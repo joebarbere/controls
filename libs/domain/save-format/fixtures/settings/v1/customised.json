@@ -1,0 +1,39 @@
+{
+  "settingsVersion": 1,
+  "graphics": { "backend": "webgl2", "pixelRatioCap": 1.5 },
+  "audio": { "master": 0.8, "effects": 0.65, "ambience": 0, "interface": 0.3 },
+  "controls": {
+    "lookSensitivity": 1.75,
+    "invertY": true,
+    "keybindings": { "palette.open": "Mod+Shift+K", "edit.redo": null }
+  },
+  "palette": { "recents": ["entity.place", "edit.undo", "view.resetLayout"] },
+  "console": { "history": ["help", "entity.place prop.crate --x 100", "world.hash"] },
+  "display": { "units": "metric", "theme": "dark", "reducedMotion": "reduce" },
+  "gameplay": { "defaultDifficulty": "trainee", "region": "nec" },
+  "workspace": {
+    "layout": {
+      "orientation": "horizontal",
+      "panels": [
+        { "id": "viewport", "size": 0.75 },
+        { "id": "inspector", "size": 0.25 }
+      ],
+      "bottom": { "id": "console", "size": 0.3, "visible": false }
+    }
+  },
+  "autosave": { "enabled": false, "slotCount": 10, "intervalSeconds": 60 },
+  "toolBelt": {
+    "slots": [
+      { "id": "prop.spool", "version": 1 },
+      null,
+      { "id": "prop.box", "version": 1 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      { "id": "prop.crate", "version": 1 }
+    ]
+  },
+  "extensions": { "mod.example.lastMenu": "settings" }
+}

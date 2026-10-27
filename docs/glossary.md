@@ -61,19 +61,26 @@
 
 ## Game and codebase
 
-| Term                 | Meaning                                                                                                                                                           |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **As-built**         | The physical wiring the player (or job author) actually installed. The simulator runs the as-built, not the print.                                                |
-| **`.ctrl`**          | The save file: a ZIP of JSON documents with a manifest. See [ADR 0004](decisions/0004-save-format.md).                                                            |
-| **`catalogVersion`** | Version of the device catalogue in `content/`. Versioned independently of the app.                                                                                |
-| **Command**          | A registered, Zod-typed action (`wire.connect`, `sim.setSpeed`). The only way the world changes; shared by the palette, keybinds, console and scripting API (P1). |
-| **Print**            | A schematic, wiring diagram or panel layout. A separate document that may be wrong.                                                                               |
-| **Realism charter**  | Plan §3: simulate what can be measured, abstract what can't, cite a `source` for every constant.                                                                  |
-| **Region profile**   | The bundle of voltages, frequency, sizing units, colours, symbols and rules for a code region. NEC only through 1.0.                                              |
-| **Replay log**       | The ordered list of executed commands with their sim tick. With the seed, it reproduces a session exactly.                                                        |
-| **`schemaVersion`**  | Integer version of the save format, driving the migration chain.                                                                                                  |
-| **Web harness**      | The browser build of `apps/game` (`pnpm start:web`) using `@controls/platform-web`. For development and Playwright, not a shipped product.                        |
-| **World document**   | The persistent, serialisable game state (physical model, prints, PLC and HMI documents).                                                                          |
+| Term                    | Meaning                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **As-built**            | The physical wiring the player (or job author) actually installed. The simulator runs the as-built, not the print.                                                        |
+| **`.ctrl`**             | The save file: a ZIP of JSON documents with a manifest. See [ADR 0004](decisions/0004-save-format.md).                                                                    |
+| **Assisted**            | A world flag set once a cheat command has run (palette, console or script). It persists in the save and is never cleared; assisted runs are excluded from career scoring. |
+| **Catalogue reference** | How a save points at a device or prop: `{ id, version }` (e.g. `prop.crate` at version 1), never an inlined copy, so catalogue fixes reach old saves.                     |
+| **`catalogVersion`**    | Version of the device catalogue in `content/`. Versioned independently of the app.                                                                                        |
+| **Command**             | A registered, Zod-typed action (`wire.connect`, `sim.setSpeed`). The only way the world changes; shared by the palette, keybinds, console and scripting API (P1).         |
+| **`extensions` bag**    | A JSON object on the world, each entity, the manifest and settings for data the current schema doesn't model. It must round-trip untouched.                               |
+| **Fixture**             | A checked-in example document for a given `schemaVersion` (`libs/domain/save-format/fixtures/`). Every fixture of every version must load forever.                        |
+| **Migration chain**     | The pure `n → n+1` steps that upgrade any older document to the current `schemaVersion`. Total: every known version reaches the current one.                              |
+| **Print**               | A schematic, wiring diagram or panel layout. A separate document that may be wrong.                                                                                       |
+| **Realism charter**     | Plan §3: simulate what can be measured, abstract what can't, cite a `source` for every constant.                                                                          |
+| **Region profile**      | The bundle of voltages, frequency, sizing units, colours, symbols and rules for a code region. NEC only through 1.0.                                                      |
+| **Replay log**          | The ordered list of executed commands with their sim tick. With the seed, it reproduces a session exactly.                                                                |
+| **`schemaVersion`**     | Integer version of the save format, driving the migration chain.                                                                                                          |
+| **`settingsVersion`**   | Integer version of the settings document, independent of the save's `schemaVersion`.                                                                                      |
+| **Web harness**         | The browser build of `apps/game` (`pnpm start:web`) using `@controls/platform-web`. For development and Playwright, not a shipped product.                                |
+| **World document**      | The persistent, serialisable game state (physical model, prints, PLC and HMI documents).                                                                                  |
+| **World hash**          | SHA-256 of the canonical JSON (sorted keys, normalised `-0`) of the world document. The same commands from any surface give the same hash (ADR 0007).                     |
 
 ## Workspace and tooling
 

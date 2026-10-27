@@ -14,8 +14,9 @@ A new area (new lib, new cross-cutting concern) gets a new file, a row below, **
 
 ## Files
 
-| File                           | Load when working on…                                                                                                        |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| [`workspace.md`](workspace.md) | Dependencies, `package.json`, `pnpm-workspace.yaml`, `nx.json`, tsconfig, ESLint/Prettier, new libs, Nx tags, `pnpm verify`. |
-| [`electron.md`](electron.md)   | `apps/desktop`, `apps/desktop-e2e`, `libs/platform/electron`, `libs/ipc-contract`, the `app://` protocol, CSP, Fuses.        |
-| [`release.md`](release.md)     | Versioning, `tools/check-version-sync.mjs`, electron-builder config, `release.yml`, auto-update, signing, `/release`.        |
+| File                               | Load when working on…                                                                                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`workspace.md`](workspace.md)     | Dependencies, `package.json`, `pnpm-workspace.yaml`, `nx.json`, tsconfig, ESLint/Prettier, new libs, Nx tags, `pnpm verify`.                              |
+| [`electron.md`](electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `libs/platform/electron`, `libs/ipc-contract`, the `app://` protocol, CSP, Fuses.                                     |
+| [`release.md`](release.md)         | Versioning, `tools/check-version-sync.mjs`, electron-builder config, `release.yml`, auto-update, signing, `/release`.                                     |
+| [`save-format.md`](save-format.md) | `libs/domain/save-format` (schemas, migrations, fixtures, settings, JSON Schema), world serialisation, command ids/args in the replay log, load failures. |

@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "settingsVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "graphics": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "webgl2"
+          ]
+        },
+        "pixelRatioCap": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "backend",
+        "pixelRatioCap"
+      ],
+      "additionalProperties": false
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "master": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "effects": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ambience": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "interface": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "master",
+        "effects",
+        "ambience",
+        "interface"
+      ],
+      "additionalProperties": false
+    },
+    "controls": {
+      "type": "object",
+      "properties": {
+        "lookSensitivity": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10
+        },
+        "invertY": {
+          "type": "boolean"
+        },
+        "keybindings": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "lookSensitivity",
+        "invertY",
+        "keybindings"
+      ],
+      "additionalProperties": false
+    },
+    "palette": {
+      "type": "object",
+      "properties": {
+        "recents": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+          }
+        }
+      },
+      "required": [
+        "recents"
+      ],
+      "additionalProperties": false
+    },
+    "console": {
+      "type": "object",
+      "properties": {
+        "history": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": [
+        "history"
+      ],
+      "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "units": {
+          "type": "string",
+          "enum": [
+            "imperial",
+            "metric"
+          ]
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "reducedMotion": {
+          "type": "string",
+          "enum": [
+            "system",
+            "reduce",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "units",
+        "theme",
+        "reducedMotion"
+      ],
+      "additionalProperties": false
+    },
+    "gameplay": {
+      "type": "object",
+      "properties": {
+        "defaultDifficulty": {
+          "type": "string",
+          "enum": [
+            "trainee",
+            "apprentice",
+            "journeyman",
+            "realistic"
+          ]
+        },
+        "region": {
+          "type": "string",
+          "enum": [
+            "nec"
+          ]
+        }
+      },
+      "required": [
+        "defaultDifficulty",
+        "region"
+      ],
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "layout": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "layout"
+      ],
+      "additionalProperties": false
+    },
+    "autosave": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "slotCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "enabled",
+        "slotCount",
+        "intervalSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "toolBelt": {
+      "type": "object",
+      "properties": {
+        "slots": {
+          "minItems": 9,
+          "maxItems": 9,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CatalogRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "slots"
+      ],
+      "additionalProperties": false
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "settingsVersion",
+    "graphics",
+    "audio",
+    "controls",
+    "palette",
+    "console",
+    "display",
+    "gameplay",
+    "workspace",
+    "autosave",
+    "toolBelt",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls settings, settingsVersion 1",
+  "description": "The settings document (plan F1.1). Zod in @controls/save-format is authoritative; this JSON Schema omits string well-formedness, JSON nesting limits and the no-repeat rule for palette recents.",
+  "$defs": {
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    }
+  }
+}

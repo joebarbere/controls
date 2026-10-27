@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - `fast-check` (dev dependency) for property tests in domain libs, and a 90 % Vitest coverage gate for every `type:domain` lib, run by its `test` target and therefore by `pnpm verify`.
 - A `scope:headless` module-boundary tag for the upcoming `apps/sim-cli`: it may depend only on `type:domain` libs.
+- The save format's first version (`schemaVersion` 1) in a new framework-free library, `@controls/save-format` (F1.8a, [ADR 0007](docs/decisions/0007-world-document-v1.md)). It defines Zod schemas for the save manifest, the world document (seed, sim tick, entity id counter, region, difficulty, the "assisted" flag, entities by catalogue reference with integer-millimetre positions and millidegree orientations, and an `extensions` bag) and the replay log. A settings document (`settingsVersion` 1) with `defaultSettings()` covers graphics, audio, controls, keybinding overrides, palette and console history, display, gameplay defaults, workspace layout, autosave and the tool belt. Loading validates untrusted JSON, migrates it through a total migration chain and refuses saves from newer builds with a clear error. Every document round-trips losslessly through JSON (fast-check property tests). Fixtures for every version must keep loading, and JSON Schema exports are checked in and kept in sync by a test. Saving and loading in the game arrive with the `.ctrl` container (F1.8b).
 
 ### Changed
 

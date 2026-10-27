@@ -7,7 +7,7 @@ flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
     HUB --> G["guides/<br/>new developer, releasing"]
     HUB --> A["architecture/<br/>overview"]
-    HUB --> D["decisions/<br/>ADRs 0001-0004"]
+    HUB --> D["decisions/<br/>ADRs 0001-0004, 0007"]
     HUB --> C["caveats/<br/>per-area gotchas"]
     HUB --> GL["glossary.md"]
     HUB --> H["history.md"]
@@ -26,20 +26,22 @@ flowchart TD
 
 ## Architecture
 
-| Page                                 | Covers                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| [Overview](architecture/overview.md) | Process and thread model, module boundaries, what P0 implements versus the target design |
+| Page                                               | Covers                                                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design |
+| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)    |
 
 Subsystem pages (commands, save format, sim-core, renderer, PLC, HMI) are added in the phase that builds them.
 
 ## Decisions (ADRs)
 
-| ADR                                                                       | Decision                                                                                         |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                |
-| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks |
-| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                   |
-| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                      |
+| ADR                                                                       | Decision                                                                                            |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                   |
+| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks    |
+| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                      |
+| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                         |
+| [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log |
 
 ## Reference
 

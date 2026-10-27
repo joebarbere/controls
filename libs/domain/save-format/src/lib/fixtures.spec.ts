@@ -1,0 +1,125 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  CURRENT_SCHEMA_VERSION,
+  CURRENT_SETTINGS_VERSION,
+  Manifest,
+  manifestMigrator,
+  ReplayLog,
+  replayLogMigrator,
+  Settings,
+  settingsMigrator,
+  World,
+  worldMigrator,
+} from './documents';
+import type { Migrator } from './migrate';
+import type { z } from 'zod';
+
+/*
+ * Every fixture of every version must load forever (ADR 0004). Layout:
+ *   fixtures/v<schemaVersion>/<kind>/*.json      kind = world | manifest | replay-log
+ *   fixtures/settings/v<settingsVersion>/*.json
+ * Fixtures of a published version are never edited; a new version adds a new directory.
+ */
+
+const fixturesRoot = join(import.meta.dirname, '../../fixtures');
+
+interface Kind {
+  dir: (version: number) => string;
+  migrator: Migrator<unknown>;
+  current: z.ZodType;
+  currentVersion: number;
+}
+
+const kinds: Record<string, Kind> = {
+  world: { dir: (v) => `v${v}/world`, migrator: worldMigrator, current: World, currentVersion: CURRENT_SCHEMA_VERSION },
+  manifest: {
+    dir: (v) => `v${v}/manifest`,
+    migrator: manifestMigrator,
+    current: Manifest,
+    currentVersion: CURRENT_SCHEMA_VERSION,
+  },
+  'replay-log': {
+    dir: (v) => `v${v}/replay-log`,
+    migrator: replayLogMigrator,
+    current: ReplayLog,
+    currentVersion: CURRENT_SCHEMA_VERSION,
+  },
+  settings: {
+    dir: (v) => `settings/v${v}`,
+    migrator: settingsMigrator,
+    current: Settings,
+    currentVersion: CURRENT_SETTINGS_VERSION,
+  },
+};
+
+function versionDirs(): number[] {
+  return readdirSync(fixturesRoot)
+    .map((name) => /^v(\d+)$/.exec(name)?.[1])
+    .filter((v): v is string => v !== undefined)
+    .map(Number)
+    .sort((a, b) => a - b);
+}
+
+function settingsVersionDirs(): number[] {
+  return readdirSync(join(fixturesRoot, 'settings'))
+    .map((name) => /^v(\d+)$/.exec(name)?.[1])
+    .filter((v): v is string => v !== undefined)
+    .map(Number)
+    .sort((a, b) => a - b);
+}
+
+function fixturesOf(kind: Kind, version: number): { file: string; json: unknown }[] {
+  const dir = join(fixturesRoot, kind.dir(version));
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.json'))
+    .sort()
+    .map((name) => ({ file: `${kind.dir(version)}/${name}`, json: JSON.parse(readFileSync(join(dir, name), 'utf8')) }));
+}
+
+const cases = Object.entries(kinds).flatMap(([name, kind]) => {
+  const versions = name === 'settings' ? settingsVersionDirs() : versionDirs();
+  return versions.flatMap((version) => fixturesOf(kind, version).map((f) => ({ name, kind, version, ...f })));
+});
+
+describe('fixtures', () => {
+  it('there is a fixture directory for every version up to the current one, and none beyond', () => {
+    expect(versionDirs()).toStrictEqual(Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, i) => i + 1));
+    expect(settingsVersionDirs()).toStrictEqual(Array.from({ length: CURRENT_SETTINGS_VERSION }, (_, i) => i + 1));
+  });
+
+  it('every version has at least one fixture of every kind', () => {
+    for (const [name, kind] of Object.entries(kinds)) {
+      for (let version = 1; version <= kind.currentVersion; version++) {
+        expect(fixturesOf(kind, version).length, `${name} v${version}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it.each(cases.map((c) => [c.file, c] as const))('%s migrates to the current version and validates', (_file, c) => {
+    const versionKey = c.kind.migrator.versionKey;
+    expect((c.json as Record<string, unknown>)[versionKey], 'fixture is in the wrong version directory').toBe(
+      c.version,
+    );
+
+    const result = c.kind.migrator.migrate(c.json);
+    if (!result.ok) throw new Error(`${c.file}: ${JSON.stringify(result.error)}`);
+    expect(result.fromVersion).toBe(c.version);
+    expect((result.value as Record<string, unknown>)[versionKey]).toBe(c.kind.currentVersion);
+    expect(c.kind.current.parse(result.value)).toStrictEqual(result.value);
+
+    // Lossless: the loaded document survives a JSON round trip unchanged.
+    expect(c.kind.migrator.migrate(JSON.parse(JSON.stringify(result.value)))).toStrictEqual({
+      ok: true,
+      value: result.value,
+      fromVersion: c.kind.currentVersion,
+    });
+  });
+
+  it('a fixture at the current version loads unchanged (fixtures are canonical)', () => {
+    for (const c of cases.filter((x) => x.version === x.kind.currentVersion)) {
+      const result = c.kind.migrator.migrate(c.json);
+      expect(result.ok && result.value, c.file).toStrictEqual(c.json);
+    }
+  });
+});

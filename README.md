@@ -21,6 +21,10 @@ What exists today (Phase 0 scaffold):
 
 - Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails. Orbit the camera with the mouse.
 
+### Saves
+
+- Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema. Saving and loading in the game arrive later in P1.
+
 ### Tooling
 
 - Nx 24 + pnpm 11 monorepo with enforced module boundaries.
@@ -93,6 +97,7 @@ apps/
   desktop-e2e/     Playwright _electron smoke tests against the built app
 libs/
   domain/units/    framework-free domain lib; today only the generated app version
+  domain/save-format/  save and settings schemas (Zod), migrations, fixtures, JSON Schema
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
   platform/        api (interfaces), electron and web implementations

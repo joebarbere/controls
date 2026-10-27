@@ -199,14 +199,14 @@ This is ADR 0004 implemented in `libs/domain/save-format` (`@controls/save-forma
 
 Acceptance, **F1.8a** (schema, ahead of F1.2):
 
-- [ ] Frozen v1 schemas `ManifestV1`, `WorldV1` and `ReplayLogV1`, with `schemaVersion: 1`. They are never edited after v0.2.0.
+- [x] Frozen v1 schemas `ManifestV1`, `WorldV1` and `ReplayLogV1`, with `schemaVersion: 1`. They are never edited after v0.2.0.
   - `WorldV1` holds seed, tick, next id, entities with catalogue refs (id + version), integer-mm transforms, `assisted`, region id, difficulty and an `extensions` bag.
   - The manifest records `APP_VERSION`.
-- [ ] Migration framework: `migrate(doc)` is total from every known version to the current one, and a newer-than-build version returns a typed error. Synthetic test-only migrations prove chaining works.
-- [ ] Lossless round-trip property (fast-check): for any valid `WorldV1` `w`, `parse(JSON.parse(JSON.stringify(w)))` deep-equals `w`. The schema rejects NaN and ±Infinity, normalises `-0`, and requires integer mm.
-- [ ] Fixtures go in `libs/domain/save-format/fixtures/v1/`. A test loads every fixture from every version.
-- [ ] JSON Schema is exported from Zod and checked in. A test fails if it's stale.
-- [ ] Settings schema (F1.1) lives here too, with its own `settingsVersion`.
+- [x] Migration framework: `migrate(doc)` is total from every known version to the current one, and a newer-than-build version returns a typed error. Synthetic test-only migrations prove chaining works.
+- [x] Lossless round-trip property (fast-check): for any valid `WorldV1` `w`, `parse(JSON.parse(JSON.stringify(w)))` deep-equals `w`. The schema rejects NaN and ±Infinity, normalises `-0`, and requires integer mm.
+- [x] Fixtures go in `libs/domain/save-format/fixtures/v1/`. A test loads every fixture from every version.
+- [x] JSON Schema is exported from Zod and checked in. A test fails if it's stale.
+- [x] Settings schema (F1.1) lives here too, with its own `settingsVersion`.
 
 Acceptance, **F1.8b** (container and I/O, after F1.1, F1.2 and F1.9):
 
@@ -324,18 +324,18 @@ Numbers are assigned in landing order. Planned:
 
 ## Status
 
-| Feature | Description                   | Status     |
-| ------- | ----------------------------- | ---------- |
-| F1.1    | Shell UI                      | 📐 Planned |
-| F1.2    | Command system                | 📐 Planned |
-| F1.3    | Command palette               | 📐 Planned |
-| F1.4    | Keybinding service            | 📐 Planned |
-| F1.5    | Dev console                   | 📐 Planned |
-| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned |
-| F1.7    | Cameras and interaction       | 📐 Planned |
-| F1.8    | World document v1 + `.ctrl`   | 📐 Planned |
-| F1.9    | Workshop level                | 📐 Planned |
-| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned |
+| Feature | Description                   | Status                                             |
+| ------- | ----------------------------- | -------------------------------------------------- |
+| F1.1    | Shell UI                      | 📐 Planned                                         |
+| F1.2    | Command system                | 📐 Planned                                         |
+| F1.3    | Command palette               | 📐 Planned                                         |
+| F1.4    | Keybinding service            | 📐 Planned                                         |
+| F1.5    | Dev console                   | 📐 Planned                                         |
+| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                         |
+| F1.7    | Cameras and interaction       | 📐 Planned                                         |
+| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned |
+| F1.9    | Workshop level                | 📐 Planned                                         |
+| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                         |
 
 ## Close-out
 

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "initialWorld": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextEntityId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "regionId": {
+          "type": "string",
+          "enum": [
+            "nec"
+          ]
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "trainee",
+            "apprentice",
+            "journeyman",
+            "realistic"
+          ]
+        },
+        "assisted": {
+          "type": "boolean"
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityV1"
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "seed",
+        "tick",
+        "nextEntityId",
+        "regionId",
+        "difficulty",
+        "assisted",
+        "entities",
+        "extensions"
+      ],
+      "additionalProperties": false,
+      "title": "Controls world document, schemaVersion 1",
+      "description": "world.json in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity ids below nextEntityId) and string well-formedness."
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReplayEntryV1"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "initialWorld",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "title": "Controls replay log, schemaVersion 1",
+  "description": "replay.log in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits the seq and tick ordering rules.",
+  "$defs": {
+    "EntityV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "TransformV1": {
+      "type": "object",
+      "properties": {
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "orientationMdeg": {
+          "$ref": "#/$defs/OrientationMdegV1"
+        }
+      },
+      "required": [
+        "positionMm",
+        "orientationMdeg"
+      ],
+      "additionalProperties": false
+    },
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "OrientationMdegV1": {
+      "type": "object",
+      "properties": {
+        "yaw": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "pitch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "roll": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        }
+      },
+      "required": [
+        "yaw",
+        "pitch",
+        "roll"
+      ],
+      "additionalProperties": false,
+      "description": "Intrinsic Y-X-Z (yaw, pitch, roll) angles in integer millidegrees, each in [0, 360000)."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    },
+    "ReplayEntryV1": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+        },
+        "args": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      },
+      "required": [
+        "seq",
+        "tick",
+        "id",
+        "args"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

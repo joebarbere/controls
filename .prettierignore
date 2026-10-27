@@ -5,3 +5,5 @@
 .nx/self-healing
 .angular
 pnpm-lock.yaml
+# Generated from Zod by the save-format json-schema test (regenerate: pnpm nx test save-format -u)
+libs/domain/save-format/json-schema
