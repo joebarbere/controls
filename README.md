@@ -22,7 +22,7 @@ What exists today (Phase 0 scaffold):
 - A main menu over the live 3D view (New sandbox, Settings, About, Quit; Continue and Load arrive with saving). Escape returns to it from the game.
 - A docking workspace: the 3D viewport with an Inspector panel and a Console panel. Panels resize with the mouse or keyboard, collapse, and reset to defaults.
 - A HUD showing the interaction mode, the selection and an **Assisted** badge for worlds where cheats were used.
-- Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units and default difficulty (region fixed to NEC). Settings are not saved between sessions yet.
+- Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units and default difficulty (region fixed to NEC). Settings are saved and survive a restart.
 - Light and dark themes that follow your system, and reduced motion.
 - Keyboard-first: everything works without a mouse, with visible focus, and focus returns to where it was after a dialog. Notifications are announced to screen readers and can be dismissed from the keyboard.
 

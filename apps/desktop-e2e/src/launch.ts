@@ -28,7 +28,19 @@ const env = (userDataDir: string): Record<string, string> => ({
   CONTROLS_USER_DATA_DIR: userDataDir, // per-launch profile: no shared single-instance lock or profile files
 });
 
-const removeProfile = (dir: string) => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+export const removeProfile = (dir: string) =>
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+
+export interface LaunchOptions {
+  /**
+   * Reuse this profile directory (e.g. to relaunch and check persistence). The caller owns it and
+   * removes it; by default every launch gets a fresh directory that is removed on close.
+   */
+  readonly userDataDir?: string;
+}
+
+/** A fresh profile directory for {@link LaunchOptions.userDataDir}; remove it with {@link removeProfile}. */
+export const createProfile = (): string => mkdtempSync(join(tmpdir(), 'controls-e2e-'));
 
 /**
  * Launches Controls the way a player would, minus auto-update.
@@ -36,9 +48,12 @@ const removeProfile = (dir: string) => rmSync(dir, { recursive: true, force: tru
  * - CONTROLS_E2E_EXECUTABLE=<packaged binary>: the release fuses disable Node's --inspect, which
  *   `_electron` needs, so we start the binary ourselves and attach over Chromium's DevTools protocol.
  */
-export async function launchControls(): Promise<LaunchedControls> {
+export async function launchControls(options: LaunchOptions = {}): Promise<LaunchedControls> {
   const executable = process.env['CONTROLS_E2E_EXECUTABLE'];
-  const userDataDir = mkdtempSync(join(tmpdir(), 'controls-e2e-'));
+  const userDataDir = options.userDataDir ?? createProfile();
+  const cleanUp = () => {
+    if (!options.userDataDir) removeProfile(userDataDir);
+  };
   if (!executable) {
     const app = await electron.launch({
       args: [join(workspaceRoot, 'dist/apps/desktop'), ...chromiumArgs()],
@@ -48,7 +63,7 @@ export async function launchControls(): Promise<LaunchedControls> {
       window: captureConsole(await app.firstWindow()),
       close: async () => {
         await app.close();
-        removeProfile(userDataDir);
+        cleanUp();
       },
     };
   }
@@ -65,7 +80,7 @@ export async function launchControls(): Promise<LaunchedControls> {
     close: async () => {
       await browser.close().catch(() => undefined);
       await terminate(child);
-      removeProfile(userDataDir);
+      cleanUp();
     },
   };
 }

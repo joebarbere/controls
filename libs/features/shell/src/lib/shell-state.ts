@@ -20,8 +20,6 @@ export class ShellState {
   /** A sandbox is running (the menu offers Resume). TODO(F1.2): derive from feature-session. */
   readonly sessionActive = this.session.asReadonly();
   readonly menuOpen = computed(() => this.screenState() === 'menu');
-  /** TODO(F1.7): read the `mode` context key from the session once walk/work cameras land. */
-  readonly mode = signal<InteractionMode>('work').asReadonly();
 
   /** TODO(F1.9): load the workshop level into a fresh world through the session. */
   newSandbox(): void {

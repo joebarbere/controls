@@ -82,8 +82,8 @@ Main menu (New sandbox, Continue, Load, Settings, About, Quit), settings, dockin
 Acceptance:
 
 - [x] ADR 0005 picks dockview or custom split panes before the workspace PR merges. Criteria: Angular 22 zoneless support, works under the strict CSP, keyboard operation, serialisable layout, licence, bundle size.
-- [ ] Workspace: the 3D viewport plus at least a side panel (inspector) and a bottom panel (console host). Panels resize and the layout persists in settings. `view.resetLayout` is a registered command.
-- [ ] Settings sections:
+- [ ] Workspace: the 3D viewport plus at least a side panel (inspector) and a bottom panel (console host). Panels resize and the layout persists in settings. `view.resetLayout` is a registered command. _(Done except the command: Reset layout is `Workspace.resetLayout()`, marked `TODO(F1.2)` until the registry exists.)_
+- [x] Settings sections:
   - graphics: backend preference auto/webgl2, pixel-ratio cap;
   - audio: volumes, stored only; audio arrives in P4;
   - controls: look sensitivity, invert-Y, link to the F1.4 bindings;
@@ -93,8 +93,8 @@ Acceptance:
 
   Settings persist across restarts in Electron and in the web harness.
 
-- [ ] The settings document is Zod-validated with its own `settingsVersion`. A corrupt or unknown file falls back to defaults with a notification (unit tests for main and web).
-- [ ] Settings IPC (`settings:get` / `settings:set`): Zod-validated in main, `senderFrame` checked, size-capped, written atomically.
+- [x] The settings document is Zod-validated with its own `settingsVersion`. A corrupt or unknown file falls back to defaults with a notification (unit tests for main and web).
+- [x] Settings IPC (`settings:get` / `settings:set`): Zod-validated in main, `senderFrame` checked, size-capped, written atomically.
 - [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Badge wired to an input; the world `assisted` flag arrives with F1.2/F1.3.)_
 - [x] Notifications are announced through `aria-live` and can be dismissed from the keyboard.
 - [x] Light and dark themes via CSS custom properties: follow `prefers-color-scheme`, can be overridden in settings, honour `prefers-reduced-motion`.
@@ -324,18 +324,18 @@ Numbers are assigned in landing order. Planned:
 
 ## Status
 
-| Feature | Description                   | Status                                             |
-| ------- | ----------------------------- | -------------------------------------------------- |
-| F1.1    | Shell UI                      | 📐 Planned                                         |
-| F1.2    | Command system                | 📐 Planned                                         |
-| F1.3    | Command palette               | 📐 Planned                                         |
-| F1.4    | Keybinding service            | 📐 Planned                                         |
-| F1.5    | Dev console                   | 📐 Planned                                         |
-| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                         |
-| F1.7    | Cameras and interaction       | 🚧 Part 1                                          |
-| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned |
-| F1.9    | Workshop level                | 📐 Planned                                         |
-| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                         |
+| Feature | Description                   | Status                                                          |
+| ------- | ----------------------------- | --------------------------------------------------------------- |
+| F1.1    | Shell UI                      | 🚧 Done except `view.resetLayout` as a Command (waits for F1.2) |
+| F1.2    | Command system                | 📐 Planned                                                      |
+| F1.3    | Command palette               | 📐 Planned                                                      |
+| F1.4    | Keybinding service            | 📐 Planned                                                      |
+| F1.5    | Dev console                   | 📐 Planned                                                      |
+| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                                      |
+| F1.7    | Cameras and interaction       | 🚧 Part 1                                                       |
+| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned              |
+| F1.9    | Workshop level                | 📐 Planned                                                      |
+| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                                      |
 
 ## Close-out
 

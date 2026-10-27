@@ -7,7 +7,6 @@ describe('ShellState', () => {
     expect(shell.screen()).toBe('menu');
     expect(shell.menuOpen()).toBe(true);
     expect(shell.sessionActive()).toBe(false);
-    expect(shell.mode()).toBe('work');
 
     shell.resume(); // nothing to resume yet
     expect(shell.screen()).toBe('menu');

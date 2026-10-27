@@ -8,7 +8,7 @@ import {
   output,
   viewChild,
 } from '@angular/core';
-import type { RenderBackend } from '@controls/renderer';
+import type { RenderBackend, ViewportState } from '@controls/renderer';
 import { Button, Splitter } from '@controls/ui';
 import {
   BOTTOM_LIMITS,
@@ -30,6 +30,7 @@ type PanelId = keyof WorkspaceLayout;
  * the viewport), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders).
  *
  * With `chrome` off (behind the main menu) only the viewport is shown, as the menu backdrop.
+ * The viewport region is a landmark only; its canvas is the one keyboard focus target.
  * The layout is plain JSON (`[(layout)]`); the owner persists it.
  */
 @Component({
@@ -67,7 +68,7 @@ type PanelId = keyof WorkspaceLayout;
         <button ctlButton="ghost" type="button" (click)="resetLayout()">Reset layout</button>
       </div>
     }
-    <section #viewportPane class="viewport-pane" aria-label="3D viewport" tabindex="0">
+    <section #viewportPane class="viewport-pane" aria-label="3D viewport">
       <ctl-viewport (backendChange)="backendChange.emit($event)" />
       <div class="overlay"><ng-content select="[ctlViewportOverlay]" /></div>
     </section>
@@ -135,10 +136,13 @@ export class Workspace {
   protected readonly inspectorTrack = computed(() => track(this.layout().inspector));
   protected readonly bottomTrack = computed(() => track(this.layout().bottom));
   private readonly viewportPane = viewChild.required<ElementRef<HTMLElement>>('viewportPane');
+  private readonly viewport = viewChild(Viewport);
+  /** The renderer's view state (mode, hover, selection), for the HUD. Undefined until it starts. */
+  readonly viewState = computed<ViewportState | undefined>(() => this.viewport()?.state());
 
-  /** Moves keyboard focus to the viewport (after New sandbox or Resume). */
+  /** Moves keyboard focus to the viewport canvas (after New sandbox or Resume). */
   focusViewport(): void {
-    this.viewportPane().nativeElement.focus();
+    this.viewportPane().nativeElement.querySelector<HTMLElement>('canvas')?.focus();
   }
 
   /** Restores the default layout. TODO(F1.2): register as the `view.resetLayout` command and call it through the registry. */

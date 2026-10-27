@@ -7,8 +7,8 @@
         ><input
           type="radio"
           name="ctl-theme"
-          [checked]="s().interface.theme === 'system'"
-          (change)="update('interface', { theme: 'system' })"
+          [checked]="s().display.theme === 'system'"
+          (change)="update('display', { theme: 'system' })"
         />
         Match system</label
       >
@@ -16,8 +16,8 @@
         ><input
           type="radio"
           name="ctl-theme"
-          [checked]="s().interface.theme === 'light'"
-          (change)="update('interface', { theme: 'light' })"
+          [checked]="s().display.theme === 'light'"
+          (change)="update('display', { theme: 'light' })"
         />
         Light</label
       >
@@ -25,21 +25,42 @@
         ><input
           type="radio"
           name="ctl-theme"
-          [checked]="s().interface.theme === 'dark'"
-          (change)="update('interface', { theme: 'dark' })"
+          [checked]="s().display.theme === 'dark'"
+          (change)="update('display', { theme: 'dark' })"
         />
         Dark</label
       >
     </div>
-    <label class="check"
-      ><input
-        type="checkbox"
-        [checked]="s().interface.motion === 'reduce'"
-        (change)="update('interface', { motion: checked($event) ? 'reduce' : 'system' })"
-      />
-      Reduce motion</label
-    >
-    <p class="ctl-hint">Motion is always reduced when your system asks for it.</p>
+    <div class="choices" role="radiogroup" aria-labelledby="ctl-set-motion">
+      <span id="ctl-set-motion" class="label">Motion</span>
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'system'"
+          (change)="update('display', { reducedMotion: 'system' })"
+        />
+        Follow system</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'reduce'"
+          (change)="update('display', { reducedMotion: 'reduce' })"
+        />
+        Reduce motion</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'full'"
+          (change)="update('display', { reducedMotion: 'full' })"
+        />
+        Full motion</label
+      >
+    </div>
   </fieldset>
 
   <fieldset>
@@ -68,9 +89,9 @@
     <p id="ctl-set-backend-hint" class="ctl-hint">Applies after a restart.</p>
     <label class="ctl-field"
       >Pixel-ratio cap
-      <select class="ctl-select" (change)="update('graphics', { pixelRatioCapPercent: number($event) })">
+      <select class="ctl-select" (change)="update('graphics', { pixelRatioCap: number($event) })">
         @for (cap of pixelRatioCaps; track cap) {
-        <option [value]="cap" [selected]="s().graphics.pixelRatioCapPercent === cap">{{ cap / 100 }}×</option>
+        <option [value]="cap" [selected]="s().graphics.pixelRatioCap === cap">{{ cap }}×</option>
         }
       </select>
     </label>
@@ -79,39 +100,20 @@
   <fieldset aria-describedby="ctl-set-audio-hint">
     <legend>Audio</legend>
     <p id="ctl-set-audio-hint" class="ctl-hint">Sound arrives in a later build; volumes are kept until then.</p>
+    @for (v of volumes; track v.key) {
     <label class="ctl-field"
-      >Master volume
+      >{{ v.label }}
       <input
         type="range"
         min="0"
         max="100"
         step="5"
-        [value]="s().audio.master"
-        (input)="update('audio', { master: number($event) })"
+        [value]="percent(s().audio[v.key])"
+        [attr.aria-valuetext]="percent(s().audio[v.key]) + ' percent'"
+        (input)="setVolume(v.key, $event)"
       />
     </label>
-    <label class="ctl-field"
-      >Effects volume
-      <input
-        type="range"
-        min="0"
-        max="100"
-        step="5"
-        [value]="s().audio.effects"
-        (input)="update('audio', { effects: number($event) })"
-      />
-    </label>
-    <label class="ctl-field"
-      >Ambience volume
-      <input
-        type="range"
-        min="0"
-        max="100"
-        step="5"
-        [value]="s().audio.ambience"
-        (input)="update('audio', { ambience: number($event) })"
-      />
-    </label>
+    }
   </fieldset>
 
   <fieldset>
@@ -123,9 +125,9 @@
         min="10"
         max="300"
         step="10"
-        [value]="s().controls.lookSensitivityPercent"
-        [attr.aria-valuetext]="s().controls.lookSensitivityPercent + ' percent'"
-        (input)="update('controls', { lookSensitivityPercent: number($event) })"
+        [value]="percent(s().controls.lookSensitivity)"
+        [attr.aria-valuetext]="percent(s().controls.lookSensitivity) + ' percent'"
+        (input)="update('controls', { lookSensitivity: fraction($event) })"
       />
     </label>
     <label class="check"
@@ -148,8 +150,8 @@
         ><input
           type="radio"
           name="ctl-units"
-          [checked]="s().units.display === 'imperial'"
-          (change)="update('units', { display: 'imperial' })"
+          [checked]="s().display.units === 'imperial'"
+          (change)="update('display', { units: 'imperial' })"
         />
         Imperial (in, ft, AWG)</label
       >
@@ -157,8 +159,8 @@
         ><input
           type="radio"
           name="ctl-units"
-          [checked]="s().units.display === 'metric'"
-          (change)="update('units', { display: 'metric' })"
+          [checked]="s().display.units === 'metric'"
+          (change)="update('display', { units: 'metric' })"
         />
         Metric (mm, m, mm²)</label
       >
@@ -169,9 +171,9 @@
     <legend>Difficulty</legend>
     <label class="ctl-field"
       >Default for new games
-      <select class="ctl-select" (change)="update('difficulty', { default: difficulty($event) })">
+      <select class="ctl-select" (change)="update('gameplay', { defaultDifficulty: difficulty($event) })">
         @for (d of difficulties; track d.value) {
-        <option [value]="d.value" [selected]="s().difficulty.default === d.value">{{ d.label }}</option>
+        <option [value]="d.value" [selected]="s().gameplay.defaultDifficulty === d.value">{{ d.label }}</option>
         }
       </select>
     </label>
@@ -182,7 +184,7 @@
     <label class="ctl-field"
       >Electrical code
       <select class="ctl-select" disabled aria-describedby="ctl-set-region-hint">
-        <option value="nec" selected>NEC (United States)</option>
+        <option value="nec" [selected]="s().gameplay.region === 'nec'">NEC (United States)</option>
       </select>
     </label>
     <p id="ctl-set-region-hint" class="ctl-hint">Other regions are planned after 1.0.</p>

@@ -53,5 +53,5 @@ dockview is **not** added, so there is no `THIRD_PARTY_NOTICES.md` row. It stays
 
 - Every workspace action is keyboard-operable today. A Playwright test (`apps/game-e2e/src/keyboard-shell.spec.ts`) resizes, collapses and resets panels with the keyboard only.
 - We own a small amount of layout code, and multi-panel tabbing, drag-to-dock and floating panels don't exist. Adding a fourth fixed panel is cheap; a general docking tree isn't, and that is the trigger to revisit.
-- The layout format is ours and minimal, so the settings schema (F1.8a) stores it directly. A future dockview layout would need a settings migration.
+- The layout format is ours and minimal. The settings schema keeps `workspace.layout` opaque (`null` = default); `feature-workspace` stores `{ kind: 'split-panes', version: 1, inspector, bottom }` there and parses it with Zod, falling back to the default layout for anything it doesn't recognise. A future dockview layout can use a different `kind` and migrate in `feature-workspace`, without a settings schema change.
 - No new runtime dependency, nothing new to keep under the CSP, and no exposure to dockview's release cadence during P1.

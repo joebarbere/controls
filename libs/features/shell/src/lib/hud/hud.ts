@@ -12,7 +12,7 @@ const MODE_LABELS: Record<InteractionMode, string> = { walk: 'Walk', work: 'Work
   selector: 'ctl-hud',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="hud" aria-label="Status">
+    <section class="hud" aria-label="Status" data-testid="viewport-status">
       <dl>
         <dt>Mode</dt>
         <dd data-testid="hud-mode">{{ modeLabel() }}</dd>
@@ -61,7 +61,7 @@ const MODE_LABELS: Record<InteractionMode, string> = { walk: 'Walk', work: 'Work
 })
 export class Hud {
   readonly mode = input.required<InteractionMode>();
-  /** One-line summary of the selection, or null when nothing is selected. TODO(F1.7): from `selection.*` context keys. */
+  /** One-line summary of the selection (the renderer's selection label), or null when nothing is selected. */
   readonly selection = input<string | null>(null);
   /** The current world is assisted. TODO(F1.2): from the world's `assisted` flag. */
   readonly assisted = input(false);

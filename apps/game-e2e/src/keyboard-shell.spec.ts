@@ -3,11 +3,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 // F1.1 acceptance: the shell is fully operable without a mouse, focus is always visible, and
 // focus returns to the opener after each dialog closes. Every step below uses the keyboard only.
 
-/**
- * The element has keyboard focus and a visible focus indicator: :focus-visible plus either an
- * outline of at least 2 px or a ring overlay (`::after` box-shadow, used where a canvas would
- * paint over an outline).
- */
+/** The element has keyboard focus and a visible focus indicator (:focus-visible with an outline of at least 2 px). */
 async function expectVisibleFocus(locator: Locator): Promise<void> {
   await expect(locator).toBeFocused();
   const indicator = await locator.evaluate((el) => {
@@ -15,17 +11,16 @@ async function expectVisibleFocus(locator: Locator): Promise<void> {
     return {
       focusVisible: el.matches(':focus-visible'),
       outline: style.outlineStyle === 'none' ? 0 : parseFloat(style.outlineWidth),
-      ring: getComputedStyle(el, '::after').boxShadow,
     };
   });
   expect(indicator.focusVisible).toBe(true);
-  expect(indicator.outline >= 2 || indicator.ring !== 'none').toBe(true);
+  expect(indicator.outline).toBeGreaterThanOrEqual(2);
 }
 
-async function tabTo(page: Page, target: Locator, maxPresses = 15): Promise<void> {
+async function tabTo(page: Page, target: Locator, maxPresses = 15, key = 'Tab'): Promise<void> {
   for (let i = 0; i < maxPresses; i++) {
     if (await target.evaluate((el) => el === document.activeElement)) return;
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(key);
   }
   await expect(target).toBeFocused();
 }
@@ -83,11 +78,19 @@ test('menu → settings → back → about → New sandbox, keyboard only', asyn
   await expectVisibleFocus(newSandbox);
   await page.keyboard.press('Enter');
   await expect(menu).toBeHidden();
-  const viewport = page.getByRole('region', { name: '3D viewport' });
+  // The canvas is the single viewport focus target (the region around it is a landmark only).
+  const viewport = page.getByRole('region', { name: '3D viewport' }).locator('canvas');
   await expectVisibleFocus(viewport);
   await expect(page.getByRole('region', { name: 'Status' })).toContainText('Work');
 
-  // Escape brings the menu back with Resume focused; Enter resumes.
+  // On the canvas, Escape belongs to the viewport (clear selection), so it must not open the menu.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+
+  // From the toolbar, Escape brings the menu back with Resume focused; Enter resumes.
+  const menuButton = page.getByRole('button', { name: 'Menu' });
+  await tabTo(page, menuButton, 10, 'Shift+Tab');
+  await expectVisibleFocus(menuButton);
   await page.keyboard.press('Escape');
   const resume = menu.getByRole('button', { name: 'Resume' });
   await expectVisibleFocus(resume);

@@ -2,12 +2,22 @@ import { ChangeDetectionStrategy, Component, output, signal, viewChild } from '@
 import { TestBed } from '@angular/core/testing';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
-import { DEFAULT_WORKSPACE_LAYOUT, normaliseLayout, type WorkspaceLayout } from './layout';
+import {
+  DEFAULT_WORKSPACE_LAYOUT,
+  normaliseLayout,
+  parseWorkspaceLayout,
+  serialiseWorkspaceLayout,
+  type WorkspaceLayout,
+} from './layout';
 import { Viewport } from './viewport/viewport';
 import { Workspace } from './workspace';
 
 /** jsdom has no WebGL/WebGPU; the real viewport is covered by the e2e suites. */
-@Component({ selector: 'ctl-viewport', template: '', changeDetection: ChangeDetectionStrategy.OnPush })
+@Component({
+  selector: 'ctl-viewport',
+  template: '<canvas tabindex="0" aria-label="3D workspace"></canvas>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
 class FakeViewport {
   readonly backendChange = output<string>();
 }
@@ -101,7 +111,10 @@ describe('Workspace', () => {
     expect(screen.queryByRole('separator')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reset layout' })).toBeNull();
     host.workspace().focusViewport();
-    expect(document.activeElement).toBe(screen.getByRole('region', { name: '3D viewport' }));
+    expect(document.activeElement).toBe(screen.getByLabelText('3D workspace'));
+    // One focus target: the region around the canvas is a landmark, not a tab stop.
+    expect(screen.getByRole('region', { name: '3D viewport' }).hasAttribute('tabindex')).toBe(false);
+    expect(host.workspace().viewState()).toBeUndefined(); // the fake viewport has no renderer
   });
 });
 
@@ -116,5 +129,34 @@ describe('normaliseLayout', () => {
     expect(
       normaliseLayout({ inspector: { size: 250.4, collapsed: true }, bottom: { size: 1, collapsed: false } }),
     ).toEqual({ inspector: { size: 250, collapsed: true }, bottom: { size: 96, collapsed: false } });
+  });
+});
+
+describe('workspace layout in settings (opaque JSON)', () => {
+  const layout: WorkspaceLayout = {
+    inspector: { size: 400, collapsed: true },
+    bottom: { size: 150, collapsed: false },
+  };
+
+  it('round-trips through the stored form, tagged so a future format can migrate it', () => {
+    const stored = serialiseWorkspaceLayout(layout);
+    expect(stored).toEqual({ kind: 'split-panes', version: 1, ...layout });
+    expect(parseWorkspaceLayout(JSON.parse(JSON.stringify(stored)))).toEqual(layout);
+  });
+
+  it.each([
+    ['null (the schema default)', null],
+    ['another layout format', { kind: 'dockview', version: 1 }],
+    ['a newer version', { ...serialiseWorkspaceLayout(layout), version: 2 }],
+    ['extra keys', { ...serialiseWorkspaceLayout(layout), extra: true }],
+    ['a wrong type', { ...serialiseWorkspaceLayout(layout), inspector: { size: '400', collapsed: true } }],
+    ['a string', 'split-panes'],
+  ])('falls back to the default layout for %s', (_name, stored) => {
+    expect(parseWorkspaceLayout(stored)).toEqual(DEFAULT_WORKSPACE_LAYOUT);
+  });
+
+  it('clamps an out-of-range stored size instead of discarding the layout', () => {
+    const stored = { ...serialiseWorkspaceLayout(layout), inspector: { size: 5000, collapsed: false } };
+    expect(parseWorkspaceLayout(stored).inspector).toEqual({ size: 640, collapsed: false });
   });
 });

@@ -1,6 +1,6 @@
 # UI shell
 
-> **Status (F1.1):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry (F1.2), keybinding service (F1.4), palette (F1.3), console (F1.5) and `feature-session` are still to come; their hooks are marked `TODO(F1.x)` in the code. Settings persistence lands with F1.8a. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
+> **Status (F1.1):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry (F1.2), keybinding service (F1.4), palette (F1.3), console (F1.5) and `feature-session` are still to come; their hooks are marked `TODO(F1.x)` in the code. Settings persist on both platforms (below). `view.resetLayout` becomes a Command with F1.2. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
 
 ## Libraries
 
@@ -14,7 +14,7 @@ flowchart LR
     WS["feature-workspace<br/>Workspace · Viewport<br/>WorkspaceLayout"]:::done
     SET["feature-settings<br/>SettingsDialog · SettingsForm<br/>SettingsStore · SETTINGS_SERVICE"]:::done
     UI["ui (type:ui)<br/>tokens · ctlButton · ctl-dialog<br/>ctlFocusTrap · ctl-splitter · ctl-toast-stack"]:::done
-    PAPI["platform-api<br/>Platform (canQuit, quit)<br/>SettingsService · SettingsDocument"]:::done
+    PAPI["platform-api<br/>Platform (settings, canQuit, quit)<br/>SettingsService"]:::done
     REND["renderer"]:::done
     SESS["feature-session (F1.2)<br/>world signal, exec, context keys"]:::later
     PAL["feature-palette (F1.3)"]:::later
@@ -37,8 +37,8 @@ The workspace is always mounted. Behind the main menu it shows only the viewport
 ```mermaid
 stateDiagram-v2
     [*] --> Menu: boot (focus: first menu item)
-    Menu --> Workspace: New sandbox / Resume (focus: 3D viewport)
-    Workspace --> Menu: Escape or Menu button (focus: Resume)
+    Menu --> Workspace: New sandbox / Resume (focus: viewport canvas)
+    Workspace --> Menu: Menu button, or Escape outside the canvas (focus: Resume)
     Menu --> Workspace: Escape (session running)
     state Menu {
         [*] --> Items
@@ -50,7 +50,7 @@ stateDiagram-v2
 ```
 
 - **Dialogs** are native `<dialog>` elements opened with `showModal()` (`ctl-dialog`). The page behind them is inert, focus moves inside and is trapped, Escape closes, and focus returns to the opener.
-- **Escape** is handled innermost-first: a dialog consumes it, then `App.onEscape` toggles between the menu and the workspace. F1.4 moves this into the keybinding service.
+- **Escape** is handled innermost-first: a dialog or the focused viewport canvas (clear selection) consumes it; otherwise `App.onEscape` toggles between the menu and the workspace. F1.4 moves this into the keybinding service.
 - **Main menu** items are plain buttons in a `<nav>`. Tab, Up/Down, Home and End move between them. Continue and Load are `aria-disabled` with a reason until F1.8b, and Quit is hidden where `Platform.canQuit` is false (the web harness).
 
 ## Workspace layout
@@ -62,7 +62,7 @@ flowchart TB
         TB["toolbar: [ctlWorkspaceToolbar] · Inspector · Console · Reset layout"]
         subgraph row[" "]
             direction LR
-            VP["3D viewport (region, tabindex 0)<br/>ctl-viewport + [ctlViewportOverlay] (HUD)"]
+            VP["3D viewport (region landmark)<br/>ctl-viewport canvas (the focus target)<br/>+ [ctlViewportOverlay] (HUD, fed by viewState)"]
             VS["ctl-splitter<br/>vertical"]
             INS["Inspector<br/>[ctlInspector]"]
         end
@@ -81,8 +81,9 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    FORM["SettingsForm<br/>(native labelled controls)"] -->|"update(section, patch)"| STORE["SettingsStore<br/>signal&lt;SettingsDocument&gt;"]
-    STORE -->|"debounced 300 ms"| SVC["SETTINGS_SERVICE<br/>MemorySettingsService today<br/>Electron IPC / web storage (F1.8a)"]
+    FORM["SettingsForm<br/>(native labelled controls)"] -->|"update(section, patch)"| STORE["SettingsStore<br/>signal&lt;Settings&gt;"]
+    WS["Workspace layout"] -->|"serialiseWorkspaceLayout"| STORE
+    STORE -->|"debounced 300 ms, after load"| SVC["SETTINGS_SERVICE<br/>= Platform.settings"]
     SVC -->|"load(): settings + fallbackReason"| STORE
     STORE -->|"corrupt / unknown version"| NOTE["NotificationService"]
     STORE -->|"effect: data-theme, data-motion"| HTML["&lt;html&gt;"]
@@ -90,8 +91,37 @@ flowchart LR
     NOTE --> TOAST["ctl-toast-stack<br/>role=status (polite) · role=alert (assertive)"]
 ```
 
+- **Document:** `Settings` from `@controls/save-format` (`settingsVersion` 1). The store edits it section by section; edits made before the first load finishes are replayed on top of the loaded document, and nothing is saved until the load has finished.
 - **Theme:** tokens are `light-dark()` pairs under `color-scheme: light dark`, so they follow `prefers-color-scheme`. A settings override pins `color-scheme` through `data-theme`.
-- **Reduced motion:** applies when `prefers-reduced-motion: reduce` is set or `data-motion="reduce"` is on `<html>`.
+- **Reduced motion:** `display.reducedMotion` is `system` (follow `prefers-reduced-motion`), `reduce` (`data-motion="reduce"`) or `full` (`data-motion="full"`, ignores the OS preference).
+
+### Persistence
+
+```mermaid
+sequenceDiagram
+    participant UI as SettingsStore (renderer)
+    participant PE as ElectronSettingsService
+    participant PRE as preload bridge
+    participant MAIN as main: ipc-handlers
+    participant FILE as SettingsFile (userData/settings.json)
+    UI->>PE: load()
+    PE->>PRE: getSettings()
+    PRE->>MAIN: invoke settings:get
+    MAIN->>MAIN: senderFrame is app://
+    MAIN->>FILE: read(): stat, readFile, loadSettings
+    FILE-->>MAIN: { settings, fallbackReason }
+    MAIN-->>PE: response
+    PE->>PE: re-validate (SettingsGetResponseSchema, loadSettings)
+    PE-->>UI: { settings, fallbackReason }
+    UI->>PE: save(settings)
+    PE->>PRE: setSettings(settings)
+    PRE->>MAIN: invoke settings:set
+    MAIN->>MAIN: origin, ≤ 1 MiB, current-version Settings
+    MAIN->>FILE: write: temp file, fsync, rename
+```
+
+- **Web harness:** `WebSettingsService` stores the same JSON in `localStorage` (`controls.settings`), with every access in try/catch. Both platforms parse stored text with `parseStoredSettings` from `@controls/ipc-contract`, so fallback behaviour is identical.
+- **Quit:** `Platform.quit()` → `app:quit` → `app.quit()` on desktop (including macOS). The web harness has no Quit.
 - **Notifications:** info and success auto-dismiss after 8 s; warnings and errors stay until dismissed. Expiry pauses while the pointer or keyboard focus is in the stack. Each toast has a Dismiss button, Escape dismisses the focused toast, and focus then moves to the next toast or back to where it came from.
 
 ## Related

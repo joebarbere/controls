@@ -47,7 +47,23 @@ test.describe.serial('desktop smoke', () => {
         bridgeKeys: Object.keys((scope['controls'] as object | undefined) ?? {}),
       };
     });
-    expect(exposure).toEqual({ require: 'undefined', process: 'undefined', bridgeKeys: ['getAppInfo'] });
+    expect(exposure).toEqual({
+      require: 'undefined',
+      process: 'undefined',
+      bridgeKeys: ['getAppInfo', 'getSettings', 'setSettings', 'quit'],
+    });
+  });
+
+  test('settings:set refuses an invalid document without echoing it', async () => {
+    const message = await running().window.evaluate(async () => {
+      const bridge = (globalThis as unknown as { controls: { setSettings(s: unknown): Promise<void> } }).controls;
+      return bridge.setSettings({ secret: 'do-not-echo' }).then(
+        () => 'accepted',
+        (error: Error) => error.message,
+      );
+    });
+    expect(message).toContain('settings:set refused (invalid)');
+    expect(message).not.toContain('do-not-echo');
   });
 
   // The shell (native <dialog>, design tokens, splitters) must work under the app:// CSP (ADR 0005).
@@ -74,7 +90,7 @@ test.describe.serial('desktop smoke', () => {
     await menu.getByRole('button', { name: 'New sandbox' }).focus();
     await window.keyboard.press('Enter');
     await expect(window.getByRole('region', { name: 'Inspector' })).toBeVisible();
-    await expect(window.getByRole('region', { name: '3D viewport' })).toBeFocused();
+    await expect(window.locator('ctl-viewport canvas')).toBeFocused();
     await expect(window.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready');
 
     const violations = await window.evaluate(

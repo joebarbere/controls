@@ -46,7 +46,8 @@
   color-scheme: dark;
 }
 
-// Reduced motion: the OS preference, or the settings override (`data-motion="reduce"`).
+// Reduced motion: the OS preference unless settings force full motion (`data-motion="full"`),
+// or always when settings force it (`data-motion="reduce"`).
 @mixin reduced-motion {
   --ctl-duration: 0ms;
 
@@ -61,7 +62,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  :root:not([data-motion='full']) {
     @include reduced-motion;
   }
 }

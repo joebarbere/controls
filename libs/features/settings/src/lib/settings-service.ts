@@ -1,26 +1,26 @@
 import { InjectionToken } from '@angular/core';
-import type { SettingsDocument, SettingsLoadResult, SettingsService } from '@controls/platform-api';
-import { PLACEHOLDER_DEFAULT_SETTINGS } from './defaults';
+import type { SettingsLoadResult, SettingsService } from '@controls/platform-api';
+import { defaultSettings, type Settings } from '@controls/save-format';
 
 /**
- * Keeps settings in memory for the life of the page. The default until the platform
- * implementations land. TODO(F1.8a): apps/game provides the Electron or web `SettingsService`.
+ * Keeps settings in memory for the life of the page. For tests and for hosts with no storage;
+ * apps/game provides the platform's persistent service instead.
  */
 export class MemorySettingsService implements SettingsService {
-  constructor(private stored?: SettingsDocument) {}
+  constructor(private stored?: Settings) {}
 
   async load(): Promise<SettingsLoadResult> {
     return this.stored
-      ? { settings: this.stored }
-      : { settings: PLACEHOLDER_DEFAULT_SETTINGS, fallbackReason: 'missing' };
+      ? { settings: this.stored, fallbackReason: null }
+      : { settings: defaultSettings(), fallbackReason: 'missing' };
   }
 
-  async save(settings: SettingsDocument): Promise<void> {
+  async save(settings: Settings): Promise<void> {
     this.stored = settings;
   }
 }
 
-/** Where settings are loaded from and saved to. */
+/** Where settings are loaded from and saved to. apps/game provides `platform.settings`. */
 export const SETTINGS_SERVICE = new InjectionToken<SettingsService>('controls.settings', {
   providedIn: 'root',
   factory: () => new MemorySettingsService(),

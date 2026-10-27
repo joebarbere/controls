@@ -2,6 +2,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   Injector,
   resource,
@@ -10,7 +11,7 @@ import {
 } from '@angular/core';
 import { AboutDialog, Hud, MainMenu, NotificationService, Notifications, ShellState } from '@controls/feature-shell';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
-import { Workspace } from '@controls/feature-workspace';
+import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
 import { PLATFORM } from './platform.token';
 
@@ -28,14 +29,18 @@ import { PLATFORM } from './platform.token';
     <ctl-workspace
       [chrome]="!shell.menuOpen()"
       [attr.inert]="shell.menuOpen() ? '' : null"
-      [layout]="settings.settings().workspace.layout"
-      (layoutChange)="settings.update('workspace', { layout: $event })"
+      [layout]="layout()"
+      (layoutChange)="settings.update('workspace', { layout: serialiseLayout($event) })"
       (layoutReset)="notifications.notify('Layout reset.')"
       (backendChange)="backend.set($event)"
     >
       <button ctlButton="ghost" type="button" ctlWorkspaceToolbar (click)="openMenu()">Menu</button>
       @if (!shell.menuOpen()) {
-        <ctl-hud ctlViewportOverlay [mode]="shell.mode()" />
+        <ctl-hud
+          ctlViewportOverlay
+          [mode]="viewState()?.mode ?? 'work'"
+          [selection]="viewState()?.selected?.label ?? null"
+        />
       }
     </ctl-workspace>
     @if (shell.menuOpen()) {
@@ -70,7 +75,12 @@ export class App {
   protected readonly backend = signal<string>('starting…');
   /** SharedArrayBuffer (sim worker snapshots) needs cross-origin isolation — see docs/caveats/electron.md. */
   protected readonly isolated = globalThis.crossOriginIsolated === true;
-  private readonly workspace = viewChild.required(Workspace);
+  private readonly workspace = viewChild(Workspace);
+  /** The panel layout, decoded from the opaque `settings.workspace.layout` (defaults if unrecognised). */
+  protected readonly layout = computed(() => parseWorkspaceLayout(this.settings.settings().workspace.layout));
+  protected readonly serialiseLayout = serialiseWorkspaceLayout;
+  /** Mode and selection from the renderer, for the HUD. */
+  protected readonly viewState = computed(() => this.workspace()?.viewState());
   private readonly injector = inject(Injector);
 
   protected newSandbox(): void {
@@ -92,8 +102,10 @@ export class App {
   }
 
   /**
-   * Escape opens the menu from the workspace and resumes from the menu. Dialogs handle their own
-   * Escape first (and mark the event handled). TODO(F1.4): bind through the keybinding service.
+   * Escape opens the menu from the workspace and resumes from the menu. Inner handlers win: dialogs
+   * and the focused viewport canvas (Escape = clear selection, F1.7) mark the event handled, so from
+   * the canvas the menu is reached with the toolbar's Menu button.
+   * TODO(F1.4): bind through the keybinding service.
    */
   protected onEscape(event: Event): void {
     if (event.defaultPrevented || this.shell.dialog()) return;
@@ -102,6 +114,6 @@ export class App {
   }
 
   private focusViewportAfterRender(): void {
-    afterNextRender(() => this.workspace().focusViewport(), { injector: this.injector });
+    afterNextRender(() => this.workspace()?.focusViewport(), { injector: this.injector });
   }
 }

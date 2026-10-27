@@ -22,7 +22,8 @@ const TEST_HOOK = '__controlsViewport';
  * Hosts one canvas for the framework-free {@link ViewportRenderer}. The renderer runs its own
  * animation loop and input handling; with zoneless change detection nothing here re-renders per
  * frame. Only view state (mode, hover, selection) and twice-a-second dev stats reach signals.
- * TODO(F1.1): the HUD moves into feature-shell; TODO(F1.2): mode/focus go through Commands.
+ * Mode and selection are shown by the shell HUD (`ctl-hud`, fed from `state`); the frame-time dev
+ * HUD and the walk-mode crosshair stay here. TODO(F1.2): mode/focus go through Commands.
  */
 @Component({
   selector: 'ctl-viewport',
@@ -33,16 +34,8 @@ const TEST_HOOK = '__controlsViewport';
       tabindex="0"
       aria-label="3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, WASD walks."
     ></canvas>
-    @if (state(); as s) {
-      <div class="status" aria-live="polite" data-testid="viewport-status">
-        <span>{{ s.mode === 'walk' ? 'Walk' : 'Work' }}</span>
-        @if (s.selected; as sel) {
-          <span>· {{ sel.label }}</span>
-        }
-      </div>
-      @if (s.mode === 'walk') {
-        <div class="crosshair" aria-hidden="true"></div>
-      }
+    @if (state()?.mode === 'walk') {
+      <div class="crosshair" aria-hidden="true"></div>
     }
     @if (showHud && stats(); as st) {
       <div class="dev-hud" data-testid="dev-hud" aria-hidden="true">
@@ -65,10 +58,9 @@ const TEST_HOOK = '__controlsViewport';
       outline: none;
     }
     canvas:focus-visible {
-      outline: 2px solid #7fb8ff;
+      outline: 2px solid var(--ctl-focus, #7fb8ff);
       outline-offset: -2px;
     }
-    .status,
     .dev-hud {
       position: absolute;
       left: 0.75rem;
@@ -80,9 +72,6 @@ const TEST_HOOK = '__controlsViewport';
         12px/1.4 ui-monospace,
         monospace;
       pointer-events: none;
-    }
-    .status {
-      bottom: 2.4rem;
     }
     .dev-hud {
       bottom: 0.75rem;

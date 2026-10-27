@@ -6,7 +6,7 @@
 >
 > **P1 so far:** `libs/domain/save-format` (`@controls/save-format`, F1.8a): the v1 world, manifest, replay-log and settings schemas, the migration framework, fixtures and JSON Schema export. See [world and saves](world-and-saves.md).
 >
-> **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`, and `platform-api` gained `SettingsService` and `Platform.quit`. See [UI shell](ui-shell.md).
+> **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`. `platform-api` gained `Platform.settings` (`SettingsService`) and `Platform.quit`, and three IPC channels joined `app:info`: `settings:get`, `settings:set` (atomic write of `userData/settings.json`) and `app:quit`. See [UI shell](ui-shell.md).
 >
 > Items marked _(PN)_ below arrive in that phase.
 

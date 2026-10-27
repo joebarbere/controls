@@ -35,6 +35,7 @@ describe('SettingsDialog', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     delete document.documentElement.dataset['theme'];
+    delete document.documentElement.dataset['motion'];
   });
 
   it('has every F1.1 section as a named group', async () => {
@@ -51,20 +52,25 @@ describe('SettingsDialog', () => {
     await user.click(within(dialog).getByRole('checkbox', { name: 'Invert vertical look' }));
     await user.click(within(dialog).getByRole('radio', { name: 'Metric (mm, m, mm²)' }));
     await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Default for new games' }), 'Realistic');
-    const master = within(dialog).getByRole('slider', { name: 'Master volume' });
-    master.focus();
-    await user.keyboard('{ArrowLeft}');
-    const look = within(dialog).getByRole('slider', { name: 'Look sensitivity' });
-    look.focus();
-    await user.keyboard('{ArrowRight}');
+    // jsdom/user-event don't step range inputs with arrow keys (Playwright covers that); set values directly.
+    const slide = (name: string, value: string) => {
+      const slider = within(dialog).getByRole('slider', { name }) as HTMLInputElement;
+      slider.value = value;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      return slider;
+    };
+    slide('Master volume', '95');
+    const look = slide('Look sensitivity', '110');
     await fixture.whenStable();
 
     const s = store.settings();
-    expect(s.graphics).toEqual({ backend: 'webgl2', pixelRatioCapPercent: 150 });
+    expect(s.graphics).toEqual({ backend: 'webgl2', pixelRatioCap: 1.5 });
     expect(s.controls.invertY).toBe(true);
-    expect(s.units.display).toBe('metric');
-    expect(s.difficulty.default).toBe('realistic');
-    expect(look.getAttribute('aria-valuetext')).toBe(`${s.controls.lookSensitivityPercent} percent`);
+    expect(s.controls.lookSensitivity).toBeCloseTo(1.1);
+    expect(s.audio.master).toBeCloseTo(0.95);
+    expect(s.display.units).toBe('metric');
+    expect(s.gameplay.defaultDifficulty).toBe('realistic');
+    expect(look.getAttribute('aria-valuetext')).toBe('110 percent');
   });
 
   it('sets the audio volumes from range inputs', async () => {
@@ -73,29 +79,35 @@ describe('SettingsDialog', () => {
       ['Master volume', 'master'],
       ['Effects volume', 'effects'],
       ['Ambience volume', 'ambience'],
+      ['Interface volume', 'interface'],
     ] as const) {
       const slider = within(dialog).getByRole('slider', { name }) as HTMLInputElement;
       slider.value = '35';
       slider.dispatchEvent(new Event('input', { bubbles: true }));
-      expect(store.settings().audio[key]).toBe(35);
+      expect(store.settings().audio[key]).toBe(0.35);
     }
   });
 
   it('overrides the theme and motion on <html>, and Restore defaults undoes it', async () => {
     const { fixture, user, dialog } = await setup();
     await user.click(within(dialog).getByRole('radio', { name: 'Dark' }));
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Reduce motion' }));
+    await user.click(within(dialog).getByRole('radio', { name: 'Reduce motion' }));
     await fixture.whenStable();
     expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(document.documentElement.dataset['motion']).toBe('reduce');
     await user.click(within(dialog).getByRole('radio', { name: 'Light' }));
     await fixture.whenStable();
     expect(document.documentElement.dataset['theme']).toBe('light');
+    await user.click(within(dialog).getByRole('radio', { name: 'Full motion' }));
+    await fixture.whenStable();
+    expect(document.documentElement.dataset['motion']).toBe('full');
 
     await user.click(within(dialog).getByRole('button', { name: 'Restore defaults' }));
     await fixture.whenStable();
     expect(document.documentElement.dataset['theme']).toBeUndefined();
+    expect(document.documentElement.dataset['motion']).toBeUndefined();
     expect((within(dialog).getByRole('radio', { name: 'Match system' }) as HTMLInputElement).checked).toBe(true);
+    expect((within(dialog).getByRole('radio', { name: 'Follow system' }) as HTMLInputElement).checked).toBe(true);
   });
 
   it('shows the region as NEC and disabled, and key bindings as not yet available', async () => {
