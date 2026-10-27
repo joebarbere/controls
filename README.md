@@ -19,7 +19,10 @@ What exists today (Phase 0 scaffold):
 
 ### Rendering
 
-- Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails. Orbit the camera with the mouse.
+- Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails.
+- Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. Press V to switch and F to focus the selection; movement keys are rebindable input actions.
+- Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). A frame-time HUD shows in dev builds.
+- Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. Placement through commands follows.
 
 ### Saves
 

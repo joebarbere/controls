@@ -181,16 +181,16 @@ All of this is in `@controls/renderer`, which now depends on `world-model` and `
 
 Acceptance:
 
-- [ ] `mm()` moves to `@controls/units`. Snapshot add/update/remove keeps the scene in sync (scene-graph JSON snapshot test).
-- [ ] Walk mode: WASD plus mouse look with pointer lock, Esc releases, kept inside the room bounds.
-- [ ] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key.
-- [ ] Hover and selection by BVH raycast. Selection is UI state (`selection.kind`), not world state. Keyboard users can cycle through selectable entities.
-- [ ] Placement:
+- [ ] `mm()` moves to `@controls/units`. Snapshot add/update/remove keeps the scene in sync (scene-graph JSON snapshot test). _(Part 1: `mm()`/`metresToMm()` moved and a scene-graph JSON snapshot test exists; snapshot sync waits for F1.2.)_
+- [x] Walk mode: WASD plus mouse look with pointer lock, Esc releases, kept inside the room bounds.
+- [ ] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key. _(Part 1: `setMode`/`focus` renderer API with orbit, zoom and pan limits on the backplate and rails; walls and benches arrive with F1.9; the Commands and context key wait for F1.2.)_
+- [x] Hover and selection by BVH raycast. Selection is UI state (`selection.kind`), not world state. Keyboard users can cycle through selectable entities.
+- [ ] Placement: _(Part 1: pure integer-mm `snap()` for all three targets with sourced constants, unit- and property-tested; the ghost preview and Commands wait for F1.2.)_
   - a ghost preview snaps to the DIN rail, the backplate grid and wall studs, with snap increments taken from sourced constants;
   - committing produces **one** `entity.place` or `entity.move` and dragging produces none;
   - Esc cancels without a command;
   - Delete runs `entity.delete`.
-- [ ] Every new geometry, material and BVH is disposed when the scene is torn down (unit test). The forced WebGL2 path stays covered by E2E. A dev HUD shows frame time.
+- [x] Every new geometry, material and BVH is disposed when the scene is torn down (unit test). The forced WebGL2 path stays covered by E2E. A dev HUD shows frame time.
 - [ ] E2E: place, move and delete with the mouse gives the same `world.hash` as the equivalent console lines.
 
 ### F1.8 World document v1 and the `.ctrl` container
@@ -332,7 +332,7 @@ Numbers are assigned in landing order. Planned:
 | F1.4    | Keybinding service            | 📐 Planned                                         |
 | F1.5    | Dev console                   | 📐 Planned                                         |
 | F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                         |
-| F1.7    | Cameras and interaction       | 📐 Planned                                         |
+| F1.7    | Cameras and interaction       | 🚧 Part 1                                          |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned |
 | F1.9    | Workshop level                | 📐 Planned                                         |
 | F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                         |

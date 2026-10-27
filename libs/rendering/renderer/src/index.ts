@@ -1,4 +1,11 @@
 export * from './lib/viewport-renderer';
+export * from './lib/viewport-controller';
 export * from './lib/geometry/din-rail';
 export * from './lib/geometry/backplate';
 export * from './lib/panel-scene';
+export * from './lib/cameras/camera-math';
+export * from './lib/input/input-actions';
+export * from './lib/picking/selection';
+export { markSelectable, selectableOf, findSelectables } from './lib/picking/picker';
+export * from './lib/stats/frame-timer';
+export * from './lib/snap';

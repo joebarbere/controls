@@ -1,0 +1,99 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ViewportController scene graph > matches the snapshot (positions in integer mm) 1`] = `
+{
+  "children": [
+    {
+      "name": "",
+      "positionMm": [
+        0,
+        1000,
+        0,
+      ],
+      "type": "HemisphereLight",
+      "visible": true,
+    },
+    {
+      "name": "",
+      "positionMm": [
+        600,
+        900,
+        1200,
+      ],
+      "type": "DirectionalLight",
+      "visible": true,
+    },
+    {
+      "name": "floor",
+      "positionMm": [
+        0,
+        -1200,
+        1750,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "backplate",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "selectable": "backplate:backplate",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "din-rail-1",
+      "positionMm": [
+        0,
+        150,
+        0,
+      ],
+      "selectable": "din-rail:din-rail-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "din-rail-2",
+      "positionMm": [
+        0,
+        -50,
+        0,
+      ],
+      "selectable": "din-rail:din-rail-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "overlay:hover",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Box3Helper",
+      "visible": false,
+    },
+    {
+      "name": "overlay:selection",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Box3Helper",
+      "visible": false,
+    },
+  ],
+  "name": "",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Scene",
+  "visible": true,
+}
+`;
