@@ -1,5 +1,7 @@
 import { _electron as electron, chromium, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const workspaceRoot = join(__dirname, '../../..');
@@ -19,11 +21,14 @@ function chromiumArgs(): string[] {
   return args;
 }
 
-/** Child environment: the parent's (minus unset entries) with auto-update disabled. */
-const env = (): Record<string, string> => ({
+/** Child environment: the parent's (minus unset entries), auto-update off, a fresh profile. */
+const env = (userDataDir: string): Record<string, string> => ({
   ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)),
   CONTROLS_DISABLE_UPDATES: '1',
+  CONTROLS_USER_DATA_DIR: userDataDir, // per-launch profile: no shared single-instance lock or profile files
 });
+
+const removeProfile = (dir: string) => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 
 /**
  * Launches Controls the way a player would, minus auto-update.
@@ -33,17 +38,24 @@ const env = (): Record<string, string> => ({
  */
 export async function launchControls(): Promise<LaunchedControls> {
   const executable = process.env['CONTROLS_E2E_EXECUTABLE'];
+  const userDataDir = mkdtempSync(join(tmpdir(), 'controls-e2e-'));
   if (!executable) {
     const app = await electron.launch({
       args: [join(workspaceRoot, 'dist/apps/desktop'), ...chromiumArgs()],
-      env: env(),
+      env: env(userDataDir),
     });
-    return { window: captureConsole(await app.firstWindow()), close: () => app.close() };
+    return {
+      window: captureConsole(await app.firstWindow()),
+      close: async () => {
+        await app.close();
+        removeProfile(userDataDir);
+      },
+    };
   }
 
   const port = 9300 + Math.floor(Math.random() * 500);
   const child = spawn(executable, [`--remote-debugging-port=${port}`, ...chromiumArgs()], {
-    env: env(),
+    env: env(userDataDir),
     stdio: 'ignore',
   });
   const browser = await connectWithRetry(`http://127.0.0.1:${port}`);
@@ -53,6 +65,7 @@ export async function launchControls(): Promise<LaunchedControls> {
     close: async () => {
       await browser.close().catch(() => undefined);
       await terminate(child);
+      removeProfile(userDataDir);
     },
   };
 }

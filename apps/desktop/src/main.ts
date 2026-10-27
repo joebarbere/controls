@@ -69,6 +69,11 @@ function createWindow(): void {
   void window.loadURL(APP_ENTRY_URL);
 }
 
+// Isolated profile (tests, side-by-side dev builds): separate userData means a separate
+// single-instance lock and settings. Must be set before the lock is requested.
+const userDataOverride = process.env['CONTROLS_USER_DATA_DIR'];
+if (userDataOverride) app.setPath('userData', userDataOverride);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

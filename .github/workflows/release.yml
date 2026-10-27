@@ -5,9 +5,11 @@ name: release
 on:
   push:
     tags: ['v*.*.*']
+  # Rehearsal: package + smoke-test on all three OSes from any branch, uploading nothing.
+  workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: false
 
 permissions:
@@ -22,6 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - name: Tag matches package.json version
+        if: github.event_name == 'push'
         run: |
           version="$(node -p "require('./package.json').version")"
           if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
@@ -72,6 +75,7 @@ jobs:
         run: pnpm exec playwright test -c apps/desktop-e2e/playwright.config.mts
       # Only a build that passed its smoke test reaches the draft release. Same inputs → same artifacts.
       - name: Upload to draft release
+        if: github.event_name == 'push'
         run: pnpm exec electron-builder --config apps/desktop/electron-builder.config.cjs --publish always
       - uses: actions/upload-artifact@v4
         if: failure()
