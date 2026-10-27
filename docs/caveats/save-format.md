@@ -21,3 +21,4 @@
 - **No timestamps in documents.** Container bytes must be deterministic, and domain code can't read the clock anyway. Use the file's mtime.
 - **The determinism lint covers specs:** a test that needs a `Date` instance uses a fixed epoch with a justified `eslint-disable-next-line no-restricted-syntax`.
 - **Coverage includes `src/testing/`** (the fast-check arbitraries, excluded from `tsconfig.lib.json`). Keep the helpers exercised.
+- **`controls.keybindings` is keyed by binding id, not only command id** (F1.4): command ids, fixed-argument bindings (`toolbelt.select.slot3`) and input actions (`input.moveForward`), all in the `CommandId` grammar. The values are canonical chords whose grammar lives in `@controls/commands` (`normaliseChord`); the schema only bounds the string (`KeyChord`, 1–64). A chord the keybinding service can't use is ignored and shown, never "repaired" on load.

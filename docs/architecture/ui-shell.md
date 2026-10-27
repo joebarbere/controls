@@ -1,6 +1,6 @@
 # UI shell
 
-> **Status (F1.1):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)); the keybinding service (F1.4), palette (F1.3) and console (F1.5) are still to come, and their hooks are marked `TODO(F1.x)` in the code. Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
+> **Status (F1.4):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)), and the keybinding service, the Key bindings dialog and the tool belt in F1.4. The palette (F1.3) and console (F1.5) are still to come, and their hooks are marked `TODO(F1.x)` in the code. Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
 
 ## Libraries
 
@@ -16,16 +16,15 @@ flowchart LR
     UI["ui (type:ui)<br/>tokens · ctlButton · ctl-dialog<br/>ctlFocusTrap · ctl-splitter · ctl-toast-stack"]:::done
     PAPI["platform-api<br/>Platform (settings, canQuit, quit)<br/>SettingsService"]:::done
     REND["renderer"]:::done
-    SESS["feature-session (F1.2)<br/>world signal, exec, context keys"]:::later
+    SESS["feature-session<br/>Session · KeybindingService · ToolBelt"]:::done
     PAL["feature-palette (F1.3)"]:::later
     CON["feature-console (F1.5)"]:::later
 
-    GAME --> SHELL & WS & SET & UI & PAPI
-    SET --> SHELL & UI & PAPI
+    GAME --> SHELL & WS & SET & UI & PAPI & SESS
+    SET --> SHELL & UI & PAPI & SESS
     SHELL --> UI
-    WS --> UI & REND
+    WS --> UI & REND & SESS
     PAL & CON -.-> SESS
-    SESS -.-> WS
 ```
 
 `ui` is presentational: it holds no services, state or commands. Features may use each other (`feature-settings` uses `NotificationService` from `feature-shell`), but none of them imports a concrete platform. The app provides `PLATFORM` (Electron bridge or web harness) and will provide the real `SETTINGS_SERVICE`.
@@ -44,13 +43,15 @@ stateDiagram-v2
         [*] --> Items
         Items --> SettingsDialog: Settings
         SettingsDialog --> Items: Back / Escape (focus returns to Settings)
+        SettingsDialog --> KeyBindingsDialog: Key bindings…
+        KeyBindingsDialog --> SettingsDialog: Back / Escape (focus returns to Key bindings…)
         Items --> AboutDialog: About
         AboutDialog --> Items: Close / Escape (focus returns to About)
     }
 ```
 
 - **Dialogs** are native `<dialog>` elements opened with `showModal()` (`ctl-dialog`). The page behind them is inert, focus moves inside and is trapped, Escape closes, and focus returns to the opener.
-- **Escape** is handled innermost-first: a dialog or the focused viewport canvas (clear selection) consumes it; otherwise `App.onEscape` toggles between the menu and the workspace. F1.4 moves this into the keybinding service.
+- **Escape** is handled innermost-first: a key capture in the Key bindings dialog, a dialog or the focused viewport canvas (clear selection) consumes it; otherwise `App.onEscape` toggles between the menu and the workspace. Escape is the shell's fixed "back" key, reserved by the keybinding service, so no command can take it.
 - **Main menu** items are plain buttons in a `<nav>`. Tab, Up/Down, Home and End move between them. Continue and Load are `aria-disabled` with a reason until F1.8b, and Quit is hidden where `Platform.canQuit` is false (the web harness).
 
 ## Workspace layout
@@ -76,6 +77,28 @@ flowchart TB
 - It is two-way bound to `settings.workspace.layout`, so it persists once F1.8a wires the storage.
 - Splitters follow the WAI-ARIA window-splitter pattern: arrows resize (Shift for big steps), Home/End jump to the limits, and Enter collapses or restores. Pointer drags use pointer capture.
 - **Reset layout** runs the `view.resetLayout` view command through `Session.exec`. The workspace applies it when the command reports back (`Session.onCommand`), so any surface that runs the command resets the layout. It is logged and never changes the world hash.
+
+## Keybindings and the tool belt
+
+```mermaid
+sequenceDiagram
+    participant K as Keyboard
+    participant C as Viewport canvas (renderer input actions)
+    participant D as document: KeybindingService
+    participant S as Session
+    participant T as ToolBelt / HUD
+    K->>C: keydown (canvas focused)
+    C->>C: input action bound and acted? preventDefault
+    C-->>D: bubbles (unless handled)
+    D->>D: chordFromEvent → keymap.resolve(chord, contextKeys, restricted?)
+    D->>S: exec('toolbelt.select', {slot: 2})
+    S-->>T: onCommand → active slot, toolbelt.slot context key, HUD "2: Crate"
+```
+
+- `KeybindingService` (`feature-session`) owns the one document `keydown` listener for commands. It builds its keymap from the registry (`defaultBindingDecls`) and the player's overrides, which `apps/game` stores in settings with `provideKeybindingOverridesFromSettings()` (`feature-settings`). Without that provider the overrides live in memory.
+- The **viewport** pushes `KeybindingService.inputBindings()` into the renderer, names the current keys in the canvas's accessible name, and sets the `viewport.focused` context key while the canvas has focus.
+- **Settings → Key bindings…** opens a sibling dialog (`ctl-keybindings-dialog`) with one table per category. **Change** captures the next key press (Escape cancels, Tab leaves); **Unbind**, **Reset** and **Reset all bindings** act at once. Conflicts and ignored stored bindings are shown in the row and wired to the Change button with `aria-describedby`; a polite status region announces each change. Inactive buttons are `aria-disabled`, so focus never falls out of the dialog.
+- The **HUD** shows the active tool-belt slot and the prop it holds (settings `toolBelt.slots`).
 
 ## Settings, theme and notifications
 
