@@ -1,0 +1,4 @@
+# LF everywhere: Prettier's --check (part of `pnpm verify`) fails on CRLF checkouts on Windows.
+* text=auto eol=lf
+*.png binary
+*.ico binary

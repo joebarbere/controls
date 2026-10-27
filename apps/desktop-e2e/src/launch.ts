@@ -12,7 +12,10 @@ export interface LaunchedControls {
 function chromiumArgs(): string[] {
   const args: string[] = [];
   if (process.env['CONTROLS_E2E_HEADLESS'] === '1') args.push('--ozone-platform=headless');
-  if (process.platform === 'linux' && process.env['CI']) args.push('--no-sandbox'); // CI runners lack the SUID sandbox helper
+  if (process.platform === 'linux' && process.env['CI']) {
+    args.push('--no-sandbox'); // CI runners lack the SUID sandbox helper
+    args.push('--enable-unsafe-swiftshader'); // GPU-less runners: allow Chromium's software WebGL (tests only)
+  }
   return args;
 }
 
@@ -35,7 +38,7 @@ export async function launchControls(): Promise<LaunchedControls> {
       args: [join(workspaceRoot, 'dist/apps/desktop'), ...chromiumArgs()],
       env: env(),
     });
-    return { window: await app.firstWindow(), close: () => app.close() };
+    return { window: captureConsole(await app.firstWindow()), close: () => app.close() };
   }
 
   const port = 9300 + Math.floor(Math.random() * 500);
@@ -44,7 +47,7 @@ export async function launchControls(): Promise<LaunchedControls> {
     stdio: 'ignore',
   });
   const browser = await connectWithRetry(`http://127.0.0.1:${port}`);
-  const window = await findAppPage(browser.contexts());
+  const window = captureConsole(await findAppPage(browser.contexts()));
   return {
     window,
     close: async () => {
@@ -73,4 +76,14 @@ async function findAppPage(contexts: ReturnType<Awaited<ReturnType<typeof chromi
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error('Controls window never appeared');
+}
+
+/** Mirrors renderer console errors/warnings to the test log, so CI failures (e.g. no WebGL) explain themselves. */
+function captureConsole(page: Page): Page {
+  page.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning')
+      console.log(`[renderer ${message.type()}] ${message.text()}`);
+  });
+  page.on('pageerror', (error) => console.log(`[renderer pageerror] ${error.message}`));
+  return page;
 }
