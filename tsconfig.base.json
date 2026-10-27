@@ -19,6 +19,7 @@
     "skipDefaultLibCheck": true,
     "paths": {
       "@controls/units": ["./libs/domain/units/src/index.ts"],
+      "@controls/save-format": ["./libs/domain/save-format/src/index.ts"],
       "@controls/ipc-contract": ["./libs/ipc-contract/src/index.ts"],
       "@controls/ipc-contract/preload": ["./libs/ipc-contract/src/preload.ts"],
       "@controls/renderer": ["./libs/rendering/renderer/src/index.ts"],

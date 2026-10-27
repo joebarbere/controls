@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "seed": 0,
+  "tick": 0,
+  "nextEntityId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "entities": [],
+  "extensions": {}
+}

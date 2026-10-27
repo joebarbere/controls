@@ -84,11 +84,12 @@ Until a specialist exists, do the work directly and follow the plan section for 
 
 Load the matching file before working in an area. The code tells you what shipped; caveats tell you why. Full index: [`docs/caveats/README.md`](docs/caveats/README.md).
 
-| File                                                     | Load when working on…                                                                         |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`docs/caveats/workspace.md`](docs/caveats/workspace.md) | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags, `pnpm verify`          |
-| [`docs/caveats/electron.md`](docs/caveats/electron.md)   | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses |
-| [`docs/caveats/release.md`](docs/caveats/release.md)     | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`       |
+| File                                                         | Load when working on…                                                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/caveats/workspace.md`](docs/caveats/workspace.md)     | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags, `pnpm verify`                                       |
+| [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                              |
+| [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                    |
+| [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log) |
 
 ## Working with the planning artifacts
 

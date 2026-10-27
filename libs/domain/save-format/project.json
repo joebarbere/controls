@@ -1,0 +1,17 @@
+{
+  "name": "save-format",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/save-format/src",
+  "projectType": "library",
+  "tags": ["type:domain"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/domain/save-format/tsconfig.lib.json --noEmit && tsc -p libs/domain/save-format/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

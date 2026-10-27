@@ -2,7 +2,9 @@
 
 > **This page shows the target architecture** from [`controls-development-plan.md`](../../controls-development-plan.md) §4. Most of it doesn't exist yet.
 >
-> **P0 implements:** `apps/desktop` (Electron main + preload, `app://` protocol, one IPC channel `app:info`, updater wiring), `apps/game` (Angular 22 zoneless shell with an about box and the viewport), `apps/game-e2e` (Playwright against the web harness) and `apps/desktop-e2e` (Playwright `_electron`, or a CDP attach to a packaged binary), `libs/domain/units` (`@controls/units`, so far only the generated `lib/version.ts`), `libs/ipc-contract` (`@controls/ipc-contract`, plus the narrow `@controls/ipc-contract/preload` entry), `libs/rendering/renderer` (`@controls/renderer`, sub-panel + two DIN rails) and `libs/platform/api|electron|web`. There is **no** sim worker, PLC worker, command registry or save format yet.
+> **P0 implements:** `apps/desktop` (Electron main + preload, `app://` protocol, one IPC channel `app:info`, updater wiring), `apps/game` (Angular 22 zoneless shell with an about box and the viewport), `apps/game-e2e` (Playwright against the web harness) and `apps/desktop-e2e` (Playwright `_electron`, or a CDP attach to a packaged binary), `libs/domain/units` (`@controls/units`, so far only the generated `lib/version.ts`), `libs/ipc-contract` (`@controls/ipc-contract`, plus the narrow `@controls/ipc-contract/preload` entry), `libs/rendering/renderer` (`@controls/renderer`, sub-panel + two DIN rails) and `libs/platform/api|electron|web`. There is **no** sim worker, PLC worker, command registry or save format in P0.
+>
+> **P1 so far:** `libs/domain/save-format` (`@controls/save-format`, F1.8a): the v1 world, manifest, replay-log and settings schemas, the migration framework, fixtures and JSON Schema export. See [world and saves](world-and-saves.md).
 >
 > Items marked _(PN)_ below arrive in that phase.
 
@@ -50,7 +52,7 @@ flowchart TB
 
 ## Module boundaries
 
-Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist in P0, and the edges between them are the imports P0 actually has. `REND --> UNITS` is intended: the renderer still uses its own `mm()` helper. E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
+Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today, and the edges between them are the imports that actually exist. `REND --> UNITS` is intended: the renderer still uses its own `mm()` helper. E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
 
 ```mermaid
 flowchart LR
@@ -71,6 +73,7 @@ flowchart LR
     PWEB["libs/platform/web<br/>type:platform"]:::p0
     IPC["libs/ipc-contract<br/>type:contract"]:::p0
     UNITS["libs/domain/units<br/>type:domain"]:::p0
+    SF["libs/domain/save-format<br/>type:domain"]:::p0
     DOM["libs/domain/* (P1+)<br/>world-model, commands, save-format, sim-core…"]:::later
     WORKER["libs/sim-worker (P2)"]:::later
 
@@ -84,6 +87,8 @@ flowchart LR
     PWEB --> PAPI & IPC & UNITS
     WORKER --> DOM
     DOM --> UNITS
+    SF --> UNITS
+    DOM --> SF
 ```
 
 **Rules** (plan §4.2):

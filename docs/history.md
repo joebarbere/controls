@@ -45,11 +45,17 @@ The roadmap is defined in [`controls-development-plan.md`](../controls-developme
 
 ### Save format (`schemaVersion`)
 
-The `.ctrl` save format ([ADR 0004](decisions/0004-save-format.md)) is introduced in P1 (F1.8). No versions yet.
+The `.ctrl` save format ([ADR 0004](decisions/0004-save-format.md)) is introduced in P1 (F1.8). Version 1 is frozen when v0.2.0 ships; until then it may still change with its fixtures.
 
-| schemaVersion | App version | Change |
-| ------------- | ----------- | ------ |
-| —             | —           | —      |
+| schemaVersion | App version        | Change                                                                                                                                                                                                                                                                                                                        |
+| ------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1             | 0.2.0 (unreleased) | First version (F1.8a, [ADR 0007](decisions/0007-world-document-v1.md)): `manifest.json`, `world.json` (seed, tick, `nextEntityId`, region, difficulty, `assisted`, entities with catalogue refs and integer-mm/millidegree transforms, `extensions`) and `replay.log` (initial world plus `{ seq, tick, id, args }` entries). |
+
+Settings are versioned separately (`settingsVersion`):
+
+| settingsVersion | App version        | Change                                                                                                                                                                          |
+| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1               | 0.2.0 (unreleased) | First version (F1.8a): graphics, audio, controls and keybinding overrides, palette recents, console history, display, gameplay defaults, workspace layout, autosave, tool belt. |
 
 ### Device catalogue (`catalogVersion`)
 
