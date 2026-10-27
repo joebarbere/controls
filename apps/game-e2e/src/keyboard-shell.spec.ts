@@ -83,16 +83,21 @@ test('menu → settings → back → about → New sandbox, keyboard only', asyn
   await expectVisibleFocus(viewport);
   await expect(page.getByRole('region', { name: 'Status' })).toContainText('Work');
 
-  // On the canvas, Escape belongs to the viewport (clear selection), so it must not open the menu.
+  // On the canvas, Escape clears a selection first; with nothing selected it opens the menu.
+  await page.keyboard.press('BracketRight');
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
+  await page.keyboard.press('Escape');
+  const resume = menu.getByRole('button', { name: 'Resume' });
+  await expectVisibleFocus(resume);
+  await page.keyboard.press('Enter');
+  await expectVisibleFocus(viewport);
 
-  // From the toolbar, Escape brings the menu back with Resume focused; Enter resumes.
+  // From the toolbar, Escape also brings the menu back with Resume focused; Enter resumes.
   const menuButton = page.getByRole('button', { name: 'Menu' });
   await tabTo(page, menuButton, 10, 'Shift+Tab');
   await expectVisibleFocus(menuButton);
   await page.keyboard.press('Escape');
-  const resume = menu.getByRole('button', { name: 'Resume' });
   await expectVisibleFocus(resume);
   await page.keyboard.press('Enter');
   await expectVisibleFocus(viewport);

@@ -23,7 +23,8 @@ export class KeyboardInput {
   constructor(
     element: EventTarget,
     windowTarget: EventTarget | null,
-    private readonly onTrigger: (action: TriggeredAction) => void,
+    /** Returns whether the action did anything; an unhandled key keeps its default (e.g. Escape reaches the shell). */
+    private readonly onTrigger: (action: TriggeredAction) => boolean,
     bindings: InputBindings = DEFAULT_INPUT_BINDINGS,
   ) {
     this.byCode = compileBindings(bindings);
@@ -50,9 +51,12 @@ export class KeyboardInput {
     if (e.ctrlKey || e.metaKey || e.altKey) return; // chords belong to Commands (F1.4)
     const action = this.byCode.get(e.code);
     if (!action) return;
-    e.preventDefault(); // stop arrows and space scrolling the page
-    if (isHeldAction(action)) this.held.add(action);
-    else if (!e.repeat) this.onTrigger(action);
+    if (isHeldAction(action)) {
+      e.preventDefault(); // stop arrows and space scrolling the page
+      this.held.add(action);
+    } else if (e.repeat || this.onTrigger(action)) {
+      e.preventDefault();
+    }
   }
 
   private onKeyUp(e: KeyboardEvent): void {

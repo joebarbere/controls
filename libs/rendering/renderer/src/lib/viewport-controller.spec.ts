@@ -72,7 +72,7 @@ const setup = () => {
 };
 
 const key = (type: 'keydown' | 'keyup', code: string, repeat = false) =>
-  Object.assign(new Event(type), { code, repeat, ctrlKey: false, metaKey: false, altKey: false });
+  Object.assign(new Event(type, { cancelable: true }), { code, repeat, ctrlKey: false, metaKey: false, altKey: false });
 const pointer = (type: string, offsetX: number, offsetY: number) =>
   Object.assign(new Event(type), {
     button: 0,
@@ -154,6 +154,19 @@ describe('ViewportController picking and selection', () => {
     canvas.dispatchEvent(key('keydown', 'BracketLeft'));
     canvas.dispatchEvent(key('keydown', 'Escape'));
     expect(seen).toEqual(['backplate', 'din-rail-1', 'backplate', null]);
+    controller.dispose();
+  });
+
+  it('consumes Escape only when it clears a selection, so the shell can still open the menu', () => {
+    const { canvas, controller } = setup();
+    const idle = key('keydown', 'Escape');
+    canvas.dispatchEvent(idle);
+    expect(idle.defaultPrevented).toBe(false);
+    controller.select('backplate');
+    const clearing = key('keydown', 'Escape');
+    canvas.dispatchEvent(clearing);
+    expect(clearing.defaultPrevented).toBe(true);
+    expect(controller.state.selected).toBeNull();
     controller.dispose();
   });
 
