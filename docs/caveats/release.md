@@ -15,4 +15,5 @@
 - **Local deb/rpm builds on Fedora** fail with `ruby: … libcrypt.so.1` (electron-builder's bundled fpm) and need `rpmbuild` for rpm: `sudo dnf install libxcrypt-compat rpm-build`. The AppImage builds without them. Ubuntu CI runners have libcrypt; `release.yml` installs `rpm`.
 - **No app icon yet:** builds use electron-builder's default Electron icon until `apps/desktop/build-resources/icon.png` (1024×1024) is added.
 - **macOS universal** builds download both x64 and arm64 Electron; `CSC_IDENTITY_AUTO_DISCOVERY=false` in `release.yml` keeps the runner from trying to sign with a stray identity.
+- **Packaged smoke tests must wait for the app to exit** between launches (`terminate()` in `apps/desktop-e2e/src/launch.ts`). The single-instance lock makes a second launch quit at once if the previous process is still shutting down; v0.1.0's first macOS release job failed this way (`connectOverCDP … ECONNREFUSED`).
 - Record each release lesson here, in the same PR as the fix.

@@ -1,5 +1,5 @@
 import { _electron as electron, chromium, type Page } from '@playwright/test';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 
 const workspaceRoot = join(__dirname, '../../..');
@@ -52,7 +52,7 @@ export async function launchControls(): Promise<LaunchedControls> {
     window,
     close: async () => {
       await browser.close().catch(() => undefined);
-      child.kill();
+      await terminate(child);
     },
   };
 }
@@ -86,4 +86,17 @@ function captureConsole(page: Page): Page {
   });
   page.on('pageerror', (error) => console.log(`[renderer pageerror] ${error.message}`));
   return page;
+}
+
+/**
+ * Waits for the app to really exit. The app holds a single-instance lock, so launching the next
+ * test while the previous process is still shutting down (seen on macOS) makes the new one quit.
+ */
+async function terminate(child: ChildProcess, graceMs = 10_000): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  child.kill();
+  const timer = setTimeout(() => child.kill('SIGKILL'), graceMs);
+  await exited;
+  clearTimeout(timer);
 }
