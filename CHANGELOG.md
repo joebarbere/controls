@@ -35,7 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The F1.7 viewport e2e tests start a sandbox first, because the game now boots to the main menu with the viewport inert behind it.
 - Domain libs are now provably framework-free and deterministic. Lint bans framework and UI packages (`@angular/*`, `rxjs`, `electron`, `three`, …) in `type:domain` libs, Node built-ins in domain source, and `Math.random`, `Date.now`, `new Date()`, `performance` and `crypto` in all domain code. Domain libs typecheck without the DOM lib or ambient Node types, via a shared `libs/domain/tsconfig.domain.json`. Before this, the boundary was only checked against workspace imports.
 - `desktop-e2e:e2e` is explicitly never cached, so a packaged smoke run can't be replaced by a cached dev run.
-- Toolchain patch updates at the Phase 1 kickoff: pnpm 11.15.0 → 11.28.8, electron-builder 26.18.0 → 26.18.1 and electron-updater 6.8.11 → 6.8.12. Nx 24.0.2 is deferred until it clears pnpm's minimum release age.
+- Toolchain patch updates at the Phase 1 kickoff: pnpm 11.15.0 → 11.28.8, electron-builder 26.18.0 → 26.18.1 and electron-updater 6.8.11 → 6.8.12. Nx 24.0.0 → 24.0.2 followed once it cleared pnpm's minimum release age (no `nx migrate` migrations).
 
 ## [0.1.0] - 2026-10-26
 
