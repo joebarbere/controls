@@ -20,6 +20,9 @@
     "paths": {
       "@controls/units": ["./libs/domain/units/src/index.ts"],
       "@controls/save-format": ["./libs/domain/save-format/src/index.ts"],
+      "@controls/save-format/testing": ["./libs/domain/save-format/src/testing/arbitraries.ts"],
+      "@controls/commands": ["./libs/domain/commands/src/index.ts"],
+      "@controls/world-model": ["./libs/domain/world-model/src/index.ts"],
       "@controls/ipc-contract": ["./libs/ipc-contract/src/index.ts"],
       "@controls/ipc-contract/preload": ["./libs/ipc-contract/src/preload.ts"],
       "@controls/renderer": ["./libs/rendering/renderer/src/index.ts"],
@@ -29,7 +32,8 @@
       "@controls/ui": ["./libs/ui/src/index.ts"],
       "@controls/feature-shell": ["./libs/features/shell/src/index.ts"],
       "@controls/feature-workspace": ["./libs/features/workspace/src/index.ts"],
-      "@controls/feature-settings": ["./libs/features/settings/src/index.ts"]
+      "@controls/feature-settings": ["./libs/features/settings/src/index.ts"],
+      "@controls/feature-session": ["./libs/features/session/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

@@ -3,7 +3,7 @@ import { type LoadError, type LoadResult, migrationChain } from './migrate';
 import type { Difficulty, RegionId } from './primitives';
 import { defaultSettingsV1, SettingsV1 } from './settings/v1';
 import { CTRL_FORMAT, ManifestV1 } from './v1/manifest';
-import { ReplayLogV1 } from './v1/replay-log';
+import { ReplayEntryV1, ReplayLogV1 } from './v1/replay-log';
 import { WorldV1 } from './v1/world';
 
 /*
@@ -25,6 +25,9 @@ export const Manifest = ManifestV1;
 export type Manifest = ManifestV1;
 export const ReplayLog = ReplayLogV1;
 export type ReplayLog = ReplayLogV1;
+/** One replay-log entry at the current version. `@controls/commands` validates every logged entry with it. */
+export const ReplayEntry = ReplayEntryV1;
+export type ReplayEntry = ReplayEntryV1;
 export const Settings = SettingsV1;
 export type Settings = SettingsV1;
 
@@ -97,7 +100,7 @@ export function createManifest(options: { catalogVersion?: number } = {}): Manif
   });
 }
 
-/** An empty replay log starting from `initialWorld`. */
-export function createReplayLog(initialWorld: World): ReplayLog {
-  return ReplayLog.parse({ schemaVersion: CURRENT_SCHEMA_VERSION, initialWorld, entries: [] });
+/** A replay log starting from `initialWorld`, empty unless `entries` are given. Validated, so bad entries throw. */
+export function createReplayLog(initialWorld: World, entries: readonly ReplayEntry[] = []): ReplayLog {
+  return ReplayLog.parse({ schemaVersion: CURRENT_SCHEMA_VERSION, initialWorld, entries });
 }

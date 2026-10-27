@@ -63,7 +63,7 @@ export class Hud {
   readonly mode = input.required<InteractionMode>();
   /** One-line summary of the selection (the renderer's selection label), or null when nothing is selected. */
   readonly selection = input<string | null>(null);
-  /** The current world is assisted. TODO(F1.2): from the world's `assisted` flag. */
+  /** The current world is assisted (the app binds the world's `assisted` flag). */
   readonly assisted = input(false);
 
   protected readonly modeLabel = computed(() => MODE_LABELS[this.mode()]);

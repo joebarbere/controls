@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { AboutDialog, Hud, MainMenu, NotificationService, Notifications, ShellState } from '@controls/feature-shell';
+import { Session } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
@@ -18,7 +19,7 @@ import { PLATFORM } from './platform.token';
 /**
  * Assembles the shell: the workspace (always mounted; behind the main menu it is the 3D backdrop),
  * the main menu, the settings and about dialogs, the HUD and notifications. Navigation is UI-only
- * state in {@link ShellState}; world changes will go through the command registry (F1.2).
+ * state in {@link ShellState}; world changes go through the command registry via {@link Session}.
  */
 @Component({
   selector: 'ctl-root',
@@ -40,6 +41,7 @@ import { PLATFORM } from './platform.token';
           ctlViewportOverlay
           [mode]="viewState()?.mode ?? 'work'"
           [selection]="viewState()?.selected?.label ?? null"
+          [assisted]="session.world().assisted"
         />
       }
     </ctl-workspace>
@@ -70,6 +72,8 @@ export class App {
   protected readonly platform = inject(PLATFORM);
   protected readonly shell = inject(ShellState);
   protected readonly settings = inject(SettingsStore);
+  /** The world session (F1.2): the HUD's assisted badge reads the world's flag. */
+  protected readonly session = inject(Session);
   protected readonly notifications = inject(NotificationService);
   protected readonly info = resource({ loader: () => this.platform.getAppInfo() });
   protected readonly backend = signal<string>('starting…');

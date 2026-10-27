@@ -1,0 +1,17 @@
+{
+  "name": "world-model",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/world-model/src",
+  "projectType": "library",
+  "tags": ["type:domain"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/domain/world-model/tsconfig.lib.json --noEmit && tsc -p libs/domain/world-model/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}
