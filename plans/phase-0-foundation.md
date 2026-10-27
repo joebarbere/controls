@@ -1,6 +1,6 @@
 # Phase 0: Foundation ("Hello, panel")
 
-**Release:** v0.1.0 · **Status:** 🚧 In progress (started 2026-10-26) · **Spec:** [plan §6 P0](../controls-development-plan.md#p0--foundation-v010-hello-panel)
+**Release:** v0.1.0 · **Status:** ✅ Done (2026-10-26) · **Spec:** [plan §6 P0](../controls-development-plan.md#p0--foundation-v010-hello-panel)
 
 > **Status (2026-10-26, later):** pushed to GitHub; `main.yml` is green on all three OSes (verify, web e2e, Electron smoke). v0.1.0 bumped and awaiting its first tag-driven draft release.
 >
@@ -13,8 +13,8 @@ A green, cross-platform walking skeleton: an Nx workspace, an Electron shell ser
 ## Phase acceptance
 
 - [x] `pnpm verify` is green on Windows, macOS and Linux (CI `main.yml` matrix). _(run 40434999754, after fixing CRLF checkouts and GPU-less WebGL)_
-- [ ] Pushing `v0.1.0` produces a **draft** GitHub Release whose installers launch on Windows, macOS and Linux and show the viewport.
-- [ ] The `/release` dry run is documented in [`docs/guides/releasing.md`](../docs/guides/releasing.md) and has been run once.
+- [x] Pushing `v0.1.0` produces a **draft** GitHub Release whose installers launch on Windows, macOS and Linux and show the viewport.
+- [x] The `/release` dry run is documented in [`docs/guides/releasing.md`](../docs/guides/releasing.md) and has been run once. _(Rehearsed for real via `release.yml` `workflow_dispatch` (run 40441020062: package + smoke on all three OSes, no upload), then v0.1.0 cut from a tag.)_
 
 ## Features
 
@@ -24,7 +24,7 @@ Nx 24 + pnpm 11 workspace, TypeScript strict, ESLint flat config, Prettier, modu
 
 Acceptance:
 
-- [ ] `pnpm install` works from a clean clone with Node 24 and Corepack; packages with install scripts are in `pnpm-workspace.yaml` `allowBuilds`. _(`allowBuilds` is in place; a clean-clone install hasn't been exercised. The first CI run, which does `pnpm install --frozen-lockfile`, will show it.)_
+- [x] `pnpm install` works from a clean clone with Node 24 and Corepack; packages with install scripts are in `pnpm-workspace.yaml` `allowBuilds`. _(Every CI job does a clean-clone `pnpm install --frozen-lockfile` on Windows, macOS and Linux.)_
 - [x] Projects carry `type:*` tags and `@nx/enforce-module-boundaries` fails on a forbidden import (for example a `type:domain` lib importing Angular). _(A `type:domain` lib importing `@controls/renderer` fails lint; both e2e projects are `type:e2e`.)_
 - [x] `tsconfig.base.json` uses `paths` without `baseUrl`; all projects typecheck under `strict`. _(Every project, including both e2e suites, has a `typecheck` target in `pnpm verify`.)_
 - [x] Findings recorded: TypeScript pinned to 6.0.x (Angular 22 requires `>=6.0 <6.1`; `tsgo` not used); Vitest 4.1 (Angular 22 requires `^4`); integrated paths style because `@nx/angular` refuses project references. → [ADR 0001](../docs/decisions/0001-stack.md), [workspace caveats](../docs/caveats/workspace.md).
@@ -83,7 +83,7 @@ Acceptance:
 
 - [x] `apps/desktop/electron-builder.config.cjs` defines NSIS, universal dmg + zip, AppImage, deb and rpm targets and the GitHub publish provider.
 - [ ] `pnpm package:desktop` and `pnpm package:desktop:dir` work locally on the current OS. _(`package:desktop:dir` works and the AppImage builds. On the Fedora dev host, deb fails because `libcrypt.so.1` is missing and rpm fails because `rpmbuild` is missing (see [release caveats](../docs/caveats/release.md)). Tick this once `libxcrypt-compat` and `rpm-build` are installed and a full run passes.)_
-- [ ] `release.yml` builds all three OSes from a `v*` tag and creates a **draft** release with every artifact and `latest*.yml`. _(The workflow is written, including a packaged-app smoke test on each OS. It has never run: no tag, no draft.)_
+- [x] `release.yml` builds all three OSes from a `v*` tag and creates a **draft** release with every artifact and `latest*.yml`. _(Run 40441773977: draft v0.1.0 with NSIS, universal dmg/zip, AppImage/deb/rpm, blockmaps and all three `latest*.yml`, each smoke-tested before upload.)_
 - [x] electron-updater checks for updates only when packaged; no-op in dev. _(It is also skipped on macOS while builds are unsigned, and when `CONTROLS_DISABLE_UPDATES=1`.)_
 - [x] `pnpm version:sync` writes the root version into `apps/desktop/package.json` and `libs/domain/units/src/lib/version.ts`; `tools/check-version-sync.mjs` fails on drift (unit-tested or exercised in CI).
 
