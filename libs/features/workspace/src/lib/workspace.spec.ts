@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, output, signal, viewChild } from '@
 import { TestBed } from '@angular/core/testing';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
+import { Session } from '@controls/feature-session';
 import {
   DEFAULT_WORKSPACE_LAYOUT,
   normaliseLayout,
@@ -94,12 +95,29 @@ describe('Workspace', () => {
     expect(host.layout().bottom.collapsed).toBe(false);
   });
 
-  it('resets the layout and reports it', async () => {
+  it('resets the layout through the view.resetLayout command and reports it', async () => {
     const { fixture, host, user } = await setup();
+    const session = TestBed.inject(Session);
+    const hash = session.hash();
     host.layout.set({ inspector: { size: 500, collapsed: true }, bottom: { size: 120, collapsed: true } });
     await fixture.whenStable();
     await user.click(screen.getByRole('button', { name: 'Reset layout' }));
     expect(host.layout()).toEqual(DEFAULT_WORKSPACE_LAYOUT);
+    expect(host.resets).toBe(1);
+    // A view command: logged, but the world (and its hash) is unchanged.
+    expect(session.entries().map((e) => e.id)).toEqual(['view.resetLayout']);
+    expect(session.hash()).toBe(hash);
+  });
+
+  it('resets the layout when view.resetLayout runs from another surface', async () => {
+    const { fixture, host } = await setup();
+    host.layout.set({ inspector: { size: 500, collapsed: true }, bottom: { size: 120, collapsed: true } });
+    await fixture.whenStable();
+    expect(TestBed.inject(Session).exec('view.resetLayout').ok).toBe(true);
+    expect(host.layout()).toEqual(DEFAULT_WORKSPACE_LAYOUT);
+    expect(host.resets).toBe(1);
+    fixture.destroy();
+    TestBed.inject(Session).exec('view.resetLayout'); // the destroyed workspace no longer listens
     expect(host.resets).toBe(1);
   });
 

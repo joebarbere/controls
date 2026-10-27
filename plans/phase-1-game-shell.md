@@ -82,7 +82,7 @@ Main menu (New sandbox, Continue, Load, Settings, About, Quit), settings, dockin
 Acceptance:
 
 - [x] ADR 0005 picks dockview or custom split panes before the workspace PR merges. Criteria: Angular 22 zoneless support, works under the strict CSP, keyboard operation, serialisable layout, licence, bundle size.
-- [ ] Workspace: the 3D viewport plus at least a side panel (inspector) and a bottom panel (console host). Panels resize and the layout persists in settings. `view.resetLayout` is a registered command. _(Done except the command: Reset layout is `Workspace.resetLayout()`, marked `TODO(F1.2)` until the registry exists.)_
+- [x] Workspace: the 3D viewport plus at least a side panel (inspector) and a bottom panel (console host). Panels resize and the layout persists in settings. `view.resetLayout` is a registered command. _(The command landed with F1.2: the button runs it through `Session.exec` and the workspace applies it in `Session.onCommand`.)_
 - [x] Settings sections:
   - graphics: backend preference auto/webgl2, pixel-ratio cap;
   - audio: volumes, stored only; audio arrives in P4;
@@ -95,7 +95,7 @@ Acceptance:
 
 - [x] The settings document is Zod-validated with its own `settingsVersion`. A corrupt or unknown file falls back to defaults with a notification (unit tests for main and web).
 - [x] Settings IPC (`settings:get` / `settings:set`): Zod-validated in main, `senderFrame` checked, size-capped, written atomically.
-- [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Badge wired to an input; the world `assisted` flag arrives with F1.2/F1.3.)_
+- [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Since F1.2 the badge reads the world's `assisted` flag through `Session`; cheat commands arrive with F1.3/F1.5.)_
 - [x] Notifications are announced through `aria-live` and can be dismissed from the keyboard.
 - [x] Light and dark themes via CSS custom properties: follow `prefers-color-scheme`, can be overridden in settings, honour `prefers-reduced-motion`.
 - [x] Keyboard-only Playwright test: menu → settings → back → New sandbox without the mouse, with visible focus and focus restored after each dialog closes.
@@ -107,18 +107,19 @@ The registry, bus, undo/redo and replay log from §4.6 live in `libs/domain/comm
 
 Acceptance:
 
-- [ ] `CommandDef<A>` matches §4.6 (`id`, `title`, `category`, Zod `args`, `when`, `keybinding`, `undoable`, `cheat`, `run`). The registry rejects duplicate or malformed ids.
-- [ ] `exec(id, args)` parses `args` with the command's Zod schema before `run`. Invalid args return a typed error and leave the world and the log unchanged.
-- [ ] `when` context expressions (`==`, `!=`, `&&`, `||`, `!`, dotted keys) go through a hand-written parser and evaluator. No `eval` or `new Function` (CSP). Unit-tested.
-- [ ] Undoable commands produce an apply/invert pair. `edit.undo` and `edit.redo` are registered commands. A new mutation clears redo. Deleting and then undoing restores the same entity id.
-- [ ] Replay log entries are `{ seq, tick, id, args }`, using the save-format schema. Only successful commands are logged. View/UI commands are logged but don't change the world hash.
-- [ ] World ops `entity.place`, `entity.move`, `entity.rotate` and `entity.delete`. Positions are integer mm. Entity ids come from a world counter, never `crypto.randomUUID`. The seeded PRNG (a reimplemented small-state generator) lives in `world-model` with its seed in the world document.
-- [ ] `world.hash`: canonical serialisation (sorted keys, normalised `-0`) hashed with pure TypeScript. It gives the same value in Node and Chromium (tested in both).
-- [ ] fast-check properties:
+- [x] `CommandDef<A>` matches §4.6 (`id`, `title`, `category`, Zod `args`, `when`, `keybinding`, `undoable`, `cheat`, `run`). The registry rejects duplicate or malformed ids.
+- [x] `exec(id, args)` parses `args` with the command's Zod schema before `run`. Invalid args return a typed error and leave the world and the log unchanged.
+- [x] `when` context expressions (`==`, `!=`, `&&`, `||`, `!`, dotted keys) go through a hand-written parser and evaluator. No `eval` or `new Function` (CSP). Unit-tested.
+- [x] Undoable commands produce an apply/invert pair. `edit.undo` and `edit.redo` are registered commands. A new mutation clears redo. Deleting and then undoing restores the same entity id.
+- [x] Replay log entries are `{ seq, tick, id, args }`, using the save-format schema. Only successful commands are logged. View/UI commands are logged but don't change the world hash.
+- [x] World ops `entity.place`, `entity.move`, `entity.rotate` and `entity.delete`. Positions are integer mm. Entity ids come from a world counter, never `crypto.randomUUID`. The seeded PRNG (a reimplemented small-state generator) lives in `world-model` with its seed in the world document.
+- [x] `world.hash`: canonical serialisation (sorted keys, normalised `-0`) hashed with pure TypeScript. It gives the same value in Node and Chromium (tested in both: golden hashes in `world-model` and in `apps/game-e2e/src/world-hash.spec.ts`).
+- [x] fast-check properties (engine with a toy state in `commands`, real world commands and hash in `world-model`):
   - for any command sequence, undoing everything returns the initial hash;
   - `invert ∘ apply` is the identity for every undoable command;
   - replaying seed + log gives the live hash.
-- [ ] Coverage of at least 90 % for `commands` and `world-model`.
+- [x] Coverage of at least 90 % for `commands` and `world-model`.
+- _Decisions in [ADR 0006](../docs/decisions/0006-command-system.md): `edit.undo`/`edit.redo` are logged and re-executed on replay; `when` is advisory (not checked by `exec`); view commands are declared in domain code and applied by the UI through `Session.onCommand`._
 
 ### F1.3 Command palette
 
@@ -324,18 +325,18 @@ Numbers are assigned in landing order. Planned:
 
 ## Status
 
-| Feature | Description                   | Status                                                          |
-| ------- | ----------------------------- | --------------------------------------------------------------- |
-| F1.1    | Shell UI                      | 🚧 Done except `view.resetLayout` as a Command (waits for F1.2) |
-| F1.2    | Command system                | 📐 Planned                                                      |
-| F1.3    | Command palette               | 📐 Planned                                                      |
-| F1.4    | Keybinding service            | 📐 Planned                                                      |
-| F1.5    | Dev console                   | 📐 Planned                                                      |
-| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                                      |
-| F1.7    | Cameras and interaction       | 🚧 Part 1                                                       |
-| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned              |
-| F1.9    | Workshop level                | 📐 Planned                                                      |
-| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                                      |
+| Feature | Description                   | Status                                                |
+| ------- | ----------------------------- | ----------------------------------------------------- |
+| F1.1    | Shell UI                      | ✅ Done (`view.resetLayout` became a Command in F1.2) |
+| F1.2    | Command system                | ✅ Done                                               |
+| F1.3    | Command palette               | 📐 Planned                                            |
+| F1.4    | Keybinding service            | 📐 Planned                                            |
+| F1.5    | Dev console                   | 📐 Planned                                            |
+| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                            |
+| F1.7    | Cameras and interaction       | 🚧 Part 1                                             |
+| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
+| F1.9    | Workshop level                | 📐 Planned                                            |
+| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                            |
 
 ## Close-out
 

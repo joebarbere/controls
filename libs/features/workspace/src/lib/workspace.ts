@@ -2,13 +2,16 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
+  inject,
   input,
   model,
   output,
   viewChild,
 } from '@angular/core';
 import type { RenderBackend, ViewportState } from '@controls/renderer';
+import { Session } from '@controls/feature-session';
 import { Button, Splitter } from '@controls/ui';
 import {
   BOTTOM_LIMITS,
@@ -31,7 +34,9 @@ type PanelId = keyof WorkspaceLayout;
  *
  * With `chrome` off (behind the main menu) only the viewport is shown, as the menu backdrop.
  * The viewport region is a landmark only; its canvas is the one keyboard focus target.
- * The layout is plain JSON (`[(layout)]`); the owner persists it.
+ * The layout is plain JSON (`[(layout)]`); the owner persists it. Reset layout runs the
+ * `view.resetLayout` command through the session (logged, no world change) and takes effect when
+ * the command reports back, so the palette, keybindings and console reach the same code.
  */
 @Component({
   selector: 'ctl-workspace',
@@ -65,7 +70,7 @@ type PanelId = keyof WorkspaceLayout;
         >
           Console
         </button>
-        <button ctlButton="ghost" type="button" (click)="resetLayout()">Reset layout</button>
+        <button ctlButton="ghost" type="button" (click)="requestResetLayout()">Reset layout</button>
       </div>
     }
     <section #viewportPane class="viewport-pane" aria-label="3D viewport">
@@ -145,8 +150,20 @@ export class Workspace {
     this.viewportPane().nativeElement.querySelector<HTMLElement>('canvas')?.focus();
   }
 
-  /** Restores the default layout. TODO(F1.2): register as the `view.resetLayout` command and call it through the registry. */
-  resetLayout(): void {
+  private readonly session = inject(Session);
+
+  constructor() {
+    const off = this.session.onCommand('view.resetLayout', () => this.resetLayout());
+    inject(DestroyRef).onDestroy(off);
+  }
+
+  /** The Reset layout button: runs the `view.resetLayout` command. */
+  protected requestResetLayout(): void {
+    this.session.exec('view.resetLayout');
+  }
+
+  /** Restores the default layout (the effect of `view.resetLayout`). */
+  private resetLayout(): void {
     this.layout.set(DEFAULT_WORKSPACE_LAYOUT);
     this.layoutReset.emit();
   }

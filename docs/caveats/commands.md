@@ -1,0 +1,19 @@
+# Commands caveats
+
+**Load this when:** working on `libs/domain/commands`, `libs/domain/world-model`, `libs/features/session`, adding or changing a command, anything that feeds `world.hash` or the replay log, or a replay that no longer reaches the live hash. Decisions: [ADR 0006](../decisions/0006-command-system.md), [ADR 0007](../decisions/0007-world-document-v1.md). Architecture: [commands](../architecture/commands.md).
+
+- **`run` gets the logged args, not Zod's raw output.** `z.int()` keeps `-0`, but the log (JSON) can't. The bus passes `run` the `ReplayEntry`-parsed (normalised) args, so the live run and its replay see the same values. Don't "optimise" this back to `parsed.data`: a property test caught live `-0` against replayed `0`.
+- **`when` is not checked by `exec`.** The UI context (mode, selection) isn't in the replay log, so a replay couldn't evaluate it. Put world preconditions in `run`; use `when` only to hide, disable or resolve commands in surfaces.
+- **Changes are pure and must not mutate.** `apply` and `invert` return new objects; the property tests deep-freeze worlds to prove it. Logged args are frozen too, so copy any args object you store in the world (`entity.place` does).
+- **A view command must be declared in domain code** (`defineViewCommand`, currently in `@controls/commands`), with the effect applied by the UI through `Session.onCommand`. A view command that exists only in a component can't be replayed headless: `sim-cli` would fail with `unknown-command`.
+- **Undo and redo on an empty stack must fail.** Failures aren't logged, and that is what keeps replay consistent after a load clears the history (ADR 0006). Don't turn them into silent successes.
+- **No undo cap without care.** The stacks are unbounded. A cap changes which undos succeed, so it must be a fixed constant that replay applies identically.
+- **Lookup tables keyed by user text need `hasOwnProperty`.** The `when` tokeniser once used `key in KEYWORDS`, so `toString` became a function-valued "literal". The same goes for context keys (`Object.prototype.hasOwnProperty.call`).
+- **Iteration order:** never let a `Map`, `Set` or `Object.keys` order without sorting reach the world, the log or the hash. `registry.list()` sorts by id; canonical JSON sorts keys.
+- **Floats and maths in the hash path:** `Math.sin`, `Math.cbrt` and friends are implementation-approximated, so they can differ between engines. The world stays integer (mm, millidegrees). The SHA-256 constants are a literal table (checked in the spec with exact `BigInt` roots), not computed with `Math.cbrt`.
+- **The cross-runtime golden hashes live in two places:** `libs/domain/world-model/src/lib/hash.spec.ts` (Node) and `apps/game-e2e/src/world-hash.spec.ts` (Chromium, which can't import workspace libs). Change both or neither. A golden that changes means every existing save's hash changed.
+- **No wall clock, no ambient randomness.** Time is `world.tick` (0 in P1, recorded in every entry and checked on replay); randomness is `deriveStream(world.seed, commandStreamKey(ctx.seq))`. The determinism lint enforces this in domain code, but the session adapter is Angular code: never put `Date.now()` or `Math.random()` into command args there either.
+- **The PRNG derivation and golden vectors are frozen** once v0.2.0 ships (ADR 0006). A change needs a `schemaVersion` bump.
+- **`TextEncoder` isn't available in domain code** (no `dom` lib). Use `utf8Encode` from `world-model`, which matches `TextEncoder` (lone surrogates become U+FFFD).
+- **fast-check arbitraries for the save documents** are importable as `@controls/save-format/testing` (a `tsconfig.base.json` path). Use them from specs only.
+- **`Session` is `providedIn: 'root'`**, so each Angular `TestBed` gets a fresh one. With `?e2e=1` it puts `window.__controlsSession` (exec, hash, entries, hashWorld) on the page; e2e tests drive commands through it.

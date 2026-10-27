@@ -1,6 +1,6 @@
 # UI shell
 
-> **Status (F1.1):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry (F1.2), keybinding service (F1.4), palette (F1.3), console (F1.5) and `feature-session` are still to come; their hooks are marked `TODO(F1.x)` in the code. Settings persist on both platforms (below). `view.resetLayout` becomes a Command with F1.2. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
+> **Status (F1.1):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)); the keybinding service (F1.4), palette (F1.3) and console (F1.5) are still to come, and their hooks are marked `TODO(F1.x)` in the code. Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
 
 ## Libraries
 
@@ -75,7 +75,7 @@ flowchart TB
 - `WorkspaceLayout` is plain JSON: `{ inspector: { size, collapsed }, bottom: { size, collapsed } }`, with integer CSS pixels clamped by `normaliseLayout` (inspector 200–640, bottom 96–560, and at most 60 % of the window in CSS).
 - It is two-way bound to `settings.workspace.layout`, so it persists once F1.8a wires the storage.
 - Splitters follow the WAI-ARIA window-splitter pattern: arrows resize (Shift for big steps), Home/End jump to the limits, and Enter collapses or restores. Pointer drags use pointer capture.
-- **Reset layout** becomes the `view.resetLayout` command in F1.2.
+- **Reset layout** runs the `view.resetLayout` view command through `Session.exec`. The workspace applies it when the command reports back (`Session.onCommand`), so any surface that runs the command resets the layout. It is logged and never changes the world hash.
 
 ## Settings, theme and notifications
 

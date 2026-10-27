@@ -1,0 +1,27 @@
+{
+  "name": "feature-session",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/session/src",
+  "prefix": "ctl",
+  "projectType": "library",
+  "tags": ["type:feature"],
+  "targets": {
+    "test": {
+      "executor": "@angular/build:unit-test",
+      "inputs": ["default", "^production", "{workspaceRoot}/apps/game/project.json"],
+      "options": {
+        "buildTarget": "game:build:development",
+        "tsConfig": "libs/features/session/tsconfig.spec.json",
+        "watch": false
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/features/session/tsconfig.lib.json --noEmit && tsc -p libs/features/session/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

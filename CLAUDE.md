@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Next: the kickoff boundary-hardening PR, then F1.8a → F1.2 (domain track) alongside F1.1 and F1.7. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Landed: kickoff boundary hardening, F1.8a, F1.1, F1.7 part 1, F1.2 (commands, world model, session). Next: F1.6 (scripting API + `sim-cli`) and F1.4 → F1.3/F1.5, plus F1.7 placement via commands. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
@@ -60,21 +60,22 @@ Documentation drift is a failing test. Update docs in the same PR as the change 
 
 Project agents live in `.claude/agents/`. Specialists not yet created are made at their phase kickoff.
 
-| When you are…                                                       | Use                                                                            |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Finishing any feature or fix, or before opening a PR                | `docs-keeper` (or `/docs-sync`)                                                |
-| Bumping the version or preparing a release                          | `version-keeper`, then `release-engineer` (or `/release`)                      |
-| Touching packaging, `release.yml`, the updater or signing           | `release-engineer`                                                             |
-| Working on Electron main, preload or IPC                            | `electron-platform-engineer`                                                   |
-| Working on test infrastructure, CI gates or flaky E2E               | `test-engineer`                                                                |
-| Working on Angular UI, the palette, console, keybindings or editors | `angular-ui-engineer`                                                          |
-| Working on Three.js, cables, picking or audio                       | `renderer-engineer`                                                            |
-| Changing save or world schemas or migrations                        | `save-format-guardian`                                                         |
-| Changing solvers, device electrical models or the worker protocol   | `sim-engine-engineer`, then `electrical-realism-reviewer` (both created in P2) |
-| Adding devices, tables, jobs or faults                              | `content-designer` (created in P3), then `electrical-realism-reviewer`         |
-| Working on the PLC runtime, compilers or ladder/ST editors          | `plc-engineer` (created in P10)                                                |
-| Working on HMI/SCADA, networking or alarms                          | `scada-engineer` (created in P12)                                              |
-| Starting a phase                                                    | Plan agent → `plans/phase-N-*.md`; create that phase's specialists             |
+| When you are…                                                        | Use                                                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Finishing any feature or fix, or before opening a PR                 | `docs-keeper` (or `/docs-sync`)                                                |
+| Bumping the version or preparing a release                           | `version-keeper`, then `release-engineer` (or `/release`)                      |
+| Touching packaging, `release.yml`, the updater or signing            | `release-engineer`                                                             |
+| Working on Electron main, preload or IPC                             | `electron-platform-engineer`                                                   |
+| Working on test infrastructure, CI gates or flaky E2E                | `test-engineer`                                                                |
+| Working on Angular UI, the palette, console, keybindings or editors  | `angular-ui-engineer`                                                          |
+| Working on Three.js, cables, picking or audio                        | `renderer-engineer`                                                            |
+| Working on `commands`, `world-model`, `feature-session` or a Command | main agent until P2; `save-format-guardian` reviews world ops and command args |
+| Changing save or world schemas or migrations                         | `save-format-guardian`                                                         |
+| Changing solvers, device electrical models or the worker protocol    | `sim-engine-engineer`, then `electrical-realism-reviewer` (both created in P2) |
+| Adding devices, tables, jobs or faults                               | `content-designer` (created in P3), then `electrical-realism-reviewer`         |
+| Working on the PLC runtime, compilers or ladder/ST editors           | `plc-engineer` (created in P10)                                                |
+| Working on HMI/SCADA, networking or alarms                           | `scada-engineer` (created in P12)                                              |
+| Starting a phase                                                     | Plan agent → `plans/phase-N-*.md`; create that phase's specialists             |
 
 Until a specialist exists, do the work directly and follow the plan section for that area. Default to a single sub-agent; use an agent team only when three or more areas must agree a new contract at once (expected: P2 sim ↔ worker ↔ renderer, P10 PLC ↔ sim ↔ editor, P12 network ↔ HMI ↔ PLC).
 
@@ -90,6 +91,7 @@ Load the matching file before working in an area. The code tells you what shippe
 | [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                              |
 | [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                    |
 | [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log) |
+| [`docs/caveats/commands.md`](docs/caveats/commands.md)       | `commands`, `world-model`, `feature-session`; adding a command; `world.hash`, PRNG, replay determinism                     |
 | [`docs/caveats/rendering.md`](docs/caveats/rendering.md)     | `libs/rendering/renderer`: cameras, BVH picking, selection, snap maths, disposal, viewport host                            |
 | [`docs/caveats/ui.md`](docs/caveats/ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*`, focus, dialogs, theming, Angular component tests                                |
 
