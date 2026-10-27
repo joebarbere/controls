@@ -5,3 +5,5 @@ export * from './lib/bus';
 export * from './lib/builtin';
 export * from './lib/replay';
 export * from './lib/keybindings';
+export * from './lib/console/parse';
+export * from './lib/console/args';

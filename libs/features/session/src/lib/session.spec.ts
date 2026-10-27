@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { createWorld } from '@controls/save-format';
+import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { Session } from './session';
 
@@ -77,6 +78,26 @@ describe('Session', () => {
     expect(session.entries()).toEqual([]);
     session.exec('entity.place', place);
     expect(session.replayLog()).toMatchObject({ schemaVersion: 1, initialWorld: world, entries: [{ seq: 0 }] });
+  });
+
+  it('runs the same code as a scripting-api game: same console lines, same hash, same replay log', () => {
+    const session = TestBed.inject(Session);
+    const game = createGame({ seed: 0 });
+    const script = [
+      'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 10 --positionMm.y 0 --positionMm.z -20',
+      'entity.move 1 --positionMm.x 11 --positionMm.y 0 --positionMm.z -20',
+      'view.resetLayout',
+      'entity.delete 1',
+      'edit.undo',
+    ].join('\n');
+    expect(runConsoleScript(session, script)).toMatchObject({ ok: true, executed: 5 });
+    expect(runConsoleScript(game, script)).toMatchObject({ ok: true, executed: 5 });
+    expect(session.hash()).toBe(game.hash());
+    expect(session.replayLog()).toEqual(game.replayLog());
+    const replayed = replayGame(JSON.parse(JSON.stringify(session.replayLog())));
+    expect(replayed.ok && replayed.game.hash()).toBe(session.hash());
+    // The session's world is the game's frozen snapshot.
+    expect(Object.isFrozen(session.world())).toBe(true);
   });
 
   it('exposes the test hook only with ?e2e=1', () => {

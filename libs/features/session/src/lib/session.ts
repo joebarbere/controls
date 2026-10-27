@@ -1,22 +1,9 @@
 import { DOCUMENT } from '@angular/common';
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
-import {
-  type CommandBus,
-  type CommandRegistry,
-  type ContextKeys,
-  type ContextValue,
-  type ExecResult,
-  type ExecutedEvent,
-} from '@controls/commands';
+import type { CommandRegistry, ContextKeys, ContextValue, ExecResult, ExecutedEvent } from '@controls/commands';
 import { createWorld, type ReplayEntry, type ReplayLog } from '@controls/save-format';
-import {
-  createWorldBus,
-  createWorldRegistry,
-  hashWorldDocument,
-  toReplayLog,
-  type World,
-  worldHash,
-} from '@controls/world-model';
+import { createGame, type Game } from '@controls/scripting-api';
+import { createWorldRegistry, hashWorldDocument, type World, worldHash } from '@controls/world-model';
 
 export type CommandHandler = (event: ExecutedEvent<World>) => void;
 
@@ -24,22 +11,21 @@ export type CommandHandler = (event: ExecutedEvent<World>) => void;
 const TEST_HOOK = '__controlsSession';
 
 /**
- * The Angular adapter over the framework-free command bus (`@controls/commands`,
- * `@controls/world-model`). It holds the session's world as a signal and is the UI's only way to
- * change it: every change is `exec(id, args)` through the one registry (ADR 0006). Kept thin on
- * purpose; the scripting API (F1.6) wraps the same bus for `sim-cli`.
+ * The Angular adapter over the scripting API's `Game` (`@controls/scripting-api`, F1.6), the same
+ * object `sim-cli` scripts drive, so the UI and scripts run identical code. It holds the session's
+ * world as a signal and is the UI's only way to change it: every change is `exec(id, args)` through
+ * the one registry (ADR 0006). Kept thin on purpose: no command logic lives here.
  *
  * - **View commands** (`view.resetLayout`, …) don't change the world. The feature that owns the
  *   view state reacts with {@link onCommand}, so the command is logged like any other and replays
  *   headless as a no-op.
- * - **Context keys** for `when` are the bus's own (`history.canUndo`, `history.canRedo`) plus
+ * - **Context keys** for `when` are the game's own (`history.canUndo`, `history.canRedo`) plus
  *   whatever the UI sets with {@link setContext} (`mode`, `selection.kind`, … from F1.4/F1.7).
  */
 @Injectable({ providedIn: 'root' })
 export class Session {
   readonly registry: CommandRegistry<World> = createWorldRegistry();
-  private bus!: CommandBus<World>;
-  private initialWorld!: World;
+  private game!: Game;
   private unsubscribe: () => void = () => undefined;
   private readonly handlers = new Map<string, Set<CommandHandler>>();
   private readonly worldState = signal<World>(createWorld({ seed: 0 }));
@@ -65,20 +51,22 @@ export class Session {
     this.exposeTestHook();
   }
 
-  /** Starts a new session from `world`: fresh history and an empty replay log starting there. */
+  /**
+   * Starts a new session from `world`: fresh history and an empty replay log starting there. The
+   * world is validated and frozen (`createGame`), so treat it as owned by the session.
+   */
   start(world: World): void {
     this.unsubscribe();
-    this.initialWorld = world;
-    this.bus = createWorldBus(world, this.registry);
-    this.unsubscribe = this.bus.subscribe((event) => this.executed(event));
+    this.game = createGame({ world, registry: this.registry });
+    this.unsubscribe = this.game.on('executed', (event) => this.executed(event));
     this.worldState.set(world);
-    this.history.set(this.bus.contextKeys());
+    this.history.set(this.game.contextKeys());
     this.log.set([]);
   }
 
   /** Runs a command. Invalid args or a refused command return a typed error and change nothing. */
   exec(id: string, args: unknown = {}): ExecResult {
-    return this.bus.exec(id, args);
+    return this.game.exec(id, args);
   }
 
   /** Whether the palette and keybindings should offer the command in the current context. */
@@ -109,13 +97,13 @@ export class Session {
 
   /** The replay log of this session (for `replay.log` in a save, F1.8b). */
   replayLog(): ReplayLog {
-    return toReplayLog(this.initialWorld, this.bus);
+    return this.game.replayLog();
   }
 
   private executed(event: ExecutedEvent<World>): void {
     this.worldState.set(event.state);
-    this.history.set(this.bus.contextKeys());
-    this.log.set([...this.bus.entries]);
+    this.history.set(this.game.contextKeys());
+    this.log.set([...this.game.entries()]);
     for (const handler of [...(this.handlers.get(event.entry.id) ?? [])]) handler(event);
   }
 
