@@ -4,7 +4,8 @@ import type { InteractionMode } from '../shell-state';
 const MODE_LABELS: Record<InteractionMode, string> = { walk: 'Walk', work: 'Work', editor: 'Editor' };
 
 /**
- * Heads-up display over the viewport: interaction mode, a selection summary and the **Assisted**
+ * Heads-up display over the viewport: interaction mode, a selection summary, the active tool-belt
+ * slot (F1.4) and the **Assisted**
  * badge (shown once a cheat command has run; the world's `assisted` flag arrives with F1.2/F1.3).
  * The selection and the badge sit in polite live regions, so changes are announced.
  */
@@ -18,6 +19,8 @@ const MODE_LABELS: Record<InteractionMode, string> = { walk: 'Walk', work: 'Work
         <dd data-testid="hud-mode">{{ modeLabel() }}</dd>
         <dt>Selection</dt>
         <dd data-testid="hud-selection" aria-live="polite">{{ selection() ?? 'Nothing selected' }}</dd>
+        <dt>Tool</dt>
+        <dd data-testid="hud-tool" aria-live="polite">{{ tool() ?? 'None' }}</dd>
       </dl>
       <div aria-live="polite">
         @if (assisted()) {
@@ -63,6 +66,8 @@ export class Hud {
   readonly mode = input.required<InteractionMode>();
   /** One-line summary of the selection (the renderer's selection label), or null when nothing is selected. */
   readonly selection = input<string | null>(null);
+  /** The active tool-belt slot and what it holds, e.g. `2: Crate`, or null before one is selected. */
+  readonly tool = input<string | null>(null);
   /** The current world is assisted (the app binds the world's `assisted` flag). */
   readonly assisted = input(false);
 

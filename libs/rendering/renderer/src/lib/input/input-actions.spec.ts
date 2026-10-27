@@ -1,7 +1,11 @@
+import { INPUT_ACTIONS } from '@controls/commands';
 import {
   compileBindings,
   DEFAULT_INPUT_BINDINGS,
+  HELD_ACTIONS,
+  inputBindingsFrom,
   isHeldAction,
+  TRIGGERED_ACTIONS,
   moveIntent,
   rebind,
   type HeldAction,
@@ -9,11 +13,27 @@ import {
 } from './input-actions';
 
 describe('input bindings', () => {
+  it('implements exactly the shared INPUT_ACTIONS table, with matching held flags', () => {
+    expect(INPUT_ACTIONS.map((a) => a.action).sort()).toEqual([...HELD_ACTIONS, ...TRIGGERED_ACTIONS].sort());
+    for (const a of INPUT_ACTIONS) expect(isHeldAction(a.action as never), a.action).toBe(a.held);
+  });
+
   it('defaults are unambiguous and use physical codes for WASD', () => {
     const map = compileBindings(DEFAULT_INPUT_BINDINGS);
     expect(map.get('KeyW')).toBe('moveForward');
+    expect(map.get('ArrowUp')).toBe('moveForward');
     expect(map.get('KeyD')).toBe('moveRight');
+    expect(map.get('ShiftRight')).toBe('sprint');
     expect(map.get('BracketRight')).toBe('selectNext');
+    expect(map.get('Escape')).toBe('clearSelection');
+    expect(map.get('KeyV')).toBe('toggleMode');
+  });
+
+  it('inputBindingsFrom fills missing actions with no keys and drops unknown ones', () => {
+    const bindings = inputBindingsFrom({ moveForward: ['KeyI'], fly: ['KeyQ'] });
+    expect(bindings.moveForward).toEqual(['KeyI']);
+    expect(bindings.moveBack).toEqual([]);
+    expect(Object.keys(bindings)).not.toContain('fly');
   });
 
   it('rejects a code bound to two actions', () => {

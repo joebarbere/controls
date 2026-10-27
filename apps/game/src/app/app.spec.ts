@@ -1,5 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { MemorySettingsService, SettingsStore } from '@controls/feature-settings';
+import { KeybindingService, Session } from '@controls/feature-session';
+import {
+  MemorySettingsService,
+  provideKeybindingOverridesFromSettings,
+  SettingsStore,
+} from '@controls/feature-settings';
 import type { Platform } from '@controls/platform-api';
 import { defaultSettings } from '@controls/save-format';
 import { screen } from '@testing-library/dom';
@@ -33,7 +38,11 @@ describe('App', () => {
     settings = new MemorySettingsService();
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [{ provide: PLATFORM, useValue: fakePlatform }, provideSettingsFromPlatform()],
+      providers: [
+        { provide: PLATFORM, useValue: fakePlatform },
+        provideSettingsFromPlatform(),
+        provideKeybindingOverridesFromSettings(),
+      ],
     }).compileComponents();
   });
 
@@ -82,6 +91,31 @@ describe('App', () => {
     await user.keyboard('{Enter}'); // Resume
     await fixture.whenStable();
     expect(document.activeElement).toBe(canvas());
+  });
+
+  it('selects tool-belt slots from the keyboard and keeps rebinding in settings (F1.4)', async () => {
+    const { fixture, user } = await setup();
+    await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    const tool = () => screen.getByTestId('hud-tool').textContent;
+    expect(tool()).toBe('None');
+    await user.keyboard('3');
+    await fixture.whenStable();
+    expect(tool()).toBe('3: Spool');
+    await user.keyboard('4');
+    await fixture.whenStable();
+    expect(tool()).toBe('4: Empty');
+    expect(
+      TestBed.inject(Session)
+        .entries()
+        .map((e) => e.args),
+    ).toEqual([{ slot: 3 }, { slot: 4 }]);
+
+    TestBed.inject(KeybindingService).setBinding('toolbelt.select.slot2', 'Q');
+    expect(TestBed.inject(SettingsStore).settings().controls.keybindings).toEqual({ 'toolbelt.select.slot2': 'Q' });
+    await user.keyboard('q');
+    await fixture.whenStable();
+    expect(tool()).toBe('2: Crate');
   });
 
   it('does not open the menu for an Escape an inner handler already consumed', async () => {

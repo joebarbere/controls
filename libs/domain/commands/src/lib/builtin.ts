@@ -1,5 +1,7 @@
+import { TOOL_BELT_SLOTS } from '@controls/save-format';
 import { z } from 'zod';
-import { type CommandDef, defineCommand, fail, succeed } from './command';
+import { type AnyCommandDef, type CommandDef, defineCommand, fail, succeed } from './command';
+import type { BindingDecl } from './keybindings/keymap';
 
 /** Commands that take no arguments. Strict, so a typo'd flag is an error rather than ignored. */
 export const NoArgs = z.strictObject({});
@@ -49,7 +51,7 @@ export function editCommands<S>(): CommandDef<NoArgs, S>[] {
  * means headless replay (`sim-cli`) knows every id and args schema a log can contain.
  */
 export function defineViewCommand<A, S>(
-  def: Pick<CommandDef<A, S>, 'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding'>,
+  def: Pick<CommandDef<A, S>, 'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding' | 'globalKeybinding'>,
 ): CommandDef<A, S> {
   return { ...def, undoable: false, run: () => succeed<S>() };
 }
@@ -64,7 +66,45 @@ export function resetLayoutCommand<S>(): CommandDef<NoArgs, S> {
   });
 }
 
+/**
+ * `toolbelt.select {slot}` arguments: the tool-belt slot, 1 to 9. Persisted in the replay log, so
+ * the id and this shape are save format (ADR 0006, ADR 0007): changing either needs a
+ * `schemaVersion` bump and a log migration.
+ */
+export const ToolBeltSelectArgs = z.strictObject({ slot: z.int().min(1).max(TOOL_BELT_SLOTS) });
+export type ToolBeltSelectArgs = z.infer<typeof ToolBeltSelectArgs>;
+
+/**
+ * `toolbelt.select --slot N`: makes slot N the active tool-belt slot (plan F1.4). A view command:
+ * logged, no world change. The active slot is UI state, applied through `Session.onCommand` and
+ * published as the `toolbelt.slot` context key. In P1 a slot holds a placeable prop (settings
+ * `toolBelt.slots`); placing from it arrives with F1.7. Bound to keys 1-9 by
+ * {@link toolBeltBindingDecls}, one binding per slot, since one chord can't carry arguments.
+ */
+export function toolBeltSelectCommand<S>(): CommandDef<ToolBeltSelectArgs, S> {
+  return defineViewCommand<ToolBeltSelectArgs, S>({
+    id: 'toolbelt.select',
+    title: 'Select tool-belt slot',
+    category: 'Tool belt',
+    args: ToolBeltSelectArgs,
+  });
+}
+
+/** Binding id of tool-belt slot `n`'s key (`toolbelt.select.slot3`). */
+export const toolBeltBindingId = (slot: number): string => `toolbelt.select.slot${slot}`;
+
+/** Keys 1-9 → `toolbelt.select {slot: n}`. Positional digits, so they stay on the top row on every layout. */
+export function toolBeltBindingDecls(): BindingDecl[] {
+  return Array.from({ length: TOOL_BELT_SLOTS }, (_, i) => ({
+    id: toolBeltBindingId(i + 1),
+    title: `Tool-belt slot ${i + 1}`,
+    category: 'Tool belt',
+    target: { kind: 'command', command: 'toolbelt.select', args: { slot: i + 1 } },
+    defaults: [String(i + 1)],
+  }));
+}
+
 /** Every view command declared so far. */
-export function viewCommands<S>(): CommandDef<NoArgs, S>[] {
-  return [resetLayoutCommand<S>()];
+export function viewCommands<S>(): AnyCommandDef<S>[] {
+  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>()];
 }

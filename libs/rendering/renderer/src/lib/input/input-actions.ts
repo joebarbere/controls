@@ -1,10 +1,14 @@
+import { INPUT_ACTIONS, keyNameToCode } from '@controls/commands';
+
 /**
  * Rebindable **input actions** for continuous and viewport-local input. These are not Commands:
- * per-frame movement must never enter the replay log (plan F1.4; formalised in ADR 0006, written
- * with F1.2). Bindings use `KeyboardEvent.code`, so WASD stays physical on AZERTY and Dvorak.
+ * per-frame movement must never enter the replay log (plan F1.4, ADR 0006). Bindings use
+ * `KeyboardEvent.code`, so WASD stays physical on AZERTY and Dvorak.
  *
- * TODO(F1.4): user overrides come from settings via the keybinding service; `toggleMode` and
- * `focusSelection` become the `view.mode` / `view.focus` Commands once the registry exists (F1.2).
+ * The actions, their titles and default keys are data in `@controls/commands` (`INPUT_ACTIONS`),
+ * shared with the keybinding service and the rebinding UI; this module implements them. The
+ * player's overrides arrive through `ViewportRenderer.setBindings` (from `KeybindingService`).
+ * TODO(F1.7): `toggleMode` and `focusSelection` become the `view.mode` / `view.focus` Commands.
  */
 
 /** Held while the key is down (sampled every frame). */
@@ -25,20 +29,23 @@ export type InputAction = HeldAction | TriggeredAction;
 /** Action → physical key codes. Each code maps to at most one action. */
 export type InputBindings = Readonly<Record<InputAction, readonly string[]>>;
 
-export const DEFAULT_INPUT_BINDINGS: InputBindings = {
-  moveForward: ['KeyW', 'ArrowUp'],
-  moveBack: ['KeyS', 'ArrowDown'],
-  moveLeft: ['KeyA', 'ArrowLeft'],
-  moveRight: ['KeyD', 'ArrowRight'],
-  sprint: ['ShiftLeft', 'ShiftRight'],
-  selectNext: ['BracketRight'],
-  selectPrevious: ['BracketLeft'],
-  clearSelection: ['Escape'],
-  focusSelection: ['KeyF'],
-  toggleMode: ['KeyV'],
-};
-
 const ACTIONS: readonly InputAction[] = [...HELD_ACTIONS, ...TRIGGERED_ACTIONS];
+
+/**
+ * Complete bindings from an action → codes record (as `Keymap.inputCodes()` returns): actions the
+ * record leaves out get no keys, and names this renderer doesn't implement are ignored.
+ */
+export function inputBindingsFrom(codes: Readonly<Record<string, readonly string[]>>): InputBindings {
+  const out = {} as Record<InputAction, readonly string[]>;
+  for (const action of ACTIONS)
+    out[action] = Object.prototype.hasOwnProperty.call(codes, action) ? [...codes[action]] : [];
+  return out;
+}
+
+/** The default keys from the shared `INPUT_ACTIONS` table, as codes. */
+export const DEFAULT_INPUT_BINDINGS: InputBindings = inputBindingsFrom(
+  Object.fromEntries(INPUT_ACTIONS.map((a) => [a.action, a.keys.map(keyNameToCode)])),
+);
 
 export const isHeldAction = (a: InputAction): a is HeldAction => (HELD_ACTIONS as readonly string[]).includes(a);
 

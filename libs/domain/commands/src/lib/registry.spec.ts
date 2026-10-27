@@ -98,6 +98,7 @@ describe('CommandRegistry', () => {
     expect(registry.list().map((c) => [c.id, c.category, c.keybinding ?? null, c.undoable])).toEqual([
       ['edit.redo', 'Edit', 'Mod+Shift+Z', false],
       ['edit.undo', 'Edit', 'Mod+Z', false],
+      ['toolbelt.select', 'Tool belt', null, false],
       ['view.resetLayout', 'View', null, false],
     ]);
     expect(registry.isEnabled('edit.undo', { 'history.canUndo': false })).toBe(false);

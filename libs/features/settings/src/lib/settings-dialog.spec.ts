@@ -110,13 +110,32 @@ describe('SettingsDialog', () => {
     expect((within(dialog).getByRole('radio', { name: 'Follow system' }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it('shows the region as NEC and disabled, and key bindings as not yet available', async () => {
+  it('shows the region as NEC and disabled', async () => {
     const { dialog } = await setup();
     const region = within(dialog).getByRole('combobox', { name: 'Electrical code' }) as HTMLSelectElement;
     expect(region.disabled).toBe(true);
     expect(region.value).toBe('nec');
-    const bindings = within(dialog).getByRole('button', { name: 'Key bindings…' });
-    expect(bindings.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('Key bindings… opens the rebinding dialog on top; Escape there closes only it and restores focus', async () => {
+    const { fixture, user, dialog } = await setup();
+    const button = within(dialog).getByRole('button', { name: 'Key bindings…' });
+    await user.click(button);
+    await fixture.whenStable();
+    const bindings = screen.getByRole('dialog', { name: 'Key bindings' });
+    expect(within(bindings).getByRole('table', { name: 'Edit' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    await fixture.whenStable();
+    expect(screen.queryByRole('dialog', { name: 'Key bindings' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+
+    // Closing settings closes the rebinding dialog too.
+    await user.click(button);
+    await fixture.whenStable();
+    fixture.componentInstance.open.set(false);
+    await fixture.whenStable();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('Back closes the dialog and returns focus to the opener', async () => {

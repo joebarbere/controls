@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
   isDevMode,
@@ -11,7 +12,15 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { ViewportRenderer, type RenderBackend, type ViewportState, type ViewportStats } from '@controls/renderer';
+import { VIEWPORT_FOCUSED_KEY } from '@controls/commands';
+import { KeybindingService, Session } from '@controls/feature-session';
+import {
+  inputBindingsFrom,
+  ViewportRenderer,
+  type RenderBackend,
+  type ViewportState,
+  type ViewportStats,
+} from '@controls/renderer';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -23,7 +32,11 @@ const TEST_HOOK = '__controlsViewport';
  * animation loop and input handling; with zoneless change detection nothing here re-renders per
  * frame. Only view state (mode, hover, selection) and twice-a-second dev stats reach signals.
  * Mode and selection are shown by the shell HUD (`ctl-hud`, fed from `state`); the frame-time dev
- * HUD and the walk-mode crosshair stay here. TODO(F1.2): mode/focus go through Commands.
+ * HUD and the walk-mode crosshair stay here. TODO(F1.7): mode/focus go through Commands.
+ *
+ * Input actions (WASD, selection cycling, …) come from the {@link KeybindingService}, so the
+ * player's rebinding reaches the renderer and the canvas label names the current keys. While the
+ * canvas has focus the `viewport.focused` context key is true (input actions are active).
  */
 @Component({
   selector: 'ctl-viewport',
@@ -32,7 +45,9 @@ const TEST_HOOK = '__controlsViewport';
     <canvas
       #canvas
       tabindex="0"
-      aria-label="3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, WASD walks."
+      [attr.aria-label]="label()"
+      (focus)="session.setContext(viewportFocusedKey, true)"
+      (blur)="session.setContext(viewportFocusedKey, null)"
     ></canvas>
     @if (state()?.mode === 'walk') {
       <div class="crosshair" aria-hidden="true"></div>
@@ -113,9 +128,28 @@ export class Viewport {
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly renderer = new ViewportRenderer();
+  protected readonly session = inject(Session);
+  protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
+  private readonly keys = inject(KeybindingService);
+  private readonly bindings = computed(() => inputBindingsFrom(this.keys.inputBindings()));
+  /** The canvas's accessible name, naming the current keys of each input action. */
+  protected readonly label = computed(() => {
+    const key = (action: string) => {
+      const chords = this.keys.chordsOf(`input.${action}`);
+      return chords.length > 0 ? this.keys.label(chords[0]) : 'unbound';
+    };
+    const walk = ['moveForward', 'moveLeft', 'moveBack', 'moveRight'].map(key).join(' ');
+    return (
+      `3D workspace. Click to select. ${key('selectPrevious')} and ${key('selectNext')} cycle selection, ` +
+      `${key('focusSelection')} focuses it, ${key('toggleMode')} toggles walk and work mode, ${walk} walk.`
+    );
+  });
 
   constructor() {
     const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => this.session.setContext(VIEWPORT_FOCUSED_KEY, null));
+    // Pushing bindings into the framework-free renderer is an imperative side effect.
+    effect(() => this.renderer.setBindings(this.bindings()));
     afterNextRender(() => {
       const canvas = this.canvas().nativeElement;
       const observer = new ResizeObserver(() => this.resize());
@@ -130,9 +164,11 @@ export class Viewport {
         .init(canvas, {
           // `?renderer=webgl2` pins the fallback backend so CI keeps it tested (docs/caveats/electron.md).
           forceWebGL: this.params.get('renderer') === 'webgl2',
+          bindings: this.bindings(),
           onStats: this.showHud || exposeHook ? (s) => this.stats.set(s) : undefined,
         })
         .then((backend) => {
+          this.renderer.setBindings(this.bindings()); // in case they changed while starting up
           this.state.set(this.renderer.state);
           this.renderer.onChange((s) => this.state.set(s));
           if (exposeHook) (window as unknown as Record<string, unknown>)[TEST_HOOK] = this.renderer;

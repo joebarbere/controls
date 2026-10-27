@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
 import type { Difficulty, Settings } from '@controls/save-format';
 import { Button } from '@controls/ui';
 import { SettingsStore, type SettingsSection } from './settings-store';
@@ -42,6 +42,8 @@ export class SettingsForm {
   protected readonly difficulties = DIFFICULTIES;
   protected readonly pixelRatioCaps = PIXEL_RATIO_CAPS;
   protected readonly volumes = VOLUMES;
+  /** Key bindings… was chosen; the owner opens the rebinding dialog (F1.4). */
+  readonly openKeybindings = output<void>();
 
   protected update<S extends SettingsSection>(section: S, patch: Partial<Settings[S]>): void {
     this.store.update(section, patch);

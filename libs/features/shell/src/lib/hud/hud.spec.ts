@@ -8,11 +8,12 @@ import { Hud } from './hud';
   selector: 'ctl-hud-host',
   imports: [Hud],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<ctl-hud [mode]="mode()" [selection]="selection()" [assisted]="assisted()" />`,
+  template: `<ctl-hud [mode]="mode()" [selection]="selection()" [tool]="tool()" [assisted]="assisted()" />`,
 })
 class Host {
   readonly mode = signal<InteractionMode>('work');
   readonly selection = signal<string | null>(null);
+  readonly tool = signal<string | null>(null);
   readonly assisted = signal(false);
 }
 
@@ -27,12 +28,15 @@ describe('Hud', () => {
     expect(within(hud).getByText('Work')).toBeTruthy();
     expect(within(hud).getByText('Nothing selected')).toBeTruthy();
     expect(within(hud).queryByText('Assisted')).toBeNull();
+    expect(within(hud).getByTestId('hud-tool').textContent).toBe('None');
 
     const host = fixture.componentInstance;
     host.mode.set('walk');
     host.selection.set('Crate #12');
     host.assisted.set(true);
+    host.tool.set('2: Crate');
     await fixture.whenStable();
+    expect(within(hud).getByText('2: Crate').getAttribute('aria-live')).toBe('polite');
     expect(within(hud).getByText('Walk')).toBeTruthy();
     expect(within(hud).getByText('Crate #12').getAttribute('aria-live')).toBe('polite');
     expect(within(hud).getByText('Assisted')).toBeTruthy();
