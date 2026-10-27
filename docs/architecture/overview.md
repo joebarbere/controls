@@ -6,6 +6,8 @@
 >
 > **P1 so far:** `libs/domain/save-format` (`@controls/save-format`, F1.8a): the v1 world, manifest, replay-log and settings schemas, the migration framework, fixtures and JSON Schema export. See [world and saves](world-and-saves.md).
 >
+> **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`. `platform-api` gained `Platform.settings` (`SettingsService`) and `Platform.quit`, and three IPC channels joined `app:info`: `settings:get`, `settings:set` (atomic write of `userData/settings.json`) and `app:quit`. See [UI shell](ui-shell.md).
+>
 > Items marked _(PN)_ below arrive in that phase.
 
 ## Process and thread model
@@ -52,7 +54,7 @@ flowchart TB
 
 ## Module boundaries
 
-Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today, and the edges between them are the imports that actually exist. `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
+Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today (including the F1.1 UI libs), and the edges between them are the imports that actually exist (`FEAT --> DOM` is still intended). `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
 
 ```mermaid
 flowchart LR
@@ -65,8 +67,8 @@ flowchart LR
         SIMCLI["apps/sim-cli (P1)"]:::later
     end
 
-    FEAT["libs/features/* (P1)<br/>type:feature"]:::later
-    UI["libs/ui (P1)<br/>type:ui"]:::later
+    FEAT["libs/features/shell, workspace, settings (P1)<br/>type:feature"]:::p0
+    UI["libs/ui (P1)<br/>type:ui"]:::p0
     REND["libs/rendering/renderer<br/>type:rendering"]:::p0
     PAPI["libs/platform/api<br/>type:platform"]:::p0
     PEL["libs/platform/electron<br/>type:platform"]:::p0
@@ -80,7 +82,7 @@ flowchart LR
     GAME --> FEAT & UI & REND & PAPI & PEL & PWEB
     DESK --> IPC
     SIMCLI --> DOM
-    FEAT --> DOM & REND & UI & PAPI
+    FEAT --> DOM & REND & UI & PAPI & IPC
     REND --> UNITS & DOM
     PAPI --> IPC
     PEL --> PAPI & IPC

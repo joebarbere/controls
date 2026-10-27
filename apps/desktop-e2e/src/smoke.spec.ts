@@ -47,6 +47,55 @@ test.describe.serial('desktop smoke', () => {
         bridgeKeys: Object.keys((scope['controls'] as object | undefined) ?? {}),
       };
     });
-    expect(exposure).toEqual({ require: 'undefined', process: 'undefined', bridgeKeys: ['getAppInfo'] });
+    expect(exposure).toEqual({
+      require: 'undefined',
+      process: 'undefined',
+      bridgeKeys: ['getAppInfo', 'getSettings', 'setSettings', 'quit'],
+    });
+  });
+
+  test('settings:set refuses an invalid document without echoing it', async () => {
+    const message = await running().window.evaluate(async () => {
+      const bridge = (globalThis as unknown as { controls: { setSettings(s: unknown): Promise<void> } }).controls;
+      return bridge.setSettings({ secret: 'do-not-echo' }).then(
+        () => 'accepted',
+        (error: Error) => error.message,
+      );
+    });
+    expect(message).toContain('settings:set refused (invalid)');
+    expect(message).not.toContain('do-not-echo');
+  });
+
+  // The shell (native <dialog>, design tokens, splitters) must work under the app:// CSP (ADR 0005).
+  test('shell menu, dialogs and workspace work under the CSP', async () => {
+    const { window } = running();
+    await window.evaluate(() => {
+      const scope = globalThis as unknown as { cspViolations: string[] };
+      scope.cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (e) =>
+        scope.cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`),
+      );
+    });
+    const menu = window.getByRole('navigation', { name: 'Controls' });
+    await expect(menu.getByRole('button', { name: 'Quit' })).toBeVisible(); // desktop can quit
+
+    await menu.getByRole('button', { name: 'Settings' }).focus();
+    await window.keyboard.press('Enter');
+    const settings = window.getByRole('dialog', { name: 'Settings' });
+    await expect(settings).toBeVisible();
+    await window.keyboard.press('Escape');
+    await expect(settings).toBeHidden();
+    await expect(menu.getByRole('button', { name: 'Settings' })).toBeFocused();
+
+    await menu.getByRole('button', { name: 'New sandbox' }).focus();
+    await window.keyboard.press('Enter');
+    await expect(window.getByRole('region', { name: 'Inspector' })).toBeVisible();
+    await expect(window.locator('ctl-viewport canvas')).toBeFocused();
+    await expect(window.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready');
+
+    const violations = await window.evaluate(
+      () => (globalThis as unknown as { cspViolations: string[] }).cspViolations,
+    );
+    expect(violations).toEqual([]);
   });
 });

@@ -1,12 +1,11 @@
-import { app, ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { app, ipcMain } from 'electron';
 import { AppInfoSchema, IpcChannel, type AppInfo } from '@controls/ipc-contract';
-import { APP_ORIGIN } from './app-protocol';
+import { join } from 'node:path';
+import { assertTrustedSender, createIpcHandlers } from './ipc-handlers';
+import { SettingsFile } from './settings-file';
 
-/** Only our own top-level page may call IPC; anything else is dropped. */
-function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  const url = event.senderFrame?.url ?? '';
-  if (!url.startsWith(`${APP_ORIGIN}/`)) throw new Error(`IPC from untrusted origin refused: ${url}`);
-}
+/** Settings live in `userData` (set from `CONTROLS_USER_DATA_DIR` in main.ts before this runs). */
+export const SETTINGS_FILE_NAME = 'settings.json';
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannel.AppInfo, (event): AppInfo => {
@@ -19,4 +18,12 @@ export function registerIpcHandlers(): void {
       versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
     });
   });
+
+  const handlers = createIpcHandlers({
+    settingsFile: new SettingsFile(join(app.getPath('userData'), SETTINGS_FILE_NAME)),
+    quit: () => app.quit(),
+  });
+  ipcMain.handle(IpcChannel.SettingsGet, (event) => handlers.getSettings(event));
+  ipcMain.handle(IpcChannel.SettingsSet, (event, payload: unknown) => handlers.setSettings(event, payload));
+  ipcMain.handle(IpcChannel.AppQuit, (event) => handlers.quit(event));
 }

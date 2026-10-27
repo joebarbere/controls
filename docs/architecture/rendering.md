@@ -8,8 +8,8 @@
 
 ```mermaid
 flowchart TB
-    subgraph angular["apps/game (Angular, zoneless)"]
-        VP["Viewport component<br/>canvas host, HUD, data-* state,<br/>?e2e=1 test hook"]
+    subgraph angular["@controls/feature-workspace (Angular, zoneless)"]
+        VP["Viewport component<br/>canvas host, dev HUD, data-* state,<br/>?e2e=1 test hook (mode/selection shown by the shell HUD)"]
     end
 
     subgraph renderer["@controls/renderer"]

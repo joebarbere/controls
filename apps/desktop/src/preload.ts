@@ -4,6 +4,9 @@ import { BRIDGE_KEY, IpcChannel, type ControlsBridge } from '@controls/ipc-contr
 
 const bridge: ControlsBridge = {
   getAppInfo: () => ipcRenderer.invoke(IpcChannel.AppInfo),
+  getSettings: () => ipcRenderer.invoke(IpcChannel.SettingsGet),
+  setSettings: (settings) => ipcRenderer.invoke(IpcChannel.SettingsSet, settings),
+  quit: () => ipcRenderer.invoke(IpcChannel.AppQuit),
 };
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

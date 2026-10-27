@@ -327,25 +327,28 @@ export class ViewportController {
     this.selection.hover(hit?.id ?? null);
   }
 
-  private onTrigger(action: TriggeredAction): void {
+  private onTrigger(action: TriggeredAction): boolean {
     switch (action) {
       case 'selectNext':
         this.selectNext();
-        break;
+        return true;
       case 'selectPrevious':
         this.selectPrevious();
-        break;
+        return true;
       case 'clearSelection':
+        // Only consume Escape when there is something to clear, so it can still open the menu.
+        if (!this.selection.selected) return false;
         this.select(null);
-        break;
+        return true;
       case 'focusSelection': {
         const s = this.selection.selected;
-        if (s) this.focus(s.id);
-        break;
+        if (!s) return false;
+        this.focus(s.id);
+        return true;
       }
       case 'toggleMode':
         this.setMode(this.modeValue === 'walk' ? 'work' : 'walk');
-        break;
+        return true;
     }
   }
 

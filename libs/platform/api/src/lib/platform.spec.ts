@@ -1,3 +1,4 @@
+import { defaultSettings } from '@controls/save-format';
 import type { Platform } from './platform';
 
 describe('Platform', () => {
@@ -11,7 +12,14 @@ describe('Platform', () => {
         isPackaged: false,
         versions: {},
       }),
+      settings: {
+        load: async () => ({ settings: defaultSettings(), fallbackReason: 'missing' }),
+        save: async () => undefined,
+      },
+      canQuit: false,
+      quit: () => undefined,
     };
     await expect(fake.getAppInfo()).resolves.toMatchObject({ platform: 'web' });
+    await expect(fake.settings.load()).resolves.toMatchObject({ fallbackReason: 'missing' });
   });
 });

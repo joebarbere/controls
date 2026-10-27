@@ -35,6 +35,8 @@ const hook = <T>(page: Page, fn: (h: ViewportHook) => T) =>
 async function open(page: Page) {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?e2e=1&renderer=webgl2');
+  // The game boots to the main menu over an inert viewport; start a sandbox to interact with it.
+  await page.getByRole('button', { name: 'New sandbox' }).click();
   const viewport = page.locator('ctl-viewport');
   await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   await expect(viewport).toHaveAttribute('data-backend', 'webgl2');

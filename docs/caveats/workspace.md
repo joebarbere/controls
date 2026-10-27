@@ -27,4 +27,5 @@
 - **E2E projects are tagged `type:e2e`** and may not import workspace libs (`onlyDependOnLibsWithTags: []`). Both e2e projects have the tag and a `typecheck` target.
 - **Nx generators add other-agent config** (`.cursor`, `.gemini`, `AGENTS.md`, …) and an Nx block in `CLAUDE.md`. Delete them after generating; don't run `nx configure-ai-agents`.
 - **Angular selector prefix is `ctl`.**
+- **Angular libs** (`type:ui`, `type:feature`) are generated with `@nx/angular:library --unitTestRunner=none` (the `vitest-angular` runner refuses non-buildable libs), then given a `test` target on `@angular/build:unit-test` with `buildTarget: game:build:development` and a `typecheck` target. Copy them from `libs/ui/project.json`. The generator also adds `@nx/angular:*` defaults to `nx.json`; revert that. Details in [UI caveats](ui.md).
 - Run Nx through pnpm (`pnpm nx …`, `pnpm exec nx …`), never a globally installed `nx`.

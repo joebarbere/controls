@@ -1,0 +1,194 @@
+<div class="sections">
+  <fieldset>
+    <legend>Interface</legend>
+    <div class="choices" role="radiogroup" aria-labelledby="ctl-set-theme">
+      <span id="ctl-set-theme" class="label">Theme</span>
+      <label
+        ><input
+          type="radio"
+          name="ctl-theme"
+          [checked]="s().display.theme === 'system'"
+          (change)="update('display', { theme: 'system' })"
+        />
+        Match system</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-theme"
+          [checked]="s().display.theme === 'light'"
+          (change)="update('display', { theme: 'light' })"
+        />
+        Light</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-theme"
+          [checked]="s().display.theme === 'dark'"
+          (change)="update('display', { theme: 'dark' })"
+        />
+        Dark</label
+      >
+    </div>
+    <div class="choices" role="radiogroup" aria-labelledby="ctl-set-motion">
+      <span id="ctl-set-motion" class="label">Motion</span>
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'system'"
+          (change)="update('display', { reducedMotion: 'system' })"
+        />
+        Follow system</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'reduce'"
+          (change)="update('display', { reducedMotion: 'reduce' })"
+        />
+        Reduce motion</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-motion"
+          [checked]="s().display.reducedMotion === 'full'"
+          (change)="update('display', { reducedMotion: 'full' })"
+        />
+        Full motion</label
+      >
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Graphics</legend>
+    <div class="choices" role="radiogroup" aria-labelledby="ctl-set-backend" aria-describedby="ctl-set-backend-hint">
+      <span id="ctl-set-backend" class="label">Renderer</span>
+      <label
+        ><input
+          type="radio"
+          name="ctl-backend"
+          [checked]="s().graphics.backend === 'auto'"
+          (change)="update('graphics', { backend: 'auto' })"
+        />
+        Automatic (WebGPU, WebGL2 fallback)</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-backend"
+          [checked]="s().graphics.backend === 'webgl2'"
+          (change)="update('graphics', { backend: 'webgl2' })"
+        />
+        WebGL2 only</label
+      >
+    </div>
+    <p id="ctl-set-backend-hint" class="ctl-hint">Applies after a restart.</p>
+    <label class="ctl-field"
+      >Pixel-ratio cap
+      <select class="ctl-select" (change)="update('graphics', { pixelRatioCap: number($event) })">
+        @for (cap of pixelRatioCaps; track cap) {
+        <option [value]="cap" [selected]="s().graphics.pixelRatioCap === cap">{{ cap }}×</option>
+        }
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset aria-describedby="ctl-set-audio-hint">
+    <legend>Audio</legend>
+    <p id="ctl-set-audio-hint" class="ctl-hint">Sound arrives in a later build; volumes are kept until then.</p>
+    @for (v of volumes; track v.key) {
+    <label class="ctl-field"
+      >{{ v.label }}
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+        [value]="percent(s().audio[v.key])"
+        [attr.aria-valuetext]="percent(s().audio[v.key]) + ' percent'"
+        (input)="setVolume(v.key, $event)"
+      />
+    </label>
+    }
+  </fieldset>
+
+  <fieldset>
+    <legend>Controls</legend>
+    <label class="ctl-field"
+      >Look sensitivity
+      <input
+        type="range"
+        min="10"
+        max="300"
+        step="10"
+        [value]="percent(s().controls.lookSensitivity)"
+        [attr.aria-valuetext]="percent(s().controls.lookSensitivity) + ' percent'"
+        (input)="update('controls', { lookSensitivity: fraction($event) })"
+      />
+    </label>
+    <label class="check"
+      ><input
+        type="checkbox"
+        [checked]="s().controls.invertY"
+        (change)="update('controls', { invertY: checked($event) })"
+      />
+      Invert vertical look</label
+    >
+    <button ctlButton type="button" aria-disabled="true" aria-describedby="ctl-set-bindings-hint">Key bindings…</button>
+    <p id="ctl-set-bindings-hint" class="ctl-hint">Rebinding arrives with the keybinding service.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Units</legend>
+    <div class="choices" role="radiogroup" aria-labelledby="ctl-set-units">
+      <span id="ctl-set-units" class="label">Display units</span>
+      <label
+        ><input
+          type="radio"
+          name="ctl-units"
+          [checked]="s().display.units === 'imperial'"
+          (change)="update('display', { units: 'imperial' })"
+        />
+        Imperial (in, ft, AWG)</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="ctl-units"
+          [checked]="s().display.units === 'metric'"
+          (change)="update('display', { units: 'metric' })"
+        />
+        Metric (mm, m, mm²)</label
+      >
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Difficulty</legend>
+    <label class="ctl-field"
+      >Default for new games
+      <select class="ctl-select" (change)="update('gameplay', { defaultDifficulty: difficulty($event) })">
+        @for (d of difficulties; track d.value) {
+        <option [value]="d.value" [selected]="s().gameplay.defaultDifficulty === d.value">{{ d.label }}</option>
+        }
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Region</legend>
+    <label class="ctl-field"
+      >Electrical code
+      <select class="ctl-select" disabled aria-describedby="ctl-set-region-hint">
+        <option value="nec" [selected]="s().gameplay.region === 'nec'">NEC (United States)</option>
+      </select>
+    </label>
+    <p id="ctl-set-region-hint" class="ctl-hint">Other regions are planned after 1.0.</p>
+  </fieldset>
+</div>
+
+<button ctlButton type="button" class="reset" (click)="store.resetToDefaults()">Restore defaults</button>

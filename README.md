@@ -15,7 +15,16 @@ What exists today (Phase 0 scaffold):
 - Electron 45 desktop shell serving the game over a custom `app://` protocol with COOP/COEP and a strict CSP, so the page is `crossOriginIsolated` and `SharedArrayBuffer` is available.
 - Hardened defaults: `contextIsolation`, `sandbox` and `webSecurity` on, `nodeIntegration` off, navigation and pop-ups blocked, Electron Fuses set (no RunAsNode, no `NODE_OPTIONS`, ASAR integrity on). The preload exposes a single narrow, typed bridge call whose response is Zod-validated.
 - A browser dev harness (`pnpm start:web`) that runs the same Angular 22 zoneless app without Electron.
-- An about box showing the app version, platform, active render backend and whether the page is cross-origin isolated.
+- An About dialog in the main menu showing the app version, platform, active render backend and whether the page is cross-origin isolated.
+
+### Interface
+
+- A main menu over the live 3D view (New sandbox, Settings, About, Quit; Continue and Load arrive with saving). Escape returns to it from the game.
+- A docking workspace: the 3D viewport with an Inspector panel and a Console panel. Panels resize with the mouse or keyboard, collapse, and reset to defaults.
+- A HUD showing the interaction mode, the selection and an **Assisted** badge for worlds where cheats were used.
+- Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units and default difficulty (region fixed to NEC). Settings are saved and survive a restart.
+- Light and dark themes that follow your system, and reduced motion.
+- Keyboard-first: everything works without a mouse, with visible focus, and focus returns to where it was after a dialog. Notifications are announced to screen readers and can be dismissed from the keyboard.
 
 ### Rendering
 
@@ -94,7 +103,7 @@ The roadmap is in [`controls-development-plan.md`](controls-development-plan.md)
 
 ```
 apps/
-  game/            Angular 22 zoneless app (HUD, menus, editors)
+  game/            Angular 22 zoneless app: assembles the features and injects the platform
   game-e2e/        Playwright tests against the browser harness
   desktop/         Electron main + preload (esbuild), app:// protocol, electron-builder config
   desktop-e2e/     Playwright _electron smoke tests against the built app
@@ -103,6 +112,8 @@ libs/
   domain/save-format/  save and settings schemas (Zod), migrations, fixtures, JSON Schema
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
+  ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
+  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings
   platform/        api (interfaces), electron and web implementations
 docs/  plans/  tools/  .claude/
 ```
