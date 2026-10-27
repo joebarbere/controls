@@ -1,0 +1,8 @@
+{
+  "//": "Shared base for every type:domain lib (libs/domain/*). No `dom` lib and no ambient `node` types: domain code runs in Node (sim-cli), the renderer and the sim worker, so DOM and Node globals must fail typecheck. Spec configs may add `node` and Vitest types.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2022"],
+    "types": []
+  }
+}

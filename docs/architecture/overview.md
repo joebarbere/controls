@@ -88,7 +88,8 @@ flowchart LR
 
 **Rules** (plan §4.2):
 
-- `type:domain` is pure TypeScript (no Angular, DOM or Electron) and depends only on other domain libs. That's what lets `sim-cli` run the game headless.
+- `type:domain` is pure TypeScript (no Angular, DOM or Electron) and depends only on other domain libs. That's what lets `sim-cli` run the game headless. Since the P1 kickoff this is enforced beyond tags: banned npm imports (Angular, RxJS, Electron, Three.js, …), a no-`dom` tsconfig, no Node built-ins in source, a determinism lint (no `Math.random`, wall clock, `performance` or `crypto`), and a 90 % coverage gate. See [workspace caveats](../caveats/workspace.md).
+- `scope:headless` (`apps/sim-cli`) may depend only on domain libs, on top of its `type:app` tag.
 - `sim-worker` depends on domain libs only.
 - `type:rendering` depends on `world-model`, `catalog` and `units`, plus read-only snapshot types from `sim-worker`. It is framework-free.
 - `type:feature` may depend on domain, rendering, ui and `platform/api`, **never** on a concrete platform implementation.

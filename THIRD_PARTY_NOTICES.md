@@ -18,7 +18,7 @@ Controls is released under the [MIT licence](LICENSE). It depends on, and ships,
 | [Zod](https://zod.dev/)                                    | MIT        | Schema validation (IPC payloads; later saves, catalogue, commands)                                                                             |
 | [electron-updater](https://www.electron.build/auto-update) | MIT        | Auto-update from GitHub Releases                                                                                                               |
 
-Build and test tooling (Nx, TypeScript, esbuild, Vite, Vitest, Playwright, ESLint, Prettier, electron-builder) is not shipped in the app and is not listed.
+Build and test tooling (Nx, TypeScript, esbuild, Vite, Vitest, fast-check, Playwright, ESLint, Prettier, electron-builder) is not shipped in the app and is not listed.
 
 ## Adapted code
 

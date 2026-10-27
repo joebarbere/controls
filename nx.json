@@ -9,7 +9,10 @@
       "!{projectRoot}/.eslintrc.json",
       "!{projectRoot}/eslint.config.mjs"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [
+      "{workspaceRoot}/libs/domain/tsconfig.domain.json",
+      "{workspaceRoot}/libs/domain/vitest.domain.mts"
+    ]
   },
   "plugins": [
     {
