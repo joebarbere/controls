@@ -6,8 +6,8 @@ The development plan is the spec. If a phase plan has to deviate from it, change
 
 | Phase  | Plan                                | Release | Status         |
 | ------ | ----------------------------------- | ------- | -------------- |
-| P0     | [Foundation](phase-0-foundation.md) | v0.1.0  | 🚧 In progress |
-| P1     | Game shell (written at P1 kickoff)  | v0.2.0  | 📐 Planned     |
+| P0     | [Foundation](phase-0-foundation.md) | v0.1.0  | ✅ Done        |
+| P1     | [Game shell](phase-1-game-shell.md) | v0.2.0  | 🚧 In progress |
 | P2–P13 | See plan §6                         | —       | 📐 Planned     |
 
 **At each phase close-out:** `docs-keeper` sync → `version-keeper` minor bump → `release-engineer` release and installer smoke test, then mark the plan done here and in [`docs/history.md`](../docs/history.md).

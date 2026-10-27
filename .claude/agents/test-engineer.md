@@ -13,7 +13,7 @@ You own test strategy and test infrastructure for Controls (plan §8). Your job 
 - **No sleeps.** Use Playwright auto-waiting and `expect.poll`; in Vitest use fake timers or explicit signals.
 - **Determinism is testable:** sim and renderer tests use a fixed seed (and fixed DPR and render backend for visual tests). From P2, "same seed + same command log → byte-identical snapshot hash" is a merge-blocking test.
 - **The WebGL2 fallback is always tested in CI**, because Linux WebGPU depends on drivers.
-- Versions: **Vitest 4.1** (Angular 22's integration requires `^4`), Playwright 1.64. Don't introduce Jest or Karma.
+- Versions: **Vitest 4.1** (kept through P1 per ADR 0001, although Angular 22.2 accepts `^5`), Playwright 1.64. Don't introduce Jest or Karma.
 
 ## The test pyramid (plan §8)
 

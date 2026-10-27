@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 0 (Foundation) complete. Version 0.1.0.** CI green on all three OSes; v0.1.0 cut as a draft GitHub Release. Next: P1 kickoff, the game shell (plan §6 P1): Plan agent → `plans/phase-1-game-shell.md`, then create `angular-ui-engineer`, `renderer-engineer`, `save-format-guardian`. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Next: the kickoff boundary-hardening PR, then F1.8a → F1.2 (domain track) alongside F1.1 and F1.7. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
@@ -67,9 +67,9 @@ Project agents live in `.claude/agents/`. Specialists not yet created are made a
 | Touching packaging, `release.yml`, the updater or signing           | `release-engineer`                                                             |
 | Working on Electron main, preload or IPC                            | `electron-platform-engineer`                                                   |
 | Working on test infrastructure, CI gates or flaky E2E               | `test-engineer`                                                                |
-| Working on Angular UI, the palette, console, keybindings or editors | `angular-ui-engineer` (created in P1)                                          |
-| Working on Three.js, cables, picking or audio                       | `renderer-engineer` (created in P1)                                            |
-| Changing save or world schemas or migrations                        | `save-format-guardian` (created in P1)                                         |
+| Working on Angular UI, the palette, console, keybindings or editors | `angular-ui-engineer`                                                          |
+| Working on Three.js, cables, picking or audio                       | `renderer-engineer`                                                            |
+| Changing save or world schemas or migrations                        | `save-format-guardian`                                                         |
 | Changing solvers, device electrical models or the worker protocol   | `sim-engine-engineer`, then `electrical-realism-reviewer` (both created in P2) |
 | Adding devices, tables, jobs or faults                              | `content-designer` (created in P3), then `electrical-realism-reviewer`         |
 | Working on the PLC runtime, compilers or ladder/ST editors          | `plc-engineer` (created in P10)                                                |
@@ -94,5 +94,5 @@ Load the matching file before working in an area. The code tells you what shippe
 
 - `controls-development-plan.md` is the spec. If a request conflicts with it, raise the conflict instead of quietly deviating; change the plan first, then the code.
 - Each phase has a plan in `plans/phase-N-<slug>.md` with features `FN.x` and acceptance criteria. Reference the feature ID in commits and PRs, and tick its checklist when it lands.
-- Known plan corrections (recorded in [ADR 0001](docs/decisions/0001-stack.md)): TypeScript 6.0 not 7, Vitest 4.1 not 5, and E2E split into `apps/game-e2e` (web harness) and `apps/desktop-e2e` (`_electron`).
+- Known plan corrections (recorded in [ADR 0001](docs/decisions/0001-stack.md)): TypeScript 6.0 not 7, Vitest 4.1 not 5 (kept by choice through P1), Node follows Electron's embedded Node, and E2E split into `apps/game-e2e` (web harness) and `apps/desktop-e2e` (`_electron`).
 - `docs/research/` holds dated research reports. Don't edit them; supersede with a new dated report.
