@@ -32,9 +32,51 @@ const frameworkPackages = [
 
 /** Root of the domain libs. Absolute, because each project's ESLint config resolves globs from its own directory. */
 const domainLibsDir = fileURLToPath(new URL('./libs/domain', import.meta.url));
+/** apps/sim-cli and its scenario scripts: headless runs must be as deterministic as the domain they drive. */
+const simCliDir = fileURLToPath(new URL('./apps/sim-cli', import.meta.url));
 
 const determinismHint =
   'Domain code must be deterministic: use the seeded PRNG in @controls/world-model and the integer sim tick (F1.2), never the wall clock or ambient randomness.';
+
+/** Bans wall-clock time and ambient randomness (type:domain libs and sim-cli). */
+const determinismRules = {
+  'no-restricted-properties': [
+    'error',
+    {
+      object: 'Math',
+      property: 'random',
+      message: `Math.random() is banned in domain code and sim-cli. ${determinismHint}`,
+    },
+    { object: 'Date', property: 'now', message: `Date.now() is banned in domain code and sim-cli. ${determinismHint}` },
+    ...['performance', 'crypto', 'Date', 'Math'].map((property) => ({
+      object: 'globalThis',
+      property,
+      message: `globalThis.${property} is banned in domain code and sim-cli (it bypasses the determinism lint). ${determinismHint}`,
+    })),
+  ],
+  'no-restricted-globals': [
+    'error',
+    {
+      name: 'performance',
+      message: `performance (performance.now() etc.) is banned in domain code and sim-cli. ${determinismHint}`,
+    },
+    {
+      name: 'crypto',
+      message: `crypto (randomUUID, getRandomValues) is banned in domain code and sim-cli. Entity ids come from the world counter. ${determinismHint}`,
+    },
+  ],
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: "NewExpression[callee.name='Date']",
+      message: `new Date() is banned in domain code and sim-cli. ${determinismHint}`,
+    },
+    {
+      selector: "CallExpression[callee.name='Date']",
+      message: `Date() is banned in domain code and sim-cli. ${determinismHint}`,
+    },
+  ],
+};
 
 export default [
   ...nx.configs['flat/base'],
@@ -89,45 +131,13 @@ export default [
   },
   // Domain determinism (plan §4.6, phase-1 "Determinism and invariant hooks"). Applies to specs too:
   // a domain test that reads the clock or Math.random is a flaky test. Tooling configs are exempt.
-  {
-    basePath: domainLibsDir,
+  // sim-cli (F1.6) gets the same rules: a scenario script that reads the clock can't be re-run to the same hash.
+  ...[domainLibsDir, simCliDir].map((basePath) => ({
+    basePath,
     files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'],
     ignores: ['**/*.config.*', 'vitest.domain.mts'],
-    rules: {
-      'no-restricted-properties': [
-        'error',
-        { object: 'Math', property: 'random', message: `Math.random() is banned in domain code. ${determinismHint}` },
-        { object: 'Date', property: 'now', message: `Date.now() is banned in domain code. ${determinismHint}` },
-        ...['performance', 'crypto', 'Date', 'Math'].map((property) => ({
-          object: 'globalThis',
-          property,
-          message: `globalThis.${property} is banned in domain code (it bypasses the determinism lint). ${determinismHint}`,
-        })),
-      ],
-      'no-restricted-globals': [
-        'error',
-        {
-          name: 'performance',
-          message: `performance (performance.now() etc.) is banned in domain code. ${determinismHint}`,
-        },
-        {
-          name: 'crypto',
-          message: `crypto (randomUUID, getRandomValues) is banned in domain code. Entity ids come from the world counter. ${determinismHint}`,
-        },
-      ],
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "NewExpression[callee.name='Date']",
-          message: `new Date() is banned in domain code. ${determinismHint}`,
-        },
-        {
-          selector: "CallExpression[callee.name='Date']",
-          message: `Date() is banned in domain code. ${determinismHint}`,
-        },
-      ],
-    },
-  },
+    rules: determinismRules,
+  })),
   // Domain source runs in the renderer and the sim worker as well as Node, so no Node built-ins.
   // Specs run only under Vitest in Node and may use them (e.g. node:fs to read fixtures).
   {

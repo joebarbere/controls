@@ -1,0 +1,13 @@
+# The P1 four-surface scenario as console lines (same as four-surface.ts).
+#   pnpm sim run apps/sim-cli/scenarios/four-surface.console
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200
+entity.place --ref.id prop.spool --ref.version 1 --positionMm.x 400 --positionMm.y 0 --positionMm.z -200
+entity.move 1 --positionMm.x 150 --positionMm.y 0 --positionMm.z -200
+entity.rotate 2 --deltaMdeg.yaw 90000 --deltaMdeg.pitch 0 --deltaMdeg.roll 0
+view.resetLayout
+entity.delete 1
+edit.undo      # the crate comes back with the same id
+entity.delete 2
+edit.undo
+edit.redo      # the spool is deleted again
+world.hash

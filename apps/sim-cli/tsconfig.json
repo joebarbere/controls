@@ -1,0 +1,11 @@
+{
+  "//": "Plain Node 24, no DOM: `lib` has no `dom`, so a DOM global fails typecheck (plan F1.6).",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024"],
+    "types": ["node"]
+  },
+  "files": [],
+  "include": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.spec.json" }]
+}
