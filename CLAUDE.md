@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 0 (Foundation): implementation complete locally. Version 0.0.0.** `pnpm verify` and both e2e suites pass on Linux. Remaining: push to GitHub, get the OS matrix green, then `/release minor` → v0.1.0. Open gaps are listed in the phase plan. Spec: [`controls-development-plan.md`](controls-development-plan.md). Phase plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md).
+**Phase 0 (Foundation) complete. Version 0.1.0.** CI green on all three OSes; v0.1.0 cut as a draft GitHub Release. Next: P1 kickoff, the game shell (plan §6 P1): Plan agent → `plans/phase-1-game-shell.md`, then create `angular-ui-engineer`, `renderer-engineer`, `save-format-guardian`. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

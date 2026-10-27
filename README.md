@@ -1,10 +1,10 @@
 # Controls
 
-![version](https://img.shields.io/badge/version-0.0.0-blue) ![status](https://img.shields.io/badge/status-Phase%200%20in%20progress-orange) ![licence](https://img.shields.io/badge/licence-MIT-green)
+![version](https://img.shields.io/badge/version-0.1.0-blue) ![status](https://img.shields.io/badge/status-Phase%200%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 0 (Foundation) in progress, version 0.0.0.** Nothing playable yet. The workspace, Electron shell, 3D viewport, CI and release pipeline work locally. v0.1.0 waits on the first green CI run on all three OSes and the first draft release. See [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md).
+> **Status: Phase 0 (Foundation) complete, version 0.1.0.** Nothing playable yet. The workspace, Electron shell, 3D viewport, CI (green on Windows, macOS and Linux) and draft-release pipeline are in place. Next: Phase 1, the game shell (UI, commands, cameras, save/load). See [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md).
 
 ## Features
 

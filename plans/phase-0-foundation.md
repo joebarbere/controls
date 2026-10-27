@@ -2,7 +2,9 @@
 
 **Release:** v0.1.0 · **Status:** 🚧 In progress (started 2026-10-26) · **Spec:** [plan §6 P0](../controls-development-plan.md#p0--foundation-v010-hello-panel)
 
-> **Status (2026-10-26):** F0.1–F0.6 are implemented and verified locally on Linux: `pnpm verify` exits 0, the web-harness e2e (3 tests) and the Electron smoke e2e (2 tests) pass, and the packaged unpacked Linux build passes the same smoke suite over CDP. Not done yet: the repo isn't pushed to GitHub, so no workflow has run (no macOS/Windows evidence), there is no tag or draft release, the `/release` dry run hasn't been run, and nobody has launched `pnpm start` / `pnpm start:web` by hand. Unticked items below say what is missing.
+> **Status (2026-10-26, later):** pushed to GitHub; `main.yml` is green on all three OSes (verify, web e2e, Electron smoke). v0.1.0 bumped and awaiting its first tag-driven draft release.
+>
+> **Earlier status (2026-10-26):** F0.1–F0.6 are implemented and verified locally on Linux: `pnpm verify` exits 0, the web-harness e2e (3 tests) and the Electron smoke e2e (2 tests) pass, and the packaged unpacked Linux build passes the same smoke suite over CDP. Not done yet: the repo isn't pushed to GitHub, so no workflow has run (no macOS/Windows evidence), there is no tag or draft release, the `/release` dry run hasn't been run, and nobody has launched `pnpm start` / `pnpm start:web` by hand. Unticked items below say what is missing.
 
 ## Goal
 
@@ -10,7 +12,7 @@ A green, cross-platform walking skeleton: an Nx workspace, an Electron shell ser
 
 ## Phase acceptance
 
-- [ ] `pnpm verify` is green on Windows, macOS and Linux (CI `main.yml` matrix).
+- [x] `pnpm verify` is green on Windows, macOS and Linux (CI `main.yml` matrix). _(run 40434999754, after fixing CRLF checkouts and GPU-less WebGL)_
 - [ ] Pushing `v0.1.0` produces a **draft** GitHub Release whose installers launch on Windows, macOS and Linux and show the viewport.
 - [ ] The `/release` dry run is documented in [`docs/guides/releasing.md`](../docs/guides/releasing.md) and has been run once.
 
