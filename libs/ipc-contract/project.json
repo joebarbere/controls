@@ -1,0 +1,17 @@
+{
+  "name": "ipc-contract",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ipc-contract/src",
+  "projectType": "library",
+  "tags": ["type:contract"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/ipc-contract/tsconfig.lib.json --noEmit && tsc -p libs/ipc-contract/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

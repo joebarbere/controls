@@ -1,0 +1,20 @@
+{
+  "name": "desktop-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/desktop-e2e/src",
+  "tags": ["type:e2e", "scope:desktop"],
+  "implicitDependencies": ["desktop"],
+  "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "projects": ["desktop"], "target": "build" }],
+      "options": { "command": "playwright test -c apps/desktop-e2e/playwright.config.mts" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": { "command": "tsc -p apps/desktop-e2e/tsconfig.json" }
+    }
+  }
+}

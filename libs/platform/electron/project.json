@@ -1,0 +1,17 @@
+{
+  "name": "platform-electron",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/electron/src",
+  "projectType": "library",
+  "tags": ["type:platform"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/platform/electron/tsconfig.lib.json --noEmit && tsc -p libs/platform/electron/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "renderer",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/rendering/renderer/src",
+  "projectType": "library",
+  "tags": ["type:rendering"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/rendering/renderer/tsconfig.lib.json --noEmit && tsc -p libs/rendering/renderer/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

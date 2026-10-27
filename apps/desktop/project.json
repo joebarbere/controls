@@ -1,0 +1,41 @@
+{
+  "name": "desktop",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/desktop/src",
+  "tags": ["type:app", "scope:desktop"],
+  "implicitDependencies": ["game"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "projects": ["game"], "target": "build" }],
+      "inputs": ["production", "^production", { "dependentTasksOutputFiles": "**/*", "transitive": false }],
+      "outputs": ["{workspaceRoot}/dist/apps/desktop"],
+      "cache": true,
+      "options": { "command": "node apps/desktop/build.mjs --production" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": { "command": "tsc -p apps/desktop/tsconfig.app.json && tsc -p apps/desktop/tsconfig.spec.json" }
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": { "command": "electron dist/apps/desktop" }
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": { "command": "electron-builder --config apps/desktop/electron-builder.config.cjs --publish never" }
+    },
+    "package-dir": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "electron-builder --config apps/desktop/electron-builder.config.cjs --dir --publish never"
+      }
+    }
+  }
+}

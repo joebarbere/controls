@@ -1,0 +1,17 @@
+{
+  "name": "platform-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/platform/web/src",
+  "projectType": "library",
+  "tags": ["type:platform"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/platform/web/tsconfig.lib.json --noEmit && tsc -p libs/platform/web/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

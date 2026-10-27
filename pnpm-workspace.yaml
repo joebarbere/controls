@@ -1,0 +1,13 @@
+packages:
+  - 'apps/*'
+  - 'libs/**'
+  - '!apps/desktop'
+allowBuilds:
+  nx: true
+  esbuild: true
+  '@swc/core': true
+  electron: true
+  electron-winstaller: false
+  lmdb: true
+  msgpackr-extract: true
+  '@parcel/watcher': true

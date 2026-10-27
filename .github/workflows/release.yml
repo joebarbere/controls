@@ -1,0 +1,83 @@
+# Tag push (vX.Y.Z) → verify → build installers on all three OSes → upload to a DRAFT GitHub
+# Release. A human (via release-engineer / `/release`) checks the draft and publishes it.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: verify tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Tag matches package.json version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+      - name: pnpm verify (== local)
+        run: pnpm verify
+
+  build:
+    name: package ${{ matrix.os }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned until the signing decision (plan §9.3)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build app directory
+        run: pnpm build:desktop
+      - name: Package (no upload yet)
+        run: pnpm exec electron-builder --config apps/desktop/electron-builder.config.cjs --publish never
+      - name: Install Playwright (smoke test of the packaged app)
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Smoke-test packaged Linux app
+        if: runner.os == 'Linux'
+        env:
+          CONTROLS_E2E_EXECUTABLE: ${{ github.workspace }}/dist/release/linux-unpacked/controls
+        run: xvfb-run -a pnpm exec playwright test -c apps/desktop-e2e/playwright.config.mts
+      - name: Smoke-test packaged Windows app
+        if: runner.os == 'Windows'
+        env:
+          CONTROLS_E2E_EXECUTABLE: ${{ github.workspace }}\dist\release\win-unpacked\Controls.exe
+        run: pnpm exec playwright test -c apps/desktop-e2e/playwright.config.mts
+      - name: Smoke-test packaged macOS app
+        if: runner.os == 'macOS'
+        env:
+          CONTROLS_E2E_EXECUTABLE: ${{ github.workspace }}/dist/release/mac-universal/Controls.app/Contents/MacOS/Controls
+        run: pnpm exec playwright test -c apps/desktop-e2e/playwright.config.mts
+      # Only a build that passed its smoke test reaches the draft release. Same inputs → same artifacts.
+      - name: Upload to draft release
+        run: pnpm exec electron-builder --config apps/desktop/electron-builder.config.cjs --publish always
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: release-logs-${{ matrix.os }}
+          path: |
+            dist/.playwright
+            dist/release/builder-debug.yml
+          retention-days: 7
