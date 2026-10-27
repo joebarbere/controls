@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Toolchain patch updates at the Phase 1 kickoff: pnpm 11.15.0 → 11.28.8, electron-builder 26.18.0 → 26.18.1 and electron-updater 6.8.11 → 6.8.12. Nx 24.0.2 is deferred until it clears pnpm's minimum release age.
+
 ## [0.1.0] - 2026-10-26
 
 Phase 0, "Hello, panel": the cross-platform walking skeleton. Nothing playable yet.
