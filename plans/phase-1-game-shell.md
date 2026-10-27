@@ -10,7 +10,7 @@ A game you can start, look around, place things in and save: a keyboard-first An
 
 - [ ] Place, move and delete objects with undo/redo through the **mouse, palette, console and a `sim-cli` script**, with the same resulting world hash (`world.hash`) on every surface. _(One scenario, four drivers: `apps/game-e2e` for mouse, palette and console, `sim-cli` for the script.)_
 - [ ] Save then reload is lossless: a fast-check property test on the world document and an E2E save → reload → same hash, in the web harness and in Electron.
-- [ ] Replaying seed + command log from an empty world gives the same hash as the live session (property test in `domain/commands` and `sim-cli replay`).
+- [x] Replaying seed + command log from an empty world gives the same hash as the live session (property test in `domain/commands` and `sim-cli replay`). _(F1.2 property tests; F1.6's four-surface test replays the log a `sim run` wrote and gets the live hash.)_
 - [ ] E2E covers the palette and the console (including the console under the Electron CSP).
 - [ ] `pnpm verify` green on all three OSes. Every new runtime dependency has a `THIRD_PARTY_NOTICES.md` row.
 
@@ -171,11 +171,12 @@ The typed API over the registry lives in `libs/domain/scripting-api` (`@controls
 
 Acceptance:
 
-- [ ] `pnpm sim run <script>`, `pnpm sim replay <file.ctrl>` (prints the hash), `pnpm sim hash <file.ctrl>`. Scripts are TS modules exporting `(game) => …`, or console-line files.
-- [ ] `sim-cli` lint fails on any import outside `type:domain`, and it runs under plain Node 24 with no DOM.
-- [ ] Sim queries (`probe`, `tag`) are reserved in the API docs and not implemented. They arrive in P2 and P10.
-- [ ] A `sim-cli` test target runs the four-surface scenario script and is part of `pnpm verify`.
-- [ ] `docs/guides/scripting.md` shows a worked example.
+- [x] `pnpm sim run <script>`, `pnpm sim replay <file.ctrl>` (prints the hash), `pnpm sim hash <file.ctrl>`. Scripts are TS modules exporting `(game) => …`, or console-line files. _(Until F1.8b, `replay` and `hash` read the replay-log and world JSON a `.ctrl` contains and refuse `.ctrl` with a clear error; F1.8b adds `.ctrl` to the same commands. TS scripts are bundled with esbuild at run time; ADR 0008.)_
+- [x] `sim-cli` lint fails on any import outside `type:domain`, and it runs under plain Node 24 with no DOM. _(`lint-boundary.spec.ts` lints a probe file with the real config; the four-surface test runs the bundle in a plain `node` child process.)_
+- [x] Sim queries (`probe`, `tag`) are reserved in the API docs and not implemented. They arrive in P2 and P10. _(In the `Game` type, throwing `NotAvailableError`.)_
+- [x] A `sim-cli` test target runs the four-surface scenario script and is part of `pnpm verify`. _(The headless drivers: API in-process, TS script, console-line file and replay, all to one pinned hash. Palette, keybindings and mouse are UI drivers in `apps/game-e2e`.)_
+- [x] `docs/guides/scripting.md` shows a worked example.
+- _Also landed: the console-line parser in `@controls/commands` (`console/`) for F1.5, ADR 0008 (grammar, script boundary, `.ctrl` forward compatibility; its CodeMirror section is left for F1.5), and the determinism lint extended to `apps/sim-cli`._
 
 ### F1.7 Cameras and interaction
 
@@ -262,14 +263,14 @@ Acceptance:
 
 Numbers are assigned in landing order. Planned:
 
-| ADR  | Topic                                                                                                                                       | Written in |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 0005 | Docking workspace: dockview vs custom split panes                                                                                           | F1.1       |
-| 0006 | Command system semantics: undo model, what is logged, view vs world commands, input actions vs commands, `when` grammar                     | F1.2       |
-| 0007 | World document v1 and determinism: id allocation, PRNG choice, canonical hash, orientation encoding, built-in prop refs, sim tick before P2 | F1.8a      |
-| 0008 | Console grammar, CodeMirror 6, and where scripts may run (no eval in the renderer; TS scripts only in `sim-cli` until the P13 sandbox)      | F1.5       |
-| 0009 | Save I/O boundary: main-owned save directory, opaque handles, atomic writes, web harness storage, autosave rotation                         | F1.8b      |
-| 0010 | Wire-routing spike findings                                                                                                                 | F1.10      |
+| ADR  | Topic                                                                                                                                       | Written in                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 0005 | Docking workspace: dockview vs custom split panes                                                                                           | F1.1                                                           |
+| 0006 | Command system semantics: undo model, what is logged, view vs world commands, input actions vs commands, `when` grammar                     | F1.2                                                           |
+| 0007 | World document v1 and determinism: id allocation, PRNG choice, canonical hash, orientation encoding, built-in prop refs, sim tick before P2 | F1.8a                                                          |
+| 0008 | Console grammar, CodeMirror 6, and where scripts may run (no eval in the renderer; TS scripts only in `sim-cli` until the P13 sandbox)      | F1.6 (grammar, scripts); F1.5 completes the CodeMirror section |
+| 0009 | Save I/O boundary: main-owned save directory, opaque handles, atomic writes, web harness storage, autosave rotation                         | F1.8b                                                          |
+| 0010 | Wire-routing spike findings                                                                                                                 | F1.10                                                          |
 
 ## Determinism and invariant hooks
 
@@ -333,7 +334,7 @@ Numbers are assigned in landing order. Planned:
 | F1.3    | Command palette               | 📐 Planned                                            |
 | F1.4    | Keybinding service            | ✅ Done                                               |
 | F1.5    | Dev console                   | 📐 Planned                                            |
-| F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                            |
+| F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
 | F1.7    | Cameras and interaction       | 🚧 Part 1                                             |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
 | F1.9    | Workshop level                | 📐 Planned                                            |

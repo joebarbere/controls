@@ -12,6 +12,8 @@
 
 > **P1 so far (F1.4):** the keybinding core in `@controls/commands` (`keybindings/`: chords, conflicts, resolution, the `INPUT_ACTIONS` table), `KeybindingService` and `ToolBelt` in `feature-session`, and the Key bindings dialog in `feature-settings`. The renderer now reads its input-action defaults from `@controls/commands` (`REND --> CMDS`). See [commands](commands.md#keybindings) and [UI shell](ui-shell.md#keybindings-and-the-tool-belt).
 >
+> **P1 so far (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`: the `Game` facade that `Session` and scripts share), the console-line parser in `@controls/commands`, and `apps/sim-cli` (`type:app`, `scope:headless`: `pnpm sim run|replay|hash`). See [scripting and sim-cli](scripting.md).
+>
 > Items marked _(PN)_ below arrive in that phase.
 
 ## Process and thread model
@@ -68,7 +70,7 @@ flowchart LR
     subgraph apps["type:app"]
         GAME["apps/game"]:::p0
         DESK["apps/desktop"]:::p0
-        SIMCLI["apps/sim-cli (P1)"]:::later
+        SIMCLI["apps/sim-cli<br/>scope:headless"]:::p0
     end
 
     FEAT["libs/features/shell, workspace, settings, session (P1)<br/>type:feature"]:::p0
@@ -82,13 +84,14 @@ flowchart LR
     SF["libs/domain/save-format<br/>type:domain"]:::p0
     CMDS["libs/domain/commands<br/>type:domain"]:::p0
     WM["libs/domain/world-model<br/>type:domain"]:::p0
-    DOM["libs/domain/* (P1+)<br/>scripting-api, sim-core, catalog…"]:::later
+    SAPI["libs/domain/scripting-api<br/>type:domain"]:::p0
+    DOM["libs/domain/* (P2+)<br/>sim-core, catalog…"]:::later
     WORKER["libs/sim-worker (P2)"]:::later
 
     GAME --> FEAT & UI & REND & PAPI & PEL & PWEB
     DESK --> IPC
-    SIMCLI --> DOM
-    FEAT --> CMDS & WM & SF & REND & UI & PAPI & IPC
+    SIMCLI --> SAPI & CMDS & WM & SF
+    FEAT --> SAPI & CMDS & WM & SF & REND & UI & PAPI & IPC
     REND --> UNITS & CMDS & DOM
     PAPI --> IPC
     PEL --> PAPI & IPC
@@ -98,13 +101,14 @@ flowchart LR
     SF --> UNITS
     CMDS --> SF
     WM --> CMDS & SF
+    SAPI --> CMDS & WM & SF
     DOM --> SF
 ```
 
 **Rules** (plan §4.2):
 
 - `type:domain` is pure TypeScript (no Angular, DOM or Electron) and depends only on other domain libs. That's what lets `sim-cli` run the game headless. Since the P1 kickoff this is enforced beyond tags: banned npm imports (Angular, RxJS, Electron, Three.js, …), a no-`dom` tsconfig, no Node built-ins in source, a determinism lint (no `Math.random`, wall clock, `performance` or `crypto`), and a 90 % coverage gate. See [workspace caveats](../caveats/workspace.md).
-- `scope:headless` (`apps/sim-cli`) may depend only on domain libs, on top of its `type:app` tag.
+- `scope:headless` (`apps/sim-cli`) may depend only on domain libs, on top of its `type:app` tag. A test lints a probe import with the real config to keep it that way.
 - `sim-worker` depends on domain libs only.
 - `type:rendering` depends on `world-model`, `catalog` and `units`, plus read-only snapshot types from `sim-worker`. It is framework-free.
 - `type:feature` may depend on domain, rendering, ui and `platform/api`, **never** on a concrete platform implementation.

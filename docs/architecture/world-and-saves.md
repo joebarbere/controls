@@ -111,7 +111,7 @@ flowchart LR
     CMD["@controls/commands (F1.2)<br/>replay log entries"]:::later
     CTR["container + I/O (F1.8b)<br/>ZIP, atomic write, autosave"]:::later
     SET["SettingsService (F1.1)<br/>platform-api"]:::later
-    CLI["apps/sim-cli (F1.6)<br/>replay, hash"]:::later
+    CLI["apps/sim-cli (F1.6)<br/>replay, hash (JSON until F1.8b)"]:::done
 
     SF --> UNITS
     WM --> SF

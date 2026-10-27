@@ -1,6 +1,6 @@
 # Commands and the world model
 
-> **Status (F1.4):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The Angular adapter is `libs/features/session` (`@controls/feature-session`): `Session`, `KeybindingService` and `ToolBelt`. The palette (F1.3), console (F1.5) and scripting API with `sim-cli` (F1.6) are still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
+> **Status (F1.6):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/` and the console-line parser under `console/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The scripting API's `Game` (`@controls/scripting-api`) wraps them; `sim-cli` scripts drive it, and so does the Angular adapter `libs/features/session` (`@controls/feature-session`: `Session`, `KeybindingService` and `ToolBelt`); see [scripting and sim-cli](scripting.md). The palette (F1.3) and console UI (F1.5) are still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
 
 ## One registry, four surfaces
 
@@ -13,8 +13,9 @@ flowchart LR
     PAL["Palette (F1.3)"]:::later --> SES
     KEY["KeybindingService (F1.4)<br/>document keydown"] --> SES
     CON["Console (F1.5)"]:::later --> SES
-    SES["feature-session<br/>Session: world signal, exec, context keys"] --> BUS
-    SCR["scripting-api + sim-cli (F1.6)"]:::later --> BUS
+    SES["feature-session<br/>Session: world signal, exec, context keys"] --> GAME
+    SCR["sim-cli scripts and .console files (F1.6)"] --> GAME
+    GAME["scripting-api Game<br/>exec, world(), hash(), on()"] --> BUS
     subgraph domain["type:domain"]
         BUS["CommandBus&lt;World&gt;<br/>@controls/commands"]
         REG["CommandRegistry<br/>entity.*, edit.*, view.*"]
