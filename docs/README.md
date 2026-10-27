@@ -7,7 +7,7 @@ flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
     HUB --> G["guides/<br/>new developer, releasing"]
     HUB --> A["architecture/<br/>overview"]
-    HUB --> D["decisions/<br/>ADRs 0001-0004, 0007"]
+    HUB --> D["decisions/<br/>ADRs 0001-0005, 0007"]
     HUB --> C["caveats/<br/>per-area gotchas"]
     HUB --> GL["glossary.md"]
     HUB --> H["history.md"]
@@ -26,11 +26,12 @@ flowchart TD
 
 ## Architecture
 
-| Page                                               | Covers                                                                                       |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design     |
-| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)        |
-| [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal |
+| Page                                               | Covers                                                                                              |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design            |
+| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)               |
+| [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal        |
+| [UI shell](architecture/ui-shell.md)               | Shell libraries, screens and focus flow, the docking workspace, settings, theming and notifications |
 
 Subsystem pages (commands, save format, sim-core, renderer, PLC, HMI) are added in the phase that builds them.
 
@@ -42,6 +43,7 @@ Subsystem pages (commands, save format, sim-core, renderer, PLC, HMI) are added 
 | [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks    |
 | [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                      |
 | [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                         |
+| [0005 Docking workspace](decisions/0005-docking-workspace.md)             | Custom keyboard-operable split panes, not dockview (revisit for tabbed editors)                     |
 | [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log |
 
 ## Reference

@@ -4,41 +4,7 @@
   display: block;
 }
 
-.viewport {
+ctl-workspace {
   position: absolute;
   inset: 0;
-}
-
-.hud {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--ctl-hud-bg);
-  color: var(--ctl-hud-fg);
-  pointer-events: none;
-
-  h1 {
-    margin: 0 0 6px;
-    font-size: 16px;
-    letter-spacing: 0.04em;
-  }
-}
-
-.about {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 2px 12px;
-  margin: 0;
-  font-size: 12px;
-
-  dt {
-    opacity: 0.7;
-  }
-
-  dd {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
-  }
 }

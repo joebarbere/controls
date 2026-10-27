@@ -20,6 +20,14 @@ describe('ElectronPlatform', () => {
     await expect(new ElectronPlatform(bridge).getAppInfo()).rejects.toThrow();
   });
 
+  it('can quit by closing the window', () => {
+    const closeWindow = vi.fn();
+    const platform = new ElectronPlatform({ getAppInfo: async () => ({ ...info }) }, closeWindow);
+    expect(platform.canQuit).toBe(true);
+    platform.quit();
+    expect(closeWindow).toHaveBeenCalledOnce();
+  });
+
   it('finds the bridge only when the preload installed it', () => {
     expect(findBridge({})).toBeUndefined();
     const bridge: ControlsBridge = { getAppInfo: async () => ({ ...info }) };

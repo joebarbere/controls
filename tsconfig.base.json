@@ -25,7 +25,11 @@
       "@controls/renderer": ["./libs/rendering/renderer/src/index.ts"],
       "@controls/platform-api": ["./libs/platform/api/src/index.ts"],
       "@controls/platform-electron": ["./libs/platform/electron/src/index.ts"],
-      "@controls/platform-web": ["./libs/platform/web/src/index.ts"]
+      "@controls/platform-web": ["./libs/platform/web/src/index.ts"],
+      "@controls/ui": ["./libs/ui/src/index.ts"],
+      "@controls/feature-shell": ["./libs/features/shell/src/index.ts"],
+      "@controls/feature-workspace": ["./libs/features/workspace/src/index.ts"],
+      "@controls/feature-settings": ["./libs/features/settings/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

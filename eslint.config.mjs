@@ -23,7 +23,7 @@ const frameworkPackages = [
   'three-mesh-bvh',
   '@codemirror/*', // editor UI (P1 console)
   'codemirror',
-  'dockview', // docking UI (P1 workspace, if chosen in ADR 0005)
+  'dockview', // docking UI: not chosen in ADR 0005, kept banned in case it is revisited for editors
   'dockview-*',
   'jsdom', // DOM emulation would hide DOM coupling in tests
   '@playwright/test',

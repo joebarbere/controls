@@ -8,4 +8,8 @@ import type { AppInfo } from '@controls/ipc-contract';
 export interface Platform {
   readonly kind: 'electron' | 'web';
   getAppInfo(): Promise<AppInfo>;
+  /** Whether {@link quit} can end the app. A browser tab can't close itself, so the web harness hides Quit. */
+  readonly canQuit: boolean;
+  /** Ends the app (closes the game window). */
+  quit(): void;
 }

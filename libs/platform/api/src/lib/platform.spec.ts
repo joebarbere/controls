@@ -11,6 +11,8 @@ describe('Platform', () => {
         isPackaged: false,
         versions: {},
       }),
+      canQuit: false,
+      quit: () => undefined,
     };
     await expect(fake.getAppInfo()).resolves.toMatchObject({ platform: 'web' });
   });

@@ -81,7 +81,7 @@ Main menu (New sandbox, Continue, Load, Settings, About, Quit), settings, dockin
 
 Acceptance:
 
-- [ ] ADR 0005 picks dockview or custom split panes before the workspace PR merges. Criteria: Angular 22 zoneless support, works under the strict CSP, keyboard operation, serialisable layout, licence, bundle size.
+- [x] ADR 0005 picks dockview or custom split panes before the workspace PR merges. Criteria: Angular 22 zoneless support, works under the strict CSP, keyboard operation, serialisable layout, licence, bundle size.
 - [ ] Workspace: the 3D viewport plus at least a side panel (inspector) and a bottom panel (console host). Panels resize and the layout persists in settings. `view.resetLayout` is a registered command.
 - [ ] Settings sections:
   - graphics: backend preference auto/webgl2, pixel-ratio cap;
@@ -95,11 +95,11 @@ Acceptance:
 
 - [ ] The settings document is Zod-validated with its own `settingsVersion`. A corrupt or unknown file falls back to defaults with a notification (unit tests for main and web).
 - [ ] Settings IPC (`settings:get` / `settings:set`): Zod-validated in main, `senderFrame` checked, size-capped, written atomically.
-- [ ] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run.
-- [ ] Notifications are announced through `aria-live` and can be dismissed from the keyboard.
-- [ ] Light and dark themes via CSS custom properties: follow `prefers-color-scheme`, can be overridden in settings, honour `prefers-reduced-motion`.
-- [ ] Keyboard-only Playwright test: menu → settings → back → New sandbox without the mouse, with visible focus and focus restored after each dialog closes.
-- [ ] The about box moves into the menu with its `data-testid`s intact. The existing `game-e2e` and `desktop-e2e` smoke tests stay green, and there is still no `zone.js`.
+- [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Badge wired to an input; the world `assisted` flag arrives with F1.2/F1.3.)_
+- [x] Notifications are announced through `aria-live` and can be dismissed from the keyboard.
+- [x] Light and dark themes via CSS custom properties: follow `prefers-color-scheme`, can be overridden in settings, honour `prefers-reduced-motion`.
+- [x] Keyboard-only Playwright test: menu → settings → back → New sandbox without the mouse, with visible focus and focus restored after each dialog closes.
+- [x] The about box moves into the menu with its `data-testid`s intact. The existing `game-e2e` and `desktop-e2e` smoke tests stay green, and there is still no `zone.js`.
 
 ### F1.2 Command system
 

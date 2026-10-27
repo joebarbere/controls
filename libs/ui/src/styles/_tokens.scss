@@ -1,0 +1,71 @@
+// Design tokens. Every colour is a `light-dark()` pair, so the theme follows the used
+// `color-scheme`: `light dark` by default (follows prefers-color-scheme), pinned by
+// `data-theme` on <html> when the player overrides it in settings.
+// Contrast: text and focus colours are at least 4.5:1 against their surfaces in both themes.
+
+:root {
+  color-scheme: light dark;
+
+  --ctl-bg: light-dark(#eef0f3, #1d2126);
+  --ctl-surface: light-dark(#ffffff, #262b31);
+  --ctl-surface-raised: light-dark(#f7f8fa, #2f353c);
+  --ctl-border: light-dark(#c3c9d1, #48515b);
+  --ctl-fg: light-dark(#16191d, #e8ebee);
+  --ctl-fg-muted: light-dark(#4a535d, #aab3bd);
+  --ctl-accent: light-dark(#0a58ca, #8ab4ff);
+  --ctl-accent-fg: light-dark(#ffffff, #0b1220);
+  --ctl-focus: light-dark(#0a58ca, #ffd166);
+  --ctl-danger: light-dark(#b42318, #ff8a80);
+  --ctl-warning: light-dark(#8a5300, #ffcc66);
+  --ctl-success: light-dark(#1d6b35, #7ddc95);
+  --ctl-overlay: light-dark(rgb(238 240 243 / 86%), rgb(20 23 27 / 82%));
+  --ctl-hud-bg: light-dark(rgb(255 255 255 / 86%), rgb(20 23 27 / 78%));
+  --ctl-hud-fg: var(--ctl-fg);
+  --ctl-backdrop: rgb(0 0 0 / 45%);
+
+  --ctl-font: system-ui, sans-serif;
+  --ctl-font-mono: ui-monospace, 'Cascadia Mono', 'DejaVu Sans Mono', monospace;
+  --ctl-radius: 6px;
+  --ctl-space-1: 4px;
+  --ctl-space-2: 8px;
+  --ctl-space-3: 12px;
+  --ctl-space-4: 16px;
+  --ctl-space-6: 24px;
+  --ctl-focus-ring: 0 0 0 2px var(--ctl-bg), 0 0 0 4px var(--ctl-focus);
+  --ctl-splitter-size: 6px;
+
+  --ctl-duration: 160ms;
+  --ctl-easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+// Reduced motion: the OS preference, or the settings override (`data-motion="reduce"`).
+@mixin reduced-motion {
+  --ctl-duration: 0ms;
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    @include reduced-motion;
+  }
+}
+
+:root[data-motion='reduce'] {
+  @include reduced-motion;
+}

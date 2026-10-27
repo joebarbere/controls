@@ -1,0 +1,27 @@
+{
+  "name": "feature-shell",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/features/shell/src",
+  "prefix": "ctl",
+  "projectType": "library",
+  "tags": ["type:feature"],
+  "targets": {
+    "test": {
+      "executor": "@angular/build:unit-test",
+      "inputs": ["default", "^production", "{workspaceRoot}/apps/game/project.json"],
+      "options": {
+        "buildTarget": "game:build:development",
+        "tsConfig": "libs/features/shell/tsconfig.spec.json",
+        "watch": false
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/features/shell/tsconfig.lib.json --noEmit && tsc -p libs/features/shell/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}
