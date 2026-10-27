@@ -21,4 +21,5 @@ A new area (new lib, new cross-cutting concern) gets a new file, a row below, **
 | [`release.md`](release.md)         | Versioning, `tools/check-version-sync.mjs`, electron-builder config, `release.yml`, auto-update, signing, `/release`.                                     |
 | [`save-format.md`](save-format.md) | `libs/domain/save-format` (schemas, migrations, fixtures, settings, JSON Schema), world serialisation, command ids/args in the replay log, load failures. |
 | [`rendering.md`](rendering.md)     | `libs/rendering/renderer`: scene, cameras (walk/work), BVH picking, selection, snap maths, overlays, disposal, the viewport host.                         |
+| [`commands.md`](commands.md)       | `libs/domain/commands`, `libs/domain/world-model`, `libs/features/session`, adding a command, `world.hash`, the PRNG, replay that diverges.               |
 | [`ui.md`](ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*` (shell, workspace, settings…), keyboard and focus, dialogs, theming, Angular component tests.                   |

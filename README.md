@@ -33,6 +33,13 @@ What exists today (Phase 0 scaffold):
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). A frame-time HUD shows in dev builds.
 - Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. Placement through commands follows.
 
+### Commands and world
+
+- One command registry for every way of changing the world. Commands validate their arguments, and invalid ones change nothing. Undo and redo cover every world change, and deleting then undoing brings an object back with the same id.
+- A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
+- `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
+- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. The palette, keybindings and console that drive them arrive next.
+
 ### Saves
 
 - Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema. Saving and loading in the game arrive later in P1.
@@ -110,10 +117,12 @@ apps/
 libs/
   domain/units/    framework-free domain lib; today only the generated app version
   domain/save-format/  save and settings schemas (Zod), migrations, fixtures, JSON Schema
+  domain/commands/     command registry, bus, undo/redo, replay log, `when` expressions
+  domain/world-model/  world commands, world.hash (SHA-256), seeded PRNG (sfc32)
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
   ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
-  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings
+  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec)
   platform/        api (interfaces), electron and web implementations
 docs/  plans/  tools/  .claude/
 ```
