@@ -17,12 +17,13 @@ A game you can start, look around, place things in and save: a keyboard-first An
 ## Kickoff (before F1.x PRs)
 
 1. [x] Create the P1 specialists from plan §10.2: `angular-ui-engineer`, `renderer-engineer`, `save-format-guardian` (`.claude/agents/`). The routing table in `CLAUDE.md` already lists them.
-2. **Boundary hardening PR** (`test-engineer`). P0 tested the domain boundary only against a workspace import. Close the gap:
+2. [x] **Boundary hardening PR** (`test-engineer`). P0 tested the domain boundary only against a workspace import. Close the gap:
    - add `bannedExternalImports` for `type:domain` (`@angular/*`, `electron`, `three`, `three/*`, `rxjs`);
    - give domain libs `lib: ["es2022"]` (no `dom`), so DOM globals fail typecheck;
    - ban `Math.random`, `Date.now`, `new Date()` and `performance.now` in `type:domain` with `no-restricted-properties` / `no-restricted-globals`;
    - add a `scope:headless` tag that may depend only on `type:domain` (for `apps/sim-cli`; `scope:desktop` is the precedent);
    - add `fast-check` (dev) and per-domain-lib Vitest coverage thresholds of 90 % (§8). These run in `test`, so they are part of `pnpm verify`, not CI-only.
+   - _Landed with additions:_ the ban list also covers `zone.js`, `electron-updater`, `three-mesh-bvh`, CodeMirror, dockview, `jsdom` and Playwright; `crypto` and `new Date()` are banned too, and the determinism bans apply to domain specs; domain **source** may not import Node built-ins (it also runs in the renderer and worker) and gets no ambient `node` types. Shared config: `libs/domain/tsconfig.domain.json`, `libs/domain/vitest.domain.mts`. Details in [workspace caveats](../docs/caveats/workspace.md).
 3. [x] `release-engineer` re-checks the versions of dockview, CodeMirror 6, three-mesh-bvh, fflate and fast-check, plus their licences and their Angular 22 / TS 6.0 / CSP compatibility (§12 toolchain churn).
 
 ## Kickoff decisions (2026-10-27)

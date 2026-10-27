@@ -25,7 +25,7 @@ Nx 24 + pnpm 11 workspace, TypeScript strict, ESLint flat config, Prettier, modu
 Acceptance:
 
 - [x] `pnpm install` works from a clean clone with Node 24 and Corepack; packages with install scripts are in `pnpm-workspace.yaml` `allowBuilds`. _(Every CI job does a clean-clone `pnpm install --frozen-lockfile` on Windows, macOS and Linux.)_
-- [x] Projects carry `type:*` tags and `@nx/enforce-module-boundaries` fails on a forbidden import (for example a `type:domain` lib importing Angular). _(A `type:domain` lib importing `@controls/renderer` fails lint; both e2e projects are `type:e2e`.)_
+- [x] Projects carry `type:*` tags and `@nx/enforce-module-boundaries` fails on a forbidden import (for example a `type:domain` lib importing Angular). _(A `type:domain` lib importing `@controls/renderer` fails lint; both e2e projects are `type:e2e`.)_ _(**Note, 2026-10-27:** this proved the tag constraint against a workspace import only. Nx tag constraints don't cover npm packages and the base tsconfig included the `dom` lib, so a domain lib importing `@angular/core` or using `window` would still have passed. Closed by the P1 kickoff boundary-hardening PR; see [phase 1](phase-1-game-shell.md#kickoff-before-f1x-prs).)_
 - [x] `tsconfig.base.json` uses `paths` without `baseUrl`; all projects typecheck under `strict`. _(Every project, including both e2e suites, has a `typecheck` target in `pnpm verify`.)_
 - [x] Findings recorded: TypeScript pinned to 6.0.x (Angular 22 requires `>=6.0 <6.1`; `tsgo` not used); Vitest 4.1 (Angular 22 requires `^4`); integrated paths style because `@nx/angular` refuses project references. → [ADR 0001](../docs/decisions/0001-stack.md), [workspace caveats](../docs/caveats/workspace.md).
 

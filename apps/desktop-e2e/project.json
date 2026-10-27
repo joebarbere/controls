@@ -9,6 +9,7 @@
     "e2e": {
       "executor": "nx:run-commands",
       "dependsOn": [{ "projects": ["desktop"], "target": "build" }],
+      "cache": false,
       "options": { "command": "playwright test -c apps/desktop-e2e/playwright.config.mts" }
     },
     "typecheck": {
