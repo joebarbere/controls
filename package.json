@@ -12,7 +12,7 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@11.15.0",
+  "packageManager": "pnpm@11.28.8",
   "scripts": {
     "verify": "prettier --check . && nx run-many -t lint typecheck test build && node tools/check-version-sync.mjs",
     "format": "prettier --write .",
@@ -64,8 +64,8 @@
     "@vitest/coverage-v8": "^4.0.0",
     "angular-eslint": "^22.5.0",
     "electron": "45.0.0",
-    "electron-builder": "26.18.0",
-    "electron-updater": "6.8.11",
+    "electron-builder": "26.18.1",
+    "electron-updater": "6.8.12",
     "esbuild": "0.28.2",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
