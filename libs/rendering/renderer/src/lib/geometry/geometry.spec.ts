@@ -1,6 +1,7 @@
 import { Box3, Vector3, type BufferGeometry } from 'three/webgpu';
 import { buildBackplateGeometry } from './backplate';
-import { buildDinRailGeometry, DIN_RAIL_TS35 } from './din-rail';
+import { DIN_RAIL_TS35 } from '../snap/constants';
+import { buildDinRailGeometry } from './din-rail';
 
 const box = (g: BufferGeometry): Box3 => {
   g.computeBoundingBox();
@@ -13,8 +14,8 @@ describe('buildDinRailGeometry', () => {
   it('is a TS35×7.5 profile running along X', () => {
     const s = size(buildDinRailGeometry(500));
     expect(s.x).toBeCloseTo(0.5, 6);
-    expect(s.y).toBeCloseTo(DIN_RAIL_TS35.widthMm / 1000, 6);
-    expect(s.z).toBeCloseTo(DIN_RAIL_TS35.heightMm / 1000, 6);
+    expect(s.y).toBeCloseTo(DIN_RAIL_TS35.widthMm.valueMm / 1000, 6);
+    expect(s.z).toBeCloseTo(DIN_RAIL_TS35.heightMm.valueMm / 1000, 6);
   });
 
   it('sits on the backplate (back face at z = 0)', () => {

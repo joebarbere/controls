@@ -1,8 +1,6 @@
 import { ExtrudeGeometry, Matrix4, Shape, type BufferGeometry } from 'three/webgpu';
-import { mm } from './units';
-
-/** Top-hat rail cross-section per EN 60715 TS 35×7.5 (1 mm steel). */
-export const DIN_RAIL_TS35 = { widthMm: 35, heightMm: 7.5, crownWidthMm: 27, thicknessMm: 1 } as const;
+import { mm } from '@controls/units';
+import { DIN_RAIL_TS35 } from '../snap/constants';
 
 /**
  * TS35×7.5 DIN rail of the given length.
@@ -10,10 +8,11 @@ export const DIN_RAIL_TS35 = { widthMm: 35, heightMm: 7.5, crownWidthMm: 27, thi
  * backplate along +Z; the back of the rail sits at z = 0. Centred on X and Y.
  */
 export function buildDinRailGeometry(lengthMm: number): BufferGeometry {
-  const { widthMm, heightMm, crownWidthMm, thicknessMm: t } = DIN_RAIL_TS35;
-  const w = widthMm / 2;
-  const c = crownWidthMm / 2;
-  const h = heightMm;
+  // Profile dimensions are sourced in snap/constants.ts (EN 60715 TS 35 × 7.5).
+  const t = DIN_RAIL_TS35.thicknessMm.valueMm;
+  const w = DIN_RAIL_TS35.widthMm.valueMm / 2;
+  const c = DIN_RAIL_TS35.crownWidthMm.valueMm / 2;
+  const h = DIN_RAIL_TS35.heightMm.valueMm;
   // Profile in (x = across width, y = stand-off), traced around the 1 mm sheet.
   const profile: Array<[number, number]> = [
     [-c, 0],

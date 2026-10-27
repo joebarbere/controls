@@ -8,15 +8,16 @@ Controls is released under the [MIT licence](LICENSE). It depends on, and ships,
 
 ## Runtime dependencies shipped in the desktop app
 
-| Component                                                  | Licence    | Use                                                                                                                                            |
-| ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Electron](https://www.electronjs.org/)                    | MIT        | Desktop shell. Bundles Chromium and Node.js, whose own licences are shipped by electron-builder as `LICENSES.chromium.html` alongside the app. |
-| [Angular](https://angular.dev/)                            | MIT        | UI framework (`@angular/*`)                                                                                                                    |
-| [RxJS](https://rxjs.dev/)                                  | Apache-2.0 | Angular dependency                                                                                                                             |
-| [tslib](https://github.com/microsoft/tslib)                | 0BSD       | TypeScript runtime helpers                                                                                                                     |
-| [Three.js](https://threejs.org/)                           | MIT        | 3D rendering                                                                                                                                   |
-| [Zod](https://zod.dev/)                                    | MIT        | Schema validation (IPC payloads; later saves, catalogue, commands)                                                                             |
-| [electron-updater](https://www.electron.build/auto-update) | MIT        | Auto-update from GitHub Releases                                                                                                               |
+| Component                                                     | Licence    | Use                                                                                                                                            |
+| ------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Electron](https://www.electronjs.org/)                       | MIT        | Desktop shell. Bundles Chromium and Node.js, whose own licences are shipped by electron-builder as `LICENSES.chromium.html` alongside the app. |
+| [Angular](https://angular.dev/)                               | MIT        | UI framework (`@angular/*`)                                                                                                                    |
+| [RxJS](https://rxjs.dev/)                                     | Apache-2.0 | Angular dependency                                                                                                                             |
+| [tslib](https://github.com/microsoft/tslib)                   | 0BSD       | TypeScript runtime helpers                                                                                                                     |
+| [Three.js](https://threejs.org/)                              | MIT        | 3D rendering                                                                                                                                   |
+| [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) | MIT        | BVH picking for hover and selection in the 3D viewport (`@controls/renderer`)                                                                  |
+| [Zod](https://zod.dev/)                                       | MIT        | Schema validation (IPC payloads; later saves, catalogue, commands)                                                                             |
+| [electron-updater](https://www.electron.build/auto-update)    | MIT        | Auto-update from GitHub Releases                                                                                                               |
 
 Build and test tooling (Nx, TypeScript, esbuild, Vite, Vitest, fast-check, Playwright, ESLint, Prettier, electron-builder) is not shipped in the app and is not listed.
 

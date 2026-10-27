@@ -32,6 +32,9 @@ importers:
       three:
         specifier: 0.186.1
         version: 0.186.1
+      three-mesh-bvh:
+        specifier: ~0.9.16
+        version: 0.9.16(three@0.186.1)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -4830,6 +4833,11 @@ packages:
   temp@0.9.4:
     resolution: {integrity: sha512-yYrrsWnrXMcdsnu/7YMYAofM1ktpL5By7vZhf15CrXijWWrEYZks5AXBudalfSWJLlnen/QUJUB5aoB0kqZUGA==}
     engines: {node: '>=6.0.0'}
+
+  three-mesh-bvh@0.9.16:
+    resolution: {integrity: sha512-2RK+5MJOaiHJhopURn2CUkOHiF3tFloD0uZBfhebV0CKB7mgVLpWUWaDpOyhNJRDkKKe7x4rRfTHZ32GwpXdkw==}
+    peerDependencies:
+      three: '>= 0.159.0'
 
   three@0.186.1:
     resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
@@ -10232,6 +10240,10 @@ snapshots:
     dependencies:
       mkdirp: 0.5.6
       rimraf: 2.6.3
+
+  three-mesh-bvh@0.9.16(three@0.186.1):
+    dependencies:
+      three: 0.186.1
 
   three@0.186.1: {}
 

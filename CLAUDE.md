@@ -90,6 +90,7 @@ Load the matching file before working in an area. The code tells you what shippe
 | [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                              |
 | [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                    |
 | [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log) |
+| [`docs/caveats/rendering.md`](docs/caveats/rendering.md)     | `libs/rendering/renderer`: cameras, BVH picking, selection, snap maths, disposal, viewport host                            |
 
 ## Working with the planning artifacts
 

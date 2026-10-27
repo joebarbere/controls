@@ -52,7 +52,7 @@ flowchart TB
 
 ## Module boundaries
 
-Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today, and the edges between them are the imports that actually exist. `REND --> UNITS` is intended: the renderer still uses its own `mm()` helper. E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
+Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today, and the edges between them are the imports that actually exist. `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
 
 ```mermaid
 flowchart LR

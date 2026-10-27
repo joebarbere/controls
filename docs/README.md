@@ -26,10 +26,11 @@ flowchart TD
 
 ## Architecture
 
-| Page                                               | Covers                                                                                   |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design |
-| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)    |
+| Page                                               | Covers                                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design     |
+| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)        |
+| [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal |
 
 Subsystem pages (commands, save format, sim-core, renderer, PLC, HMI) are added in the phase that builds them.
 
