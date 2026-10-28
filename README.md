@@ -19,10 +19,10 @@ What exists today (Phase 0 scaffold):
 
 ### Interface
 
-- A main menu over the live 3D view (New sandbox, Settings, About, Quit; Continue and Load arrive with saving). Escape returns to it from the game.
+- A main menu over the live 3D view (Resume and Save game while playing, New sandbox, Continue, Load, Settings, About, Quit). Escape returns to it from the game.
 - A docking workspace: the 3D viewport with an Inspector panel and a Console panel. Panels resize with the mouse or keyboard, collapse, and reset to defaults.
 - A HUD showing the interaction mode, the selection and an **Assisted** badge for worlds where cheats were used.
-- Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units and default difficulty (region fixed to NEC). Settings are saved and survive a restart.
+- Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units, default difficulty and autosave (on or off, how often, how many slots); region is fixed to NEC. Settings are saved and survive a restart.
 - Light and dark themes that follow your system, and reduced motion.
 - Keyboard-first: everything works without a mouse, with visible focus, and focus returns to where it was after a dialog. Notifications are announced to screen readers and can be dismissed from the keyboard.
 - Rebindable keys for every command and every movement key (Settings → Key bindings…), with conflicts shown rather than hidden and `Mod` as Cmd on macOS. Keys never fire while you type.
@@ -50,8 +50,10 @@ What exists today (Phase 0 scaffold):
 
 ### Saves
 
-- Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema. Saving and loading in the game arrive later in P1.
-- `.ctrl` save files: a ZIP of the save's JSON documents plus an optional thumbnail, with byte-identical output for the same game and a reader that refuses damaged, oversized, malicious or newer-version files with a clear reason. Scripts and `pnpm sim` can already write, load, hash and replay them.
+- Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema.
+- Save and load in the game: name a save from the menu or with Ctrl+S, pick one from the Load list (Ctrl+L), save to or open a file anywhere (Ctrl+Shift+S, Ctrl+O; Cmd on macOS), or Continue from the newest save. A loaded game carries on with the same replay log and an empty undo history, and a save that can't be loaded is refused with a plain reason, leaving your game as it was.
+- Autosave to rotating slots on a timer, when you return to the menu, before another game is loaded and when you quit, only when there are unsaved changes. Continue skips a damaged save and says so.
+- `.ctrl` save files: a ZIP of the save's JSON documents plus a small picture of the view, with byte-identical output for the same game and a reader that refuses damaged, oversized, malicious or newer-version files with a clear reason. Scripts and `pnpm sim` can write, load, hash and replay them too.
 - Save storage underneath it: a save folder in the desktop app's user data (named saves and rotating autosave slots), native Open and Save As dialogs, atomic writes that leave the previous save intact if anything fails, and no file paths ever exposed to the game. The browser harness keeps saves in the browser's private file storage.
 
 ### Tooling
@@ -90,7 +92,7 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
 - [ ] **P0 Foundation** (v0.1.0): workspace, Electron shell, viewport, CI, release pipeline, docs, Claude agents
-- [ ] **P1 Game shell** (v0.2.0): UI, command palette, keybinds, dev console, scripting API, cameras, save/load
+- [ ] **P1 Game shell** (v0.2.0): UI, command palette, keybinds, dev console, scripting API, cameras and save/load are in; the wire-routing spike (ADR 0010) and the release remain
 - [ ] **P2 Circuit engine and power sources** (v0.3.0): netlist compiler, DC and phasor MNA in a worker
 - [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0)
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox
@@ -135,7 +137,7 @@ libs/
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
   ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
-  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec), console (dev console)
+  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec), palette, console (dev console), saves (save, load, autosave)
   platform/        api (interfaces), electron and web implementations
 docs/  plans/  tools/  .claude/
 ```

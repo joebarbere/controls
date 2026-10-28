@@ -1,6 +1,6 @@
 # UI shell
 
-> **Status (F1.5):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)), the keybinding service, the Key bindings dialog and the tool belt in F1.4, the command palette (`feature-palette`) in F1.3, and the dev console in F1.5 ([dev console](console.md)). Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
+> **Status (F1.8b part 3):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)), the keybinding service, the Key bindings dialog and the tool belt in F1.4, the command palette (`feature-palette`) in F1.3, the dev console in F1.5 ([dev console](console.md)), and saving and loading (`feature-saves`: Save game, Load game, Continue, autosave) in F1.8b ([below](#saving-and-loading-f18b)). Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
 
 ## Libraries
 
@@ -19,6 +19,7 @@ flowchart LR
     SESS["feature-session<br/>Session · KeybindingService · ToolBelt"]:::done
     PAL["feature-palette<br/>CommandPalette · PaletteArgForm<br/>buildArgForm · paletteItems · fuzzy"]:::done
     CON["feature-console (F1.5)<br/>DevConsoleComponent · DevConsole<br/>CodeMirror 6 input (lazy)"]:::done
+    SAV["feature-saves (F1.8b)<br/>SaveGames · LoadGameDialog · SaveGameDialog<br/>SAVE_FILES · SAVE_DIALOGS · SaveThumbnails"]:::done
 
     GAME --> SHELL & WS & SET & UI & PAPI & SESS & PAL
     SET --> SHELL & UI & PAPI & SESS
@@ -26,10 +27,11 @@ flowchart LR
     WS --> UI & REND & SESS
     PAL --> UI & SESS & SET
     CON --> SESS & SET & UI
-    GAME --> CON
+    GAME --> CON & SAV
+    SAV --> SESS & SET & SHELL & UI & PAPI
 ```
 
-`ui` is presentational: it holds no services, state or commands. Features may use each other (`feature-settings` uses `NotificationService` from `feature-shell`), but none of them imports a concrete platform. The app provides `PLATFORM` (Electron bridge or web harness) and will provide the real `SETTINGS_SERVICE`.
+`ui` is presentational: it holds no services, state or commands. Features may use each other (`feature-settings` uses `NotificationService` from `feature-shell`), but none of them imports a concrete platform. The app provides `PLATFORM` (Electron bridge or web harness) and, from it, `SETTINGS_SERVICE`, `APP_LIFECYCLE`, `SAVE_FILES` and `SAVE_DIALOGS` (`app.config.ts`).
 
 ## Screens and focus
 
@@ -42,10 +44,15 @@ stateDiagram-v2
     NewGameDialog --> Workspace: Enter / Start, valid seed → Session.newSandbox (focus: viewport canvas)
     NewGameDialog --> Menu: Escape / Cancel (focus returns to New sandbox)
     Menu --> Workspace: Resume (focus: viewport canvas)
-    Workspace --> Menu: Menu button, or Escape outside the canvas (focus: Resume)
+    Menu --> Workspace: Continue loads the newest save that loads (focus: viewport canvas)
+    Workspace --> Menu: Menu button, or Escape outside the canvas (focus: Resume; autosave if changed)
     Menu --> Workspace: Escape (session running)
     state Menu {
         [*] --> Items
+        Items --> SaveGameDialog: Save game (game running)
+        SaveGameDialog --> Items: Enter / Save, or Escape / Cancel (focus returns to Save game)
+        Items --> LoadGameDialog: Load (file.load)
+        LoadGameDialog --> Items: Escape / Cancel, or a save that doesn't load (focus returns to Load)
         Items --> SettingsDialog: Settings
         SettingsDialog --> Items: Back / Escape (focus returns to Settings)
         SettingsDialog --> KeyBindingsDialog: Key bindings…
@@ -60,7 +67,34 @@ stateDiagram-v2
 - **Dialogs** are native `<dialog>` elements opened with `showModal()` (`ctl-dialog`). The page behind them is inert, focus moves inside and is trapped, Escape closes, and focus returns to the opener.
 - **Escape** is handled innermost-first: a key capture in the Key bindings dialog, a dialog or the focused viewport canvas (cancel a move, cancel placement, clear the selection, in that order; F1.7) consumes it; otherwise `App.onEscape` toggles between the menu and the workspace. Escape is the shell's fixed "back" key, reserved by the keybinding service, so no command can take it.
 - **New sandbox** (F1.9) opens the new-game dialog: the level (Workshop), a seed field with a fresh seed (`SEED_SOURCE`, `crypto.getRandomValues`) and a New seed button. A typed seed must be a whole number from 0 to 4294967295 (`parseSeed`); an invalid one is refused inline (`aria-invalid`, an alert) and the dialog stays open. Start runs `Session.newSandbox({ seed, difficulty: settings.gameplay.defaultDifficulty })`, which loads the workshop level with a fresh history and replay log; the viewport resets to its starting view (`Session.generation`).
-- **Main menu** items are plain buttons in a `<nav>`. Tab, Up/Down, Home and End move between them. Continue and Load are `aria-disabled` with a reason until F1.8b, and Quit is hidden where `Platform.canQuit` is false (the web harness).
+- **Main menu** items are plain buttons in a `<nav>`: Resume and Save game (while a game runs), New sandbox, Continue, Load, Settings, About and Quit. Tab, Up/Down, Home and End move between them. Continue is `aria-disabled`, described by "No saved games yet.", until the save directory lists a save; it is one element either way, so focus on it survives the list arriving. Quit is hidden where `Platform.canQuit` is false (the web harness).
+
+## Saving and loading (F1.8b)
+
+`SaveGames` (`feature-saves`) is the one place that writes and loads games; `App` injects it at start-up. It sits on `Session` (the game), `loadGame` (`@controls/scripting-api`: bytes to a validated game) and the platform's save I/O (`SAVE_FILES` / `SAVE_DIALOGS`, provided from `Platform.files` / `.dialogs`; [ADR 0009](../decisions/0009-save-io-boundary.md)). The `.ctrl` format and loading rules are on [world and saves](world-and-saves.md#saving-and-loading-in-the-game-f18b-part-3).
+
+```mermaid
+flowchart LR
+    subgraph surfaces["four surfaces + the menu"]
+        PAL2["palette"] & KEYS["Mod+S · Mod+Shift+S<br/>Mod+O · Mod+L"] & CONS["console"] & MENU["menu: Save game,<br/>Continue, Load"]
+    end
+    surfaces -->|"exec('file.*') (unlogged)"| SESS2["Session.onCommand"]
+    MENU -->|"Continue"| SG
+    SESS2 --> SG["SaveGames"]
+    SG -->|"save: Session.saver() → .ctrl bytes<br/>(+ thumbnail from the viewport)"| IO["Platform.files.write<br/>manual · autosave · Save As handle"]
+    SG -->|"load: files.read / dialogs.open → loadGame"| CHECK{"loads?"}
+    CHECK -- no --> NOTE["error notification<br/>(from the code, never the file)"]
+    CHECK -- yes --> ADOPT["autosave the old game if changed,<br/>Session.adopt(game)"]
+    ADOPT --> ENTER["onLoaded → App.enterGame:<br/>clear tool belt, workspace, focus canvas"]
+```
+
+- **Commands.** `file.save` (Mod+S; under the game's save name, or the Save game dialog if it has none), `file.saveAs` (Mod+Shift+S; a native Save As, a download in the web harness), `file.open` (Mod+O; a native Open, an upload in the web harness) and `file.load` (Mod+L; the Load game dialog). All four are `logged: false`, `file.save` and `file.saveAs` need `session.active`. Why they are commands but unlogged: [ADR 0006](../decisions/0006-command-system.md#saving-and-loading-f18b).
+- **Save game dialog:** one field, opening on the game's save name or `Sandbox <seed>`, selected so typing replaces it. Names follow `SaveNameSchema` and are explained inline; a name another save already has (compared without case) asks first (the button becomes Replace). The save runs after the dialog closes.
+- **Load game dialog:** the save directory, newest first, one button per save named by the save and described by kind, time and size; Up/Down, Home and End move between them. Open file… opens the picker inside the click and keeps the dialog open if the player cancels. A chosen save loads after the dialog has closed and returned focus. No thumbnails in the list yet (reading one means reading the whole save).
+- **Continue** lists again and tries saves newest first (manual and autosave alike); saves that don't load are skipped with one warning naming them.
+- **Autosave** writes the next of `autosave.slotCount` slots, only for a game with unsaved changes (its world differs from the last saved, loaded or starting one, so an untouched New sandbox never takes a slot): every `autosave.intervalSeconds` while a game runs, when the player returns to the menu, before a load replaces the game, and before quit (a flush registered with `APP_LIFECYCLE`, without a thumbnail to stay inside the 2 s budget). Settings → Saves edits the three autosave settings.
+- **Errors** become notifications written from the `CtrlError` kind or `SaveIoError` code (`messages.ts`); nothing from the file or a host path is shown. A save whose replay log had to restart loads with a warning (`REPLAY_MISMATCH_POLICY`, `notify` by default, `refuse` to refuse such saves).
+- **Thumbnails:** `SaveThumbnails` calls the viewport's `captureThumbnail()` (a 320 × 180 PNG, rendered and copied in one task); a failed capture or a non-PNG is dropped and the save goes ahead without one.
 
 ## Workspace layout
 
@@ -206,7 +240,7 @@ sequenceDiagram
 
 ### Flush before quit
 
-Buffered writes (the settings debounce now, autosave from F1.8b) must reach disk before the window closes or the app quits; Angular's `DestroyRef` doesn't run then. Features register a flush with `Platform.lifecycle.onBeforeQuit` (Angular: `APP_LIFECYCLE`), and main holds the close or quit until the renderer acknowledges.
+Buffered writes (the settings debounce and, since F1.8b, autosave) must reach disk before the window closes or the app quits; Angular's `DestroyRef` doesn't run then. Features register a flush with `Platform.lifecycle.onBeforeQuit` (Angular: `APP_LIFECYCLE`), and main holds the close or quit until the renderer acknowledges.
 
 ```mermaid
 sequenceDiagram
@@ -244,5 +278,5 @@ sequenceDiagram
 ## Related
 
 - [ADR 0005 Docking workspace](../decisions/0005-docking-workspace.md) · [UI caveats](../caveats/ui.md) · [Architecture overview](overview.md)
-- Plan §4.6 (one registry, four surfaces), §4.9 (modes) and the [phase-1 plan](../../plans/phase-1-game-shell.md) F1.1–F1.5.
+- Plan §4.6 (one registry, four surfaces), §4.9 (modes) and the [phase-1 plan](../../plans/phase-1-game-shell.md) F1.1–F1.5 and F1.8b.
 - [Commands](commands.md) (registry, `when`, view commands) · [Scripting](scripting.md) (the palette scenario's hash against `sim run`).

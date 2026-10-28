@@ -101,6 +101,17 @@ Positions are integer mm and angles integer millidegrees, validated by the `save
 
 All are logged, never change the world or its hash, and replay headless as no-ops. `view.mode` and `view.focus` stay logged on purpose: they change what the player sees, unlike the unlogged UI chrome (`palette.open`, `console.toggle`). `view.mode` and `view.focus` are registered by `createWorldRegistry()` (`viewportCommands()` in `@controls/commands`).
 
+**Save and load (F1.8b)** are unlogged UI commands too, registered by the game host's `Session` (`fileCommands()`), not by `createWorldRegistry()`, so `sim-cli` doesn't offer them. `feature-saves` performs them ([UI shell](ui-shell.md#saving-and-loading-f18b)); the reasoning is in [ADR 0006](../decisions/0006-command-system.md#saving-and-loading-f18b).
+
+| Id            | Key         | `when`           | Effect                                                                          |
+| ------------- | ----------- | ---------------- | ------------------------------------------------------------------------------- |
+| `file.save`   | Mod+S       | `session.active` | save under the game's save name, or ask for one (Save game dialog)              |
+| `file.saveAs` | Mod+Shift+S | `session.active` | save to a file the player picks (native Save As; a download in the web harness) |
+| `file.open`   | Mod+O       |                  | load a file the player picks (native Open; an upload in the web harness)        |
+| `file.load`   | Mod+L       |                  | show the Load game dialog (the save directory, newest first)                    |
+
+`session.active` is published by `Session` itself: true after New sandbox or a load, false while the menu shows the bare level at start-up.
+
 ## Keybindings
 
 ```mermaid

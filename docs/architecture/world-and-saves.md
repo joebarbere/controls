@@ -1,6 +1,6 @@
 # World document and saves
 
-> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). Autosave and the Continue/Load UI (part 3) _are later in P1_. Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
+> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). F1.8b part 3 has landed saving and loading in the game: the unlogged `file.*` commands, the Save game and Load game dialogs, Continue and autosave ([below](#saving-and-loading-in-the-game-f18b-part-3)). Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
 
 ## Documents
 
@@ -208,7 +208,7 @@ flowchart LR
     CMD["@controls/commands (F1.2)<br/>replay log entries, clearHistory"]:::done
     API["@controls/scripting-api<br/>Game.save, loadGame (F1.8b)"]:::done
     IO["save I/O (F1.8b part 2)<br/>platform files and dialogs,<br/>IPC, atomic write"]:::done
-    UI["autosave, Continue / Load<br/>(F1.8b part 3)"]:::later
+    UI["feature-saves (F1.8b part 3)<br/>file.* commands, autosave,<br/>Continue / Load"]:::done
     SET["SettingsService (F1.1)<br/>platform-api"]:::done
     CLI["apps/sim-cli (F1.6)<br/>run --save, replay, hash (.ctrl)"]:::done
     LVL["content/levels (F1.9)<br/>workshop.json"]:::done
@@ -233,7 +233,7 @@ The `.ctrl` bytes are opaque to this layer. `Platform.files` (`FileService`) and
 ```mermaid
 flowchart LR
     subgraph R["renderer (sandboxed)"]
-        UI["part 3: autosave timer,<br/>Continue, Load"] --> API["Platform.files / .dialogs<br/>(platform-api)"]
+        UI["feature-saves: SaveGames<br/>(autosave, Continue, Load)"] --> API["Platform.files / .dialogs<br/>(platform-api)"]
         API --> PE["ElectronFileService<br/>schemas in, re-validate out"]
         API --> PW["WebSaveStore<br/>(web harness)"]
     end
@@ -252,7 +252,7 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant G as game (part 3)
+    participant G as SaveGames (part 3)
     participant PE as ElectronFileService
     participant MAIN as main: save-handlers
     participant ST as SaveStore
@@ -283,6 +283,43 @@ sequenceDiagram
 - **Autosave rotation:** after the first autosave of a session, the next slot in turn; at the first, the lowest free slot, else the oldest by mtime. Slots above `slotCount` are removed after a successful write; a failed write doesn't advance the rotation.
 - **Web harness:** `WebSaveStore` keeps the same layout in OPFS with the same schemas, handles and codes. Open is an upload and Save As a download (no cancel, named after the suggested name).
 - **One contract:** `describeSaveIoContract` (`@controls/platform-api/testing`) runs against Electron (in-process IPC to the real handlers and a temp directory) and the web store (in-memory OPFS).
+
+## Saving and loading in the game (F1.8b part 3)
+
+`SaveGames` (`@controls/feature-saves`) joins the three layers above: `Session` (the running `Game`), `loadGame` / `Game.save` (bytes) and `Platform.files` / `.dialogs` (storage). The UI side (dialogs, menu, keys) is on the [UI shell](ui-shell.md#saving-and-loading-f18b) page.
+
+```mermaid
+sequenceDiagram
+    participant P as Player
+    participant SES as Session
+    participant SG as SaveGames
+    participant API as scripting-api
+    participant IO as Platform.files
+    P->>SES: exec('file.save') (Mod+S, palette, console; unlogged)
+    SES->>SG: onCommand('file.save')
+    SG->>SES: saver() (bound to this game)
+    SG->>SG: thumbnail (viewport PNG, optional)
+    SG->>API: game.save({ thumbnail }) → .ctrl bytes
+    SG->>IO: write({ kind: 'manual', name, overwrite }, bytes)
+    IO-->>SG: SaveEntry (or SaveIoError → notification)
+    P->>SG: Continue / Load / file.open
+    SG->>IO: read(handle)
+    SG->>API: loadGame(bytes, { registry: session.registry })
+    alt CtrlError
+        SG-->>P: error notification (from the kind; nothing from the file)
+    else loaded
+        SG->>SG: autosave the current game if it has unsaved changes
+        SG->>SES: adopt(game): world, empty undo stack, log continued
+        SG-->>P: "Loaded …" (+ warning if replay.status is restarted)
+    end
+```
+
+- **Loading migrates, validates, then replaces.** Nothing about the session changes until `loadGame` has returned a game; a refused save leaves the current game, its undo stack and its log as they were. `Session.adopt` then swaps in the loaded game, whose undo history is empty and whose replay log continues the save's (or restarts, with a warning; `REPLAY_MISMATCH_POLICY` can make that a refusal instead).
+- **Unsaved changes** means the world's hash differs from the hash last saved, loaded or started for this session (`Session.generation`). View commands, an undone change and an untouched New sandbox don't count.
+- **Autosave** writes `write({ kind: 'autosave', slotCount })` (rotation stays in main or the web store) for a game with unsaved changes: every `autosave.intervalSeconds` while a game runs, on return to the menu, before a load replaces the game, and in the flush before quit (no thumbnail there: the flush has 2 s). A failed autosave warns and leaves the changes unsaved, so the next trigger tries again.
+- **Continue** lists the save directory and loads the newest save that loads, manual or autosave alike; any it skips are named in one warning. With no saves, Continue is disabled with "No saved games yet."
+- **Writes are serialised**, and each is bound to the game that asked (`Session.saver()`), so a load or New sandbox that replaces the session while a thumbnail is being captured never saves the new game under the old one's name.
+- **Settings:** `autosave.enabled`, `autosave.slotCount` (1–10) and `autosave.intervalSeconds` (60–3600) were already in `SettingsV1` (F1.8a), so there was no `settingsVersion` bump; Settings → Saves edits them.
 
 ## Determinism hooks
 
