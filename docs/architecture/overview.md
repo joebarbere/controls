@@ -9,6 +9,8 @@
 > **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`. `platform-api` gained `Platform.settings` (`SettingsService`) and `Platform.quit`, and three IPC channels joined `app:info`: `settings:get`, `settings:set` (atomic write of `userData/settings.json`) and `app:quit`. See [UI shell](ui-shell.md).
 >
 > **P1 so far (F1.2):** `libs/domain/commands` (`@controls/commands`: registry, bus, undo/redo, replay, `when`), `libs/domain/world-model` (`@controls/world-model`: entity commands, sfc32, SHA-256 `world.hash`) and `libs/features/session` (`@controls/feature-session`, the Angular adapter). See [commands](commands.md).
+
+> **P1 so far (F1.4):** the keybinding core in `@controls/commands` (`keybindings/`: chords, conflicts, resolution, the `INPUT_ACTIONS` table), `KeybindingService` and `ToolBelt` in `feature-session`, and the Key bindings dialog in `feature-settings`. The renderer now reads its input-action defaults from `@controls/commands` (`REND --> CMDS`). See [commands](commands.md#keybindings) and [UI shell](ui-shell.md#keybindings-and-the-tool-belt).
 >
 > Items marked _(PN)_ below arrive in that phase.
 
@@ -56,7 +58,7 @@ flowchart TB
 
 ## Module boundaries
 
-Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today (including the F1.1 UI libs and the F1.2 command libs), and the edges between them are the imports that actually exist (`REND --> DOM` is still intended). `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
+Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today (including the F1.1 UI libs and the F1.2 command libs), and the edges between them are the imports that actually exist (`REND --> DOM` is still intended). `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. `REND --> CMDS` is real since F1.4: the renderer takes its input-action table from `@controls/commands`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
 
 ```mermaid
 flowchart LR
@@ -87,7 +89,7 @@ flowchart LR
     DESK --> IPC
     SIMCLI --> DOM
     FEAT --> CMDS & WM & SF & REND & UI & PAPI & IPC
-    REND --> UNITS & DOM
+    REND --> UNITS & CMDS & DOM
     PAPI --> IPC
     PEL --> PAPI & IPC
     PWEB --> PAPI & IPC & UNITS

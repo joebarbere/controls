@@ -62,8 +62,16 @@ export interface CommandDef<A = unknown, S = unknown> {
    * the command. Advisory: `exec` doesn't check it, because the UI context isn't in the replay log.
    */
   readonly when?: string;
-  /** Default keybinding, e.g. `Mod+Z`. Rebindable (F1.4). */
-  readonly keybinding?: string;
+  /**
+   * Default keybinding(s), e.g. `Mod+Z` or `['Mod+K', 'Mod+Shift+P']` (chord grammar: `normaliseChord`).
+   * Rebindable: a player override replaces all of them (F1.4).
+   */
+  readonly keybinding?: string | readonly string[];
+  /**
+   * The keybinding also fires while focus is in a text field, a code editor or a dialog. Only for
+   * commands that must work from anywhere: the palette and the console toggle.
+   */
+  readonly globalKeybinding?: boolean;
   /**
    * Whether the change it returns goes on the undo stack. A non-undoable command that still
    * changes the state clears both stacks: history can't be undone past it.

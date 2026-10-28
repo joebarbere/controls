@@ -1,6 +1,6 @@
 # ADR 0006: Command system semantics
 
-**Status:** Accepted (F1.2)
+**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
 
@@ -57,7 +57,7 @@ Any failure returns a typed `ExecError` (`unknown-command`, `invalid-args`, `rej
 
 ### View commands versus world commands
 
-- **View commands** (`view.resetLayout` now; `view.mode` and `view.focus` with F1.7) are declared in domain code with `defineViewCommand`. Their `run` is a no-op, so a headless replay knows every id and argument schema a log can contain.
+- **View commands** (`view.resetLayout` and `toolbelt.select` now; `view.mode` and `view.focus` with F1.7) are declared in domain code with `defineViewCommand`. Their `run` is a no-op, so a headless replay knows every id and argument schema a log can contain.
 - They are logged (for bug-report fidelity and palette recents) but never change the world, its hash or the history.
 - The feature that owns the view state applies the effect when the session reports the command (`Session.onCommand`). For example, the workspace's Reset layout button runs `exec('view.resetLayout')`, and the workspace resets its layout when the command comes back. A palette, keybinding or console call behaves identically.
 - **Settings** are player preferences, not commands. They are edited through `SettingsStore` and never logged.
@@ -67,6 +67,39 @@ Any failure returns a typed `ExecError` (`unknown-command`, `invalid-args`, `rej
 - Continuous, per-frame or exploratory input is an **input action**, handled in the renderer and never logged: WASD walking, mouse look, orbit and pan, hover, and cycling the selection. Input actions are rebindable (F1.4), keyed by physical key code.
 - **Only commit points become commands**: placing (one `entity.place` on commit, none while dragging), a move commit, delete, switching mode and focusing a target. That keeps the replay log small and meaningful.
 - **Selection is view state.** It feeds `when` (`selection.kind`) but isn't a command.
+- _Confirmed in F1.4._ The input actions are declared as data next to the commands (`INPUT_ACTIONS` in `@controls/commands`: id, renderer action, title, held or triggered, default keys). The renderer implements them and its spec checks it implements exactly that table. The keybinding service resolves the player's overrides and hands the renderer a plain action → `KeyboardEvent.code` map (`ViewportRenderer.setBindings`). They never reach `exec`, so they never reach the replay log. **Mouse look** is an input action on the mouse axes, not a key: its options are the settings' look sensitivity and invert-Y, and pointer-lock release is the browser's Escape.
+
+### Keybindings (F1.4)
+
+**Chords.** A chord is zero or more modifiers and one key joined with `+` (`Mod+Shift+Z`, `F4`, `1`, `ShiftLeft`). Parsing (`normaliseChord`) accepts aliases (`Cmd`, `Control`, `Option`, `Esc`, `Up`, `]`, …) and any letter case.
+
+- `Mod` is Ctrl on Windows and Linux and Cmd on macOS. The **canonical form**, which settings store and key events resolve to, puts modifiers in the order `Mod`, `Ctrl`, `Meta`, `Alt`, `Shift`, followed by the key. The platform's own command key is folded into `Mod`, so on Linux `Ctrl+K` is stored as `Mod+K`, and on macOS `Ctrl+K` stays `Ctrl+K`.
+- **Key names** are `KeyboardEvent.code` with the `Key` and `Digit` prefixes dropped (`W`, `1`, `BracketRight`, `F5`, `ShiftLeft`).
+- **Command chords match letters by layout.** On a Latin layout the letter the key types wins, so `Mod+Z` is the key labelled Z on AZERTY too. If the key types no ASCII character (Cyrillic, macOS Option, dead keys), the physical letter is used. If a letter position types punctuation (Dvorak), the punctuation is used. Digits and every other key are positional, so `Shift+1` stays `1` and the tool-belt keys stay on the top row.
+- **Input-action chords are positional bare keys.** A modifier key on its own (`ShiftLeft` for sprint) is a valid input-action key but never a command key.
+- **Reserved:** Tab and Shift+Tab (focus movement) and Escape (the shell's fixed "back" key: dialogs and the menu). The player can't bind them. Defaults may still use Escape: the viewport's clear-selection action uses it and falls through to the menu when nothing is selected.
+
+**Bindings and storage.** A binding has an id, and that id is the key in settings `controls.keybindings` (`binding id → chord | null`, where `null` means unbound by the player):
+
+- an argument-less command binds under its **command id** (`edit.undo`), with defaults from `CommandDef.keybinding` (a chord or a list);
+- a command bound **with fixed arguments** gets its own id (`toolbelt.select.slot3` runs `toolbelt.select {slot: 3}`), because one chord can't carry arguments;
+- an **input action** binds under `input.<action>` (`input.moveForward`). `input` is a reserved namespace: no command may use it, and the keymap refuses one that does.
+
+All three fit the command-id grammar the v1 settings schema already uses for the record's keys, so **settings did not change shape** (only doc comments). Sharing one record is clean because the namespaces can't collide. Splitting it would only buy a `settingsVersion` bump. An override replaces all of a binding's defaults. Overrides that can't be used (an unknown key, a modifier on an input action, a reserved chord) are ignored, listed and shown in the rebinding UI, and left in the file. Overrides for ids this build doesn't know are ignored.
+
+**Conflicts.** Two bindings on one chord conflict unless their `when`s are **provably disjoint**. Input actions count as `when: viewport.focused`, because they only listen on the viewport canvas. The proof is deliberately conservative:
+
+1. Negations are pushed inward (De Morgan; `!(k == v)` becomes `k != v`) and each `when` is expanded to disjunctive normal form. Above 64 terms the proof gives up and assumes overlap.
+2. Atoms are `k == v`, `k != v`, `k` (truthy) and `!k` (falsy). Anything else (key against key, …) is opaque and contradicts nothing.
+3. Two `when`s are disjoint if every pair of terms clashes on some key: two different required values, `== v` with `!= v`, truthy with falsy, or a value of the wrong truthiness. A term containing `false` clashes with everything. Falsy means `null` (also a missing key), `false`, `0` and `''`, as in `evaluateWhen`.
+
+A binding without `when` is never disjoint from anything. A property test checks soundness: no context satisfies two expressions the analysis calls disjoint. Conflicts are shown on both bindings and in a summary, never silently shadowed.
+
+**Resolution order** is fixed: the player's bindings come before defaults, then bindings are ordered by id (code-unit order), never by registration or object-key order. A key press runs the first **command** binding on its chord whose `when` holds and that the focus rules allow. When two input actions share a key, the first in the same order keeps it. In the viewport an input action sees the key first, and a key it acts on (it calls `preventDefault`) never reaches the command layer.
+
+**Focus rules.** The keybinding service listens on the document and ignores events an inner handler already handled. While focus is in a text field, a `<select>`, `contenteditable`, a CodeMirror editor (`.cm-editor`) or an open dialog, only bindings marked **global** fire. A command opts in with `CommandDef.globalKeybinding` (for the palette in F1.3 and the console toggle in F1.5). Auto-repeat never runs a command, because a held key would flood the replay log.
+
+**The tool belt.** `toolbelt.select {slot}` (`slot` an integer from 1 to 9, strict object) is a view command declared in `@controls/commands` next to `view.resetLayout`. Keys 1 to 9 are bound by default. The UI applies it through `Session.onCommand` (the `ToolBelt` service) and publishes the `toolbelt.slot` context key. Its id and argument shape are now save format.
 
 ### `when`
 

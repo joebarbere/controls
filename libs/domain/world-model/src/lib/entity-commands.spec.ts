@@ -1,4 +1,4 @@
-import { defineCommand, NoArgs, succeed } from '@controls/commands';
+import { defaultBindingDecls, defineCommand, Keymap, NoArgs, succeed } from '@controls/commands';
 import { createWorld, migrateReplayLog, ReplayLog, World } from '@controls/save-format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -201,8 +201,25 @@ describe('world registry, replay log and cheats', () => {
       'entity.move:true',
       'entity.place:true',
       'entity.rotate:true',
+      'toolbelt.select:false',
       'view.resetLayout:false',
     ]);
+  });
+
+  it('has conflict-free default keybindings on every platform (F1.4)', () => {
+    for (const platform of ['mac', 'other'] as const) {
+      const keymap = Keymap.create(defaultBindingDecls(createWorldRegistry()), {}, platform);
+      expect(keymap.conflicts).toEqual([]);
+    }
+  });
+
+  it('logs toolbelt.select without changing the world or its hash', () => {
+    const bus = createWorldBus(createWorld({ seed: 1 }));
+    const before = worldHash(bus.state);
+    expect(bus.exec('toolbelt.select', { slot: 3 })).toMatchObject({ ok: true, entry: { args: { slot: 3 } } });
+    expect(bus.exec('toolbelt.select', { slot: 10 })).toMatchObject({ ok: false, error: { kind: 'invalid-args' } });
+    expect(worldHash(bus.state)).toBe(before);
+    expect(bus.entries.map((e) => e.id)).toEqual(['toolbelt.select']);
   });
 
   it('replays the F1.8a replay-log fixture', () => {

@@ -25,11 +25,13 @@ What exists today (Phase 0 scaffold):
 - Settings for theme, reduced motion, renderer, pixel-ratio cap, volumes, look sensitivity, invert Y, display units and default difficulty (region fixed to NEC). Settings are saved and survive a restart.
 - Light and dark themes that follow your system, and reduced motion.
 - Keyboard-first: everything works without a mouse, with visible focus, and focus returns to where it was after a dialog. Notifications are announced to screen readers and can be dismissed from the keyboard.
+- Rebindable keys for every command and every movement key (Settings → Key bindings…), with conflicts shown rather than hidden and `Mod` as Cmd on macOS. Keys never fire while you type.
+- A tool belt: keys 1–9 pick a slot, and the HUD shows what it holds.
 
 ### Rendering
 
 - Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails.
-- Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. Press V to switch and F to focus the selection; movement keys are rebindable input actions.
+- Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. Press V to switch and F to focus the selection; all of these keys can be rebound.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). A frame-time HUD shows in dev builds.
 - Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. Placement through commands follows.
 
@@ -38,7 +40,7 @@ What exists today (Phase 0 scaffold):
 - One command registry for every way of changing the world. Commands validate their arguments, and invalid ones change nothing. Undo and redo cover every world change, and deleting then undoing brings an object back with the same id.
 - A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
 - `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
-- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. The palette, keybindings and console that drive them arrive next.
+- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. Keybindings drive commands today; the palette and console arrive next.
 
 ### Saves
 

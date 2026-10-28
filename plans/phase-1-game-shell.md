@@ -142,12 +142,13 @@ The framework-free core lives in `@controls/commands` (`keybindings/`): chord pa
 
 Acceptance:
 
-- [ ] Default bindings come from `CommandDef.keybinding`. User overrides are saved in settings. Bindings can be reset one at a time or all at once.
-- [ ] A conflict is two bindings with the same chord whose `when` contexts are not provably disjoint. Conflicts are shown in the rebinding UI, never silently shadowed, and resolution order is deterministic. Unit-tested.
-- [ ] Bindings are ignored while focus is in a text field or CodeMirror, except global ones (palette, console toggle, Esc).
-- [ ] Tool belt slots 1–9 run `toolbelt.select --slot N`. In P1 a slot holds a placeable prop type.
-- [ ] Continuous walk-mode movement (WASD, mouse look) uses rebindable **input actions**, not Commands, so per-frame input never enters the replay log. This is recorded in ADR 0006.
-- [ ] E2E: rebind a command, use the new key, and the change survives a reload.
+- [x] Default bindings come from `CommandDef.keybinding`. User overrides are saved in settings. Bindings can be reset one at a time or all at once.
+- [x] A conflict is two bindings with the same chord whose `when` contexts are not provably disjoint. Conflicts are shown in the rebinding UI, never silently shadowed, and resolution order is deterministic. Unit-tested.
+- [x] Bindings are ignored while focus is in a text field or CodeMirror, except global ones (palette, console toggle, Esc).
+- [x] Tool belt slots 1–9 run `toolbelt.select --slot N`. In P1 a slot holds a placeable prop type.
+- [x] Continuous walk-mode movement (WASD, mouse look) uses rebindable **input actions**, not Commands, so per-frame input never enters the replay log. This is recorded in ADR 0006.
+- [x] E2E: rebind a command, use the new key, and the change survives a reload.
+- _Decisions in [ADR 0006](../docs/decisions/0006-command-system.md#keybindings-f14) (amended): canonical chords (`Mod`, `Ctrl`, `Meta`, `Alt`, `Shift`, then a `code`-derived key name; command letters follow the layout, everything else is positional); binding ids (`edit.undo`, `toolbelt.select.slot3`, `input.moveForward`) share settings `controls.keybindings`, so the settings schema didn't change; conservative disjointness (NNF + DNF capped at 64 terms, with a soundness property test); user overrides first, then id; Tab, Shift+Tab and Escape reserved; `CommandDef.globalKeybinding` for the palette and console toggle. `toolbelt.select {slot: int 1..9}` is a view command. Mouse look stays on the mouse axes (sensitivity and invert-Y in settings)._
 
 ### F1.5 Dev console
 
@@ -330,7 +331,7 @@ Numbers are assigned in landing order. Planned:
 | F1.1    | Shell UI                      | ✅ Done (`view.resetLayout` became a Command in F1.2) |
 | F1.2    | Command system                | ✅ Done                                               |
 | F1.3    | Command palette               | 📐 Planned                                            |
-| F1.4    | Keybinding service            | 📐 Planned                                            |
+| F1.4    | Keybinding service            | ✅ Done                                               |
 | F1.5    | Dev console                   | 📐 Planned                                            |
 | F1.6    | Scripting API v0 + `sim-cli`  | 📐 Planned                                            |
 | F1.7    | Cameras and interaction       | 🚧 Part 1                                             |

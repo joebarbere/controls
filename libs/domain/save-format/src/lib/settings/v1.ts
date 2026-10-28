@@ -30,7 +30,11 @@ export const TOOL_BELT_SLOTS = 9;
 
 const Volume = FiniteNumber.min(0).max(1);
 
-/** A key chord as written by the keybinding service (F1.4 owns the grammar), e.g. `Mod+Shift+P`. */
+/**
+ * A key chord as written by the keybinding service, e.g. `Mod+Shift+P`. The grammar and canonical
+ * form are `normaliseChord` in `@controls/commands` (ADR 0006 "Keybindings"); this schema only
+ * bounds the string, and the service ignores (and reports) a chord it can't use.
+ */
 export const KeyChord = SafeString.min(1).max(64);
 
 export const SettingsV1 = z
@@ -54,8 +58,10 @@ export const SettingsV1 = z
       lookSensitivity: FiniteNumber.min(0.1).max(10),
       invertY: z.boolean(),
       /**
-       * User overrides of default keybindings: command id → chord, or `null` for explicitly unbound.
-       * A command without an entry uses its `CommandDef.keybinding` default.
+       * User overrides of default keybindings: **binding id** → chord, or `null` for explicitly unbound.
+       * A binding id is a command id (`edit.undo`), a fixed-argument binding (`toolbelt.select.slot3`)
+       * or an input action (`input.moveForward`, never logged); all fit the command-id grammar.
+       * A binding without an entry uses its default (`CommandDef.keybinding`, `INPUT_ACTIONS`).
        */
       keybindings: z.record(CommandId, KeyChord.nullable()),
     }),

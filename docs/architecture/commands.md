@@ -1,6 +1,6 @@
 # Commands and the world model
 
-> **Status (F1.2):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`). The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The Angular adapter is `libs/features/session` (`@controls/feature-session`). The palette (F1.3), keybindings (F1.4), console (F1.5) and scripting API with `sim-cli` (F1.6) are still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
+> **Status (F1.4):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The Angular adapter is `libs/features/session` (`@controls/feature-session`): `Session`, `KeybindingService` and `ToolBelt`. The palette (F1.3), console (F1.5) and scripting API with `sim-cli` (F1.6) are still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
 
 ## One registry, four surfaces
 
@@ -11,7 +11,7 @@ flowchart LR
     classDef later fill:#f4f4f4,stroke:#999,stroke-dasharray: 4 3;
     BTN["UI buttons<br/>(Reset layout)"] --> SES
     PAL["Palette (F1.3)"]:::later --> SES
-    KEY["Keybindings (F1.4)"]:::later --> SES
+    KEY["KeybindingService (F1.4)<br/>document keydown"] --> SES
     CON["Console (F1.5)"]:::later --> SES
     SES["feature-session<br/>Session: world signal, exec, context keys"] --> BUS
     SCR["scripting-api + sim-cli (F1.6)"]:::later --> BUS
@@ -27,6 +27,7 @@ flowchart LR
     end
     BUS -->|"executed event"| SES
     SES -->|"onCommand('view.resetLayout')"| WS["feature-workspace<br/>resets its layout"]
+    SES -->|"onCommand('toolbelt.select')"| TB["ToolBelt<br/>active slot, toolbelt.slot key"]
 ```
 
 ## `exec`
@@ -81,6 +82,40 @@ flowchart LR
 | `entity.delete` | `id`                                                   | removes the entity; `nextEntityId` unchanged            | reinserts it, same id, in sorted order |
 
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`.
+
+## View commands
+
+| Id                 | Args                           | Effect (applied by the UI through `Session.onCommand`)                            |
+| ------------------ | ------------------------------ | --------------------------------------------------------------------------------- |
+| `view.resetLayout` | none                           | the workspace restores its default panel layout                                   |
+| `toolbelt.select`  | `slot`: integer 1–9 (required) | `ToolBelt` sets the active slot and the `toolbelt.slot` context key; HUD shows it |
+
+Both are logged, never change the world or its hash, and replay headless as no-ops.
+
+## Keybindings
+
+```mermaid
+flowchart LR
+    subgraph domain["@controls/commands keybindings/ (type:domain)"]
+        DEF["defaultBindingDecls(registry)<br/>CommandDef.keybinding · toolbelt.select.slot1–9 · INPUT_ACTIONS"]
+        KM["Keymap.create(decls, overrides, platform)<br/>canonical chords · conflicts · invalid overrides"]
+        DIS["provablyDisjoint(when, when)<br/>NNF + capped DNF"]
+        DEF --> KM
+        DIS --> KM
+    end
+    SET["settings controls.keybindings<br/>binding id → chord | null"] -->|"KEYBINDING_OVERRIDES"| KS
+    KM --> KS["KeybindingService<br/>(feature-session)"]
+    KEYDOWN["document keydown"] --> KS
+    KS -->|"resolve(chord, contextKeys, restricted?)"| EXEC["Session.exec(command, args)"]
+    KS -->|"inputCodes(): action → codes"| VP["Viewport → ViewportRenderer.setBindings"]
+    KS --> UI["Key bindings dialog<br/>(feature-settings)"]
+    UI -->|"setBinding / reset / resetAll"| SET
+```
+
+- **Binding ids** are the settings keys: a command id (`edit.undo`), a fixed-argument binding (`toolbelt.select.slot3` → `toolbelt.select {slot: 3}`) or an input action (`input.moveForward`, reserved namespace). Overrides replace every default of a binding; `null` unbinds.
+- **Canonical chords** (`Mod+Shift+Z`): modifiers `Mod`, `Ctrl`, `Meta`, `Alt`, `Shift`, then a key name (`KeyboardEvent.code` without `Key`/`Digit`). `Mod` is Ctrl, or Cmd on macOS. Command letters follow the layout, everything else is positional; input actions are always positional bare keys.
+- **Resolution:** the player's bindings first, then by id. The first command binding whose `when` holds runs; in text fields, code editors and dialogs only `globalKeybinding` commands do. Tab, Shift+Tab and Escape are reserved.
+- **Conflicts:** same chord and `when`s not provably disjoint (input actions count as `viewport.focused`). Shown on both bindings, never shadowed. Rules and the proof are in [ADR 0006](../decisions/0006-command-system.md#keybindings-f14).
 
 ## Determinism primitives
 

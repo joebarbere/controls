@@ -138,8 +138,7 @@
       />
       Invert vertical look</label
     >
-    <button ctlButton type="button" aria-disabled="true" aria-describedby="ctl-set-bindings-hint">Key bindings…</button>
-    <p id="ctl-set-bindings-hint" class="ctl-hint">Rebinding arrives with the keybinding service.</p>
+    <button ctlButton type="button" aria-haspopup="dialog" (click)="openKeybindings.emit()">Key bindings…</button>
   </fieldset>
 
   <fieldset>
