@@ -53,9 +53,45 @@ async function startSandbox(page: Page) {
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
 }
 
-test('rebind a command and an input action, use the new keys, and keep them after a reload', async ({ page }) => {
+/** Resolves after `count` animation frames: the renderer applies held movement keys once per frame. */
+const frames = (page: Page, count: number) =>
+  page.evaluate(
+    (n) =>
+      new Promise<void>((resolve) => {
+        const step = () => (--n <= 0 ? resolve() : requestAnimationFrame(step));
+        requestAnimationFrame(step);
+      }),
+    count,
+  );
+
+/** In Key bindings: tool-belt slot 2 → Q (a command) and walk forward → I (an input action). */
+async function rebindSlot2AndWalkForward(page: Page, dialog: ReturnType<Page['getByRole']>) {
+  await rebind(page, dialog, 'Tool-belt slot 2', 'KeyQ');
+  await expect(dialog.getByTestId('keys-toolbelt.select.slot2')).toHaveText('Q');
+  await rebind(page, dialog, 'Walk forward', 'KeyI');
+  await expect(dialog.getByTestId('keys-input.moveForward')).toHaveText('I');
+}
+
+/** Closes Key bindings, then Settings, with Escape, and waits for the debounced save. */
+async function closeAndSave(page: Page, keyBindings: Awaited<ReturnType<typeof openKeyBindings>>) {
+  // Escape closes the rebinding dialog only and returns focus to Key bindings…; again closes settings.
+  await page.keyboard.press('Escape');
+  await expect(keyBindings.dialog).toBeHidden();
+  await expect(keyBindings.opener).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(keyBindings.settings).toBeHidden();
+  await expect.poll(() => stored(page)).toContain('"toolbelt.select.slot2": "Q"');
+  expect(await stored(page)).toContain('"input.moveForward": "I"');
+}
+
+// One flow per test, each from a fresh page (and so fresh localStorage): as a single test this ran
+// to the 30 s timeout on a loaded machine (see support/focus.ts on why every step costs a frame).
+
+test('a conflicting rebind is shown on both bindings, and Escape while capturing cancels only the capture', async ({
+  page,
+}) => {
   await page.goto('/?e2e=1&renderer=webgl2');
-  const { settings, opener, dialog } = await openKeyBindings(page);
+  const { dialog } = await openKeyBindings(page);
 
   // A conflict is shown on both bindings, never silently shadowed; Reset clears it.
   await rebind(page, dialog, 'Tool-belt slot 3', 'KeyW');
@@ -73,21 +109,13 @@ test('rebind a command and an input action, use the new keys, and keep them afte
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('keys-edit.undo')).toHaveText(/Ctrl\+Z/);
+});
 
-  // The real rebinds: tool-belt slot 2 → Q (a command), walk forward → I (an input action).
-  await rebind(page, dialog, 'Tool-belt slot 2', 'KeyQ');
-  await expect(dialog.getByTestId('keys-toolbelt.select.slot2')).toHaveText('Q');
-  await rebind(page, dialog, 'Walk forward', 'KeyI');
-  await expect(dialog.getByTestId('keys-input.moveForward')).toHaveText('I');
-
-  // Escape closes the rebinding dialog only and returns focus to Key bindings…; again closes settings.
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  await expect(opener).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(settings).toBeHidden();
-  await expect.poll(() => stored(page)).toContain('"toolbelt.select.slot2": "Q"');
-  expect(await stored(page)).toContain('"input.moveForward": "I"');
+test('a rebound command runs on its new key, and the old key does nothing', async ({ page }) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  const keyBindings = await openKeyBindings(page);
+  await rebindSlot2AndWalkForward(page, keyBindings.dialog);
+  await closeAndSave(page, keyBindings);
 
   await startSandbox(page);
   const tool = page.getByTestId('hud-tool');
@@ -95,10 +123,20 @@ test('rebind a command and an input action, use the new keys, and keep them afte
   await page.keyboard.press('KeyQ');
   await expect(tool).toHaveText('2: Crate');
   expect(await entries(page)).toEqual([{ id: 'toolbelt.select', args: { slot: 2 } }]);
+});
+
+test('rebinds survive a reload: the command, and an input action that never reaches the log; Reset all restores them', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  const keyBindings = await openKeyBindings(page);
+  await rebindSlot2AndWalkForward(page, keyBindings.dialog);
+  await closeAndSave(page, keyBindings);
 
   // After a reload the new keys still work: the command…
   await page.reload();
   await startSandbox(page);
+  const tool = page.getByTestId('hud-tool');
   await expect(tool).toHaveText('None');
   await page.keyboard.press('KeyQ');
   await expect(tool).toHaveText('2: Crate');
@@ -111,16 +149,16 @@ test('rebind a command and an input action, use the new keys, and keep them afte
     { id: 'view.mode', args: { mode: 'walk' } },
   ];
   expect(await entries(page)).toEqual(logged);
-  // …and the rebound input action moves the camera without touching the replay log.
+  // …and the rebound input action moves the camera without touching the replay log. Movement is
+  // applied per frame, so holding a key for a few frames is enough to show whether it is bound.
   const start = await cameraZ(page);
   await page.keyboard.down('KeyW'); // no longer bound
-  await page.waitForTimeout(300);
+  await frames(page, 5);
   await page.keyboard.up('KeyW');
   expect(await cameraZ(page)).toBe(start);
   await page.keyboard.down('KeyI');
-  await page.waitForTimeout(400);
+  await expect.poll(() => cameraZ(page)).toBeLessThan(start);
   await page.keyboard.up('KeyI');
-  expect(await cameraZ(page)).toBeLessThan(start);
   expect(await entries(page)).toEqual(logged);
 
   // And the rebinding screen still shows them; Reset all restores the defaults. The crate is still

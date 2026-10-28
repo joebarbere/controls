@@ -1,4 +1,4 @@
-# Pull requests: the exact `pnpm verify` contract plus both e2e suites on Linux.
+# Pull requests: the same three-OS matrix as main (ci.yml), so a PR is green only if main would be.
 name: pr
 
 on:
@@ -12,24 +12,6 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: verify + e2e (ubuntu)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - name: pnpm verify (== local)
-        run: pnpm verify
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Web harness e2e
-        run: pnpm e2e
-      - name: Electron smoke e2e
-        run: xvfb-run -a pnpm e2e:desktop
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-${{ github.run_id }}
-          path: dist/.playwright
-          retention-days: 7
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yml

@@ -1,4 +1,5 @@
-# Pushes to main: full OS matrix, so platform regressions surface before a release tag.
+# Pushes to main: the same three-OS matrix as pull requests (ci.yml), so platform regressions
+# surface before a release tag.
 name: main
 
 on:
@@ -13,32 +14,6 @@ permissions:
   contents: read
 
 jobs:
-  matrix:
-    name: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - name: pnpm verify (== local)
-        run: pnpm verify
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Web harness e2e
-        run: pnpm e2e
-      - name: Electron smoke e2e (Linux, xvfb)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a pnpm e2e:desktop
-      - name: Electron smoke e2e
-        if: runner.os != 'Linux'
-        run: pnpm e2e:desktop
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-${{ matrix.os }}-${{ github.run_id }}
-          path: dist/.playwright
-          retention-days: 7
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yml

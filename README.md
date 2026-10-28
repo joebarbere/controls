@@ -58,7 +58,7 @@ What exists today (Phase 0 scaffold):
 - `pnpm verify` runs exactly what CI runs, including the Prettier format check.
 - `sim-cli` runs the game headless in plain Node: `pnpm sim run <script>` (TypeScript or console lines; `--world content/levels/workshop.json` to run on the workshop), `pnpm sim replay <log>` and `pnpm sim hash <world>` print the world hash, and `--expect` turns any of them into a check. See the [scripting guide](docs/guides/scripting.md).
 - Playwright end-to-end tests: the browser harness (`apps/game-e2e`) and an Electron smoke suite (`apps/desktop-e2e`). The smoke suite can also attach to a packaged build.
-- GitHub Actions: `pr.yml` (verify and both e2e suites on Linux), `main.yml` (the same on Windows, macOS and Linux) and `release.yml` (tag → installers for all three OSes in a draft GitHub Release, each smoke-tested, with auto-update metadata).
+- GitHub Actions: `pr.yml` and `main.yml` both call one reusable workflow, `ci.yml` (verify and both e2e suites on Windows, macOS and Linux), so a pull request runs exactly what `main` runs; and `release.yml` (tag → installers for all three OSes in a draft GitHub Release, each smoke-tested, with auto-update metadata).
 
 ## Platforms
 

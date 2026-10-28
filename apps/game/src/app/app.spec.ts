@@ -122,18 +122,20 @@ describe('App', () => {
     expect(session.world().difficulty).toBe(TestBed.inject(SettingsStore).settings().gameplay.defaultDifficulty);
     expect(session.entries()).toEqual([]);
     expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
+  });
 
-    // Escape on the dialog goes back to the menu without starting anything.
-    screen.getByRole('button', { name: 'Menu' }).click();
+  it('Escape on the New sandbox dialog goes back to the menu without starting anything (F1.9)', async () => {
+    const { fixture, user } = await setup();
+    const session = TestBed.inject(Session);
+    const before = session.world();
+    await user.keyboard('{Enter}'); // New sandbox
     await fixture.whenStable();
-    screen.getByRole('button', { name: 'New sandbox' }).focus();
-    await user.keyboard('{Enter}');
-    await fixture.whenStable();
+    expect(screen.getByRole('dialog', { name: 'New sandbox' })).toBeTruthy();
     await user.keyboard('{Escape}');
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New sandbox' }));
-    expect(session.world().seed).toBe(31337);
+    expect(session.world()).toBe(before); // no new game started
   });
 
   it('selects tool-belt slots from the keyboard and keeps rebinding in settings (F1.4)', async () => {

@@ -2,6 +2,7 @@ import { workspaceRoot } from '@nx/devkit';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { expectVisibleFocus } from './support/focus';
 import { enterSeed } from './support/sandbox';
 
 /**
@@ -41,12 +42,6 @@ function scenarioIds(path: string): string[] {
     .map((line) => line.split(/\s+/)[0]);
 }
 
-/** The element has keyboard focus and a visible focus indicator. */
-async function expectVisibleFocus(locator: Locator): Promise<void> {
-  await expect(locator).toBeFocused();
-  expect(await locator.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
-}
-
 /** Fills the focused field, then ArrowDown to the next one. */
 async function fill(page: Page, form: Locator, label: string, value: string) {
   await expect(form.getByRole('textbox', { name: label, exact: true })).toBeFocused();
@@ -69,14 +64,14 @@ test('place an object, then undo it, using only the palette and the keyboard', a
 
   // Ctrl+K opens it on the search field; Escape closes it and focus returns to the canvas.
   await page.keyboard.press('Control+K');
-  await expectVisibleFocus(search);
+  await expectVisibleFocus(page, search);
   await page.keyboard.press('Escape');
   await expect(palette).toBeHidden();
   await expect(canvas).toBeFocused();
 
   // Ctrl+Shift+P, search, Enter: the generated form for entity.place.
   await page.keyboard.press('Control+Shift+P');
-  await expectVisibleFocus(search);
+  await expectVisibleFocus(page, search);
   await page.keyboard.type('place');
   await expect(search).toHaveAttribute('aria-activedescendant', /option-0$/);
   await expect(palette.getByRole('option').first()).toHaveAttribute('data-command', 'entity.place');

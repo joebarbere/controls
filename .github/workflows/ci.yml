@@ -1,0 +1,47 @@
+# Reusable: `pnpm verify` (== local) plus both e2e suites on Linux, macOS and Windows.
+# Called by pr.yml and main.yml so a pull request runs exactly what main runs. Change the steps
+# here, never in a caller. Every step is a local command: no CI-only checks.
+name: ci
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify + e2e (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: ubuntu
+          - os: macos-latest
+            label: macos
+          - os: windows-latest
+            label: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: pnpm verify (== local)
+        run: pnpm verify
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Web harness e2e
+        run: pnpm e2e
+      - name: Electron smoke e2e (Linux, xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm e2e:desktop
+      - name: Electron smoke e2e
+        if: runner.os != 'Linux'
+        run: pnpm e2e:desktop
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-${{ matrix.label }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/.playwright
+          retention-days: 7
