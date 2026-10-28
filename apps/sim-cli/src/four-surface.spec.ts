@@ -1,6 +1,6 @@
 import { createGame, replayGame } from '@controls/scripting-api';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -104,6 +104,31 @@ describe('the four-surface scenario', () => {
     expect(run.status).toBe(0);
     // The file's own `world.hash` line, then the final hash.
     expect(run.stdout).toEqual([FOUR_SURFACE_HASH, FOUR_SURFACE_HASH]);
+  });
+
+  it('5. sim run --save <out.ctrl>, then sim replay, sim hash and sim run --world on the save', () => {
+    const save = join(dir, 'four-surface.ctrl');
+    const run = sim('run', join(scenarios, 'four-surface.console'), '--world', WORKSHOP_LEVEL, '--save', save);
+    expect(run.stderr).toBe('');
+    expect(run.status).toBe(0);
+    for (const command of ['replay', 'hash']) {
+      const result = sim(command, save, '--expect', FOUR_SURFACE_HASH);
+      expect(result.stderr).toBe('');
+      expect(result.stdout).toEqual([FOUR_SURFACE_HASH]);
+    }
+    // Loading the save and running nothing keeps the world (and continues its log).
+    const noop = join(dir, 'noop.console');
+    writeFileSync(noop, '');
+    const resumed = sim('run', noop, '--world', save, '--expect', FOUR_SURFACE_HASH);
+    expect(resumed.stderr).toBe('');
+    expect(resumed.status).toBe(0);
+  });
+
+  it('5b. the checked-in v1 fixture of this scenario replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v1/ctrl/workshop-four-surface.ctrl');
+    const replay = sim('replay', fixture);
+    expect(replay.stderr).toBe('');
+    expect(replay.stdout).toEqual([FOUR_SURFACE_HASH]);
   });
 
   it('runs under plain Node with no DOM globals', async () => {

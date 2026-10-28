@@ -1,7 +1,7 @@
 import type { Game } from '@controls/scripting-api';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /*
@@ -50,6 +50,21 @@ export function isAllowedImport(specifier: string, aliases: ReadonlySet<string>)
   );
 }
 
+const DOMAIN_LIBS_DIR = join(WORKSPACE_ROOT, 'libs', 'domain') + sep;
+
+/**
+ * Whether an import is made by a domain lib's production source or by a package, rather than by
+ * the script. The boundary applies to the script's own files: a domain lib's dependencies (zod,
+ * fflate) are already bounded by the `type:domain` lint, and a script still can't import them
+ * directly (except zod). Test helpers (`src/testing/`) get no exemption, so their dev-only
+ * dependencies (fast-check) stay out of scripts.
+ */
+export function isLibraryImporter(importer: string): boolean {
+  const segments = importer.split(/[\\/]/);
+  if (segments.includes('node_modules')) return true;
+  return importer.startsWith(DOMAIN_LIBS_DIR) && !/[\\/]src[\\/]testing[\\/]/.test(importer);
+}
+
 /** Bundles and imports a module script, returning its default export. Never throws. */
 export async function loadModuleScript(path: string, label = path): Promise<LoadScriptResult> {
   const { build } = await import('esbuild');
@@ -72,7 +87,7 @@ export async function loadModuleScript(path: string, label = path): Promise<Load
           name: 'sim-cli-import-boundary',
           setup(pluginBuild) {
             pluginBuild.onResolve({ filter: /.*/ }, (args) =>
-              args.kind === 'entry-point' || isAllowedImport(args.path, aliases)
+              args.kind === 'entry-point' || isLibraryImporter(args.importer) || isAllowedImport(args.path, aliases)
                 ? undefined
                 : {
                     errors: [

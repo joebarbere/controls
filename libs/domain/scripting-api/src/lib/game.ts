@@ -8,13 +8,20 @@ import type {
   ReplayError,
 } from '@controls/commands';
 import {
+  createManifest,
   createWorld,
+  type CtrlContents,
+  type CtrlError,
   type LoadError,
+  type Manifest,
   migrateReplayLog,
+  readCtrl,
+  type ReadCtrlOptions,
   type ReplayEntry,
   type ReplayLog,
   type ValidationIssue,
   World as WorldSchema,
+  writeCtrl,
 } from '@controls/save-format';
 import {
   createWorldBus,
@@ -61,6 +68,12 @@ export interface GameEvents {
   readonly executed: ExecutedEvent<World>;
 }
 export type GameEventName = keyof GameEvents;
+
+/** Options for {@link Game.save}. */
+export interface SaveGameOptions {
+  /** PNG bytes for `thumbnail.png` (the renderer's capture), or `null` for none. */
+  readonly thumbnail?: Uint8Array | null;
+}
 
 /** Thrown by {@link createGame} for options that can't start a game. Never echoes the input. */
 export class GameOptionsError extends Error {
@@ -118,6 +131,13 @@ export interface Game {
   entries(): readonly ReplayEntry[];
   /** The replay log of this game: its initial world plus every entry (`replay.log` in a save). */
   replayLog(): ReplayLog;
+  /**
+   * The game as a `.ctrl` save (F1.8b): a manifest for this build, the current world, the replay
+   * log and an optional thumbnail. Deterministic: the same game gives the same bytes. Load it with
+   * {@link loadGame}. Throws `CtrlWriteError` if the save would be over a size cap or the thumbnail
+   * isn't a PNG.
+   */
+  save(options?: SaveGameOptions): Uint8Array;
   canUndo(): boolean;
   canRedo(): boolean;
   /** The context keys the game owns (`history.canUndo`, `history.canRedo`). */
@@ -172,6 +192,13 @@ function wrap(bus: CommandBus<World>, initialWorld: World): Game {
     },
     entries: () => bus.entries,
     replayLog: () => toReplayLog(initialWorld, bus),
+    save: (options = {}) =>
+      writeCtrl({
+        manifest: createManifest(),
+        world: bus.state,
+        replayLog: toReplayLog(initialWorld, bus),
+        thumbnail: options.thumbnail ?? null,
+      }),
     canUndo: () => bus.canUndo,
     canRedo: () => bus.canRedo,
     contextKeys: () => bus.contextKeys(),
@@ -252,4 +279,85 @@ export function replayLogGame(log: ReplayLog, options: CommonOptions = {}): Repl
     return { ok: false, error: { kind: 'replay', message: replayed.error.message, error: replayed.error } };
   }
   return { ok: true, game: wrap(replayed.bus, log.initialWorld) };
+}
+
+/**
+ * What happened to a save's `replay.log` when it was loaded. The world (`world.json`) is always
+ * what loads; the log is kept only if replaying it from its initial world reproduces that world's
+ * `world.hash` exactly (ADR 0007), because continuing a log that doesn't would make every later
+ * replay of this session wrong.
+ */
+export type SaveReplayStatus =
+  /** Replayed to `world.json`'s hash: the game continues the same log. */
+  | { readonly status: 'continued' }
+  /** The save has no `replay.log`: a new log starts from the loaded world. */
+  | { readonly status: 'absent' }
+  /**
+   * The log failed to replay, or replayed to a different hash: it was dropped and a new log starts
+   * from the loaded world. The UI should say so; `message` names the first failing entry, if any.
+   */
+  | { readonly status: 'restarted'; readonly reason: 'replay-failed' | 'hash-mismatch'; readonly message: string };
+
+export interface LoadedGame {
+  readonly ok: true;
+  /** The loaded game: the saved world, an empty undo/redo history, and the log (see `replay`). */
+  readonly game: Game;
+  readonly manifest: Manifest;
+  readonly thumbnail: Uint8Array | null;
+  /** The `schemaVersion` the save was written at, before migration. */
+  readonly fromVersion: number;
+  readonly replay: SaveReplayStatus;
+}
+
+export type LoadGameResult = LoadedGame | { readonly ok: false; readonly error: CtrlError };
+
+export type LoadGameOptions = CommonOptions & ReadCtrlOptions;
+
+/**
+ * Loads a `.ctrl` save from untrusted bytes (F1.8b). `readCtrl` reads, migrates and validates it
+ * (otherwise a typed `CtrlError`, including `newer-than-build`); then a game is built on its world.
+ * **The undo stack is cleared and the replay log continues:** the log is replayed from its initial
+ * world and, if it reproduces the saved world's hash, the game continues it (same `seq` numbering,
+ * so seeded streams stay put); otherwise a new log starts (see {@link SaveReplayStatus}). Never
+ * throws. The host replaces its session with the returned game.
+ */
+export function loadGame(bytes: Uint8Array, options: LoadGameOptions = {}): LoadGameResult {
+  const read = readCtrl(bytes, { limits: options.limits ?? {} });
+  if (!read.ok) return { ok: false, error: read.error };
+  return gameFromSave(read.value, options);
+}
+
+/** {@link loadGame} for contents already read with `readCtrl`. Never throws. */
+export function gameFromSave(contents: CtrlContents, options: CommonOptions = {}): LoadedGame {
+  const registry = options.registry ?? createWorldRegistry();
+  const { world, replayLog: log } = contents;
+  let game: Game;
+  let replay: SaveReplayStatus;
+  const replayed = log === null ? null : replayWorldLog(log, registry);
+  if (log !== null && replayed?.ok && replayed.hash === worldHash(world)) {
+    replayed.bus.clearHistory();
+    game = wrap(replayed.bus, log.initialWorld);
+    replay = { status: 'continued' };
+  } else {
+    game = wrap(createWorldBus(world, registry), world);
+    if (replayed === null) {
+      replay = { status: 'absent' };
+    } else if (replayed.ok) {
+      replay = {
+        status: 'restarted',
+        reason: 'hash-mismatch',
+        message: "The save's replay log doesn't reproduce its world, so a new log starts from the loaded world.",
+      };
+    } else {
+      replay = { status: 'restarted', reason: 'replay-failed', message: replayed.error.message };
+    }
+  }
+  return {
+    ok: true,
+    game,
+    manifest: contents.manifest,
+    thumbnail: contents.thumbnail,
+    fromVersion: contents.fromVersion,
+    replay,
+  };
 }

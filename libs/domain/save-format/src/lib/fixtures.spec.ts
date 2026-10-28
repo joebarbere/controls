@@ -12,12 +12,14 @@ import {
   World,
   worldMigrator,
 } from './documents';
+import { readCtrl, writeCtrl } from './container/ctrl';
 import type { Migrator } from './migrate';
 import type { z } from 'zod';
 
 /*
  * Every fixture of every version must load forever (ADR 0004). Layout:
  *   fixtures/v<schemaVersion>/<kind>/*.json      kind = world | manifest | replay-log
+ *   fixtures/v<schemaVersion>/ctrl/*.ctrl        whole .ctrl containers (F1.8b)
  *   fixtures/settings/v<settingsVersion>/*.json
  * Fixtures of a published version are never edited; a new version adds a new directory.
  */
@@ -82,6 +84,17 @@ const cases = Object.entries(kinds).flatMap(([name, kind]) => {
   return versions.flatMap((version) => fixturesOf(kind, version).map((f) => ({ name, kind, version, ...f })));
 });
 
+/** `.ctrl` containers: `fixtures/v<N>/ctrl/*.ctrl`. Binary and frozen like the JSON fixtures. */
+function ctrlFixturesOf(version: number): { file: string; bytes: Uint8Array }[] {
+  const dir = join(fixturesRoot, `v${version}/ctrl`);
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.ctrl'))
+    .sort()
+    .map((name) => ({ file: `v${version}/ctrl/${name}`, bytes: new Uint8Array(readFileSync(join(dir, name))) }));
+}
+
+const ctrlCases = versionDirs().flatMap((version) => ctrlFixturesOf(version).map((f) => ({ version, ...f })));
+
 describe('fixtures', () => {
   it('there is a fixture directory for every version up to the current one, and none beyond', () => {
     expect(versionDirs()).toStrictEqual(Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, i) => i + 1));
@@ -114,6 +127,23 @@ describe('fixtures', () => {
       value: result.value,
       fromVersion: c.kind.currentVersion,
     });
+  });
+
+  it('every version has at least one .ctrl container fixture', () => {
+    for (let version = 1; version <= CURRENT_SCHEMA_VERSION; version++) {
+      expect(ctrlFixturesOf(version).length, `ctrl v${version}`).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(ctrlCases.map((c) => [c.file, c] as const))('%s reads, migrates and validates', (_file, c) => {
+    const result = readCtrl(c.bytes);
+    if (!result.ok) throw new Error(`${c.file}: ${JSON.stringify(result.error)}`);
+    expect(result.value.fromVersion).toBe(c.version);
+    expect(result.value.manifest.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(World.parse(result.value.world)).toStrictEqual(result.value.world);
+    // Lossless: re-writing what was read reads back to the same contents.
+    const rewritten = readCtrl(writeCtrl(result.value));
+    expect(rewritten.ok && rewritten.value).toStrictEqual({ ...result.value, fromVersion: CURRENT_SCHEMA_VERSION });
   });
 
   it('a fixture at the current version loads unchanged (fixtures are canonical)', () => {

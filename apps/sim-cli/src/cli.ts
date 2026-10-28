@@ -1,6 +1,14 @@
-import { migrateWorld } from '@controls/save-format';
-import { createGame, formatConsoleScriptError, type Game, replayGame, runConsoleScript } from '@controls/scripting-api';
-import { hashWorldDocument, newGameWorld } from '@controls/world-model';
+import { CtrlWriteError, migrateWorld, readCtrl, type World } from '@controls/save-format';
+import {
+  createGame,
+  formatConsoleScriptError,
+  type Game,
+  gameFromSave,
+  replayGame,
+  replayLogGame,
+  runConsoleScript,
+} from '@controls/scripting-api';
+import { hashWorldDocument, newGameWorld, worldHash } from '@controls/world-model';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { readDocument } from './documents';
@@ -9,9 +17,9 @@ import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
 /*
  * `sim-cli`: runs the game headless in plain Node (plan §4.6, F1.6, ADR 0008).
  *
- *   sim run <script> [--world <world.json>] [--seed N] [--log <out.json>] [--expect <hash>]
- *   sim replay <replay-log.json> [--expect <hash>]
- *   sim hash <world.json> [--expect <hash>]
+ *   sim run <script> [--world <file>] [--seed N] [--log <out.json>] [--save <out.ctrl>] [--expect <hash>]
+ *   sim replay <save.ctrl | replay-log.json> [--expect <hash>]
+ *   sim hash <save.ctrl | world.json> [--expect <hash>]
  *
  * stdout carries data only (hashes, a script's own output); diagnostics go to stderr. Exit codes:
  * 0 success, 1 failure (bad document, failing script, hash mismatch), 2 usage error.
@@ -34,22 +42,25 @@ Commands:
   run <script>     Run a TypeScript/JavaScript module (.ts .mts .js .mjs) exporting
                    default (game) => …, or a console-line file (any other extension,
                    conventionally .console). Prints world.hash at the end.
-      --world <file>      Start from a world document or a level, e.g.
-                          content/levels/workshop.json (default: an empty world)
+      --world <file>      Start from a .ctrl save (loaded as the game loads it: undo
+                          cleared, its replay log continued), a world document or a
+                          level, e.g. content/levels/workshop.json (default: an empty world)
       --seed <n>          The seed: of the empty world (default 0), or, with --world,
-                          a new game on that level with this seed (as New sandbox does)
+                          a new game on that world with this seed (as New sandbox does)
       --log <file>        Write the session's replay log (JSON) here
-  replay <file>    Replay a replay-log JSON from its initial world; print the hash
-  hash <file>      Print world.hash of a world document (world.json, a level)
+      --save <file>       Write the session as a .ctrl save here
+  replay <file>    Replay a .ctrl save's replay.log (or a replay-log JSON) from its
+                   initial world and print the hash; for a .ctrl, fail unless it
+                   equals the hash of the save's world.json
+  hash <file>      Print world.hash of a .ctrl save's world.json, or of a world
+                   document (world.json, a level)
   help             Show this help
 
 Common options:
-      --expect <hash>     Fail (exit 1) unless the final hash equals this
-
-.ctrl saves are read from F1.8b; until then pass the JSON documents.`;
+      --expect <hash>     Fail (exit 1) unless the final hash equals this`;
 
 const OPTIONS: Readonly<Record<string, readonly string[]>> = {
-  run: ['seed', 'world', 'log', 'expect'],
+  run: ['seed', 'world', 'log', 'save', 'expect'],
   replay: ['expect'],
   hash: ['expect'],
 };
@@ -139,11 +150,25 @@ async function startGame(parsed: Parsed, io: CliIo): Promise<Game> {
   if (worldFile === undefined) return createGame({ seed: seed ?? 0 });
   const document = await readDocument(resolve(io.cwd, worldFile), worldFile);
   if (!document.ok) throw new Failure(document.message);
-  if (document.kind !== 'world') throw new Failure(`${worldFile}: is a replay log, not a world document`);
-  const loaded = migrateWorld(document.json);
-  if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
-  // With --seed, a new game on that level (New sandbox's path); without, the document as it is.
-  return createGame({ world: seed === undefined ? loaded.value : newGameWorld(loaded.value, { seed }) });
+  let world: World;
+  if (document.kind === 'ctrl') {
+    const read = readCtrl(document.bytes);
+    if (!read.ok) throw new Failure(`${worldFile}: ${read.error.message}`);
+    if (seed === undefined) {
+      // The game's Load: the saved world, undo cleared, the replay log continued (or restarted).
+      const loaded = gameFromSave(read.value);
+      if (loaded.replay.status === 'restarted') io.stderr(`sim: ${worldFile}: ${loaded.replay.message}`);
+      return loaded.game;
+    }
+    world = read.value.world;
+  } else {
+    if (document.kind !== 'world') throw new Failure(`${worldFile}: is a replay log, not a world document`);
+    const loaded = migrateWorld(document.json);
+    if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
+    world = loaded.value;
+  }
+  // With --seed, a new game on that world (New sandbox's path); without, the document as it is.
+  return createGame({ world: seed === undefined ? world : newGameWorld(world, { seed }) });
 }
 
 async function run(path: string, parsed: Parsed, io: CliIo): Promise<string> {
@@ -171,12 +196,24 @@ async function run(path: string, parsed: Parsed, io: CliIo): Promise<string> {
   if (logFile !== undefined) {
     await writeFile(resolve(io.cwd, logFile), `${JSON.stringify(game.replayLog(), null, 2)}\n`);
   }
+  const saveFile = parsed.options['save'];
+  if (saveFile !== undefined) {
+    let bytes: Uint8Array;
+    try {
+      bytes = game.save();
+    } catch (error) {
+      if (error instanceof CtrlWriteError) throw new Failure(`${saveFile}: ${error.message}`);
+      throw error;
+    }
+    await writeFile(resolve(io.cwd, saveFile), bytes);
+  }
   return game.hash();
 }
 
 async function replay(path: string, label: string): Promise<string> {
   const document = await readDocument(path, label);
   if (!document.ok) throw new Failure(document.message);
+  if (document.kind === 'ctrl') return replaySave(document.bytes, label);
   if (document.kind !== 'replay-log') {
     throw new Failure(`${label}: is a world document, not a replay log (use "sim hash")`);
   }
@@ -185,9 +222,32 @@ async function replay(path: string, label: string): Promise<string> {
   return result.game.hash();
 }
 
+/**
+ * Replay for a `.ctrl`: run its `replay.log` entries from the log's initial world (which carries
+ * the seed), and require the result to hash like the save's `world.json`. Prints the replayed hash.
+ */
+function replaySave(bytes: Uint8Array, label: string): string {
+  const read = readCtrl(bytes);
+  if (!read.ok) throw new Failure(`${label}: ${read.error.message}`);
+  if (read.value.replayLog === null) throw new Failure(`${label}: has no replay.log (use "sim hash")`);
+  const result = replayLogGame(read.value.replayLog);
+  if (!result.ok) throw new Failure(`${label}: replay.log: ${result.error.message}`);
+  const replayed = result.game.hash();
+  const saved = worldHash(read.value.world);
+  if (replayed !== saved) {
+    throw new Failure(`${label}: replay.log replays to ${replayed}, but world.json hashes to ${saved}`);
+  }
+  return replayed;
+}
+
 async function hashFile(path: string, label: string): Promise<string> {
   const document = await readDocument(path, label);
   if (!document.ok) throw new Failure(document.message);
+  if (document.kind === 'ctrl') {
+    const read = readCtrl(document.bytes);
+    if (!read.ok) throw new Failure(`${label}: ${read.error.message}`);
+    return worldHash(read.value.world);
+  }
   if (document.kind !== 'world') throw new Failure(`${label}: is a replay log (use "sim replay")`);
   const result = hashWorldDocument(document.json);
   if (!result.ok) throw new Failure(`${label}: ${result.error.message}`);

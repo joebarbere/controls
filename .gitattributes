@@ -1,4 +1,6 @@
 # LF everywhere: Prettier's --check (part of `pnpm verify`) fails on CRLF checkouts on Windows.
 * text=auto eol=lf
 *.png binary
+# .ctrl saves are ZIP archives (save-format fixtures).
+*.ctrl binary
 *.ico binary

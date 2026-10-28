@@ -226,6 +226,22 @@ export class CommandBus<S> {
     this.log.push(deepFreeze(structuredCloneJson(entry)));
   }
 
+  /**
+   * Empties the undo and redo stacks; the state and the log are untouched. Loading a save does
+   * this (F1.8b: "the undo stack is cleared and the replay log continues"), so the player can't
+   * undo past the load.
+   *
+   * Replay stays exact: a fresh bus replaying the whole log keeps the pre-load history, but the
+   * live stacks are always the top part of the replayed ones (empty after the clear; every later
+   * command pushes, pops or clears both alike). So every `edit.undo` / `edit.redo` that succeeds
+   * live, and is therefore logged, pops the same change on replay. One that fails live is never
+   * logged, so the extra history is never reached.
+   */
+  clearHistory(): void {
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+  }
+
   /** Calls `listener` after every successful command. Returns an unsubscribe function. */
   subscribe(listener: ExecutedListener<S>): () => void {
     this.listeners.add(listener);

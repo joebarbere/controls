@@ -6,3 +6,4 @@ export * from './lib/v1/manifest';
 export * from './lib/v1/world';
 export * from './lib/v1/replay-log';
 export * from './lib/settings/v1';
+export * from './lib/container';
