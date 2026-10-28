@@ -1,6 +1,6 @@
 # ADR 0006: Command system semantics
 
-**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`)
+**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`) and F1.3 (`palette.open`, argument hints, cheat confirmation)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
 
@@ -119,6 +119,14 @@ A binding without `when` is never disjoint from anything. A property test checks
 
 A successful `cheat` command sets the world's `assisted` flag through the bus's `markAssisted` hook, **outside** its change. So undoing the cheat doesn't clear the flag, which is never cleared (ADR 0007). The consequence is that "undo everything returns the initial hash" holds only for sessions without cheats.
 
+### The palette (F1.3)
+
+- **`palette.open` is a view command** (`Mod+K`, `Mod+Shift+P`, `globalKeybinding: true`), declared next to `view.resetLayout`. Like every view command it is logged; closing the palette is not a command. Its id is now save format like any other.
+- **Argument forms are generated from each command's `args`** through `z.toJSONSchema(args, { io: 'input' })`. Commands may add **`.meta()` hints** to their schemas: `title` and `description` label and explain a field, and the `x-controls-ref` keyword (`ARG_REF_KEYWORD`; `entityRefMeta` for `entity`) marks an integer as a world-entity id, which the palette prefills from the `selection.entityId` context key. Hints only add JSON Schema keywords and never change what a schema accepts, so adding one to a persisted args shape is not a save-format change. Validation stays the command's own schema.
+- **The palette never lists `palette.open`** and runs the chosen command only after its dialog has closed, so the command sees focus where the player left it.
+- **Recents** (settings `palette.recents`) are the commands run from the palette, not every logged command: a keybinding or script shouldn't reorder the palette.
+- **Cheats ask once per world.** Before a `cheat` command runs in a world that isn't assisted yet, the palette asks for confirmation; once the world is assisted there is nothing more to lose, so it doesn't ask again. The flag itself is still set by the bus ("Cheats" above).
+
 ### Randomness
 
 - A command that needs randomness derives a stream with `deriveStream(world.seed, commandStreamKey(ctx.seq))` (key `command:<seq>`). Entity-owned randomness uses `entityStreamKey(id)` (`entity:<id>`).
@@ -135,7 +143,7 @@ Each entry records the state's `tick` when it ran (always 0 in P1), and replay r
 
 ## Consequences
 
-- Surfaces (palette F1.3, keybindings F1.4, console F1.5, scripting API F1.6) call `exec` and read `when` through the registry, and never touch state.
+- Surfaces (palette F1.3, keybindings F1.4, console F1.5, scripting API F1.6) call `exec` and read `when` through the registry, and never touch state. A command whose args the palette's form can't express fails the palette's every-command spec, so new argument shapes extend the form model first.
 - A new view command is declared in domain code (in `@controls/commands` for now), never only in a component, or headless replay of a log that contains it fails with `unknown-command`.
 - Command ids and argument shapes are save format (ADR 0007): renaming one or changing its args needs a `schemaVersion` bump and a log migration. `replayEntries` reports a changed args shape as `diverged`.
 - F1.8b's load continues the loaded log with a cleared history; it never starts a new log or drops entries, which would break the undo argument above. That needs a small bus addition (clear the history, keep the log).

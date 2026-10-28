@@ -1,6 +1,6 @@
 # Commands and the world model
 
-> **Status (F1.6):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/` and the console-line parser under `console/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The scripting API's `Game` (`@controls/scripting-api`) wraps them; `sim-cli` scripts drive it, and so does the Angular adapter `libs/features/session` (`@controls/feature-session`: `Session`, `KeybindingService` and `ToolBelt`); see [scripting and sim-cli](scripting.md). The palette (F1.3) and console UI (F1.5) are still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
+> **Status (F1.6):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/` and the console-line parser under `console/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The scripting API's `Game` (`@controls/scripting-api`) wraps them; `sim-cli` scripts drive it, and so does the Angular adapter `libs/features/session` (`@controls/feature-session`: `Session`, `KeybindingService` and `ToolBelt`); see [scripting and sim-cli](scripting.md). The command palette (`feature-palette`, F1.3) is the second UI surface; the console UI (F1.5) is still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
 
 ## One registry, four surfaces
 
@@ -10,7 +10,7 @@ Every surface goes through the same registry and bus. Only the bus changes the w
 flowchart LR
     classDef later fill:#f4f4f4,stroke:#999,stroke-dasharray: 4 3;
     BTN["UI buttons<br/>(Reset layout)"] --> SES
-    PAL["Palette (F1.3)"]:::later --> SES
+    PAL["CommandPalette (F1.3)<br/>forms from Zod args"] --> SES
     KEY["KeybindingService (F1.4)<br/>document keydown"] --> SES
     CON["Console (F1.5)"]:::later --> SES
     SES["feature-session<br/>Session: world signal, exec, context keys"] --> GAME
@@ -29,6 +29,7 @@ flowchart LR
     BUS -->|"executed event"| SES
     SES -->|"onCommand('view.resetLayout')"| WS["feature-workspace<br/>resets its layout"]
     SES -->|"onCommand('toolbelt.select')"| TB["ToolBelt<br/>active slot, toolbelt.slot key"]
+    SES -->|"onCommand('palette.open')"| PAL
 ```
 
 ## `exec`

@@ -14,6 +14,8 @@
 >
 > **P1 so far (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`: the `Game` facade that `Session` and scripts share), the console-line parser in `@controls/commands`, and `apps/sim-cli` (`type:app`, `scope:headless`: `pnpm sim run|replay|hash`). See [scripting and sim-cli](scripting.md).
 >
+> **P1 so far (F1.3):** `libs/features/palette` (`@controls/feature-palette`, `type:feature`): the command palette, with argument forms generated from each command's Zod `args`. `palette.open` joined the built-in view commands in `@controls/commands`, with the `.meta()` arg hints (`x-controls-ref`) and the `selection.entityId` context key. See [UI shell](ui-shell.md#command-palette-f13).
+>
 > Items marked _(PN)_ below arrive in that phase.
 
 ## Process and thread model
@@ -73,7 +75,7 @@ flowchart LR
         SIMCLI["apps/sim-cli<br/>scope:headless"]:::p0
     end
 
-    FEAT["libs/features/shell, workspace, settings, session (P1)<br/>type:feature"]:::p0
+    FEAT["libs/features/shell, workspace, settings, session, palette (P1)<br/>type:feature"]:::p0
     UI["libs/ui (P1)<br/>type:ui"]:::p0
     REND["libs/rendering/renderer<br/>type:rendering"]:::p0
     PAPI["libs/platform/api<br/>type:platform"]:::p0

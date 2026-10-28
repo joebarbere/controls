@@ -95,7 +95,7 @@ Acceptance:
 
 - [x] The settings document is Zod-validated with its own `settingsVersion`. A corrupt or unknown file falls back to defaults with a notification (unit tests for main and web).
 - [x] Settings IPC (`settings:get` / `settings:set`): Zod-validated in main, `senderFrame` checked, size-capped, written atomically.
-- [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Since F1.2 the badge reads the world's `assisted` flag through `Session`; cheat commands arrive with F1.3/F1.5.)_
+- [x] HUD shows the current mode, a selection summary and an **assisted** badge once a cheat has run. _(Since F1.2 the badge reads the world's `assisted` flag through `Session`; the palette's cheat confirmation landed in F1.3; no cheat command is registered yet.)_
 - [x] Notifications are announced through `aria-live` and can be dismissed from the keyboard.
 - [x] Light and dark themes via CSS custom properties: follow `prefers-color-scheme`, can be overridden in settings, honour `prefers-reduced-motion`.
 - [x] Keyboard-only Playwright test: menu → settings → back → New sandbox without the mouse, with visible focus and focus restored after each dialog closes.
@@ -127,14 +127,14 @@ Acceptance:
 
 Acceptance:
 
-- [ ] Ctrl+K and Ctrl+Shift+P open it, bound through F1.4 to the `palette.open` command (Cmd on macOS).
-- [ ] Fuzzy search over title, category and id. Commands whose `when` is false are hidden or shown disabled with the reason. Recent commands come first and are stored in settings.
-- [ ] Forms support string, integer/number with bounds, boolean, enum, nested object, optional and default. Entity-reference args offer the current selection.
-- [ ] A unit test checks that **every registered command** can be rendered as a palette form, so a new command can't silently break the palette.
-- [ ] Validation errors come from the same Zod schema and show inline.
-- [ ] Running a `cheat` command asks for confirmation and sets the world's `assisted` flag, which persists.
-- [ ] ARIA combobox/listbox pattern, works with arrows, Enter and Esc only, focus restored on close.
-- [ ] E2E: place an object, then undo it, using only the palette.
+- [x] Ctrl+K and Ctrl+Shift+P open it, bound through F1.4 to the `palette.open` command (Cmd on macOS). _(`palette.open` is a view command with `globalKeybinding`, so it is logged like the others.)_
+- [x] Fuzzy search over title, category and id. Commands whose `when` is false are hidden or shown disabled with the reason. Recent commands come first and are stored in settings. _(Shown disabled, after the enabled ones; recents are commands run from the palette.)_
+- [x] Forms support string, integer/number with bounds, boolean, enum, nested object, optional and default. Entity-reference args offer the current selection. _(Entity ids carry the `x-controls-ref: entity` `.meta()` hint and read the `selection.entityId` context key, which the viewport publishes once F1.7 selects world entities.)_
+- [x] A unit test checks that **every registered command** can be rendered as a palette form, so a new command can't silently break the palette.
+- [x] Validation errors come from the same Zod schema and show inline.
+- [x] Running a `cheat` command asks for confirmation and sets the world's `assisted` flag, which persists. _(No cheat ships in P1 yet; the spec registers one. Once the world is assisted the palette stops asking.)_
+- [x] ARIA combobox/listbox pattern, works with arrows, Enter and Esc only, focus restored on close.
+- [x] E2E: place an object, then undo it, using only the palette. _(Keyboard only; the final hash is pinned and matches `sim run scenarios/palette-place-undo.console`.)_
 
 ### F1.4 Keybinding service
 
@@ -331,7 +331,7 @@ Numbers are assigned in landing order. Planned:
 | ------- | ----------------------------- | ----------------------------------------------------- |
 | F1.1    | Shell UI                      | ✅ Done (`view.resetLayout` became a Command in F1.2) |
 | F1.2    | Command system                | ✅ Done                                               |
-| F1.3    | Command palette               | 📐 Planned                                            |
+| F1.3    | Command palette               | ✅ Done                                               |
 | F1.4    | Keybinding service            | ✅ Done                                               |
 | F1.5    | Dev console                   | 📐 Planned                                            |
 | F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
