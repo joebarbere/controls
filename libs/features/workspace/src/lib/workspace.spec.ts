@@ -136,6 +136,76 @@ describe('Workspace', () => {
   });
 });
 
+@Component({
+  selector: 'ctl-console-host',
+  imports: [Workspace],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <ctl-workspace [chrome]="chrome()" [(layout)]="layout">
+      <button type="button" ctlWorkspaceToolbar>Menu</button>
+      <div ctlBottomPanel>
+        <button type="button">Output</button>
+        <input aria-label="Console input" data-autofocus />
+      </div>
+    </ctl-workspace>
+  `,
+})
+class ConsoleHost {
+  readonly chrome = signal(true);
+  readonly layout = signal<WorkspaceLayout>(DEFAULT_WORKSPACE_LAYOUT);
+}
+
+describe('Workspace console.toggle (F1.5)', () => {
+  afterEach(() => (document.body.innerHTML = ''));
+
+  async function setupConsole() {
+    TestBed.overrideComponent(Workspace, { remove: { imports: [Viewport] }, add: { imports: [FakeViewport] } });
+    const fixture = TestBed.createComponent(ConsoleHost);
+    document.body.appendChild(fixture.nativeElement);
+    await fixture.whenStable();
+    return { fixture, host: fixture.componentInstance, session: TestBed.inject(Session) };
+  }
+
+  it('opens the collapsed bottom panel and focuses its [data-autofocus] element, then closes back to the opener', async () => {
+    const { fixture, host, session } = await setupConsole();
+    host.layout.set({ ...DEFAULT_WORKSPACE_LAYOUT, bottom: { size: 200, collapsed: true } });
+    await fixture.whenStable();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    menu.focus();
+
+    expect(session.exec('console.toggle').ok).toBe(true);
+    await fixture.whenStable();
+    expect(host.layout().bottom.collapsed).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Console input' }));
+
+    session.exec('console.toggle'); // focus is in the panel: close it
+    await fixture.whenStable();
+    expect(host.layout().bottom.collapsed).toBe(true);
+    expect(document.activeElement).toBe(menu);
+  });
+
+  it('focuses an open console without closing it, and falls back to the viewport', async () => {
+    const { fixture, host, session } = await setupConsole();
+    (document.activeElement as HTMLElement | null)?.blur();
+    session.exec('console.toggle'); // already open (the default layout), focus elsewhere
+    await fixture.whenStable();
+    expect(host.layout().bottom.collapsed).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Console input' }));
+    session.exec('console.toggle'); // the opener was <body>: focus the viewport instead
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(screen.getByLabelText('3D workspace'));
+  });
+
+  it('does nothing behind the main menu', async () => {
+    const { fixture, host, session } = await setupConsole();
+    host.chrome.set(false);
+    await fixture.whenStable();
+    session.exec('console.toggle');
+    await fixture.whenStable();
+    expect(host.layout()).toEqual(DEFAULT_WORKSPACE_LAYOUT);
+  });
+});
+
 describe('normaliseLayout', () => {
   it('clamps sizes into the panel limits, rounds them and coerces flags', () => {
     expect(

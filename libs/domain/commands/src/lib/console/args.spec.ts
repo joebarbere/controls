@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { z } from 'zod';
 import { defineCommand, succeed } from '../command';
 import { CommandRegistry } from '../registry';
-import { consoleArgs, ConsoleFormatError, formatConsoleLine, parseConsoleCommand } from './args';
+import { consoleArgs, consoleFields, ConsoleFormatError, formatConsoleLine, parseConsoleCommand } from './args';
 import { type ConsoleCommandLine, parseConsoleLine } from './parse';
 
 const Int = z.int();
@@ -228,5 +228,51 @@ describe('formatConsoleLine', () => {
         },
       ),
     );
+  });
+});
+
+describe('consoleFields', () => {
+  const pick = (schema: z.ZodType) =>
+    consoleFields(schema).map(({ path, kind, optional, position }) => ({ path, kind, optional, position }));
+
+  it('lists dotted leaf paths in declaration order, with positions for top-level scalars', () => {
+    expect(pick(Place)).toEqual([
+      { path: 'ref.id', kind: 'string', optional: false, position: null },
+      { path: 'ref.version', kind: 'number', optional: false, position: null },
+      { path: 'positionMm.x', kind: 'number', optional: false, position: null },
+      { path: 'positionMm.y', kind: 'number', optional: false, position: null },
+      { path: 'positionMm.z', kind: 'number', optional: false, position: null },
+      { path: 'orientationMdeg.yaw', kind: 'number', optional: true, position: null },
+      { path: 'orientationMdeg.pitch', kind: 'number', optional: true, position: null },
+      { path: 'orientationMdeg.roll', kind: 'number', optional: true, position: null },
+    ]);
+  });
+
+  it('classifies leaves the way consoleArgs types them, with enum values and bounds', () => {
+    const fields = Object.fromEntries(consoleFields(Misc).map((f) => [f.path, f]));
+    expect(fields['id']).toMatchObject({ kind: 'number', optional: false, position: 0, min: 1, max: null });
+    expect(fields['visible']).toMatchObject({ kind: 'boolean', values: [true, false], optional: true });
+    expect(fields['mode']).toMatchObject({ kind: 'enum', values: ['walk', 'work'], optional: true, position: 3 });
+    expect(fields['tag']).toMatchObject({ kind: 'string' }); // the pipe's input decides
+    expect(fields['version']).toMatchObject({ kind: 'enum', values: [1] });
+    expect(fields['either']).toMatchObject({ kind: 'other' });
+    expect(fields['ratio']).toMatchObject({ kind: 'number', nullable: true });
+    expect(consoleFields(z.strictObject({ n: z.number().describe('How many') }))[0].description).toBe('How many');
+    expect(consoleFields(z.string())).toEqual([]);
+  });
+
+  it('offers only flags that consoleArgs accepts', () => {
+    const line = (flags: string): ConsoleCommandLine => {
+      const parsed = parseConsoleLine(`x.y ${flags}`);
+      if (!parsed.ok || !parsed.line) throw new Error('parse');
+      return parsed.line;
+    };
+    for (const schema of [Place, Misc]) {
+      for (const field of consoleFields(schema)) {
+        const value =
+          field.kind === 'number' ? '1' : field.kind === 'boolean' ? 'true' : String(field.values[0] ?? 'a');
+        expect(consoleArgs(schema, line(`--${field.path} ${value}`)).ok, field.path).toBe(true);
+      }
+    }
   });
 });

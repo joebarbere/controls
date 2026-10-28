@@ -216,6 +216,7 @@ describe('world registry, replay log and cheats', () => {
         .list()
         .map((c) => `${c.id}:${c.undoable}`),
     ).toEqual([
+      'console.toggle:false',
       'edit.redo:false',
       'edit.undo:false',
       'entity.delete:true',

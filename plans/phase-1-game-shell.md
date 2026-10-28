@@ -11,7 +11,7 @@ A game you can start, look around, place things in and save: a keyboard-first An
 - [ ] Place, move and delete objects with undo/redo through the **mouse, palette, console and a `sim-cli` script**, with the same resulting world hash (`world.hash`) on every surface. _(One scenario, four drivers: `apps/game-e2e` for mouse, palette and console, `sim-cli` for the script.)_
 - [ ] Save then reload is lossless: a fast-check property test on the world document and an E2E save → reload → same hash, in the web harness and in Electron.
 - [x] Replaying seed + command log from an empty world gives the same hash as the live session (property test in `domain/commands` and `sim-cli replay`). _(F1.2 property tests; F1.6's four-surface test replays the log a `sim run` wrote and gets the live hash.)_
-- [ ] E2E covers the palette and the console (including the console under the Electron CSP).
+- [x] E2E covers the palette and the console (including the console under the Electron CSP). _(`apps/game-e2e`: `palette.spec.ts` (F1.3) and `console.spec.ts` (F1.5); `apps/desktop-e2e/src/smoke.spec.ts` opens the console under the real `app://` CSP.)_
 - [ ] `pnpm verify` green on all three OSes. Every new runtime dependency has a `THIRD_PARTY_NOTICES.md` row.
 
 ## Kickoff (before F1.x PRs)
@@ -156,14 +156,14 @@ Acceptance:
 
 Acceptance:
 
-- [ ] The backtick key toggles it. It's available in Sandbox and dev builds and hidden elsewhere (gated by a context key).
-- [ ] Grammar: dotted command id, positional args, `--flag value`, bare `--flag` = true, quoted strings and numbers. Flags map onto the Zod object shape. Parse errors point to a column. Grammar in ADR 0008.
-- [ ] Tab completion for command ids, flag names and enum values from the registry. History with ↑/↓, saved in settings and capped.
-- [ ] `help [id]` is generated from the registry. `world.hash` prints the current hash (read-only; the E2E tests use it).
-- [ ] Before a cheat command runs, a banner warns that it will mark the save as assisted.
-- [ ] `run <file>` runs a file of console lines (data only). Running JS/TS scripts inside the game is out of scope while the CSP bans eval (ADR 0008).
-- [ ] `apps/desktop-e2e` opens the console in Electron, which proves CodeMirror 6 works under the real CSP.
-- [ ] E2E (web harness): place an object, undo, recall a line from history, and check the hash matches the palette path.
+- [x] The backtick key toggles it. It's available in Sandbox and dev builds and hidden elsewhere (gated by a context key). _(`console.toggle`, a global binding with `when: console.available`; the key is set from `isConsoleAvailable`: Sandbox or dev build, workspace on screen.)_
+- [x] Grammar: dotted command id, positional args, `--flag value`, bare `--flag` = true, quoted strings and numbers. Flags map onto the Zod object shape. Parse errors point to a column. Grammar in ADR 0008.
+- [x] Tab completion for command ids, flag names and enum values from the registry. History with ↑/↓, saved in settings and capped.
+- [x] `help [id]` is generated from the registry. `world.hash` prints the current hash (read-only; the E2E tests use it).
+- [x] Before a cheat command runs, a banner warns that it will mark the save as assisted. _(Unit-tested with a test cheat: no cheat command is registered in P1 yet.)_
+- [x] `run <file>` runs a file of console lines (data only). Running JS/TS scripts inside the game is out of scope while the CSP bans eval (ADR 0008). _(`run` takes no path until F1.8b: it opens a file picker, or the player drops a file on the console; the same in the web harness and Electron.)_
+- [x] `apps/desktop-e2e` opens the console in Electron, which proves CodeMirror 6 works under the real CSP. _(The CSP is unchanged: CodeMirror's `<style>` element and style attributes are covered by `style-src 'unsafe-inline'`.)_
+- [x] E2E (web harness): place an object, undo, recall a line from history, and check the hash matches the palette path. _(`console.spec.ts`: place, undo, history and `world.hash` reach `CONSOLE_PLACE_UNDO_HASH` (also `pnpm sim run apps/sim-cli/scenarios/console-place-undo.console`); typing the lines of F1.3's `palette-place-undo.console` into a fresh session reaches `PALETTE_PLACE_UNDO_HASH`, the literal `palette.spec.ts` asserts, with the same logged commands. The console also runs `four-surface.console` to `FOUR_SURFACE_HASH`.)_
 
 ### F1.6 Scripting API v0 and `sim-cli`
 
@@ -333,7 +333,7 @@ Numbers are assigned in landing order. Planned:
 | F1.2    | Command system                | ✅ Done                                               |
 | F1.3    | Command palette               | ✅ Done                                               |
 | F1.4    | Keybinding service            | ✅ Done                                               |
-| F1.5    | Dev console                   | 📐 Planned                                            |
+| F1.5    | Dev console                   | ✅ Done                                               |
 | F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
 | F1.7    | Cameras and interaction       | 🚧 Part 1                                             |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |

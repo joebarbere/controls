@@ -7,7 +7,7 @@ import {
 } from '@controls/feature-settings';
 import type { Platform } from '@controls/platform-api';
 import { defaultSettings } from '@controls/save-format';
-import { screen } from '@testing-library/dom';
+import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
 import { provideSettingsFromPlatform } from './app.config';
@@ -118,6 +118,33 @@ describe('App', () => {
     expect(tool()).toBe('2: Crate');
   });
 
+  it('toggles the dev console with backtick from the viewport and from inside it (F1.5)', async () => {
+    // jsdom has no layout: CodeMirror measures text with Range rects (ui caveats).
+    Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+    Range.prototype.getBoundingClientRect ??= () => new DOMRect();
+    const { fixture, user } = await setup();
+    const session = TestBed.inject(Session);
+    expect(session.isEnabled('console.toggle')).toBe(false); // not in the main menu
+    await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    expect(session.isEnabled('console.toggle')).toBe(true);
+    const canvas = document.querySelector('ctl-viewport canvas');
+    expect(document.activeElement).toBe(canvas);
+    await waitFor(() => expect(document.querySelector('[data-editor="ready"]')).toBeTruthy());
+
+    await user.keyboard('[Backquote]'); // by code: user-event's key map has no backtick
+    await fixture.whenStable();
+    const input = screen.getByRole('textbox', { name: 'Console input' });
+    expect(document.activeElement).toBe(input);
+
+    await user.keyboard('[Backquote]'); // a global binding: it fires while typing in the console, and types nothing
+    await fixture.whenStable();
+    expect(input.textContent).toBe('');
+    expect(screen.queryByRole('region', { name: 'Console' })).toBeNull(); // collapsed
+    expect(document.activeElement).toBe(canvas);
+    expect(session.entries()).toEqual([]); // console.toggle is UI chrome: never logged
+  });
+
   it('does not open the menu for an Escape an inner handler already consumed', async () => {
     const { fixture, user } = await setup();
     await user.keyboard('{Enter}'); // New sandbox
@@ -163,7 +190,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Reset layout' }));
     await fixture.whenStable();
     expect(screen.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow')).toBe('320');
-    expect(screen.getByRole('status').textContent).toContain('Layout reset.');
+    expect(screen.getAllByRole('status').map((s) => s.textContent)).toContainEqual(
+      expect.stringContaining('Layout reset.'),
+    );
   });
 
   it('restores a stored layout at start-up, and ignores an unrecognised one', async () => {

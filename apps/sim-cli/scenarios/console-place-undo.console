@@ -1,0 +1,2 @@
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200
+edit.undo

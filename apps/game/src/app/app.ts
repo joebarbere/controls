@@ -5,10 +5,12 @@ import {
   computed,
   inject,
   Injector,
+  isDevMode,
   resource,
   signal,
   viewChild,
 } from '@angular/core';
+import { DevConsoleComponent, isConsoleAvailable } from '@controls/feature-console';
 import { AboutDialog, Hud, MainMenu, NotificationService, Notifications, ShellState } from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
@@ -24,7 +26,17 @@ import { PLATFORM } from './platform.token';
  */
 @Component({
   selector: 'ctl-root',
-  imports: [Workspace, MainMenu, AboutDialog, SettingsDialog, Hud, Notifications, Button, CommandPalette],
+  imports: [
+    Workspace,
+    MainMenu,
+    AboutDialog,
+    SettingsDialog,
+    Hud,
+    Notifications,
+    Button,
+    CommandPalette,
+    DevConsoleComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
   template: `
@@ -37,6 +49,7 @@ import { PLATFORM } from './platform.token';
       (backendChange)="backend.set($event)"
     >
       <button ctlButton="ghost" type="button" ctlWorkspaceToolbar (click)="openMenu()">Menu</button>
+      <ctl-dev-console ctlBottomPanel [available]="consoleAvailable()" />
       @if (!shell.menuOpen()) {
         <ctl-hud
           ctlViewportOverlay
@@ -99,6 +112,14 @@ export class App {
   /** Mode and selection from the renderer, for the HUD. */
   protected readonly viewState = computed(() => this.workspace()?.viewState());
   private readonly injector = inject(Injector);
+  /** The dev console (F1.5): Sandbox and dev builds, while the workspace shows. Every P1 game is a sandbox. */
+  protected readonly consoleAvailable = computed(() =>
+    isConsoleAvailable({
+      inWorkspace: !this.shell.menuOpen(),
+      sessionKind: this.shell.sessionActive() ? 'sandbox' : null,
+      devBuild: isDevMode(),
+    }),
+  );
 
   protected newSandbox(): void {
     this.shell.newSandbox();

@@ -19,6 +19,7 @@ describe('paletteItems', () => {
       'view.resetLayout',
       'edit.redo',
       'edit.undo',
+      'console.toggle', // disabled here: console.available is unset
     ]);
     expect(ids(items)).not.toContain('palette.open');
     expect([...PALETTE_HIDDEN_COMMANDS]).toEqual(['palette.open']);

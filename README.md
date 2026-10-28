@@ -28,6 +28,7 @@ What exists today (Phase 0 scaffold):
 - Rebindable keys for every command and every movement key (Settings → Key bindings…), with conflicts shown rather than hidden and `Mod` as Cmd on macOS. Keys never fire while you type.
 - A tool belt: keys 1–9 pick a slot, and the HUD shows what it holds.
 - A command palette (Ctrl+K or Ctrl+Shift+P, Cmd on macOS): fuzzy search over every command, recent commands first, unavailable ones shown with the reason, and a form for each command's arguments with inline validation. Cheats ask before they mark your world as assisted. Works with the arrow keys, Enter and Esc alone.
+- A dev console (backtick) in Sandbox and dev builds: type `verb.noun --flag value` lines with Tab completion for commands, flags and values, recall earlier lines with ↑/↓ (kept across restarts), read `help [id]` generated from the commands themselves, print `world.hash`, and `run` a console-line file you pick or drop. Errors point at the column, and a banner warns before a cheat marks the save as assisted.
 
 ### Rendering
 
@@ -41,7 +42,7 @@ What exists today (Phase 0 scaffold):
 - One command registry for every way of changing the world. Commands validate their arguments, and invalid ones change nothing. Undo and redo cover every world change, and deleting then undoing brings an object back with the same id.
 - A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
 - `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
-- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. Keybindings and the command palette drive commands today; the console arrives next.
+- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. Keybindings, the command palette and the dev console drive commands today.
 - A scripting API: TypeScript scripts and console-line files (`entity.move 1 --positionMm.x 150 …`) drive the game through the same registry as the UI, which itself runs on the same `Game` object, so every surface reaches the same `world.hash`.
 
 ### Saves
@@ -129,7 +130,7 @@ libs/
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
   ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
-  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec)
+  features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec), console (dev console)
   platform/        api (interfaces), electron and web implementations
 docs/  plans/  tools/  .claude/
 ```

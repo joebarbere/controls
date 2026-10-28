@@ -41,6 +41,8 @@ interface SchemaDef {
 }
 
 const WRAPPERS = new Set(['optional', 'default', 'prefault', 'nullable', 'readonly', 'catch', 'nonoptional']);
+/** Wrappers that let a key be left out (for help and completion only; `exec` decides). */
+const OPTIONAL_WRAPPERS = new Set(['optional', 'default', 'prefault']);
 /** Same as the JSON-number grammar (no leading zeros, no `+`, no hex). */
 const NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -55,16 +57,20 @@ function defOf(schema: z.ZodType): SchemaDef {
  * Strips optional/default/nullable/pipe wrappers down to the schema that decides a word's type, and
  * notes whether a wrapper accepts `null` (so `--x null` works for a nullable number).
  */
-function unwrap(schema: z.ZodType): { def: SchemaDef; nullable: boolean } {
+function unwrap(schema: z.ZodType): { def: SchemaDef; nullable: boolean; optional: boolean; inner: z.ZodType } {
+  let inner = schema;
   let def = defOf(schema);
   let nullable = false;
+  let optional = false;
   for (let depth = 0; depth < 16; depth++) {
     if (def.type === 'nullable') nullable = true;
-    if (WRAPPERS.has(def.type) && def.innerType) def = defOf(def.innerType);
-    else if (def.type === 'pipe' && def.in) def = defOf(def.in);
+    if (OPTIONAL_WRAPPERS.has(def.type)) optional = true;
+    if (WRAPPERS.has(def.type) && def.innerType) inner = def.innerType;
+    else if (def.type === 'pipe' && def.in) inner = def.in;
     else break;
+    def = defOf(inner);
   }
-  return { def, nullable };
+  return { def, nullable, optional, inner };
 }
 
 class MappingError extends Error {
@@ -217,6 +223,98 @@ export function parseConsoleCommand<S>(registry: CommandRegistry<S>, source: str
   }
   const mapped = consoleArgs(def.args, parsed.line);
   return mapped.ok ? { ok: true, command: { id: def.id, args: mapped.args } } : mapped;
+}
+
+/** How a console word for a field is typed (see `consoleArgs`). `object` fields are given by their fields. */
+export type ConsoleFieldKind = 'number' | 'boolean' | 'string' | 'enum' | 'other';
+
+/** One flag a command accepts: what `help` documents and what Tab completion offers (F1.5). */
+export interface ConsoleField {
+  /** Dotted flag path without `--`, e.g. `positionMm.x`. */
+  readonly path: string;
+  readonly kind: ConsoleFieldKind;
+  /** Allowed values of an enum or literal field, in declaration order; `[true, false]` for booleans. */
+  readonly values: readonly (string | number | boolean)[];
+  /** The key (or an object around it) may be left out: optional, or has a default. */
+  readonly optional: boolean;
+  /** `null` is accepted. */
+  readonly nullable: boolean;
+  /** 0-based position for a top-level scalar key that can be given positionally, else `null`. */
+  readonly position: number | null;
+  /** Numeric bounds, where the schema declares them. */
+  readonly min: number | null;
+  readonly max: number | null;
+  /** The field's `.describe()` / `.meta({ description })`, if any. */
+  readonly description: string | null;
+}
+
+interface NumberBounds {
+  readonly minValue?: number | null;
+  readonly maxValue?: number | null;
+  readonly description?: string;
+}
+
+function fieldKind(def: SchemaDef): Pick<ConsoleField, 'kind' | 'values'> {
+  switch (def.type) {
+    case 'number':
+      return { kind: 'number', values: [] };
+    case 'boolean':
+      return { kind: 'boolean', values: [true, false] };
+    case 'string':
+    case 'template_literal':
+      return { kind: 'string', values: [] };
+    case 'enum': {
+      const entries = (def as SchemaDef & { entries?: Readonly<Record<string, string | number>> }).entries ?? {};
+      return { kind: 'enum', values: Object.values(entries) };
+    }
+    case 'literal': {
+      const values = (def.values ?? []).filter(
+        (v): v is string | number | boolean => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+      );
+      return { kind: 'enum', values };
+    }
+    default:
+      return { kind: 'other', values: [] };
+  }
+}
+
+/**
+ * Every flag path `consoleArgs` accepts for `schema` (a command's `args`), depth first in key
+ * declaration order, so completion and `help` can never offer a flag the mapping would reject.
+ * Object-valued keys are expanded into their fields (an object is given as dotted flags).
+ */
+export function consoleFields(schema: z.ZodType): ConsoleField[] {
+  const fields: ConsoleField[] = [];
+  const walk = (node: z.ZodType, prefix: string, optionalParent: boolean, depth: number) => {
+    const shape = shapeOf(node);
+    if (!shape || depth > 16) return;
+    Object.keys(shape).forEach((key, index) => {
+      if (FORBIDDEN_KEYS.has(key) || !FLAG_SEGMENT.test(key)) return;
+      const path = prefix ? `${prefix}.${key}` : key;
+      const { def, nullable, optional, inner } = unwrap(shape[key]);
+      if (def.type === 'object') {
+        walk(shape[key], path, optionalParent || optional, depth + 1);
+        return;
+      }
+      const meta = inner as unknown as NumberBounds;
+      const outer = shape[key] as unknown as NumberBounds;
+      // `z.int()` reports the safe-integer range as its bounds; that isn't a declared bound.
+      const bound = (v: number | null | undefined) =>
+        typeof v === 'number' && Number.isFinite(v) && Math.abs(v) !== Number.MAX_SAFE_INTEGER ? v : null;
+      fields.push({
+        path,
+        ...fieldKind(def),
+        optional: optionalParent || optional,
+        nullable,
+        position: prefix ? null : index,
+        min: def.type === 'number' ? bound(meta.minValue) : null,
+        max: def.type === 'number' ? bound(meta.maxValue) : null,
+        description: outer.description ?? meta.description ?? null,
+      });
+    });
+  };
+  walk(schema, '', false, 0);
+  return fields;
 }
 
 /** Thrown by {@link formatConsoleLine} for args the grammar can't express (arrays, empty objects, non-finite numbers). */

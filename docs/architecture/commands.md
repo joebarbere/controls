@@ -12,7 +12,7 @@ flowchart LR
     BTN["UI buttons<br/>(Reset layout)"] --> SES
     PAL["CommandPalette (F1.3)<br/>forms from Zod args"] --> SES
     KEY["KeybindingService (F1.4)<br/>document keydown"] --> SES
-    CON["Console (F1.5)"]:::later --> SES
+    CON["Console (F1.5)"] --> SES
     SES["feature-session<br/>Session: world signal, exec, context keys"] --> GAME
     SCR["sim-cli scripts and .console files (F1.6)"] --> GAME
     GAME["scripting-api Game<br/>exec, world(), hash(), on()"] --> BUS

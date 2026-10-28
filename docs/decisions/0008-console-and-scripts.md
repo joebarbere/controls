@@ -1,6 +1,6 @@
 # ADR 0008: Console grammar, CodeMirror 6, and where scripts may run
 
-**Status:** Accepted for the grammar and the script boundary (F1.6). The CodeMirror 6 section is a placeholder that F1.5 completes.
+**Status:** Accepted. The grammar and the script boundary landed with F1.6; the CodeMirror 6 section with F1.5.
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.5, F1.6 and the kickoff decisions; [ADR 0006](0006-command-system.md) (commands, `when`, replay); [ADR 0007](0007-world-document-v1.md) (world document, hash, replay log)
 
@@ -104,7 +104,33 @@ The registry already gives every command a Zod `args` object, so the console nee
 
 ### CodeMirror 6 in the in-game console (F1.5)
 
-> **To be completed by F1.5.** Record here: the CodeMirror 6 packages and versions, how the editor is configured under the strict CSP (style injection, `style-src 'unsafe-inline'`), how completion uses the registry (ids, flag names from the args shape, enum values), how parse errors from `parseConsoleLine` / `parseConsoleCommand` are shown at their column, history storage in settings, the `help` and `run` verbs, and the cheat warning banner. The grammar above is fixed; F1.5 consumes it and doesn't change it without amending this ADR.
+The console lives in `@controls/feature-console` (architecture: [dev console](../architecture/console.md)). It consumes the grammar above unchanged.
+
+**Packages.** Only `@codemirror/state` (~6.7.6) and `@codemirror/view` (~6.43.15), both MIT, plus their MIT dependencies `style-mod`, `w3c-keyname`, `crelt` and `@marijn/find-cluster-break`. No `@codemirror/language`, `commands` or `autocomplete`:
+
+- the input is one line, so there is nothing to highlight or indent; native contenteditable editing (typing, deleting, caret movement, select-all) is enough, and the keys the console owns (Enter, ↑, ↓, Tab, Escape) are a five-entry `keymap`;
+- `@codemirror/autocomplete` would pull `language` and Lezer for a popup the console doesn't need. Completion is shell-style instead (below), with the candidates in the hint line and the result announced in a polite `role="status"` region;
+- the editor is loaded with a dynamic `import()` when the console first becomes available. It is a separate chunk (about 208 kB raw, 60 kB gzipped), which keeps the initial bundle under its 2 MB budget.
+
+**CSP.** CodeMirror never evaluates code. It does inject styles: `style-mod` mounts its rules in a `<style>` element in `document.head` (it uses constructable stylesheets only inside a shadow root), and the editor sets inline `style` attributes on its own elements. Both are allowed by the existing `style-src 'self' 'unsafe-inline'`, which Angular's component styles already need, so **F1.5 doesn't change the CSP**. `apps/desktop-e2e` opens the console in Electron under the real `app://` CSP, runs a line, checks CodeMirror's styles applied and asserts no `securitypolicyviolation`. If the CSP ever drops `'unsafe-inline'` for nonces, `EditorView.cspNonce` passes the same nonce to `style-mod` (Angular has `CSP_NONCE`); the inline `style` attributes would then need `'unsafe-hashes'` or a CodeMirror without them, so check that before tightening.
+
+**Editor setup.** A one-line document (a transaction filter turns pasted line breaks into spaces), the console's keymap, an error-mark field, a theme on the design tokens, and content attributes: `role="textbox"` (CodeMirror's), `aria-label="Console input"`, `aria-multiline="false"`, `aria-describedby` the hint line and a live `aria-invalid`. CodeMirror's base theme removes the outline from `.cm-content`, so the console theme restores the global 2 px focus outline on `.cm-content:focus-visible`. The keybinding service already treats `.cm-editor` as a typing target, so only global bindings fire inside it.
+
+**Completion.** Tab completes the word before the cursor, read from the registry: command ids plus the console words for the first word (and after `help`), flag names after `-` (from `consoleFields(def.args)`, the same walk over the args shape `consoleArgs` uses, minus flags already given), and the values of enum, literal and boolean fields after their flag or in their positional slot. One candidate is inserted with a space; several extend to their common prefix, and when that adds nothing, Tab cycles through them, with the list in the hint line. Inside a quote, a comment, a free-text value or an unknown command there is nothing to complete. **On an empty line Tab moves focus on**, so the input never traps the keyboard; Shift+Tab is never captured.
+
+**Errors at a column.** `resolveConsoleLine` returns the `ConsoleError` from `parseConsoleLine` or `parseConsoleCommand` unchanged. The console keeps the line, underlines the word starting at that column (a CodeMirror mark decoration), puts the caret there, sets `aria-invalid="true"`, and shows `Column N: message` in the hint line and in the output log (with the line and a caret under the column). The mark clears on the next edit. Errors from `exec` (bounds, refusals) are shown with `describeExecError`.
+
+**History.** Every submitted, non-blank line goes to settings `console.history` (oldest first), including lines with errors so they can be fixed. `appendHistory` writes within the schema's caps (200 lines of at most 2,000 characters, well-formed strings, no repeat of the newest), because one over-cap value makes the whole settings file fall back. A line longer than 2,000 characters still runs (the parser allows 4,096) but isn't kept. ↑ and ↓ walk it like a shell and give back the draft past the newest line.
+
+**Console words.** `help`, `run` and `clear` are handled before the registry; `world.hash` is the shared query from `CONSOLE_QUERIES`, and a registered command with that id would win. None is logged.
+
+- `help` lists every registered command (id, title, its keys from the keybinding service, a cheat marker) and the console words. `help <id>` shows a command's title and category, a usage line, each flag with its type (number bounds, enum values, `true|false`), whether it is optional and its positional slot, its keys, `when`, whether it is undoable and whether it is a cheat. All of it is generated from the `CommandDef` and its args schema.
+- `run` takes no argument. It opens a file picker (or the player drops a file on the console, or uses the Run file button). The renderer can't open file paths until save I/O (F1.8b), so `run <path>` is an error that says so; the file input works the same in the web harness and in Electron's sandboxed renderer, which shows the native dialog. The file (at most 1 MiB) is read as text and run with `runConsoleScript`. Console words other than `world.hash` aren't valid in a file.
+- `clear` empties the output.
+
+**Cheats.** Before a `cheat: true` command runs in a world that isn't assisted yet, the console holds it and shows a warning banner (`role="alert"`): running it marks the save as assisted, permanently. Enter on the unchanged line or Run cheat confirms; Escape, Cancel or another line drops it, and nothing runs or is logged. A console-line file that contains a cheat is checked the same way before any of it runs. Once the world is assisted there is nothing left to warn about, so cheats run directly. The assisted flag itself is set by the bus (ADR 0006).
+
+**Toggle and gating.** `console.toggle` is a view command (no world change, and not in the replay log: UI-chrome toggles use `logged: false`, the same rule as `palette.open`, ADR 0006) with the default key `Backquote`, `globalKeybinding: true` and `when: console.available`. Because it is global, backtick closes the console from inside its own input, as in most games' consoles; the cost is that a literal backtick can't be typed there (no part of the grammar needs one, and rebinding the toggle frees the key). The `console.available` context key is true in a Sandbox or a dev build while the workspace is on screen; elsewhere the backtick does nothing and the console shows a note instead of the input.
 
 ## Consequences
 

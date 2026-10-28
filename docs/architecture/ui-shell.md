@@ -1,6 +1,6 @@
 # UI shell
 
-> **Status (F1.3):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)), the keybinding service, the Key bindings dialog and the tool belt in F1.4, and the command palette (`feature-palette`) in F1.3. The console (F1.5) is still to come. Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
+> **Status (F1.5):** the shell, workspace, settings screen, HUD, notifications and theming exist. The command registry and `feature-session` landed in F1.2 ([commands](commands.md)), the keybinding service, the Key bindings dialog and the tool belt in F1.4, the command palette (`feature-palette`) in F1.3, and the dev console in F1.5 ([dev console](console.md)). Settings persist on both platforms (below). Reset layout runs the `view.resetLayout` command, and the HUD's assisted badge reads the world's `assisted` flag from the session. Gotchas: [UI caveats](../caveats/ui.md). Docking choice: [ADR 0005](../decisions/0005-docking-workspace.md).
 
 ## Libraries
 
@@ -18,14 +18,15 @@ flowchart LR
     REND["renderer"]:::done
     SESS["feature-session<br/>Session · KeybindingService · ToolBelt"]:::done
     PAL["feature-palette<br/>CommandPalette · PaletteArgForm<br/>buildArgForm · paletteItems · fuzzy"]:::done
-    CON["feature-console (F1.5)"]:::later
+    CON["feature-console (F1.5)<br/>DevConsoleComponent · DevConsole<br/>CodeMirror 6 input (lazy)"]:::done
 
     GAME --> SHELL & WS & SET & UI & PAPI & SESS & PAL
     SET --> SHELL & UI & PAPI & SESS
     SHELL --> UI
     WS --> UI & REND & SESS
     PAL --> UI & SESS & SET
-    CON -.-> SESS
+    CON --> SESS & SET & UI
+    GAME --> CON
 ```
 
 `ui` is presentational: it holds no services, state or commands. Features may use each other (`feature-settings` uses `NotificationService` from `feature-shell`), but none of them imports a concrete platform. The app provides `PLATFORM` (Electron bridge or web harness) and will provide the real `SETTINGS_SERVICE`.
@@ -71,7 +72,7 @@ flowchart TB
             INS["Inspector<br/>[ctlInspector]"]
         end
         HS["ctl-splitter horizontal"]
-        BOT["Console panel<br/>[ctlBottomPanel] (F1.5)"]
+        BOT["Console panel<br/>[ctlBottomPanel]: ctl-dev-console (F1.5)"]
     end
     TB --> row --> HS --> BOT
 ```
@@ -79,6 +80,7 @@ flowchart TB
 - `WorkspaceLayout` is plain JSON: `{ inspector: { size, collapsed }, bottom: { size, collapsed } }`, with integer CSS pixels clamped by `normaliseLayout` (inspector 200–640, bottom 96–560, and at most 60 % of the window in CSS).
 - It is two-way bound to `settings.workspace.layout`, so it persists once F1.8a wires the storage.
 - Splitters follow the WAI-ARIA window-splitter pattern: arrows resize (Shift for big steps), Home/End jump to the limits, and Enter collapses or restores. Pointer drags use pointer capture.
+- **`console.toggle`** (backtick) is applied by the workspace too: it expands the bottom panel and focuses its `[data-autofocus]` element, or collapses it and restores focus when focus is already inside. See [dev console](console.md).
 - **Reset layout** runs the `view.resetLayout` view command through `Session.exec`. The workspace applies it when the command reports back (`Session.onCommand`), so any surface that runs the command resets the layout. It is logged and never changes the world hash.
 
 ## Keybindings and the tool belt

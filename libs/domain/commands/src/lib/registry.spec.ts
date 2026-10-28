@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { editCommands, NoArgs, viewCommands } from './builtin';
+import { CONSOLE_AVAILABLE_KEY, editCommands, NoArgs, viewCommands } from './builtin';
 import { type CommandDef, succeed } from './command';
 import { CommandRegistrationError, CommandRegistry } from './registry';
 
@@ -105,6 +105,7 @@ describe('CommandRegistry', () => {
   it('registers the built-in edit and view commands', () => {
     const registry = new CommandRegistry<number>().registerAll(editCommands<number>()).registerAll(viewCommands());
     expect(registry.list().map((c) => [c.id, c.category, c.keybinding ?? null, c.undoable])).toEqual([
+      ['console.toggle', 'View', 'Backquote', false],
       ['edit.redo', 'Edit', 'Mod+Shift+Z', false],
       ['edit.undo', 'Edit', 'Mod+Z', false],
       ['palette.open', 'View', ['Mod+K', 'Mod+Shift+P'], false],
@@ -113,6 +114,11 @@ describe('CommandRegistry', () => {
     ]);
     expect(registry.isEnabled('edit.undo', { 'history.canUndo': false })).toBe(false);
     expect(registry.isEnabled('edit.redo', { 'history.canRedo': true })).toBe(true);
+    // The console toggle is gated by its context key and fires while typing (global).
+    expect(registry.isEnabled('console.toggle', {})).toBe(false);
+    expect(registry.isEnabled('console.toggle', { [CONSOLE_AVAILABLE_KEY]: true })).toBe(true);
+    expect(registry.get('console.toggle')?.globalKeybinding).toBe(true);
+    expect(registry.get('console.toggle')?.logged).toBe(false); // UI chrome, like palette.open
   });
 
   it('rejects args of the wrong shape in NoArgs (strict)', () => {

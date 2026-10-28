@@ -35,7 +35,8 @@
       "@controls/feature-workspace": ["./libs/features/workspace/src/index.ts"],
       "@controls/feature-settings": ["./libs/features/settings/src/index.ts"],
       "@controls/feature-session": ["./libs/features/session/src/index.ts"],
-      "@controls/feature-palette": ["./libs/features/palette/src/index.ts"]
+      "@controls/feature-palette": ["./libs/features/palette/src/index.ts"],
+      "@controls/feature-console": ["./libs/features/console/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
