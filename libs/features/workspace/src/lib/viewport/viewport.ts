@@ -44,8 +44,10 @@ const TEST_HOOK = '__controlsViewport';
 
 /**
  * Hosts one canvas for the framework-free {@link ViewportRenderer}. The renderer runs its own
- * animation loop and input handling; with zoneless change detection nothing here re-renders per
- * frame. Only view state (mode, hover, selection) and twice-a-second dev stats reach signals.
+ * on-demand render loop and input handling (it draws only when something changed; behind the main
+ * menu it draws once and idles); with zoneless change detection nothing here re-renders per frame.
+ * Only view state (mode, hover, selection) and the dev stats (twice a second while drawing, then
+ * once "idle") reach signals. The HUD shows what a frame costs, not the gap between frames.
  * Mode and selection are shown by the shell HUD (`ctl-hud`, fed from `state`); the frame-time dev
  * HUD and the crosshair (walk mode, or a ghost aimed by the reticle) stay here.
  *
@@ -81,7 +83,16 @@ const TEST_HOOK = '__controlsViewport';
     }
     @if (showHud && stats(); as st) {
       <div class="dev-hud" data-testid="dev-hud" aria-hidden="true">
-        {{ st.avgMs.toFixed(1) }} ms · worst {{ st.worstMs.toFixed(1) }} · {{ st.fps.toFixed(0) }} fps ·
+        @if (st.idle) {
+          idle · last frame {{ st.lastMs.toFixed(1) }} ms ·
+        } @else {
+          {{ st.avgMs.toFixed(1) }} ms · worst {{ st.worstMs.toFixed(1) }} ·
+          @if (st.fps > 0) {
+            {{ st.fps.toFixed(0) }} fps ·
+          } @else {
+            {{ st.windowFrames }} frames ·
+          }
+        }
         {{ st.drawCalls }} draws · {{ st.geometries }} geo · {{ st.bvhs }} bvh
       </div>
     }
