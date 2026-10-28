@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { createWorld } from '@controls/save-format';
 import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
-import { Session } from './session';
+import { SANDBOX_LEVEL, Session } from './session';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = { ref: crate, positionMm: { x: 10, y: 0, z: -20 } };
@@ -110,6 +110,51 @@ describe('Session', () => {
     expect(replayed.ok && replayed.game.hash()).toBe(session.hash());
     // The session's world is the game's frozen snapshot.
     expect(Object.isFrozen(session.world())).toBe(true);
+  });
+
+  describe('the sandbox level (F1.9)', () => {
+    const bench = {
+      id: 'bench',
+      ref: { id: 'prop.bench', version: 1 },
+      transform: { positionMm: { x: 700, y: -1200, z: 80 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+      extensions: {},
+    };
+    const level = { ...createWorld({ seed: 0 }), fixtures: [bench] };
+    const withLevel = (json: unknown) => {
+      TestBed.configureTestingModule({ providers: [{ provide: SANDBOX_LEVEL, useValue: json }] });
+      return TestBed.inject(Session);
+    };
+
+    it('shows the level behind the menu, and New sandbox starts a game on it with a fresh history and log', () => {
+      const session = withLevel(JSON.parse(JSON.stringify(level)));
+      expect(session.world()).toEqual(level);
+      expect(session.generation()).toBe(1);
+      session.exec('entity.place', place);
+      expect(session.canUndo()).toBe(true);
+
+      session.newSandbox({ seed: 4_294_967_295, difficulty: 'realistic' });
+      expect(session.world()).toEqual({ ...level, seed: 4_294_967_295, difficulty: 'realistic' });
+      expect(session.world().fixtures).toEqual([bench]);
+      expect(session.entries()).toEqual([]);
+      expect(session.canUndo()).toBe(false);
+      expect(session.replayLog().initialWorld.seed).toBe(4_294_967_295);
+      expect(session.generation()).toBe(2);
+
+      // The same seed is the same world, so the same hash (a typed seed reproduces a session).
+      const first = session.hash();
+      session.newSandbox({ seed: 4_294_967_295, difficulty: 'realistic' });
+      expect(session.hash()).toBe(first);
+      expect(() => session.newSandbox({ seed: -1 })).toThrow();
+    });
+
+    it('falls back to an empty world (and says so) when the level does not load', () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const session = withLevel({ schemaVersion: 1, fixtures: 'nope' });
+      expect(session.world()).toEqual(createWorld({ seed: 0 }));
+      expect(error).toHaveBeenCalledOnce();
+      session.newSandbox({ seed: 3 });
+      expect(session.world()).toEqual(createWorld({ seed: 3 }));
+    });
   });
 
   it('exposes the test hook only with ?e2e=1', () => {

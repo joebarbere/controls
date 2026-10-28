@@ -3,7 +3,7 @@ import { metresToMm } from '@controls/units';
 import type { ViewMode } from './cameras/camera-math';
 import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
-import type { SceneGraphNode } from './panel-scene';
+import type { SceneGraphNode } from './scene';
 import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
 import { FrameTimer, type FrameTiming } from './stats/frame-timer';
 import {
@@ -34,6 +34,8 @@ export interface ViewportStats extends FrameTiming {
   readonly entities: number;
   /** Shared prop recipes alive (geometry + material pairs); back to 0 when no prop is drawn. */
   readonly recipes: number;
+  /** Level fixtures drawn (floor, walls, bench, backplate, rails). */
+  readonly fixtures: number;
 }
 
 const STATS_INTERVAL_MS = 500;
@@ -122,6 +124,11 @@ export class ViewportRenderer {
     return this.controller?.projectMm(p);
   }
 
+  /** Back to the starting view (work mode, initial focus, nothing selected): a new session. */
+  resetView(): void {
+    this.controller?.resetView();
+  }
+
   setMode(mode: ViewMode): void {
     this.controller?.setMode(mode);
   }
@@ -177,6 +184,7 @@ export class ViewportRenderer {
       bvhs: this.controller?.bvhCount ?? 0,
       entities: this.controller?.entityCount ?? 0,
       recipes: this.controller?.recipeCount ?? 0,
+      fixtures: this.controller?.fixtureCount ?? 0,
     };
   }
 

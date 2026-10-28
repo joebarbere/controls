@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { enterSeed } from './support/sandbox';
 
 // F1.1: settings persist across a reload in the web harness (localStorage), and an unreadable
 // stored document falls back to defaults with a warning.
@@ -17,6 +18,7 @@ test('a settings change and the panel layout survive a reload', async ({ page })
   await settings.getByRole('button', { name: 'Back' }).click();
 
   await menu.getByRole('button', { name: 'New sandbox' }).click();
+  await enterSeed(page);
   const splitter = page.getByRole('separator', { name: 'Resize inspector' });
   await splitter.focus();
   await page.keyboard.press('Shift+ArrowLeft');
@@ -33,6 +35,7 @@ test('a settings change and the panel layout survive a reload', async ({ page })
   await expect(settings.getByRole('combobox', { name: 'Default for new games' })).toHaveValue('realistic');
   await page.keyboard.press('Escape');
   await menu.getByRole('button', { name: 'New sandbox' }).click();
+  await enterSeed(page);
   await expect(page.getByRole('separator', { name: 'Resize inspector' })).toHaveAttribute('aria-valuenow', '384');
 });
 

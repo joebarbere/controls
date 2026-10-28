@@ -135,6 +135,8 @@ export interface FocusTarget {
   readonly center: Vec3;
   readonly radius: number;
   readonly normal: SurfaceNormal;
+  /** Camera elevation above level, radians (a bench is framed from above). Default 0. */
+  readonly elevation?: number;
 }
 
 /** Orbit set-up for work mode, in the shape OrbitControls wants. */
@@ -187,9 +189,11 @@ export function workOrbitFor(focus: FocusTarget, verticalFovDeg: number, aspect:
   const d = fitDistance(focus.radius, verticalFovDeg, aspect) * WORK_LIMITS.framingMargin;
   const n = NORMAL_VEC[focus.normal];
   const az = NORMAL_AZIMUTH[focus.normal];
+  const e = Math.min(Math.max(focus.elevation ?? 0, -WORK_LIMITS.polarHalfRangeRad), WORK_LIMITS.polarHalfRangeRad);
+  const h = d * Math.cos(e);
   return {
     target: { ...focus.center },
-    position: { x: focus.center.x + n.x * d, y: focus.center.y, z: focus.center.z + n.z * d },
+    position: { x: focus.center.x + n.x * h, y: focus.center.y + d * Math.sin(e), z: focus.center.z + n.z * h },
     minDistance: Math.min(WORK_LIMITS.minDistanceM, d),
     maxDistance: d * WORK_LIMITS.maxDistanceFactor,
     minPolarAngle: Math.PI / 2 - WORK_LIMITS.polarHalfRangeRad,

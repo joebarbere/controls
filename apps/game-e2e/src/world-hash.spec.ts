@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startSandbox } from './support/sandbox';
 
 /**
  * F1.2: `world.hash` is identical in Node and Chromium. The golden values below are the SAME
@@ -6,9 +7,25 @@ import { expect, test, type Page } from '@playwright/test';
  * game computes them in Chromium through the `?e2e=1` session hook. Change both or neither.
  */
 const GOLDEN = {
-  emptySeed0: 'e5e9a9fcd6ab93f0ae928adfc86c01c20c83230a668775fa886e98351ef7a047',
-  propsAndExtensionsFixture: '3f250d0db76728961bc71836cd4162044554bbc13b75337b2fe42c24035edf13',
-  scenario: '598d80f324bc32138de0de821dccade85e722a8bc8e0d27cc8fa854652a2a3cf',
+  emptySeed0: '2480470b706e39a15e962b7106a5eb37b3e8e03adf78199d8e007c1299fe0534',
+  propsAndExtensionsFixture: 'a51879789f4e0e693b7d56e1fd2a59e836c22b62839fbdce6ec261a6d384c5ac',
+  scenario: '99990dfb229d89bd028a57439bc21de31868a13434eee41a91c8088d78737526',
+  /** `content/levels/workshop.json` (seed 0): the world the game boots with, and New sandbox with seed 0 (F1.9). */
+  workshopSeed0: 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825',
+};
+
+/** `libs/domain/save-format/fixtures/v1/world/empty.json`: `createWorld({ seed: 0 })`. */
+const EMPTY_SEED_0 = {
+  schemaVersion: 1,
+  seed: 0,
+  tick: 0,
+  nextEntityId: 1,
+  regionId: 'nec',
+  difficulty: 'apprentice',
+  assisted: false,
+  fixtures: [],
+  entities: [],
+  extensions: {},
 };
 
 /** `libs/domain/save-format/fixtures/v1/world/props-and-extensions.json` (unicode, floats, extensions). */
@@ -20,6 +37,20 @@ const PROPS_AND_EXTENSIONS = {
   regionId: 'nec',
   difficulty: 'realistic',
   assisted: true,
+  fixtures: [
+    {
+      id: 'bench',
+      ref: { id: 'prop.bench', version: 1 },
+      transform: { positionMm: { x: 700, y: -1200, z: 80 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+      extensions: {},
+    },
+    {
+      id: 'stud-wall-2',
+      ref: { id: 'prop.stud-wall', version: 1 },
+      transform: { positionMm: { x: -2500, y: -1200, z: 3000 }, orientationMdeg: { yaw: 90000, pitch: 0, roll: 0 } },
+      extensions: { 'mod.example.paint': 'primer' },
+    },
+  ],
   entities: [
     {
       id: 1,
@@ -49,7 +80,7 @@ const PROPS_AND_EXTENSIONS = {
   },
 };
 
-/** The scenario `hash.spec.ts` runs from `createWorld({ seed: 0 })`. */
+/** The scenario `hash.spec.ts` runs from the workshop level at seed 0 (the world the game boots with). */
 const SCENARIO: ReadonlyArray<readonly [string, object]> = [
   ['entity.place', { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 100, y: 0, z: -200 } }],
   [
@@ -97,7 +128,9 @@ test('world.hash in Chromium matches the Node golden values', async ({ page }) =
   await page.goto('/?e2e=1');
   await expect.poll(() => page.evaluate(() => typeof window.__controlsSession)).toBe('object');
 
-  expect(await session(page, (h) => h.hash())).toBe(GOLDEN.emptySeed0);
+  // Behind the main menu the game shows the workshop level as it is (seed 0).
+  expect(await session(page, (h) => h.hash())).toBe(GOLDEN.workshopSeed0);
+  expect(await session(page, (h, world) => h.hashWorld(world), EMPTY_SEED_0)).toBe(GOLDEN.emptySeed0);
   expect(await session(page, (h, world) => h.hashWorld(world), PROPS_AND_EXTENSIONS)).toBe(
     GOLDEN.propsAndExtensionsFixture,
   );
@@ -111,9 +144,25 @@ test('world.hash in Chromium matches the Node golden values', async ({ page }) =
   expect(await session(page, (h) => h.hash())).toBe(GOLDEN.scenario);
 });
 
+test('New sandbox with seed 0 is the workshop level unchanged; another seed changes only the seed', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1');
+  await startSandbox(page, 0);
+  await expect.poll(() => session(page, (h) => h.hash())).toBe(GOLDEN.workshopSeed0);
+  await page.keyboard.press('Escape'); // back to the menu
+  await startSandbox(page, 7);
+  const seven = await session(page, (h) => h.hash());
+  expect(seven).not.toBe(GOLDEN.workshopSeed0);
+  await page.keyboard.press('Escape');
+  await startSandbox(page, 7);
+  expect(await session(page, (h) => h.hash())).toBe(seven); // the same seed, the same world
+  expect(await session(page, (h) => h.entries())).toEqual([]); // a fresh log every time
+});
+
 test('Reset layout runs view.resetLayout: logged, world hash unchanged', async ({ page }) => {
   await page.goto('/?e2e=1');
-  await page.getByRole('button', { name: 'New sandbox' }).click();
+  await startSandbox(page);
   await expect.poll(() => page.evaluate(() => typeof window.__controlsSession)).toBe('object');
   const before = await session(page, (h) => h.hash());
 

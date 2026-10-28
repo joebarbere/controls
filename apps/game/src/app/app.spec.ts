@@ -11,6 +11,7 @@ import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
 import { provideSettingsFromPlatform } from './app.config';
+import { provideSandboxLevel } from './levels';
 import { PLATFORM } from './platform.token';
 
 describe('App', () => {
@@ -42,6 +43,7 @@ describe('App', () => {
         { provide: PLATFORM, useValue: fakePlatform },
         provideSettingsFromPlatform(),
         provideKeybindingOverridesFromSettings(),
+        provideSandboxLevel(),
       ],
     }).compileComponents();
   });
@@ -71,6 +73,8 @@ describe('App', () => {
     const canvas = () => document.querySelector('ctl-viewport canvas');
     await user.keyboard('{Enter}'); // New sandbox
     await fixture.whenStable();
+    await user.keyboard('{Enter}'); // Start, with the dialog's fresh seed
+    await fixture.whenStable();
     expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
     expect(document.activeElement).toBe(canvas()); // the canvas is the single viewport focus target
     expect(screen.getByRole('region', { name: '3D viewport' }).hasAttribute('tabindex')).toBe(false);
@@ -93,9 +97,44 @@ describe('App', () => {
     expect(document.activeElement).toBe(canvas());
   });
 
+  it('New sandbox asks for a seed and starts the workshop with it (F1.9)', async () => {
+    const { fixture, user } = await setup();
+    const session = TestBed.inject(Session);
+    await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    const dialog = screen.getByRole('dialog', { name: 'New sandbox' });
+    expect(dialog).toBeTruthy();
+    const seed = screen.getByRole('textbox', { name: 'Seed' }) as HTMLInputElement;
+    expect(document.activeElement).toBe(seed);
+    expect(seed.value).toMatch(/^\d+$/); // a fresh seed
+    await user.clear(seed);
+    await user.type(seed, '31337{Enter}');
+    await fixture.whenStable();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(session.world().seed).toBe(31337);
+    expect(session.world().fixtures.map((f) => f.id)).toContain('stud-wall');
+    expect(session.world().difficulty).toBe(TestBed.inject(SettingsStore).settings().gameplay.defaultDifficulty);
+    expect(session.entries()).toEqual([]);
+    expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
+
+    // Escape on the dialog goes back to the menu without starting anything.
+    screen.getByRole('button', { name: 'Menu' }).click();
+    await fixture.whenStable();
+    screen.getByRole('button', { name: 'New sandbox' }).focus();
+    await user.keyboard('{Enter}');
+    await fixture.whenStable();
+    await user.keyboard('{Escape}');
+    await fixture.whenStable();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New sandbox' }));
+    expect(session.world().seed).toBe(31337);
+  });
+
   it('selects tool-belt slots from the keyboard and keeps rebinding in settings (F1.4)', async () => {
     const { fixture, user } = await setup();
     await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    await user.keyboard('{Enter}'); // Start, with the dialog's fresh seed
     await fixture.whenStable();
     const tool = () => screen.getByTestId('hud-tool').textContent;
     expect(tool()).toBe('None');
@@ -127,6 +166,8 @@ describe('App', () => {
     expect(session.isEnabled('console.toggle')).toBe(false); // not in the main menu
     await user.keyboard('{Enter}'); // New sandbox
     await fixture.whenStable();
+    await user.keyboard('{Enter}'); // Start, with the dialog's fresh seed
+    await fixture.whenStable();
     expect(session.isEnabled('console.toggle')).toBe(true);
     const canvas = document.querySelector('ctl-viewport canvas');
     expect(document.activeElement).toBe(canvas);
@@ -148,6 +189,8 @@ describe('App', () => {
   it('does not open the menu for an Escape an inner handler already consumed', async () => {
     const { fixture, user } = await setup();
     await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    await user.keyboard('{Enter}'); // Start, with the dialog's fresh seed
     await fixture.whenStable();
     const canvas = document.querySelector('ctl-viewport canvas') as HTMLElement;
     canvas.addEventListener('keydown', (e) => e.preventDefault()); // as the renderer does (clear selection)
@@ -176,6 +219,8 @@ describe('App', () => {
   it('persists a layout change in settings and confirms Reset layout with a notification', async () => {
     const { fixture, user } = await setup();
     await user.click(screen.getByRole('button', { name: 'New sandbox' }));
+    await fixture.whenStable();
+    await user.click(screen.getByRole('button', { name: 'Start' }));
     await fixture.whenStable();
     screen.getByRole('separator', { name: 'Resize inspector' }).focus();
     await user.keyboard('{ArrowLeft}');
@@ -206,6 +251,8 @@ describe('App', () => {
     const { fixture, user } = await setup();
     await TestBed.inject(SettingsStore).loaded;
     await user.click(screen.getByRole('button', { name: 'New sandbox' }));
+    await fixture.whenStable();
+    await user.click(screen.getByRole('button', { name: 'Start' }));
     await fixture.whenStable();
     expect(screen.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow')).toBe('480');
     expect(screen.queryByRole('region', { name: 'Console' })).toBeNull(); // collapsed

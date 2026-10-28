@@ -214,6 +214,14 @@ export class Viewport {
     // imperative side effect. The renderer keeps them until it has started.
     effect(() => this.renderer.setBindings(this.bindings()));
     effect(() => this.renderer.syncWorld(this.session.world()));
+    // A new session (New sandbox) starts from the initial view: work mode on the backplate.
+    let generation = this.session.generation();
+    effect(() => {
+      const next = this.session.generation();
+      if (next === generation) return;
+      generation = next;
+      this.renderer.resetView();
+    });
     effect(() => this.renderer.setPlacement(this.activeProp()));
     const offIntent = this.renderer.onIntent((intent) => this.onIntent(intent));
     destroyRef.onDestroy(offIntent);

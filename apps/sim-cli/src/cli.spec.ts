@@ -1,12 +1,13 @@
 import { migrateReplayLog } from '@controls/save-format';
 import { replayGame } from '@controls/scripting-api';
-import { hashWorldDocument } from '@controls/world-model';
+import { hashWorldDocument, loadLevel, newGameWorld, worldHash } from '@controls/world-model';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type CliIo, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli, USAGE } from './cli';
 import { documentKind, readDocument } from './documents';
 import { domainAliases, isAllowedImport, WORKSPACE_ROOT } from './script-loader';
+import { WORKSHOP_LEVEL_PATH } from './testing/workshop';
 
 const fixtures = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v1');
 const worldFixture = join(fixtures, 'world/props-and-extensions.json');
@@ -50,7 +51,6 @@ describe('sim help and usage', () => {
     [['hash', 'a', '--seed', '1'], 'Unknown option --seed for "hash"'],
     [['run', 'a', '--seed'], '--seed needs a value'],
     [['run', 'a', '--seed', '1', '--seed', '2'], '--seed is given twice'],
-    [['run', 'a', '--seed', '1', '--world', 'w.json'], '--seed and --world are mutually exclusive'],
     [['run', 'a.console', '--seed', 'x'], '--seed must be an unsigned 32-bit integer'],
     [['run', 'a.console', '--seed', '4294967296'], '--seed must be an unsigned 32-bit integer'],
   ])('exits 2 for %j', async (argv, message) => {
@@ -167,6 +167,19 @@ describe('sim run', () => {
     expect((await sim('run', 'noop.console', '--world', 'gone.json')).stderr).toEqual(['sim: gone.json: ENOENT']);
     await file('bad-world.json', JSON.stringify({ schemaVersion: 1 }));
     expect((await sim('run', 'noop.console', '--world', 'bad-world.json')).stderr[0]).toMatch(/^sim: bad-world.json: /);
+  });
+
+  it('--world with --seed starts a new game on that level (New sandbox), and validates the seed first', async () => {
+    const level = await json(WORKSHOP_LEVEL_PATH);
+    const loaded = loadLevel(level);
+    if (!loaded.ok) throw new Error('workshop should load');
+    const expected = worldHash(newGameWorld(loaded.level, { seed: 42 }));
+    const result = await sim('run', await file('noop.console', ''), '--world', WORKSHOP_LEVEL_PATH, '--seed', '42');
+    expect(result).toEqual({ code: EXIT_OK, stdout: [expected], stderr: [] });
+    // Without --seed the level runs as it is (seed 0).
+    const plain = await sim('run', 'noop.console', '--world', WORKSHOP_LEVEL_PATH);
+    expect(plain.stdout).toEqual([worldHash(loaded.level)]);
+    expect((await sim('run', 'noop.console', '--world', WORKSHOP_LEVEL_PATH, '--seed', '-1')).code).toBe(EXIT_USAGE);
   });
 
   it('runs a TypeScript module script against the game', async () => {

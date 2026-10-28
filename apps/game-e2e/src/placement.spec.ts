@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { startSandbox } from './support/sandbox';
 
 /**
  * F1.7: place, move and delete with the mouse gives the same `world.hash` as the equivalent console
@@ -15,8 +16,11 @@ import { join } from 'node:path';
  *
  * F1.5 cross-check: the in-game console's `run` of the same .console file must reach MOUSE_HASH as
  * well, so the mouse, the in-game console and `sim-cli` agree.
+ *
+ * F1.9: every test starts New sandbox with seed 0 (the workshop level, `support/sandbox.ts`); the
+ * sim-cli side runs with `--world content/levels/workshop.json`.
  */
-const MOUSE_HASH = 'ea1ca89916bce0e211d21ee7a7a39c1d67997bfce884071307e4d1bbe7b1a84c';
+const MOUSE_HASH = '827d9590df526f216a734cd4015b93d2af5369e66c97b799cbbd0458edaa0997';
 
 interface Hooks {
   __controlsViewport?: {
@@ -61,7 +65,7 @@ async function screen(page: Page, canvas: Locator, x: number, y: number, z: numb
 async function open(page: Page) {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?e2e=1&renderer=webgl2');
-  await page.getByRole('button', { name: 'New sandbox' }).click();
+  await startSandbox(page);
   const viewport = page.locator('ctl-viewport');
   await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   await expect(viewport).toHaveAttribute('data-backend', 'webgl2');
@@ -143,8 +147,9 @@ test('keyboard only: pick a prop, Enter places it at the reticle, M and Enter mo
 
   // Cycle to the spool and pick it up; focus the rail first so the reticle lands on it.
   await expect.poll(() => viewportHook(page, (h) => h.selectables().map((s) => s.id))).toContain('entity-1');
-  await page.keyboard.press('BracketRight');
-  await page.keyboard.press('BracketRight');
+  // Selection cycles in code-unit id order: backboard, backplate, bench, din-rail-1, din-rail-2,
+  // entity-1, stud-wall.
+  for (let i = 0; i < 4; i++) await page.keyboard.press('BracketRight');
   await expect(viewport).toHaveAttribute('data-selected', 'din-rail-1');
   await page.keyboard.press('KeyF');
   await expect(viewport).toHaveAttribute('data-focus', 'din-rail-1');

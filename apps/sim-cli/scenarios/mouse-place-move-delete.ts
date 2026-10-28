@@ -1,5 +1,5 @@
 import type { Game } from '@controls/scripting-api';
-import { demoPanelSnapTargets, placeOnTargets, type CatalogRef, type Vec3Mm } from '@controls/world-model';
+import { placeOnTargets, worldSnapTargets, type CatalogRef, type Vec3Mm } from '@controls/world-model';
 
 /*
  * The F1.7 mouse scenario as a script that snaps exactly as the mouse does: it aims at the same
@@ -7,10 +7,11 @@ import { demoPanelSnapTargets, placeOnTargets, type CatalogRef, type Vec3Mm } fr
  * the renderer's ghost) choose the target and the snapped position. It must reach the same
  * `world.hash` as `mouse-place-move-delete.console`, which spells the positions out.
  *
- *   pnpm sim run apps/sim-cli/scenarios/mouse-place-move-delete.ts
+ *   pnpm sim run apps/sim-cli/scenarios/mouse-place-move-delete.ts --world content/levels/workshop.json
  */
 export default function mousePlaceMoveDelete(game: Game): void {
-  const targets = demoPanelSnapTargets();
+  // Snap against the world the script was given (the workshop): the same targets the renderer uses.
+  const targets = worldSnapTargets(game.world());
   const box: CatalogRef = { id: 'prop.box', version: 1 };
   const crate: CatalogRef = { id: 'prop.crate', version: 1 };
   const at = (ref: CatalogRef, cursor: Vec3Mm, keepOrientation = false) => {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startSandbox } from './support/sandbox';
 
 /**
  * F1.7 cameras, picking and selection. Drives the renderer through the `?e2e=1` test hook and
@@ -44,7 +45,7 @@ async function open(page: Page) {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?e2e=1&renderer=webgl2');
   // The game boots to the main menu over an inert viewport; start a sandbox to interact with it.
-  await page.getByRole('button', { name: 'New sandbox' }).click();
+  await startSandbox(page);
   const viewport = page.locator('ctl-viewport');
   await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   await expect(viewport).toHaveAttribute('data-backend', 'webgl2');
@@ -55,10 +56,14 @@ test('starts in work mode focused on the backplate', async ({ page }) => {
   const viewport = await open(page);
   await expect(viewport).toHaveAttribute('data-mode', 'work');
   await expect(viewport).toHaveAttribute('data-focus', 'backplate');
+  // The workshop's fixtures (F1.9), in id order; the floor is not selectable.
   expect(await hook(page, (h) => h.selectables().map((s) => `${s.kind}:${s.id}`))).toEqual([
+    'board:backboard',
     'backplate:backplate',
+    'bench:bench',
     'din-rail:din-rail-1',
     'din-rail:din-rail-2',
+    'wall:stud-wall',
   ]);
 });
 
@@ -77,8 +82,12 @@ test('keyboard: cycle selection, focus it (view.focus), toggle walk mode (view.m
   const viewport = await open(page);
   await page.locator('ctl-viewport canvas').focus();
   await page.keyboard.press('BracketRight');
+  await expect(viewport).toHaveAttribute('data-selected', 'backboard');
+  await page.keyboard.press('BracketRight');
   await expect(viewport).toHaveAttribute('data-selected', 'backplate');
   await expect(viewport).toHaveAttribute('data-selection-kind', 'backplate');
+  await page.keyboard.press('BracketRight');
+  await expect(viewport).toHaveAttribute('data-selection-kind', 'bench');
   await page.keyboard.press('BracketRight');
   await expect(viewport).toHaveAttribute('data-selected', 'din-rail-1');
   await expect(page.getByTestId('viewport-status')).toContainText('DIN rail 1');
@@ -97,7 +106,7 @@ test('keyboard: cycle selection, focus it (view.focus), toggle walk mode (view.m
   await page.keyboard.up('KeyW');
   const after = await hook(page, (h) => h.cameraPositionMm());
   expect(after?.z).toBeLessThan(before?.z ?? 0);
-  expect(after?.z).toBeGreaterThanOrEqual(250); // room bound minus body radius
+  expect(after?.z).toBeGreaterThanOrEqual(140); // the workshop floor starts at z = -110, plus the 250 mm body radius
   expect(after?.y).toBe(400); // floor −1200 mm + 1600 mm eye height
 });
 
@@ -109,7 +118,11 @@ test('mouse: BVH hover and click-to-select on the panel', async ({ page }) => {
   await expect(viewport).toHaveAttribute('data-hovered', 'backplate');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(viewport).toHaveAttribute('data-selected', 'backplate');
-  await page.mouse.click(box.x + 4, box.y + 4); // background
+  // Round the panel is the open stud wall the backboard is fixed to (F1.9).
+  await page.mouse.click(box.x + 4, box.y + 4);
+  await expect(viewport).toHaveAttribute('data-selected', 'stud-wall');
+  await expect(viewport).toHaveAttribute('data-selection-kind', 'wall');
+  await page.keyboard.press('Escape');
   await expect(viewport).not.toHaveAttribute('data-selected', /.*/);
 });
 
@@ -125,6 +138,8 @@ test('hover and selection churn allocates no GPU geometry', async ({ page }) => 
   await page.waitForTimeout(300);
   const after = await hook(page, (h) => h.stats());
   expect(after.geometries).toBe(baseline.geometries);
-  expect(after.bvhs).toBe(3);
+  // One BVH per fixture geometry: board, plate, bench (top, frame, shelf), the rails' shared one,
+  // and the stud wall's framing and snap plane.
+  expect(after.bvhs).toBe(8);
   expect(after.frames).toBeGreaterThan(baseline.frames);
 });

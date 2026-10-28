@@ -2,19 +2,30 @@ import fc from 'fast-check';
 import { isIntegerMm } from '@controls/units';
 import * as constants from './constants';
 import {
+  dinSlotStartMm,
   SNAP_STEPS,
   snap,
   snapToBackplateGrid,
+  snapToBenchTop,
   snapToDinRail,
   snapToWallStuds,
   studCentres,
   type BackplateGridTarget,
+  type BenchTopTarget,
   type DinRailTarget,
   type Footprint,
   type SnapResult,
   type WallStudsTarget,
 } from './snap';
-import { frameNormal, surfaceToWorld, worldToSurface, type SurfaceFrame, type SurfaceNormal } from './surface';
+import {
+  frameAxes,
+  frameNormal,
+  surfaceToWorld,
+  worldToSurface,
+  type FrameNormal,
+  type SurfaceFrame,
+  type SurfaceNormal,
+} from './surface';
 
 const front: SurfaceFrame = { origin: { x: 0, y: 0, z: 0 }, normal: '+z' };
 const rail: DinRailTarget = { kind: 'din-rail', id: 'rail', frame: front, lengthMm: 500 };
@@ -34,6 +45,14 @@ const wall: WallStudsTarget = {
   heightMm: 2438,
   firstStudCentreMm: 19,
 };
+const top: BenchTopTarget = {
+  kind: 'bench-top',
+  id: 'top',
+  frame: { origin: { x: 0, y: 900, z: 0 }, normal: '+y' },
+  widthMm: 1800,
+  heightMm: 750,
+  marginMm: 10,
+};
 const mcb: Footprint = { widthMm: 18, heightMm: 90 };
 
 const anchor = (r: SnapResult) => {
@@ -48,7 +67,10 @@ describe('snap constants', () => {
       constants.DIN_MODULE_PITCH,
       constants.WALL_STUD_SPACING,
       constants.WALL_STUD_THICKNESS,
+      constants.WALL_STUD_DEPTH,
       constants.BACKPLATE_GRID_PITCH,
+      constants.BENCH_TOP_GRID_PITCH,
+      constants.BENCH_TOP_MARGIN,
       constants.WALL_VERTICAL_PITCH,
       constants.DIN_RAIL_CAPTURE,
       constants.BACKPLATE_MARGIN,
@@ -60,11 +82,23 @@ describe('snap constants', () => {
     }
   });
 
-  it('derives integer steps', () => {
+  it('real-world values name a published source', () => {
+    expect(constants.DIN_MODULE_PITCH).toMatchObject({ valueMm: 17.5, kind: 'real-world' });
+    expect(constants.DIN_MODULE_PITCH.source).toMatch(/DIN 43880/);
+    expect(constants.WALL_STUD_SPACING.valueMm).toBeCloseTo(16 * 25.4, 9);
+    expect(constants.WALL_STUD_THICKNESS.valueMm).toBeCloseTo(1.5 * 25.4, 9);
+    expect(constants.WALL_STUD_DEPTH.valueMm).toBeCloseTo(3.5 * 25.4, 9);
+    for (const c of [constants.WALL_STUD_SPACING, constants.WALL_STUD_THICKNESS, constants.WALL_STUD_DEPTH]) {
+      expect(c.source).toMatch(/IRC|PS 20/);
+    }
+  });
+
+  it('derives integer grid steps and keeps the DIN module pitch exact', () => {
     expect(SNAP_STEPS).toEqual({
-      dinModuleMm: 18,
+      dinModulePitchMm: 17.5,
       dinCaptureMm: 40,
       backplateGridMm: 5,
+      benchTopGridMm: 10,
       wallVerticalMm: 10,
       planeToleranceMm: 10,
       studHalfThicknessMm: 20,
@@ -85,22 +119,43 @@ describe('surface frames', () => {
     }
   });
 
+  it('horizontal frames: u is the frame right, v = n × u, and u × v = n', () => {
+    const cross = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => ({
+      x: a.y * b.z - a.z * b.y || 0,
+      y: a.z * b.x - a.x * b.z || 0,
+      z: a.x * b.y - a.y * b.x || 0,
+    });
+    expect(frameAxes({ origin: { x: 0, y: 0, z: 0 }, normal: '+y' })).toEqual({
+      u: { x: 1, y: 0, z: 0 },
+      v: { x: 0, y: 0, z: -1 },
+    });
+    const frames: SurfaceFrame[] = [
+      ...normals.map((normal) => ({ origin: { x: 0, y: 0, z: 0 }, normal })),
+      ...normals.map((right) => ({ origin: { x: 0, y: 0, z: 0 }, normal: '+y' as FrameNormal, right })),
+    ];
+    for (const frame of frames) {
+      const { u, v } = frameAxes(frame);
+      expect(cross(u, v)).toEqual(frameNormal(frame));
+    }
+  });
+
   it('world ↔ surface round-trips in integer mm', () => {
     fc.assert(
       fc.property(
+        fc.constantFrom<FrameNormal>(...normals, '+y'),
+        fc.record({
+          x: fc.integer({ min: -1e6, max: 1e6 }),
+          y: fc.integer({ min: -1e6, max: 1e6 }),
+          z: fc.integer({ min: -1e6, max: 1e6 }),
+        }),
+        fc.record({
+          x: fc.integer({ min: -1e6, max: 1e6 }),
+          y: fc.integer({ min: -1e6, max: 1e6 }),
+          z: fc.integer({ min: -1e6, max: 1e6 }),
+        }),
         fc.constantFrom(...normals),
-        fc.record({
-          x: fc.integer({ min: -1e6, max: 1e6 }),
-          y: fc.integer({ min: -1e6, max: 1e6 }),
-          z: fc.integer({ min: -1e6, max: 1e6 }),
-        }),
-        fc.record({
-          x: fc.integer({ min: -1e6, max: 1e6 }),
-          y: fc.integer({ min: -1e6, max: 1e6 }),
-          z: fc.integer({ min: -1e6, max: 1e6 }),
-        }),
-        (normal, origin, p) => {
-          const frame: SurfaceFrame = { origin, normal };
+        (normal, origin, p, right) => {
+          const frame: SurfaceFrame = { origin, normal, right };
           const local = worldToSurface(frame, p);
           const back = surfaceToWorld(frame, local, local.w);
           expect(back).toEqual({ x: p.x || 0, y: p.y || 0, z: p.z || 0 });
@@ -112,15 +167,19 @@ describe('surface frames', () => {
 });
 
 describe('snapToDinRail', () => {
+  it('module slots start at round(k × 17.5): exact pitch, rounded once', () => {
+    expect([0, 1, 2, 3, 4, 40].map(dinSlotStartMm)).toEqual([0, 18, 35, 53, 70, 700]);
+  });
+
   it('puts the left edge on a whole module and centres the device on the rail', () => {
-    expect(anchor(snapToDinRail(rail, mcb, { u: 100, v: 12 }))).toEqual({ u: 90, v: -45 });
+    expect(anchor(snapToDinRail(rail, mcb, { u: 100, v: 12 }))).toEqual({ u: 88, v: -45 });
     expect(anchor(snapToDinRail(rail, mcb, { u: 9, v: 0 }))).toEqual({ u: 0, v: -45 });
   });
 
   it('keeps the device on the rail at both ends', () => {
     expect(anchor(snapToDinRail(rail, mcb, { u: -400, v: 0 }))).toEqual({ u: 0, v: -45 });
-    // 500 mm rail, 18 mm device: last whole module that fits starts at 26 × 18 = 468 (486 + 18 > 500).
-    expect(anchor(snapToDinRail(rail, mcb, { u: 9000, v: 0 }))).toEqual({ u: 468, v: -45 });
+    // 500 mm rail, 18 mm device: 482 mm free, so the last slot is 27 (27 × 17.5 = 472.5 → 473).
+    expect(anchor(snapToDinRail(rail, mcb, { u: 9000, v: 0 }))).toEqual({ u: 473, v: -45 });
   });
 
   it('refuses a cursor outside the capture band and a device longer than the rail', () => {
@@ -140,7 +199,7 @@ describe('snapToDinRail', () => {
         (modules, u, v) => {
           const r = snapToDinRail(rail, { widthMm: modules * 18, heightMm: 90 }, { u, v });
           if (!r.ok) return;
-          expect(r.anchor.u % 18).toBe(0);
+          expect(dinSlotStartMm(Math.round(r.anchor.u / 17.5))).toBe(r.anchor.u);
           expect(r.anchor.u).toBeGreaterThanOrEqual(0);
           expect(r.anchor.u + modules * 18).toBeLessThanOrEqual(rail.lengthMm);
         },
@@ -193,6 +252,26 @@ describe('snapToBackplateGrid', () => {
         },
       ),
     );
+  });
+});
+
+describe('snapToBenchTop', () => {
+  it('snaps the corner to the 10 mm grid inside the margin, and refuses oversized props', () => {
+    expect(anchor(snapToBenchTop(top, { widthMm: 300, heightMm: 200 }, { u: 900, v: 375 }))).toEqual({
+      u: 750,
+      v: 280,
+    });
+    expect(anchor(snapToBenchTop(top, { widthMm: 300, heightMm: 200 }, { u: -50, v: 9000 }))).toEqual({
+      u: 10,
+      v: 540,
+    });
+    expect(snapToBenchTop(top, { widthMm: 300, heightMm: 731 }, { u: 0, v: 0 })).toMatchObject({
+      ok: false,
+      reason: 'too-large',
+    });
+    expect(
+      anchor(snapToBenchTop({ ...top, marginMm: undefined }, { widthMm: 10, heightMm: 10 }, { u: 0, v: 0 })),
+    ).toEqual({ u: 0, v: 0 });
   });
 });
 
@@ -285,12 +364,21 @@ describe('snap (world-space dispatch)', () => {
       ok: true,
       targetId: 'rail',
       kind: 'din-rail',
-      anchor: { u: 90, v: -45 },
-      world: { x: 100, y: 955, z: -40 },
+      anchor: { u: 88, v: -45 },
+      world: { x: 100, y: 955, z: -38 },
       normal: '+x',
     });
     expect(snap(plate, { widthMm: 10, heightMm: 10 }, { x: 0, y: 0, z: 0 })).toMatchObject({ ok: true });
     expect(snap(wall, { widthMm: 10, heightMm: 10 }, { x: 0, y: 0, z: 0 })).toMatchObject({ ok: true });
+    // A bench top: v runs from the front edge (z = 0) to the back (-z).
+    expect(snap(top, { widthMm: 100, heightMm: 50 }, { x: 300, y: 900, z: -200 })).toEqual({
+      ok: true,
+      targetId: 'top',
+      kind: 'bench-top',
+      anchor: { u: 250, v: 180 },
+      world: { x: 250, y: 900, z: -180 },
+      normal: '+y',
+    });
   });
 
   it('rejects non-integer cursors (convert with metresToMm first)', () => {
@@ -300,7 +388,7 @@ describe('snap (world-space dispatch)', () => {
   it('is deterministic: the same inputs give identical results', () => {
     fc.assert(
       fc.property(fc.integer({ min: -3000, max: 3000 }), fc.integer({ min: -3000, max: 3000 }), (x, y) => {
-        for (const t of [rail, plate, wall]) {
+        for (const t of [rail, plate, wall, top]) {
           expect(snap(t, mcb, { x, y, z: 0 })).toEqual(snap(t, mcb, { x, y, z: 0 }));
         }
       }),

@@ -39,6 +39,12 @@
     "assisted": {
       "type": "boolean"
     },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FixtureV1"
+      }
+    },
     "entities": {
       "type": "array",
       "items": {
@@ -57,20 +63,19 @@
     "regionId",
     "difficulty",
     "assisted",
+    "fixtures",
     "entities",
     "extensions"
   ],
   "additionalProperties": false,
   "title": "Controls world document, schemaVersion 1",
-  "description": "world.json in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity ids below nextEntityId) and string well-formedness.",
+  "description": "world.json in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity ids below nextEntityId, sorted unique fixture ids, the reserved \"entity-\" fixture id prefix) and string well-formedness.",
   "$defs": {
-    "EntityV1": {
+    "FixtureV1": {
       "type": "object",
       "properties": {
         "id": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/FixtureIdV1"
         },
         "ref": {
           "$ref": "#/$defs/CatalogRef"
@@ -89,6 +94,12 @@
         "extensions"
       ],
       "additionalProperties": false
+    },
+    "FixtureIdV1": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Lower-case words joined by single hyphens, at most 64 characters."
     },
     "CatalogRef": {
       "type": "object",
@@ -222,6 +233,32 @@
           }
         }
       ]
+    },
+    "EntityV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "extensions"
+      ],
+      "additionalProperties": false
     }
   }
 }

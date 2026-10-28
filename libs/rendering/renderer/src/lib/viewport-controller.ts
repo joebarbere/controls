@@ -13,6 +13,7 @@ import { Box3, PerspectiveCamera, Sphere, Vector3, type Object3D, type Scene } f
 import { metresToMm, mm } from '@controls/units';
 import {
   placeOnTargets,
+  worldSnapTargets,
   type CatalogRef,
   type Entity,
   type EntityId,
@@ -46,24 +47,27 @@ import {
 import { KeyboardInput } from './input/keyboard-input';
 import { PlacementGhost } from './overlays/ghost';
 import { SelectionHighlight } from './overlays/highlight';
-import {
-  buildPanelScene,
-  describeSceneGraph,
-  disposeScene,
-  PANEL_ROOM_BOUNDS,
-  type SceneGraphNode,
-} from './panel-scene';
 import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
+import { buildBaseScene, DEFAULT_ROOM_BOUNDS, describeSceneGraph, disposeScene, type SceneGraphNode } from './scene';
+import { FixtureSync } from './world/fixture-sync';
 import { WorldSync } from './world/world-sync';
 
 export interface ViewportControllerOptions {
   readonly bindings?: InputBindings;
   readonly walk?: Partial<WalkConfig>;
+  /** Walkable area. Defaults to the world's floor fixture, or {@link DEFAULT_ROOM_BOUNDS} without one. */
   readonly room?: RoomBoundsMm;
-  /** Scene to show; the controller takes ownership and disposes it. Defaults to the demo panel. */
+  /**
+   * Scene to draw the world into; the controller takes ownership and disposes it. Defaults to
+   * {@link buildBaseScene} (lights only). Selectables already in it stay selectable (tests).
+   */
   readonly scene?: Scene;
-  /** Focus target for the initial work-mode camera. Defaults to the first focusable selectable. */
+  /**
+   * Focus target for the initial work-mode camera (and {@link ViewportController.resetView}).
+   * Defaults to the first backplate in id order (the panel is P1's main work surface), else the
+   * first focusable selectable.
+   */
   readonly initialFocus?: string;
 }
 
@@ -133,10 +137,13 @@ export class ViewportController {
 
   private readonly disposer = new Disposer();
   private readonly picker = new Picker();
-  /** Picks snap surfaces only (backplate, rails; walls in F1.9), so props never block the ghost. */
+  /** Picks fixtures only (snap surfaces and what hides them), so props never block the ghost. */
   private readonly surfacePicker = new Picker();
-  private readonly snapTargets: readonly SnapTarget[];
-  private readonly fixed: ReadonlyArray<{ root: Object3D; info: SelectableInfo }>;
+  /** What placement snaps to: `worldSnapTargets(world)` (the same targets scripts use), plus any in a custom scene. */
+  private snapTargets: readonly SnapTarget[] = [];
+  /** Selectables that came with the scene itself (none in the base scene). */
+  private readonly sceneSelectables: ReadonlyArray<{ root: Object3D; info: SelectableInfo }>;
+  private readonly fixtures: FixtureSync;
   private readonly world: WorldSync;
   private readonly ghost: PlacementGhost;
   private readonly highlight: SelectionHighlight;
@@ -147,7 +154,9 @@ export class ViewportController {
   private readonly listeners = new Set<ViewportStateListener>();
   private readonly intentListeners = new Set<ViewportIntentListener>();
   private readonly walkConfig: WalkConfig;
-  private readonly room: RoomBoundsMm;
+  private readonly roomOverride: RoomBoundsMm | null;
+  private room: RoomBoundsMm;
+  private readonly initialFocus: string | undefined;
 
   private modeValue: ViewMode = 'work';
   private focusIdValue: string | null = null;
@@ -175,20 +184,24 @@ export class ViewportController {
     options: ViewportControllerOptions = {},
   ) {
     this.walkConfig = { ...DEFAULT_WALK_CONFIG, ...options.walk };
-    this.room = options.room ?? PANEL_ROOM_BOUNDS;
-    this.scene = options.scene ?? buildPanelScene();
+    this.roomOverride = options.room ?? null;
+    this.room = this.roomOverride ?? DEFAULT_ROOM_BOUNDS;
+    this.initialFocus = options.initialFocus;
+    this.scene = options.scene ?? buildBaseScene();
     this.camera.rotation.order = 'YXZ'; // yaw then pitch, for walk mode
     // Teardown runs in reverse: scene last, after everything that references it.
     this.disposer.add(() => disposeScene(this.scene));
 
-    this.fixed = findSelectables(this.scene);
-    this.snapTargets = this.fixed.flatMap((f) => (f.info.snapTarget ? [f.info.snapTarget] : []));
-    this.surfacePicker.setRoots(this.fixed.filter((f) => f.info.snapTarget).map((f) => f.root));
+    this.sceneSelectables = findSelectables(this.scene);
     this.disposer.add(() => this.surfacePicker.dispose());
     this.disposer.add(() => this.picker.dispose());
 
-    // World entities and the ghost share reference-counted prop recipes; both leave the scene
-    // (releasing their geometry) before the scene itself is disposed.
+    // Fixtures (level geometry) share reference-counted fixture recipes. World entities and the ghost
+    // share reference-counted prop recipes. All leave the scene (releasing their geometry) before
+    // the scene itself is disposed.
+    this.fixtures = new FixtureSync(this.scene);
+    this.disposer.add(() => this.fixtures.dispose());
+    this.refreshSurfaces();
     this.world = new WorldSync(this.scene);
     this.disposer.add(() => this.world.dispose());
     this.ghost = new PlacementGhost(this.scene, this.world.recipes);
@@ -235,8 +248,7 @@ export class ViewportController {
       this.intentListeners.clear();
     });
 
-    const initial = options.initialFocus ?? this.selection.all.find((s) => s.focusNormal)?.id;
-    if (initial) this.focus(initial);
+    this.focusInitial();
   }
 
   get mode(): ViewMode {
@@ -270,15 +282,38 @@ export class ViewportController {
    * picking BVH and keyboard selection list follow. Never mutates `world`.
    */
   syncWorld(world: World): void {
+    const fixturesChanged = this.fixtures.sync(world);
+    if (fixturesChanged) {
+      this.room = this.roomOverride ?? this.fixtures.room() ?? DEFAULT_ROOM_BOUNDS;
+      this.refreshSurfaces();
+    }
     const result = this.world.sync(world);
     if (this.moving && this.world.entityOf(this.moving.id) !== this.moving.entity) this.endMove();
-    if (result.membershipChanged) {
+    if (result.membershipChanged || fixturesChanged) {
       this.refreshSelectables();
     } else if (result.transformsChanged) {
       this.picker.refit();
       this.refreshHighlight();
     }
+    // A level change: if the focus target went away (or there was none yet), frame the initial one.
+    if (fixturesChanged && (this.focusIdValue === null || !this.roots.has(this.focusIdValue))) {
+      this.focusIdValue = null;
+      this.focusInitial();
+    }
     this.hoverDirty = true;
+  }
+
+  /**
+   * Back to the starting view (a new session): work mode, no selection, the initial focus target.
+   * View state only, so it is not a Command.
+   */
+  resetView(): void {
+    if (this.moving) this.endMove();
+    this.selection.select(null);
+    this.focusIdValue = null;
+    if (this.modeValue !== 'work') this.setMode('work');
+    this.focusInitial();
+    this.emit();
   }
 
   /**
@@ -427,6 +462,21 @@ export class ViewportController {
     return this.world.recipes.size;
   }
 
+  /** Number of fixtures drawn (level geometry). */
+  get fixtureCount(): number {
+    return this.fixtures.size;
+  }
+
+  /** Number of live shared fixture recipes; 0 after dispose or on a world without fixtures. */
+  get fixtureRecipeCount(): number {
+    return this.fixtures.recipes.size;
+  }
+
+  /** The walkable area in use (the floor fixture's, or the default). */
+  get roomBounds(): RoomBoundsMm {
+    return this.room;
+  }
+
   dispose(): void {
     this.disposer.dispose();
   }
@@ -536,9 +586,29 @@ export class ViewportController {
 
   // --- internals -----------------------------------------------------------------------------
 
-  /** Rebuilds the selectable list and the picking BVH from the fixed scene plus the world entities. */
+  /** Rebuilds the snap targets and the placement picker from the fixtures (and any scene selectables). */
+  private refreshSurfaces(): void {
+    const sceneTargets = this.sceneSelectables.flatMap((f) => (f.info.snapTarget ? [f.info.snapTarget] : []));
+    this.snapTargets = [...sceneTargets, ...worldSnapTargets(this.fixtures.worldFixtures())];
+    // Snap surfaces and the fixtures that hide them (a hit on the backboard is on no target).
+    this.surfacePicker.setRoots([
+      ...this.sceneSelectables.filter((f) => f.info.snapTarget).map((f) => f.root),
+      ...this.fixtures.surfaceRoots(),
+    ]);
+  }
+
+  /** Frames the initial focus target (see `initialFocus`), if any; walk mode keeps it for later. */
+  private focusInitial(): void {
+    const all = this.selection.all;
+    const id = this.initialFocus ?? (all.find((s) => s.kind === 'backplate') ?? all.find((s) => s.focusNormal))?.id;
+    if (!id) return;
+    if (this.modeValue === 'work') this.focus(id);
+    else if (this.selection.get(id)?.focusNormal) this.focusIdValue = id;
+  }
+
+  /** Rebuilds the selectable list and the picking BVH from the scene, the fixtures and the world entities. */
   private refreshSelectables(): void {
-    const all = [...this.fixed, ...this.world.selectables()];
+    const all = [...this.sceneSelectables, ...this.fixtures.selectables(), ...this.world.selectables()];
     this.roots.clear();
     all.forEach(({ root, info }) => this.roots.set(info.id, root));
     this.selection.setSelectables(all.map((a) => a.info));
@@ -558,8 +628,9 @@ export class ViewportController {
     if (!root || !normal) return;
     this.tmpBox.setFromObject(root).getBoundingSphere(this.tmpSphere);
     const c = this.tmpSphere.center;
+    const elevation = ((this.selection.get(id)?.focusElevationDeg ?? 0) * Math.PI) / 180;
     const orbit = workOrbitFor(
-      { id, center: { x: c.x, y: c.y, z: c.z }, radius: this.tmpSphere.radius, normal },
+      { id, center: { x: c.x, y: c.y, z: c.z }, radius: this.tmpSphere.radius, normal, elevation },
       this.camera.fov,
       this.camera.aspect,
     );

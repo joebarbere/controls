@@ -1,11 +1,29 @@
 import { DOCUMENT } from '@angular/common';
-import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, InjectionToken, signal } from '@angular/core';
 import type { CommandRegistry, ContextKeys, ContextValue, ExecResult, ExecutedEvent } from '@controls/commands';
 import { createWorld, type ReplayEntry, type ReplayLog } from '@controls/save-format';
 import { createGame, type Game } from '@controls/scripting-api';
-import { createWorldRegistry, hashWorldDocument, type World, worldHash } from '@controls/world-model';
+import {
+  createWorldRegistry,
+  hashWorldDocument,
+  loadLevel,
+  newGameWorld,
+  type NewGameOptions,
+  type World,
+  worldHash,
+} from '@controls/world-model';
 
 export type CommandHandler = (event: ExecutedEvent<World>) => void;
+
+/**
+ * The level New sandbox starts from (F1.9): an untrusted, `JSON.parse`d world document, validated
+ * through the normal loader when the session starts. The game app provides
+ * `content/levels/workshop.json`; without a provider (unit tests) sandboxes start from an empty world.
+ */
+export const SANDBOX_LEVEL = new InjectionToken<unknown>('controls.sandboxLevel', {
+  providedIn: 'root',
+  factory: () => null,
+});
 
 /** Window property for the E2E test hook (`?e2e=1` only). */
 const TEST_HOOK = '__controlsSession';
@@ -32,6 +50,9 @@ export class Session {
   private readonly history = signal({ 'history.canUndo': false, 'history.canRedo': false });
   private readonly uiContext = signal<Readonly<Record<string, ContextValue>>>({});
   private readonly log = signal<readonly ReplayEntry[]>([]);
+  private readonly started = signal(0);
+  /** The sandbox level (validated), or an empty world without one. */
+  readonly level: World = sandboxLevel(inject(SANDBOX_LEVEL));
 
   /** The current world document. Read-only: change it with {@link exec}. */
   readonly world = this.worldState.asReadonly();
@@ -43,12 +64,22 @@ export class Session {
   readonly canRedo = computed(() => this.history()['history.canRedo']);
   /** Every context key, for evaluating `when`. */
   readonly contextKeys = computed<ContextKeys>(() => ({ ...this.uiContext(), ...this.history() }));
+  /** Counts {@link start}s: views that keep per-session state (the camera) reset when it changes. */
+  readonly generation = this.started.asReadonly();
 
   constructor() {
-    // A new session starts from an empty world with seed 0 until the workshop level and the new-game
-    // seed arrive (F1.9).
-    this.start(this.worldState());
+    // Behind the main menu the level is shown as it is (its own seed); New sandbox starts a game on it.
+    this.start(this.level);
     this.exposeTestHook();
+  }
+
+  /**
+   * New sandbox (F1.9): a new game on the sandbox level with the given seed (the new-game dialog's
+   * fresh or typed one) and difficulty. Fresh history and an empty replay log. Throws for a seed
+   * outside the unsigned 32-bit range; the dialog validates first.
+   */
+  newSandbox(options: NewGameOptions): void {
+    this.start(newGameWorld(this.level, options));
   }
 
   /**
@@ -62,6 +93,7 @@ export class Session {
     this.worldState.set(world);
     this.history.set(this.game.contextKeys());
     this.log.set([]);
+    this.started.update((n) => n + 1);
   }
 
   /** Runs a command. Invalid args or a refused command return a typed error and change nothing. */
@@ -127,4 +159,13 @@ export class Session {
     };
     inject(DestroyRef).onDestroy(() => delete target[TEST_HOOK]);
   }
+}
+
+/** Validates the provided level; an empty world without one, or (logged) when it doesn't load. */
+function sandboxLevel(json: unknown): World {
+  if (json === null) return createWorld({ seed: 0 });
+  const loaded = loadLevel(json);
+  if (loaded.ok) return loaded.level;
+  console.error('The sandbox level failed to load; starting from an empty world.', loaded.error);
+  return createWorld({ seed: 0 });
 }

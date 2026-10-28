@@ -11,7 +11,15 @@ import {
   viewChild,
 } from '@angular/core';
 import { DevConsoleComponent, isConsoleAvailable } from '@controls/feature-console';
-import { AboutDialog, Hud, MainMenu, NotificationService, Notifications, ShellState } from '@controls/feature-shell';
+import {
+  AboutDialog,
+  Hud,
+  MainMenu,
+  NewGameDialog,
+  NotificationService,
+  Notifications,
+  ShellState,
+} from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
@@ -30,6 +38,7 @@ import { PLATFORM } from './platform.token';
     Workspace,
     MainMenu,
     AboutDialog,
+    NewGameDialog,
     SettingsDialog,
     Hud,
     Notifications,
@@ -71,6 +80,11 @@ import { PLATFORM } from './platform.token';
         (quitGame)="platform.quit()"
       />
     }
+    <ctl-new-game-dialog
+      [open]="shell.dialog() === 'newGame'"
+      (openChange)="dialogOpenChange($event)"
+      (start)="startSandbox($event)"
+    />
     <ctl-settings-dialog [open]="shell.dialog() === 'settings'" (openChange)="dialogOpenChange($event)" />
     <ctl-about-dialog
       [open]="shell.dialog() === 'about'"
@@ -121,7 +135,18 @@ export class App {
     }),
   );
 
+  /** New sandbox asks for a seed first (the new-game dialog); {@link startSandbox} runs on Start. */
   protected newSandbox(): void {
+    this.shell.openDialog('newGame');
+  }
+
+  /**
+   * Starts a sandbox on the workshop level with `seed` and the player's default difficulty (F1.9):
+   * a fresh world, history and replay log, then the workspace with the viewport focused.
+   */
+  protected startSandbox(seed: number): void {
+    this.session.newSandbox({ seed, difficulty: this.settings.settings().gameplay.defaultDifficulty });
+    this.toolBelt.clear(); // the tool belt's active slot belongs to the old session
     this.shell.newSandbox();
     this.focusViewportAfterRender();
   }

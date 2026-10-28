@@ -1,5 +1,5 @@
 # The P1 four-surface scenario as console lines (same as four-surface.ts).
-#   pnpm sim run apps/sim-cli/scenarios/four-surface.console
+#   pnpm sim run apps/sim-cli/scenarios/four-surface.console --world content/levels/workshop.json
 entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200
 entity.place --ref.id prop.spool --ref.version 1 --positionMm.x 400 --positionMm.y 0 --positionMm.z -200
 entity.move 1 --positionMm.x 150 --positionMm.y 0 --positionMm.z -200

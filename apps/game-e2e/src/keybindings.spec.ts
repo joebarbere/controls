@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startSandbox as startWorkshop } from './support/sandbox';
 
 /**
  * F1.4 keybindings: rebind a command and an input action from the keyboard in Settings → Key
@@ -46,7 +47,7 @@ async function rebind(page: Page, dialog: ReturnType<Page['getByRole']>, title: 
 }
 
 async function startSandbox(page: Page) {
-  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'New sandbox' }).click();
+  await startWorkshop(page);
   const viewport = page.locator('ctl-viewport');
   await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();

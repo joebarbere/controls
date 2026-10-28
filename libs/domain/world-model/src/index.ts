@@ -5,4 +5,6 @@ export * from './lib/hash';
 export * from './lib/entity-commands';
 export * from './lib/session';
 export * from './lib/props';
+export * from './lib/fixtures';
+export * from './lib/level';
 export * from './lib/snap';

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fourSurface from '../scenarios/four-surface';
 import { WORKSPACE_ROOT } from './script-loader';
+import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
  * The four-surface scenario, headless (plan F1.6 and the P1 phase acceptance).
@@ -27,7 +28,7 @@ import { WORKSPACE_ROOT } from './script-loader';
  */
 
 /** world.hash after the scenario. The game-e2e drivers (mouse, palette, console) must match it. */
-export const FOUR_SURFACE_HASH = 'a61268c711b69ba5bafaeeda6ba00d3340eba691322ca3a20255044b669560ee';
+export const FOUR_SURFACE_HASH = '7510b0555da91f351f9f11f17731cc5c7bc0cc2cec3238bf4126018f84a80dfd';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -56,7 +57,7 @@ describe('the four-surface scenario', () => {
   });
 
   it('1. scripting API in-process', () => {
-    const game = createGame({ seed: 0 });
+    const game = createGame({ world: workshopWorld() });
     fourSurface(game);
     expect(game.hash()).toBe(FOUR_SURFACE_HASH);
     const replayed = replayGame(JSON.parse(JSON.stringify(game.replayLog())));
@@ -64,7 +65,7 @@ describe('the four-surface scenario', () => {
   });
 
   it('1b. the checked-in console file says exactly what the script does', async () => {
-    const game = createGame({ seed: 0 });
+    const game = createGame({ world: workshopWorld() });
     fourSurface(game);
     const commands = (await readFile(join(scenarios, 'four-surface.console'), 'utf8'))
       .split('\n')
@@ -78,7 +79,16 @@ describe('the four-surface scenario', () => {
 
   it('2 + 4. sim run <script.ts> --log, then sim replay <log>', () => {
     const log = join(dir, 'four-surface.replay.json');
-    const run = sim('run', join(scenarios, 'four-surface.ts'), '--log', log, '--expect', FOUR_SURFACE_HASH);
+    const run = sim(
+      'run',
+      join(scenarios, 'four-surface.ts'),
+      '--world',
+      WORKSHOP_LEVEL,
+      '--log',
+      log,
+      '--expect',
+      FOUR_SURFACE_HASH,
+    );
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
     expect(run.stdout).toEqual([FOUR_SURFACE_HASH]);
@@ -89,7 +99,7 @@ describe('the four-surface scenario', () => {
   });
 
   it('3. sim run <file.console>', () => {
-    const run = sim('run', join(scenarios, 'four-surface.console'));
+    const run = sim('run', join(scenarios, 'four-surface.console'), '--world', WORKSHOP_LEVEL);
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
     // The file's own `world.hash` line, then the final hash.
@@ -112,7 +122,16 @@ describe('the four-surface scenario', () => {
   });
 
   it('exits non-zero when the hash differs from --expect', () => {
-    const run = sim('run', join(scenarios, 'four-surface.console'), '--seed', '1', '--expect', FOUR_SURFACE_HASH);
+    const run = sim(
+      'run',
+      join(scenarios, 'four-surface.console'),
+      '--world',
+      WORKSHOP_LEVEL,
+      '--seed',
+      '1',
+      '--expect',
+      FOUR_SURFACE_HASH,
+    );
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(/hash mismatch/);
   });
