@@ -139,6 +139,20 @@ describe('work mode', () => {
     expect(orbit.maxDistance).toBeCloseTo(orbit.position.z * WORK_LIMITS.maxDistanceFactor, 9);
   });
 
+  it('frames from above at an elevation (benches), at the same distance, clamped to the polar limits', () => {
+    const level = workOrbitFor({ id: 'b', center: { x: 0, y: 0, z: 0 }, radius: 1, normal: '+z' }, 45, 1);
+    const above = workOrbitFor(
+      { id: 'b', center: { x: 0, y: 0, z: 0 }, radius: 1, normal: '+z', elevation: Math.PI / 6 },
+      45,
+      1,
+    );
+    const d = (p: { x: number; y: number; z: number }) => Math.hypot(p.x, p.y, p.z);
+    expect(d(above.position)).toBeCloseTo(d(level.position), 9);
+    expect(above.position.y).toBeCloseTo(d(level.position) / 2, 9); // sin 30°
+    const steep = workOrbitFor({ id: 'b', center: { x: 0, y: 0, z: 0 }, radius: 1, normal: '+z', elevation: 2 }, 45, 1);
+    expect(Math.asin(steep.position.y / d(steep.position))).toBeCloseTo(WORK_LIMITS.polarHalfRangeRad, 9);
+  });
+
   it('centres azimuth limits on each normal', () => {
     const at = (normal: '+x' | '-x' | '-z') =>
       workOrbitFor({ id: 'w', center: { x: 1, y: 1, z: 1 }, radius: 0.01, normal }, 45, 1);

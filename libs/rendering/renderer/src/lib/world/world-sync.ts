@@ -6,7 +6,7 @@
  */
 import { Group, Mesh, type Object3D, type Scene } from 'three/webgpu';
 import { mdegToRadians, mm } from '@controls/units';
-import type { CatalogRef, Entity, EntityId, World } from '@controls/world-model';
+import type { CatalogRef, Entity, EntityId, Transform, World } from '@controls/world-model';
 import { PropRecipes } from '../geometry/props';
 import { markSelectable } from '../picking/picker';
 import type { SelectableInfo } from '../picking/selection';
@@ -128,8 +128,8 @@ export class WorldSync {
  * Integer mm and millidegrees → scene metres and radians, at draw time only. Euler order `YXZ` is
  * ADR 0007's intrinsic yaw (about +y), then pitch (new +x), then roll (new +z).
  */
-export function applyTransform(object: Object3D, entity: Entity): void {
-  const { positionMm: p, orientationMdeg: o } = entity.transform;
+export function applyTransform(object: Object3D, placed: { readonly transform: Transform }): void {
+  const { positionMm: p, orientationMdeg: o } = placed.transform;
   object.position.set(mm(p.x), mm(p.y), mm(p.z));
   object.rotation.set(mdegToRadians(o.pitch), mdegToRadians(o.yaw), mdegToRadians(o.roll), 'YXZ');
 }

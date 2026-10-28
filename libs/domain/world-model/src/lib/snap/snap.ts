@@ -15,6 +15,7 @@
 import { roundMm } from '@controls/units';
 import {
   BACKPLATE_GRID_PITCH,
+  BENCH_TOP_GRID_PITCH,
   DIN_MODULE_PITCH,
   DIN_RAIL_CAPTURE,
   SNAP_PLANE_TOLERANCE,
@@ -26,8 +27,8 @@ import {
   assertIntegerMm,
   surfaceToWorld,
   worldToSurface,
+  type FrameNormal,
   type SurfaceFrame,
-  type SurfaceNormal,
   type SurfacePointMm,
   type Vec3Mm,
 } from './surface';
@@ -68,8 +69,23 @@ export interface WallStudsTarget {
   readonly firstStudCentreMm: number;
 }
 
+/**
+ * A bench top (F1.9): a horizontal (`'+y'`) frame. Frame origin: the top's front-left corner, so
+ * `u` runs along the front edge and `v` runs from the front edge to the back.
+ */
+export interface BenchTopTarget {
+  readonly kind: 'bench-top';
+  readonly id: string;
+  readonly frame: SurfaceFrame;
+  readonly widthMm: number;
+  /** Front-to-back depth of the top (its extent along `v`). */
+  readonly heightMm: number;
+  /** Keep-out border, integer mm. Default 0. */
+  readonly marginMm?: number;
+}
+
 /** Anything placement can snap to. */
-export type SnapTarget = DinRailTarget | BackplateGridTarget | WallStudsTarget;
+export type SnapTarget = DinRailTarget | BackplateGridTarget | WallStudsTarget | BenchTopTarget;
 
 export type SnapFailure = 'out-of-capture' | 'out-of-bounds' | 'too-large';
 
@@ -81,15 +97,19 @@ export type SnapResult =
       readonly anchor: SurfacePointMm;
       readonly world: Vec3Mm;
       /** The target surface's normal (which way a part mounted there faces). */
-      readonly normal: SurfaceNormal;
+      readonly normal: FrameNormal;
     }
   | { readonly ok: false; readonly targetId: string; readonly kind: SnapTarget['kind']; readonly reason: SnapFailure };
 
-/** Increments derived from the sourced constants, rounded once to integer mm. */
+/**
+ * Increments derived from the sourced constants. Grid steps are rounded once to integer mm; the DIN
+ * module pitch stays exact (17.5 mm) and each slot start is rounded instead.
+ */
 export const SNAP_STEPS = {
-  dinModuleMm: roundMm(DIN_MODULE_PITCH.valueMm),
+  dinModulePitchMm: DIN_MODULE_PITCH.valueMm,
   dinCaptureMm: roundMm(DIN_RAIL_CAPTURE.valueMm),
   backplateGridMm: roundMm(BACKPLATE_GRID_PITCH.valueMm),
+  benchTopGridMm: roundMm(BENCH_TOP_GRID_PITCH.valueMm),
   wallVerticalMm: roundMm(WALL_VERTICAL_PITCH.valueMm),
   planeToleranceMm: roundMm(SNAP_PLANE_TOLERANCE.valueMm),
   /** Half a stud, rounded **up** so a box set against a stud never overlaps it. */
@@ -128,23 +148,31 @@ const fail = (target: SnapTarget, reason: SnapFailure): SnapResult => ({
 });
 
 /**
- * DIN rail: the device clips on centred across the rail, its left edge on a whole module
- * (18 mm) from the rail's left end, and it must fit on the rail.
+ * Start of DIN module slot `k` from the rail's left end: `round(k × 17.5)`, rounded once (never a
+ * running sum of a rounded step), like the stud layout.
+ */
+export const dinSlotStartMm = (k: number): number => roundMm(k * SNAP_STEPS.dinModulePitchMm);
+
+/**
+ * DIN rail: the device clips on centred across the rail, its left edge at the start of a whole
+ * module slot (17.5 mm, DIN 43880) from the rail's left end, and it must fit on the rail.
  */
 export function snapToDinRail(target: DinRailTarget, footprint: Footprint, cursor: SurfacePointMm): SnapResult {
   checkFootprint(footprint);
   assertIntegerMm('lengthMm', target.lengthMm);
   if (Math.abs(cursor.v) > SNAP_STEPS.dinCaptureMm) return fail(target, 'out-of-capture');
-  const pitch = SNAP_STEPS.dinModuleMm;
+  const pitch = SNAP_STEPS.dinModulePitchMm;
   const free = target.lengthMm - footprint.widthMm;
   if (free < 0) return fail(target, 'too-large');
+  // k × 17.5 ≤ free with free an integer, so the rounded start never exceeds it either.
   const k = slot(cursor.u - footprint.widthMm / 2, pitch, Math.floor(free / pitch));
-  return ok(target, { u: k * pitch, v: -Math.floor(footprint.heightMm / 2) });
+  return ok(target, { u: dinSlotStartMm(k), v: -Math.floor(footprint.heightMm / 2) });
 }
 
-/** Backplate: the footprint's corner lands on the grid, inside the plate minus its margin. */
-export function snapToBackplateGrid(
-  target: BackplateGridTarget,
+/** A rectangular grid of `pitch` inside `widthMm × heightMm` minus `marginMm` (backplates, bench tops). */
+function snapToGrid(
+  target: BackplateGridTarget | BenchTopTarget,
+  pitch: number,
   footprint: Footprint,
   cursor: SurfacePointMm,
 ): SnapResult {
@@ -153,13 +181,26 @@ export function snapToBackplateGrid(
   assertIntegerMm('widthMm', target.widthMm);
   assertIntegerMm('heightMm', target.heightMm);
   assertIntegerMm('marginMm', margin);
-  const pitch = SNAP_STEPS.backplateGridMm;
   const freeU = target.widthMm - 2 * margin - footprint.widthMm;
   const freeV = target.heightMm - 2 * margin - footprint.heightMm;
   if (freeU < 0 || freeV < 0) return fail(target, 'too-large');
   const ku = slot(cursor.u - footprint.widthMm / 2 - margin, pitch, Math.floor(freeU / pitch));
   const kv = slot(cursor.v - footprint.heightMm / 2 - margin, pitch, Math.floor(freeV / pitch));
   return ok(target, { u: margin + ku * pitch, v: margin + kv * pitch });
+}
+
+/** Backplate: the footprint's corner lands on the 5 mm grid, inside the plate minus its margin. */
+export function snapToBackplateGrid(
+  target: BackplateGridTarget,
+  footprint: Footprint,
+  cursor: SurfacePointMm,
+): SnapResult {
+  return snapToGrid(target, SNAP_STEPS.backplateGridMm, footprint, cursor);
+}
+
+/** Bench top: the footprint's corner lands on the 10 mm grid, inside the top minus its margin. */
+export function snapToBenchTop(target: BenchTopTarget, footprint: Footprint, cursor: SurfacePointMm): SnapResult {
+  return snapToGrid(target, SNAP_STEPS.benchTopGridMm, footprint, cursor);
 }
 
 /**
@@ -232,5 +273,7 @@ export function snap(target: SnapTarget, footprint: Footprint, cursorWorld: Vec3
       return snapToBackplateGrid(target, footprint, local);
     case 'wall-studs':
       return snapToWallStuds(target, footprint, local);
+    case 'bench-top':
+      return snapToBenchTop(target, footprint, local);
   }
 }

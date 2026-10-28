@@ -89,6 +89,11 @@ test.describe.serial('desktop smoke', () => {
 
     await menu.getByRole('button', { name: 'New sandbox' }).focus();
     await window.keyboard.press('Enter');
+    // The new-game dialog (F1.9) offers a fresh seed; Enter starts the workshop with it.
+    const seed = window.getByRole('dialog', { name: 'New sandbox' }).getByRole('textbox', { name: 'Seed' });
+    await expect(seed).toBeFocused();
+    await expect(seed).toHaveValue(/^\d+$/);
+    await window.keyboard.press('Enter');
     await expect(window.getByRole('region', { name: 'Inspector' })).toBeVisible();
     await expect(window.locator('ctl-viewport canvas')).toBeFocused();
     await expect(window.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready');

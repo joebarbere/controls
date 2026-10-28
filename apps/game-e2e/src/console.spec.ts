@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { startSandbox as startWorkshop } from './support/sandbox';
 
 /**
  * F1.5 dev console, keyboard only: backtick opens it, a line places an object (with Tab
@@ -10,16 +11,18 @@ import { join } from 'node:path';
  *
  * Hash cross-checks: CONSOLE_PLACE_UNDO_HASH is the literal `apps/sim-cli/src/console-place-undo.spec.ts` pins for
  * `apps/sim-cli/scenarios/console-place-undo.console` (the lines typed below),
- * and FOUR_SURFACE_HASH is `apps/sim-cli/src/four-surface.spec.ts`'s. Change them together.
+ * and FOUR_SURFACE_HASH is `apps/sim-cli/src/four-surface.spec.ts`'s. Change them together. Since
+ * F1.9 every session starts on the workshop level with seed 0 (`support/sandbox.ts`), the world the
+ * sim-cli scenarios start from (`--world content/levels/workshop.json`).
  */
-const CONSOLE_PLACE_UNDO_HASH = 'e5e9a9fcd6ab93f0ae928adfc86c01c20c83230a668775fa886e98351ef7a047';
-const FOUR_SURFACE_HASH = 'a61268c711b69ba5bafaeeda6ba00d3340eba691322ca3a20255044b669560ee';
+const CONSOLE_PLACE_UNDO_HASH = 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825';
+const FOUR_SURFACE_HASH = '7510b0555da91f351f9f11f17731cc5c7bc0cc2cec3238bf4126018f84a80dfd';
 /**
  * The palette path's hash (F1.3): the same literal as PALETTE_PLACE_UNDO_HASH in
  * `apps/game-e2e/src/palette.spec.ts` and `apps/sim-cli/src/palette-place-undo.spec.ts`. Change all
  * three together.
  */
-const PALETTE_PLACE_UNDO_HASH = '46733670b0eeda0464b066f036de9ecb410479f0b55305137ea87828c2690ea2';
+const PALETTE_PLACE_UNDO_HASH = '82b7578708f2759b91a17b49188f1da4cfdf65a7699dfe457cc3f7e930d77362';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';
@@ -38,7 +41,7 @@ const loggedIds = (page: Page) =>
   page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.entries() ?? []).map((e) => e.id));
 
 async function startSandbox(page: Page) {
-  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'New sandbox' }).click();
+  await startWorkshop(page);
   await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
   // CodeMirror is a lazy chunk; it loads as soon as the console is available.

@@ -15,3 +15,6 @@ export type Transform = Entity['transform'];
 export type PositionMm = Transform['positionMm'];
 /** Intrinsic yaw/pitch/roll in integer millidegrees, each in [0, 360000). */
 export type OrientationMdeg = Transform['orientationMdeg'];
+/** Fixed level geometry (F1.9): a wall, bench, backplate or DIN rail that comes with the level. */
+export type Fixture = World['fixtures'][number];
+export type FixtureId = Fixture['id'];

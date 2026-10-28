@@ -2,6 +2,7 @@ import { createGame } from '@controls/scripting-api';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
+import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
  * The F1.3 palette path, headless. `apps/game-e2e/src/palette.spec.ts` places two props and undoes
@@ -13,19 +14,23 @@ import { WORKSPACE_ROOT } from './script-loader';
  */
 
 /** world.hash after the palette scenario: one crate left, `nextEntityId` 2. */
-export const PALETTE_PLACE_UNDO_HASH = '46733670b0eeda0464b066f036de9ecb410479f0b55305137ea87828c2690ea2';
+export const PALETTE_PLACE_UNDO_HASH = '82b7578708f2759b91a17b49188f1da4cfdf65a7699dfe457cc3f7e930d77362';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/palette-place-undo.console');
 
 describe('the palette place-and-undo scenario', () => {
   it('sim run <palette-place-undo.console> prints the golden hash', () => {
-    const result = spawnSync(process.execPath, [bundle, 'run', scenario, '--expect', PALETTE_PLACE_UNDO_HASH], {
-      cwd: WORKSPACE_ROOT,
-      env: { ...process.env, INIT_CWD: WORKSPACE_ROOT },
-      encoding: 'utf8',
-      timeout: 30_000,
-    });
+    const result = spawnSync(
+      process.execPath,
+      [bundle, 'run', scenario, '--world', WORKSHOP_LEVEL, '--expect', PALETTE_PLACE_UNDO_HASH],
+      {
+        cwd: WORKSPACE_ROOT,
+        env: { ...process.env, INIT_CWD: WORKSPACE_ROOT },
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    );
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
     // The file's own `world.hash` line, then the final hash.
@@ -34,7 +39,7 @@ describe('the palette place-and-undo scenario', () => {
 
   it('matches the scripting API with the args the palette form sends', () => {
     // The palette's form always sends the defaulted orientation; the console line leaves it out.
-    const game = createGame({ seed: 0 });
+    const game = createGame({ world: workshopWorld() });
     const zero = { yaw: 0, pitch: 0, roll: 0 };
     expect(game.execOrThrow('palette.open')).toBeNull(); // UI chrome: runs, but is never logged
     game.execOrThrow('entity.place', {

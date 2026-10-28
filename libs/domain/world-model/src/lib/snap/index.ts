@@ -5,4 +5,3 @@ export * from './surface';
 export * from './snap';
 export * from './resolve';
 export * from './placement';
-export * from './demo-panel';

@@ -1,6 +1,6 @@
 # ADR 0007: World document v1 and determinism
 
-**Status:** Accepted (F1.8a; PRNG and hash implemented in F1.2)
+**Status:** Accepted (F1.8a; PRNG and hash implemented in F1.2); amended in F1.9 (fixtures and levels)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.4, §4.6, §4.8; [ADR 0004](0004-save-format.md); [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.8, "Kickoff decisions"
 
@@ -84,6 +84,18 @@ Until the catalogue lands (P2–P3), props use catalogue refs **`prop.<name>` at
 
 They never throw. Errors are typed and carry bounded, value-free issue lists.
 
+### Fixtures and levels (F1.9)
+
+The workshop's floor, stud wall, backboard, backplate, DIN rails and bench must be in the world (so they're in `world.hash`, a save says which level it is, and headless scripts snap against the same surfaces as the mouse), but they aren't things the player places.
+
+- **Decision: a `fixtures` list in `WorldV1`, next to `entities`.** Each fixture is `{ id, ref, transform, extensions }`: a string id in the view-target grammar (lower-case words joined by hyphens, at most 64 characters, never starting with `entity-`), a built-in catalogue ref (`prop.stud-wall@1`, …), the same integer-mm / millidegree transform as an entity, and an `extensions` bag. The list is sorted by id in UTF-16 code-unit order, so each world still has one serialised form. **No command creates, moves or deletes a fixture**, and fixtures take no entity ids.
+- **Sizes and snap targets are code, positions are data.** `FIXTURE_SPECS` in `@controls/world-model` sizes each built-in fixture (game-design values with a `source`; real-world dimensions come from the sourced snap constants), and `fixtureSnapTarget(fixture)` derives the world-space snap target from the spec and the fixture's transform. The renderer and scripts both call `worldSnapTargets(world)`. Fixture transforms are plain yaw quarter-turns; any other transform still draws but offers no snap or focus target (P1 surfaces are axis-aligned).
+- **A level is a world document** (`content/levels/workshop.json`), loaded with `migrateWorld`. A new game copies it with its own seed, difficulty and tick 0 (`newGameWorld`). The game bundles the level (`@controls/content/levels/…`), and `sim-cli` reads the file (`--world`, `hash`).
+- **No `schemaVersion` bump.** v1 is unpublished until v0.2.0, so the field was added to v1 with every fixture, the JSON Schema export and the arbitraries updated in the same change. It changes every `world.hash` (an empty world now serialises `"fixtures":[]`); all golden hashes were re-pinned together.
+- **Rejected:**
+  - _Fixtures as entities_ (`prop.stud-wall` in `entities`): every entity command would need a "fixed" refusal, the level would consume entity ids 1 to 7 (every scenario's ids would shift), and walls and rails would get `entity-N` view ids instead of `stud-wall` and `din-rail-1`.
+  - _Level geometry only in code_ with a level id in `extensions`: a save wouldn't describe its own room, `extensions` is for data the schema doesn't model, and a level edit would silently change what an old save looks like.
+
 ## Consequences
 
 - `world-model` (F1.2) infers its types from `World`. It must restore `nextEntityId` when undoing a place, keep `entities` sorted, and implement sfc32, the stream derivation and the SHA-256 canonical hash as specified here.
@@ -91,3 +103,4 @@ They never throw. Errors are typed and carry bounded, value-free issue lists.
 - F1.1's settings UI writes `Settings` documents and must enforce the caps itself (console history 200, palette recents 20). An over-cap file fails validation, and the whole file then falls back to defaults.
 - F1.8b adds the ZIP container and I/O on top of these documents. v1 can still change until v0.2.0 ships, and is frozen from then on.
 - Adding a region (IEC) or a difficulty is a schema change, even though it only widens an enum. An older build must refuse such a save rather than misread it.
+- F1.9: entity commands never touch `fixtures`, so a replay log's `initialWorld` carries the level it started on. A level edit after v0.2.0 is a content change, not a schema change: old saves keep their own fixtures. P3's cuttable DIN rails and catalogue entries will either keep the `prop.*` fixture refs at version 1 or migrate them.

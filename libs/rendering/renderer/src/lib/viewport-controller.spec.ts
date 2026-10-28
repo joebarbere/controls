@@ -1,8 +1,29 @@
-import { Box3Helper, Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
-import { createWorld } from '@controls/save-format';
-import { createWorldBus, demoPanelSnapTargets, placeOnTargets, type Entity, type World } from '@controls/world-model';
-import { describeSceneGraph, PANEL_ROOM_BOUNDS } from './panel-scene';
+import { Box3, Box3Helper, Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
+import { createWorld, migrateWorld } from '@controls/save-format';
+import { createWorldBus, placeOnTargets, worldSnapTargets, type Entity, type World } from '@controls/world-model';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DEFAULT_ROOM_BOUNDS, describeSceneGraph } from './scene';
 import { ViewportController, type ViewportIntent, type ViewportState } from './viewport-controller';
+
+/** `content/levels/workshop.json`, loaded the way the game loads it. */
+const WORKSHOP: World = (() => {
+  const json: unknown = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '../../../../../content/levels/workshop.json'), 'utf8'),
+  );
+  const loaded = migrateWorld(json);
+  if (!loaded.ok) throw new Error(loaded.error.message);
+  return loaded.value;
+})();
+
+/**
+ * The workshop's panel only (backplate and both DIN rails), as the P1 demo panel was: most picking
+ * and placement tests look at it head-on and want empty background around it.
+ */
+const PANEL: World = {
+  ...WORKSHOP,
+  fixtures: WORKSHOP.fixtures.filter((f) => ['backplate', 'din-rail-1', 'din-rail-2'].includes(f.id)),
+};
 
 /** EventTarget that tracks live listeners, so tests can prove every one is removed. */
 class TrackingTarget extends EventTarget {
@@ -65,10 +86,11 @@ class FakeCanvas extends TrackingTarget {
   }
 }
 
-const setup = () => {
+const setup = (world: World = PANEL) => {
   const canvas = new FakeCanvas();
   const controller = new ViewportController(canvas as unknown as HTMLElement);
   controller.resize(canvas.clientWidth, canvas.clientHeight);
+  controller.syncWorld(world);
   controller.focus('backplate');
   return { canvas, controller };
 };
@@ -195,9 +217,10 @@ describe('ViewportController modes', () => {
     canvas.dispatchEvent(key('keydown', 'KeyW'));
     controller.update(0.1);
     expect(controller.camera.position.z).toBeLessThan(startZ);
-    expect(controller.camera.position.y).toBeCloseTo((PANEL_ROOM_BOUNDS.floorYMm + 1600) / 1000, 9);
+    expect(controller.roomBounds).toEqual(DEFAULT_ROOM_BOUNDS); // the panel-only world has no floor
+    expect(controller.camera.position.y).toBeCloseTo((DEFAULT_ROOM_BOUNDS.floorYMm + 1600) / 1000, 9);
     for (let i = 0; i < 200; i++) controller.update(0.1);
-    expect(controller.camera.position.z).toBeCloseTo((PANEL_ROOM_BOUNDS.minZMm + 250) / 1000, 9);
+    expect(controller.camera.position.z).toBeCloseTo((DEFAULT_ROOM_BOUNDS.minZMm + 250) / 1000, 9);
     canvas.dispatchEvent(key('keyup', 'KeyW'));
     const z = controller.camera.position.z;
     controller.update(0.1);
@@ -270,9 +293,9 @@ describe('ViewportController modes', () => {
 });
 
 describe('ViewportController scene graph', () => {
-  it('matches the snapshot (positions in integer mm)', () => {
-    const { controller } = setup();
-    expect(controller.sceneGraph()).toMatchSnapshot();
+  it('matches the snapshot of the workshop level (positions in integer mm)', () => {
+    const { controller } = setup(WORKSHOP);
+    expect(controller.sceneGraph()).toMatchSnapshot('workshop');
     controller.dispose();
   });
 });
@@ -299,7 +322,7 @@ describe('ViewportController disposal', () => {
       }
       if (o instanceof Mesh) meshes.push(o);
     });
-    expect(controller.bvhCount).toBe(3);
+    expect(controller.bvhCount).toBe(2); // the plate, and one geometry shared by both rails
     const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
     const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
     const listener = vi.fn();
@@ -337,7 +360,7 @@ const entity = (id: number, ref: typeof BOX, x: number, y: number, yaw = 0): Ent
   extensions: {},
 });
 const worldWith = (...entities: Entity[]): World => ({
-  ...createWorld({ seed: 0 }),
+  ...PANEL,
   nextEntityId: Math.max(0, ...entities.map((e) => e.id)) + 1,
   entities,
 });
@@ -422,7 +445,7 @@ describe('ViewportController world sync', () => {
 });
 
 describe('ViewportController placement', () => {
-  const targets = demoPanelSnapTargets();
+  const targets = worldSnapTargets(PANEL);
 
   it('the ghost previews the snapped spot; a click commits exactly one place intent', () => {
     const { canvas, controller } = setup();
@@ -462,7 +485,7 @@ describe('ViewportController placement', () => {
     pointAt(canvas, controller, -10, 150, 7);
     controller.update(1 / 60);
     expect(controller.state.placement).toMatchObject({ valid: true, targetId: 'din-rail-1' });
-    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-70, 110, 0]);
+    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-75, 110, 0]);
     controller.dispose();
   });
 
@@ -564,7 +587,7 @@ describe('ViewportController moves', () => {
 
     const end = controller.projectMm({ x: -10, y: 150, z: 7 });
     canvas.dispatchEvent(pointer('pointerup', end.x, end.y));
-    expect(seen).toEqual([{ kind: 'move', id: 1, positionMm: { x: -70, y: 110, z: 0 } }]);
+    expect(seen).toEqual([{ kind: 'move', id: 1, positionMm: { x: -75, y: 110, z: 0 } }]);
     expect(box.visible).toBe(true);
     expect(controller.state.placement).toBeNull();
     expect(controller.camera.position.equals(eye)).toBe(true); // the drag didn't orbit
@@ -645,7 +668,7 @@ describe('ViewportController moves', () => {
 describe('ViewportController with a live command bus', () => {
   it('intents executed as Commands give the same world as the equivalent script', () => {
     const { canvas, controller } = setup();
-    const bus = createWorldBus(createWorld({ seed: 0 }));
+    const bus = createWorldBus(PANEL);
     controller.onIntent((i) => {
       if (i.kind === 'place')
         bus.exec('entity.place', { ref: i.ref, positionMm: i.positionMm, orientationMdeg: i.orientationMdeg });
@@ -659,8 +682,8 @@ describe('ViewportController with a live command bus', () => {
     expect(bus.entries.map((e) => e.id)).toEqual(['entity.place']);
     expect(controller.entityCount).toBe(1);
 
-    const script = createWorldBus(createWorld({ seed: 0 }));
-    const placed = placeOnTargets(BOX, { x: -150, y: 300, z: 0 }, demoPanelSnapTargets());
+    const script = createWorldBus(PANEL);
+    const placed = placeOnTargets(BOX, { x: -150, y: 300, z: 0 }, worldSnapTargets(script.state));
     if (!placed.ok) throw new Error('expected a placement');
     script.exec('entity.place', { ref: BOX, positionMm: placed.positionMm, orientationMdeg: placed.orientationMdeg });
     expect(bus.state).toEqual(script.state);
@@ -692,6 +715,156 @@ describe('ViewportController disposal with world entities and a ghost', () => {
     expect(controller.bvhCount).toBe(0);
     expect(controller.scene.getObjectByName('world')).toBeUndefined();
     expect(controller.scene.getObjectByName('overlay:ghost')).toBeUndefined();
+    expect(canvas.live.size).toBe(0);
+  });
+});
+
+// --- F1.9: the workshop level ----------------------------------------------------------------
+
+describe('ViewportController on the workshop', () => {
+  const SPOOL = { id: 'prop.spool', version: 1 };
+  const targets = worldSnapTargets(WORKSHOP);
+
+  it('draws nothing until a world arrives, then frames the backplate and walks the floor', () => {
+    const canvas = new FakeCanvas();
+    const controller = new ViewportController(canvas as unknown as HTMLElement);
+    controller.resize(canvas.clientWidth, canvas.clientHeight);
+    expect(controller.state.focusId).toBeNull();
+    expect(controller.selection.all).toEqual([]);
+    controller.syncWorld(WORKSHOP);
+    expect(controller.state).toMatchObject({ mode: 'work', focusId: 'backplate' });
+    expect(controller.fixtureCount).toBe(7);
+    expect(controller.roomBounds).toEqual({ minXMm: -2500, maxXMm: 2500, minZMm: -110, maxZMm: 3590, floorYMm: -1200 });
+    controller.syncWorld(createWorld({ seed: 0 })); // an empty world: the level goes, and so does the focus
+    expect(controller.fixtureCount).toBe(0);
+    expect(controller.fixtureRecipeCount).toBe(0);
+    expect(controller.state.focusId).toBeNull();
+    expect(controller.roomBounds).toEqual(DEFAULT_ROOM_BOUNDS);
+    controller.dispose();
+  });
+
+  it('walls, benches and the backboard are selectable focus targets (view.focus); the floor is not', () => {
+    const { controller } = setup(WORKSHOP);
+    expect(controller.selection.all.map((s) => `${s.kind}:${s.id}`)).toEqual([
+      'board:backboard',
+      'backplate:backplate',
+      'bench:bench',
+      'din-rail:din-rail-1',
+      'din-rail:din-rail-2',
+      'wall:stud-wall',
+    ]);
+    for (const id of ['stud-wall', 'bench', 'backboard', 'din-rail-1']) {
+      expect(controller.focus(id), id).toBe(true);
+      expect(controller.state.focusId).toBe(id);
+    }
+    expect(controller.focus('floor')).toBe(false);
+    // The bench is framed from above (its top is 900 mm up, at y = -300), so its top is in view.
+    controller.focus('bench');
+    expect(controller.camera.position.y).toBeGreaterThan(-0.3);
+    controller.dispose();
+  });
+
+  it('the ghost snaps to the stud wall and the bench top with the arguments a script gets', () => {
+    const { canvas, controller } = setup(WORKSHOP);
+    const seen = intents(controller);
+    controller.focus('stud-wall');
+    controller.setPlacement(BOX);
+    const wallPoint = { x: -2000, y: 0, z: -21 };
+    const p = pointAt(canvas, controller, wallPoint.x, wallPoint.y, wallPoint.z);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ valid: true, targetId: 'stud-wall' });
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+
+    controller.focus('bench');
+    controller.setPlacement(SPOOL);
+    const benchPoint = { x: 1600, y: -300, z: 455 };
+    const q = pointAt(canvas, controller, benchPoint.x, benchPoint.y, benchPoint.z);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ valid: true, targetId: 'bench' });
+    canvas.dispatchEvent(pointer('pointerdown', q.x, q.y));
+    canvas.dispatchEvent(pointer('pointerup', q.x, q.y));
+
+    const expected = (
+      [
+        [BOX, wallPoint],
+        [SPOOL, benchPoint],
+      ] as const
+    ).map(([ref, cursor]) => {
+      const r = placeOnTargets(ref, cursor, targets);
+      if (!r.ok) throw new Error(`expected a placement, got ${r.reason}`);
+      return { kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg };
+    });
+    expect(seen).toEqual(expected);
+    expect(expected[1].orientationMdeg).toEqual({ yaw: 0, pitch: 270_000, roll: 0 }); // stood up on the bench
+    controller.dispose();
+  });
+
+  it('the backboard hides the studs behind it: no snap there, so nothing is placed', () => {
+    const { canvas, controller } = setup(WORKSHOP);
+    const seen = intents(controller);
+    controller.focus('backboard');
+    controller.setPlacement(BOX);
+    const p = pointAt(canvas, controller, -500, 500, -3); // on the board, above and left of the backplate
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ valid: false, targetId: null });
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    expect(seen).toEqual([]);
+    controller.dispose();
+  });
+
+  it('a prop placed on the bench is drawn standing on the top', () => {
+    const { controller } = setup(WORKSHOP);
+    const placed = placeOnTargets(SPOOL, { x: 1600, y: -300, z: 455 }, targets);
+    if (!placed.ok) throw new Error('expected a placement');
+    const transform = { positionMm: placed.positionMm, orientationMdeg: placed.orientationMdeg };
+    controller.syncWorld({
+      ...WORKSHOP,
+      nextEntityId: 2,
+      entities: [{ id: 1, ref: SPOOL, transform, extensions: {} }],
+    });
+    const spool = controller.scene.getObjectByName('entity-1') as Mesh;
+    const bounds = new Box3().setFromObject(spool);
+    expect(bounds.min.y).toBeCloseTo(-0.3, 6); // its bottom on the bench top
+    expect(bounds.max.y).toBeCloseTo(-0.2, 6); // 100 mm tall: the spool's depth stands up
+    controller.dispose();
+  });
+
+  it('resetView returns to work mode on the backplate with nothing selected', () => {
+    const { controller } = setup(WORKSHOP);
+    controller.focus('bench');
+    controller.select('stud-wall');
+    controller.setMode('walk');
+    controller.resetView();
+    expect(controller.state).toMatchObject({ mode: 'work', focusId: 'backplate', selected: null });
+    controller.dispose();
+  });
+
+  it('disposal releases every fixture recipe, BVH and listener', () => {
+    const { canvas, controller } = setup(WORKSHOP);
+    canvas.dispatchEvent(pointer('pointermove', 640, 360));
+    controller.update(1 / 60);
+    controller.setPlacement(BOX);
+    controller.update(1 / 60);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh || o instanceof Box3Helper) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    expect(controller.fixtureRecipeCount).toBe(6);
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(controller.fixtureRecipeCount).toBe(0);
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(0);
+    expect(controller.scene.getObjectByName('fixtures')).toBeUndefined();
     expect(canvas.live.size).toBe(0);
   });
 });

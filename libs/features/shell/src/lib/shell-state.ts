@@ -1,7 +1,7 @@
 import { computed, Injectable, signal } from '@angular/core';
 
 export type ShellScreen = 'menu' | 'workspace';
-export type ShellDialog = 'settings' | 'about';
+export type ShellDialog = 'settings' | 'about' | 'newGame';
 /** Interaction modes (plan §4.9). */
 export type InteractionMode = 'walk' | 'work' | 'editor';
 
@@ -21,7 +21,10 @@ export class ShellState {
   readonly sessionActive = this.session.asReadonly();
   readonly menuOpen = computed(() => this.screenState() === 'menu');
 
-  /** TODO(F1.9): load the workshop level into a fresh world through the session. */
+  /**
+   * Enters the workspace for a sandbox that has just started. The new-game dialog (`newGame`) picks
+   * the seed and `Session.newSandbox` loads the workshop level (F1.9); this is only navigation.
+   */
   newSandbox(): void {
     this.session.set(true);
     this.dialogState.set(null);

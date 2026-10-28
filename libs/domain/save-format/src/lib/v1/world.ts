@@ -46,9 +46,44 @@ export const EntityV1 = z
   .meta({ id: 'EntityV1' });
 export type EntityV1 = z.infer<typeof EntityV1>;
 
+/** Fixture ids: lower-case words joined by single hyphens, at most 64 characters (`backplate`, `din-rail-1`). */
+export const FIXTURE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/**
+ * Prefix reserved for the view ids of entities (`entity-12`), so a fixture id can never collide with
+ * one in `view.focus` or the selection.
+ */
+export const RESERVED_FIXTURE_ID_PREFIX = 'entity-';
+
+export const FixtureIdV1 = z
+  .string()
+  .max(64)
+  .regex(FIXTURE_ID_PATTERN)
+  .refine((id) => !id.startsWith(RESERVED_FIXTURE_ID_PREFIX), {
+    message: `Fixture ids may not start with "${RESERVED_FIXTURE_ID_PREFIX}" (reserved for entity view ids)`,
+  })
+  .meta({ id: 'FixtureIdV1', description: 'Lower-case words joined by single hyphens, at most 64 characters.' });
+
+/**
+ * Fixed level geometry (F1.9): walls, benches, backplates and DIN rails that come with a level. A
+ * fixture is drawn by a procedural recipe for its catalogue ref and may offer one snap target and a
+ * focus target, both named by its `id`. No command creates, moves or deletes fixtures; they change
+ * only when a level document does. They are not entities, so they take no entity ids.
+ */
+export const FixtureV1 = z
+  .strictObject({
+    id: FixtureIdV1,
+    ref: CatalogRef,
+    transform: TransformV1,
+    extensions: Extensions,
+  })
+  .meta({ id: 'FixtureV1' });
+export type FixtureV1 = z.infer<typeof FixtureV1>;
+
 /**
  * The world document (`world.json`), schemaVersion 1. Entities are sorted by strictly ascending `id`
- * and every id is below `nextEntityId`, so each world has exactly one serialised form.
+ * and every id is below `nextEntityId`, and fixtures by strictly ascending `id`, so each world has
+ * exactly one serialised form.
  */
 export const WorldV1 = z
   .strictObject({
@@ -63,10 +98,21 @@ export const WorldV1 = z
     difficulty: Difficulty,
     /** Set once a cheat command has run; never cleared. */
     assisted: z.boolean(),
+    /** Fixed level geometry, sorted by strictly ascending `id` (UTF-16 code units). */
+    fixtures: z.array(FixtureV1),
     entities: z.array(EntityV1),
     extensions: Extensions,
   })
   .superRefine((world, ctx) => {
+    world.fixtures.forEach((fixture, index) => {
+      if (index > 0 && !(world.fixtures[index - 1].id < fixture.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fixtures', index, 'id'],
+          message: 'Fixture ids must be unique and sorted in ascending order',
+        });
+      }
+    });
     let previous = 0;
     world.entities.forEach((entity, index) => {
       if (entity.id <= previous) {
@@ -89,6 +135,6 @@ export const WorldV1 = z
   .meta({
     title: 'Controls world document, schemaVersion 1',
     description:
-      'world.json in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity ids below nextEntityId) and string well-formedness.',
+      'world.json in a .ctrl save (ADR 0004, ADR 0007). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity ids below nextEntityId, sorted unique fixture ids, the reserved "entity-" fixture id prefix) and string well-formedness.',
   });
 export type WorldV1 = z.infer<typeof WorldV1>;

@@ -18,6 +18,7 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "paths": {
+      "@controls/content/*": ["./content/*"],
       "@controls/units": ["./libs/domain/units/src/index.ts"],
       "@controls/save-format": ["./libs/domain/save-format/src/index.ts"],
       "@controls/save-format/testing": ["./libs/domain/save-format/src/testing/arbitraries.ts"],

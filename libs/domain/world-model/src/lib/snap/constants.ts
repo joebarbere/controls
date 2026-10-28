@@ -37,15 +37,15 @@ export const DIN_RAIL_TS35 = {
 } as const satisfies Record<string, SourcedLength>;
 
 /**
- * Pitch for modular DIN-rail devices (one "module"). DIN 43880 gives a 17.5 mm module width; modular
- * devices are commonly built to an 18 mm pitch, which is also integer-mm. Using 18 mm is a rounding
- * choice, labelled as such.
+ * Width of one module of a modular DIN-rail device (MCBs, relays, multi-pole terminal blocks). Kept
+ * exact: slot `k` on a rail starts `round(k × 17.5)` mm from the rail's end, rounded once like the
+ * stud layout, so 40 modules span exactly 700 mm. (Until F1.9 this was a rounded 18 mm pitch.)
  */
 export const DIN_MODULE_PITCH: SourcedLength = {
-  valueMm: 18,
+  valueMm: 17.5,
   kind: 'real-world',
   source:
-    'DIN 43880:1988 module width 17.5 mm; 18 mm is the per-module pitch common in modular-device catalogues (rounded up to integer mm: game-design choice)',
+    'DIN 43880:1988 (built-in equipment for electrical installations, overall dimensions): module width 17.5 mm; slot starts are rounded once to integer mm',
 };
 
 /** Studs at 16 in on centre, the usual US light-frame wall layout. */
@@ -63,6 +63,13 @@ export const WALL_STUD_THICKNESS: SourcedLength = {
   source: 'American Softwood Lumber Standard (NIST DOC PS 20-20): nominal 2 in dressed dry = 1-1/2 in = 38.1 mm',
 };
 
+/** Depth of a nominal 2×4 stud across the wall (3-1/2 in). */
+export const WALL_STUD_DEPTH: SourcedLength = {
+  valueMm: 88.9,
+  kind: 'real-world',
+  source: 'American Softwood Lumber Standard (NIST DOC PS 20-20): nominal 4 in dressed dry = 3-1/2 in = 88.9 mm',
+};
+
 /** Backplate placement grid. Real sub-panels are drilled anywhere; the grid is for play. */
 export const BACKPLATE_GRID_PITCH: SourcedLength = {
   valueMm: 5,
@@ -75,6 +82,20 @@ export const WALL_VERTICAL_PITCH: SourcedLength = {
   valueMm: 10,
   kind: 'game-design',
   source: 'game-design: 10 mm vertical increment on walls',
+};
+
+/** Placement grid on a bench top (F1.9). */
+export const BENCH_TOP_GRID_PITCH: SourcedLength = {
+  valueMm: 10,
+  kind: 'game-design',
+  source: 'game-design: 10 mm grid for setting props down on a bench top',
+};
+
+/** Keep-out border around a bench top's edge, so props never overhang it. */
+export const BENCH_TOP_MARGIN: SourcedLength = {
+  valueMm: 10,
+  kind: 'game-design',
+  source: 'game-design: 10 mm keep-out border on bench tops',
 };
 
 /** How far (perpendicular) from a DIN rail centreline the cursor may be and still snap to it. */

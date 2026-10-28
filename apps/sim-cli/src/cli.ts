@@ -1,6 +1,6 @@
 import { migrateWorld } from '@controls/save-format';
 import { createGame, formatConsoleScriptError, type Game, replayGame, runConsoleScript } from '@controls/scripting-api';
-import { hashWorldDocument } from '@controls/world-model';
+import { hashWorldDocument, newGameWorld } from '@controls/world-model';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { readDocument } from './documents';
@@ -9,7 +9,7 @@ import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
 /*
  * `sim-cli`: runs the game headless in plain Node (plan §4.6, F1.6, ADR 0008).
  *
- *   sim run <script> [--seed N | --world <world.json>] [--log <out.json>] [--expect <hash>]
+ *   sim run <script> [--world <world.json>] [--seed N] [--log <out.json>] [--expect <hash>]
  *   sim replay <replay-log.json> [--expect <hash>]
  *   sim hash <world.json> [--expect <hash>]
  *
@@ -34,8 +34,10 @@ Commands:
   run <script>     Run a TypeScript/JavaScript module (.ts .mts .js .mjs) exporting
                    default (game) => …, or a console-line file (any other extension,
                    conventionally .console). Prints world.hash at the end.
-      --seed <n>          Start from an empty world with this seed (default 0)
-      --world <file>      Start from a world document instead
+      --world <file>      Start from a world document or a level, e.g.
+                          content/levels/workshop.json (default: an empty world)
+      --seed <n>          The seed: of the empty world (default 0), or, with --world,
+                          a new game on that level with this seed (as New sandbox does)
       --log <file>        Write the session's replay log (JSON) here
   replay <file>    Replay a replay-log JSON from its initial world; print the hash
   hash <file>      Print world.hash of a world document (world.json, a level)
@@ -82,9 +84,6 @@ function parseArgv(argv: readonly string[]): Parsed | 'help' {
     options[name] = value;
   }
   if (positionals.length !== 1) throw new UsageError(`"${command}" takes exactly one file`);
-  if (options['seed'] !== undefined && options['world'] !== undefined) {
-    throw new UsageError('--seed and --world are mutually exclusive');
-  }
   return { command, file: positionals[0], options };
 }
 
@@ -135,13 +134,16 @@ function describe(error: unknown): string {
 
 async function startGame(parsed: Parsed, io: CliIo): Promise<Game> {
   const worldFile = parsed.options['world'];
-  if (worldFile === undefined) return createGame({ seed: parseSeed(parsed.options['seed'] ?? '0') });
+  const seedText = parsed.options['seed'];
+  const seed = seedText === undefined ? undefined : parseSeed(seedText);
+  if (worldFile === undefined) return createGame({ seed: seed ?? 0 });
   const document = await readDocument(resolve(io.cwd, worldFile), worldFile);
   if (!document.ok) throw new Failure(document.message);
   if (document.kind !== 'world') throw new Failure(`${worldFile}: is a replay log, not a world document`);
   const loaded = migrateWorld(document.json);
   if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
-  return createGame({ world: loaded.value });
+  // With --seed, a new game on that level (New sandbox's path); without, the document as it is.
+  return createGame({ world: seed === undefined ? loaded.value : newGameWorld(loaded.value, { seed }) });
 }
 
 async function run(path: string, parsed: Parsed, io: CliIo): Promise<string> {

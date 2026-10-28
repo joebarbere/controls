@@ -117,6 +117,9 @@ export default [
             },
             { sourceTag: 'type:app', onlyDependOnLibsWithTags: ['*'] },
             { sourceTag: 'type:e2e', onlyDependOnLibsWithTags: [] },
+            // content/ (F1.9): data only (levels now; the catalogue, tables and jobs later). It imports
+            // nothing; apps bundle it (`@controls/content/levels/workshop.json`), headless tools read the files.
+            { sourceTag: 'type:content', onlyDependOnLibsWithTags: [] },
             // apps/sim-cli (P1): runs the game in plain Node, so it may use domain libs only. All matching
             // constraints apply, so this narrows `type:app`'s wildcard. Precedent: the `scope:desktop` tag.
             {

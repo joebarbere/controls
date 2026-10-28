@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`ViewportController scene graph > matches the snapshot (positions in integer mm) 1`] = `
+exports[`ViewportController scene graph > matches the snapshot of the workshop level (positions in integer mm) > workshop 1`] = `
 {
   "children": [
     {
@@ -24,51 +24,286 @@ exports[`ViewportController scene graph > matches the snapshot (positions in int
       "visible": true,
     },
     {
-      "name": "floor",
+      "children": [
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                0,
+                -18,
+                1220,
+                1220,
+                0,
+              ],
+              "name": "backboard:board",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "backboard",
+          "positionMm": [
+            -610,
+            -610,
+            -3,
+          ],
+          "selectable": "board:backboard",
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                0,
+                -3,
+                600,
+                800,
+                0,
+              ],
+              "name": "backplate:plate",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "backplate",
+          "positionMm": [
+            -300,
+            -400,
+            0,
+          ],
+          "selectable": "backplate:backplate",
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                860,
+                0,
+                1800,
+                900,
+                750,
+              ],
+              "name": "bench:top",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+            {
+              "boundsMm": [
+                40,
+                0,
+                40,
+                1760,
+                860,
+                710,
+              ],
+              "name": "bench:frame",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+            {
+              "boundsMm": [
+                40,
+                150,
+                40,
+                1760,
+                170,
+                710,
+              ],
+              "name": "bench:shelf",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "bench",
+          "positionMm": [
+            700,
+            -1200,
+            80,
+          ],
+          "selectable": "bench:bench",
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                -18,
+                0,
+                500,
+                18,
+                7,
+              ],
+              "name": "din-rail-1:rail",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "din-rail-1",
+          "positionMm": [
+            -250,
+            150,
+            0,
+          ],
+          "selectable": "din-rail:din-rail-1",
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                -18,
+                0,
+                500,
+                18,
+                7,
+              ],
+              "name": "din-rail-2:rail",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "din-rail-2",
+          "positionMm": [
+            -250,
+            -50,
+            0,
+          ],
+          "selectable": "din-rail:din-rail-2",
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                0,
+                0,
+                5000,
+                0,
+                3700,
+              ],
+              "name": "floor:floor",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "floor",
+          "positionMm": [
+            -2500,
+            -1200,
+            -110,
+          ],
+          "type": "Group",
+          "visible": true,
+        },
+        {
+          "children": [
+            {
+              "boundsMm": [
+                0,
+                0,
+                -89,
+                4915,
+                2440,
+                0,
+              ],
+              "name": "stud-wall:framing",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+            {
+              "boundsMm": [
+                0,
+                0,
+                0,
+                4915,
+                2440,
+                0,
+              ],
+              "drawn": false,
+              "name": "stud-wall:snap-plane",
+              "positionMm": [
+                0,
+                0,
+                0,
+              ],
+              "type": "Mesh",
+              "visible": true,
+            },
+          ],
+          "name": "stud-wall",
+          "positionMm": [
+            -2500,
+            -1200,
+            -21,
+          ],
+          "selectable": "wall:stud-wall",
+          "type": "Group",
+          "visible": true,
+        },
+      ],
+      "name": "fixtures",
       "positionMm": [
         0,
-        -1200,
-        1750,
-      ],
-      "rotationMdeg": [
-        -90000,
         0,
         0,
       ],
-      "type": "Mesh",
-      "visible": true,
-    },
-    {
-      "name": "backplate",
-      "positionMm": [
-        0,
-        0,
-        0,
-      ],
-      "selectable": "backplate:backplate",
-      "type": "Mesh",
-      "visible": true,
-    },
-    {
-      "name": "din-rail-1",
-      "positionMm": [
-        0,
-        150,
-        0,
-      ],
-      "selectable": "din-rail:din-rail-1",
-      "type": "Mesh",
-      "visible": true,
-    },
-    {
-      "name": "din-rail-2",
-      "positionMm": [
-        0,
-        -50,
-        0,
-      ],
-      "selectable": "din-rail:din-rail-2",
-      "type": "Mesh",
+      "type": "Group",
       "visible": true,
     },
     {
@@ -127,6 +362,14 @@ exports[`ViewportController world sync > adds, updates and removes entity object
 {
   "children": [
     {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        120,
+        80,
+        60,
+      ],
       "name": "entity-1",
       "positionMm": [
         -70,
@@ -138,6 +381,14 @@ exports[`ViewportController world sync > adds, updates and removes entity object
       "visible": true,
     },
     {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        300,
+        200,
+        200,
+      ],
       "name": "entity-2",
       "positionMm": [
         -50,
@@ -169,6 +420,14 @@ exports[`ViewportController world sync > adds, updates and removes entity object
 {
   "children": [
     {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        120,
+        80,
+        60,
+      ],
       "name": "entity-1",
       "positionMm": [
         -70,
@@ -195,6 +454,14 @@ exports[`ViewportController world sync > adds, updates and removes entity object
 {
   "children": [
     {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        120,
+        80,
+        60,
+      ],
       "name": "entity-1",
       "positionMm": [
         -210,
@@ -206,6 +473,14 @@ exports[`ViewportController world sync > adds, updates and removes entity object
       "visible": true,
     },
     {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        300,
+        200,
+        200,
+      ],
       "name": "entity-2",
       "positionMm": [
         -50,

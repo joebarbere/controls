@@ -18,6 +18,7 @@ const world = (overrides: Record<string, unknown> = {}) => ({
   regionId: 'nec',
   difficulty: 'apprentice',
   assisted: false,
+  fixtures: [],
   entities: [crate(1), crate(2, 500)],
   extensions: {},
   ...overrides,
@@ -34,7 +35,9 @@ describe('WorldV1', () => {
   });
 
   it('createWorld builds an empty, valid world with P1 defaults', () => {
-    expect(createWorld({ seed: 7 })).toStrictEqual({ ...world({ seed: 7, nextEntityId: 1, entities: [] }) });
+    expect(createWorld({ seed: 7 })).toStrictEqual({
+      ...world({ seed: 7, nextEntityId: 1, fixtures: [], entities: [] }),
+    });
     expect(createWorld({ seed: 0, difficulty: 'realistic', regionId: 'nec' }).difficulty).toBe('realistic');
     expect(() => createWorld({ seed: 2 ** 32 })).toThrow();
     expect(() => createWorld({ seed: -1 })).toThrow();
@@ -80,6 +83,27 @@ describe('WorldV1', () => {
     );
     expect(issuesOf(world({ nextEntityId: 2 }))).toContain('Entity id must be below nextEntityId');
     expect(issuesOf(world({ entities: [crate(0)] }))).not.toHaveLength(0);
+  });
+
+  it('requires fixture ids sorted, unique, well-formed and outside the entity- prefix', () => {
+    const fixture = (id: string) => ({ ...crate(1), id });
+    expect(issuesOf(world({ fixtures: [fixture('backplate'), fixture('din-rail-1')] }))).toHaveLength(0);
+    expect(issuesOf(world({ fixtures: [fixture('din-rail-1'), fixture('backplate')] }))).toContain(
+      'Fixture ids must be unique and sorted in ascending order',
+    );
+    expect(issuesOf(world({ fixtures: [fixture('bench'), fixture('bench')] }))).toContain(
+      'Fixture ids must be unique and sorted in ascending order',
+    );
+    // Code-unit order: '-' (U+002D) sorts before digits and letters.
+    expect(issuesOf(world({ fixtures: [fixture('din-rail'), fixture('din-rail-1'), fixture('dinrail')] }))).toEqual([]);
+    for (const bad of ['Bench', 'bench--1', '-bench', 'bench-', 'a'.repeat(65), 'stud wall', '']) {
+      expect(issuesOf(world({ fixtures: [fixture(bad)] })), bad).not.toHaveLength(0);
+    }
+    expect(issuesOf(world({ fixtures: [fixture('entity-1')] }))).toContain(
+      'Fixture ids may not start with "entity-" (reserved for entity view ids)',
+    );
+    const extra = { ...fixture('bench'), colour: 'red' };
+    expect(issuesOf(world({ fixtures: [extra] }))).not.toHaveLength(0);
   });
 
   it('seeds are unsigned 32-bit integers', () => {

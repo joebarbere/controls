@@ -74,7 +74,10 @@ export interface NewWorldOptions {
   regionId?: RegionId;
 }
 
-/** An empty world at the current schema version. Validated, so an out-of-range seed throws. */
+/**
+ * An empty world (no fixtures, no entities) at the current schema version. Validated, so an
+ * out-of-range seed throws. A level such as the workshop is a world document with fixtures.
+ */
 export function createWorld(options: NewWorldOptions): World {
   return World.parse({
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -84,6 +87,7 @@ export function createWorld(options: NewWorldOptions): World {
     regionId: options.regionId ?? 'nec',
     difficulty: options.difficulty ?? 'apprentice',
     assisted: false,
+    fixtures: [],
     entities: [],
     extensions: {},
   });

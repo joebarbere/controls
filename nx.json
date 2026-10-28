@@ -11,7 +11,8 @@
     ],
     "sharedGlobals": [
       "{workspaceRoot}/libs/domain/tsconfig.domain.json",
-      "{workspaceRoot}/libs/domain/vitest.domain.mts"
+      "{workspaceRoot}/libs/domain/vitest.domain.mts",
+      "{workspaceRoot}/content/**/*"
     ]
   },
   "plugins": [

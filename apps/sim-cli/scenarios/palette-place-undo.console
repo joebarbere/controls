@@ -2,7 +2,7 @@
 # runs with the palette, keyboard only. Opening the palette (palette.open) is UI chrome and is never
 # logged, so it isn't here. Both must reach PALETTE_PLACE_UNDO_HASH
 # (apps/sim-cli/src/palette-place-undo.spec.ts).
-#   pnpm sim run apps/sim-cli/scenarios/palette-place-undo.console
+#   pnpm sim run apps/sim-cli/scenarios/palette-place-undo.console --world content/levels/workshop.json
 entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200
 entity.place --ref.id prop.spool --ref.version 1 --positionMm.x 400 --positionMm.y 0 --positionMm.z -200
 edit.undo      # the spool goes; the crate stays

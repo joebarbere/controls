@@ -38,7 +38,10 @@ The workspace is always mounted. Behind the main menu it shows only the viewport
 ```mermaid
 stateDiagram-v2
     [*] --> Menu: boot (focus: first menu item)
-    Menu --> Workspace: New sandbox / Resume (focus: viewport canvas)
+    Menu --> NewGameDialog: New sandbox (focus: Seed, a fresh seed)
+    NewGameDialog --> Workspace: Enter / Start, valid seed → Session.newSandbox (focus: viewport canvas)
+    NewGameDialog --> Menu: Escape / Cancel (focus returns to New sandbox)
+    Menu --> Workspace: Resume (focus: viewport canvas)
     Workspace --> Menu: Menu button, or Escape outside the canvas (focus: Resume)
     Menu --> Workspace: Escape (session running)
     state Menu {
@@ -56,6 +59,7 @@ stateDiagram-v2
 
 - **Dialogs** are native `<dialog>` elements opened with `showModal()` (`ctl-dialog`). The page behind them is inert, focus moves inside and is trapped, Escape closes, and focus returns to the opener.
 - **Escape** is handled innermost-first: a key capture in the Key bindings dialog, a dialog or the focused viewport canvas (cancel a move, cancel placement, clear the selection, in that order; F1.7) consumes it; otherwise `App.onEscape` toggles between the menu and the workspace. Escape is the shell's fixed "back" key, reserved by the keybinding service, so no command can take it.
+- **New sandbox** (F1.9) opens the new-game dialog: the level (Workshop), a seed field with a fresh seed (`SEED_SOURCE`, `crypto.getRandomValues`) and a New seed button. A typed seed must be a whole number from 0 to 4294967295 (`parseSeed`); an invalid one is refused inline (`aria-invalid`, an alert) and the dialog stays open. Start runs `Session.newSandbox({ seed, difficulty: settings.gameplay.defaultDifficulty })`, which loads the workshop level with a fresh history and replay log; the viewport resets to its starting view (`Session.generation`).
 - **Main menu** items are plain buttons in a `<nav>`. Tab, Up/Down, Home and End move between them. Continue and Load are `aria-disabled` with a reason until F1.8b, and Quit is hidden where `Platform.canQuit` is false (the web harness).
 
 ## Workspace layout

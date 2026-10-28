@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "seed": 0,
+  "tick": 0,
+  "nextEntityId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [
+    {
+      "id": "backboard",
+      "ref": { "id": "prop.plywood-backboard", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -610, "y": -610, "z": -3 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "backplate",
+      "ref": { "id": "prop.backplate", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -300, "y": -400, "z": 0 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "bench",
+      "ref": { "id": "prop.bench", "version": 1 },
+      "transform": {
+        "positionMm": { "x": 700, "y": -1200, "z": 80 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "din-rail-1",
+      "ref": { "id": "prop.din-rail", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -250, "y": 150, "z": 0 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "din-rail-2",
+      "ref": { "id": "prop.din-rail", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -250, "y": -50, "z": 0 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "floor",
+      "ref": { "id": "prop.workshop-floor", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -2500, "y": -1200, "z": -110 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "stud-wall",
+      "ref": { "id": "prop.stud-wall", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -2500, "y": -1200, "z": -21 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    }
+  ],
+  "entities": [],
+  "extensions": {}
+}

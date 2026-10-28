@@ -1,12 +1,37 @@
+import { migrateWorld } from '@controls/save-format';
 import fc from 'fast-check';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { worldSnapTargets } from '../fixtures';
 import { BUILTIN_PROPS, builtinProp, propFootprint } from '../props';
 import { BACKPLATE_MARGIN, SNAP_PLANE_TOLERANCE } from './constants';
-import { DEMO_PANEL, demoBackplateTarget, demoPanelSnapTargets } from './demo-panel';
-import { normalForOrientation, orientationForNormal, placeOnTargets } from './placement';
+import {
+  isMountedOrientation,
+  normalForOrientation,
+  orientationForFrame,
+  orientationForNormal,
+  placeOnTargets,
+} from './placement';
 import { isOnTarget, snapToBest } from './resolve';
 import type { DinRailTarget, SnapTarget, WallStudsTarget } from './snap';
 
-const targets = demoPanelSnapTargets();
+/** The workshop level (`content/levels/workshop.json`), loaded the way the game loads it. */
+function workshop() {
+  const json: unknown = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, '../../../../../../content/levels/workshop.json'), 'utf8'),
+  );
+  const loaded = migrateWorld(json);
+  if (!loaded.ok) throw new Error(loaded.error.message);
+  return loaded.value;
+}
+
+const targets = worldSnapTargets(workshop());
+const byId = (id: string): SnapTarget => {
+  const t = targets.find((x) => x.id === id);
+  if (!t) throw new Error(`no target ${id}`);
+  return t;
+};
+const panel = [byId('backplate'), byId('din-rail-1'), byId('din-rail-2')];
 const box = { id: 'prop.box', version: 1 };
 const crate = { id: 'prop.crate', version: 1 };
 const footprint = { widthMm: 120, heightMm: 80 };
@@ -30,22 +55,23 @@ describe('built-in props', () => {
   });
 });
 
-describe('demo panel', () => {
-  it('has a sourced layout and the backplate margin from the constants', () => {
-    expect(DEMO_PANEL.source).toMatch(/game-design/);
+describe('workshop snap targets', () => {
+  it('come from the level fixtures, named by fixture id, with the backplate margin from the constants', () => {
     expect(BACKPLATE_MARGIN.source).toMatch(/game-design/);
     expect(SNAP_PLANE_TOLERANCE.source).toMatch(/game-design/);
-    expect(demoBackplateTarget()).toMatchObject({ marginMm: 20, frame: { origin: { x: -300, y: -400, z: 0 } } });
+    expect(byId('backplate')).toMatchObject({ marginMm: 20, frame: { origin: { x: -300, y: -400, z: 0 } } });
     expect(targets.map((t) => `${t.kind}:${t.id}`)).toEqual([
       'backplate-grid:backplate',
+      'bench-top:bench',
       'din-rail:din-rail-1',
       'din-rail:din-rail-2',
+      'wall-studs:stud-wall',
     ]);
   });
 });
 
 describe('isOnTarget', () => {
-  const [plate, rail1] = targets;
+  const [plate, rail1] = [byId('backplate'), byId('din-rail-1')];
 
   it('needs the point near the plane and inside the extent', () => {
     expect(isOnTarget(plate, { x: 0, y: 0, z: 0 })).toBe(true);
@@ -76,7 +102,7 @@ describe('snapToBest', () => {
     expect(snapToBest(targets, footprint, { x: -10, y: 150, z: 0 })).toMatchObject({
       ok: true,
       targetId: 'din-rail-1',
-      world: { x: -70, y: 110, z: 0 },
+      world: { x: -75, y: 110, z: 0 },
     });
   });
 
@@ -106,10 +132,10 @@ describe('snapToBest', () => {
   });
 
   it('ignores the order of the targets (priority, then id)', () => {
-    const extra: DinRailTarget = { kind: 'din-rail', id: 'din-rail-0', frame: targets[1].frame, lengthMm: 500 };
+    const extra: DinRailTarget = { kind: 'din-rail', id: 'din-rail-0', frame: panel[1].frame, lengthMm: 500 };
     fc.assert(
       fc.property(
-        fc.shuffledSubarray([...targets, extra], { minLength: 4, maxLength: 4 }),
+        fc.shuffledSubarray([...targets, extra], { minLength: 6, maxLength: 6 }),
         fc.integer({ min: -300, max: 300 }),
         fc.integer({ min: -400, max: 400 }),
         (shuffled: SnapTarget[], x, y) => {
@@ -118,7 +144,7 @@ describe('snapToBest', () => {
         },
       ),
     );
-    expect(snapToBest([...targets, extra], footprint, { x: 0, y: 150, z: 0 })).toMatchObject({
+    expect(snapToBest([...panel, extra], footprint, { x: 0, y: 150, z: 0 })).toMatchObject({
       targetId: 'din-rail-0',
     });
   });
@@ -128,11 +154,25 @@ describe('orientation of mounted props', () => {
   it('maps the four surface normals to yaw quarter-turns and back', () => {
     for (const normal of ['+z', '+x', '-z', '-x'] as const) {
       expect(normalForOrientation(orientationForNormal(normal))).toBe(normal);
+      expect(orientationForFrame({ origin: { x: 0, y: 0, z: 0 }, normal })).toEqual(orientationForNormal(normal));
     }
     expect(orientationForNormal('+x')).toEqual({ yaw: 90_000, pitch: 0, roll: 0 });
     expect(normalForOrientation({ yaw: 45_000, pitch: 0, roll: 0 })).toBeNull();
     expect(normalForOrientation({ yaw: 0, pitch: 1, roll: 0 })).toBeNull();
     expect(normalForOrientation({ yaw: 0, pitch: 0, roll: 1 })).toBeNull();
+  });
+
+  it('stands a prop up on a bench top: pitch -90°, yaw turning +x onto the frame right', () => {
+    const up = (right?: '+x' | '-x' | '+z' | '-z') =>
+      orientationForFrame({ origin: { x: 0, y: 0, z: 0 }, normal: '+y', right });
+    expect(up()).toEqual({ yaw: 0, pitch: 270_000, roll: 0 });
+    expect(up('-z')).toEqual({ yaw: 90_000, pitch: 270_000, roll: 0 });
+    expect(up('-x')).toEqual({ yaw: 180_000, pitch: 270_000, roll: 0 });
+    expect(up('+z')).toEqual({ yaw: 270_000, pitch: 270_000, roll: 0 });
+    for (const r of ['+x', '-x', '+z', '-z'] as const) expect(isMountedOrientation(up(r))).toBe(true);
+    expect(isMountedOrientation({ yaw: 45_000, pitch: 270_000, roll: 0 })).toBe(false);
+    expect(isMountedOrientation({ yaw: 0, pitch: 270_000, roll: 1 })).toBe(false);
+    expect(isMountedOrientation({ yaw: 0, pitch: 90_000, roll: 0 })).toBe(false);
   });
 });
 
@@ -180,7 +220,35 @@ describe('placeOnTargets', () => {
     ).toMatchObject({ ok: false, reason: 'orientation-mismatch' });
     expect(
       placeOnTargets(box, { x: -10, y: 150, z: 0 }, targets, { orientationMdeg: orientationForNormal('+z') }),
-    ).toMatchObject({ ok: true, targetId: 'din-rail-1', positionMm: { x: -70, y: 110, z: 0 } });
+    ).toMatchObject({ ok: true, targetId: 'din-rail-1', positionMm: { x: -75, y: 110, z: 0 } });
+  });
+
+  it('sets props down on the bench top and the wall studs of the workshop', () => {
+    // Bench top: front-left corner at (700, -300, 830); u = +x, v = -z, 10 mm grid inside a 10 mm margin.
+    expect(placeOnTargets(crate, { x: 1600, y: -300, z: 455 }, targets)).toEqual({
+      ok: true,
+      targetId: 'bench',
+      kind: 'bench-top',
+      positionMm: { x: 1450, y: -300, z: 550 },
+      orientationMdeg: { yaw: 0, pitch: 270_000, roll: 0 },
+    });
+    // Stud wall: stud faces at z = -21, first stud centre 19 mm from x = -2500; studs at x = -2481, -2075, …
+    expect(placeOnTargets(box, { x: -2000, y: 0, z: -21 }, targets)).toEqual({
+      ok: true,
+      targetId: 'stud-wall',
+      kind: 'wall-studs',
+      positionMm: { x: -2055, y: -40, z: -21 },
+      orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+    });
+    // A wall-mounted box can't be moved onto the bench (one move never turns it).
+    expect(
+      placeOnTargets(box, { x: 1600, y: -300, z: 455 }, targets, { orientationMdeg: orientationForNormal('+z') }),
+    ).toMatchObject({ ok: false, reason: 'no-target' });
+    expect(
+      placeOnTargets(box, { x: 1600, y: -300, z: 455 }, targets, {
+        orientationMdeg: { yaw: 0, pitch: 270_000, roll: 0 },
+      }),
+    ).toMatchObject({ ok: true, targetId: 'bench' });
   });
 
   it('is deterministic and always integer', () => {

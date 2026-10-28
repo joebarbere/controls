@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { enterSeed } from './support/sandbox';
 
 // F1.1 acceptance: the shell is fully operable without a mouse, focus is always visible, and
 // focus returns to the opener after each dialog closes. Every step below uses the keyboard only.
@@ -73,10 +74,12 @@ test('menu → settings → back → about → New sandbox, keyboard only', asyn
   await expect(about).toBeHidden();
   await expectVisibleFocus(aboutButton);
 
-  // New sandbox: the menu goes and focus lands on the viewport.
+  // New sandbox asks for a seed (F1.9; its own test below); Enter starts. The menu goes and focus
+  // lands on the viewport.
   await page.keyboard.press('Home');
   await expectVisibleFocus(newSandbox);
   await page.keyboard.press('Enter');
+  await enterSeed(page);
   await expect(menu).toBeHidden();
   // The canvas is the single viewport focus target (the region around it is a landmark only).
   const viewport = page.getByRole('region', { name: '3D viewport' }).locator('canvas');
@@ -103,9 +106,46 @@ test('menu → settings → back → about → New sandbox, keyboard only', asyn
   await expectVisibleFocus(viewport);
 });
 
+test('the new-game dialog: fresh seed, Escape backs out, an invalid seed is refused, keyboard only', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1');
+  const menu = page.getByRole('navigation', { name: 'Controls' });
+  const newSandbox = menu.getByRole('button', { name: 'New sandbox' });
+  await expect(newSandbox).toBeFocused();
+  await page.keyboard.press('Enter');
+  const newGame = page.getByRole('dialog', { name: 'New sandbox' });
+  const seed = newGame.getByRole('textbox', { name: 'Seed' });
+  await expectVisibleFocus(seed);
+  await expect(seed).toHaveValue(/^\d+$/); // a fresh seed
+  await page.keyboard.press('Escape');
+  await expect(newGame).toBeHidden();
+  await expectVisibleFocus(newSandbox); // focus back on the opener
+
+  await page.keyboard.press('Enter');
+  await expectVisibleFocus(seed);
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type('4294967296'); // one past the largest seed
+  await page.keyboard.press('Enter');
+  await expect(seed).toHaveAttribute('aria-invalid', 'true');
+  await expect(newGame.getByRole('alert')).toContainText('whole number from 0 to 4294967295');
+  await expect(newGame).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type('12345');
+  await page.keyboard.press('Enter');
+  await expect(newGame).toBeHidden();
+  await expect(menu).toBeHidden();
+  await expect(page.locator('ctl-viewport canvas')).toBeFocused();
+  const world = await page.evaluate(
+    () => (window as unknown as { __controlsSession: { world(): { seed: number } } }).__controlsSession.world().seed,
+  );
+  expect(world).toBe(12345);
+});
+
 test('workspace panels resize, collapse and reset from the keyboard', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'New sandbox' }).press('Enter');
+  await enterSeed(page);
   const inspector = page.getByRole('region', { name: 'Inspector' });
   await expect(inspector).toBeVisible();
   const before = (await inspector.boundingBox())?.width ?? 0;

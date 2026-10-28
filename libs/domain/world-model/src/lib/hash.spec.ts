@@ -1,4 +1,4 @@
-import { createWorld, World } from '@controls/save-format';
+import { createWorld, migrateWorld, World } from '@controls/save-format';
 import { rawWorldV1Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { createHash } from 'node:crypto';
@@ -6,6 +6,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { canonicalJson, CanonicalJsonError, hashWorldDocument, worldHash } from './hash';
 import { createWorldBus } from './session';
+
+const workshopJson = (): unknown =>
+  JSON.parse(readFileSync(resolve(import.meta.dirname, '../../../../../content/levels/workshop.json'), 'utf8'));
+
+function workshop(): World {
+  const loaded = migrateWorld(workshopJson());
+  if (!loaded.ok) throw new Error(loaded.error.message);
+  return loaded.value;
+}
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(resolve(import.meta.dirname, `../../../save-format/fixtures/v1/world/${name}.json`), 'utf8'));
@@ -107,12 +116,17 @@ describe('world.hash', () => {
  * tests prove the hash is identical in Node and Chromium. Change both or neither.
  */
 const GOLDEN = {
-  emptySeed0: 'e5e9a9fcd6ab93f0ae928adfc86c01c20c83230a668775fa886e98351ef7a047',
-  propsAndExtensionsFixture: '3f250d0db76728961bc71836cd4162044554bbc13b75337b2fe42c24035edf13',
-  scenario: '598d80f324bc32138de0de821dccade85e722a8bc8e0d27cc8fa854652a2a3cf',
+  emptySeed0: '2480470b706e39a15e962b7106a5eb37b3e8e03adf78199d8e007c1299fe0534',
+  propsAndExtensionsFixture: 'a51879789f4e0e693b7d56e1fd2a59e836c22b62839fbdce6ec261a6d384c5ac',
+  scenario: '99990dfb229d89bd028a57439bc21de31868a13434eee41a91c8088d78737526',
+  /** `content/levels/workshop.json` (seed 0): New sandbox with seed 0 starts here (F1.9). */
+  workshopSeed0: 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825',
 } as const;
 
-/** The scenario the e2e test runs through the session hook, from `createWorld({ seed: 0 })`. */
+/**
+ * The scenario the e2e test runs through the session hook, from the world the game boots with: the
+ * workshop level at seed 0 (`content/levels/workshop.json`, F1.9).
+ */
 const SCENARIO: ReadonlyArray<readonly [string, object]> = [
   ['entity.place', { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 100, y: 0, z: -200 } }],
   [
@@ -141,8 +155,12 @@ describe('cross-runtime golden hashes (also asserted in Chromium)', () => {
     });
   });
 
+  it('pins the workshop level (also what `pnpm sim hash content/levels/workshop.json` prints)', () => {
+    expect(hashWorldDocument(workshopJson())).toMatchObject({ ok: true, hash: GOLDEN.workshopSeed0 });
+  });
+
   it('pins the scenario hash', () => {
-    const bus = createWorldBus(createWorld({ seed: 0 }));
+    const bus = createWorldBus(workshop());
     for (const [id, args] of SCENARIO) expect(bus.exec(id, args)).toMatchObject({ ok: true });
     expect(worldHash(bus.state)).toBe(GOLDEN.scenario);
     expect(worldHash(bus.state)).toBe(referenceHash(bus.state));

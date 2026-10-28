@@ -4,16 +4,18 @@
  */
 import type { SnapTarget, SurfaceNormal } from '@controls/world-model';
 
-export type SelectableKind = 'backplate' | 'din-rail' | 'wall' | 'bench' | 'prop' | 'device';
+export type SelectableKind = 'backplate' | 'din-rail' | 'wall' | 'board' | 'bench' | 'prop' | 'device';
 
 /** JSON-plain metadata stored on a scene object's `userData.selectable`. */
 export interface SelectableInfo {
-  /** Stable id: a fixed scene object's name (`backplate`, `din-rail-1`) or `entity-<id>` for world entities. */
+  /** Stable id: a fixture's id (`backplate`, `din-rail-1`, `stud-wall`) or `entity-<id>` for world entities. */
   readonly id: string;
   readonly kind: SelectableKind;
   readonly label: string;
   /** Present when work mode can focus this object; the way its working face points. */
   readonly focusNormal?: SurfaceNormal;
+  /** Work mode frames the face from this many degrees above level (benches); default 0. */
+  readonly focusElevationDeg?: number;
   /** Present when placement can snap onto this object. */
   readonly snapTarget?: SnapTarget;
   /** The world entity this object draws (entity selectables only); Commands take it as `id`. */

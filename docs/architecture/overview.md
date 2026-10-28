@@ -90,10 +90,11 @@ flowchart LR
     CMDS["libs/domain/commands<br/>type:domain"]:::p0
     WM["libs/domain/world-model<br/>type:domain"]:::p0
     SAPI["libs/domain/scripting-api<br/>type:domain"]:::p0
+    CONTENT["content/ (F1.9)<br/>type:content: levels"]:::p0
     DOM["libs/domain/* (P2+)<br/>sim-core, catalog…"]:::later
     WORKER["libs/sim-worker (P2)"]:::later
 
-    GAME --> FEAT & UI & REND & PAPI & PEL & PWEB
+    GAME --> FEAT & UI & REND & PAPI & PEL & PWEB & CONTENT
     DESK --> IPC
     SIMCLI --> SAPI & CMDS & WM & SF
     FEAT --> SAPI & CMDS & WM & SF & REND & UI & PAPI & IPC
@@ -114,6 +115,7 @@ flowchart LR
 
 - `type:domain` is pure TypeScript (no Angular, DOM or Electron) and depends only on other domain libs. That's what lets `sim-cli` run the game headless. Since the P1 kickoff this is enforced beyond tags: banned npm imports (Angular, RxJS, Electron, Three.js, …), a no-`dom` tsconfig, no Node built-ins in source, a determinism lint (no `Math.random`, wall clock, `performance` or `crypto`), and a 90 % coverage gate. See [workspace caveats](../caveats/workspace.md).
 - `scope:headless` (`apps/sim-cli`) may depend only on domain libs, on top of its `type:app` tag. A test lints a probe import with the real config to keep it that way.
+- `type:content` (`content/`, F1.9) is data only and imports nothing. The game bundles levels through `@controls/content/*`; `sim-cli` and specs read the files from disk.
 - `sim-worker` depends on domain libs only.
 - `type:rendering` depends on `world-model`, `catalog` and `units`, plus read-only snapshot types from `sim-worker`. It is framework-free.
 - `type:feature` may depend on domain, rendering, ui and `platform/api`, **never** on a concrete platform implementation.

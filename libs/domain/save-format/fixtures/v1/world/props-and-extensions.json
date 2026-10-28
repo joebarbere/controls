@@ -6,6 +6,26 @@
   "regionId": "nec",
   "difficulty": "realistic",
   "assisted": true,
+  "fixtures": [
+    {
+      "id": "bench",
+      "ref": { "id": "prop.bench", "version": 1 },
+      "transform": {
+        "positionMm": { "x": 700, "y": -1200, "z": 80 },
+        "orientationMdeg": { "yaw": 0, "pitch": 0, "roll": 0 }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "stud-wall-2",
+      "ref": { "id": "prop.stud-wall", "version": 1 },
+      "transform": {
+        "positionMm": { "x": -2500, "y": -1200, "z": 3000 },
+        "orientationMdeg": { "yaw": 90000, "pitch": 0, "roll": 0 }
+      },
+      "extensions": { "mod.example.paint": "primer" }
+    }
+  ],
   "entities": [
     {
       "id": 1,

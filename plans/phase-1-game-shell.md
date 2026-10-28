@@ -8,7 +8,7 @@ A game you can start, look around, place things in and save: a keyboard-first An
 
 ## Phase acceptance
 
-- [ ] Place, move and delete objects with undo/redo through the **mouse, palette, console and a `sim-cli` script**, with the same resulting world hash (`world.hash`) on every surface. _(One scenario, four drivers: `apps/game-e2e` for mouse, palette and console, `sim-cli` for the script.)_
+- [ ] Place, move and delete objects with undo/redo through the **mouse, palette, console and a `sim-cli` script**, with the same resulting world hash (`world.hash`) on every surface. _(One scenario, four drivers: `apps/game-e2e` for mouse, palette and console, `sim-cli` for the script.)_ _F1.9: every scenario now runs on the workshop level (New sandbox with seed 0 in `game-e2e`, `--world content/levels/workshop.json` in `sim-cli`), with goldens shared between them. Still open: no single scenario has all four drivers yet. The mouse scenario (`mouse-place-move-delete`) is driven by the mouse, the in-game console, a console file and a snapping TS script but not the palette, and has no undo/redo; the palette and four-surface scenarios have undo/redo but no mouse driver._
 - [ ] Save then reload is lossless: a fast-check property test on the world document and an E2E save → reload → same hash, in the web harness and in Electron.
 - [x] Replaying seed + command log from an empty world gives the same hash as the live session (property test in `domain/commands` and `sim-cli replay`). _(F1.2 property tests; F1.6's four-surface test replays the log a `sim run` wrote and gets the live hash.)_
 - [x] E2E covers the palette and the console (including the console under the Electron CSP). _(`apps/game-e2e`: `palette.spec.ts` (F1.3) and `console.spec.ts` (F1.5); `apps/desktop-e2e/src/smoke.spec.ts` opens the console under the real `app://` CSP.)_
@@ -186,9 +186,9 @@ Acceptance:
 
 - [x] `mm()` moves to `@controls/units`. Snapshot add/update/remove keeps the scene in sync (scene-graph JSON snapshot test). _(Part 1: `mm()`/`metresToMm()` moved. Part 2: `WorldSync` draws world entities by id with ref-counted prop recipes; snapshots cover add, move and remove; the snap maths moved to `world-model` `snap/`.)_
 - [x] Walk mode: WASD plus mouse look with pointer lock, Esc releases, kept inside the room bounds.
-- [x] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key. _(Part 1: orbit, zoom and pan limits on the backplate and rails. Part 2: both view commands, the `mode` and `selection.*` context keys, and V/F as their bindings (ADR 0006). Walls and benches become focus targets with F1.9.)_
+- [x] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key. _(Part 1: orbit, zoom and pan limits on the backplate and rails. Part 2: both view commands, the `mode` and `selection.*` context keys, and V/F as their bindings (ADR 0006). Walls and benches became focus targets with F1.9.)_
 - [x] Hover and selection by BVH raycast. Selection is UI state (`selection.kind`), not world state. Keyboard users can cycle through selectable entities.
-- [x] Placement: _(Part 1: pure integer-mm `snap()` for all three targets with sourced constants. Part 2: the ghost, one Command per commit through `feature-workspace`, Escape and Delete; keyboard placement with Enter at the reticle and M to pick up. Wall studs are snapped and tested, but no wall exists until F1.9.)_
+- [x] Placement: _(Part 1: pure integer-mm `snap()` for all three targets with sourced constants. Part 2: the ghost, one Command per commit through `feature-workspace`, Escape and Delete; keyboard placement with Enter at the reticle and M to pick up. Wall studs are snapped and tested; F1.9 added the workshop's stud wall, live.)_
   - a ghost preview snaps to the DIN rail, the backplate grid and wall studs, with snap increments taken from sourced constants;
   - committing produces **one** `entity.place` or `entity.move` and dragging produces none;
   - Esc cancels without a command;
@@ -230,11 +230,12 @@ The level data lives in `content/levels/workshop.json` (a `WorldV1` document, va
 
 Acceptance:
 
-- [ ] New sandbox loads the workshop with a fresh seed (or one typed in the new-game dialog).
-- [ ] At least three generic props can be placed from the palette, the tool belt, the console and a script.
-- [ ] Every real-world dimension (TS35 rail, stud spacing, module pitch) carries a `source`. Game-design values are labelled as such.
-- [ ] Scene-graph JSON snapshot plus one Playwright screenshot baseline (fixed seed, WebGL2, DPR 1). Baseline owned by `test-engineer`.
-- [ ] `pnpm sim hash content/levels/workshop.json` works headless.
+- [x] New sandbox loads the workshop with a fresh seed (or one typed in the new-game dialog). _(`NewGameDialog` in `feature-shell`: a fresh seed from `crypto.getRandomValues` on the UI side (domain code never draws one), or a typed one validated as 0…4294967295; keyboard only, Escape backs out. `Session.newSandbox({ seed, difficulty })` copies the level (`newGameWorld`) with a fresh history and replay log. The level is `content/levels/workshop.json`, bundled through `@controls/content/*` and validated with `migrateWorld`.)_
+- [x] At least three generic props can be placed from the palette, the tool belt, the console and a script. _(Box, crate and spool, on the backplate grid, the DIN rails, the stud wall and the bench top. Tool belt and mouse: `placement.spec.ts` and the controller spec; palette and console: `entity.place` (`palette.spec.ts`, `console.spec.ts`); script: `apps/sim-cli/src/workshop.spec.ts` places on every workshop surface with `worldSnapTargets(game.world())`.)_
+- [x] Every real-world dimension (TS35 rail, stud spacing, module pitch) carries a `source`. Game-design values are labelled as such. _(The DIN module is now 17.5 mm per DIN 43880, rounded once per slot; the old 18 mm pitch is gone. Stud depth (3-1/2 in, PS 20) joined spacing and thickness. Fixture sizes in `FIXTURE_SPECS` are game-design with sources; specs check every constant.)_
+- [x] Scene-graph JSON snapshot plus one Playwright screenshot baseline (fixed seed, WebGL2, DPR 1). Baseline owned by `test-engineer`. _(The controller spec snapshots the whole workshop scene, now with mesh bounds. `apps/game-e2e/src/workshop.spec.ts`: seed 0, six props, SwiftShader WebGL2, 1280 × 720 at DPR 1, `view.focus stud-wall`, overlays hidden; Linux only; how to update it is in the [rendering caveats](../docs/caveats/rendering.md).)_
+- [x] `pnpm sim hash content/levels/workshop.json` works headless. _(Pinned in `apps/sim-cli/src/workshop.spec.ts`, part of `pnpm verify`; the same golden is `workshopSeed0` in `world-model` and `game-e2e`.)_
+- _Decisions: fixtures are a new `WorldV1.fixtures` list (string ids, built-in `prop.*` refs, no command touches them), not entities, recorded in [ADR 0007](../docs/decisions/0007-world-document-v1.md#fixtures-and-levels-f19). No `schemaVersion` bump (v1 is unpublished); every golden hash was re-pinned. `sim run --world <level> --seed N` is a new game on a level. `content/` became an Nx project (`type:content`)._
 
 ### F1.10 Spike: wire routing
 
@@ -335,9 +336,9 @@ Numbers are assigned in landing order. Planned:
 | F1.4    | Keybinding service            | ✅ Done                                               |
 | F1.5    | Dev console                   | ✅ Done                                               |
 | F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
-| F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets with F1.9)      |
+| F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets in F1.9)        |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
-| F1.9    | Workshop level                | 📐 Planned                                            |
+| F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)     |
 | F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                            |
 
 ## Close-out

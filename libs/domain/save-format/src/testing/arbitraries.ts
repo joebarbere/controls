@@ -49,24 +49,39 @@ export const commandIdArb = fc
 const coordinateArb = fc.oneof(fc.integer({ min: -MAX_COORDINATE_MM, max: MAX_COORDINATE_MM }), fc.constant(-0));
 const angleArb = fc.oneof(fc.integer({ min: 0, max: MILLIDEGREES_PER_TURN - 1 }), fc.constant(-0));
 
+const transformArb = fc.record({
+  positionMm: fc.record({ x: coordinateArb, y: coordinateArb, z: coordinateArb }),
+  orientationMdeg: fc.record({ yaw: angleArb, pitch: angleArb, roll: angleArb }),
+});
+
 const entityArb = (id: number) =>
   fc.record({
     id: fc.constant(id),
     ref: catalogRefArb,
-    transform: fc.record({
-      positionMm: fc.record({ x: coordinateArb, y: coordinateArb, z: coordinateArb }),
-      orientationMdeg: fc.record({ yaw: angleArb, pitch: angleArb, roll: angleArb }),
-    }),
+    transform: transformArb,
     extensions: jsonObjectArb,
   });
+
+/** A fixture id: lower-case hyphenated words, never the reserved `entity-` prefix. */
+export const fixtureIdArb = fc
+  .stringMatching(/^[a-z][a-z0-9]{0,8}(?:-[a-z0-9]{1,4}){0,2}$/)
+  .filter((id) => !id.startsWith('entity-'));
+
+const fixtureArb = (id: string) =>
+  fc.record({ id: fc.constant(id), ref: catalogRefArb, transform: transformArb, extensions: jsonObjectArb });
+
+/** Code-unit order, the order `WorldV1` requires for fixture ids. */
+const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** A raw world document that `WorldV1` accepts. */
 export const rawWorldV1Arb = fc
   .record({
     ids: fc.uniqueArray(fc.integer({ min: 1, max: 1_000_000 }), { maxLength: 6 }),
     gap: fc.nat({ max: 5 }),
+    fixtureIds: fc.uniqueArray(fixtureIdArb, { maxLength: 4 }),
   })
-  .chain(({ ids, gap }) => {
+  .chain(({ ids, gap, fixtureIds }) => {
+    const sortedFixtures = [...fixtureIds].sort(byCodeUnits);
     const sorted = [...ids].sort((a, b) => a - b);
     const nextEntityId = (sorted.at(-1) ?? 0) + 1 + gap;
     return fc.record({
@@ -77,6 +92,7 @@ export const rawWorldV1Arb = fc
       regionId: fc.constant('nec' as const),
       difficulty: fc.constantFrom('trainee', 'apprentice', 'journeyman', 'realistic'),
       assisted: fc.boolean(),
+      fixtures: sortedFixtures.length === 0 ? fc.constant([]) : fc.tuple(...sortedFixtures.map(fixtureArb)),
       entities: sorted.length === 0 ? fc.constant([]) : fc.tuple(...sorted.map(entityArb)),
       extensions: jsonObjectArb,
     });

@@ -2,6 +2,7 @@ import { workspaceRoot } from '@nx/devkit';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { enterSeed } from './support/sandbox';
 
 /**
  * F1.3 acceptance: place an object, then undo it, using only the command palette and the keyboard
@@ -9,8 +10,9 @@ import { join } from 'node:path';
  * PALETTE_PLACE_UNDO_HASH, the literal `apps/sim-cli/src/palette-place-undo.spec.ts` gets from
  * `sim run scenarios/palette-place-undo.console`, and the replay log must hold the command ids of
  * that file, so the palette path is checked against the console-line path. Change them together.
+ * The session is the workshop level with seed 0 (F1.9), typed into the new-game dialog.
  */
-const PALETTE_PLACE_UNDO_HASH = '46733670b0eeda0464b066f036de9ecb410479f0b55305137ea87828c2690ea2';
+const PALETTE_PLACE_UNDO_HASH = '82b7578708f2759b91a17b49188f1da4cfdf65a7699dfe457cc3f7e930d77362';
 
 const SCENARIO = join(workspaceRoot, 'apps/sim-cli/scenarios/palette-place-undo.console');
 
@@ -57,6 +59,7 @@ test('place an object, then undo it, using only the palette and the keyboard', a
   const menu = page.getByRole('navigation', { name: 'Controls' });
   await expect(menu.getByRole('button', { name: 'New sandbox' })).toBeFocused();
   await page.keyboard.press('Enter');
+  await enterSeed(page);
   await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
   const canvas = page.locator('ctl-viewport canvas');
   await expect(canvas).toBeFocused();

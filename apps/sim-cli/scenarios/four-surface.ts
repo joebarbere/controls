@@ -7,7 +7,7 @@ import type { Game } from '@controls/scripting-api';
  * `world.hash` (FOUR_SURFACE_HASH). The game-e2e mouse, palette and console drivers (F1.3, F1.5,
  * F1.7) must reach that hash too.
  *
- *   pnpm sim run apps/sim-cli/scenarios/four-surface.ts
+ *   pnpm sim run apps/sim-cli/scenarios/four-surface.ts --world content/levels/workshop.json
  */
 export default function fourSurface(game: Game): void {
   const crate = { id: 'prop.crate', version: 1 };
