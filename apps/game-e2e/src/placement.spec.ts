@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * F1.7: place, move and delete with the mouse gives the same `world.hash` as the equivalent console
@@ -10,6 +12,9 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * The mouse is aimed at integer-mm world points through the `?e2e=1` hook's `projectMm` (view
  * state only); snapping turns each into the console file's exact positions. Forced WebGL2, the
  * backend CI exercises on GPU-less runners. Pointer lock is never asserted (flaky headless).
+ *
+ * F1.5 cross-check: the in-game console's `run` of the same .console file must reach MOUSE_HASH as
+ * well, so the mouse, the in-game console and `sim-cli` agree.
  */
 const MOUSE_HASH = 'ea1ca89916bce0e211d21ee7a7a39c1d67997bfce884071307e4d1bbe7b1a84c';
 
@@ -194,4 +199,74 @@ test('placing and deleting returns GPU geometry and BVHs to baseline', async ({ 
   await expect.poll(() => stats(page)).toMatchObject({ entities: 0, recipes: 0, bvhs: baseline.bvhs });
   await page.waitForTimeout(300);
   expect((await stats(page)).geometries).toBe(baseline.geometries);
+});
+
+test('the in-game console runs mouse-place-move-delete.console to the same hash (mouse = console = sim-cli)', async ({
+  page,
+}) => {
+  const { viewport } = await open(page);
+  await expect(page.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  await page.keyboard.press('Backquote');
+  await expect(page.getByRole('textbox', { name: 'Console input' })).toBeFocused();
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.type('run');
+  await page.keyboard.press('Enter');
+  const file = 'mouse-place-move-delete.console';
+  const text = readFileSync(join(__dirname, '../../sim-cli/scenarios', file));
+  await (await chooser).setFiles({ name: file, mimeType: 'text/plain', buffer: text });
+  const log = page.getByRole('log', { name: 'Console output' });
+  await expect(log).toContainText(`Ran 6 commands from ${file}.`);
+  await expect(log).toContainText(MOUSE_HASH);
+  expect(await hash(page)).toBe(MOUSE_HASH);
+  // The same logged commands as the mouse path (opening the console isn't logged).
+  expect(await logged(page)).toEqual([
+    'toolbelt.select',
+    'entity.place',
+    'toolbelt.select',
+    'entity.place',
+    'entity.move',
+    'entity.delete',
+  ]);
+  // The file's `toolbelt.select 2` armed the crate, exactly as the key would.
+  await expect(viewport).toHaveAttribute('data-placement-ref', 'prop.crate');
+});
+
+test('Escape ordering with the console and the palette open: each closes itself first', async ({ page }) => {
+  const { viewport, canvas } = await open(page);
+  const menu = page.getByRole('navigation', { name: 'Controls' });
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  const input = page.getByRole('textbox', { name: 'Console input' });
+  await expect(page.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  await page.keyboard.press('Digit1');
+  await expect(viewport).toHaveAttribute('data-placing', 'place');
+
+  // The console handles its own Escape: it closes, the tool stays armed, the menu stays shut.
+  await page.keyboard.press('Backquote');
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(input).toBeHidden();
+  await expect(viewport).toHaveAttribute('data-placing', 'place');
+  await expect(menu).toBeHidden();
+
+  // So does the palette (focus returns to the canvas).
+  await canvas.focus();
+  await page.keyboard.press('Control+K');
+  await expect(palette).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(palette).toBeHidden();
+  await expect(canvas).toBeFocused();
+  await expect(viewport).toHaveAttribute('data-placing', 'place');
+  await expect(menu).toBeHidden();
+
+  // Then the viewport's own order: cancel placement, clear the selection, then the menu.
+  await page.keyboard.press('Escape');
+  await expect(viewport).not.toHaveAttribute('data-placing', /.*/);
+  await expect(menu).toBeHidden();
+  await viewportHook(page, (h) => h.select('backplate'));
+  await page.keyboard.press('Escape');
+  await expect(viewport).not.toHaveAttribute('data-selected', /.*/);
+  await expect(menu).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeVisible();
+  expect(await logged(page)).toEqual(['toolbelt.select']); // no Escape ran a command
 });

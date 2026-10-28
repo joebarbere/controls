@@ -1,5 +1,6 @@
 # F1.7: the mouse e2e (apps/game-e2e/src/placement.spec.ts) as console lines. Both must end at
-# MOUSE_PLACE_MOVE_DELETE_HASH (apps/sim-cli/src/mouse-place-move-delete.spec.ts).
+# MOUSE_PLACE_MOVE_DELETE_HASH (apps/sim-cli/src/mouse-place-move-delete.spec.ts), and so must the
+# in-game console's `run` of this file (the console test in placement.spec.ts).
 #   pnpm sim run apps/sim-cli/scenarios/mouse-place-move-delete.console
 #
 # Positions are what the demo panel's snap targets give for the cursor points the e2e aims at
