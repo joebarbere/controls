@@ -85,8 +85,8 @@ export class Session {
   }
 
   /**
-   * Calls `handler` each time command `id` succeeds, after the world signal is updated. This is how
-   * view commands take effect. Returns an unsubscribe function.
+   * Calls `handler` each time command `id` succeeds, after the world signal is updated, whether or
+   * not it is logged (`palette.open` isn't). This is how view commands take effect. Returns an unsubscribe function.
    */
   onCommand(id: string, handler: CommandHandler): () => void {
     let set = this.handlers.get(id);
@@ -103,8 +103,8 @@ export class Session {
   private executed(event: ExecutedEvent<World>): void {
     this.worldState.set(event.state);
     this.history.set(this.game.contextKeys());
-    this.log.set([...this.game.entries()]);
-    for (const handler of [...(this.handlers.get(event.entry.id) ?? [])]) handler(event);
+    if (event.logged) this.log.set([...this.game.entries()]); // UI chrome (palette.open) isn't logged
+    for (const handler of [...(this.handlers.get(event.command.id) ?? [])]) handler(event);
   }
 
   /**

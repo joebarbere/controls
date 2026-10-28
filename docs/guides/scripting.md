@@ -102,24 +102,24 @@ It prints the hash twice (the file's own `world.hash` query, then the final hash
 
 `import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api'`. In `sim-cli`, the game is created for you and passed to your default export.
 
-| Member                                    | What it does                                                                                                      |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `createGame({ seed })`                    | A new game from an empty world with that seed (unsigned 32-bit).                                                  |
-| `createGame({ world })`                   | A new game from a valid current-version world document. Passing both requires `seed === world.seed`.              |
-| `exec(id, args?)`                         | Runs a command. Returns `{ ok: true, entry }` or `{ ok: false, error }` (`unknown-command`, `invalid-args`, …).   |
-| `execOrThrow(id, args?)`                  | `exec`, but throws `CommandFailedError` (with `.error`) on failure and returns the logged entry.                  |
-| `world()`                                 | The current world document, deeply frozen. Later commands produce new snapshots and never change old ones.        |
-| `hash()`                                  | `world.hash` of the current world.                                                                                |
-| `entries()`, `replayLog()`                | The replay entries so far, and the full replay log (initial world plus entries), as saved in `replay.log`.        |
-| `canUndo()`, `canRedo()`, `contextKeys()` | History state, also the `history.canUndo` / `history.canRedo` context keys.                                       |
-| `isEnabled(id, context?)`                 | Whether a command's `when` holds, given extra UI context keys. Advisory, like `when` itself.                      |
-| `on('executed', listener)`                | Called after every successful command with `{ entry, def, previous, state }`. Returns an unsubscribe function.    |
-| `registry`                                | The command registry: every id, title, category, Zod `args` schema and `when`.                                    |
-| `probe(from, to)`                         | **Reserved for P2** (meter probes on the as-built circuit). Throws `NotAvailableError` (`code: 'not-available'`). |
-| `tag(path)`                               | **Reserved for P10** (read a PLC tag such as `PLC1:Motor.Run`). Throws `NotAvailableError`.                       |
-| `replayGame(json)`                        | Validates and migrates a replay log, replays it and returns a game at its end that continues the same log.        |
-| `runConsoleScript(game, text)`            | Runs a console-line file against a game (or the UI's `Session`).                                                  |
-| `toConsoleScript(entries)`                | Writes replay entries as console lines, so any recorded session can be re-run from a console-line file.           |
+| Member                                    | What it does                                                                                                                                                                                       |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createGame({ seed })`                    | A new game from an empty world with that seed (unsigned 32-bit).                                                                                                                                   |
+| `createGame({ world })`                   | A new game from a valid current-version world document. Passing both requires `seed === world.seed`.                                                                                               |
+| `exec(id, args?)`                         | Runs a command. Returns `{ ok: true, logged, entry, command }` (`entry` is `null` for unlogged UI chrome such as `palette.open`) or `{ ok: false, error }` (`unknown-command`, `invalid-args`, …). |
+| `execOrThrow(id, args?)`                  | `exec`, but throws `CommandFailedError` (with `.error`) on failure and returns the logged entry (`null` for an unlogged command).                                                                  |
+| `world()`                                 | The current world document, deeply frozen. Later commands produce new snapshots and never change old ones.                                                                                         |
+| `hash()`                                  | `world.hash` of the current world.                                                                                                                                                                 |
+| `entries()`, `replayLog()`                | The replay entries so far, and the full replay log (initial world plus entries), as saved in `replay.log`.                                                                                         |
+| `canUndo()`, `canRedo()`, `contextKeys()` | History state, also the `history.canUndo` / `history.canRedo` context keys.                                                                                                                        |
+| `isEnabled(id, context?)`                 | Whether a command's `when` holds, given extra UI context keys. Advisory, like `when` itself.                                                                                                       |
+| `on('executed', listener)`                | Called after every successful command with `{ entry, def, previous, state }`. Returns an unsubscribe function.                                                                                     |
+| `registry`                                | The command registry: every id, title, category, Zod `args` schema and `when`.                                                                                                                     |
+| `probe(from, to)`                         | **Reserved for P2** (meter probes on the as-built circuit). Throws `NotAvailableError` (`code: 'not-available'`).                                                                                  |
+| `tag(path)`                               | **Reserved for P10** (read a PLC tag such as `PLC1:Motor.Run`). Throws `NotAvailableError`.                                                                                                        |
+| `replayGame(json)`                        | Validates and migrates a replay log, replays it and returns a game at its end that continues the same log.                                                                                         |
+| `runConsoleScript(game, text)`            | Runs a console-line file against a game (or the UI's `Session`).                                                                                                                                   |
+| `toConsoleScript(entries)`                | Writes replay entries as console lines, so any recorded session can be re-run from a console-line file.                                                                                            |
 
 The commands available in P1 are `entity.place`, `entity.move`, `entity.rotate`, `entity.delete`, `edit.undo`, `edit.redo` and `view.resetLayout` (see [commands](../architecture/commands.md#world-commands)). Positions are integer millimetres and rotations integer millidegrees. View commands are logged but don't change the hash.
 

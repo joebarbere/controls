@@ -119,7 +119,43 @@ const rogueUndo = defineCommand<NoArgs, Toy>({
   run: () => ({ ok: true, history: 'undo' }),
 });
 
+/** UI chrome: runs and notifies, never logged. */
+const chrome = defineCommand<NoArgs, Toy>({
+  id: 'test.chrome',
+  title: 'Chrome',
+  category: 'Test',
+  args: NoArgs,
+  undoable: false,
+  logged: false,
+  run: () => succeed(),
+});
+
+/** Unlogged but returns a change: refused at exec, since replay could never see it. */
+const unloggedChange = defineCommand<NoArgs, Toy>({
+  id: 'test.unloggedChange',
+  title: 'Unlogged change',
+  category: 'Test',
+  args: NoArgs,
+  undoable: false,
+  logged: false,
+  run: () => succeed({ apply: (s) => ({ ...s, items: [...s.items, 9] }), invert: (s) => s }),
+});
+
+/** Unlogged but moves the history: refused too. */
+const unloggedUndo = defineCommand<NoArgs, Toy>({
+  id: 'test.unloggedUndo',
+  title: 'Unlogged undo',
+  category: 'Test',
+  args: NoArgs,
+  undoable: false,
+  logged: false,
+  run: (ctx) => (ctx.canUndo ? { ok: true, history: 'undo' } : fail('nothing-to-undo', 'Nothing to undo')),
+});
+
 const defs: CommandDef<never, Toy>[] = [
+  chrome,
+  unloggedChange,
+  unloggedUndo,
   push,
   pop,
   advance,
@@ -147,7 +183,12 @@ describe('CommandBus.exec', () => {
     const events: ExecutedEvent<Toy>[] = [];
     const unsubscribe = bus.subscribe((e) => events.push(e));
     const result = bus.exec('list.push', { value: -0 });
-    expect(result).toEqual({ ok: true, entry: { seq: 0, tick: 0, id: 'list.push', args: { value: 0 } } });
+    expect(result).toEqual({
+      ok: true,
+      logged: true,
+      entry: { seq: 0, tick: 0, id: 'list.push', args: { value: 0 } },
+      command: { id: 'list.push', tick: 0, args: { value: 0 } },
+    });
     expect(bus.state.items).toEqual([0]);
     expect(bus.entries).toEqual([{ seq: 0, tick: 0, id: 'list.push', args: { value: 0 } }]);
     expect(Object.isFrozen(bus.entries[0].args)).toBe(true);
@@ -284,6 +325,8 @@ describe('undo and redo', () => {
     const before = bus.state;
     expect(bus.exec('view.resetLayout')).toEqual({
       ok: true,
+      logged: true,
+      command: { id: 'view.resetLayout', tick: 0, args: {} },
       entry: { seq: 1, tick: 0, id: 'view.resetLayout', args: {} },
     });
     expect(bus.state).toBe(before);
@@ -479,5 +522,76 @@ describe('replayEntries', () => {
     expect(replays({ a: [1, { b: 3 }], c: null })).toBe(false); // leaf
     expect(replays({ a: [1, null], c: null })).toBe(false); // null vs object
     expect(replays({ a: [1, { b: 2 }], c: 0 })).toBe(false); // scalar vs null
+  });
+});
+
+describe('unlogged commands (logged: false)', () => {
+  it('run and notify listeners, but take no seq, no log entry and no history', () => {
+    const bus = createBus();
+    const events: ExecutedEvent<Toy>[] = [];
+    bus.subscribe((e) => events.push(e));
+    bus.exec('list.push', { value: 1 });
+    const result = bus.exec('test.chrome');
+    expect(result).toEqual({
+      ok: true,
+      logged: false,
+      entry: null,
+      command: { id: 'test.chrome', tick: 0, args: {} },
+    });
+    expect(events.map((e) => [e.command.id, e.logged, e.entry?.seq ?? null])).toEqual([
+      ['list.push', true, 0],
+      ['test.chrome', false, null],
+    ]);
+    expect(events[1].state).toBe(events[1].previous);
+    expect(bus.entries.map((e) => e.id)).toEqual(['list.push']);
+    expect(bus.canUndo).toBe(true);
+    expect(bus.exec('list.push', { value: 2 })).toMatchObject({ logged: true, entry: { seq: 1 } });
+  });
+
+  it('are refused (unlogged-change) if run returns a change or a history move, and change nothing', () => {
+    const bus = createBus();
+    bus.exec('list.push', { value: 1 });
+    const before = bus.state;
+    expect(bus.exec('test.unloggedChange')).toMatchObject({ ok: false, error: { kind: 'unlogged-change' } });
+    expect(bus.exec('test.unloggedUndo')).toMatchObject({ ok: false, error: { kind: 'unlogged-change' } });
+    expect(bus.state).toBe(before);
+    expect(bus.entries).toHaveLength(1);
+    expect(bus.canUndo).toBe(true);
+    expect(bus.canRedo).toBe(false);
+  });
+
+  it('replays an older log that still records one, keeping its seq numbering', () => {
+    const live = createBus();
+    live.exec('list.push', { value: 1 });
+    live.exec('list.push', { value: 2 });
+    // As an older build would have logged it, with test.chrome taking seq 1.
+    const old = [
+      { ...live.entries[0] },
+      { seq: 1, tick: 0, id: 'test.chrome', args: {} },
+      { ...live.entries[1], seq: 2 },
+    ];
+    const replayed = createBus();
+    expect(replayEntries(replayed, old)).toEqual({ ok: true });
+    expect(replayed.state.items).toEqual([1, 2]);
+    expect(replayed.entries).toEqual(old);
+    expect(replayed.exec('list.push', { value: 3 })).toMatchObject({ entry: { seq: 3 } });
+
+    expect(replayEntries(createBus(), [{ seq: 0, tick: 7, id: 'test.chrome', args: {} }])).toMatchObject({
+      ok: false,
+      error: { kind: 'tick-mismatch', seq: 0 },
+    });
+  });
+
+  it('carryOver refuses misuse', () => {
+    const bus = createBus();
+    expect(() => bus.carryOver({ seq: 0, tick: 0, id: 'list.push', args: { value: 1 } })).toThrow(/not an unlogged/);
+    expect(() => bus.carryOver({ seq: 0, tick: 0, id: 'nope.nope', args: {} })).toThrow(/not an unlogged/);
+    expect(() => bus.carryOver({ seq: 3, tick: 0, id: 'test.chrome', args: {} })).toThrow(/Expected seq 0/);
+    expect(() => bus.carryOver({ seq: 0, tick: 1, id: 'test.chrome', args: {} })).toThrow(/different tick/);
+    expect(bus.entries).toEqual([]);
+  });
+
+  it('palette.open is unlogged', () => {
+    expect(viewCommands<Toy>().find((c) => c.id === 'palette.open')?.logged).toBe(false);
   });
 });

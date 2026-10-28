@@ -6,7 +6,8 @@ import { WORKSPACE_ROOT } from './script-loader';
 /*
  * The F1.3 palette path, headless. `apps/game-e2e/src/palette.spec.ts` places two props and undoes
  * the second using only the palette and the keyboard, then asserts PALETTE_PLACE_UNDO_HASH and that
- * its replay log has the command ids of `scenarios/palette-place-undo.console`. Here the same file
+ * its replay log has the command ids of `scenarios/palette-place-undo.console` (`palette.open` is
+ * unlogged UI chrome, so neither contains it). Here the same file
  * runs through `sim run` (the console-line parser the in-game console uses), so the palette path is
  * checked against the console-line path. Change the literal here and in the e2e spec together.
  */
@@ -35,21 +36,21 @@ describe('the palette place-and-undo scenario', () => {
     // The palette's form always sends the defaulted orientation; the console line leaves it out.
     const game = createGame({ seed: 0 });
     const zero = { yaw: 0, pitch: 0, roll: 0 };
-    game.execOrThrow('palette.open');
-    game.execOrThrow('palette.open');
+    expect(game.execOrThrow('palette.open')).toBeNull(); // UI chrome: runs, but is never logged
     game.execOrThrow('entity.place', {
       ref: { id: 'prop.crate', version: 1 },
       positionMm: { x: 100, y: 0, z: -200 },
       orientationMdeg: zero,
     });
-    game.execOrThrow('palette.open');
+    expect(game.execOrThrow('palette.open')).toBeNull();
     game.execOrThrow('entity.place', {
       ref: { id: 'prop.spool', version: 1 },
       positionMm: { x: 400, y: 0, z: -200 },
       orientationMdeg: zero,
     });
-    game.execOrThrow('palette.open');
+    expect(game.execOrThrow('palette.open')).toBeNull();
     game.execOrThrow('edit.undo');
+    expect(game.entries().map((e) => e.id)).toEqual(['entity.place', 'entity.place', 'edit.undo']);
     expect(game.world().entities.map((e) => e.ref.id)).toEqual(['prop.crate']);
     expect(game.hash()).toBe(PALETTE_PLACE_UNDO_HASH);
   });

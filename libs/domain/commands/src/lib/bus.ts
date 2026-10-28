@@ -14,19 +14,37 @@ export type ExecError =
   | { readonly kind: 'unknown-command'; readonly id: string; readonly message: string }
   | { readonly kind: 'invalid-args'; readonly id: string; readonly message: string; readonly issues: ArgIssue[] }
   | { readonly kind: 'rejected'; readonly id: string; readonly code: string; readonly message: string }
-  | { readonly kind: 'threw'; readonly id: string; readonly message: string };
+  | { readonly kind: 'threw'; readonly id: string; readonly message: string }
+  /** A `logged: false` command returned a change or a history move, which replay could never see. */
+  | { readonly kind: 'unlogged-change'; readonly id: string; readonly message: string };
 
-export type ExecResult =
-  { readonly ok: true; readonly entry: ReplayEntry } | { readonly ok: false; readonly error: ExecError };
+/** What ran: the id, the tick and the args in their logged (JSON-normalised) form. Logged or not. */
+export interface ExecutedCommand {
+  readonly id: string;
+  readonly tick: number;
+  readonly args: ReplayEntry['args'];
+}
 
-/** Emitted after every successful command, once the state and the log are updated. */
-export interface ExecutedEvent<S> {
-  readonly entry: ReplayEntry;
+/**
+ * How a success was recorded. A logged command (the default) has its replay `entry`; a
+ * `logged: false` command (UI chrome such as `palette.open`) has `entry: null`, consumed no `seq`
+ * and left the history alone.
+ */
+export type ExecRecord =
+  { readonly logged: true; readonly entry: ReplayEntry } | { readonly logged: false; readonly entry: null };
+
+export type ExecSuccess = { readonly ok: true; readonly command: ExecutedCommand } & ExecRecord;
+
+export type ExecResult = ExecSuccess | { readonly ok: false; readonly error: ExecError };
+
+/** Emitted after every successful command (logged or not), once the state and the log are updated. */
+export type ExecutedEvent<S> = {
+  readonly command: ExecutedCommand;
   readonly def: AnyCommandDef<S>;
   /** The state before the command (identical to `state` for commands that changed nothing). */
   readonly previous: S;
   readonly state: S;
-}
+} & ExecRecord;
 
 export type ExecutedListener<S> = (event: ExecutedEvent<S>) => void;
 
@@ -53,6 +71,11 @@ function issues(error: z.ZodError): ArgIssue[] {
   }));
 }
 
+/** A copy of a JSON value (entries are plain JSON), so the log never aliases a caller's object. */
+function structuredCloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function deepFreeze<T>(value: T): T {
   if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -72,6 +95,8 @@ function deepFreeze<T>(value: T): T {
  *   Replaying the log against the initial state through a fresh bus rebuilds the same history, so
  *   it reaches the same state.
  * - An undoable change goes on the undo stack and clears redo. A non-undoable change clears both.
+ * - A `logged: false` command (UI chrome) runs and notifies listeners but is never logged, consumes
+ *   no `seq` and never touches the history; if its `run` returns a change it is refused.
  */
 export class CommandBus<S> {
   readonly registry: CommandRegistry<S>;
@@ -98,6 +123,11 @@ export class CommandBus<S> {
   /** The replay entries logged so far (frozen). */
   get entries(): readonly ReplayEntry[] {
     return this.log;
+  }
+
+  /** The sim tick of the current state (what the next entry would record). */
+  currentTick(): number {
+    return this.tickOf(this.current);
   }
 
   get canUndo(): boolean {
@@ -155,14 +185,45 @@ export class CommandBus<S> {
     }
     if (!result.ok) return { ok: false, error: { kind: 'rejected', id, code: result.code, message: result.message } };
 
-    this.commit(def, result);
+    const command: ExecutedCommand = deepFreeze({ id, tick, args: entry.data.args });
     const previous = this.current;
-    this.current = next;
-    const logged = deepFreeze(entry.data);
-    this.log.push(logged);
-    const event: ExecutedEvent<S> = { entry: logged, def, previous, state: next };
+    let record: ExecRecord;
+    if (def.logged === false) {
+      if ('history' in result || result.change !== null || next !== previous) {
+        return {
+          ok: false,
+          error: {
+            kind: 'unlogged-change',
+            id,
+            message: `"${id}" is not logged, so it must not change the state or the history`,
+          },
+        };
+      }
+      record = { logged: false, entry: null };
+    } else {
+      this.commit(def, result);
+      this.current = next;
+      const logged = deepFreeze(entry.data);
+      this.log.push(logged);
+      record = { logged: true, entry: logged };
+    }
+    const event: ExecutedEvent<S> = { command, def, previous, state: this.current, ...record };
     for (const listener of [...this.listeners]) listener(event);
-    return { ok: true, entry: logged };
+    return { ok: true, command, ...record };
+  }
+
+  /**
+   * Replay only: appends a recorded entry of a command that is now `logged: false` without running
+   * it, so an older log that still contains one keeps its `seq` numbering (and every later
+   * command's `seq`-derived randomness). Such a command can't change the state, so skipping its run
+   * is exact. Throws on misuse: an unknown or logged command, or a `seq` or tick that doesn't fit.
+   */
+  carryOver(entry: ReplayEntry): void {
+    const def = this.registry.get(entry.id);
+    if (!def || def.logged !== false) throw new Error(`"${entry.id}" is not an unlogged command`);
+    if (entry.seq !== this.log.length) throw new Error(`Expected seq ${this.log.length}, found ${entry.seq}`);
+    if (entry.tick !== this.currentTick()) throw new Error(`Entry ${entry.seq} is at a different tick`);
+    this.log.push(deepFreeze(structuredCloneJson(entry)));
   }
 
   /** Calls `listener` after every successful command. Returns an unsubscribe function. */

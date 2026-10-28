@@ -46,22 +46,24 @@ sequenceDiagram
     B->>D: run(ctx, loggedArgs)
     D-->>B: succeed(change) | succeed() | fail(code)
     B->>B: next = change.apply(state) (a throw → threw)
-    B->>B: commit stacks, state, log entry
-    B-->>S: { ok: true, entry } and an executed event
+    B->>B: logged: false and a change? → unlogged-change
+    B->>B: commit stacks, state, log entry (skipped when logged: false)
+    B-->>S: { ok: true, logged, entry | null, command } and an executed event
 ```
 
 A failure at any step returns a typed error and changes nothing.
 
 ## Undo, redo and the log
 
-| Command result             | Undo stack | Redo stack | Logged |
-| -------------------------- | ---------- | ---------- | ------ |
-| Undoable change            | push       | clear      | yes    |
-| Non-undoable change        | clear      | clear      | yes    |
-| No change (view command)   | unchanged  | unchanged  | yes    |
-| `edit.undo`                | pop        | push       | yes    |
-| `edit.redo`                | push       | pop        | yes    |
-| Failure (incl. empty undo) | unchanged  | unchanged  | no     |
+| Command result              | Undo stack | Redo stack | Logged |
+| --------------------------- | ---------- | ---------- | ------ |
+| Undoable change             | push       | clear      | yes    |
+| Non-undoable change         | clear      | clear      | yes    |
+| No change (view command)    | unchanged  | unchanged  | yes    |
+| UI chrome (`logged: false`) | unchanged  | unchanged  | no     |
+| `edit.undo`                 | pop        | push       | yes    |
+| `edit.redo`                 | push       | pop        | yes    |
+| Failure (incl. empty undo)  | unchanged  | unchanged  | no     |
 
 Replay re-runs every entry, `edit.undo` included, through a fresh bus from the log's `initialWorld`. The bus is deterministic, so it rebuilds the same stacks and reaches the live hash. That is the F1.2 property test.
 

@@ -20,7 +20,7 @@ export class ToolBelt {
 
   constructor() {
     const off = this.session.onCommand('toolbelt.select', (event) => {
-      const { slot } = event.entry.args as ToolBeltSelectArgs;
+      const { slot } = event.command.args as ToolBeltSelectArgs;
       this.slot.set(slot);
       this.session.setContext(TOOL_BELT_SLOT_KEY, slot);
     });

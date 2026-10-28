@@ -72,7 +72,7 @@ describe('CommandPalette', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     await open();
     expect(document.activeElement).toBe(search());
-    expect(session.entries().map((e) => e.id)).toEqual(['palette.open']);
+    expect(session.entries()).toEqual([]); // palette.open is UI chrome: never logged
 
     await user.keyboard('{Escape}');
     await stable();
@@ -127,7 +127,7 @@ describe('CommandPalette', () => {
     await user.keyboard('{Enter}');
     await stable();
     expect(screen.getByRole('status').textContent).toBe('Undo: Not available now (needs history.canUndo)');
-    expect(session.entries().map((e) => e.id)).toEqual(['palette.open']);
+    expect(session.entries()).toEqual([]); // palette.open is UI chrome: never logged
     expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeTruthy();
   });
 
@@ -186,7 +186,7 @@ describe('CommandPalette', () => {
     await stable();
     expect(session.world().entities).toEqual([]);
     expect(store.settings().palette.recents).toEqual(['edit.undo', 'entity.place']);
-    expect(session.entries().map((e) => e.id)).toEqual(['palette.open', 'entity.place', 'palette.open', 'edit.undo']);
+    expect(session.entries().map((e) => e.id)).toEqual(['entity.place', 'edit.undo']); // palette.open isn't logged
   });
 
   it('Escape in a form goes back to the list with the query kept', async () => {
@@ -229,7 +229,7 @@ describe('CommandPalette', () => {
     const form = screen.getByRole('form', { name: 'Arguments for Delete object' });
     expect(within(form).getByRole('alert').textContent).toContain('No entity with id 9');
     expect(screen.getByRole('textbox', { name: 'Entity' })).toHaveProperty('value', '9');
-    expect(session.entries().map((e) => e.id)).toEqual(['palette.open']);
+    expect(session.entries()).toEqual([]); // palette.open is UI chrome: never logged
   });
 
   it('asks before a cheat, then marks the world assisted (and stops asking)', async () => {
@@ -284,6 +284,6 @@ describe('CommandPalette', () => {
     await open();
     await user.click(screen.getByRole('option', { name: /^Reset layout/ }));
     await stable();
-    expect(session.entries().map((e) => e.id)).toEqual(['palette.open', 'view.resetLayout']);
+    expect(session.entries().map((e) => e.id)).toEqual(['view.resetLayout']);
   });
 });

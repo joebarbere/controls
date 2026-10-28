@@ -105,8 +105,11 @@ export interface Game {
    * error and change nothing; only successful commands reach the replay log.
    */
   exec(id: string, args?: unknown): ExecResult;
-  /** {@link exec}, but throws {@link CommandFailedError} on failure and returns the logged entry. */
-  execOrThrow(id: string, args?: unknown): ReplayEntry;
+  /**
+   * {@link exec}, but throws {@link CommandFailedError} on failure and returns the logged entry, or
+   * `null` for a command that isn't logged (`logged: false`, UI chrome such as `palette.open`).
+   */
+  execOrThrow(id: string, args?: unknown): ReplayEntry | null;
   /** The current world document: a frozen snapshot that later commands never change. */
   world(): DeepReadonly<World>;
   /** `world.hash` of the current world (SHA-256 of its canonical JSON, ADR 0007). */

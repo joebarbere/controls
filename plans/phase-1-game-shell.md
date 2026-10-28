@@ -127,7 +127,7 @@ Acceptance:
 
 Acceptance:
 
-- [x] Ctrl+K and Ctrl+Shift+P open it, bound through F1.4 to the `palette.open` command (Cmd on macOS). _(`palette.open` is a view command with `globalKeybinding`, so it is logged like the others.)_
+- [x] Ctrl+K and Ctrl+Shift+P open it, bound through F1.4 to the `palette.open` command (Cmd on macOS). _(`palette.open` is a view command with `globalKeybinding` and `logged: false`: UI chrome never enters the replay log.)_
 - [x] Fuzzy search over title, category and id. Commands whose `when` is false are hidden or shown disabled with the reason. Recent commands come first and are stored in settings. _(Shown disabled, after the enabled ones; recents are commands run from the palette.)_
 - [x] Forms support string, integer/number with bounds, boolean, enum, nested object, optional and default. Entity-reference args offer the current selection. _(Entity ids carry the `x-controls-ref: entity` `.meta()` hint and read the `selection.entityId` context key, which the viewport publishes once F1.7 selects world entities.)_
 - [x] A unit test checks that **every registered command** can be rendered as a palette form, so a new command can't silently break the palette.

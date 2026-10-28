@@ -88,13 +88,16 @@ describe('createGame', () => {
   it('notifies executed listeners until they unsubscribe, and rejects unknown events', () => {
     const game = createGame({ seed: 1 });
     const seen: string[] = [];
-    const off = game.on('executed', (event) => seen.push(`${event.entry.seq}:${event.entry.id}`));
+    const off = game.on('executed', (event) => seen.push(`${event.entry?.seq ?? 'unlogged'}:${event.command.id}`));
     game.exec('entity.place', place(1));
     game.exec('entity.delete', { id: 99 }); // fails: no event
+    game.exec('palette.open'); // UI chrome: an event, but no entry and no seq
     game.exec('view.resetLayout');
     off();
     game.exec('edit.undo');
-    expect(seen).toEqual(['0:entity.place', '1:view.resetLayout']);
+    expect(seen).toEqual(['0:entity.place', 'unlogged:palette.open', '1:view.resetLayout']);
+    expect(game.entries().map((e) => e.id)).toEqual(['entity.place', 'view.resetLayout', 'edit.undo']);
+    expect(game.execOrThrow('palette.open')).toBeNull();
     expect(() => game.on('nope' as 'executed', () => undefined)).toThrow(/Unknown game event "nope"/);
   });
 
@@ -191,7 +194,7 @@ describe('replayGame', () => {
     expect(game.replayLog()).toEqual(live.replayLog());
 
     // It continues the log: redo the delete.
-    expect(game.execOrThrow('edit.redo').seq).toBe(5);
+    expect(game.execOrThrow('edit.redo')?.seq).toBe(5);
     expect(game.world().entities).toEqual([]);
   });
 

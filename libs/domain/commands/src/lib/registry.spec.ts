@@ -93,6 +93,15 @@ describe('CommandRegistry', () => {
     expect(registry.isEnabled('view.none', {})).toBe(false);
   });
 
+  it('refuses an unlogged command that is undoable or a cheat', () => {
+    for (const extra of [{ undoable: true }, { cheat: true }]) {
+      expect(() => new CommandRegistry<number>().register(command('ui.thing', { logged: false, ...extra }))).toThrow(
+        expect.objectContaining({ reason: 'unlogged-state-change', commandId: 'ui.thing' }),
+      );
+    }
+    expect(() => new CommandRegistry<number>().register(command('ui.thing', { logged: false }))).not.toThrow();
+  });
+
   it('registers the built-in edit and view commands', () => {
     const registry = new CommandRegistry<number>().registerAll(editCommands<number>()).registerAll(viewCommands());
     expect(registry.list().map((c) => [c.id, c.category, c.keybinding ?? null, c.undoable])).toEqual([

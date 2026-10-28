@@ -90,7 +90,7 @@ sequenceDiagram
 
 `apps/sim-cli/scenarios/four-surface.ts` and `four-surface.console` express one scenario. `apps/sim-cli/src/four-surface.spec.ts` drives it through the scripting API in-process, `sim run` of each file and `sim replay` of the log the script run wrote, and pins the resulting hash. The test target depends on `build`, so it runs the real bundle, and it is part of `pnpm verify`. The palette, keybinding and mouse drivers are UI and live in `apps/game-e2e`.
 
-**The palette scenario (F1.3).** `scenarios/palette-place-undo.console` lists, as console lines, exactly what `apps/game-e2e/src/palette.spec.ts` does with the palette and the keyboard: two `palette.open`s, place a crate, `palette.open`, place a spool, `palette.open`, undo. `apps/sim-cli/src/palette-place-undo.spec.ts` runs it with `sim run` and pins `PALETTE_PLACE_UNDO_HASH`; the e2e test asserts the same literal and that its replay log has the file's command ids, so the palette path is checked against the console-line path.
+**The palette scenario (F1.3).** `scenarios/palette-place-undo.console` lists, as console lines, exactly what `apps/game-e2e/src/palette.spec.ts` logs with the palette and the keyboard: place a crate, place a spool, undo. Opening the palette (`palette.open`) is unlogged UI chrome, so it appears in neither. `apps/sim-cli/src/palette-place-undo.spec.ts` runs it with `sim run` and pins `PALETTE_PLACE_UNDO_HASH`; the e2e test asserts the same literal and that its replay log has the file's command ids, so the palette path is checked against the console-line path.
 
 ## Reserved queries
 
