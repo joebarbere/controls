@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Landed: kickoff boundary hardening, F1.1–F1.7, F1.8 (schemas, `.ctrl` container, save I/O, autosave, Continue/Load), F1.9 (workshop level + new-game seed), F1.10 (wire-routing spike, ADR 0010), the phase-acceptance E2E (one scenario, four drivers). Next: P1 close-out, then the v0.2.0 release. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 1 (Game shell) complete 2026-10-28, awaiting the v0.2.0 release. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md) (open follow-ups listed there). Next: the v0.2.0 release (`version-keeper`, then `release-engineer`), then the Phase 2 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

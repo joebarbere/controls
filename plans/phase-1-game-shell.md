@@ -1,6 +1,6 @@
 # Phase 1: Game shell ("Hands on the panel")
 
-**Release:** v0.2.0 · **Status:** 🚧 In progress (kickoff 2026-10-27) · **Spec:** [plan §6 P1](../controls-development-plan.md#p1--game-shell-ui-commands-cameras-saveload-v020)
+**Release:** v0.2.0 (pending) · **Status:** ✅ Features and phase-acceptance E2E complete (kickoff 2026-10-27, completed 2026-10-28); awaiting the v0.2.0 release · **Spec:** [plan §6 P1](../controls-development-plan.md#p1--game-shell-ui-commands-cameras-saveload-v020)
 
 ## Goal
 
@@ -9,10 +9,10 @@ A game you can start, look around, place things in and save: a keyboard-first An
 ## Phase acceptance
 
 - [x] Place, move and delete objects with undo/redo through the **mouse, palette, console and a `sim-cli` script**, with the same resulting world hash (`world.hash`) on every surface. _(One scenario, four drivers: `apps/sim-cli/scenarios/phase-acceptance.{console,ts}` on the workshop level. `apps/game-e2e/src/phase-acceptance.spec.ts` drives it with the mouse (undo and redo on the keyboard), the palette alone and the in-game console; `apps/sim-cli/src/phase-acceptance.spec.ts` runs the snapping script and the console file, and replays the log and a save. All must log the file's command ids and reach `PHASE_ACCEPTANCE_HASH`.)_
-- [ ] Save then reload is lossless: a fast-check property test on the world document and an E2E save → reload → same hash, in the web harness and in Electron.
+- [x] Save then reload is lossless: a fast-check property test on the world document and an E2E save → reload → same hash, in the web harness and in Electron. _(Property test `round-trips any valid world losslessly through JSON (property)` in `libs/domain/save-format/src/lib/v1/world.spec.ts`; web harness: `apps/game-e2e/src/load-ui.spec.ts` saves from the menu, reloads the page and Continues to the same `world.hash`; Electron: `apps/desktop-e2e/src/saves.spec.ts` ("saves a game from the menu and loads it back from the Load list (F1.8b part 3)") asserts the same hash after loading.)_
 - [x] Replaying seed + command log from an empty world gives the same hash as the live session (property test in `domain/commands` and `sim-cli replay`). _(F1.2 property tests; F1.6's four-surface test replays the log a `sim run` wrote and gets the live hash.)_
 - [x] E2E covers the palette and the console (including the console under the Electron CSP). _(`apps/game-e2e`: `palette.spec.ts` (F1.3) and `console.spec.ts` (F1.5); `apps/desktop-e2e/src/smoke.spec.ts` opens the console under the real `app://` CSP.)_
-- [ ] `pnpm verify` green on all three OSes. Every new runtime dependency has a `THIRD_PARTY_NOTICES.md` row.
+- [ ] `pnpm verify` green on all three OSes. Every new runtime dependency has a `THIRD_PARTY_NOTICES.md` row. _(Notices checked at close-out: every root `dependencies` entry (Angular, RxJS, Three.js, three-mesh-bvh, Zod, fflate, `@codemirror/state` and `@codemirror/view`, plus CodeMirror's own runtime dependencies) has a row. Ticked once `main`'s three-OS CI confirms the close-out.)_
 
 ## Kickoff (before F1.x PRs)
 
@@ -39,7 +39,7 @@ Accepted from the planner's and `release-engineer`'s kickoff reports. Spec v1.2 
 
 ## Build order
 
-One feature per PR. F1.8 is split into two PRs (a, b); see the open questions. Three tracks can run in parallel after the kickoff:
+One feature per PR. F1.8 is split into two PRs (a, b); see the kickoff decisions. Three tracks can run in parallel after the kickoff:
 
 ```mermaid
 flowchart LR
@@ -227,7 +227,7 @@ Acceptance, **F1.8b** (container and I/O, after F1.1, F1.2 and F1.9):
 
 ### F1.9 Sandbox "workshop" level
 
-The level data lives in `content/levels/workshop.json` (a `WorldV1` document, validated by `@controls/save-format`). The bench, a wall section with exposed studs, the backplate with DIN rails and generic props (box, crate, spool) are procedural recipes in the renderer. Generic props use built-in catalogue refs (`prop.*@1`) until the catalogue arrives (see open questions). **Owner:** `renderer-engineer`; `save-format-guardian` for the level document.
+The level data lives in `content/levels/workshop.json` (a `WorldV1` document, validated by `@controls/save-format`). The bench, a wall section with exposed studs, the backplate with DIN rails and generic props (box, crate, spool) are procedural recipes in the renderer. Generic props use built-in catalogue refs (`prop.*@1`) until the catalogue arrives (see the kickoff decisions). **Owner:** `renderer-engineer`; `save-format-guardian` for the level document.
 
 Acceptance:
 
@@ -349,10 +349,24 @@ Numbers are assigned in landing order. Planned:
 | F1.8    | World document v1 + `.ctrl`   | ✅ Done (F1.8a; F1.8b parts 1–3: container, save I/O, save and load UI) |
 | F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)                       |
 | F1.10   | Wire-routing spike (ADR 0010) | ✅ Done (ADR only; spike branch not merged)                             |
+| —       | Phase-acceptance E2E          | ✅ Done (one scenario through mouse, palette, console and `sim-cli`)    |
+| —       | v0.2.0 release                | ⏳ Pending (`version-keeper`, then `release-engineer`)                  |
+
+## Open follow-ups (not done in P1)
+
+Known gaps carried past P1. None blocks the phase acceptance; each is picked up by the phase that needs it or by a P2+ plan.
+
+- **Placement overlap checks.** Placement snaps to the rail, grid, studs and bench top, but nothing stops one prop being placed into another.
+- **Keybinding conflict detection on non-QWERTY layouts (e.g. AZERTY).** Command letters follow the layout while input actions are positional ([ADR 0006](../docs/decisions/0006-command-system.md#keybindings-f14)), and conflict detection hasn't been checked against an AZERTY layout.
+- **The plan §4.9 frame budget on a 2020-era integrated GPU** is unmeasured (F1.10 and the rendering page measured a discrete GPU and SwiftShader only; [ADR 0010](../docs/decisions/0010-wire-routing-spike.md)). The P3 frame-time probe should include one.
+- **A manual WebGPU check on a real GPU.** Headless WebGPU on SwiftShader is unreliable, so E2E forces WebGL2 ([rendering caveats](../docs/caveats/rendering.md)); the WebGPU path needs a hands-on check, including save thumbnails.
+- **The Load list has no delete and shows no thumbnails.** There is no `save:delete` channel yet ([ADR 0009](../docs/decisions/0009-save-io-boundary.md)), and thumbnails are saved but not displayed, because reading one means reading and unzipping the whole save.
+- **The replay log never shrinks.** `Game.save` writes the whole log, which continues across loads, so a very long game (about 200k commands) passes the 32 MiB `replay.log` cap and every save of it fails. Rebase the log onto the current world (or drop `replay.log`) when it's over the cap; schema v1 already allows both, so no migration is needed (save-format-guardian pre-release review).
+- **Continue's case-insensitive fallback** (`findLastPlayed` in `feature-saves`) can pick "SHOP" when the last-played "Shop" was deleted outside the game on a case-sensitive file system, because `save:write` doesn't refuse names that differ only by case. Fold case only where the save folder is case-insensitive, or refuse such names.
 
 ## Close-out
 
-1. `docs-keeper` sync: README features, CHANGELOG, `docs/history.md` P1 narrative and `schemaVersion` 1.
-2. `version-keeper`: `0.1.0 → 0.2.0`.
-3. `release-engineer`: package, smoke test (including new sandbox and save/load), tag on confirmation, check the draft. The user publishes.
-4. Mark P1 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). P2 kickoff writes `plans/phase-2-*.md` and creates `sim-engine-engineer` and `electrical-realism-reviewer`. P2 is one of the agent-team cases (sim ↔ worker ↔ renderer).
+1. [x] `docs-keeper` sync: README features, CHANGELOG, `docs/history.md` P1 narrative and `schemaVersion` 1.
+2. [ ] `version-keeper`: `0.1.0 → 0.2.0`.
+3. [ ] `release-engineer`: package, smoke test (including new sandbox and save/load), tag on confirmation, check the draft. The user publishes.
+4. [ ] Mark P1 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). P2 kickoff writes `plans/phase-2-*.md` and creates `sim-engine-engineer` and `electrical-realism-reviewer`. P2 is one of the agent-team cases (sim ↔ worker ↔ renderer).
