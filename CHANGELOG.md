@@ -50,6 +50,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- `release.yml` now grants `contents: write` only to the packaging job that uploads to the draft release; the workflow default, and the `verify` job, are read-only.
 - **Pull requests now run CI on Windows, macOS and Linux**, not just Linux, so a PR is green only if `main` would be. `pr.yml` and `main.yml` both call one reusable workflow, `.github/workflows/ci.yml` (`pnpm verify`, then the web and Electron e2e suites, `fail-fast: false`, Playwright output uploaded on failure), so the two can't drift. The PR check names change from `verify + e2e (ubuntu)` to `ci / verify + e2e (ubuntu)`, `(macos)` and `(windows)`.
 - Long web e2e tests are split into one flow per test, each from a fresh page: the F1.1 keyboard-only walk-through (main menu, settings, about, New sandbox, Escape in the workspace), the F1.4 keybindings test (conflicts, use after rebinding, survival across a reload) and the web settings-persistence test (settings, panel layout). The single F1.1 test had hit the 30 s timeout on Windows CI. The focus helpers (`apps/game-e2e/src/support/focus.ts`, shared with the palette test) no longer use `locator.evaluate`, the web e2e runs at 960 × 540 by default (the 3D specs still pin 1280 × 720), and the keybindings test waits animation frames instead of fixed delays. Locally the longest of these tests now takes about 12 s instead of 28 s.
 
