@@ -1,0 +1,12 @@
+# The F1.3 palette path as console lines: exactly the commands apps/game-e2e/src/palette.spec.ts
+# runs with the palette, keyboard only (each palette.open is the Ctrl+K that opened it). Both must
+# reach PALETTE_PLACE_UNDO_HASH (apps/sim-cli/src/palette-place-undo.spec.ts).
+#   pnpm sim run apps/sim-cli/scenarios/palette-place-undo.console
+palette.open   # Ctrl+K, then Escape: opening is logged, closing isn't a command
+palette.open   # Ctrl+Shift+P
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200
+palette.open
+entity.place --ref.id prop.spool --ref.version 1 --positionMm.x 400 --positionMm.y 0 --positionMm.z -200
+palette.open
+edit.undo      # the spool goes; the crate stays
+world.hash
