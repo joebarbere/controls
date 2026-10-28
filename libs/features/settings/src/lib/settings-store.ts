@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
-import { NotificationService } from '@controls/feature-shell';
+import { APP_LIFECYCLE, NotificationService } from '@controls/feature-shell';
 import { defaultSettings, type Settings } from '@controls/save-format';
 import { SETTINGS_SERVICE } from './settings-service';
 
@@ -20,7 +20,9 @@ type Patch = (settings: Settings) => Settings;
  *   back to defaults (the service decides) and the player is warned.
  * - Changes made **before** the load finishes are kept: they are replayed on top of the loaded
  *   document instead of being overwritten by it.
- * - Saves are debounced by {@link SAVE_DEBOUNCE_MS}; a failed save is reported.
+ * - Saves are debounced by {@link SAVE_DEBOUNCE_MS}; a failed save is reported. A pending or in-flight
+ *   save is flushed before the window closes or the app quits ({@link APP_LIFECYCLE}): Angular's
+ *   `DestroyRef` doesn't run when Electron closes the window, so it can't be relied on for that.
  * - Theme and motion are reflected on `<html>` as `data-theme` / `data-motion` for the design tokens.
  *
  * Writers of capped lists (palette recents ≤ 20, no repeats; console history ≤ 200 × 2000 chars)
@@ -32,6 +34,8 @@ export class SettingsStore {
   private readonly notifications = inject(NotificationService);
   private readonly state = signal<Settings>(defaultSettings());
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Saves handed to the service and not yet settled. */
+  private readonly inFlight = new Set<Promise<void>>();
   /** Edits made while loading; `null` once loaded. */
   private pending: Patch[] | null = [];
 
@@ -49,7 +53,11 @@ export class SettingsStore {
       if (reducedMotion === 'system') delete root.dataset['motion'];
       else root.dataset['motion'] = reducedMotion;
     });
-    inject(DestroyRef).onDestroy(() => void this.flush());
+    const offBeforeQuit = inject(APP_LIFECYCLE).onBeforeQuit(() => this.flush());
+    inject(DestroyRef).onDestroy(() => {
+      offBeforeQuit();
+      void this.flush();
+    });
   }
 
   /** Replaces part of one section, e.g. `update('audio', { master: 0.5 })`. */
@@ -72,12 +80,17 @@ export class SettingsStore {
     });
   }
 
-  /** Writes any pending change now. */
+  /**
+   * Writes any pending change now, and resolves once every save already started has settled too
+   * (a save the debounce started a moment ago may still be on its way to main). Never rejects.
+   */
   flush(): Promise<void> {
-    if (this.saveTimer === undefined) return Promise.resolve();
-    clearTimeout(this.saveTimer);
-    this.saveTimer = undefined;
-    return this.save();
+    if (this.saveTimer !== undefined) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = undefined;
+      this.startSave();
+    }
+    return Promise.all(this.inFlight).then(() => undefined);
   }
 
   private apply(patch: Patch): void {
@@ -107,8 +120,13 @@ export class SettingsStore {
     if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = undefined;
-      void this.save();
+      this.startSave();
     }, SAVE_DEBOUNCE_MS);
+  }
+
+  private startSave(): void {
+    const saving = this.save().finally(() => this.inFlight.delete(saving));
+    this.inFlight.add(saving);
   }
 
   private async save(): Promise<void> {

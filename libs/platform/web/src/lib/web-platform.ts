@@ -1,5 +1,11 @@
 import { parseStoredSettings, serialiseSettings, type AppInfo, type SettingsLoadResult } from '@controls/ipc-contract';
-import type { Platform, SettingsService } from '@controls/platform-api';
+import {
+  runFlushes,
+  type AppLifecycle,
+  type PendingWritesFlush,
+  type Platform,
+  type SettingsService,
+} from '@controls/platform-api';
 import type { Settings } from '@controls/save-format';
 import { APP_VERSION } from '@controls/units';
 
@@ -34,12 +40,45 @@ export class WebSettingsService implements SettingsService {
   }
 }
 
+/** The slice of `window` used to hear that the page is going away. */
+export type PageHideTarget = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+
+/**
+ * Flush before quit in the browser harness: registered flushes run on `pagehide` (tab closed,
+ * reloaded or navigated away; unlike `beforeunload`, it also fires on mobile and with the
+ * back/forward cache). The browser doesn't wait for promises, so this is best effort: the
+ * synchronous `localStorage.setItem` behind a settings flush completes, an async write may not.
+ */
+export class WebAppLifecycle implements AppLifecycle {
+  private readonly flushes = new Set<PendingWritesFlush>();
+  private readonly onPageHide = () => void runFlushes(this.flushes);
+
+  /** `target` defaults to `window`; without one (Node, workers) nothing ever fires. */
+  constructor(private readonly target: PageHideTarget | undefined = pageHideTarget()) {}
+
+  onBeforeQuit(flush: PendingWritesFlush): () => void {
+    const entry: PendingWritesFlush = () => flush();
+    if (this.flushes.size === 0) this.target?.addEventListener('pagehide', this.onPageHide);
+    this.flushes.add(entry);
+    return () => {
+      if (!this.flushes.delete(entry)) return;
+      if (this.flushes.size === 0) this.target?.removeEventListener('pagehide', this.onPageHide);
+    };
+  }
+}
+
+function pageHideTarget(): PageHideTarget | undefined {
+  const candidate = globalThis as Partial<PageHideTarget>;
+  return typeof candidate.addEventListener === 'function' ? (candidate as PageHideTarget) : undefined;
+}
+
 /** {@link Platform} for the browser dev harness (`pnpm start:web`, Playwright web e2e). */
 export class WebPlatform implements Platform {
   readonly kind = 'web' as const;
   /** Browsers only let a script close windows it opened, so the harness has no Quit. */
   readonly canQuit = false;
   readonly settings: SettingsService = new WebSettingsService();
+  readonly lifecycle: AppLifecycle = new WebAppLifecycle();
 
   async getAppInfo(): Promise<AppInfo> {
     return { appVersion: APP_VERSION, platform: 'web', arch: 'unknown', isPackaged: false, versions: {} };

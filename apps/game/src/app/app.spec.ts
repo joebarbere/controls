@@ -5,18 +5,19 @@ import {
   provideKeybindingOverridesFromSettings,
   SettingsStore,
 } from '@controls/feature-settings';
-import type { Platform } from '@controls/platform-api';
+import type { PendingWritesFlush, Platform } from '@controls/platform-api';
 import { defaultSettings } from '@controls/save-format';
 import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
-import { provideSettingsFromPlatform } from './app.config';
+import { provideLifecycleFromPlatform, provideSettingsFromPlatform } from './app.config';
 import { provideSandboxLevel } from './levels';
 import { PLATFORM } from './platform.token';
 
 describe('App', () => {
   const quit = vi.fn();
   let settings: MemorySettingsService;
+  const flushes = new Set<PendingWritesFlush>();
   const fakePlatform: Platform = {
     kind: 'electron',
     getAppInfo: async () => ({
@@ -31,17 +32,22 @@ describe('App', () => {
     },
     canQuit: true,
     quit,
+    lifecycle: {
+      onBeforeQuit: (flush) => (flushes.add(flush), () => void flushes.delete(flush)),
+    },
   };
 
   beforeEach(async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined); // jsdom has no WebGL/WebGPU
     quit.mockReset();
+    flushes.clear();
     settings = new MemorySettingsService();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         { provide: PLATFORM, useValue: fakePlatform },
         provideSettingsFromPlatform(),
+        provideLifecycleFromPlatform(),
         provideKeybindingOverridesFromSettings(),
         provideSandboxLevel(),
       ],
@@ -266,5 +272,15 @@ describe('App', () => {
     const { user } = await setup();
     await user.click(screen.getByRole('button', { name: 'Quit' }));
     expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it('saves a settings change still inside the debounce when the platform asks before quitting', async () => {
+    await setup();
+    const store = TestBed.inject(SettingsStore);
+    await store.loaded;
+    store.update('display', { theme: 'dark' });
+    expect(flushes.size).toBe(1); // SettingsStore registered with Platform.lifecycle
+    await Promise.all([...flushes].map((flush) => flush()));
+    await expect(settings.load()).resolves.toMatchObject({ settings: { display: { theme: 'dark' } } });
   });
 });

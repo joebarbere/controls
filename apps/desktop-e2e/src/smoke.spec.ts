@@ -50,7 +50,7 @@ test.describe.serial('desktop smoke', () => {
     expect(exposure).toEqual({
       require: 'undefined',
       process: 'undefined',
-      bridgeKeys: ['getAppInfo', 'getSettings', 'setSettings', 'quit'],
+      bridgeKeys: ['getAppInfo', 'getSettings', 'setSettings', 'quit', 'onFlushRequest', 'ackFlush'],
     });
   });
 
@@ -64,6 +64,21 @@ test.describe.serial('desktop smoke', () => {
     });
     expect(message).toContain('settings:set refused (invalid)');
     expect(message).not.toContain('do-not-echo');
+  });
+
+  test('app:flush-ack refuses a forged or malformed ack without echoing it', async () => {
+    const messages = await running().window.evaluate(async () => {
+      const bridge = (globalThis as unknown as { controls: { ackFlush(a: unknown): Promise<void> } }).controls;
+      const attempt = (ack: unknown) =>
+        bridge.ackFlush(ack).then(
+          () => 'accepted',
+          (error: Error) => error.message,
+        );
+      return [await attempt({ requestId: 1, ok: 'do-not-echo' }), await attempt({ requestId: 424242, ok: true })];
+    });
+    expect(messages[0]).toContain('app:flush-ack refused (invalid)');
+    expect(messages[1]).toContain('app:flush-ack refused (unknown-request)');
+    expect(messages.join()).not.toContain('do-not-echo');
   });
 
   // The shell (native <dialog>, design tokens, splitters) must work under the app:// CSP (ADR 0005).

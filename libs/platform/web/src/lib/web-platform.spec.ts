@@ -1,7 +1,13 @@
 import { AppInfoSchema, serialiseSettings } from '@controls/ipc-contract';
 import { defaultSettings } from '@controls/save-format';
 import { APP_VERSION } from '@controls/units';
-import { WEB_SETTINGS_KEY, WebPlatform, WebSettingsService, type SettingsStorage } from './web-platform';
+import {
+  WEB_SETTINGS_KEY,
+  WebAppLifecycle,
+  WebPlatform,
+  WebSettingsService,
+  type SettingsStorage,
+} from './web-platform';
 
 class MemoryStorage implements SettingsStorage {
   readonly items = new Map<string, string>();
@@ -24,6 +30,48 @@ describe('WebPlatform', () => {
     const platform = new WebPlatform();
     expect(platform.canQuit).toBe(false);
     expect(() => platform.quit()).not.toThrow();
+  });
+});
+
+describe('WebAppLifecycle (flush on pagehide)', () => {
+  it('runs registered flushes on pagehide, and listens only while something is registered', () => {
+    const target = new EventTarget();
+    const add = vi.spyOn(target, 'addEventListener');
+    const remove = vi.spyOn(target, 'removeEventListener');
+    const lifecycle = new WebAppLifecycle(target);
+    const a = vi.fn();
+    const b = vi.fn();
+    const offA = lifecycle.onBeforeQuit(a);
+    const offB = lifecycle.onBeforeQuit(b);
+    expect(add).toHaveBeenCalledOnce();
+    target.dispatchEvent(new Event('pagehide'));
+    expect(a).toHaveBeenCalledOnce(); // synchronously, while the page is still there
+    expect(b).toHaveBeenCalledOnce();
+    offA();
+    offA(); // idempotent
+    expect(remove).not.toHaveBeenCalled();
+    offB();
+    expect(remove).toHaveBeenCalledOnce();
+    target.dispatchEvent(new Event('pagehide'));
+    expect(a).toHaveBeenCalledOnce();
+  });
+
+  it('runs every flush even if one throws', () => {
+    const target = new EventTarget();
+    const lifecycle = new WebAppLifecycle(target);
+    const after = vi.fn();
+    lifecycle.onBeforeQuit(() => {
+      throw new Error('boom');
+    });
+    lifecycle.onBeforeQuit(after);
+    target.dispatchEvent(new Event('pagehide'));
+    expect(after).toHaveBeenCalledOnce();
+  });
+
+  it('works without a window (Node), where nothing fires', () => {
+    const off = new WebAppLifecycle(undefined).onBeforeQuit(() => undefined);
+    expect(() => off()).not.toThrow();
+    expect(new WebPlatform().lifecycle).toBeInstanceOf(WebAppLifecycle);
   });
 });
 

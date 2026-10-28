@@ -71,6 +71,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `desktop-e2e:e2e` is explicitly never cached, so a packaged smoke run can't be replaced by a cached dev run.
 - Toolchain patch updates at the Phase 1 kickoff: pnpm 11.15.0 → 11.28.8, electron-builder 26.18.0 → 26.18.1 and electron-updater 6.8.11 → 6.8.12. Nx 24.0.0 → 24.0.2 followed once it cleared pnpm's minimum release age (no `nx migrate` migrations).
 
+### Fixed
+
+- **A setting changed just before quitting is no longer lost.** Settings are saved 300 ms after the last change, and that save was dropped if you quit (menu Quit, Cmd+Q, closing the window) inside those 300 ms. The desktop app now asks the page to finish its pending writes before a window closes or the app quits, and waits for it (up to 2 s, so a hung page can't stop you quitting). The browser harness writes pending settings when the tab is closed or reloaded. This also caused the intermittent macOS CI failure of the settings-persistence test, which now waits for both changes to be on disk and has regression tests for quitting and for closing the window straight after a change.
+
 ## [0.1.0] - 2026-10-26
 
 Phase 0, "Hello, panel": the cross-platform walking skeleton. Nothing playable yet.

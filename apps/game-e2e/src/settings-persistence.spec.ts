@@ -39,6 +39,25 @@ test('a settings change and the panel layout survive a reload', async ({ page })
   await expect(page.getByRole('separator', { name: 'Resize inspector' })).toHaveAttribute('aria-valuenow', '384');
 });
 
+// Flush before quit, web harness: a change still inside the save debounce is written on `pagehide`.
+test('a settings change made just before a reload is not lost', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'Settings' }).click();
+  const light = page.getByRole('dialog', { name: 'Settings' }).getByRole('radio', { name: 'Light' });
+  await expect(light).toBeVisible();
+  // Change and reload in one task, so the 300 ms debounce can't have fired before the page goes.
+  const loaded = page.waitForEvent('load');
+  await light
+    .evaluate((radio: HTMLInputElement) => {
+      radio.click();
+      location.reload();
+    })
+    .catch(() => undefined); // the reload may tear down the evaluation's context
+  await loaded;
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await stored(page)).toContain('"theme": "light"');
+});
+
 test('an unreadable stored document falls back to defaults with a warning', async ({ page }) => {
   await page.addInitScript((key) => {
     if (!sessionStorage.getItem('seeded')) {

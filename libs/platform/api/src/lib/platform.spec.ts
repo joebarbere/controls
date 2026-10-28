@@ -1,4 +1,5 @@
 import { defaultSettings } from '@controls/save-format';
+import { NOOP_LIFECYCLE } from './lifecycle';
 import type { Platform } from './platform';
 
 describe('Platform', () => {
@@ -18,6 +19,7 @@ describe('Platform', () => {
       },
       canQuit: false,
       quit: () => undefined,
+      lifecycle: NOOP_LIFECYCLE,
     };
     await expect(fake.getAppInfo()).resolves.toMatchObject({ platform: 'web' });
     await expect(fake.settings.load()).resolves.toMatchObject({ fallbackReason: 'missing' });
