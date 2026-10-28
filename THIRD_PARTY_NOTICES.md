@@ -8,16 +8,21 @@ Controls is released under the [MIT licence](LICENSE). It depends on, and ships,
 
 ## Runtime dependencies shipped in the desktop app
 
-| Component                                                     | Licence    | Use                                                                                                                                            |
-| ------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Electron](https://www.electronjs.org/)                       | MIT        | Desktop shell. Bundles Chromium and Node.js, whose own licences are shipped by electron-builder as `LICENSES.chromium.html` alongside the app. |
-| [Angular](https://angular.dev/)                               | MIT        | UI framework (`@angular/*`)                                                                                                                    |
-| [RxJS](https://rxjs.dev/)                                     | Apache-2.0 | Angular dependency                                                                                                                             |
-| [tslib](https://github.com/microsoft/tslib)                   | 0BSD       | TypeScript runtime helpers                                                                                                                     |
-| [Three.js](https://threejs.org/)                              | MIT        | 3D rendering                                                                                                                                   |
-| [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) | MIT        | BVH picking for hover and selection in the 3D viewport (`@controls/renderer`)                                                                  |
-| [Zod](https://zod.dev/)                                       | MIT        | Schema validation (IPC payloads; later saves, catalogue, commands)                                                                             |
-| [electron-updater](https://www.electron.build/auto-update)    | MIT        | Auto-update from GitHub Releases                                                                                                               |
+| Component                                                                      | Licence    | Use                                                                                                                                            |
+| ------------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Electron](https://www.electronjs.org/)                                        | MIT        | Desktop shell. Bundles Chromium and Node.js, whose own licences are shipped by electron-builder as `LICENSES.chromium.html` alongside the app. |
+| [Angular](https://angular.dev/)                                                | MIT        | UI framework (`@angular/*`)                                                                                                                    |
+| [RxJS](https://rxjs.dev/)                                                      | Apache-2.0 | Angular dependency                                                                                                                             |
+| [tslib](https://github.com/microsoft/tslib)                                    | 0BSD       | TypeScript runtime helpers                                                                                                                     |
+| [Three.js](https://threejs.org/)                                               | MIT        | 3D rendering                                                                                                                                   |
+| [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)                  | MIT        | BVH picking for hover and selection in the 3D viewport (`@controls/renderer`)                                                                  |
+| [Zod](https://zod.dev/)                                                        | MIT        | Schema validation (IPC payloads; later saves, catalogue, commands)                                                                             |
+| [CodeMirror 6](https://codemirror.net/)                                        | MIT        | The dev console's input (`@codemirror/state`, `@codemirror/view`; `@controls/feature-console`)                                                 |
+| [style-mod](https://www.npmjs.com/package/style-mod)                           | MIT        | CodeMirror dependency: CSS-in-JS rules for the editor                                                                                          |
+| [w3c-keyname](https://github.com/marijnh/w3c-keyname)                          | MIT        | CodeMirror dependency: key names for keymaps                                                                                                   |
+| [crelt](https://www.npmjs.com/package/crelt)                                   | MIT        | CodeMirror dependency: DOM element helper                                                                                                      |
+| [find-cluster-break](https://www.npmjs.com/package/@marijn/find-cluster-break) | MIT        | CodeMirror dependency (`@marijn/find-cluster-break`): grapheme cluster boundaries                                                              |
+| [electron-updater](https://www.electron.build/auto-update)                     | MIT        | Auto-update from GitHub Releases                                                                                                               |
 
 Build and test tooling (Nx, TypeScript, esbuild, Vite, Vitest, fast-check, Playwright, ESLint, Prettier, electron-builder) is not shipped in the app and is not listed.
 

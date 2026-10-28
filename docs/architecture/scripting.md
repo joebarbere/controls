@@ -1,6 +1,6 @@
 # Scripting API and `sim-cli`
 
-> **Status (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`) is the typed `Game` facade over the world command bus; `feature-session`'s `Session` wraps it. The console-line parser lives in `@controls/commands` (`console/`). `apps/sim-cli` (`type:app`, `scope:headless`) runs scripts, replays and hashes headless in plain Node. The in-game console UI is F1.5 and the `.ctrl` container F1.8b. Decisions: [ADR 0008](../decisions/0008-console-and-scripts.md). How-to: [scripting guide](../guides/scripting.md). Gotchas: [scripting caveats](../caveats/scripting.md).
+> **Status (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`) is the typed `Game` facade over the world command bus; `feature-session`'s `Session` wraps it. The console-line parser lives in `@controls/commands` (`console/`). `apps/sim-cli` (`type:app`, `scope:headless`) runs scripts, replays and hashes headless in plain Node. The in-game console is `@controls/feature-console` ([dev console](console.md), F1.5) and the `.ctrl` container F1.8b. Decisions: [ADR 0008](../decisions/0008-console-and-scripts.md). How-to: [scripting guide](../guides/scripting.md). Gotchas: [scripting caveats](../caveats/scripting.md).
 
 ## One `Game`, every driver
 
@@ -11,8 +11,8 @@ flowchart LR
     classDef later fill:#f4f4f4,stroke:#999,stroke-dasharray: 4 3;
     subgraph ui["Renderer (Angular)"]
         PAL["Palette (F1.3)"] --> SES
-        KEY["Keybindings (F1.4)"]:::later --> SES
-        CON["Console (F1.5)"]:::later --> SES
+        KEY["Keybindings (F1.4)"] --> SES
+        CON["Console (F1.5)<br/>feature-console"] --> SES
         BTN["Buttons, mouse (F1.7)"] --> SES
         SES["Session<br/>feature-session"]
     end

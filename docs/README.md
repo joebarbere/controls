@@ -35,21 +35,22 @@ flowchart TD
 | [Commands](architecture/commands.md)               | Command registry and bus, undo/redo, the replay log, world commands, `world.hash` and the PRNG      |
 | [UI shell](architecture/ui-shell.md)               | Shell libraries, screens and focus flow, the docking workspace, settings, theming and notifications |
 | [Scripting and sim-cli](architecture/scripting.md) | The scripting API `Game`, console-line files, `sim-cli` run/replay/hash, the four-surface scenario  |
+| [Dev console](architecture/console.md)             | The in-game console: CodeMirror input, completion, history, `help`, `run`, cheat banner, gating     |
 
 Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds them.
 
 ## Decisions (ADRs)
 
-| ADR                                                                       | Decision                                                                                               |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                      |
-| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks       |
-| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                         |
-| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                            |
-| [0005 Docking workspace](decisions/0005-docking-workspace.md)             | Custom keyboard-operable split panes, not dockview (revisit for tabbed editors)                        |
-| [0006 Command system](decisions/0006-command-system.md)                   | Pure apply/invert commands, undo/redo logged and replayed, view commands, advisory `when` grammar      |
-| [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log    |
-| [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror (F1.5) |
+| ADR                                                                       | Decision                                                                                                               |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                                      |
+| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks                       |
+| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                                         |
+| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                                            |
+| [0005 Docking workspace](decisions/0005-docking-workspace.md)             | Custom keyboard-operable split panes, not dockview (revisit for tabbed editors)                                        |
+| [0006 Command system](decisions/0006-command-system.md)                   | Pure apply/invert commands, undo/redo logged and replayed, view commands, advisory `when` grammar                      |
+| [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log                    |
+| [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror 6 under the CSP (F1.5) |
 
 ## Reference
 

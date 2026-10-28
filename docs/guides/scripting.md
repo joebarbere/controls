@@ -5,7 +5,7 @@ Controls can be driven without the UI. A **script** runs commands against a game
 There are two script formats:
 
 - **TypeScript (or JavaScript) modules** that export `(game) => …`. They run in `sim-cli` (plain Node) only.
-- **Console-line files** (`.console`): one console command per line, as data. They run in `sim-cli` and, from F1.5, in the in-game console with `run <file>`.
+- **Console-line files** (`.console`): one console command per line, as data. They run in `sim-cli` and in the in-game dev console: type `run` (or use Run file, or drop the file on the console) and pick the file.
 
 Why two: the game's renderer has a strict Content Security Policy with no `eval`, so it can never run JavaScript it didn't ship with. Console-line files are data, so they run everywhere. See [ADR 0008](../decisions/0008-console-and-scripts.md).
 
