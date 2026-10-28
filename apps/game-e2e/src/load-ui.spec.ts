@@ -66,12 +66,14 @@ test('a game saved from the menu survives a reload, and Continue reaches the sam
   expect(await hash(page)).toBe(saved);
 });
 
+// Mod is Ctrl here on every host OS: the project emulates Desktop Chrome, whose user agent is Windows,
+// so the app's key platform is 'other' even on a macOS runner. `ControlOrMeta` would press Cmd there.
 test('keyboard only: Mod+S names a save, Mod+L lists it, Enter loads it back', async ({ page }) => {
   await open(page);
   await startSandbox(page);
   const saved = await placeCrate(page);
 
-  await page.keyboard.press('ControlOrMeta+S');
+  await page.keyboard.press('Control+S');
   const saveDialog = page.getByRole('dialog', { name: 'Save game' });
   await expect(saveDialog.getByRole('textbox', { name: 'Save name' })).toHaveValue('Sandbox 0');
   await page.keyboard.press('Enter');
@@ -85,7 +87,7 @@ test('keyboard only: Mod+S names a save, Mod+L lists it, Enter loads it back', a
   await enterSeed(page, 1);
   expect(await hash(page)).not.toBe(saved);
 
-  await page.keyboard.press('ControlOrMeta+L');
+  await page.keyboard.press('Control+L');
   const loadDialog = page.getByRole('dialog', { name: 'Load game' });
   await expect(loadDialog.getByRole('button', { name: 'Sandbox 0', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -100,7 +102,7 @@ test('Save to a file downloads the save, and Open file uploads it back to the sa
   const saved = await placeCrate(page);
 
   const downloading = page.waitForEvent('download');
-  await page.keyboard.press('ControlOrMeta+Shift+S');
+  await page.keyboard.press('Control+Shift+S');
   const download = await downloading;
   expect(download.suggestedFilename()).toBe('Sandbox 0.ctrl');
   const bytes = await readFile((await download.path()) ?? '');
@@ -111,7 +113,7 @@ test('Save to a file downloads the save, and Open file uploads it back to the sa
   expect(await hash(page)).not.toBe(saved);
 
   const choosing = page.waitForEvent('filechooser');
-  await page.keyboard.press('ControlOrMeta+O');
+  await page.keyboard.press('Control+O');
   const chooser = await choosing;
   await chooser.setFiles({ name: 'Sandbox 0.ctrl', mimeType: 'application/octet-stream', buffer: bytes });
   await expect(page.getByText('Loaded “Sandbox 0.ctrl”.')).toBeVisible();
