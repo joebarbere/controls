@@ -1,6 +1,6 @@
 # World document and saves
 
-> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). The ZIP container, file I/O, IPC and autosave are F1.8b _(later in P1)_. Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
+> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. File I/O, IPC and the web harness store (F1.8b part 2), and autosave and the Continue/Load UI (part 3) _are later in P1_. Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
 
 ## Documents
 
@@ -99,13 +99,82 @@ flowchart LR
     LVL -->|"sim run --world … [--seed N]"| CLI["sim-cli"]
 ```
 
-## Loading
+## The `.ctrl` container (F1.8b)
+
+A save is a ZIP written and parsed by `libs/domain/save-format/src/lib/container/` (fflate supplies only DEFLATE). Bytes in, bytes out: no file system, no clock, no framework. The Electron main process or the web harness stores the bytes (F1.8b part 2).
+
+| Entry                     | Required | Stored as                      | Cap    |
+| ------------------------- | -------- | ------------------------------ | ------ |
+| `manifest.json`           | yes      | DEFLATE, sorted-key JSON       | 64 KiB |
+| `world.json`              | yes      | DEFLATE, sorted-key JSON       | 16 MiB |
+| `replay.log`              | no       | DEFLATE, sorted-key JSON       | 32 MiB |
+| `thumbnail.png`           | no       | stored (PNG signature checked) | 4 MiB  |
+| `prints/`, `plc/`, `hmi/` | no       | empty directory entries (v1)   |        |
+| whole file / all entries  |          | at most 64 entries             | 48 MiB |
+
+**Writing is deterministic.** The same documents give the same bytes on every machine and in every time zone: entries sorted by name, every timestamp 1980-01-01 00:00, no extra fields, comments or attributes, DEFLATE level 6 / mem 12, and JSON written with sorted keys, two-space indents and a final newline. A test pins the SHA-256 of a sample container. `appVersion` is in the manifest, so a new release changes new saves' bytes but never `world.hash`.
+
+```mermaid
+flowchart TD
+    subgraph write["writeCtrl(documents) → Uint8Array"]
+        W1["validate each document at the current schemaVersion<br/>(migrator pre-checks, Zod)"] --> W2["ctrlJson: sorted keys, indent 2, final newline<br/>strict UTF-8 encode"]
+        W2 --> W3["apply CTRL_LIMITS (never write what we'd refuse)"]
+        W3 --> W4["ZIP: sorted entries, fixed DOS date, DEFLATE 6/12, PNG stored"]
+    end
+    subgraph read["readCtrl(bytes) → contents | CtrlError (never throws)"]
+        R1{"≤ 48 MiB?"} -- no --> X1["too-large"]
+        R1 --> R2["parse end record + central directory<br/>no ZIP64 / encryption / other methods / multi-disk"]
+        R2 -- fails --> X2["not-a-zip / unsupported-zip / too-many-entries"]
+        R2 --> R3["names: plain relative ASCII, no '..', '/', '\\', ':'<br/>no duplicates, ranges inside the file, no overlap"]
+        R3 -- fails --> X3["unsafe-path / duplicate-entry / not-a-zip"]
+        R3 --> R4["declared sizes ≤ per-entry caps and total cap"]
+        R4 -- fails --> X4["entry-too-large / total-too-large"]
+        R4 --> R5["manifest.json: inflate in 4 KiB slices, abort past declared size<br/>size + CRC-32 must match; strict UTF-8; JSON.parse; migrate"]
+        R5 -- "schemaVersion > build" --> X5["newer-than-build<br/>(names the writer's appVersion)"]
+        R5 --> R6["entry list ⊆ layout of that version"]
+        R6 -- fails --> X6["unexpected-entry"]
+        R6 --> R7["world.json, replay.log: same extraction;<br/>schemaVersion must equal the manifest's; migrate + validate"]
+        R7 --> R8["thumbnail.png: PNG signature"]
+        R8 --> OK["{ manifest, world, replayLog | null, thumbnail | null, fromVersion }"]
+    end
+```
+
+### Saving and loading a game
+
+`@controls/scripting-api` turns a running `Game` into bytes and back, so the UI (part 3), `sim-cli` and scripts share one path.
+
+```mermaid
+sequenceDiagram
+    participant Host as Session / sim-cli
+    participant API as scripting-api
+    participant SF as save-format
+    participant WM as world-model
+    Host->>API: game.save({ thumbnail })
+    API->>SF: writeCtrl({ createManifest(), world, replayLog, thumbnail })
+    SF-->>Host: Uint8Array
+    Host->>API: loadGame(bytes)
+    API->>SF: readCtrl(bytes)
+    SF-->>API: contents (or CtrlError → returned as is)
+    API->>WM: replayLog(contents.replayLog)
+    alt replays to world.json's hash
+        API->>API: bus.clearHistory(); continue the same log
+    else no log, fails, or different hash
+        API->>API: new game on world.json; new log (replay: absent / restarted)
+    end
+    API-->>Host: { game, manifest, thumbnail, fromVersion, replay }
+```
+
+- **The world always wins.** `world.json` is what loads. The log is kept only when replaying it from its `initialWorld` reproduces that world's `world.hash`; otherwise a new log starts from the loaded world and `replay.status` is `restarted` (the UI should say so).
+- **The undo stack is cleared and the log continues** (plan F1.8b). The next command gets the next `seq`, so seeded streams don't shift. A full replay of a log that spans loads still reaches the live hash, because the live undo/redo stacks are always the top part of the replayed ones.
+- **`sim-cli`:** `sim hash <save>` hashes `world.json`; `sim replay <save>` replays `replay.log` and fails unless it reaches `world.json`'s hash; `sim run --world <save>` loads it like the game; `sim run --save <file>` writes one.
+
+## Loading a document
 
 Every load goes through a migrator, which never throws and returns `{ ok: true, value, fromVersion }` or a typed `LoadError`.
 
 ```mermaid
 flowchart TD
-    BYTES["bytes (F1.8b: ZIP entry, UTF-8)"] --> PARSE["JSON.parse"]
+    BYTES["ZIP entry (readCtrl), strict UTF-8"] --> PARSE["JSON.parse"]
     PARSE --> OBJ{"plain object?"}
     OBJ -- no --> E1["not-an-object"]
     OBJ -- yes --> DEPTH{"nesting ≤ 64?<br/>(iterative)"}
@@ -132,21 +201,29 @@ flowchart LR
     classDef done fill:#dff5e1,stroke:#2e7d32;
     classDef later fill:#f4f4f4,stroke:#999,stroke-dasharray: 4 3;
 
-    SF["@controls/save-format<br/>schemas · migrations · fixtures"]:::done
+    SF["@controls/save-format<br/>schemas · migrations · fixtures<br/>.ctrl container (F1.8b)"]:::done
+    FF["fflate (MIT)<br/>DEFLATE only"]:::done
     UNITS["@controls/units<br/>APP_VERSION"]:::done
-    WM["@controls/world-model (F1.2)<br/>world ops, sfc32, world.hash"]:::later
-    CMD["@controls/commands (F1.2)<br/>replay log entries"]:::later
-    CTR["container + I/O (F1.8b)<br/>ZIP, atomic write, autosave"]:::later
-    SET["SettingsService (F1.1)<br/>platform-api"]:::later
-    CLI["apps/sim-cli (F1.6)<br/>replay, hash (JSON until F1.8b)"]:::done
+    WM["@controls/world-model (F1.2)<br/>world ops, sfc32, world.hash"]:::done
+    CMD["@controls/commands (F1.2)<br/>replay log entries, clearHistory"]:::done
+    API["@controls/scripting-api<br/>Game.save, loadGame (F1.8b)"]:::done
+    IO["platform FileService, IPC,<br/>atomic write (F1.8b part 2)"]:::later
+    UI["autosave, Continue / Load<br/>(F1.8b part 3)"]:::later
+    SET["SettingsService (F1.1)<br/>platform-api"]:::done
+    CLI["apps/sim-cli (F1.6)<br/>run --save, replay, hash (.ctrl)"]:::done
     LVL["content/levels (F1.9)<br/>workshop.json"]:::done
 
     SF --> UNITS
+    SF --> FF
     WM --> SF
     CMD --> SF
-    CTR --> SF
+    API --> WM
+    API --> SF
+    IO -->|"opaque bytes"| SF
+    UI --> API
+    UI --> IO
     SET --> SF
-    CLI --> WM
+    CLI --> API
     CLI --> LVL
 ```
 

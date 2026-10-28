@@ -16,6 +16,7 @@ pnpm sim run apps/sim-cli/scenarios/four-surface.ts        # a TypeScript scenar
 pnpm sim run apps/sim-cli/scenarios/four-surface.console   # the same scenario as console lines
 pnpm sim hash libs/domain/save-format/fixtures/v1/world/empty.json
 pnpm sim replay libs/domain/save-format/fixtures/v1/replay-log/place-move-delete-undo.json
+pnpm sim replay libs/domain/save-format/fixtures/v1/ctrl/workshop-four-surface.ctrl   # a .ctrl save
 pnpm sim help
 ```
 
@@ -100,26 +101,28 @@ It prints the hash twice (the file's own `world.hash` query, then the final hash
 
 ## The `Game` API
 
-`import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api'`. In `sim-cli`, the game is created for you and passed to your default export.
+`import { createGame, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api'`. In `sim-cli`, the game is created for you and passed to your default export.
 
-| Member                                    | What it does                                                                                                                                                                                       |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createGame({ seed })`                    | A new game from an empty world with that seed (unsigned 32-bit).                                                                                                                                   |
-| `createGame({ world })`                   | A new game from a valid current-version world document. Passing both requires `seed === world.seed`.                                                                                               |
-| `exec(id, args?)`                         | Runs a command. Returns `{ ok: true, logged, entry, command }` (`entry` is `null` for unlogged UI chrome such as `palette.open`) or `{ ok: false, error }` (`unknown-command`, `invalid-args`, …). |
-| `execOrThrow(id, args?)`                  | `exec`, but throws `CommandFailedError` (with `.error`) on failure and returns the logged entry (`null` for an unlogged command).                                                                  |
-| `world()`                                 | The current world document, deeply frozen. Later commands produce new snapshots and never change old ones.                                                                                         |
-| `hash()`                                  | `world.hash` of the current world.                                                                                                                                                                 |
-| `entries()`, `replayLog()`                | The replay entries so far, and the full replay log (initial world plus entries), as saved in `replay.log`.                                                                                         |
-| `canUndo()`, `canRedo()`, `contextKeys()` | History state, also the `history.canUndo` / `history.canRedo` context keys.                                                                                                                        |
-| `isEnabled(id, context?)`                 | Whether a command's `when` holds, given extra UI context keys. Advisory, like `when` itself.                                                                                                       |
-| `on('executed', listener)`                | Called after every successful command with `{ entry, def, previous, state }`. Returns an unsubscribe function.                                                                                     |
-| `registry`                                | The command registry: every id, title, category, Zod `args` schema and `when`.                                                                                                                     |
-| `probe(from, to)`                         | **Reserved for P2** (meter probes on the as-built circuit). Throws `NotAvailableError` (`code: 'not-available'`).                                                                                  |
-| `tag(path)`                               | **Reserved for P10** (read a PLC tag such as `PLC1:Motor.Run`). Throws `NotAvailableError`.                                                                                                        |
-| `replayGame(json)`                        | Validates and migrates a replay log, replays it and returns a game at its end that continues the same log.                                                                                         |
-| `runConsoleScript(game, text)`            | Runs a console-line file against a game (or the UI's `Session`).                                                                                                                                   |
-| `toConsoleScript(entries)`                | Writes replay entries as console lines, so any recorded session can be re-run from a console-line file.                                                                                            |
+| Member                                    | What it does                                                                                                                                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createGame({ seed })`                    | A new game from an empty world with that seed (unsigned 32-bit).                                                                                                                                                                                            |
+| `createGame({ world })`                   | A new game from a valid current-version world document. Passing both requires `seed === world.seed`.                                                                                                                                                        |
+| `exec(id, args?)`                         | Runs a command. Returns `{ ok: true, logged, entry, command }` (`entry` is `null` for unlogged UI chrome such as `palette.open`) or `{ ok: false, error }` (`unknown-command`, `invalid-args`, …).                                                          |
+| `execOrThrow(id, args?)`                  | `exec`, but throws `CommandFailedError` (with `.error`) on failure and returns the logged entry (`null` for an unlogged command).                                                                                                                           |
+| `world()`                                 | The current world document, deeply frozen. Later commands produce new snapshots and never change old ones.                                                                                                                                                  |
+| `hash()`                                  | `world.hash` of the current world.                                                                                                                                                                                                                          |
+| `entries()`, `replayLog()`                | The replay entries so far, and the full replay log (initial world plus entries), as saved in `replay.log`.                                                                                                                                                  |
+| `save({ thumbnail? })`                    | The game as `.ctrl` bytes (manifest, world, replay log, optional PNG). Deterministic: the same game gives the same bytes. Throws `CtrlWriteError` over a size cap.                                                                                          |
+| `canUndo()`, `canRedo()`, `contextKeys()` | History state, also the `history.canUndo` / `history.canRedo` context keys.                                                                                                                                                                                 |
+| `isEnabled(id, context?)`                 | Whether a command's `when` holds, given extra UI context keys. Advisory, like `when` itself.                                                                                                                                                                |
+| `on('executed', listener)`                | Called after every successful command with `{ entry, def, previous, state }`. Returns an unsubscribe function.                                                                                                                                              |
+| `registry`                                | The command registry: every id, title, category, Zod `args` schema and `when`.                                                                                                                                                                              |
+| `probe(from, to)`                         | **Reserved for P2** (meter probes on the as-built circuit). Throws `NotAvailableError` (`code: 'not-available'`).                                                                                                                                           |
+| `tag(path)`                               | **Reserved for P10** (read a PLC tag such as `PLC1:Motor.Run`). Throws `NotAvailableError`.                                                                                                                                                                 |
+| `replayGame(json)`                        | Validates and migrates a replay log, replays it and returns a game at its end that continues the same log.                                                                                                                                                  |
+| `loadGame(bytes)`                         | Loads a `.ctrl` as the game does: `{ ok: true, game, manifest, thumbnail, fromVersion, replay }` or `{ ok: false, error }` (a typed `CtrlError`, e.g. `newer-than-build`). Undo is cleared; the log continues if it reproduces the world (`replay.status`). |
+| `runConsoleScript(game, text)`            | Runs a console-line file against a game (or the UI's `Session`).                                                                                                                                                                                            |
+| `toConsoleScript(entries)`                | Writes replay entries as console lines, so any recorded session can be re-run from a console-line file.                                                                                                                                                     |
 
 The commands available in P1 are `entity.place`, `entity.move`, `entity.rotate`, `entity.delete`, `edit.undo`, `edit.redo` and `view.resetLayout` (see [commands](../architecture/commands.md#world-commands)). Positions are integer millimetres and rotations integer millidegrees. View commands are logged but don't change the hash.
 
@@ -142,7 +145,21 @@ The full grammar and its rationale are in [ADR 0008](../decisions/0008-console-a
 
 - **Imports:** relative files, the `type:domain` libs (`@controls/scripting-api`, `@controls/commands`, `@controls/world-model`, `@controls/save-format`, `@controls/units`) and `zod` only. Node built-ins, UI libs and other packages are rejected when the script is bundled. Use the `game` you're given rather than creating your own.
 - **Determinism:** don't use `Math.random()`, `Date.now()`, `new Date()` or `performance.now()`. Inside `apps/sim-cli` (including `scenarios/`) lint enforces it. Need randomness? Use a fixed seed or the seeded PRNG in `@controls/world-model`.
-- **No `.ctrl` yet:** `sim hash` and `sim replay` read the JSON documents (`world.json`, a level file, `replay.log`). `.ctrl` support arrives with F1.8b and uses the same commands.
+
+## `.ctrl` saves
+
+`sim-cli` reads and writes the game's save files (F1.8b) as well as the JSON documents inside them. A file is a save if it ends in `.ctrl` or starts with a ZIP signature.
+
+```bash
+pnpm sim run my-scenario.console --world content/levels/workshop.json --save my.ctrl   # write a save
+pnpm sim hash my.ctrl                     # world.hash of the save's world.json
+pnpm sim replay my.ctrl                   # replay its replay.log; must reach world.json's hash
+pnpm sim run more.console --world my.ctrl --save my-2.ctrl   # load it, carry on, save again
+```
+
+What **replay** means for a save: the entries of its `replay.log` are run from the log's `initialWorld` (which carries the seed) through a fresh command bus, and the result must hash exactly like the save's `world.json`. `sim replay` prints that hash, or exits 1 if the save has no log, an entry fails, or the hashes differ (it prints both).
+
+`--world <save>` loads the save as the game's Load does: the saved world, an empty undo history (you can't undo past the load) and the same replay log continuing, so the session's log still replays from the very start. If the save's log doesn't reproduce its world, the world still loads, a new log starts from it, and `sim` warns on stderr. Add `--seed N` to start a new game on the saved world instead. In a script, `game.save()` and `loadGame(bytes)` do the same.
 
 ## The four-surface scenario
 
@@ -174,12 +191,15 @@ DIN rails win over the backplate behind them, and a move keeps the entity's orie
 
 ## Troubleshooting
 
-| Message                                                 | Fix                                                                                         |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `Scripts may import only relative files, …`             | Remove the import; take what you need from `game`, or import a domain lib.                  |
-| `the script must export a default function (game) => …` | Add `export default function (game: Game) { … }`.                                           |
-| `line 3, column 15: Unknown argument --idd`             | A flag that isn't in the command's args. `pnpm sim run` checks the whole file first.        |
-| `Invalid arguments for "entity.place": positionMm: …`   | The args failed the command's Zod schema (the same message the palette shows).              |
-| `is a replay log (use "sim replay")` and the reverse    | `hash` takes a world document, `replay` a replay log.                                       |
-| `.ctrl saves are not supported until F1.8b`             | Pass the world or replay-log JSON.                                                          |
-| `hash mismatch: expected …`                             | The result differs from `--expect`. Replay with an older log to find the diverging command. |
+| Message                                                 | Fix                                                                                             |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `Scripts may import only relative files, …`             | Remove the import; take what you need from `game`, or import a domain lib.                      |
+| `the script must export a default function (game) => …` | Add `export default function (game: Game) { … }`.                                               |
+| `line 3, column 15: Unknown argument --idd`             | A flag that isn't in the command's args. `pnpm sim run` checks the whole file first.            |
+| `Invalid arguments for "entity.place": positionMm: …`   | The args failed the command's Zod schema (the same message the palette shows).                  |
+| `is a replay log (use "sim replay")` and the reverse    | `hash` takes a world document, `replay` a replay log.                                           |
+| `has no replay.log (use "sim hash")`                    | The save was written without a log; `sim hash` still hashes its world.                          |
+| `replay.log replays to …, but world.json hashes to …`   | The save's log doesn't reproduce its world (a bug, or an edited file). The world is what loads. |
+| `This save was written by Controls … (save format N)`   | A newer build wrote it. Update, or use that build.                                              |
+| `Not a valid ZIP archive: …`, `… has an unsafe path …`  | The file is damaged or not a save. Nothing was loaded.                                          |
+| `hash mismatch: expected …`                             | The result differs from `--expect`. Replay with an older log to find the diverging command.     |

@@ -9,4 +9,7 @@ Framework-free domain library (`type:domain`) that owns every persisted document
 - **Fixtures:** `fixtures/v<N>/{world,manifest,replay-log}/` and `fixtures/settings/v<N>/`. Every fixture of every version must load forever.
 - **JSON Schema:** generated into `json-schema/` and checked in. Regenerate with `pnpm nx test save-format -u`.
 
-The ZIP container, file I/O and autosave are F1.8b. Tests: `pnpm nx test save-format` (90 % coverage gate).
+- **`.ctrl` container (F1.8b):** `writeCtrl({ manifest, world, replayLog?, thumbnail? }) → Uint8Array` (deterministic bytes; throws `CtrlWriteError`) and `readCtrl(bytes, { limits? }) → { ok, value } | { ok: false, error: CtrlError }` (never throws, never trusts the archive). Caps in `CTRL_LIMITS`; layout in `CTRL_ENTRY`. fflate does DEFLATE; the ZIP structure is `src/lib/container/zip.ts`. Fixtures: `fixtures/v<N>/ctrl/*.ctrl`.
+- **Test helpers** (`@controls/save-format/testing`): fast-check arbitraries, `rawZip` (writes any archive, hostile ones included) and `TINY_PNG`.
+
+File I/O, IPC and autosave are F1.8b parts 2 and 3. Tests: `pnpm nx test save-format` (90 % coverage gate).
