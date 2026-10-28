@@ -4,11 +4,12 @@ import type { ViewMode } from './cameras/camera-math';
 import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './panel-scene';
-import type { Vec3Mm } from './snap/surface';
+import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
 import { FrameTimer, type FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,
   type ViewportControllerOptions,
+  type ViewportIntentListener,
   type ViewportState,
   type ViewportStateListener,
 } from './viewport-controller';
@@ -29,6 +30,10 @@ export interface ViewportStats extends FrameTiming {
   readonly geometries: number;
   readonly textures: number;
   readonly bvhs: number;
+  /** World entities drawn. */
+  readonly entities: number;
+  /** Shared prop recipes alive (geometry + material pairs); back to 0 when no prop is drawn. */
+  readonly recipes: number;
 }
 
 const STATS_INTERVAL_MS = 500;
@@ -45,6 +50,10 @@ export class ViewportRenderer {
   private readonly timer = new FrameTimer();
   private lastStatsMs = -1;
   private lastFrameMs = -1;
+  // Kept until the controller exists (WebGPU init is async), then applied.
+  private world: World | null = null;
+  private placement: CatalogRef | null = null;
+  private readonly intentListeners = new Set<ViewportIntentListener>();
 
   async init(canvas: HTMLCanvasElement, options: ViewportOptions = {}): Promise<RenderBackend> {
     const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: options.forceWebGL ?? false });
@@ -59,6 +68,9 @@ export class ViewportRenderer {
     this.backendName = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
     const controller = new ViewportController(canvas, options);
     this.controller = controller;
+    if (this.world) controller.syncWorld(this.world);
+    controller.setPlacement(this.placement);
+    controller.onIntent((intent) => this.intentListeners.forEach((l) => l(intent)));
     const onStats = options.onStats;
 
     renderer.setAnimationLoop((timeMs: number) => {
@@ -85,6 +97,29 @@ export class ViewportRenderer {
 
   onChange(listener: ViewportStateListener): () => void {
     return this.controller?.onChange(listener) ?? (() => undefined);
+  }
+
+  /** Gesture commit points (place, move, cancel placement); may subscribe before `init` resolves. */
+  onIntent(listener: ViewportIntentListener): () => void {
+    this.intentListeners.add(listener);
+    return () => this.intentListeners.delete(listener);
+  }
+
+  /** Draws a world snapshot (entities by id). Read-only: the renderer never mutates the world. */
+  syncWorld(world: World): void {
+    this.world = world;
+    this.controller?.syncWorld(world);
+  }
+
+  /** Arms placement of the active tool's prop, or disarms it (`null`). */
+  setPlacement(ref: CatalogRef | null): void {
+    this.placement = ref;
+    this.controller?.setPlacement(ref);
+  }
+
+  /** Canvas CSS-pixel position of an integer-mm world point (tests aim the mouse with it). */
+  projectMm(p: Vec3Mm): { x: number; y: number } | undefined {
+    return this.controller?.projectMm(p);
   }
 
   setMode(mode: ViewMode): void {
@@ -140,6 +175,8 @@ export class ViewportRenderer {
       geometries: info?.memory.geometries ?? 0,
       textures: info?.memory.textures ?? 0,
       bvhs: this.controller?.bvhCount ?? 0,
+      entities: this.controller?.entityCount ?? 0,
+      recipes: this.controller?.recipeCount ?? 0,
     };
   }
 
@@ -156,5 +193,6 @@ export class ViewportRenderer {
     this.controller = undefined;
     this.renderer?.dispose();
     this.renderer = undefined;
+    this.intentListeners.clear();
   }
 }

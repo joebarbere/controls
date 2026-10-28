@@ -10,6 +10,12 @@
  *
  * Mouse look is an input action on the mouse axes, not a key: its options are the settings' look
  * sensitivity and invert-Y. Releasing pointer lock is the browser's Escape and can't be rebound.
+ *
+ * F1.7: `toggleMode` and `focusSelection` left this table; `V` and `F` are now bindings of the
+ * `view.mode` and `view.focus` commands (`view.mode.walk`, `view.mode.work`, `view.focus.selection`).
+ * Overrides players stored under `input.toggleMode` / `input.focusSelection` are unknown binding
+ * ids now, which the keymap ignores (and leaves in the file). `commitPlacement` and `moveSelection`
+ * are gestures, like a click: the workspace turns their commit into `entity.place` / `entity.move`.
  */
 
 /** Binding-id namespace of input actions. */
@@ -51,7 +57,7 @@ export const INPUT_ACTIONS: readonly InputActionDef[] = [
   def('sprint', 'Sprint (hold)', true, ['ShiftLeft', 'ShiftRight']),
   def('selectNext', 'Select next', false, ['BracketRight']),
   def('selectPrevious', 'Select previous', false, ['BracketLeft']),
-  def('clearSelection', 'Clear selection', false, ['Escape']),
-  def('focusSelection', 'Focus selection', false, ['F']),
-  def('toggleMode', 'Toggle walk and work mode', false, ['V']),
+  def('clearSelection', 'Cancel placement, or clear the selection', false, ['Escape']),
+  def('commitPlacement', 'Place or drop at the reticle', false, ['Enter', 'NumpadEnter']),
+  def('moveSelection', 'Pick up the selection to move it', false, ['M']),
 ];

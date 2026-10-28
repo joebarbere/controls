@@ -10,14 +10,11 @@ import {
   type Object3D,
 } from 'three/webgpu';
 import { metresToMm, mm } from '@controls/units';
+import { DEMO_PANEL, demoBackplateTarget, demoRailTarget } from '@controls/world-model';
 import type { RoomBoundsMm } from './cameras/camera-math';
 import { buildBackplateGeometry } from './geometry/backplate';
 import { buildDinRailGeometry } from './geometry/din-rail';
 import { markSelectable } from './picking/picker';
-
-const PLATE = { widthMm: 600, heightMm: 800 } as const;
-const RAIL_LENGTH_MM = 500;
-const RAIL_Y_MM = [150, -50] as const;
 
 /**
  * Walkable area around the P0/P1 demo panel (game-design: a small workshop bay, floor 1.2 m below
@@ -32,10 +29,11 @@ export const PANEL_ROOM_BOUNDS: RoomBoundsMm = {
 };
 
 /**
- * Demo content: a 600×800 mm white sub-panel with two 500 mm TS35 DIN rails, on a floor.
- * The plate and rails are selectable; the plate is a work-mode focus target and both carry
- * snap targets (in world integer mm) for placement.
- * TODO(F1.2): built from world snapshots by entity id instead of by hand.
+ * Fixed demo content: the `DEMO_PANEL` sub-panel from `@controls/world-model` (a 600×800 mm white
+ * plate with two 500 mm TS35 DIN rails), on a floor. The plate and rails are selectable and
+ * focusable, and carry the same snap targets scripts use (`demoPanelSnapTargets()`). World
+ * entities (props) are drawn on top by `WorldSync` from world snapshots.
+ * TODO(F1.9): the workshop level document replaces the demo panel.
  */
 export function buildPanelScene(): Scene {
   const scene = new Scene();
@@ -55,44 +53,32 @@ export function buildPanelScene(): Scene {
   floor.position.set(mm((room.minXMm + room.maxXMm) / 2), mm(room.floorYMm), mm((room.minZMm + room.maxZMm) / 2));
   scene.add(floor);
 
+  const { backplate } = DEMO_PANEL;
   const plate = new Mesh(
-    buildBackplateGeometry(PLATE.widthMm, PLATE.heightMm),
+    buildBackplateGeometry(backplate.widthMm, backplate.heightMm),
     new MeshStandardMaterial({ color: 0xd9dcdf, metalness: 0.2, roughness: 0.6 }), // white-painted sub-panel
   );
-  plate.name = 'backplate';
+  plate.name = backplate.id;
   markSelectable(plate, {
-    id: 'backplate',
+    id: backplate.id,
     kind: 'backplate',
-    label: 'Backplate 600 × 800',
+    label: `Backplate ${backplate.widthMm} × ${backplate.heightMm}`,
     focusNormal: '+z',
-    snapTarget: {
-      kind: 'backplate-grid',
-      id: 'backplate',
-      frame: { origin: { x: -PLATE.widthMm / 2, y: -PLATE.heightMm / 2, z: 0 }, normal: '+z' },
-      widthMm: PLATE.widthMm,
-      heightMm: PLATE.heightMm,
-      marginMm: 20, // game-design keep-out border
-    },
+    snapTarget: demoBackplateTarget(),
   });
   scene.add(plate);
 
   const railMaterial = new MeshStandardMaterial({ color: 0xc4cad0, metalness: 0.45, roughness: 0.4 }); // zinc-plated steel
-  RAIL_Y_MM.forEach((yMm, i) => {
-    const id = `din-rail-${i + 1}`;
-    const rail = new Mesh(buildDinRailGeometry(RAIL_LENGTH_MM), railMaterial);
-    rail.name = id;
-    rail.position.set(0, mm(yMm), 0);
+  DEMO_PANEL.rails.forEach((r, i) => {
+    const rail = new Mesh(buildDinRailGeometry(r.lengthMm), railMaterial);
+    rail.name = r.id;
+    rail.position.set(0, mm(r.yMm), 0);
     markSelectable(rail, {
-      id,
+      id: r.id,
       kind: 'din-rail',
-      label: `DIN rail ${i + 1} (TS35, ${RAIL_LENGTH_MM} mm)`,
+      label: `DIN rail ${i + 1} (TS35, ${r.lengthMm} mm)`,
       focusNormal: '+z',
-      snapTarget: {
-        kind: 'din-rail',
-        id,
-        frame: { origin: { x: -RAIL_LENGTH_MM / 2, y: yMm, z: 0 }, normal: '+z' },
-        lengthMm: RAIL_LENGTH_MM,
-      },
+      snapTarget: demoRailTarget(r),
     });
     scene.add(rail);
   });
@@ -111,11 +97,15 @@ export function disposeScene(scene: Scene): void {
   materials.forEach((m) => m.dispose());
 }
 
-/** Stable, JSON-plain summary of a scene graph for snapshot tests (positions in integer mm). */
+/**
+ * Stable, JSON-plain summary of a scene graph for snapshot tests: positions in integer mm and, when
+ * not zero, the Euler rotation (x, y, z components) in integer millidegrees.
+ */
 export interface SceneGraphNode {
   name: string;
   type: string;
   positionMm: [number, number, number];
+  rotationMdeg?: [number, number, number];
   visible: boolean;
   selectable?: string;
   children?: SceneGraphNode[];
@@ -129,6 +119,12 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
     positionMm: [metresToMm(p.x), metresToMm(p.y), metresToMm(p.z)],
     visible: object.visible,
   };
+  const r = object.rotation;
+  const mdeg = (radians: number): number => {
+    const v = Math.round((radians * 180_000) / Math.PI);
+    return v === 0 ? 0 : v;
+  };
+  if (r.x !== 0 || r.y !== 0 || r.z !== 0) node.rotationMdeg = [mdeg(r.x), mdeg(r.y), mdeg(r.z)];
   const sel = object.userData['selectable'] as { id: string; kind: string } | undefined;
   if (sel) node.selectable = `${sel.kind}:${sel.id}`;
   if (object.children.length > 0) node.children = object.children.map(describeSceneGraph);

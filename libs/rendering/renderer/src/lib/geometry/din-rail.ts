@@ -1,6 +1,6 @@
 import { ExtrudeGeometry, Matrix4, Shape, type BufferGeometry } from 'three/webgpu';
 import { mm } from '@controls/units';
-import { DIN_RAIL_TS35 } from '../snap/constants';
+import { DIN_RAIL_TS35 } from '@controls/world-model';
 
 /**
  * TS35×7.5 DIN rail of the given length.
@@ -8,7 +8,7 @@ import { DIN_RAIL_TS35 } from '../snap/constants';
  * backplate along +Z; the back of the rail sits at z = 0. Centred on X and Y.
  */
 export function buildDinRailGeometry(lengthMm: number): BufferGeometry {
-  // Profile dimensions are sourced in snap/constants.ts (EN 60715 TS 35 × 7.5).
+  // Profile dimensions are sourced in @controls/world-model snap/constants.ts (EN 60715 TS 35 × 7.5).
   const t = DIN_RAIL_TS35.thicknessMm.valueMm;
   const w = DIN_RAIL_TS35.widthMm.valueMm / 2;
   const c = DIN_RAIL_TS35.crownWidthMm.valueMm / 2;

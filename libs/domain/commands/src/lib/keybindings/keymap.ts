@@ -24,6 +24,12 @@ export type BindingTarget =
       readonly command: string;
       /** Arguments `exec` receives. `{}` for argument-less commands. */
       readonly args: Readonly<Record<string, unknown>>;
+      /**
+       * Arguments taken from context keys when the key is pressed: argument name → context key
+       * (`{ id: 'selection.entityId' }`). The binding only fires while every one of those keys is
+       * set (not `null` or missing); the logged args hold the concrete values.
+       */
+      readonly contextArgs?: Readonly<Record<string, string>>;
     }
   | { readonly kind: 'input'; readonly action: string; readonly held: boolean };
 
@@ -182,14 +188,15 @@ export class Keymap {
   }
 
   /**
-   * The command binding a key press runs: the first, in resolution order, whose `when` holds and
-   * that the focus rules allow. Input actions are never returned (the renderer handles them on the
+   * The command binding a key press runs: the first, in resolution order, whose `when` holds, whose
+   * context arguments are all set, and that the focus rules allow. Input actions are never returned (the renderer handles them on the
    * viewport, and a key it acts on never reaches the command layer).
    */
   resolve(chord: string, context: ContextKeys, options: ResolveOptions = {}): ResolvedBinding | null {
     for (const binding of this.on(chord)) {
       if (binding.decl.target.kind !== 'command') continue;
       if (options.restricted && !binding.decl.global) continue;
+      if (!contextArgsAvailable(binding.decl.target, context)) continue;
       if (binding.when === null || evaluateWhen(binding.when, context)) return binding;
     }
     return null;
@@ -229,6 +236,27 @@ export class Keymap {
   }
 }
 
+const hasContextValue = (context: ContextKeys, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(context, key) && context[key] !== null;
+
+function contextArgsAvailable(target: BindingTarget, context: ContextKeys): boolean {
+  if (target.kind !== 'command' || !target.contextArgs) return true;
+  return Object.values(target.contextArgs).every((key) => hasContextValue(context, key));
+}
+
+/**
+ * The arguments a command binding runs with: its fixed `args` plus each context argument's current
+ * value. Call it with the context the binding was resolved against.
+ */
+export function bindingArgs(target: BindingTarget, context: ContextKeys): Record<string, unknown> {
+  if (target.kind !== 'command') return {};
+  const args: Record<string, unknown> = { ...target.args };
+  for (const [name, key] of Object.entries(target.contextArgs ?? {})) {
+    args[name] = hasContextValue(context, key) ? context[key] : null;
+  }
+  return args;
+}
+
 function keyCode(chord: string): string {
   return keyNameToCode((splitChord(chord) as { key: string }).key);
 }
@@ -248,6 +276,11 @@ function checkDecl(decl: BindingDecl, seen: ReadonlySet<string>): void {
   if (decl.target.kind === 'command') {
     if (isInputId || decl.target.command.startsWith(INPUT_ACTION_PREFIX)) {
       fail(`"${INPUT_ACTION_PREFIX}" is reserved for input actions`);
+    }
+    for (const name of Object.keys(decl.target.contextArgs ?? {})) {
+      if (Object.prototype.hasOwnProperty.call(decl.target.args, name)) {
+        fail(`argument "${name}" is both fixed and taken from the context`);
+      }
     }
   }
 }

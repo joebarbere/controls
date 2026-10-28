@@ -1,8 +1,8 @@
 # ADR 0006: Command system semantics
 
-**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`) and F1.3 (`palette.open`, unlogged UI-chrome commands, argument hints, cheat confirmation)
+**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`), F1.3 (`palette.open`, unlogged UI-chrome commands, argument hints, cheat confirmation) and F1.7 (`view.mode`, `view.focus`, context-argument bindings, gestures)
 **Date:** 2026-10-27 (Phase 1)
-**Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
+**Sources:** plan §4.6, §4.9; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4, F1.7; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
 
 ## Context
 
@@ -61,7 +61,7 @@ Any failure returns a typed `ExecError` (`unknown-command`, `invalid-args`, `rej
 
 ### View commands versus world commands
 
-- **View commands** (`view.resetLayout` and `toolbelt.select` now; `view.mode` and `view.focus` with F1.7) are declared in domain code with `defineViewCommand`. Their `run` is a no-op, so a headless replay knows every id and argument schema a log can contain.
+- **View commands** (`view.resetLayout`, `toolbelt.select`, and since F1.7 `view.mode` and `view.focus`) are declared in domain code with `defineViewCommand`. Their `run` is a no-op, so a headless replay knows every id and argument schema a log can contain.
 - They are logged (for bug-report fidelity and palette recents) but never change the world, its hash or the history.
 - The feature that owns the view state applies the effect when the session reports the command (`Session.onCommand`). For example, the workspace's Reset layout button runs `exec('view.resetLayout')`, and the workspace resets its layout when the command comes back. A palette, keybinding or console call behaves identically.
 - **Settings** are player preferences, not commands. They are edited through `SettingsStore` and never logged.
@@ -104,6 +104,27 @@ A binding without `when` is never disjoint from anything. A property test checks
 **Focus rules.** The keybinding service listens on the document and ignores events an inner handler already handled. While focus is in a text field, a `<select>`, `contenteditable`, a CodeMirror editor (`.cm-editor`) or an open dialog, only bindings marked **global** fire. A command opts in with `CommandDef.globalKeybinding` (for the palette in F1.3 and the console toggle in F1.5). Auto-repeat never runs a command, because a held key would flood the replay log.
 
 **The tool belt.** `toolbelt.select {slot}` (`slot` an integer from 1 to 9, strict object) is a view command declared in `@controls/commands` next to `view.resetLayout`. Keys 1 to 9 are bound by default. The UI applies it through `Session.onCommand` (the `ToolBelt` service) and publishes the `toolbelt.slot` context key. Its id and argument shape are now save format.
+
+### Viewport commands, context arguments and gestures (F1.7)
+
+**`view.mode {mode}`** (`mode`: `'walk' | 'work'`, strict) and **`view.focus {target}`** (`target`: a view target id, lower-case words joined by single hyphens, at most 64 characters: `backplate`, `din-rail-1`) are view commands in `@controls/commands` (`viewportCommands()`), registered by `createWorldRegistry()`. The viewport applies them through `Session.onCommand` and publishes `mode` as a `when` context key. **They are logged** (the default): unlike `palette.open` and `console.toggle`, they change what the player sees, so a bug report's log should show them. `view.focus` can't validate its target (a view command never sees the scene); the viewport ignores a target it can't focus. **Their ids and argument shapes are save format.**
+
+**Context arguments.** One chord can't carry "the other mode" or "the selected thing", so a command binding may take arguments from context keys: `BindingTarget.contextArgs` maps an argument name to a context key (`{ id: 'selection.entityId' }`). The keymap resolves such a binding only while every key is set (not missing or `null`); `bindingArgs(target, context)` fills them when the key is pressed, so **the log holds concrete values**, never a reference to the selection. Rejected: arguments that mean "the current selection" (a log entry that can't be replayed without UI state); a toggle command (the log wouldn't say which mode was chosen).
+
+**Extra bindings live on the command.** `CommandDef.bindings` declares bindings with fixed or context arguments, each with its own binding id; `defaultBindingDecls` collects them from the registry. The F1.7 defaults:
+
+| Binding id                | Runs                                       | Default               | `when`                                    |
+| ------------------------- | ------------------------------------------ | --------------------- | ----------------------------------------- |
+| `view.mode.walk`          | `view.mode {mode: 'walk'}`                 | `V`                   | `viewport.focused && mode == 'work'`      |
+| `view.mode.work`          | `view.mode {mode: 'work'}`                 | `V`                   | `viewport.focused && mode == 'walk'`      |
+| `view.focus.selection`    | `view.focus {target: <selection.id>}`      | `F`                   | `viewport.focused && selection.focusable` |
+| `entity.delete.selection` | `entity.delete {id: <selection.entityId>}` | `Delete`, `Backspace` | `viewport.focused && selection.entityId`  |
+
+`V` is two bindings on provably disjoint `when`s, so it toggles without a conflict. All four need `viewport.focused`, as the input actions they replace did. The viewport publishes `mode`, `selection.id`, `selection.kind`, `selection.focusable` and `selection.entityId`.
+
+**Input-action table changes.** `toggleMode` and `focusSelection` left `INPUT_ACTIONS`; `commitPlacement` (`Enter`, `NumpadEnter`) and `moveSelection` (`M`) joined it, and `clearSelection` (`Escape`) became "cancel placement, or clear the selection". Stored overrides under `input.toggleMode` / `input.focusSelection` are now unknown binding ids, which the keymap ignores and leaves in the settings file. No `settingsVersion` bump: the record's shape didn't change, and an unknown id was already defined as ignored.
+
+**Gestures commit once.** The renderer turns pointer and key gestures into intents at commit points only, and `feature-workspace` executes each as exactly one Command: a click or `Enter` on a valid snap is one `entity.place {ref, positionMm, orientationMdeg}`; releasing a drag (or `Enter`/click after `M`) is one `entity.move {id, positionMm}` if the position changed; dragging produces nothing; Escape while placing produces nothing (the tool is put away as UI state). The arguments come from `placeOnTargets` in `@controls/world-model`, the same function scripts call, so a mouse session and a script that aims at the same points log identical entries and reach the same `world.hash` (`apps/sim-cli/scenarios/mouse-place-move-delete.*`, `apps/game-e2e/src/placement.spec.ts`).
 
 ### `when`
 

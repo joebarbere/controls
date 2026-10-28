@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { computed, DestroyRef, inject, Injectable, InjectionToken, signal, type Signal } from '@angular/core';
 import {
   type BindingDecl,
+  bindingArgs,
   chordFromEvent,
   chordLabel,
   defaultBindingDecls,
@@ -155,12 +156,12 @@ export class KeybindingService {
     if (event.defaultPrevented || event.isComposing) return;
     const chord = chordFromEvent(event, this.platform);
     if (chord === null) return;
-    const binding = this.keymap().resolve(chord, this.session.contextKeys(), {
-      restricted: isRestrictedTarget(event.target),
-    });
+    const context = this.session.contextKeys();
+    const binding = this.keymap().resolve(chord, context, { restricted: isRestrictedTarget(event.target) });
     if (!binding || binding.decl.target.kind !== 'command') return;
     event.preventDefault();
     if (event.repeat) return;
-    this.session.exec(binding.decl.target.command, binding.decl.target.args);
+    // Context arguments (the selection's id, …) are read now, so the log holds concrete values.
+    this.session.exec(binding.decl.target.command, bindingArgs(binding.decl.target, context));
   }
 }

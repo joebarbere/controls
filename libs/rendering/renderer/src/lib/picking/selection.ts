@@ -2,21 +2,22 @@
  * Hover and selection: renderer/UI state, **not** world state. Nothing here is saved or logged;
  * Commands that act on the selection (e.g. `entity.delete`) read it as an argument (F1.2).
  */
-import type { SnapTarget } from '../snap/snap';
-import type { SurfaceNormal } from '../snap/surface';
+import type { SnapTarget, SurfaceNormal } from '@controls/world-model';
 
 export type SelectableKind = 'backplate' | 'din-rail' | 'wall' | 'bench' | 'prop' | 'device';
 
 /** JSON-plain metadata stored on a scene object's `userData.selectable`. */
 export interface SelectableInfo {
-  /** Stable id. TODO(F1.2): the world entity id once scenes sync from world snapshots. */
+  /** Stable id: a fixed scene object's name (`backplate`, `din-rail-1`) or `entity-<id>` for world entities. */
   readonly id: string;
   readonly kind: SelectableKind;
   readonly label: string;
   /** Present when work mode can focus this object; the way its working face points. */
   readonly focusNormal?: SurfaceNormal;
-  /** Present when placement can snap onto this object (F1.7 placement, after F1.2). */
+  /** Present when placement can snap onto this object. */
   readonly snapTarget?: SnapTarget;
+  /** The world entity this object draws (entity selectables only); Commands take it as `id`. */
+  readonly entityId?: number;
 }
 
 export interface SelectionSnapshot {

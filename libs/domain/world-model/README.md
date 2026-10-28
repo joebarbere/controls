@@ -5,6 +5,7 @@ Framework-free domain library (`type:domain`): the world document's operations a
 - **World commands:** `entity.place`, `entity.move`, `entity.rotate`, `entity.delete` (undoable, integer mm and millidegrees, ids from `nextEntityId`).
 - **Sessions:** `createWorldRegistry()` (world + edit + view commands), `createWorldBus(world)`, `toReplayLog(initialWorld, bus)`, `replayLog(log)` → world and hash.
 - **Hash:** `canonicalJson`, `worldHash(world)` (SHA-256, lower-case hex), `hashWorldDocument(json)` for untrusted input. `sha256`, `sha256Hex`, `utf8Encode` are written from FIPS 180-4.
+- **Snapping and placement (F1.7):** `snap()`, `snapToBest()` and `placeOnTargets()` (cursor point → exact `entity.place` / `entity.move` arguments) in integer mm with sourced constants, `orientationForNormal()`, the demo panel's snap targets (`demoPanelSnapTargets()`) and the built-in prop table (`BUILTIN_PROPS`, `builtinProp()`, `propFootprint()`). The renderer's ghost and scripts call the same functions.
 - **PRNG:** `Sfc32`, `deriveStream(seed, key)` with `commandStreamKey(seq)` / `entityStreamKey(id)`.
 
 Tests: `pnpm nx test world-model` (90 % coverage gate).

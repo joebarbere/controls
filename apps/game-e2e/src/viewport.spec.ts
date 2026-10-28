@@ -32,6 +32,14 @@ const hook = <T>(page: Page, fn: (h: ViewportHook) => T) =>
     return new Function('h', `return (${src})(h)`)(h) as T;
   }, fn.toString());
 
+/** The session's replay log as `id args` strings (view commands are logged; input actions never are). */
+const logged = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __controlsSession: { entries(): Array<{ id: string; args: unknown }> } }).__controlsSession
+      .entries()
+      .map((e) => `${e.id} ${JSON.stringify(e.args)}`),
+  );
+
 async function open(page: Page) {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?e2e=1&renderer=webgl2');
@@ -65,7 +73,7 @@ test('mode switching and focus through the renderer API', async ({ page }) => {
   expect(await hook(page, (h) => h.focus('no-such-thing'))).toBe(false);
 });
 
-test('keyboard: cycle selection, focus it, toggle walk mode and walk', async ({ page }) => {
+test('keyboard: cycle selection, focus it (view.focus), toggle walk mode (view.mode) and walk', async ({ page }) => {
   const viewport = await open(page);
   await page.locator('ctl-viewport canvas').focus();
   await page.keyboard.press('BracketRight');
@@ -76,11 +84,13 @@ test('keyboard: cycle selection, focus it, toggle walk mode and walk', async ({ 
   await expect(page.getByTestId('viewport-status')).toContainText('DIN rail 1');
   await page.keyboard.press('KeyF');
   await expect(viewport).toHaveAttribute('data-focus', 'din-rail-1');
+  expect(await logged(page)).toEqual(['view.focus {"target":"din-rail-1"}']);
   await page.keyboard.press('Escape');
   await expect(viewport).not.toHaveAttribute('data-selected', /.*/);
 
   await page.keyboard.press('KeyV');
   await expect(viewport).toHaveAttribute('data-mode', 'walk');
+  expect(await logged(page)).toEqual(['view.focus {"target":"din-rail-1"}', 'view.mode {"mode":"walk"}']);
   const before = await hook(page, (h) => h.cameraPositionMm());
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(400);

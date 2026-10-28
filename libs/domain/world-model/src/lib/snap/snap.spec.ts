@@ -51,6 +51,8 @@ describe('snap constants', () => {
       constants.BACKPLATE_GRID_PITCH,
       constants.WALL_VERTICAL_PITCH,
       constants.DIN_RAIL_CAPTURE,
+      constants.BACKPLATE_MARGIN,
+      constants.SNAP_PLANE_TOLERANCE,
     ];
     for (const c of all) {
       expect(c.source.length).toBeGreaterThan(10);
@@ -64,6 +66,7 @@ describe('snap constants', () => {
       dinCaptureMm: 40,
       backplateGridMm: 5,
       wallVerticalMm: 10,
+      planeToleranceMm: 10,
       studHalfThicknessMm: 20,
     });
   });
@@ -284,6 +287,7 @@ describe('snap (world-space dispatch)', () => {
       kind: 'din-rail',
       anchor: { u: 90, v: -45 },
       world: { x: 100, y: 955, z: -40 },
+      normal: '+x',
     });
     expect(snap(plate, { widthMm: 10, heightMm: 10 }, { x: 0, y: 0, z: 0 })).toMatchObject({ ok: true });
     expect(snap(wall, { widthMm: 10, heightMm: 10 }, { x: 0, y: 0, z: 0 })).toMatchObject({ ok: true });

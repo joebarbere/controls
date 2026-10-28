@@ -3,7 +3,9 @@
  * `u` runs to the viewer's right when facing the surface, `v` is world +y, and the surface normal points
  * at the viewer. P1 surfaces are vertical and axis-aligned, so the normal is one of four directions.
  *
- * TODO(ADR 0007): replace `SurfaceNormal` with the save-format orientation encoding once it lands.
+ * A placed entity stores its orientation in the ADR 0007 encoding (integer millidegrees). P1 surfaces
+ * only need four yaw quarter-turns, mapped by `orientationForNormal` / `normalForOrientation`
+ * (`placement.ts`). `SurfaceNormal` stays the frame's own description, not a second rotation type.
  */
 import { isIntegerMm } from '@controls/units';
 

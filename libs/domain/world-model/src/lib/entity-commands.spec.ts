@@ -225,7 +225,21 @@ describe('world registry, replay log and cheats', () => {
       'entity.rotate:true',
       'palette.open:false',
       'toolbelt.select:false',
+      'view.focus:false',
+      'view.mode:false',
       'view.resetLayout:false',
+    ]);
+  });
+
+  it('binds Delete to entity.delete with the selected entity id (F1.7)', () => {
+    const delete_ = createWorldRegistry().get('entity.delete');
+    expect(delete_?.bindings).toEqual([
+      expect.objectContaining({
+        id: 'entity.delete.selection',
+        defaults: ['Delete', 'Backspace'],
+        when: 'viewport.focused && selection.entityId',
+        target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: 'selection.entityId' } },
+      }),
     ]);
   });
 

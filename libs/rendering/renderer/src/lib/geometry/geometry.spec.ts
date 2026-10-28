@@ -1,6 +1,6 @@
 import { Box3, Vector3, type BufferGeometry } from 'three/webgpu';
 import { buildBackplateGeometry } from './backplate';
-import { DIN_RAIL_TS35 } from '../snap/constants';
+import { DIN_RAIL_TS35 } from '@controls/world-model';
 import { buildDinRailGeometry } from './din-rail';
 
 const box = (g: BufferGeometry): Box3 => {

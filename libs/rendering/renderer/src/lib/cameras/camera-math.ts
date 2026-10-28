@@ -6,7 +6,7 @@
  * Camera pose is view state, not world state: it never enters the replay log.
  */
 import { mm } from '@controls/units';
-import type { SurfaceNormal } from '../snap/surface';
+import type { SurfaceNormal } from '@controls/world-model';
 
 export type ViewMode = 'walk' | 'work';
 

@@ -5,6 +5,7 @@ import {
   type ReplayError,
   replayEntries,
   viewCommands,
+  viewportCommands,
 } from '@controls/commands';
 import { createReplayLog, type ReplayLog } from '@controls/save-format';
 import { entityCommands } from './entity-commands';
@@ -13,14 +14,15 @@ import type { World } from './types';
 
 /**
  * A registry holding every command a replay log can contain: the world commands, `edit.undo` /
- * `edit.redo` and the declared view commands. Headless replay and the UI both start from this,
+ * `edit.redo` and the declared view commands (including the viewport's `view.mode` / `view.focus`). Headless replay and the UI both start from this,
  * so they agree on every id and argument schema. Hosts may register more commands on top.
  */
 export function createWorldRegistry(): CommandRegistry<World> {
   return new CommandRegistry<World>()
     .registerAll(entityCommands())
     .registerAll(editCommands<World>())
-    .registerAll(viewCommands<World>());
+    .registerAll(viewCommands<World>())
+    .registerAll(viewportCommands<World>());
 }
 
 /** A command bus over a world document, starting with an empty history and an empty log. */

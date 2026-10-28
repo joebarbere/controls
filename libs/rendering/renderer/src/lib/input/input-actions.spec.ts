@@ -26,7 +26,10 @@ describe('input bindings', () => {
     expect(map.get('ShiftRight')).toBe('sprint');
     expect(map.get('BracketRight')).toBe('selectNext');
     expect(map.get('Escape')).toBe('clearSelection');
-    expect(map.get('KeyV')).toBe('toggleMode');
+    expect(map.get('Enter')).toBe('commitPlacement');
+    expect(map.get('KeyM')).toBe('moveSelection');
+    expect(map.get('KeyV')).toBeUndefined(); // view.mode is a Command binding since F1.7
+    expect(map.get('KeyF')).toBeUndefined(); // view.focus too
   });
 
   it('inputBindingsFrom fills missing actions with no keys and drops unknown ones', () => {
@@ -50,7 +53,7 @@ describe('input bindings', () => {
 
   it('classifies held and triggered actions', () => {
     expect(isHeldAction('sprint')).toBe(true);
-    expect(isHeldAction('toggleMode')).toBe(false);
+    expect(isHeldAction('commitPlacement')).toBe(false);
   });
 });
 

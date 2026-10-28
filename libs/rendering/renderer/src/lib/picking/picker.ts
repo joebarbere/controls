@@ -12,6 +12,7 @@ import {
   Mesh,
   Raycaster,
   Vector2,
+  Vector3,
   type BufferGeometry,
   type Camera,
   type Intersection,
@@ -52,6 +53,14 @@ export function findSelectables(root: Object3D): Array<{ root: Object3D; info: S
 
 type BvhGeometry = BufferGeometry & { boundsTree?: MeshBVH };
 
+/** A pick: the selectable hit, its distance along the ray and the world hit point (metres). */
+export interface PickHit {
+  readonly info: SelectableInfo;
+  readonly distance: number;
+  /** World-space hit point in scene units. Owned by the picker: copy it before the next pick. */
+  readonly point: Vector3;
+}
+
 export class Picker {
   private objectBvh: ObjectBVH | null = null;
   private readonly roots: Object3D[] = [];
@@ -60,6 +69,7 @@ export class Picker {
   private readonly raycaster = new Raycaster();
   private readonly ndc = new Vector2();
   private readonly hits: Intersection[] = [];
+  private readonly point = new Vector3();
 
   constructor() {
     (this.raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
@@ -72,17 +82,22 @@ export class Picker {
 
   /**
    * (Re)builds the object-level BVH over `roots` and a geometry BVH for every mesh under them that
-   * lacks one. Call after the scene's world matrices are current.
-   * TODO(F1.2): call on world-snapshot add/remove; call `refit()` on moves.
+   * lacks one. BVHs and `raycast` patches for meshes no longer under any root are dropped, so
+   * removing world entities returns memory to baseline. Call after adding or removing selectables
+   * (world sync does); call {@link refit} after moving them.
    */
   setRoots(roots: readonly Object3D[]): void {
     this.roots.length = 0;
     this.roots.push(...roots);
+    const liveGeometries = new Set<BufferGeometry>();
+    const liveMeshes = new Set<Mesh>();
     for (const root of roots) {
       root.updateWorldMatrix(true, true);
       root.traverse((o) => {
         if (!(o instanceof Mesh)) return;
         const geometry = o.geometry as BvhGeometry;
+        liveGeometries.add(geometry);
+        liveMeshes.add(o);
         if (!geometry.boundsTree) {
           geometry.boundsTree = new MeshBVH(geometry, { indirect: true });
           this.ownedGeometries.add(geometry);
@@ -92,6 +107,16 @@ export class Picker {
           this.patchedMeshes.add(o);
         }
       });
+    }
+    for (const geometry of [...this.ownedGeometries]) {
+      if (liveGeometries.has(geometry)) continue;
+      delete geometry.boundsTree;
+      this.ownedGeometries.delete(geometry);
+    }
+    for (const mesh of [...this.patchedMeshes]) {
+      if (liveMeshes.has(mesh)) continue;
+      delete (mesh as { raycast?: unknown }).raycast;
+      this.patchedMeshes.delete(mesh);
     }
     // ObjectBVH needs at least one primitive (its id-bit maths takes log2 of the object count).
     this.objectBvh = this.roots.length > 0 ? new ObjectBVH(this.roots) : null;
@@ -105,19 +130,25 @@ export class Picker {
   }
 
   /** Nearest selectable under normalised device coordinates (−1…1), or `null`. */
-  pick(ndcX: number, ndcY: number, camera: Camera): { info: SelectableInfo; distance: number } | null {
+  pick(ndcX: number, ndcY: number, camera: Camera): PickHit | null {
     if (!this.objectBvh) return null;
     this.ndc.set(ndcX, ndcY);
     this.raycaster.setFromCamera(this.ndc, camera);
     this.hits.length = 0;
     this.objectBvh.raycast(this.raycaster, this.hits);
-    let best: { info: SelectableInfo; distance: number } | null = null;
+    let best: Intersection | null = null;
+    let info: SelectableInfo | null = null;
     for (const hit of this.hits) {
       const owner = selectableOf(hit.object);
-      if (owner && (!best || hit.distance < best.distance)) best = { info: owner.info, distance: hit.distance };
+      if (owner && (!best || hit.distance < best.distance)) {
+        best = hit;
+        info = owner.info;
+      }
     }
     this.hits.length = 0;
-    return best;
+    if (!best || !info) return null;
+    this.point.copy(best.point);
+    return { info, distance: best.distance, point: this.point };
   }
 
   /** Drops every BVH this picker built and restores the meshes' own `raycast`. */
