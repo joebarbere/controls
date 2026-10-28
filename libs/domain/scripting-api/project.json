@@ -1,0 +1,17 @@
+{
+  "name": "scripting-api",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/scripting-api/src",
+  "projectType": "library",
+  "tags": ["type:domain"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/domain/scripting-api/tsconfig.lib.json --noEmit && tsc -p libs/domain/scripting-api/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

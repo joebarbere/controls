@@ -1,0 +1,26 @@
+{
+  "name": "sim-cli",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/sim-cli/src",
+  "tags": ["type:app", "scope:headless"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "inputs": ["production", "^production"],
+      "outputs": ["{workspaceRoot}/dist/apps/sim-cli"],
+      "cache": true,
+      "options": { "command": "node apps/sim-cli/build.mjs" }
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["default", "^production", "{workspaceRoot}/eslint.config.mjs", "{workspaceRoot}/tsconfig.base.json"]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": { "command": "tsc -p apps/sim-cli/tsconfig.app.json && tsc -p apps/sim-cli/tsconfig.spec.json" }
+    }
+  }
+}

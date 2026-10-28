@@ -41,6 +41,7 @@ What exists today (Phase 0 scaffold):
 - A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
 - `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
 - World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. Keybindings drive commands today; the palette and console arrive next.
+- A scripting API: TypeScript scripts and console-line files (`entity.move 1 --positionMm.x 150 …`) drive the game through the same registry as the UI, which itself runs on the same `Game` object, so every surface reaches the same `world.hash`.
 
 ### Saves
 
@@ -50,6 +51,7 @@ What exists today (Phase 0 scaffold):
 
 - Nx 24 + pnpm 11 monorepo with enforced module boundaries.
 - `pnpm verify` runs exactly what CI runs, including the Prettier format check.
+- `sim-cli` runs the game headless in plain Node: `pnpm sim run <script>` (TypeScript or console lines), `pnpm sim replay <log>` and `pnpm sim hash <world>` print the world hash, and `--expect` turns any of them into a check. See the [scripting guide](docs/guides/scripting.md).
 - Playwright end-to-end tests: the browser harness (`apps/game-e2e`) and an Electron smoke suite (`apps/desktop-e2e`). The smoke suite can also attach to a packaged build.
 - GitHub Actions: `pr.yml` (verify and both e2e suites on Linux), `main.yml` (the same on Windows, macOS and Linux) and `release.yml` (tag → installers for all three OSes in a draft GitHub Release, each smoke-tested, with auto-update metadata).
 
@@ -116,11 +118,13 @@ apps/
   game-e2e/        Playwright tests against the browser harness
   desktop/         Electron main + preload (esbuild), app:// protocol, electron-builder config
   desktop-e2e/     Playwright _electron smoke tests against the built app
+  sim-cli/         headless Node CLI (esbuild bundle): run scripts, replay logs, hash worlds; scenarios/
 libs/
   domain/units/    framework-free domain lib; today only the generated app version
   domain/save-format/  save and settings schemas (Zod), migrations, fixtures, JSON Schema
   domain/commands/     command registry, bus, undo/redo, replay log, `when` expressions
   domain/world-model/  world commands, world.hash (SHA-256), seeded PRNG (sfc32)
+  domain/scripting-api/  the Game facade shared by the UI session and scripts, console-line files
   ipc-contract/    IPC channel names, Zod schemas and the preload bridge type
   rendering/renderer/  framework-free Three.js scene
   ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
