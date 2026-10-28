@@ -1,0 +1,23 @@
+# The P1 phase-acceptance scenario as console lines: place, move and delete with undo and redo, the
+# one scenario every driver runs. apps/game-e2e/src/phase-acceptance.spec.ts drives it with the
+# mouse (and keys for undo/redo), with the palette alone, and with the in-game console's `run` of
+# this file; apps/sim-cli/src/phase-acceptance.spec.ts runs it and phase-acceptance.ts headless.
+# All of them must reach PHASE_ACCEPTANCE_HASH and log exactly these commands.
+#   pnpm sim run apps/sim-cli/scenarios/phase-acceptance.console --world content/levels/workshop.json
+#
+# Positions are where the workshop's snap targets put the mouse's cursor points (see
+# mouse-place-move-delete.console, which this extends with undo and redo).
+toolbelt.select 1
+# Click the backplate at (-150, 300): the 120 x 80 box snaps to the 5 mm grid.
+entity.place --ref.id prop.box --ref.version 1 --positionMm.x -210 --positionMm.y 260 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+toolbelt.select 2
+# Click the backplate at (100, -200): the 300 x 200 crate.
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x -50 --positionMm.y -300 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+# Drag the box onto DIN rail 1 at (-10, 150).
+entity.move 1 --positionMm.x -75 --positionMm.y 110 --positionMm.z 0
+# Select the crate and delete it, then undo, redo and undo again: it ends back where it was, id 2.
+entity.delete 2
+edit.undo
+edit.redo
+edit.undo
+world.hash

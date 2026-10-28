@@ -165,6 +165,12 @@ What **replay** means for a save: the entries of its `replay.log` are run from t
 
 `apps/sim-cli/scenarios/four-surface.{ts,console}` is the P1 acceptance scenario: place, move, rotate and delete with undo and redo. `apps/sim-cli/src/four-surface.spec.ts` drives it through the scripting API in-process, `sim run` of the TypeScript script, `sim run` of the console file and `sim replay` of the written log, and requires the same pinned hash from all of them. It runs in `pnpm nx test sim-cli`, which is part of `pnpm verify`. The palette and keybinding surfaces need the UI and are driven in `apps/game-e2e`, which must reach the same hash.
 
+`apps/sim-cli/scenarios/phase-acceptance.{ts,console}` is the scenario the P1 phase acceptance drives through all four surfaces: the mouse, the palette, the in-game console (in `apps/game-e2e/src/phase-acceptance.spec.ts`) and `sim-cli` (in `apps/sim-cli/src/phase-acceptance.spec.ts`). It places with the mouse's snapped positions, moves onto a DIN rail and deletes, with undo and redo, and every driver must reach the same hash:
+
+```bash
+pnpm sim run apps/sim-cli/scenarios/phase-acceptance.ts --world content/levels/workshop.json
+```
+
 ## Snapping like the mouse
 
 The viewport doesn't invent positions: when you click, it asks `@controls/world-model` where the active prop snaps under the cursor, and runs `entity.place` with exactly that answer. A script can ask the same question:
