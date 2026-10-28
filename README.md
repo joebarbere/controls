@@ -51,6 +51,7 @@ What exists today (Phase 0 scaffold):
 ### Saves
 
 - Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema. Saving and loading in the game arrive later in P1.
+- `.ctrl` save files: a ZIP of the save's JSON documents plus an optional thumbnail, with byte-identical output for the same game and a reader that refuses damaged, oversized, malicious or newer-version files with a clear reason. Scripts and `pnpm sim` can already write, load, hash and replay them.
 
 ### Tooling
 

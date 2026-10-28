@@ -1,12 +1,20 @@
-import { migrateReplayLog } from '@controls/save-format';
-import { replayGame } from '@controls/scripting-api';
+import {
+  createManifest,
+  createReplayLog,
+  createWorld,
+  migrateReplayLog,
+  readCtrl,
+  writeCtrl,
+} from '@controls/save-format';
+import { rawZip } from '@controls/save-format/testing';
+import { createGame, replayGame } from '@controls/scripting-api';
 import { hashWorldDocument, loadLevel, newGameWorld, worldHash } from '@controls/world-model';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type CliIo, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli, USAGE } from './cli';
 import { documentKind, readDocument } from './documents';
-import { domainAliases, isAllowedImport, WORKSPACE_ROOT } from './script-loader';
+import { domainAliases, isAllowedImport, isLibraryImporter, WORKSPACE_ROOT } from './script-loader';
 import { WORKSHOP_LEVEL_PATH } from './testing/workshop';
 
 const fixtures = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v1');
@@ -77,10 +85,7 @@ describe('sim hash', () => {
 
   it.each([
     ['missing.json', 'sim: missing.json: ENOENT'],
-    [
-      'save.ctrl',
-      'sim: save.ctrl: .ctrl saves are not supported until F1.8b; pass the world or replay-log JSON instead',
-    ],
+    ['save.ctrl', 'sim: save.ctrl: ENOENT'],
     ['.', 'sim: .: not a file'],
   ])('reports %s', async (name, message) => {
     expect(await sim('hash', name)).toEqual({ code: EXIT_FAILURE, stdout: [], stderr: [message] });
@@ -199,6 +204,31 @@ describe('sim run', () => {
     expect(result.stdout).toHaveLength(1);
   });
 
+  it('lets a script save (fflate comes in through save-format) but not import fflate itself', async () => {
+    await file(
+      'saver.ts',
+      `import type { Game } from '@controls/scripting-api';
+       import { readCtrl } from '@controls/save-format';
+       export default (game: Game): void => {
+         const read = readCtrl(game.save());
+         if (!read.ok) throw new Error(read.error.message);
+       };`,
+    );
+    expect(await sim('run', 'saver.ts')).toMatchObject({ code: EXIT_OK, stderr: [] });
+    await file('zip.ts', "import { zipSync } from 'fflate';\nexport default () => zipSync;");
+    expect((await sim('run', 'zip.ts')).stderr[0]).toMatch(/not "fflate"/);
+    expect(isLibraryImporter(join(WORKSPACE_ROOT, 'libs/domain/save-format/src/lib/container/zip.ts'))).toBe(true);
+    expect(isLibraryImporter(join(WORKSPACE_ROOT, 'node_modules/zod/index.js'))).toBe(true);
+    expect(isLibraryImporter(join(dir, 'zip.ts'))).toBe(false);
+    expect(isLibraryImporter(join(WORKSPACE_ROOT, 'libs/domain/save-format/src/testing/arbitraries.ts'))).toBe(false);
+    // So the test helpers still can't be bundled into a script (they need fast-check).
+    await file(
+      'helpers.ts',
+      "import { TINY_PNG } from '@controls/save-format/testing';\nexport default () => TINY_PNG;",
+    );
+    expect((await sim('run', 'helpers.ts')).stderr[0]).toMatch(/not "fast-check"/);
+  });
+
   it('reports script problems: compile errors, banned imports, no default export, throws', async () => {
     await file('syntax.ts', 'export default (game => {');
     expect((await sim('run', 'syntax.ts')).stderr[0]).toMatch(/^sim: syntax.ts:1:\d+: /);
@@ -220,6 +250,138 @@ describe('sim run', () => {
     expect((await sim('run', 'throws-value.ts')).stderr).toEqual(['sim: throws-value.ts: script failed: plain']);
   });
 });
+
+describe('.ctrl saves (F1.8b)', () => {
+  const ctrlFixture = join(fixtures, 'ctrl/place-move-delete-undo.ctrl');
+  const worldOnly = join(fixtures, 'ctrl/world-only.ctrl');
+  const crate = { id: 'prop.crate', version: 1 };
+
+  async function saveFile(name: string, bytes: Uint8Array): Promise<string> {
+    const path = join(dir, name);
+    await writeFile(path, bytes);
+    return path;
+  }
+
+  it('hash prints the hash of the save’s world.json; replay replays its log to the same hash', async () => {
+    const read = readCtrl(new Uint8Array(await readFile(ctrlFixture)));
+    if (!read.ok) throw new Error('fixture should load');
+    const expected = worldHash(read.value.world);
+    expect(await sim('hash', ctrlFixture)).toEqual({ code: EXIT_OK, stdout: [expected], stderr: [] });
+    expect(await sim('replay', ctrlFixture, '--expect', expected)).toEqual({
+      code: EXIT_OK,
+      stdout: [expected],
+      stderr: [],
+    });
+  });
+
+  it('recognises a save by its ZIP signature whatever its extension', async () => {
+    const renamed = await saveFile('save.bin', new Uint8Array(await readFile(worldOnly)));
+    expect((await sim('hash', renamed)).code).toBe(EXIT_OK);
+  });
+
+  it('replay needs a replay.log that reproduces world.json', async () => {
+    expect((await sim('replay', worldOnly)).stderr).toEqual([`sim: ${worldOnly}: has no replay.log (use "sim hash")`]);
+
+    const world = createWorld({ seed: 1 });
+    const other = createGame({ seed: 2 });
+    other.execOrThrow('entity.place', { ref: crate, positionMm: { x: 0, y: 0, z: 0 } });
+    const mismatched = await saveFile(
+      'mismatched.ctrl',
+      writeCtrl({ manifest: createManifest(), world, replayLog: other.replayLog() }),
+    );
+    const result = await sim('replay', mismatched);
+    expect(result.code).toBe(EXIT_FAILURE);
+    expect(result.stderr).toEqual([
+      `sim: ${mismatched}: replay.log replays to ${other.hash()}, but world.json hashes to ${worldHash(world)}`,
+    ]);
+
+    const failing = await saveFile(
+      'failing.ctrl',
+      writeCtrl({
+        manifest: createManifest(),
+        world,
+        replayLog: createReplayLog(world, [{ seq: 0, tick: 0, id: 'entity.delete', args: { id: 4 } }]),
+      }),
+    );
+    expect((await sim('replay', failing)).stderr[0]).toMatch(
+      /^sim: .*failing.ctrl: replay.log: Entry 0 \(entity.delete\)/,
+    );
+  });
+
+  it('reports damaged, hostile and newer saves with the container’s message', async () => {
+    const junk = await saveFile('junk.ctrl', new Uint8Array([1, 2, 3, 4]));
+    expect((await sim('hash', junk)).stderr).toEqual([
+      `sim: ${junk}: Not a valid ZIP archive: no end-of-central-directory record.`,
+    ]);
+    const traversal = await saveFile('evil.ctrl', rawZip([{ name: '../world.json', data: '{}' }]));
+    expect((await sim('replay', traversal)).stderr[0]).toMatch(/unsafe path \(parent-directory segment\)/);
+    const newer = await saveFile(
+      'newer.ctrl',
+      rawZip([{ name: 'manifest.json', data: JSON.stringify({ ...createManifest(), schemaVersion: 7 }) }]),
+    );
+    const refused = await sim('run', await file('noop.console', ''), '--world', newer);
+    expect(refused.code).toBe(EXIT_FAILURE);
+    expect(refused.stderr[0]).toMatch(/save format 7\). This build .* Update the game to open it\.$/);
+  });
+
+  it('run --world <save> loads it as the game does: undo cleared, the log continued', async () => {
+    await file(
+      'place.console',
+      'entity.place --ref.id prop.box --ref.version 1 --positionMm.x 5 --positionMm.y 0 --positionMm.z 0\n',
+    );
+    const out = join(dir, 'continued.json');
+    const result = await sim('run', 'place.console', '--world', ctrlFixture, '--log', out);
+    expect(result.stderr).toEqual([]);
+    const log = migrateReplayLog(await json(out));
+    if (!log.ok) throw new Error('log should load');
+    const saved = migrateReplayLog(await json(replayFixture));
+    if (!saved.ok) throw new Error('fixture should load');
+    expect(log.value.initialWorld).toStrictEqual(saved.value.initialWorld);
+    expect(log.value.entries.map((e) => e.id)).toEqual([...saved.value.entries.map((e) => e.id), 'entity.place']);
+
+    // Undo can't reach past the load.
+    await file('undo.console', 'edit.undo\n');
+    expect((await sim('run', 'undo.console', '--world', ctrlFixture)).stderr[0]).toMatch(/^sim: undo.console: line 1/);
+  });
+
+  it('run --world <save> warns when the save’s log has to restart', async () => {
+    const other = createGame({ seed: 2 });
+    const mismatched = await saveFile(
+      'restart.ctrl',
+      writeCtrl({ manifest: createManifest(), world: createWorld({ seed: 1 }), replayLog: other.replayLog() }),
+    );
+    const result = await sim('run', await file('noop.console', ''), '--world', mismatched);
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.stdout).toEqual([worldHash(createWorld({ seed: 1 }))]);
+    expect(result.stderr).toEqual([
+      `sim: ${mismatched}: The save's replay log doesn't reproduce its world, so a new log starts from the loaded world.`,
+    ]);
+  });
+
+  it('run --world <save> --seed N starts a new game on the saved world', async () => {
+    const read = readCtrl(new Uint8Array(await readFile(worldOnly)));
+    if (!read.ok) throw new Error('fixture should load');
+    const result = await sim('run', await file('noop.console', ''), '--world', worldOnly, '--seed', '77');
+    expect(result.stdout).toEqual([worldHash(newGameWorld(read.value.world, { seed: 77 }))]);
+  });
+
+  it('run --save writes a .ctrl that loads back to the same hash, byte-identical across runs', async () => {
+    const run = async (name: string) => {
+      const result = await sim('run', 'scenario.console', '--seed', '5', '--save', name);
+      expect(result.code).toBe(EXIT_OK);
+      return { hash: result.stdout.at(-1), bytes: new Uint8Array(await readFile(join(dir, name))) };
+    };
+    await file('scenario.console', `${placeLineFor(1)}\n${placeLineFor(2)}\nedit.undo\n`);
+    const a = await run('a.ctrl');
+    const b = await run('b.ctrl');
+    expect(b.bytes).toStrictEqual(a.bytes);
+    expect((await sim('replay', 'a.ctrl')).stdout).toEqual([a.hash]);
+  });
+});
+
+function placeLineFor(x: number): string {
+  return `entity.place --ref.id prop.crate --ref.version 1 --positionMm.x ${x} --positionMm.y 0 --positionMm.z 0`;
+}
 
 describe('documents', () => {
   it('classifies by content', () => {

@@ -2,6 +2,9 @@ import fc from 'fast-check';
 import { isWellFormed, type JsonValue } from '../lib/primitives';
 import { MAX_COORDINATE_MM, MILLIDEGREES_PER_TURN } from '../lib/v1/world';
 
+// `@controls/save-format/testing` points at this file; the raw ZIP builder rides along.
+export * from './zip-builder';
+
 /*
  * fast-check arbitraries producing *raw* documents that the v1 schemas accept. Raw on purpose: they
  * include `-0`, which the schemas normalise, so properties exercise the normalisation too.
@@ -154,6 +157,22 @@ export const rawSettingsV1Arb = fc.record({
   toolBelt: fc.record({ slots: fc.array(fc.option(catalogRefArb), { minLength: 9, maxLength: 9 }) }),
   extensions: jsonObjectArb,
 });
+
+/** A raw manifest that `ManifestV1` accepts. */
+export const rawManifestV1Arb = fc.record({
+  format: fc.constant('controls.ctrl' as const),
+  schemaVersion: fc.constant(1 as const),
+  appVersion: fc
+    .tuple(fc.nat({ max: 99 }), fc.nat({ max: 99 }), fc.nat({ max: 99 }), fc.constantFrom('', '-rc.1', '+build.7'))
+    .map(([a, b, c, suffix]) => `${a}.${b}.${c}${suffix}`),
+  catalogVersion: fc.oneof(fc.nat({ max: 1000 }), fc.constant(-0)),
+  extensions: jsonObjectArb,
+});
+
+/** Bytes that start with the PNG signature (the container checks the signature, not the image). */
+export const pngBytesArb = fc
+  .uint8Array({ maxLength: 64 })
+  .map((tail) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...tail]));
 
 /** Throws if `value` contains `-0` anywhere (JSON would silently turn it into `0`). */
 export function assertNoNegativeZero(value: unknown, path = '(root)'): void {

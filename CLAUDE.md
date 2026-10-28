@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Landed: kickoff boundary hardening, F1.8a, F1.1, F1.2 (commands, world model, session), F1.3 palette, F1.4 keybindings, F1.5 console, F1.6 (scripting API + `sim-cli`), F1.7 (placement via commands), F1.9 (workshop level + new-game seed). Next: F1.8b (`.ctrl` container, autosave, Continue/Load), the phase-acceptance E2E, then the F1.10 wire-routing spike. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 1 (Game shell) in progress, kickoff 2026-10-27. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md); P1 specialists `angular-ui-engineer`, `renderer-engineer` and `save-format-guardian` created. Landed: kickoff boundary hardening, F1.8a, F1.1, F1.2 (commands, world model, session), F1.3 palette, F1.4 keybindings, F1.5 console, F1.6 (scripting API + `sim-cli`), F1.7 (placement via commands), F1.9 (workshop level + new-game seed), F1.8b part 1 (pure `.ctrl` container, `game.save`/`loadGame`, `sim-cli` saves). Next: F1.8b parts 2–3 (save I/O + IPC, autosave, Continue/Load), the phase-acceptance E2E, then the F1.10 wire-routing spike. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
@@ -43,7 +43,7 @@ pnpm e2e:desktop       # Playwright _electron smoke against the built app (apps/
 pnpm package:desktop   # electron-builder installers for this OS (package:desktop:dir = unpacked)
 pnpm version:sync      # root version -> apps/desktop/package.json + libs/domain/units/src/lib/version.ts
 pnpm sim run <script>  # headless: a .ts module exporting (game) => … or a .console file; prints world.hash (--seed, --world, --log, --expect)
-pnpm sim replay <log>  # replay a replay-log JSON, print the hash; `pnpm sim hash <world.json>` hashes a world (.ctrl from F1.8b)
+pnpm sim replay <log>  # replay a .ctrl or replay-log JSON, print the hash; `pnpm sim hash <file>` hashes a .ctrl or world JSON; `sim run … --save x.ctrl` writes a save
 ```
 
 Run Nx through pnpm (`pnpm nx …`), never a global `nx`. Use `pnpm --silent sim …` when piping (stdout is data only). Guide: [`docs/guides/scripting.md`](docs/guides/scripting.md).

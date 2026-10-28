@@ -1,6 +1,6 @@
 # Scripting API and `sim-cli`
 
-> **Status (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`) is the typed `Game` facade over the world command bus; `feature-session`'s `Session` wraps it. The console-line parser lives in `@controls/commands` (`console/`). `apps/sim-cli` (`type:app`, `scope:headless`) runs scripts, replays and hashes headless in plain Node. The in-game console is `@controls/feature-console` ([dev console](console.md), F1.5) and the `.ctrl` container F1.8b. Decisions: [ADR 0008](../decisions/0008-console-and-scripts.md). How-to: [scripting guide](../guides/scripting.md). Gotchas: [scripting caveats](../caveats/scripting.md).
+> **Status (F1.6):** `libs/domain/scripting-api` (`@controls/scripting-api`) is the typed `Game` facade over the world command bus; `feature-session`'s `Session` wraps it. The console-line parser lives in `@controls/commands` (`console/`). `apps/sim-cli` (`type:app`, `scope:headless`) runs scripts, replays and hashes headless in plain Node. The in-game console is `@controls/feature-console` ([dev console](console.md), F1.5) and the `.ctrl` container is `@controls/save-format` (F1.8b): `game.save()` writes one, `loadGame(bytes)` loads one, and `sim-cli` reads and writes them ([world and saves](world-and-saves.md#the-ctrl-container-f18b)). Decisions: [ADR 0008](../decisions/0008-console-and-scripts.md). How-to: [scripting guide](../guides/scripting.md). Gotchas: [scripting caveats](../caveats/scripting.md).
 
 ## One `Game`, every driver
 
@@ -43,19 +43,20 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    ARGV["sim run | replay | hash &lt;file&gt; [--seed] [--world] [--log] [--expect]"] --> CLI["runCli<br/>apps/sim-cli/src/cli.ts"]
+    ARGV["sim run | replay | hash &lt;file&gt; [--seed] [--world] [--log] [--save] [--expect]"] --> CLI["runCli<br/>apps/sim-cli/src/cli.ts"]
     CLI -->|".ts .mts .js .mjs"| LOAD["loadModuleScript<br/>esbuild bundle in memory, import boundary plugin"]
     LOAD --> TMP["temp .mjs → import() → default(game)"]
     CLI -->|"other extensions"| RCS["runConsoleScript<br/>parse all lines, then exec"]
-    CLI -->|"replay"| DOC["readDocument<br/>JSON, size cap, kind by content"]
+    CLI -->|"replay"| DOC["readDocument<br/>size cap; .ctrl by extension or ZIP signature,<br/>else JSON, kind by content"]
     CLI -->|"hash"| DOC
     DOC -->|"replay-log"| RG["replayGame → hash"]
     DOC -->|"world"| HW["hashWorldDocument"]
-    DOC -->|".ctrl"| NO["error: F1.8b"]
-    TMP --> OUT["stdout: final world.hash<br/>(and --log replay log)"]
+    DOC -->|".ctrl"| RC["readCtrl → hash: world.json<br/>replay: replay.log must reach world.json's hash"]
+    TMP --> OUT["stdout: final world.hash<br/>(--log replay log, --save .ctrl via game.save())"]
     RCS --> OUT
     RG --> OUT
     HW --> OUT
+    RC --> OUT
 ```
 
 - **Bundle:** `apps/sim-cli/build.mjs` bundles `src/main.ts` with esbuild into `dist/apps/sim-cli/main.mjs` (ESM, Node 24, domain libs and zod inlined, esbuild external). The Nx `build` target and `pnpm sim` (via `bin/sim.mjs`) both call it.

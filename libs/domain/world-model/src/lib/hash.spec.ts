@@ -19,13 +19,24 @@ function workshop(): World {
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(resolve(import.meta.dirname, `../../../save-format/fixtures/v1/world/${name}.json`), 'utf8'));
 
-/** An independent canonical form: JSON.stringify with a replacer that rebuilds objects with sorted keys. */
+/**
+ * An independent canonical form: JSON.stringify for scalars, members joined by hand in code-unit
+ * order (an explicit comparator). It must not rebuild objects and re-stringify them: JavaScript
+ * lists integer-like keys ("0", "12") before all others whatever the insertion order, so a rebuilt
+ * object can't hold `{"": …, "0": …}` in code-unit order.
+ */
 function referenceCanonical(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    typeof v === 'object' && v !== null && !Array.isArray(v)
-      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-      : v,
-  );
+  if (Array.isArray(value)) return `[${value.map(referenceCanonical).join(',')}]`;
+  if (typeof value !== 'object' || value === null) return JSON.stringify(value);
+  const byCodeUnits = ([a]: [string, unknown], [b]: [string, unknown]): number => {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      const d = a.charCodeAt(i) - b.charCodeAt(i);
+      if (d !== 0) return d;
+    }
+    return a.length - b.length;
+  };
+  const members = Object.entries(value).sort(byCodeUnits);
+  return `{${members.map(([k, v]) => `${JSON.stringify(k)}:${referenceCanonical(v)}`).join(',')}}`;
 }
 
 const referenceHash = (value: unknown) => createHash('sha256').update(referenceCanonical(value), 'utf8').digest('hex');
@@ -40,6 +51,8 @@ describe('canonicalJson', () => {
   it('sorts by UTF-16 code units, not code points or locale', () => {
     // U+FF5E (one unit 0xFF5E) sorts after U+1F600 (units 0xD83D 0xDE00), unlike code-point order.
     expect(canonicalJson({ '～': 1, '😀': 2, Z: 3, a: 4, é: 5 })).toBe('{"Z":3,"a":4,"é":5,"😀":2,"～":1}');
+    // Integer-like keys too, which JavaScript itself always lists first.
+    expect(canonicalJson({ '0': {}, '': null, '10': 1, '9': 2 })).toBe('{"":null,"0":{},"10":1,"9":2}');
   });
 
   it('formats numbers and strings exactly as JSON.stringify', () => {

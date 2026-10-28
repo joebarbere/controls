@@ -432,6 +432,42 @@ describe('properties (toy state)', () => {
     );
   });
 
+  it('clearing the history mid-session (loading a save) keeps the log replayable to the live state', () => {
+    fc.assert(
+      fc.property(
+        fc.array(opArb, { maxLength: 20 }),
+        fc.array(fc.array(opArb, { maxLength: 15 }), { minLength: 1, maxLength: 3 }),
+        (before, sessions) => {
+          const live = createBus();
+          before.forEach((op) => run(live, op));
+          for (const ops of sessions) {
+            live.clearHistory();
+            expect(live.canUndo || live.canRedo).toBe(false);
+            ops.forEach((op) => run(live, op));
+          }
+          const replayed = createBus();
+          expect(replayEntries(replayed, live.entries)).toEqual({ ok: true });
+          expect(replayed.state).toEqual(live.state);
+          expect(replayed.entries).toEqual(live.entries);
+        },
+      ),
+    );
+  });
+
+  it('clearHistory leaves the state and the log alone', () => {
+    const bus = createBus();
+    bus.exec('list.push', { value: 1 });
+    bus.exec('list.push', { value: 2 });
+    bus.exec('edit.undo');
+    const [state, entries] = [bus.state, [...bus.entries]];
+    bus.clearHistory();
+    expect([bus.canUndo, bus.canRedo]).toEqual([false, false]);
+    expect(bus.state).toBe(state);
+    expect(bus.entries).toEqual(entries);
+    expect(bus.exec('edit.redo')).toMatchObject({ ok: false });
+    expect(bus.entries).toHaveLength(3);
+  });
+
   it('only successful commands are logged, with gap-free seq', () => {
     fc.assert(
       fc.property(fc.array(opArb, { maxLength: 30 }), (ops) => {

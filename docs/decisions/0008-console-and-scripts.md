@@ -94,6 +94,7 @@ The registry already gives every command a Zod `args` object, so the console nee
   - `sim replay <file>` takes a **replay log** (`replay.log`, which is JSON, or any `*.json`), replays it from its `initialWorld` and prints the resulting hash.
 - The document kind is taken from the content (a replay log has `initialWorld`), not the file name, and passing the wrong kind is an error naming the right subcommand.
 - A `.ctrl` file is refused with a clear "not supported until F1.8b" error. **Forward-compatible shape:** F1.8b adds `.ctrl` to the same reader, where `hash` reads the archive's `world.json` and `replay` reads its `replay.log` (and can check the result against `world.json`). The subcommands, options and output don't change.
+- **Amended in F1.8b (container landed):** a `.ctrl` (by extension or ZIP signature) is read with `readCtrl`. `hash` prints its `world.json`'s hash; `replay` replays its `replay.log` from the log's `initialWorld` and **fails unless the result equals `world.json`'s hash** (and fails for a save without a log). `run --world <save>` loads it as the game does (`loadGame`: undo cleared, log continued), `run --save <file>` writes `game.save()`. The script import boundary now applies to the script's own files only; imports made by a domain lib's production source (fflate, through `@controls/save-format`) pass, as the `type:domain` lint bounds them.
 - `sim run --log <file>` writes the session's replay log in the same format, so `sim run` then `sim replay` round-trips.
 
 ### CLI conventions

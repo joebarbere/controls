@@ -171,7 +171,7 @@ The typed API over the registry lives in `libs/domain/scripting-api` (`@controls
 
 Acceptance:
 
-- [x] `pnpm sim run <script>`, `pnpm sim replay <file.ctrl>` (prints the hash), `pnpm sim hash <file.ctrl>`. Scripts are TS modules exporting `(game) => …`, or console-line files. _(Until F1.8b, `replay` and `hash` read the replay-log and world JSON a `.ctrl` contains and refuse `.ctrl` with a clear error; F1.8b adds `.ctrl` to the same commands. TS scripts are bundled with esbuild at run time; ADR 0008.)_
+- [x] `pnpm sim run <script>`, `pnpm sim replay <file.ctrl>` (prints the hash), `pnpm sim hash <file.ctrl>`. Scripts are TS modules exporting `(game) => …`, or console-line files. _(Until F1.8b, `replay` and `hash` read the replay-log and world JSON a `.ctrl` contains and refuse `.ctrl` with a clear error; F1.8b adds `.ctrl` to the same commands. TS scripts are bundled with esbuild at run time; ADR 0008. F1.8b part 1: `hash` and `replay` read `.ctrl` (`replay` must reach `world.json`'s hash), `run --world <save>` loads one, `run --save` writes one.)_
 - [x] `sim-cli` lint fails on any import outside `type:domain`, and it runs under plain Node 24 with no DOM. _(`lint-boundary.spec.ts` lints a probe file with the real config; the four-surface test runs the bundle in a plain `node` child process.)_
 - [x] Sim queries (`probe`, `tag`) are reserved in the API docs and not implemented. They arrive in P2 and P10. _(In the `Game` type, throwing `NotAvailableError`.)_
 - [x] A `sim-cli` test target runs the four-surface scenario script and is part of `pnpm verify`. _(The headless drivers: API in-process, TS script, console-line file and replay, all to one pinned hash. Palette, keybindings and mouse are UI drivers in `apps/game-e2e`.)_
@@ -213,16 +213,16 @@ Acceptance, **F1.8a** (schema, ahead of F1.2):
 
 Acceptance, **F1.8b** (container and I/O, after F1.1, F1.2 and F1.9):
 
-- [ ] Reads and writes a `.ctrl` ZIP containing `manifest.json`, `world.json`, an optional `replay.log` and an optional `thumbnail.png` (from the renderer). `prints/`, `plc/` and `hmi/` are tolerated but empty in v1. Output bytes are deterministic (sorted entries, fixed mtimes). Oversized or unexpected entries are rejected.
+- [x] Reads and writes a `.ctrl` ZIP containing `manifest.json`, `world.json`, an optional `replay.log` and an optional `thumbnail.png` (from the renderer). `prints/`, `plc/` and `hmi/` are tolerated but empty in v1. Output bytes are deterministic (sorted entries, fixed mtimes). Oversized or unexpected entries are rejected. _(Part 1: `writeCtrl` / `readCtrl` in `@controls/save-format`. The ZIP structure is our own code (fflate's `zipSync` stamps local-time-zone dates; `unzipSync` trusts declared sizes), fflate does DEFLATE. Caps: file and total 48 MiB, `world.json` 16 MiB, `replay.log` 32 MiB, thumbnail 4 MiB, manifest 64 KiB, 64 entries; inflation aborts past the declared size; traversal, duplicates, overlap, ZIP64 and encryption refused; manifest first, so newer saves get `newer-than-build`. Golden SHA-256 pinned; fixtures in `fixtures/v1/ctrl/`. The thumbnail is bytes passed in; the renderer capture comes with part 3. [ADR 0007](../docs/decisions/0007-world-document-v1.md#container-bytes-and-loading-a-save-f18b).)_
 - [ ] `FileService` and `DialogService` in `platform-api`. Electron channels (`save:list`, `save:read`, `save:write`, `dialog:open`, `dialog:saveAs`):
   - Zod-validated and size-capped, with `senderFrame` checked;
   - main owns the saves directory, and the renderer gets opaque handles, never raw paths;
   - writes are atomic (temp, fsync, rename), and a test that fails mid-write leaves the old file intact.
 - [ ] The web harness stores saves in OPFS or IndexedDB. Save As / Open use download and upload. One contract test suite runs against both platforms.
 - [ ] Autosave rotates N slots on an interval and when returning to the menu (N and the interval are settings). Continue loads the newest valid slot and skips corrupt ones with a notification.
-- [ ] Loading migrates, validates and then replaces the session. The undo stack is cleared and the replay log continues.
+- [ ] Loading migrates, validates and then replaces the session. The undo stack is cleared and the replay log continues. _(Part 1, domain side done: `loadGame(bytes)` / `gameFromSave` in `@controls/scripting-api` migrate and validate through `readCtrl`, clear the history (`CommandBus.clearHistory`) and continue the log if it reproduces `world.json`'s hash, else start a new one (`replay.status`). `game.save()` writes. Replacing `Session`'s game is part 3.)_
 - [ ] E2E: save → reload gives the same hash in the web harness, and save/load works in `desktop-e2e` (also part of `release-engineer`'s smoke procedure).
-- [ ] `docs/history.md` records `schemaVersion` 1.
+- [x] `docs/history.md` records `schemaVersion` 1. _(With the container noted, F1.8b part 1.)_
 
 ### F1.9 Sandbox "workshop" level
 

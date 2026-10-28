@@ -1,6 +1,6 @@
 # ADR 0007: World document v1 and determinism
 
-**Status:** Accepted (F1.8a; PRNG and hash implemented in F1.2); amended in F1.9 (fixtures and levels)
+**Status:** Accepted (F1.8a; PRNG and hash implemented in F1.2); amended in F1.9 (fixtures and levels) and F1.8b (container bytes, loading a save)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.4, §4.6, §4.8; [ADR 0004](0004-save-format.md); [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.8, "Kickoff decisions"
 
@@ -95,6 +95,14 @@ The workshop's floor, stud wall, backboard, backplate, DIN rails and bench must 
 - **Rejected:**
   - _Fixtures as entities_ (`prop.stud-wall` in `entities`): every entity command would need a "fixed" refusal, the level would consume entity ids 1 to 7 (every scenario's ids would shift), and walls and rails would get `entity-N` view ids instead of `stud-wall` and `din-rail-1`.
   - _Level geometry only in code_ with a level id in `extensions`: a save wouldn't describe its own room, `extensions` is for data the schema doesn't model, and a level edit would silently change what an old save looks like.
+
+### Container bytes and loading a save (F1.8b)
+
+- **Our own ZIP structure, fflate for DEFLATE only.** fflate's `zipSync` derives each entry's DOS timestamp from the local time zone, so the same save would differ between machines, and its `unzipSync` trusts declared sizes. `save-format` writes a strict ZIP subset itself (stored or DEFLATE, no encryption, no ZIP64, one disk, plain relative ASCII names) and reads only that subset.
+- **Deterministic bytes:** entries sorted by name, DOS date 1980-01-01 00:00, no extra fields, comments or attributes, DEFLATE level 6 / mem 12, the PNG stored, JSON written with sorted keys, two-space indents and a final newline (readable once unzipped). A golden SHA-256 is pinned on fixture documents (not on `createManifest()`, whose `appVersion` changes every release).
+- **Reading never trusts the archive.** Caps on the file (48 MiB), entries (64), each entry's declared size (`world.json` 16 MiB, `replay.log` 32 MiB, `thumbnail.png` 4 MiB, `manifest.json` 64 KiB) and their total (48 MiB) are checked before inflating; inflation runs in 4 KiB slices and aborts past the declared size; sizes and CRC-32 must match; names with traversal, absolute paths, backslashes, drive letters or non-ASCII bytes, duplicates and overlapping entries are refused. `manifest.json` is read before the entry list is judged, so a save from a newer build is refused as `newer-than-build` even if it holds entries v1 doesn't define. Every document must carry the manifest's `schemaVersion`.
+- **Loading a save: the world wins, the log must earn its place.** `world.json` is what loads. The `replay.log` is replayed from its `initialWorld`; the game continues it only if it reaches `world.json`'s `world.hash`. Otherwise (it fails, or diverges) the world still loads and a new log starts from it, reported as `replay.status: 'restarted'`. The undo and redo stacks are cleared, and the next command takes the next `seq`. A full replay across loads stays exact: the live stacks are always the top part of what a replay rebuilds, so every logged undo or redo pops the same change.
+- **Rejected:** fflate's `zipSync` with a fixed `mtime` (still time-zone dependent); refusing a save whose log diverges (the player would lose a valid world over a debugging artefact); keeping the undo history in the save (it holds closures, not data, and the plan clears it on load).
 
 ## Consequences
 
