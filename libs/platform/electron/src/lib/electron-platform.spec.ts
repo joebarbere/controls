@@ -18,6 +18,11 @@ function bridge(overrides: Partial<ControlsBridge> = {}): ControlsBridge {
     quit: async () => undefined,
     onFlushRequest: () => () => undefined,
     ackFlush: async () => undefined,
+    listSaves: async () => [],
+    readSave: async () => new Uint8Array([1]),
+    writeSave: async () => Promise.reject(new Error('not used')),
+    showOpenDialog: async () => null,
+    showSaveAsDialog: async () => null,
     ...overrides,
   };
 }

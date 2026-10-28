@@ -1,4 +1,4 @@
-import { _electron as electron, chromium, type Page } from '@playwright/test';
+import { _electron as electron, chromium, type ElectronApplication, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +15,11 @@ export interface LaunchedControls {
    * only: a packaged build has no Node inspector to run it through, so this is undefined there.
    */
   readonly closeWindow?: () => Promise<void>;
+  /**
+   * Runs a function in main with the `electron` module (Playwright's `ElectronApplication.evaluate`),
+   * e.g. to stub `dialog`. Dev build only, like {@link closeWindow}.
+   */
+  readonly evaluateMain?: ElectronApplication['evaluate'];
 }
 
 function chromiumArgs(): string[] {
@@ -72,6 +77,7 @@ export async function launchControls(options: LaunchOptions = {}): Promise<Launc
         cleanUp();
       },
       closeWindow: () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close()),
+      evaluateMain: app.evaluate.bind(app) as ElectronApplication['evaluate'],
     };
   }
 

@@ -2,12 +2,15 @@ import { parseStoredSettings, serialiseSettings, type AppInfo, type SettingsLoad
 import {
   runFlushes,
   type AppLifecycle,
+  type DialogService,
+  type FileService,
   type PendingWritesFlush,
   type Platform,
   type SettingsService,
 } from '@controls/platform-api';
 import type { Settings } from '@controls/save-format';
 import { APP_VERSION } from '@controls/units';
+import { WebSaveStore } from './web-files';
 
 /** localStorage key for the web harness settings document. */
 export const WEB_SETTINGS_KEY = 'controls.settings';
@@ -79,6 +82,14 @@ export class WebPlatform implements Platform {
   readonly canQuit = false;
   readonly settings: SettingsService = new WebSettingsService();
   readonly lifecycle: AppLifecycle = new WebAppLifecycle();
+  /** Saves in the origin-private file system; Open uploads, Save As downloads (ADR 0009). */
+  readonly files: FileService;
+  readonly dialogs: DialogService;
+
+  constructor(saves: WebSaveStore = new WebSaveStore()) {
+    this.files = saves.files;
+    this.dialogs = saves.dialogs;
+  }
 
   async getAppInfo(): Promise<AppInfo> {
     return { appVersion: APP_VERSION, platform: 'web', arch: 'unknown', isPackaged: false, versions: {} };

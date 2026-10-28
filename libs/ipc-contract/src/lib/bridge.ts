@@ -20,6 +20,16 @@ export interface ControlsBridge {
   readonly onFlushRequest: (listener: (request: unknown) => void) => () => void;
   /** `app:flush-ack`: answers a flush request (`FlushAckSchema`). */
   readonly ackFlush: (ack: unknown) => Promise<void>;
+  /** `save:list`: `SaveEntry[]`, newest first (`SaveListResponseSchema`). */
+  readonly listSaves: () => Promise<unknown>;
+  /** `save:read` (`SaveReadRequestSchema`): the file's bytes, a `Uint8Array`. */
+  readonly readSave: (request: unknown) => Promise<unknown>;
+  /** `save:write` (`SaveWriteRequestSchema`): the written file's `SaveEntry`. */
+  readonly writeSave: (request: unknown) => Promise<unknown>;
+  /** `dialog:open` (`DialogOpenRequestSchema`): a read-only `SaveEntry`, or null if cancelled. */
+  readonly showOpenDialog: (request: unknown) => Promise<unknown>;
+  /** `dialog:saveAs` (`DialogSaveAsRequestSchema`): a write-only `SaveAsTarget`, or null if cancelled. */
+  readonly showSaveAsDialog: (request: unknown) => Promise<unknown>;
 }
 
 /** Global key the preload uses with `contextBridge.exposeInMainWorld`. */

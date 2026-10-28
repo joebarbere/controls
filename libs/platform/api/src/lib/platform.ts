@@ -1,11 +1,12 @@
 import type { AppInfo } from '@controls/ipc-contract';
+import type { DialogService, FileService } from './files';
 import type { AppLifecycle } from './lifecycle';
 import type { SettingsService } from './settings';
 
 /**
  * Everything the game needs from its host. Features depend on this interface only;
  * apps inject a concrete implementation (Electron bridge or browser dev harness).
- * Grows in P1 (files, dialogs, updates).
+ * Grows in P1 (updates still to come).
  */
 export interface Platform {
   readonly kind: 'electron' | 'web';
@@ -18,4 +19,8 @@ export interface Platform {
   quit(): void;
   /** Flush-before-quit hooks for features with buffered writes (settings now, autosave from F1.8b). */
   readonly lifecycle: AppLifecycle;
+  /** Saves in the host's save directory, behind opaque handles (ADR 0009). */
+  readonly files: FileService;
+  /** Open and Save As pickers for files outside the save directory. */
+  readonly dialogs: DialogService;
 }
