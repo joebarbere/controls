@@ -12,7 +12,7 @@ describe('ShellState', () => {
     expect(shell.screen()).toBe('menu');
 
     shell.openDialog('settings');
-    shell.newSandbox();
+    shell.enterGame();
     expect(shell.screen()).toBe('workspace');
     expect(shell.dialog()).toBeNull();
     expect(shell.sessionActive()).toBe(true);
@@ -20,7 +20,7 @@ describe('ShellState', () => {
 
   it('returns to the menu and resumes, and tracks the open dialog', () => {
     const shell = TestBed.inject(ShellState);
-    shell.newSandbox();
+    shell.enterGame();
     shell.openMenu();
     expect(shell.menuOpen()).toBe(true);
     shell.resume();

@@ -40,9 +40,31 @@ describe('SettingsDialog', () => {
 
   it('has every F1.1 section as a named group', async () => {
     const { dialog } = await setup();
-    for (const name of ['Interface', 'Graphics', 'Audio', 'Controls', 'Units', 'Difficulty', 'Region']) {
+    for (const name of ['Interface', 'Graphics', 'Audio', 'Controls', 'Units', 'Difficulty', 'Saves', 'Region']) {
       expect(within(dialog).getByRole('group', { name })).toBeTruthy();
     }
+  });
+
+  it('edits autosave: on or off, the interval and the slot count (F1.8b)', async () => {
+    const { fixture, store, user, dialog } = await setup();
+    const saves = within(dialog).getByRole('group', { name: 'Saves' });
+    const autosave = within(saves).getByRole('checkbox', { name: 'Autosave' }) as HTMLInputElement;
+    expect(autosave.checked).toBe(true);
+    expect((within(saves).getByRole('combobox', { name: 'Autosave every' }) as HTMLSelectElement).value).toBe('300');
+    await user.click(autosave);
+    await user.selectOptions(within(saves).getByRole('combobox', { name: 'Autosave every' }), '900'); // 15 minutes
+    await user.selectOptions(within(saves).getByRole('combobox', { name: 'Autosave slots' }), '5');
+    await fixture.whenStable();
+    expect(store.settings().autosave).toEqual({ enabled: false, intervalSeconds: 900, slotCount: 5 });
+
+    // A stored interval that isn't offered is still shown, not a blank select.
+    store.update('autosave', { intervalSeconds: 90 });
+    await fixture.whenStable();
+    const every = within(saves).getByRole('combobox', { name: 'Autosave every' }) as HTMLSelectElement;
+    expect(every.selectedOptions[0]?.textContent?.trim()).toBe('1.5 minutes');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Restore defaults' }));
+    expect(store.settings().autosave).toEqual({ enabled: true, intervalSeconds: 300, slotCount: 3 });
   });
 
   it('edits each section through labelled controls', async () => {

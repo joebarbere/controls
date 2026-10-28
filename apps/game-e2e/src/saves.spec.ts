@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * F1.8b part 2: the web harness stores saves in the origin-private file system (ADR 0009). Until
- * the Load/Continue UI lands, this drives `Platform.files` through the `?e2e=1` platform hook, on
- * the real page (COOP/COEP, crossOriginIsolated), and proves a save survives a reload. The bytes
- * are the world document as JSON: opaque to the store, and hashable on the way back.
+ * F1.8b part 2: the web harness stores saves in the origin-private file system (ADR 0009). This
+ * drives `Platform.files` directly through the `?e2e=1` platform hook, on the real page (COOP/COEP,
+ * crossOriginIsolated), and proves a save survives a reload. The bytes are the world document as
+ * JSON: opaque to the store, and hashable on the way back. The game's own save and load UI (part 3)
+ * is `load-ui.spec.ts`.
  */
 
 interface Hooks {

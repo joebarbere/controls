@@ -38,7 +38,9 @@
       "@controls/feature-settings": ["./libs/features/settings/src/index.ts"],
       "@controls/feature-session": ["./libs/features/session/src/index.ts"],
       "@controls/feature-palette": ["./libs/features/palette/src/index.ts"],
-      "@controls/feature-console": ["./libs/features/console/src/index.ts"]
+      "@controls/feature-console": ["./libs/features/console/src/index.ts"],
+      "@controls/feature-saves": ["./libs/features/saves/src/index.ts"],
+      "@controls/feature-saves/testing": ["./libs/features/saves/src/testing/memory-save-io.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

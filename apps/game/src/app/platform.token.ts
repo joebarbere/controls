@@ -18,8 +18,8 @@ export const PLATFORM = new InjectionToken<Platform>('controls.platform', {
 });
 
 /**
- * `?e2e=1` only: exposes the save services on `window`, so `apps/game-e2e` can round-trip a save
- * through the real web store (OPFS in Chromium) before the Load/Continue UI exists. The desktop app
+ * `?e2e=1` only: exposes the save services on `window`, so `apps/game-e2e` can drive the real web
+ * store (OPFS in Chromium) directly and inspect what the Load/Continue UI wrote. The desktop app
  * always loads `app://game/index.html` without a query, so this never runs there.
  */
 function exposeTestHook(platform: Platform, view: Window | null): void {

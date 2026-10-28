@@ -178,6 +178,40 @@
     </label>
   </fieldset>
 
+  <fieldset aria-describedby="ctl-set-autosave-hint">
+    <legend>Saves</legend>
+    <label class="check"
+      ><input
+        type="checkbox"
+        [checked]="s().autosave.enabled"
+        (change)="update('autosave', { enabled: checked($event) })"
+      />
+      Autosave</label
+    >
+    <label class="ctl-field"
+      >Autosave every
+      <select class="ctl-select" (change)="update('autosave', { intervalSeconds: number($event) })">
+        @for (seconds of autosaveIntervals(); track seconds) {
+        <option [value]="seconds" [selected]="s().autosave.intervalSeconds === seconds">
+          {{ intervalLabel(seconds) }}
+        </option>
+        }
+      </select>
+    </label>
+    <label class="ctl-field"
+      >Autosave slots
+      <select class="ctl-select" (change)="update('autosave', { slotCount: number($event) })">
+        @for (count of autosaveSlotCounts; track count) {
+        <option [value]="count" [selected]="s().autosave.slotCount === count">{{ count }}</option>
+        }
+      </select>
+    </label>
+    <p id="ctl-set-autosave-hint" class="ctl-hint">
+      Autosaves also happen when you return to the menu, load another game or quit, if the game has unsaved changes. The
+      oldest slot is reused first.
+    </p>
+  </fieldset>
+
   <fieldset>
     <legend>Region</legend>
     <label class="ctl-field"

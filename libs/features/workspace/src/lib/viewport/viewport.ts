@@ -264,6 +264,11 @@ export class Viewport {
     });
   }
 
+  /** A small PNG of the current view for a save's thumbnail (F1.8b), or null before the renderer starts. */
+  captureThumbnail(): Promise<Uint8Array | null> {
+    return this.renderer.captureThumbnail();
+  }
+
   /** A gesture's commit point → exactly one Command (or, for a cancelled placement, none). */
   private onIntent(intent: ViewportIntent): void {
     switch (intent.kind) {
