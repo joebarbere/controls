@@ -40,5 +40,10 @@ export default defineConfig({
     cwd: workspaceRoot,
   },
   // Chromium only: Electron is Chromium, so other engines add CI time without covering the product.
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // 960 × 540, not Desktop Chrome's 1280 × 720: the viewport renders every frame, behind the menu
+  // too, and SwiftShader's cost scales with pixels (median frame 133 ms at 1280 × 720 against 33 ms
+  // at 640 × 360, measured on a loaded dev machine). Every protocol round trip waits for a frame, so
+  // the UI suites run about twice as fast. Specs where the 3D image or pixel aim is the contract pin
+  // 1280 × 720 themselves (harness, viewport, placement, workshop).
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 960, height: 540 } } }],
 });
