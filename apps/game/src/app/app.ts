@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { AboutDialog, Hud, MainMenu, NotificationService, Notifications, ShellState } from '@controls/feature-shell';
+import { CommandPalette } from '@controls/feature-palette';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
@@ -23,7 +24,7 @@ import { PLATFORM } from './platform.token';
  */
 @Component({
   selector: 'ctl-root',
-  imports: [Workspace, MainMenu, AboutDialog, SettingsDialog, Hud, Notifications, Button],
+  imports: [Workspace, MainMenu, AboutDialog, SettingsDialog, Hud, Notifications, Button, CommandPalette],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
   template: `
@@ -65,6 +66,7 @@ import { PLATFORM } from './platform.token';
       [backend]="backend()"
       [isolated]="isolated"
     />
+    <ctl-command-palette />
     <ctl-notifications />
   `,
   styleUrl: './app.scss',

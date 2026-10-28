@@ -1,0 +1,112 @@
+.palette {
+  display: grid;
+  gap: var(--ctl-space-3);
+  width: min(560px, calc(100vw - 96px));
+}
+
+.search {
+  padding: var(--ctl-space-2) var(--ctl-space-3);
+  border: 1px solid var(--ctl-border);
+  border-radius: var(--ctl-radius);
+  background: var(--ctl-surface-raised);
+  color: var(--ctl-fg);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.list {
+  max-height: min(360px, 50vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.option {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: baseline;
+  gap: var(--ctl-space-1) var(--ctl-space-2);
+  padding: var(--ctl-space-2) var(--ctl-space-3);
+  border-radius: var(--ctl-radius);
+  cursor: pointer;
+}
+
+// The active option is the combobox's focus: show it like a focus ring, in both themes.
+.option[aria-selected='true'] {
+  outline: 2px solid var(--ctl-focus);
+  outline-offset: -2px;
+  background: var(--ctl-surface-raised);
+}
+
+.option[aria-disabled='true'] {
+  cursor: default;
+  color: var(--ctl-fg-muted);
+}
+
+.title {
+  font-weight: 600;
+}
+
+.tag {
+  padding: 0 var(--ctl-space-1);
+  border: 1px solid var(--ctl-border);
+  border-radius: var(--ctl-radius);
+  color: var(--ctl-fg-muted);
+  font-size: 0.75rem;
+}
+
+.cheat {
+  border-color: var(--ctl-warning);
+  color: var(--ctl-warning);
+}
+
+.keys {
+  grid-column: 4;
+  display: flex;
+  gap: var(--ctl-space-1);
+}
+
+kbd {
+  padding: 0 var(--ctl-space-1);
+  border: 1px solid var(--ctl-border);
+  border-radius: var(--ctl-radius);
+  font-family: var(--ctl-font-mono);
+  font-size: 0.75rem;
+}
+
+.meta,
+.reason {
+  grid-column: 1 / -1;
+  color: var(--ctl-fg-muted);
+  font-size: 0.8125rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--ctl-fg-muted);
+}
+
+.step {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.confirm p {
+  margin: var(--ctl-space-2) 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ctl-space-2);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
