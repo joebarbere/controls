@@ -158,6 +158,22 @@ export const rawSettingsV1Arb = fc.record({
   extensions: jsonObjectArb,
 });
 
+/** A raw settings document that `SettingsV2` accepts: v1's, plus a last-played pointer or none. */
+export const rawSettingsV2Arb = fc
+  .tuple(
+    rawSettingsV1Arb,
+    fc.option(
+      fc.oneof(
+        fc.record({
+          kind: fc.constant('manual' as const),
+          name: safeStringArb.filter((s) => s.length >= 1 && s.length <= 255),
+        }),
+        fc.record({ kind: fc.constant('autosave' as const), slot: fc.integer({ min: 1, max: 10 }) }),
+      ),
+    ),
+  )
+  .map(([v1, lastPlayed]) => ({ ...v1, settingsVersion: 2 as const, saves: { lastPlayed } }));
+
 /** A raw manifest that `ManifestV1` accepts. */
 export const rawManifestV1Arb = fc.record({
   format: fc.constant('controls.ctrl' as const),

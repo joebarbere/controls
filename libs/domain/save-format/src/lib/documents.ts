@@ -1,7 +1,8 @@
 import { APP_VERSION } from '@controls/units';
 import { type LoadError, type LoadResult, migrationChain } from './migrate';
 import type { Difficulty, RegionId } from './primitives';
-import { defaultSettingsV1, SettingsV1 } from './settings/v1';
+import { SettingsV1 } from './settings/v1';
+import { defaultSettingsV2, SettingsV2, settingsV1ToV2 } from './settings/v2';
 import { CTRL_FORMAT, ManifestV1 } from './v1/manifest';
 import { ReplayEntryV1, ReplayLogV1 } from './v1/replay-log';
 import { WorldV1 } from './v1/world';
@@ -16,7 +17,7 @@ import { WorldV1 } from './v1/world';
 export const CURRENT_SCHEMA_VERSION = 1;
 
 /** The settings document's `settingsVersion` (independent of `schemaVersion`). */
-export const CURRENT_SETTINGS_VERSION = 1;
+export const CURRENT_SETTINGS_VERSION = 2;
 
 /** The current world document schema. `world-model` infers its types from this. */
 export const World = WorldV1;
@@ -28,13 +29,15 @@ export type ReplayLog = ReplayLogV1;
 /** One replay-log entry at the current version. `@controls/commands` validates every logged entry with it. */
 export const ReplayEntry = ReplayEntryV1;
 export type ReplayEntry = ReplayEntryV1;
-export const Settings = SettingsV1;
-export type Settings = SettingsV1;
+export const Settings = SettingsV2;
+export type Settings = SettingsV2;
 
 export const worldMigrator = migrationChain('world document', 'schemaVersion', WorldV1).build();
 export const manifestMigrator = migrationChain('save manifest', 'schemaVersion', ManifestV1).build();
 export const replayLogMigrator = migrationChain('replay log', 'schemaVersion', ReplayLogV1).build();
-export const settingsMigrator = migrationChain('settings', 'settingsVersion', SettingsV1).build();
+export const settingsMigrator = migrationChain('settings', 'settingsVersion', SettingsV1)
+  .then(SettingsV2, settingsV1ToV2)
+  .build();
 
 /** Validates and migrates untrusted world JSON (already `JSON.parse`d) to the current schema. */
 export function migrateWorld(input: unknown): LoadResult<World> {
@@ -55,7 +58,7 @@ export function migrateSettings(input: unknown): LoadResult<Settings> {
 
 /** Fresh default settings for the current `settingsVersion`. */
 export function defaultSettings(): Settings {
-  return defaultSettingsV1();
+  return defaultSettingsV2();
 }
 
 /**

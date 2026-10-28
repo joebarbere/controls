@@ -2,7 +2,8 @@ import { computed, DestroyRef, effect, inject, Injectable, signal } from '@angul
 import { Session, type SessionSaver } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
-import type { SaveAsTarget, SaveEntry, SaveName } from '@controls/platform-api';
+import { type SaveAsTarget, type SaveEntry, SaveIoError, type SaveName } from '@controls/platform-api';
+import { LastPlayedSave } from '@controls/save-format';
 import { type LoadedGame, loadGame } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
@@ -21,6 +22,39 @@ export const REPLAY_RESTARTED_MESSAGE =
 const TOO_LARGE_TO_SAVE = 'The game is too large to save.';
 
 export type SaveOutcome = 'saved' | 'exists' | 'failed';
+
+/**
+ * The settings pointer for a save-directory entry (ADR 0009, "Continue and the last-played save"):
+ * a manual save by name, an autosave by slot. `null` for a file outside the directory, or anything
+ * the settings schema wouldn't accept (a writer must never put an invalid document in settings).
+ */
+export function lastPlayedOf(entry: SaveEntry): LastPlayedSave | null {
+  const pointer =
+    entry.kind === 'manual'
+      ? { kind: 'manual', name: entry.name }
+      : entry.kind === 'autosave'
+        ? { kind: 'autosave', slot: entry.slot }
+        : null;
+  const parsed = LastPlayedSave.safeParse(pointer);
+  return parsed.success ? parsed.data : null;
+}
+
+/** The listing's entry for `pointer`: exact name first, then ignoring case (case-insensitive file systems). */
+export function findLastPlayed(entries: readonly SaveEntry[], pointer: LastPlayedSave): SaveEntry | undefined {
+  if (pointer.kind === 'autosave') return entries.find((e) => e.kind === 'autosave' && e.slot === pointer.slot);
+  const manual = entries.filter((e) => e.kind === 'manual');
+  const folded = pointer.name.toLowerCase();
+  return manual.find((e) => e.name === pointer.name) ?? manual.find((e) => e.name.toLowerCase() === folded);
+}
+
+const pointerName = (pointer: LastPlayedSave) =>
+  pointer.kind === 'manual' ? pointer.name : `Autosave ${pointer.slot}`;
+
+const samePointer = (a: LastPlayedSave | null, b: LastPlayedSave | null) =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    (a.kind === 'manual' ? b.kind === 'manual' && a.name === b.name : b.kind === 'autosave' && a.slot === b.slot));
 
 interface Snapshot {
   readonly bytes: Uint8Array;
@@ -44,9 +78,12 @@ const quoted = (name: string) => `“${name}”`;
  *   the replay log continues, or restarts with a notification (see {@link REPLAY_MISMATCH_POLICY}).
  * - **Autosave** writes the next of `settings.autosave.slotCount` slots (rotation is the platform's)
  *   every `intervalSeconds` while a game is in progress, when the player returns to the menu, before
- *   another game replaces this one, and before the app quits. Only a game with unsaved changes is
- *   autosaved: a world back at its last saved (or starting) hash is not, so an untouched new sandbox
- *   never takes a slot from a real game.
+ *   another game replaces this one, and before the app quits. Only a game the save directory doesn't
+ *   hold as it is now is autosaved (see {@link isDirty}): an untouched new sandbox never takes a slot
+ *   from a real game, but a game opened from (or saved to) a file outside the directory is copied in.
+ * - **Continue** resumes the game the player was last in: `settings.saves.lastPlayed` names the
+ *   save-directory entry that holds it (set on every load from, and write to, the directory for the
+ *   game running then), and Continue tries that entry before the rest, newest first.
  * - **Errors** become notifications written from the error's code or kind (`messages.ts`), never its
  *   message, so nothing from a file or a host path is echoed.
  *
@@ -66,8 +103,11 @@ export class SaveGames {
   private readonly entries = signal<readonly SaveEntry[]>([]);
   private readonly named = signal<{ readonly generation: number; readonly name: SaveName } | null>(null);
   private readonly loadingState = signal(false);
-  /** The world hash that counts as saved, per session generation (`Session.generation`). */
-  private clean: { readonly generation: number; readonly hash: string } | null = null;
+  /**
+   * The world hash the save directory holds for this session generation (`Session.generation`);
+   * `hash: null` when the game came from a file outside the directory, so the directory has none.
+   */
+  private stored: { readonly generation: number; readonly hash: string | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private listing = 0;
   private readonly loadedListeners = new Set<() => void>();
@@ -111,13 +151,18 @@ export class SaveGames {
     return () => this.loadedListeners.delete(listener);
   }
 
-  /** Whether the game has changes no save holds: its world differs from the last saved, loaded or starting one. */
+  /**
+   * Whether the save directory lacks the game as it is now, which is what autosave writes: its world
+   * differs from the one last saved to or loaded from the directory (or, for a game never saved
+   * there, from its starting world), or it came from a file outside the directory. Saving to a file
+   * (Save As) doesn't count: Continue can only resume what the directory holds.
+   */
   isDirty(): boolean {
     if (!this.session.active()) return false;
     const generation = this.session.generation();
-    const cleanHash =
-      this.clean?.generation === generation ? this.clean.hash : worldHash(this.session.replayLog().initialWorld);
-    return this.session.hash() !== cleanHash;
+    const storedHash =
+      this.stored?.generation === generation ? this.stored.hash : worldHash(this.session.replayLog().initialWorld);
+    return this.session.hash() !== storedHash;
   }
 
   /** Lists the save directory again. A failure leaves an empty list (and says so, unless there is no storage). */
@@ -160,13 +205,14 @@ export class SaveGames {
         this.error(`Couldn’t save ${quoted(name)}. ${TOO_LARGE_TO_SAVE}`);
         return 'failed';
       }
+      let written: SaveEntry;
       try {
-        await this.files.write({ kind: 'manual', name, overwrite }, snapshot.bytes);
+        written = await this.files.write({ kind: 'manual', name, overwrite }, snapshot.bytes);
       } catch (error) {
         this.error(`Couldn’t save ${quoted(name)}. ${saveIoReason(error, 'save')}`);
         return saveIoCodeOf(error) === 'exists' ? 'exists' : 'failed';
       }
-      this.markClean(snapshot);
+      this.markStored(snapshot, written);
       this.named.set({ generation: snapshot.generation, name });
       this.notifications.notify(`Saved ${quoted(name)}.`, { level: 'success' });
       void this.refresh();
@@ -205,7 +251,7 @@ export class SaveGames {
         this.error(`Couldn’t save the game. ${saveIoReason(error, 'save')}`);
         return 'failed';
       }
-      this.markClean(snapshot);
+      // Not stored: the save directory still lacks this state, so autosave copies it in later.
       this.notifications.notify(`Saved to ${quoted(name)}.`, { level: 'success' });
       return 'saved';
     });
@@ -228,13 +274,14 @@ export class SaveGames {
         this.notifications.notify(`Autosave failed. ${TOO_LARGE_TO_SAVE}`, { level: 'warning' });
         return false;
       }
+      let written: SaveEntry;
       try {
-        await this.files.write({ kind: 'autosave', slotCount }, snapshot.bytes);
+        written = await this.files.write({ kind: 'autosave', slotCount }, snapshot.bytes);
       } catch (error) {
         this.notifications.notify(`Autosave failed. ${saveIoReason(error, 'save')}`, { level: 'warning' });
         return false;
       }
-      this.markClean(snapshot);
+      this.markStored(snapshot, written);
       void this.refresh();
       return true;
     });
@@ -242,13 +289,18 @@ export class SaveGames {
 
   /**
    * Before quit: autosaves unsaved changes (without a thumbnail, to stay inside the host's flush
-   * timeout) and resolves once every write already queued has settled. Never rejects.
+   * timeout), waits for every write already queued, then flushes settings so the last-played
+   * pointer that autosave set is written too (the host runs every flush at once, so the settings
+   * store's own flush may already have run). Never rejects.
    */
   flush(): Promise<void> {
-    return this.autosave({ thumbnail: false }).then(
-      () => undefined,
-      () => undefined,
-    );
+    return this.autosave({ thumbnail: false })
+      .catch(() => undefined)
+      .then(() => this.settings.flush())
+      .then(
+        () => undefined,
+        () => undefined,
+      );
   }
 
   /** `file.load`: lists the saves again and shows the Load game dialog. */
@@ -290,16 +342,23 @@ export class SaveGames {
   }
 
   /**
-   * Continue: loads the newest save (manual or autosave) that loads, skipping any that don't with
-   * one notification. Resolves `true` if a save was loaded.
+   * Continue: loads the save of the game the player was last in (`settings.saves.lastPlayed`), else
+   * the newest save (manual or autosave) that loads. Saves that don't load, and a last-played save
+   * that has gone, are skipped with one notification. Resolves `true` if a save was loaded.
    */
   async continueLatest(): Promise<boolean> {
     if (this.loadingState()) return false;
     this.loadingState.set(true);
     try {
-      await this.refresh();
+      await Promise.all([this.refresh(), this.settings.loaded]);
       const skipped: { readonly name: string; readonly reason: string }[] = [];
-      for (const entry of this.entries()) {
+      const entries = this.entries();
+      const pointer = this.settings.settings().saves.lastPlayed;
+      const last = pointer === null ? undefined : findLastPlayed(entries, pointer);
+      if (pointer !== null && last === undefined) {
+        skipped.push({ name: pointerName(pointer), reason: saveIoReason(new SaveIoError('not-found'), 'load') });
+      }
+      for (const entry of last === undefined ? entries : [last, ...entries.filter((e) => e !== last)]) {
         const checked = await this.check(entry);
         if (!checked.ok) {
           skipped.push({ name: entry.name, reason: checked.reason });
@@ -336,11 +395,16 @@ export class SaveGames {
 
   /** Replaces the session with a checked save (after autosaving unsaved changes in the old one). */
   private async apply(entry: SaveEntry, loaded: LoadedGame): Promise<boolean> {
+    // Writes the game being left if the directory lacks it (pointing Continue at that autosave), so
+    // nothing is lost; then this load points Continue at the save it loaded.
     await this.autosave();
     this.session.adopt(loaded.game);
     const generation = this.session.generation();
-    this.clean = { generation, hash: loaded.game.hash() };
+    const external = entry.kind === 'external';
+    this.stored = { generation, hash: external ? null : loaded.game.hash() };
     this.named.set(entry.kind === 'manual' ? { generation, name: entry.name } : null);
+    // A file from outside the directory has no pointer until autosave copies it in.
+    this.setLastPlayed(lastPlayedOf(entry));
     this.notifications.notify(`Loaded ${quoted(entry.name)}.`, { level: 'success' });
     if (loaded.replay.status === 'restarted') {
       this.notifications.notify(REPLAY_RESTARTED_MESSAGE, { level: 'warning' });
@@ -364,10 +428,21 @@ export class SaveGames {
     return null;
   }
 
-  private markClean(snapshot: Snapshot): void {
-    if (snapshot.generation === this.session.generation()) {
-      this.clean = { generation: snapshot.generation, hash: snapshot.hash };
-    }
+  /**
+   * After a write to the save directory: if the snapshot is of the game running now, the directory
+   * holds it, and Continue should resume from where it was written. A write of a game that has since
+   * been replaced (queued before a New sandbox or a load) changes neither.
+   */
+  private markStored(snapshot: Snapshot, written: SaveEntry): void {
+    if (snapshot.generation !== this.session.generation()) return;
+    this.stored = { generation: snapshot.generation, hash: snapshot.hash };
+    this.setLastPlayed(lastPlayedOf(written));
+  }
+
+  /** Updates `settings.saves.lastPlayed`, only if it changed (loading the same save again writes nothing). */
+  private setLastPlayed(lastPlayed: LastPlayedSave | null): void {
+    if (samePointer(this.settings.settings().saves.lastPlayed, lastPlayed)) return;
+    this.settings.update('saves', { lastPlayed });
   }
 
   private requireGame(): boolean {

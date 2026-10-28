@@ -177,7 +177,7 @@ export class App {
     this.enterGame();
   }
 
-  /** Continue (F1.8b): loads the newest save that loads; {@link enterGame} runs once it has. */
+  /** Continue (F1.8b): resumes the last-played save, else the newest that loads; then {@link enterGame}. */
   protected continueGame(): void {
     void this.saves.continueLatest();
   }

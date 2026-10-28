@@ -44,7 +44,7 @@ stateDiagram-v2
     NewGameDialog --> Workspace: Enter / Start, valid seed → Session.newSandbox (focus: viewport canvas)
     NewGameDialog --> Menu: Escape / Cancel (focus returns to New sandbox)
     Menu --> Workspace: Resume (focus: viewport canvas)
-    Menu --> Workspace: Continue loads the newest save that loads (focus: viewport canvas)
+    Menu --> Workspace: Continue resumes the last-played save, else the newest that loads (focus: viewport canvas)
     Workspace --> Menu: Menu button, or Escape outside the canvas (focus: Resume; autosave if changed)
     Menu --> Workspace: Escape (session running)
     state Menu {
@@ -91,7 +91,7 @@ flowchart LR
 - **Commands.** `file.save` (Mod+S; under the game's save name, or the Save game dialog if it has none), `file.saveAs` (Mod+Shift+S; a native Save As, a download in the web harness), `file.open` (Mod+O; a native Open, an upload in the web harness) and `file.load` (Mod+L; the Load game dialog). All four are `logged: false`, `file.save` and `file.saveAs` need `session.active`. Why they are commands but unlogged: [ADR 0006](../decisions/0006-command-system.md#saving-and-loading-f18b).
 - **Save game dialog:** one field, opening on the game's save name or `Sandbox <seed>`, selected so typing replaces it. Names follow `SaveNameSchema` and are explained inline; a name another save already has (compared without case) asks first (the button becomes Replace). The save runs after the dialog closes.
 - **Load game dialog:** the save directory, newest first, one button per save named by the save and described by kind, time and size; Up/Down, Home and End move between them. Open file… opens the picker inside the click and keeps the dialog open if the player cancels. A chosen save loads after the dialog has closed and returned focus. No thumbnails in the list yet (reading one means reading the whole save).
-- **Continue** lists again and tries saves newest first (manual and autosave alike); saves that don't load are skipped with one warning naming them.
+- **Continue** lists again and tries the save of the game the player was last in first (`settings.saves.lastPlayed`), then the rest newest first (manual and autosave alike); saves that don't load, or a last-played save that has gone, are skipped with one warning naming them.
 - **Autosave** writes the next of `autosave.slotCount` slots, only for a game with unsaved changes (its world differs from the last saved, loaded or starting one, so an untouched New sandbox never takes a slot): every `autosave.intervalSeconds` while a game runs, when the player returns to the menu, before a load replaces the game, and before quit (a flush registered with `APP_LIFECYCLE`, without a thumbnail to stay inside the 2 s budget). Settings → Saves edits the three autosave settings.
 - **Errors** become notifications written from the `CtrlError` kind or `SaveIoError` code (`messages.ts`); nothing from the file or a host path is shown. A save whose replay log had to restart loads with a warning (`REPLAY_MISMATCH_POLICY`, `notify` by default, `refuse` to refuse such saves).
 - **Thumbnails:** `SaveThumbnails` calls the viewport's `captureThumbnail()` (a 320 × 180 PNG, rendered and copied in one task); a failed capture or a non-PNG is dropped and the save goes ahead without one.
@@ -206,7 +206,7 @@ flowchart LR
     NOTE --> TOAST["ctl-toast-stack<br/>role=status (polite) · role=alert (assertive)"]
 ```
 
-- **Document:** `Settings` from `@controls/save-format` (`settingsVersion` 1). The store edits it section by section; edits made before the first load finishes are replayed on top of the loaded document, and nothing is saved until the load has finished.
+- **Document:** `Settings` from `@controls/save-format` (`settingsVersion` 2 since the Continue fix: `saves.lastPlayed`). The store edits it section by section; edits made before the first load finishes are replayed on top of the loaded document, and nothing is saved until the load has finished.
 - **Theme:** tokens are `light-dark()` pairs under `color-scheme: light dark`, so they follow `prefers-color-scheme`. A settings override pins `color-scheme` through `data-theme`.
 - **Reduced motion:** `display.reducedMotion` is `system` (follow `prefers-reduced-motion`), `reduce` (`data-motion="reduce"`) or `full` (`data-motion="full"`, ignores the OS preference).
 

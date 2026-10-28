@@ -1,6 +1,6 @@
 # ADR 0009: Save I/O boundary
 
-**Status:** Accepted (F1.8b part 2: platform save I/O)
+**Status:** Accepted (F1.8b part 2: platform save I/O). Amended 2026-10-28: Continue resumes the last-played save (settings v2).
 **Date:** 2026-10-28 (Phase 1)
 **Sources:** plan §4.3, §4.4, §4.11; [ADR 0004](0004-save-format.md) (atomic writes in main, N autosave slots); [phase 1 plan](../../plans/phase-1-game-shell.md) F1.8b; [electron caveats](../caveats/electron.md)
 
@@ -53,7 +53,7 @@ The caller passes `slotCount` (from settings); main (or the web store) picks the
 - after a write in this session, the next slot, wrapping at `slotCount`;
 - otherwise (first autosave after launch) the lowest free slot, else the oldest by mtime, ties to the lowest slot.
 
-The session counter matters: on a file system with coarse timestamps (FAT's 2 s) several slots can share an mtime, and "oldest" alone would overwrite the same slot forever. A failed write doesn't advance the counter. After a successful write, slots above `slotCount` are deleted (the player lowered the count; they would otherwise go stale forever). Continue (part 3) lists, takes the newest autosave and falls back to the next if `readCtrl` refuses it.
+The session counter matters: on a file system with coarse timestamps (FAT's 2 s) several slots can share an mtime, and "oldest" alone would overwrite the same slot forever. A failed write doesn't advance the counter. After a successful write, slots above `slotCount` are deleted (the player lowered the count; they would otherwise go stale forever). Continue (part 3) lists and tries the last-played save first ([below](#continue-and-the-last-played-save)), then the newest, falling back to the next if `readCtrl` refuses it.
 
 ### Web harness storage: OPFS
 
@@ -62,6 +62,30 @@ The browser harness keeps saves in the **origin-private file system** (`navigato
 - **Why not IndexedDB:** both work under the CSP and COOP/COEP (neither is a fetch, so `connect-src` and COEP don't apply, and both are available to a cross-origin-isolated page; the e2e test checks `crossOriginIsolated` alongside the round trip). OPFS maps one-to-one onto the desktop layout (directories and files, `lastModified`, size), so the store's code mirrors main's. Its `createWritable()` writes a swap file that `close()` commits, which is the same atomicity contract as temp-and-rename. And it can be faked in Node with a 100-line in-memory directory, where IndexedDB would need a new test dependency (`fake-indexeddb`) and a licence row.
 - **A new file exists, empty, as soon as `getFileHandle({ create: true })` returns**, before its first write commits. The store removes it again if that write fails, and listing skips empty files (no valid save is empty) in case the tab closed in between.
 - **Open is an upload** (`<input type="file">`, whose `cancel` event reports a dismissed chooser) and **Save As is a download** (`<a download>` on a `blob:` URL). A download has no picker, so it can't be cancelled and is named after the suggested name. Both need transient user activation: call them from the click or key handler.
+
+### Continue and the last-played save
+
+_Added after F1.8b part 3 (fix/continue-last-played)._ Part 3 shipped Continue as "the newest save that loads". That resumes the wrong game whenever a save newer than the game the player was in exists. The case that showed it: playing game A with unsaved changes, the player loads save X; A is autosaved before X replaces it (so A isn't lost); they quit without changing X, so nothing of X is written. Next launch, A's autosave is the newest file and Continue loads A. The same happens without any autosave: save A at 10:00, load yesterday's X, quit.
+
+**Decision:** settings hold a pointer, `saves.lastPlayed`: `{ kind: 'manual', name }` or `{ kind: 'autosave', slot }` or `null` (`LastPlayedSave`, settings v2). `SaveGames` sets it for the game running now whenever the save directory gets or gives that game:
+
+- a load from the directory (Load list, Continue) points at the entry loaded;
+- a manual save or an autosave of the current game points at the entry written. A write that lands after its game was replaced (queued before a New sandbox) moves nothing, so the pre-load autosave of A points at A's slot first and the load then points at X;
+- a load of a file from outside the directory (Open) sets `null`: its handle doesn't outlive the window, and the web harness's upload can't be read again.
+
+Continue lists the directory and tries the pointer's entry first, then the rest newest first, as before. A pointer to a save that no longer loads, or that has gone, is named in the one "skipped" warning, and the newest save that loads is used.
+
+To make the pointer total, the directory must hold the game the player is in. **Autosave now writes any game the directory doesn't hold as it is**, not only one with changes since its last save: a game opened from outside the directory, or saved only with Save As, counts as not held, so the next autosave trigger (interval, menu, a load over it, quit) copies it into a slot and points there. An untouched New sandbox is still never autosaved.
+
+The quit flush autosaves and then flushes settings itself: the host runs every registered flush at once, so the settings store's own flush may already have finished before autosave sets the pointer.
+
+Alternatives considered:
+
+- **Write X as the newest autosave when it loads** (or touch its mtime). No schema or IPC change, but it spends a slot on every load: with one slot it overwrites A's pre-load autosave immediately, losing A. Touching the mtime needs a new channel, changes the time the Load list shows as "saved", and can't touch a file the web harness uploaded.
+- **"Last active" metadata inside each save.** Loading X writes nothing to X, so X can't be marked; marking A's autosave as "left for another save" still has to name X, which is the pointer with extra steps, and it doesn't cover the case with no pre-load autosave.
+- **A `saves/last.json` written by main** behind a new `save:*` channel. It could be atomic with the write it follows, and could even remember an opened file's path in main. But it needs a new channel, a new persisted document, a second implementation in the web store (which still couldn't reopen an upload, so autosave would have to copy opened files in anyway) and contract tests on both platforms. The settings pointer reuses storage both platforms already have, with no IPC change.
+
+Consequences: `settingsVersion` 2 (adds `saves`; v1 files migrate with `lastPlayed: null`). The pointer is a reference by name or slot, never a handle or path, and is resolved against a fresh listing (exact name first, then case-insensitively, for case-insensitive file systems). A crash in the 300 ms settings debounce after an autosave leaves the pointer at the same game's previous save, at most one autosave interval old. With autosave off, a game that exists only outside the directory isn't copied in, and Continue falls back to the newest save.
 
 ### One contract, two platforms
 

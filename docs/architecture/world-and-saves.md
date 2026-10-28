@@ -53,12 +53,13 @@ classDiagram
         id: command id
         args: JSON object
     }
-    class SettingsV1 {
-        settingsVersion = 1
+    class SettingsV2 {
+        settingsVersion = 2
         graphics, audio, controls
         palette, console, display
         gameplay, workspace
         autosave, toolBelt
+        saves.lastPlayed (v2)
         extensions
     }
     WorldV1 "1" *-- "*" FixtureV1 : fixtures
@@ -67,7 +68,7 @@ classDiagram
     EntityV1 --> CatalogRef
     ReplayLogV1 *-- WorldV1 : initialWorld
     ReplayLogV1 "1" *-- "*" ReplayEntryV1 : entries
-    SettingsV1 --> CatalogRef : toolBelt.slots
+    SettingsV2 --> CatalogRef : toolBelt.slots
 ```
 
 | Document                | File in `.ctrl`           | Schema         | Version key       |
@@ -76,7 +77,7 @@ classDiagram
 | World                   | `world.json`              | `WorldV1`      | `schemaVersion`   |
 | Replay log              | `replay.log` (optional)   | `ReplayLogV1`  | `schemaVersion`   |
 | Prints, PLC, HMI        | `prints/`, `plc/`, `hmi/` | (P6, P10, P12) | `schemaVersion`   |
-| Settings (not in saves) | settings store (F1.1)     | `SettingsV1`   | `settingsVersion` |
+| Settings (not in saves) | settings store (F1.1)     | `SettingsV2`   | `settingsVersion` |
 
 JSON Schema for each document is generated from Zod into `libs/domain/save-format/json-schema/` for docs, mods and tools. Zod stays authoritative.
 
@@ -315,11 +316,21 @@ sequenceDiagram
 ```
 
 - **Loading migrates, validates, then replaces.** Nothing about the session changes until `loadGame` has returned a game; a refused save leaves the current game, its undo stack and its log as they were. `Session.adopt` then swaps in the loaded game, whose undo history is empty and whose replay log continues the save's (or restarts, with a warning; `REPLAY_MISMATCH_POLICY` can make that a refusal instead).
-- **Unsaved changes** means the world's hash differs from the hash last saved, loaded or started for this session (`Session.generation`). View commands, an undone change and an untouched New sandbox don't count.
-- **Autosave** writes `write({ kind: 'autosave', slotCount })` (rotation stays in main or the web store) for a game with unsaved changes: every `autosave.intervalSeconds` while a game runs, on return to the menu, before a load replaces the game, and in the flush before quit (no thumbnail there: the flush has 2 s). A failed autosave warns and leaves the changes unsaved, so the next trigger tries again.
-- **Continue** lists the save directory and loads the newest save that loads, manual or autosave alike; any it skips are named in one warning. With no saves, Continue is disabled with "No saved games yet."
+- **Unsaved changes** (`SaveGames.isDirty`) means the save directory doesn't hold the game as it is: the world's hash differs from the hash last saved to or loaded from the directory for this session (`Session.generation`), or from the starting world if it never was, or the game came from a file outside the directory (Open) and hasn't been autosaved yet. View commands, an undone change and an untouched New sandbox don't count. Save As doesn't clear it: Continue can only resume what the directory holds.
+- **Autosave** writes `write({ kind: 'autosave', slotCount })` (rotation stays in main or the web store) for a game with unsaved changes: every `autosave.intervalSeconds` while a game runs, on return to the menu, before a load replaces the game, and in the flush before quit (no thumbnail there: the flush has 2 s). A failed autosave warns and leaves the changes unsaved, so the next trigger tries again. The quit flush then flushes settings, so the pointer below is written too.
+- **Continue** resumes the game the player was last in ([ADR 0009](../decisions/0009-save-io-boundary.md#continue-and-the-last-played-save)). `settings.saves.lastPlayed` names the save-directory entry that holds it (a manual save by name, an autosave by slot); Continue lists the directory and tries that entry first, then the rest newest first, manual or autosave alike. A last-played save that no longer loads or has gone, and any other save it skips, are named in one warning. With no saves, Continue is disabled with "No saved games yet."
 - **Writes are serialised**, and each is bound to the game that asked (`Session.saver()`), so a load or New sandbox that replaces the session while a thumbnail is being captured never saves the new game under the old one's name.
-- **Settings:** `autosave.enabled`, `autosave.slotCount` (1–10) and `autosave.intervalSeconds` (60–3600) were already in `SettingsV1` (F1.8a), so there was no `settingsVersion` bump; Settings → Saves edits them.
+- **Settings:** `autosave.enabled`, `autosave.slotCount` (1–10) and `autosave.intervalSeconds` (60–3600) were already in `SettingsV1` (F1.8a); Settings → Saves edits them. `saves.lastPlayed` is `settingsVersion` 2; nothing on the settings screen shows it, and Reset to defaults keeps it.
+
+```mermaid
+flowchart TD
+    LOADDIR["load from the directory<br/>(Load list, Continue)"] -->|"entry loaded"| P[("settings.saves.lastPlayed<br/>manual name | autosave slot | null")]
+    WRITE["manual save or autosave<br/>of the game running now"] -->|"entry written"| P
+    OPEN["Open (a file outside the directory)"] -->|"null; the game is unsaved,<br/>so the next autosave copies it in"| P
+    P --> CONT{"Continue"}
+    CONT -->|"pointer's entry loads"| OK["resume it"]
+    CONT -->|"gone, damaged or null"| NEWEST["newest save that loads<br/>(skipped ones named in one warning)"]
+```
 
 ## Determinism hooks
 

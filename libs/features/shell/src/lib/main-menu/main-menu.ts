@@ -6,8 +6,8 @@ import { Button } from '@controls/ui';
  * and promise menu-bar semantics). Tab and Shift+Tab work as everywhere; Up/Down, Home and End move
  * between items too. The first item takes focus when the menu appears.
  *
- * With a game running the menu offers Resume and Save game first. Continue loads the newest save
- * (F1.8b); with no saves it stays focusable but `aria-disabled`, with the reason, so keyboard and
+ * With a game running the menu offers Resume and Save game first. Continue resumes the game last
+ * played (F1.8b); with no saves it stays focusable but `aria-disabled`, with the reason, so keyboard and
  * screen-reader users can still discover it. Load lists the saves (and can open a file), so it is
  * always available.
  */

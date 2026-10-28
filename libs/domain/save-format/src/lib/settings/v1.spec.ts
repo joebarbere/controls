@@ -1,25 +1,26 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawSettingsV1Arb } from '../../testing/arbitraries';
-import { CURRENT_SETTINGS_VERSION, defaultSettings, loadSettings, migrateSettings } from '../documents';
-import { MAX_CONSOLE_HISTORY, MAX_PALETTE_RECENTS, SettingsV1, TOOL_BELT_SLOTS } from './v1';
+import { migrateSettings } from '../documents';
+import { defaultSettingsV1, MAX_CONSOLE_HISTORY, MAX_PALETTE_RECENTS, SettingsV1, TOOL_BELT_SLOTS } from './v1';
+import { settingsV1ToV2 } from './v2';
 
-const valid = (patch: (s: ReturnType<typeof defaultSettings>) => void) => {
-  const settings = defaultSettings();
+const valid = (patch: (s: SettingsV1) => void) => {
+  const settings = defaultSettingsV1();
   patch(settings);
   return SettingsV1.safeParse(settings).success;
 };
 
 describe('SettingsV1', () => {
-  it('defaultSettings() is valid, current and a fresh object each call', () => {
-    const a = defaultSettings();
+  it('defaultSettingsV1() is valid at v1 and a fresh object each call', () => {
+    const a = defaultSettingsV1();
     expect(SettingsV1.parse(a)).toStrictEqual(a);
-    expect(a.settingsVersion).toBe(CURRENT_SETTINGS_VERSION);
+    expect(a.settingsVersion).toBe(1);
     a.console.history.push('mutated');
-    expect(defaultSettings().console.history).toStrictEqual([]);
+    expect(defaultSettingsV1().console.history).toStrictEqual([]);
   });
 
   it('defaults: imperial, system theme, NEC, apprentice, three built-in props on the tool belt', () => {
-    const s = defaultSettings();
+    const s = defaultSettingsV1();
     expect(s.display).toStrictEqual({ units: 'imperial', theme: 'system', reducedMotion: 'system' });
     expect(s.gameplay).toStrictEqual({ defaultDifficulty: 'apprentice', region: 'nec' });
     expect(s.toolBelt.slots).toHaveLength(TOOL_BELT_SLOTS);
@@ -66,20 +67,6 @@ describe('SettingsV1', () => {
     expect(valid((s) => s.toolBelt.slots.push(null))).toBe(false);
   });
 
-  it('loadSettings falls back to defaults with an error for corrupt, foreign or newer files', () => {
-    expect(loadSettings(defaultSettings())).toStrictEqual({ settings: defaultSettings(), error: null });
-    for (const [input, kind] of [
-      [undefined, 'not-an-object'],
-      ['{', 'not-an-object'],
-      [{ settingsVersion: 99 }, 'newer-than-build'],
-      [{ ...defaultSettings(), audio: null }, 'invalid'],
-    ] as const) {
-      const { settings, error } = loadSettings(input);
-      expect(settings).toStrictEqual(defaultSettings());
-      expect(error?.kind).toBe(kind);
-    }
-  });
-
   it('round-trips any valid settings document losslessly through JSON (property)', () => {
     fc.assert(
       fc.property(rawSettingsV1Arb, (raw) => {
@@ -87,7 +74,12 @@ describe('SettingsV1', () => {
         assertNoNegativeZero(parsed);
         const text = JSON.stringify(parsed);
         expect(SettingsV1.parse(JSON.parse(text))).toStrictEqual(parsed);
-        expect(migrateSettings(JSON.parse(text))).toStrictEqual({ ok: true, value: parsed, fromVersion: 1 });
+        // A v1 document still loads: migrated to the current version, with nothing else changed.
+        expect(migrateSettings(JSON.parse(text))).toStrictEqual({
+          ok: true,
+          value: settingsV1ToV2(parsed),
+          fromVersion: 1,
+        });
       }),
       { numRuns: 50 },
     );

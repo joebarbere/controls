@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { Session } from '@controls/feature-session';
-import { SettingsStore } from '@controls/feature-settings';
+import { MemorySettingsService, SETTINGS_SERVICE, SettingsStore } from '@controls/feature-settings';
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
-import type { PendingWritesFlush } from '@controls/platform-api';
-import { createManifest, createWorld, readCtrl, writeCtrl } from '@controls/save-format';
+import type { PendingWritesFlush, SaveEntry } from '@controls/platform-api';
+import { createManifest, createWorld, defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
 import { createGame, loadGame } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
-import { REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
+import { findLastPlayed, lastPlayedOf, REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -20 } });
@@ -22,11 +22,13 @@ function otherSave(): { bytes: Uint8Array; hash: string } {
   return { bytes: game.save(), hash: game.hash() };
 }
 
-function setup(options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo } = {}) {
+function setup(options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo; settings?: MemorySettingsService } = {}) {
   const io = options.io ?? new MemorySaveIo();
+  const settingsService = options.settings ?? new MemorySettingsService();
   const flushes = new Set<PendingWritesFlush>();
   TestBed.configureTestingModule({
     providers: [
+      { provide: SETTINGS_SERVICE, useValue: settingsService },
       { provide: SAVE_FILES, useValue: io.files },
       { provide: SAVE_DIALOGS, useValue: io.dialogs },
       { provide: REPLAY_MISMATCH_POLICY, useValue: options.policy ?? 'notify' },
@@ -42,8 +44,31 @@ function setup(options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo } = {
     TestBed.inject(NotificationService)
       .toasts()
       .map((t) => `${t.level}: ${t.message}`);
-  return { io, saves, session, flushes, toasts, shell: TestBed.inject(ShellState) };
+  /** Quits (runs every flush, as the host does: all at once) and starts the app again on the same storage. */
+  const relaunch = async () => {
+    await Promise.all([...flushes].map((flush) => flush()));
+    TestBed.resetTestingModule();
+    io.relaunch();
+    const next = setup({ ...options, io, settings: settingsService });
+    await Promise.all([next.saves.ready, TestBed.inject(SettingsStore).loaded]);
+    return next;
+  };
+  /** The last-played pointer as stored (what the next launch reads). */
+  const storedPointer = async () => (await settingsService.load()).settings.saves.lastPlayed;
+  return { io, saves, session, flushes, toasts, shell: TestBed.inject(ShellState), relaunch, storedPointer };
 }
+
+/** A different game from {@link otherSave}: seed 7 with one crate. */
+function thirdSave(): { bytes: Uint8Array; hash: string } {
+  const game = createGame({ seed: 7 });
+  game.exec('entity.place', place(70));
+  return { bytes: game.save(), hash: game.hash() };
+}
+
+const hashOf = (bytes: Uint8Array | undefined) => {
+  const loaded = loadGame(bytes ?? new Uint8Array());
+  return loaded.ok ? loaded.game.hash() : 'unloadable';
+};
 
 describe('SaveGames', () => {
   afterEach(() => {
@@ -299,5 +324,197 @@ describe('SaveGames', () => {
 
   it('suggests a valid save name from the seed', () => {
     expect(suggestedSaveName(4_294_967_295)).toBe('Sandbox 4294967295');
+  });
+});
+
+/** The listed save named `name` (fails the test if there is none). */
+function entryNamed(saves: SaveGames, name: string): SaveEntry {
+  const entry = saves.saves().find((e) => e.name === name);
+  if (!entry) throw new Error(`no save named ${name}`);
+  return entry;
+}
+
+describe('Continue resumes the game the player was last in (settings.saves.lastPlayed)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  const pointer = () => TestBed.inject(SettingsStore).settings().saves.lastPlayed;
+
+  it('after loading X over unsaved changes in A, A is autosaved but Continue resumes X', async () => {
+    const io = new MemorySaveIo();
+    const x = otherSave();
+    io.seed({ kind: 'manual', name: 'X' }, x.bytes);
+    const first = setup({ io });
+    await first.saves.ready;
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    const a = first.session.hash();
+
+    expect(await first.saves.load(entryNamed(first.saves, 'X'))).toBe(true);
+    expect(hashOf(io.bytesOf('Autosave 1'))).toBe(a); // A was written before X replaced it
+    expect(pointer()).toEqual({ kind: 'manual', name: 'X' });
+
+    const next = await first.relaunch(); // quit without changing X: nothing more is written
+    expect(next.saves.saves().map((e) => e.name)).toEqual(['Autosave 1', 'X']); // A's autosave is newest
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(x.hash);
+    expect(next.saves.saveName()).toBe('X');
+    expect(next.toasts()).toEqual(['success: Loaded “X”.']);
+  });
+
+  it('a file opened from outside the directory is copied in when left, and Continue resumes it', async () => {
+    const io = new MemorySaveIo();
+    const first = setup({ io });
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    const a = first.session.hash();
+    const x = otherSave();
+    io.nextOpen({ name: 'shared.ctrl', bytes: x.bytes });
+    expect(await first.saves.openFile()).toBe(true);
+    expect(hashOf(io.bytesOf('Autosave 1'))).toBe(a);
+    expect(pointer()).toBeNull(); // an opened file's handle doesn't outlive the launch
+    expect(first.saves.isDirty()).toBe(true); // the directory doesn't hold X
+
+    const next = await first.relaunch(); // the quit flush autosaves X, then writes the pointer
+    expect(hashOf(io.bytesOf('Autosave 2'))).toBe(x.hash);
+    expect(await first.storedPointer()).toEqual({ kind: 'autosave', slot: 2 });
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(x.hash);
+  });
+
+  it('a game saved only to a file (Save As) is still autosaved into the directory for Continue', async () => {
+    const first = setup();
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    const hash = first.session.hash();
+    first.io.nextSaveAs('mine.ctrl');
+    expect(await first.saves.saveToFile()).toBe('saved');
+    expect(first.saves.isDirty()).toBe(true);
+
+    const next = await first.relaunch();
+    expect(hashOf(first.io.bytesOf('Autosave 1'))).toBe(hash);
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(hash);
+  });
+
+  it('a last-played save that no longer loads is skipped with the warning, and the newest that loads is used', async () => {
+    const io = new MemorySaveIo();
+    io.seed({ kind: 'manual', name: 'X' }, otherSave().bytes);
+    const first = setup({ io });
+    await first.saves.ready;
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    const a = first.session.hash();
+    expect(await first.saves.load(entryNamed(first.saves, 'X'))).toBe(true);
+    io.corrupt('X', new Uint8Array([1, 2, 3]));
+
+    const next = await first.relaunch();
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(a);
+    expect(next.toasts()).toEqual([
+      'warning: Skipped “X”: The save is damaged, or it isn’t a Controls save.',
+      'success: Loaded “Autosave 1”.',
+    ]);
+  });
+
+  it('a last-played save that has been deleted is named in the warning, and the newest save loads', async () => {
+    const io = new MemorySaveIo();
+    const x = otherSave();
+    io.seed({ kind: 'autosave', name: 'Autosave 1', slot: 1 }, x.bytes);
+    const settings = new MemorySettingsService({
+      ...defaultSettings(),
+      saves: { lastPlayed: { kind: 'manual', name: 'Gone' } },
+    });
+    const { saves, session, toasts } = setup({ io, settings });
+    expect(await saves.continueLatest()).toBe(true);
+    expect(session.hash()).toBe(x.hash);
+    expect(toasts()).toEqual([
+      'warning: Skipped “Gone”: The save isn’t there any more.',
+      'success: Loaded “Autosave 1”.',
+    ]);
+    expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
+  });
+
+  it('the pointer follows autosave rotation, so the slot it names holds the game last played', async () => {
+    const io = new MemorySaveIo();
+    const y = thirdSave();
+    io.seed({ kind: 'manual', name: 'Y' }, y.bytes);
+    const first = setup({ io });
+    await first.saves.ready;
+    TestBed.inject(SettingsStore).update('autosave', { slotCount: 2 });
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    expect(await first.saves.autosave()).toBe(true); // game X → slot 1
+    expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
+
+    expect(await first.saves.load(entryNamed(first.saves, 'Y'))).toBe(true); // X is stored: no autosave
+    expect(io.names().sort()).toEqual(['Autosave 1', 'Y']);
+    first.session.exec('entity.place', place(20));
+    expect(await first.saves.autosave()).toBe(true); // Y → slot 2
+    first.session.exec('entity.place', place(30));
+    expect(await first.saves.autosave()).toBe(true); // Y → slot 1, X's autosave rotated out
+    const latest = first.session.hash();
+    expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
+
+    const next = await first.relaunch();
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(latest);
+  });
+
+  it('a manual save followed by more play and an autosave: Continue resumes the autosave', async () => {
+    const first = setup();
+    first.session.newSandbox({ seed: 3 });
+    first.session.exec('entity.place', place(10));
+    expect(await first.saves.saveNamed('Shop', false)).toBe('saved');
+    expect(pointer()).toEqual({ kind: 'manual', name: 'Shop' });
+    first.session.exec('entity.place', place(20));
+    expect(await first.saves.autosave()).toBe(true);
+    const later = first.session.hash();
+    expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
+
+    const next = await first.relaunch();
+    expect(await next.saves.continueLatest()).toBe(true);
+    expect(next.session.hash()).toBe(later);
+  });
+
+  it('a write of a game that a New sandbox has since replaced does not move the pointer', async () => {
+    const { saves, session } = setup();
+    let release: (png: null) => void = () => undefined;
+    const gate = new Promise<null>((resolve) => (release = resolve));
+    TestBed.inject(SaveThumbnails).register(() => gate);
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(10));
+    const writing = saves.autosave(); // waits for the thumbnail
+    session.newSandbox({ seed: 4 });
+    release(null);
+    expect(await writing).toBe(true);
+    expect(pointer()).toBeNull();
+  });
+
+  it('points at manual saves by name and autosaves by slot, never at a file outside the directory', () => {
+    const entry = (e: Partial<SaveEntry>): SaveEntry => ({
+      handle: 'h',
+      name: 'Shop',
+      kind: 'manual',
+      slot: null,
+      modifiedMs: 0,
+      sizeBytes: 1,
+      ...e,
+    });
+    expect(lastPlayedOf(entry({}))).toEqual({ kind: 'manual', name: 'Shop' });
+    expect(lastPlayedOf(entry({ kind: 'autosave', name: 'Autosave 2', slot: 2 }))).toEqual({
+      kind: 'autosave',
+      slot: 2,
+    });
+    expect(lastPlayedOf(entry({ kind: 'external', name: 'shared.ctrl' }))).toBeNull();
+    expect(lastPlayedOf(entry({ kind: 'autosave', name: 'Autosave 15', slot: 15 }))).toBeNull(); // outside settings
+
+    const list = [
+      entry({ name: 'shop', handle: 'a' }),
+      entry({ name: 'Shop', handle: 'b' }),
+      entry({ kind: 'autosave', name: 'Autosave 1', slot: 1, handle: 'c' }),
+    ];
+    expect(findLastPlayed(list, { kind: 'manual', name: 'Shop' })?.handle).toBe('b'); // exact name first
+    expect(findLastPlayed(list, { kind: 'manual', name: 'SHOP' })?.handle).toBe('a'); // then ignoring case
+    expect(findLastPlayed(list, { kind: 'autosave', slot: 1 })?.handle).toBe('c');
+    expect(findLastPlayed(list, { kind: 'autosave', slot: 2 })).toBeUndefined();
   });
 });

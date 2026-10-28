@@ -42,7 +42,7 @@ describe('IPC handlers', () => {
 
   it.each([
     ['an invalid document', { ...defaultSettings(), audio: { master: 2 } }, 'invalid'],
-    ['a newer version', { ...defaultSettings(), settingsVersion: 2 }, 'invalid'],
+    ['a newer version', { ...defaultSettings(), settingsVersion: 99 }, 'invalid'],
     ['a non-object', 'settings please', 'invalid'],
     ['an over-cap console history', overCapHistory(), 'invalid'],
     [

@@ -1,0 +1,67 @@
+{
+  "settingsVersion": 2,
+  "graphics": {
+    "backend": "auto",
+    "pixelRatioCap": 2
+  },
+  "audio": {
+    "master": 1,
+    "effects": 1,
+    "ambience": 1,
+    "interface": 1
+  },
+  "controls": {
+    "lookSensitivity": 1,
+    "invertY": false,
+    "keybindings": {}
+  },
+  "palette": {
+    "recents": []
+  },
+  "console": {
+    "history": []
+  },
+  "display": {
+    "units": "imperial",
+    "theme": "system",
+    "reducedMotion": "system"
+  },
+  "gameplay": {
+    "defaultDifficulty": "apprentice",
+    "region": "nec"
+  },
+  "workspace": {
+    "layout": null
+  },
+  "autosave": {
+    "enabled": true,
+    "slotCount": 3,
+    "intervalSeconds": 300
+  },
+  "toolBelt": {
+    "slots": [
+      {
+        "id": "prop.box",
+        "version": 1
+      },
+      {
+        "id": "prop.crate",
+        "version": 1
+      },
+      {
+        "id": "prop.spool",
+        "version": 1
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "saves": {
+    "lastPlayed": null
+  },
+  "extensions": {}
+}
