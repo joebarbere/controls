@@ -32,12 +32,13 @@ What exists today (Phase 0 scaffold):
 
 ### Rendering
 
-- Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails.
+- Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback.
+- A workshop sandbox level: an open 2×4 stud wall at 16 in centres, a plywood backboard with a backplate and two TS35 DIN rails, and a workbench, all built procedurally from a level document (`content/levels/workshop.json`). New sandbox asks for a seed (a fresh random one, or type your own to replay a world).
 - Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. V switches mode and F focuses the selection, both through logged commands (`view.mode`, `view.focus`); all of these keys can be rebound.
 - The viewport draws the world document by entity id: placed objects appear, move and disappear as commands run (undo and redo included), as procedural props that share geometry, and removing them returns GPU memory to where it was.
 - Placement with a snapping ghost preview: pick a prop (1–9), aim, click or press Enter to place it; drag an object (or select it, M, Enter) to move it; Delete removes it; Escape cancels. Each commit is exactly one command, so the mouse reaches the same `world.hash` as the equivalent console lines.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). A frame-time HUD shows in dev builds.
-- Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. It lives in the world model, so scripts snap exactly like the mouse.
+- Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
 
 ### Commands and world
 
@@ -55,7 +56,7 @@ What exists today (Phase 0 scaffold):
 
 - Nx 24 + pnpm 11 monorepo with enforced module boundaries.
 - `pnpm verify` runs exactly what CI runs, including the Prettier format check.
-- `sim-cli` runs the game headless in plain Node: `pnpm sim run <script>` (TypeScript or console lines), `pnpm sim replay <log>` and `pnpm sim hash <world>` print the world hash, and `--expect` turns any of them into a check. See the [scripting guide](docs/guides/scripting.md).
+- `sim-cli` runs the game headless in plain Node: `pnpm sim run <script>` (TypeScript or console lines; `--world content/levels/workshop.json` to run on the workshop), `pnpm sim replay <log>` and `pnpm sim hash <world>` print the world hash, and `--expect` turns any of them into a check. See the [scripting guide](docs/guides/scripting.md).
 - Playwright end-to-end tests: the browser harness (`apps/game-e2e`) and an Electron smoke suite (`apps/desktop-e2e`). The smoke suite can also attach to a packaged build.
 - GitHub Actions: `pr.yml` (verify and both e2e suites on Linux), `main.yml` (the same on Windows, macOS and Linux) and `release.yml` (tag → installers for all three OSes in a draft GitHub Release, each smoke-tested, with auto-update metadata).
 

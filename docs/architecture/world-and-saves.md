@@ -26,6 +26,12 @@ classDiagram
         assisted: boolean
         extensions
     }
+    class FixtureV1 {
+        id: "stud-wall" (sorted, unique)
+        ref: CatalogRef
+        transform (int mm, int millidegrees)
+        extensions
+    }
     class EntityV1 {
         id: int (sorted, unique)
         ref: CatalogRef
@@ -55,7 +61,9 @@ classDiagram
         autosave, toolBelt
         extensions
     }
+    WorldV1 "1" *-- "*" FixtureV1 : fixtures
     WorldV1 "1" *-- "*" EntityV1 : entities
+    FixtureV1 --> CatalogRef
     EntityV1 --> CatalogRef
     ReplayLogV1 *-- WorldV1 : initialWorld
     ReplayLogV1 "1" *-- "*" ReplayEntryV1 : entries
@@ -71,6 +79,25 @@ classDiagram
 | Settings (not in saves) | settings store (F1.1)     | `SettingsV1`   | `settingsVersion` |
 
 JSON Schema for each document is generated from Zod into `libs/domain/save-format/json-schema/` for docs, mods and tools. Zod stays authoritative.
+
+## Fixtures and levels (F1.9)
+
+A world has two lists of placed things:
+
+- **`entities`**: what the player (or a script) places, moves and deletes, with integer ids from `nextEntityId`. Every entity command acts on these.
+- **`fixtures`**: the level's fixed geometry (floor, walls, benches, backboards, backplates, DIN rails), with string ids (`stud-wall`, `din-rail-1`) sorted by code units. No command creates, moves or deletes a fixture, and fixtures take no entity ids. Ids starting with `entity-` are refused, so a fixture id never collides with an entity's view id. Both lists are in `world.hash`.
+
+A **level** is a world document in `content/levels/` (data only; Nx project `content`, tag `type:content`). New sandbox loads `content/levels/workshop.json` through `migrateWorld` (`loadLevel`) and copies it with the game's seed, difficulty and tick 0 (`newGameWorld`). The decision and its alternatives are in [ADR 0007](../decisions/0007-world-document-v1.md#fixtures-and-levels-f19).
+
+```mermaid
+flowchart LR
+    LVL["content/levels/workshop.json"] -->|"loadLevel (migrateWorld)"| LEVEL["level: World<br/>(seed 0, fixtures, no entities)"]
+    DLG["new-game dialog<br/>fresh CSPRNG seed or typed"] --> NEW
+    SET["settings gameplay.defaultDifficulty"] --> NEW
+    LEVEL --> NEW["newGameWorld(level, { seed, difficulty })"]
+    NEW --> SES["Session.start: fresh history,<br/>empty replay log (initialWorld = this)"]
+    LVL -->|"sim run --world … [--seed N]"| CLI["sim-cli"]
+```
 
 ## Loading
 
@@ -112,6 +139,7 @@ flowchart LR
     CTR["container + I/O (F1.8b)<br/>ZIP, atomic write, autosave"]:::later
     SET["SettingsService (F1.1)<br/>platform-api"]:::later
     CLI["apps/sim-cli (F1.6)<br/>replay, hash (JSON until F1.8b)"]:::done
+    LVL["content/levels (F1.9)<br/>workshop.json"]:::done
 
     SF --> UNITS
     WM --> SF
@@ -119,11 +147,13 @@ flowchart LR
     CTR --> SF
     SET --> SF
     CLI --> WM
+    CLI --> LVL
 ```
 
 ## Determinism hooks
 
-- **Ids:** `nextEntityId` counter in the world. Undoing a place restores it, and undoing a delete reinserts the same id.
+- **Ids:** `nextEntityId` counter in the world. Undoing a place restores it, and undoing a delete reinserts the same id. Fixtures have their own string ids and never use the counter.
+- **Seeds:** domain code never draws a seed. The new-game dialog draws a fresh one with `crypto.getRandomValues` (UI side) or takes a typed one; the same seed on the same level gives the same initial world and hash.
 - **Randomness:** the world `seed` feeds sfc32 streams derived per use, so no generator state is persisted (ADR 0007).
 - **Hash:** SHA-256 over canonical JSON of the world document only (sorted keys, normalised `-0`).
 - **Replay:** `initialWorld` plus `{ seq, tick, id, args }` entries reproduce the saved world's hash.

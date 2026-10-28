@@ -1,6 +1,6 @@
 # Rendering and interaction
 
-> **Status (P1, F1.7 done):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Walls and benches arrive with F1.9. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
+> **Status (P1, F1.7 and F1.9 done):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. Since F1.9 the scene is the **workshop level**: its floor, stud wall, backboard, backplate, DIN rails and bench are the world's **fixtures**, drawn by procedural recipes, and walls and benches are focus and snap targets. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
 
 `@controls/renderer` (`type:rendering`) is framework-free imperative Three.js r186. It **draws the world model and never owns it**: the world arrives as read-only snapshots, and everything the renderer keeps (camera pose, mode, hover, selection, the ghost, overlays) is view state. Gestures leave it as **intents**, which `feature-workspace` executes as Commands.
 
@@ -17,6 +17,8 @@ flowchart TB
     subgraph renderer["@controls/renderer"]
         VR["ViewportRenderer<br/>WebGPURenderer (WebGL2 fallback),<br/>animation loop, FrameTimer"]
         VC["ViewportController (no GPU)<br/>scene, camera, modes, input,<br/>picking, gestures → intents"]
+        FS["world/fixture-sync<br/>fixtures by id (F1.9)"]
+        FR["geometry/fixtures<br/>ref-counted fixture recipes"]
         WS["world/world-sync<br/>entities by id"]
         PR["geometry/props<br/>ref-counted prop recipes"]
         GH["overlays/ghost<br/>placement preview"]
@@ -31,7 +33,7 @@ flowchart TB
     end
 
     subgraph domain["type:domain"]
-        WM["@controls/world-model<br/>World types · snap/ (snapToBest, placeOnTargets,<br/>demo panel targets) · built-in props"]
+        WM["@controls/world-model<br/>World types · snap/ (snapToBest, placeOnTargets)<br/>FIXTURE_SPECS · worldSnapTargets · built-in props"]
         CMD["@controls/commands<br/>INPUT_ACTIONS · view.mode / view.focus"]
         UNITS["@controls/units<br/>mm(), metresToMm(), mdegToRadians()"]
     end
@@ -40,10 +42,12 @@ flowchart TB
     SET -->|"active slot's prop"| VP
     VP -->|"syncWorld, setPlacement, setMode, focus,<br/>setBindings, resize"| VR
     VR --> VC
-    VC --> WS & GH & PK & HL & CM & IA & SEL
+    VC --> FS & WS & GH & PK & HL & CM & IA & SEL
+    FS --> FR
+    FS -->|"fixtureSnapTarget()"| WM
     WS --> PR
     GH --> PR
-    VC -->|"placeOnTargets()"| WM
+    VC -->|"placeOnTargets(worldSnapTargets(world))"| WM
     VC -->|"intents: place · move · cancelPlacement"| VP
     VP -->|"exec entity.place / entity.move"| SES
     WS --> UNITS
@@ -52,7 +56,8 @@ flowchart TB
 
 - **`ViewportRenderer`** owns only the GPU: the `WebGPURenderer` (its WebGL2 backend is forced with `?renderer=webgl2`), the `setAnimationLoop` callback and the dev-HUD stats. It keeps the latest world snapshot and placement prop until `init()` resolves, then hands them to the controller. Each frame it calls `controller.update(dt)` and then `render()`.
 - **`ViewportController`** owns the scene, the camera and every listener. It is constructed against any `HTMLElement`, so unit tests run it in Node with fake event targets, real geometry and real BVHs.
-- **Domain maths** (snapping, placement, prop sizes) lives in `@controls/world-model`; the renderer imports it. Camera, input and selection maths stay in the renderer's pure, lint-fenced modules.
+- **Domain maths** (snapping, placement, prop and fixture sizes) lives in `@controls/world-model`; the renderer imports it. Camera, input and selection maths stay in the renderer's pure, lint-fenced modules.
+- **The base scene** (`buildBaseScene`) holds only the background and lights. Everything else is drawn from the world: fixtures by `FixtureSync`, entities by `WorldSync`. An empty world draws an empty room.
 
 ## Scene sync from world snapshots
 
@@ -65,11 +70,13 @@ sequenceDiagram
     participant P as Picker
     S->>V: world() changed (after any exec)
     V->>C: syncWorld(world)
+    C->>C: FixtureSync.sync(world) (same fixtures array → nothing)
+    Note over C: fixtures changed → snap targets = worldSnapTargets(world),<br/>placement picker roots, walk bounds from the floor,<br/>re-focus if the focus target went away
     C->>W: sync(world)
     Note over W: by entity id: new id → add mesh (shared recipe)<br/>same id, new snapshot → set transform (or rebuild if the ref changed)<br/>missing id → remove, release recipe
     W-->>C: { membershipChanged, transformsChanged }
     alt membership changed
-        C->>P: setRoots(fixed + entities) (drops BVHs no longer used)
+        C->>P: setRoots(fixtures + entities) (drops BVHs no longer used)
         C->>C: SelectionModel.setSelectables (clears a deleted selection)
     else only transforms
         C->>P: refit()
@@ -79,13 +86,43 @@ sequenceDiagram
 - Snapshots are immutable, so an unchanged entity is skipped by identity. The renderer never writes to a world.
 - Each entity is a `Mesh` named `entity-<id>`, selectable as `{ id: 'entity-<id>', kind: 'prop', entityId }`. Its transform is the world's integer mm and millidegrees, converted at draw time (`mm()`, `mdegToRadians()`, Euler order `YXZ` = ADR 0007's intrinsic yaw, pitch, roll).
 - **Prop recipes** are procedural (plan §4.9): a box, or a cylinder along the prop's depth, sized from the built-in prop table in `world-model`. One geometry and one material per prop ref, reference-counted, so removing the last entity of a prop disposes them. Unknown refs draw as a 100 mm placeholder cube.
-- The scene-graph JSON snapshot (`describeSceneGraph`: name, type, integer-mm position, rotation in millidegrees, selectable) covers add, update and remove.
+- The scene-graph JSON snapshot (`describeSceneGraph`: name, type, integer-mm position, rotation in millidegrees, selectable, and for meshes their geometry bounds in integer mm and `drawn: false` for snap proxies) covers add, update and remove, and the whole workshop level.
+
+## The workshop level (F1.9)
+
+```mermaid
+flowchart LR
+    LVL["content/levels/workshop.json<br/>(a WorldV1 document)"]
+    APP["apps/game (provideSandboxLevel)<br/>@controls/content/levels/workshop.json"]
+    SES["Session.newSandbox({ seed, difficulty })<br/>newGameWorld(level, …)"]
+    WM["@controls/world-model<br/>FIXTURE_SPECS · fixtureSnapTarget ·<br/>worldSnapTargets"]
+    FS["FixtureSync + FixtureRecipes<br/>(procedural, ref-counted)"]
+    CLI["sim-cli / scripts<br/>--world content/levels/workshop.json"]
+    LVL --> APP --> SES -->|"world() snapshot"| FS
+    LVL --> CLI
+    FS --> WM
+    CLI --> WM
+```
+
+| Fixture id     | Ref                      | Kind        | World position (mm)  | Focus              | Snap target                   |
+| -------------- | ------------------------ | ----------- | -------------------- | ------------------ | ----------------------------- |
+| `backboard`    | `prop.plywood-backboard` | `board`     | (-610, -610, -3)     | +z                 | none (hides the studs behind) |
+| `backplate`    | `prop.backplate`         | `backplate` | (-300, -400, 0)      | +z                 | `backplate-grid` 600 × 800    |
+| `bench`        | `prop.bench`             | `bench`     | (700, -1200, 80)     | +z, from 40° above | `bench-top` 1800 × 750        |
+| `din-rail-1/2` | `prop.din-rail`          | `din-rail`  | (-250, 150 / -50, 0) | +z                 | `din-rail` 500 mm             |
+| `floor`        | `prop.workshop-floor`    | `floor`     | (-2500, -1200, -110) | none               | none (sets the walk bounds)   |
+| `stud-wall`    | `prop.stud-wall`         | `stud-wall` | (-2500, -1200, -21)  | +z                 | `wall-studs` 4915 × 2440      |
+
+- **Positions live in the level document, sizes in `FIXTURE_SPECS`**, and the snap targets are derived from both by one function (`fixtureSnapTarget`), so the renderer and a headless script get identical targets. Each fixture is a group named by its id; the fixture id is also its selectable id, `view.focus` target and snap-target id.
+- The backplate sits where the P0/P1 demo panel was (centred on the origin, front face at z = 0), so panel coordinates in older scenarios still mean the same spot.
+- The stud wall draws its studs on the same `studCentres()` layout the snapping uses (merged into one mesh) plus an undrawn **snap plane** across the stud faces, so the placement ray finds the wall between studs. The backboard is selectable and sits in the placement picker, so a ray that hits it never reaches the studs behind it.
+- Fixtures are view-stable: syncing a world whose `fixtures` array is the same object (every command keeps it) does nothing. A new session (`Session.generation`) resets the view (`resetView`: work mode, the backplate, no selection).
 
 ## Modes
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Work: init (focus first focusable,\nthe backplate)
+    [*] --> Work: first world (focus the backplate,\nelse the first focusable)
     Work --> Walk: view.mode walk (V)
     Walk --> Work: view.mode work (V)
     Walk --> Work: view.focus target (F)
@@ -97,8 +134,8 @@ stateDiagram-v2
     }
 ```
 
-- **Work:** `OrbitControls` around a focus target. `workOrbitFor()` frames the target's bounding sphere along its face normal, and limits orbit to ±75° azimuth and ±60° elevation, zoom to 0.15 m–3× the framing distance, and pan to the focus sphere (`cursor` + `maxTargetRadius`). Click selects; dragging empty space orbits; dragging an entity moves it.
-- **Walk:** first person at a fixed eye height (1.6 m, game-design). WASD/arrows move, Shift sprints, and mouse look needs pointer lock. The pose is clamped to the room bounds minus a 0.25 m body radius.
+- **Work:** `OrbitControls` around a focus target. `workOrbitFor()` frames the target's bounding sphere along its face normal (benches from 40° above, so their top is in view), and limits orbit to ±75° azimuth and ±60° elevation, zoom to 0.15 m–3× the framing distance, and pan to the focus sphere (`cursor` + `maxTargetRadius`). Click selects; dragging empty space orbits; dragging an entity moves it.
+- **Walk:** first person at a fixed eye height (1.6 m, game-design). WASD/arrows move, Shift sprints, and mouse look needs pointer lock. The pose is clamped to the room bounds (the world's floor fixture; a default bay without one) minus a 0.25 m body radius.
 - **Switching and focusing are view commands** (`view.mode`, `view.focus`; ADR 0006): any surface runs them, they are logged, and the workspace applies them through `Session.onCommand`. The viewport publishes `mode` as a `when` context key. Movement, look, selection cycling and the placement keys stay **input actions** (`KeyboardEvent.code`), so per-frame input never reaches the replay log.
 
 ## Picking and selection
@@ -122,7 +159,7 @@ sequenceDiagram
     VC->>SM: select(id or null)
 ```
 
-- Selectables are scene objects marked with `userData.selectable`, a JSON-plain `SelectableInfo`: `id`, `kind`, `label`, and optionally `focusNormal`, `snapTarget` and `entityId`. The demo panel marks the backplate and both DIN rails; world sync marks every entity.
+- Selectables are scene objects marked with `userData.selectable`, a JSON-plain `SelectableInfo`: `id`, `kind`, `label`, and optionally `focusNormal`, `snapTarget` and `entityId`. Fixture sync marks every fixture except the floor (the backboard, backplate, bench, DIN rails and stud wall); world sync marks every entity.
 - `ViewportState` (`mode`, `pointerLocked`, `focusId`, `hovered`, `selected`, `placement`) is published through `onChange`. The Angular host mirrors it to `data-*` attributes and to the `when` context keys `mode`, `selection.id`, `selection.kind`, `selection.focusable` and `selection.entityId`.
 - Keyboard: `]` and `[` cycle through selectables in id order; `F` (`view.focus.selection`) focuses a focusable selection; `Delete` (`entity.delete.selection`) deletes a selected entity.
 
@@ -142,7 +179,7 @@ stateDiagram-v2
     Moving --> Idle: Esc, mode change, tool change,<br/>or the entity changed in the world
 ```
 
-- **The ghost** previews the active prop (or the entity being moved) at `placeOnTargets(ref, cursor, targets)` from `@controls/world-model`: the cursor ray hits a snap surface (a second picker that holds only snap surfaces, so props never block it), the hit converts to integer mm with `metresToMm`, and `snapToBest` picks a DIN rail before the backplate grid before wall studs. A failed snap hides the ghost. The ghost is renderer-local and unpickable.
+- **The ghost** previews the active prop (or the entity being moved) at `placeOnTargets(ref, cursor, targets)` from `@controls/world-model`: the cursor ray hits a fixture (a second picker that holds only fixtures, so props never block it), the hit converts to integer mm with `metresToMm`, and `snapToBest` picks a DIN rail before the backplate grid before wall studs before a bench top. The targets are `worldSnapTargets(world)`, the same list a script gets. A failed snap hides the ghost. The ghost is renderer-local and unpickable.
 - **Aiming:** the mouse pointer over the canvas, otherwise the screen-centre reticle (pointer lock in walk mode, or keyboard play with the pointer elsewhere). The crosshair shows whenever the reticle aims.
 - **Commit points only:** a click or `Enter` emits one `place` intent; releasing a drag, or `Enter`/click after `M`, emits one `move` intent if the position changed. Pointer moves and drags emit nothing. A move keeps the entity's orientation, so only targets facing the same way count (one `entity.move`, never a rotate as well).
 - **Escape, innermost first:** cancel a move, cancel placement (the workspace puts the tool away; no command), clear the selection, then fall through to the shell's menu.
@@ -150,21 +187,22 @@ stateDiagram-v2
 
 ## Snapping (pure, integer mm, `@controls/world-model`)
 
-`snap(target, footprint, cursorWorld)` converts the cursor into the target's surface frame (`u` = right, `v` = up, axis-aligned normal) and returns the footprint's lower-left **anchor** in surface and world integer mm plus the target's normal, or a typed failure (`out-of-capture`, `out-of-bounds`, `too-large`). An entity's `positionMm` is that world anchor; its prop geometry spans +x, +y, +z from it, turned by a yaw quarter-turn per surface normal (`orientationForNormal`).
+`snap(target, footprint, cursorWorld)` converts the cursor into the target's surface frame and returns the footprint's lower-left **anchor** in surface and world integer mm plus the target's normal, or a typed failure (`out-of-capture`, `out-of-bounds`, `too-large`). Vertical frames face ±x or ±z (`u` = right, `v` = up); since F1.9 a horizontal frame faces `+y` (`u` = its `right`, `v` = away from the front edge). An entity's `positionMm` is that world anchor; its prop geometry spans +x, +y, +z from it, turned by `orientationForFrame`: a yaw quarter-turn on a wall, plus pitch -90° on a bench top so the prop's depth stands up.
 
 | Target           | Rule                                                                                                                                                                                                      | Constants (source in `world-model` `snap/constants.ts`)                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `din-rail`       | Centred across the rail; left edge on a whole 18 mm module from the rail end; must fit on the rail; cursor within 40 mm of the centreline.                                                                | TS35 (EN 60715), module pitch (DIN 43880, rounded), capture (game-design)                   |
+| `din-rail`       | Centred across the rail; left edge at the start of a 17.5 mm module slot, `round(k × 17.5)` from the rail end; must fit on the rail; cursor within 40 mm of the centreline.                               | TS35 (EN 60715), module width 17.5 mm (DIN 43880), capture (game-design)                    |
 | `backplate-grid` | Corner on a 5 mm grid inside the plate minus its 20 mm margin.                                                                                                                                            | grid pitch, margin (game-design)                                                            |
 | `wall-studs`     | Flush against the side of the nearest stud that the cursor is on, inside one stud bay (falls back to the other side at a wall edge); bottom on a 10 mm grid. Stud centres are `round(first + i × 406.4)`. | 16 in o.c. (IRC R602.3(5), NIST), 2×4 dressed 38.1 mm (PS 20), vertical pitch (game-design) |
+| `bench-top`      | Horizontal: corner on a 10 mm grid inside the top minus its 10 mm margin; the prop stands on the top.                                                                                                     | grid pitch, margin (game-design)                                                            |
 
-`snapToBest(targets, footprint, cursor)` keeps the targets whose plane is within 10 mm of the cursor (`SNAP_PLANE_TOLERANCE`, covering a hit on a rail top) and whose extent contains it, then tries them by priority and id. P1's targets are the demo panel's (`demoPanelSnapTargets()`); wall studs are implemented and tested but no wall exists until F1.9.
+`snapToBest(targets, footprint, cursor)` keeps the targets whose plane is within 10 mm of the cursor (`SNAP_PLANE_TOLERANCE`, covering a hit on a rail top) and whose extent contains it, then tries them by priority and id. The targets come from the world's fixtures (`worldSnapTargets(world)`): on the workshop, the backplate, both rails, the stud wall and the bench top.
 
 ## Disposal
 
-The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` stops the loop, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
+The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` stops the loop, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
 
-Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
+Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. Loading a world without fixtures does the same for fixture recipes (`fixtureRecipeCount` reaches zero). Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
 
 ## Performance (F1.7 measurements)
 
@@ -178,3 +216,5 @@ Removing every entity (without disposing the viewport) also returns to baseline:
 | 1080p, headless SwiftShader                    | WebGL2 60 fps; WebGPU-on-SwiftShader-Vulkan 3.8 fps (CPU per-draw cost, not a GPU figure) |
 
 The budget target (60 fps on a 2020-era integrated GPU) still needs measuring on such a GPU; props are one draw call each, and instancing repeated props is the obvious next step if that budget is missed.
+
+**F1.9:** the workshop adds 9 drawn meshes (the 13 studs and 3 plates are one merged mesh; the snap plane is never drawn) and 8 geometry BVHs (the rails share one). The headless dev HUD showed 16 draw calls for the workshop with six props at 1280 × 720 on SwiftShader WebGL2; as above, headless frame times are not a GPU figure.

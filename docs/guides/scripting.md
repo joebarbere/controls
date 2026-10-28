@@ -68,7 +68,7 @@ log: 5 entries
 2099ec551babb486c481d9c394e9359918422e538347123eb3c0eaf7b3003145
 ```
 
-`--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document instead.
+`--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document or a level instead, such as `content/levels/workshop.json` (what New sandbox loads). With both, `--world <level> --seed N` is a new game on that level with seed N, exactly as New sandbox with seed N.
 
 ### 3. Replay it
 
@@ -154,12 +154,13 @@ The viewport doesn't invent positions: when you click, it asks `@controls/world-
 
 ```ts
 import type { Game } from '@controls/scripting-api';
-import { demoPanelSnapTargets, placeOnTargets } from '@controls/world-model';
+import { placeOnTargets, worldSnapTargets } from '@controls/world-model';
 
 export default function (game: Game): void {
   const box = { id: 'prop.box', version: 1 };
   // Aim at the backplate point (-150, 300, 0) mm; the 120 x 80 mm box snaps to the 5 mm grid.
-  const placed = placeOnTargets(box, { x: -150, y: 300, z: 0 }, demoPanelSnapTargets());
+  // Snap against the surfaces of the world the script runs on (the workshop's fixtures).
+  const placed = placeOnTargets(box, { x: -150, y: 300, z: 0 }, worldSnapTargets(game.world()));
   if (!placed.ok) throw new Error(placed.reason);
   game.execOrThrow('entity.place', {
     ref: box,
@@ -169,7 +170,7 @@ export default function (game: Game): void {
 }
 ```
 
-DIN rails win over the backplate behind them, and a move keeps the entity's orientation (pass `{ orientationMdeg }` as the fourth argument). `apps/sim-cli/scenarios/mouse-place-move-delete.{ts,console}` is the F1.7 scenario: the TypeScript version aims like the mouse, the console version spells out the positions, and `apps/sim-cli/src/mouse-place-move-delete.spec.ts` checks both against the hash that the mouse e2e (`apps/game-e2e/src/placement.spec.ts`) also reaches. Until the workshop level (F1.9) the only targets are the demo panel's.
+DIN rails win over the backplate behind them, and a move keeps the entity's orientation (pass `{ orientationMdeg }` as the fourth argument). `apps/sim-cli/scenarios/mouse-place-move-delete.{ts,console}` is the F1.7 scenario: the TypeScript version aims like the mouse, the console version spells out the positions, and `apps/sim-cli/src/mouse-place-move-delete.spec.ts` checks both against the hash that the mouse e2e (`apps/game-e2e/src/placement.spec.ts`) also reaches. Run it on the workshop level, as New sandbox does: `pnpm sim run my-script.ts --world content/levels/workshop.json` (add `--seed N` for a new game with seed N). The workshop's targets are the backplate grid, both DIN rails, the stud wall (boxes go against a stud) and the bench top (props stand on it, pitched -90°). On an empty world there are no targets, so `placeOnTargets` returns `no-target`.
 
 ## Troubleshooting
 
