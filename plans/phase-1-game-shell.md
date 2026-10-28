@@ -251,14 +251,22 @@ It uses a Verlet rope that bakes to a tube. The code stays on the `spike/wire-ro
 
 Acceptance:
 
-- [ ] Measurements recorded:
+- [x] Measurements recorded:
   - frame time with N live ropes and N baked wires (WebGPU and WebGL2);
   - clicks and seconds per connection;
   - hit-target sizes that worked;
   - clipping and occlusion problems;
   - particles per wire.
-- [ ] ADR 0010 records the findings, the recommended interaction model, the instancing approach, and what P3 must build and must avoid.
-- [ ] No spike code or spike-only dependency reaches `main`.
+
+  _(N = 10, 50 and 200 on a real GPU at 1080p and on SwiftShader at 640 × 360. Seconds per connection are a scripted lower bound only; human times need the ADR's manual protocol. The 2020-era integrated-GPU budget is still unmeasured.)_
+
+- [x] ADR 0010 records the findings, the recommended interaction model, the instancing approach, and what P3 must build and must avoid.
+- [x] No spike code or spike-only dependency reaches `main`. _(The spike added no dependency; its code stays on the unmerged `spike/wire-routing` branch.)_
+- _Decisions in [ADR 0010](../docs/decisions/0010-wire-routing-spike.md):_
+  - two clicks per connection, with auto-route through ducts by default, optional waypoints, and a zoom or magnifier before terminals are targeted (6.2 mm terminals are 4 to 6 px apart at the default framing);
+  - baked wires as one `InstancedMesh` of segments (40 to 60 times cheaper to bake than a `TubeGeometry`, with no draw call per wire);
+  - terminals picked in screen space with an occlusion filter, and wires picked through a BVH;
+  - a deterministic bake computed from the command's arguments, never from the live preview.
 
 ## ADRs to write in P1
 
@@ -271,7 +279,7 @@ Numbers are assigned in landing order. Planned:
 | 0007 | World document v1 and determinism: id allocation, PRNG choice, canonical hash, orientation encoding, built-in prop refs, sim tick before P2 | F1.8a                                                          |
 | 0008 | Console grammar, CodeMirror 6, and where scripts may run (no eval in the renderer; TS scripts only in `sim-cli` until the P13 sandbox)      | F1.6 (grammar, scripts); F1.5 completes the CodeMirror section |
 | 0009 | Save I/O boundary: main-owned save directory, opaque handles, atomic writes, web harness storage, autosave rotation                         | F1.8b                                                          |
-| 0010 | Wire-routing spike findings                                                                                                                 | F1.10                                                          |
+| 0010 | Wire-routing spike findings: interaction model, baked-wire instancing, terminal and wire picking, what P3 must build and avoid              | F1.10                                                          |
 
 ## Determinism and invariant hooks
 
@@ -339,7 +347,7 @@ Numbers are assigned in landing order. Planned:
 | F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets in F1.9)        |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
 | F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)     |
-| F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                            |
+| F1.10   | Wire-routing spike (ADR 0010) | ✅ Done (ADR only; spike branch not merged)           |
 
 ## Close-out
 
