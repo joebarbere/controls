@@ -118,6 +118,7 @@ describe('CommandRegistry', () => {
     expect(registry.isEnabled('console.toggle', {})).toBe(false);
     expect(registry.isEnabled('console.toggle', { [CONSOLE_AVAILABLE_KEY]: true })).toBe(true);
     expect(registry.get('console.toggle')?.globalKeybinding).toBe(true);
+    expect(registry.get('console.toggle')?.logged).toBe(false); // UI chrome, like palette.open
   });
 
   it('rejects args of the wrong shape in NoArgs (strict)', () => {

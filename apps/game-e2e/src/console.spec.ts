@@ -14,6 +14,12 @@ import { join } from 'node:path';
  */
 const CONSOLE_PLACE_UNDO_HASH = 'e5e9a9fcd6ab93f0ae928adfc86c01c20c83230a668775fa886e98351ef7a047';
 const FOUR_SURFACE_HASH = 'a61268c711b69ba5bafaeeda6ba00d3340eba691322ca3a20255044b669560ee';
+/**
+ * The palette path's hash (F1.3): the same literal as PALETTE_PLACE_UNDO_HASH in
+ * `apps/game-e2e/src/palette.spec.ts` and `apps/sim-cli/src/palette-place-undo.spec.ts`. Change all
+ * three together.
+ */
+const PALETTE_PLACE_UNDO_HASH = '46733670b0eeda0464b066f036de9ecb410479f0b55305137ea87828c2690ea2';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';
@@ -116,10 +122,7 @@ test('place an object, undo, recall a line from history and print the hash, keyb
   await expect(lastOutput(page)).toHaveText(CONSOLE_PLACE_UNDO_HASH);
   expect(await sessionHash(page)).toBe(CONSOLE_PLACE_UNDO_HASH);
   expect(await loggedIds(page)).toEqual(logged);
-  expect(logged.filter((id) => id.startsWith('entity.') || id.startsWith('edit.'))).toEqual([
-    'entity.place',
-    'edit.undo',
-  ]);
+  expect(logged).toEqual(['entity.place', 'edit.undo']); // console.toggle is UI chrome: never logged
 
   // `help <id>` is generated from the registry.
   await page.keyboard.insertText('help entity.move');
@@ -158,4 +161,27 @@ test('run picks a console-line file and runs it (the four-surface scenario)', as
   await expect(lastOutput(page)).toHaveText('Ran 10 commands from four-surface.console.');
   await expect(log).toContainText(FOUR_SURFACE_HASH);
   expect(await sessionHash(page)).toBe(FOUR_SURFACE_HASH);
+});
+
+test('typing the palette scenario into the console reaches the palette path hash (F1.3 cross-check)', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await openConsole(page);
+  // Exactly the lines F1.3's palette e2e is checked against, typed one by one into a fresh session.
+  const lines = readFileSync(join(__dirname, '../../sim-cli/scenarios/palette-place-undo.console'), 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'));
+  expect(lines.at(-1)).toBe('world.hash');
+  for (const line of lines) {
+    await page.keyboard.insertText(line);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Console input' })).toHaveText('');
+  }
+  await expect(lastOutput(page)).toHaveText(PALETTE_PLACE_UNDO_HASH);
+  expect(await sessionHash(page)).toBe(PALETTE_PLACE_UNDO_HASH);
+  // The same logged commands as the palette path (opening the console, like the palette, isn't logged).
+  expect(await loggedIds(page)).toEqual(['entity.place', 'entity.place', 'edit.undo']);
 });

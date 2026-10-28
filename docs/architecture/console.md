@@ -84,7 +84,7 @@ sequenceDiagram
 | Console input     | Escape    | Cancels a pending cheat, else clears an error or completion hint, else closes the console (`console.toggle`)                |
 | Console input     | Shift+Tab | Moves focus back (never captured)                                                                                           |
 
-`console.toggle` is a view command, but unlike `view.resetLayout` it is UI chrome and stays out of the replay log (`logged: false`, the rule F1.3 introduces for `palette.open`). Its effect is in `Workspace`: with focus inside the bottom panel it collapses the panel and restores focus to where it was (else the viewport canvas); otherwise it expands the panel if needed and focuses its `[data-autofocus]` element.
+`console.toggle` is a view command, but unlike `view.resetLayout` it is UI chrome and stays out of the replay log (`logged: false`, the same rule as `palette.open`, ADR 0006). Its effect is in `Workspace`: with focus inside the bottom panel it collapses the panel and restores focus to where it was (else the viewport canvas); otherwise it expands the panel if needed and focuses its `[data-autofocus]` element.
 
 ## Gating
 

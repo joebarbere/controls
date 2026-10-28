@@ -142,6 +142,7 @@ describe('App', () => {
     expect(input.textContent).toBe('');
     expect(screen.queryByRole('region', { name: 'Console' })).toBeNull(); // collapsed
     expect(document.activeElement).toBe(canvas);
+    expect(session.entries()).toEqual([]); // console.toggle is UI chrome: never logged
   });
 
   it('does not open the menu for an Escape an inner handler already consumed', async () => {

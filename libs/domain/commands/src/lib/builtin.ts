@@ -76,8 +76,7 @@ export const CONSOLE_AVAILABLE_KEY = 'console.available';
  * `console.toggle`: opens the dev console and focuses its input, or closes it when focus is already
  * in it (F1.5, ADR 0008). A view command bound to the backtick key as a **global** binding, so it
  * also fires while typing in the console (a literal backtick can't be typed there unless rebound).
- * UI chrome, so it must stay out of the replay log: it gets `logged: false` when that field lands
- * with F1.3 (`palette.open` follows the same rule).
+ * UI chrome, so `logged: false`: it never enters the replay log (ADR 0006, "What is logged").
  */
 export function consoleToggleCommand<S>(): CommandDef<NoArgs, S> {
   return defineViewCommand<NoArgs, S>({
@@ -88,6 +87,7 @@ export function consoleToggleCommand<S>(): CommandDef<NoArgs, S> {
     when: CONSOLE_AVAILABLE_KEY,
     keybinding: 'Backquote',
     globalKeybinding: true,
+    logged: false,
   });
 }
 

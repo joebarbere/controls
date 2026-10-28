@@ -92,6 +92,8 @@ sequenceDiagram
 
 **The palette scenario (F1.3).** `scenarios/palette-place-undo.console` lists, as console lines, exactly what `apps/game-e2e/src/palette.spec.ts` logs with the palette and the keyboard: place a crate, place a spool, undo. Opening the palette (`palette.open`) is unlogged UI chrome, so it appears in neither. `apps/sim-cli/src/palette-place-undo.spec.ts` runs it with `sim run` and pins `PALETTE_PLACE_UNDO_HASH`; the e2e test asserts the same literal and that its replay log has the file's command ids, so the palette path is checked against the console-line path.
 
+**The console scenarios (F1.5).** `scenarios/console-place-undo.console` (place a crate, undo) is pinned to `CONSOLE_PLACE_UNDO_HASH` by `apps/sim-cli/src/console-place-undo.spec.ts`. `apps/game-e2e/src/console.spec.ts` types it into the in-game console, types the lines of `palette-place-undo.console` into a fresh session and asserts `PALETTE_PLACE_UNDO_HASH` (the console-versus-palette cross-check), and `run`s `four-surface.console` to `FOUR_SURFACE_HASH`. Opening the console (`console.toggle`) is unlogged UI chrome too.
+
 ## Reserved queries
 
 `game.probe(from, to)` (P2, meter probes on the as-built circuit) and `game.tag(path)` (P10, PLC tags) are in the `Game` type now and throw `NotAvailableError` (`code: 'not-available'`). Reserving them in the type keeps the names stable and gives a script a precise error instead of `is not a function`; implementing them later only widens their return type.

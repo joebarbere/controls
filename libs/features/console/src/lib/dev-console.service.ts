@@ -170,7 +170,10 @@ export class DevConsole {
   private exec(source: string, id: string, args: Record<string, unknown>): void {
     const result = this.session.exec(id, args);
     if (result.ok) {
-      this.push({ kind: 'output', text: `${id}: ok (log #${result.entry.seq})` });
+      this.push({
+        kind: 'output',
+        text: result.logged ? `${id}: ok (log #${result.entry.seq})` : `${id}: ok (not logged)`,
+      });
     } else {
       const column = firstColumn(source);
       this.push({ kind: 'error', text: describeExecError(result.error), source, column });
