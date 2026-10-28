@@ -52,6 +52,7 @@ What exists today (Phase 0 scaffold):
 
 - Versioned save-format schemas (`schemaVersion` 1: manifest, world, replay log) and a settings schema, validated with Zod. They come with a total migration chain, fixtures that must load forever, lossless JSON round-trip property tests and exported JSON Schema. Saving and loading in the game arrive later in P1.
 - `.ctrl` save files: a ZIP of the save's JSON documents plus an optional thumbnail, with byte-identical output for the same game and a reader that refuses damaged, oversized, malicious or newer-version files with a clear reason. Scripts and `pnpm sim` can already write, load, hash and replay them.
+- Save storage underneath it: a save folder in the desktop app's user data (named saves and rotating autosave slots), native Open and Save As dialogs, atomic writes that leave the previous save intact if anything fails, and no file paths ever exposed to the game. The browser harness keeps saves in the browser's private file storage.
 
 ### Tooling
 

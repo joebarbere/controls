@@ -7,7 +7,7 @@ flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
     HUB --> G["guides/<br/>new developer, releasing, scripting"]
     HUB --> A["architecture/<br/>overview"]
-    HUB --> D["decisions/<br/>ADRs 0001-0008, 0010"]
+    HUB --> D["decisions/<br/>ADRs 0001-0010"]
     HUB --> C["caveats/<br/>per-area gotchas"]
     HUB --> GL["glossary.md"]
     HUB --> H["history.md"]
@@ -30,7 +30,7 @@ flowchart TD
 | Page                                               | Covers                                                                                              |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design            |
-| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; `.ctrl` container (F1.8b)               |
+| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; save I/O and handles; `.ctrl` container |
 | [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal        |
 | [Commands](architecture/commands.md)               | Command registry and bus, undo/redo, the replay log, world commands, `world.hash` and the PRNG      |
 | [UI shell](architecture/ui-shell.md)               | Shell libraries, screens and focus flow, the docking workspace, settings, theming and notifications |
@@ -51,6 +51,7 @@ Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds the
 | [0006 Command system](decisions/0006-command-system.md)                   | Pure apply/invert commands, undo/redo logged and replayed, view commands, advisory `when` grammar                       |
 | [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log                     |
 | [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror 6 under the CSP (F1.5)  |
+| [0009 Save I/O boundary](decisions/0009-save-io-boundary.md)              | Main-owned save directory, opaque handles, atomic writes, OPFS in the web harness, autosave rotation                    |
 | [0010 Wire-routing spike](decisions/0010-wire-routing-spike.md)           | F1.10 findings: two-click auto-routed wires, instanced segments, screen-space terminal picking, deterministic bake (P3) |
 
 ## Reference
