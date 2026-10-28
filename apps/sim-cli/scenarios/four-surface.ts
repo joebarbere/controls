@@ -30,5 +30,5 @@ export default function fourSurface(game: Game): void {
 
   const ids = game.world().entities.map((entity) => entity.id);
   if (ids.join() !== '1') throw new Error(`expected only entity 1 to remain, found [${ids.join()}]`);
-  if (placed.seq !== 0 || game.entries().length !== 10) throw new Error('unexpected replay log');
+  if (placed?.seq !== 0 || game.entries().length !== 10) throw new Error('unexpected replay log');
 }

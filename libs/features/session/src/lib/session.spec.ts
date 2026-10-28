@@ -46,7 +46,7 @@ describe('Session', () => {
     session.exec('entity.place', place);
     const hash = session.hash();
     const seen: string[] = [];
-    const off = session.onCommand('view.resetLayout', (e) => seen.push(`${e.entry.seq}`));
+    const off = session.onCommand('view.resetLayout', (e) => seen.push(`${e.entry?.seq}`));
     session.exec('view.resetLayout');
     expect(seen).toEqual(['1']);
     expect(session.hash()).toBe(hash);
@@ -54,6 +54,18 @@ describe('Session', () => {
     off();
     session.exec('view.resetLayout');
     expect(seen).toEqual(['1']);
+  });
+
+  it('runs onCommand handlers for unlogged UI chrome (palette.open) without logging it', () => {
+    const session = TestBed.inject(Session);
+    const seen: boolean[] = [];
+    const off = session.onCommand('palette.open', (e) => seen.push(e.logged));
+    const result = session.exec('palette.open');
+    expect(result).toMatchObject({ ok: true, logged: false, entry: null, command: { id: 'palette.open' } });
+    expect(seen).toEqual([false]);
+    expect(session.entries()).toEqual([]);
+    expect(session.replayLog().entries).toEqual([]);
+    off();
   });
 
   it('evaluates when against history and UI context keys', () => {

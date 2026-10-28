@@ -1,6 +1,6 @@
 # ADR 0006: Command system semantics
 
-**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`)
+**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`) and F1.3 (`palette.open`, unlogged UI-chrome commands, argument hints, cheat confirmation)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
 
@@ -48,6 +48,10 @@ Any failure returns a typed `ExecError` (`unknown-command`, `invalid-args`, `rej
 ### What is logged
 
 - **Every successful command, and only those.** That includes view commands and `edit.undo` / `edit.redo` (with `args: {}`). Failures are never logged.
+- **Except UI chrome (amended in F1.3).** A command with `logged: false` (`palette.open`, and `console.toggle` in F1.5) opens or closes UI chrome and carries no information replay needs. It runs through the registry and its listeners fire (`Session.onCommand`, the scripting API's `on('executed')`), but it is never written to the log, consumes no `seq` and leaves undo and redo alone. The success result and the executed event say so explicitly: `{ logged: false, entry: null }` instead of `{ logged: true, entry }`, and both carry `command` (`id`, `tick`, normalised `args`) either way.
+  - **Why:** the replay log is save format, frozen once v0.2.0 ships. Replay logs and bug reports should carry only world and view changes, not every time the player opened the palette; a `seq` handed to an unlogged command would also be reused by the next logged one.
+  - **Guard:** an unlogged state change would break replay, so the registry refuses `logged: false` together with `undoable` or `cheat` (`CommandRegistrationError`, reason `unlogged-state-change`), and `exec` refuses an unlogged command whose `run` returns a change or a history move (`ExecError` kind `unlogged-change`; nothing is committed).
+  - **Older logs:** a log written before a command became unlogged may still contain it. `replayEntries` keeps such an entry as it is (`CommandBus.carryOver`, after checking its `seq` and tick) instead of running it. The command can't have changed the state, so this is exact, and every later entry keeps its `seq` and therefore its `seq`-derived randomness.
 - **Replay re-executes everything**, `edit.undo` included, through a fresh bus that starts from `initialWorld` with an empty history. The bus is deterministic, so it rebuilds the same stacks and reaches the same state and hash. `replayEntries` also checks each entry's `seq`, `tick` and (structurally) its args, and stops at the first entry that fails or diverges.
 - **Why this is consistent with loading a save** (F1.8b clears the undo stack and continues the log): an undo or redo on an empty stack fails and isn't logged. So every undo the live session logged after a load acted on a post-load change, and that change is also on top of the replay's rebuilt stack. The redo stack is the same argument in reverse.
 - **Rejected:**
@@ -119,6 +123,14 @@ A binding without `when` is never disjoint from anything. A property test checks
 
 A successful `cheat` command sets the world's `assisted` flag through the bus's `markAssisted` hook, **outside** its change. So undoing the cheat doesn't clear the flag, which is never cleared (ADR 0007). The consequence is that "undo everything returns the initial hash" holds only for sessions without cheats.
 
+### The palette (F1.3)
+
+- **`palette.open` is an unlogged view command** (`Mod+K`, `Mod+Shift+P`, `globalKeybinding: true`, `logged: false`), declared next to `view.resetLayout`. It is UI chrome, so it never enters the replay log ("What is logged" above); closing the palette is not a command at all.
+- **Argument forms are generated from each command's `args`** through `z.toJSONSchema(args, { io: 'input' })`. Commands may add **`.meta()` hints** to their schemas: `title` and `description` label and explain a field, and the `x-controls-ref` keyword (`ARG_REF_KEYWORD`; `entityRefMeta` for `entity`) marks an integer as a world-entity id, which the palette prefills from the `selection.entityId` context key. Hints only add JSON Schema keywords and never change what a schema accepts, so adding one to a persisted args shape is not a save-format change. Validation stays the command's own schema.
+- **The palette never lists `palette.open`** and runs the chosen command only after its dialog has closed, so the command sees focus where the player left it.
+- **Recents** (settings `palette.recents`) are the commands run from the palette, not every logged command: a keybinding or script shouldn't reorder the palette.
+- **Cheats ask once per world.** Before a `cheat` command runs in a world that isn't assisted yet, the palette asks for confirmation; once the world is assisted there is nothing more to lose, so it doesn't ask again. The flag itself is still set by the bus ("Cheats" above).
+
 ### Randomness
 
 - A command that needs randomness derives a stream with `deriveStream(world.seed, commandStreamKey(ctx.seq))` (key `command:<seq>`). Entity-owned randomness uses `entityStreamKey(id)` (`entity:<id>`).
@@ -135,7 +147,7 @@ Each entry records the state's `tick` when it ran (always 0 in P1), and replay r
 
 ## Consequences
 
-- Surfaces (palette F1.3, keybindings F1.4, console F1.5, scripting API F1.6) call `exec` and read `when` through the registry, and never touch state.
+- Surfaces (palette F1.3, keybindings F1.4, console F1.5, scripting API F1.6) call `exec` and read `when` through the registry, and never touch state. A command whose args the palette's form can't express fails the palette's every-command spec, so new argument shapes extend the form model first.
 - A new view command is declared in domain code (in `@controls/commands` for now), never only in a component, or headless replay of a log that contains it fails with `unknown-command`.
 - Command ids and argument shapes are save format (ADR 0007): renaming one or changing its args needs a `schemaVersion` bump and a log migration. `replayEntries` reports a changed args shape as `diverged`.
 - F1.8b's load continues the loaded log with a cleared history; it never starts a new log or drops entries, which would break the undo argument above. That needs a small bus addition (clear the history, keep the log).

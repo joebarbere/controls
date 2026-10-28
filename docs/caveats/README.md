@@ -23,4 +23,4 @@ A new area (new lib, new cross-cutting concern) gets a new file, a row below, **
 | [`rendering.md`](rendering.md)     | `libs/rendering/renderer`: scene, cameras (walk/work), BVH picking, selection, snap maths, overlays, disposal, the viewport host.                                            |
 | [`scripting.md`](scripting.md)     | `libs/domain/scripting-api`, the console-line parser (`commands/src/lib/console/`), `apps/sim-cli` and its scenarios, args key order.                                        |
 | [`commands.md`](commands.md)       | `libs/domain/commands`, `libs/domain/world-model`, `libs/features/session`, adding a command, `world.hash`, the PRNG, replay that diverges, keybinding chords and conflicts. |
-| [`ui.md`](ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*` (shell, workspace, settings…), keyboard and focus, keybindings, dialogs, theming, Angular component tests.                         |
+| [`ui.md`](ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*` (shell, workspace, settings, palette…), keyboard and focus, keybindings, the palette, dialogs, theming, Angular component tests.   |

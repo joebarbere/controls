@@ -1,0 +1,111 @@
+<form class="form" novalidate [attr.aria-label]="'Arguments for ' + commandTitle()" (submit)="onSubmit($event)">
+  @if (errors().form.length > 0) {
+  <div class="errors" role="alert" data-testid="palette-form-errors">
+    @for (message of errors().form; track $index) {
+    <p>{{ message }}</p>
+    }
+  </div>
+  } @if (form().fields.length === 0) {
+  <p class="muted">This command takes no arguments.</p>
+  }
+  <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: form().fields }" />
+  @if (entities().length > 0) {
+  <datalist [id]="prefix + '-entities'">
+    @for (entity of entities(); track entity.id) {
+    <option [value]="entity.id">{{ entity.label }}</option>
+    }
+  </datalist>
+  }
+  <div class="actions">
+    <button ctlButton="ghost" type="button" (click)="goBack.emit()">Back</button>
+    <button ctlButton="primary" type="submit">Run</button>
+  </div>
+</form>
+
+<ng-template #fieldList let-fields>
+  @for (field of fieldsOf(fields); track field.id) { @if (field.kind === 'object') {
+  <fieldset class="group" [attr.aria-describedby]="describedBy(field)">
+    <legend>{{ field.label }}</legend>
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    } @if (isOptionalObject(field)) {
+    <label class="check">
+      <input type="checkbox" [checked]="checked(field)" (change)="onCheck(field, $event)" />
+      Include {{ field.label }}
+    </label>
+    } @if (!isOptionalObject(field) || checked(field)) {
+    <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: field.fields }" />
+    }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </fieldset>
+  } @else if (field.kind === 'boolean') {
+  <div class="field">
+    <label class="check">
+      <input
+        type="checkbox"
+        [id]="domId(field)"
+        [checked]="checked(field)"
+        [attr.aria-invalid]="errorsOf(field).length > 0"
+        [attr.aria-describedby]="describedBy(field)"
+        (change)="onCheck(field, $event)"
+      />
+      {{ field.label }}
+    </label>
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </div>
+  } @else if (field.kind === 'enum') {
+  <div class="field">
+    <label [for]="domId(field)">{{ field.label }}</label>
+    <select
+      [id]="domId(field)"
+      [attr.aria-required]="field.required"
+      [attr.aria-invalid]="errorsOf(field).length > 0"
+      [attr.aria-describedby]="describedBy(field)"
+      (change)="onText(field, $event)"
+    >
+      <option value="" [selected]="text(field) === ''">{{ field.required ? 'Choose…' : 'Not set' }}</option>
+      @for (option of field.options; track $index) {
+      <option [value]="$index" [selected]="text(field) === '' + $index">{{ optionLabel(field, $index) }}</option>
+      }
+    </select>
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </div>
+  } @else {
+  <div class="field">
+    <label [for]="domId(field)">{{ field.label }}</label>
+    <input
+      type="text"
+      autocomplete="off"
+      spellcheck="false"
+      [id]="domId(field)"
+      [value]="text(field)"
+      [attr.inputmode]="field.kind === 'number' ? inputMode(field) : null"
+      [attr.list]="field.kind === 'number' && field.ref === 'entity' && entities().length > 0 ? prefix + '-entities' : null"
+      [attr.aria-required]="field.required"
+      [attr.aria-invalid]="errorsOf(field).length > 0"
+      [attr.aria-describedby]="describedBy(field)"
+      (input)="onText(field, $event)"
+    />
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </div>
+  } }
+</ng-template>
+
+<ng-template #fieldErrors let-field>
+  @if (errorsOf(field).length > 0) {
+  <p class="error" [id]="domId(field, '-error')">
+    @for (message of errorsOf(field); track $index) {
+    <span>{{ message }}</span>
+    }
+  </p>
+  }
+</ng-template>

@@ -1,0 +1,97 @@
+<ctl-dialog heading="Command palette" [(open)]="open" (closed)="onClosed()">
+  <div class="palette" data-testid="command-palette">
+    @switch (view().kind) { @case ('list') {
+    <label class="sr-only" [for]="prefix + '-search'">Search commands</label>
+    <input
+      #search
+      class="search"
+      type="text"
+      role="combobox"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Type a command"
+      aria-autocomplete="list"
+      aria-expanded="true"
+      [id]="prefix + '-search'"
+      [attr.aria-controls]="listboxId"
+      [attr.aria-activedescendant]="activeItem() ? optionId(active()) : null"
+      [value]="query()"
+      (input)="onQuery($event)"
+      (keydown)="onSearchKeydown($event)"
+    />
+    <ul #listbox class="list" role="listbox" aria-label="Commands" [id]="listboxId">
+      @for (item of items(); track item.def.id) {
+      <li
+        role="option"
+        class="option"
+        [id]="optionId($index)"
+        [attr.data-index]="$index"
+        [attr.data-command]="item.def.id"
+        [attr.aria-selected]="$index === active()"
+        [attr.aria-disabled]="item.enabled ? null : 'true'"
+      >
+        <span class="title">{{ item.def.title }}</span>
+        @if (item.recentRank >= 0) {
+        <span class="tag">Recent</span>
+        } @if (item.def.cheat) {
+        <span class="tag cheat">Cheat</span>
+        }
+        <span class="keys">
+          @for (chord of chords(item.def.id); track $index) {
+          <kbd>{{ chord }}</kbd>
+          }
+        </span>
+        <span class="meta">{{ item.def.category }} · {{ item.def.id }}</span>
+        @if (item.reason) {
+        <span class="reason">{{ item.reason }}</span>
+        }
+      </li>
+      }
+    </ul>
+    @if (items().length === 0) {
+    <p class="empty">No commands match “{{ query() }}”.</p>
+    } } @case ('form') { @let form = view(); @if (form.kind === 'form') {
+    <h3 class="step">{{ form.def.title }}</h3>
+    <ctl-palette-arg-form
+      [commandTitle]="form.def.title"
+      [form]="form.form"
+      [(values)]="values"
+      [errors]="errors()"
+      [selectedEntity]="selectedEntity()"
+      [entities]="entities()"
+      (runCommand)="runForm()"
+      (goBack)="back()"
+    />
+    } } @case ('confirm') { @let confirm = view(); @if (confirm.kind === 'confirm') {
+    <section class="confirm" [attr.aria-labelledby]="prefix + '-confirm'">
+      <h3 class="step" [id]="prefix + '-confirm'">Run a cheat?</h3>
+      <p>
+        “{{ confirm.def.title }}” is a cheat. Running it marks this world as <strong>assisted</strong>, and that stays
+        with the save even if you undo the command.
+      </p>
+      <div class="actions">
+        <button
+          ctlButton="ghost"
+          type="button"
+          data-confirm-action
+          (click)="back()"
+          (keydown)="onConfirmKeydown($event)"
+        >
+          Cancel
+        </button>
+        <button
+          #confirmButton
+          ctlButton="primary"
+          type="button"
+          data-confirm-action
+          (click)="confirmCheat()"
+          (keydown)="onConfirmKeydown($event)"
+        >
+          Run and mark assisted
+        </button>
+      </div>
+    </section>
+    } } }
+    <p class="sr-only" role="status">{{ status() }}</p>
+  </div>
+</ctl-dialog>

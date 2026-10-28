@@ -1,8 +1,16 @@
-import { defaultBindingDecls, defineCommand, Keymap, NoArgs, succeed } from '@controls/commands';
+import { ARG_REF_KEYWORD, defaultBindingDecls, defineCommand, Keymap, NoArgs, succeed } from '@controls/commands';
+import { z } from 'zod';
 import { createWorld, migrateReplayLog, ReplayLog, World } from '@controls/save-format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { addAngleMdeg, findEntity, findEntityIndex } from './entity-commands';
+import {
+  addAngleMdeg,
+  EntityDeleteArgs,
+  EntityMoveArgs,
+  EntityRotateArgs,
+  findEntity,
+  findEntityIndex,
+} from './entity-commands';
 import { worldHash } from './hash';
 import { createWorldBus, createWorldRegistry, replayLog, toReplayLog } from './session';
 import type { Entity } from './types';
@@ -188,6 +196,19 @@ describe('findEntityIndex', () => {
   });
 });
 
+describe('entity-reference hints (F1.3)', () => {
+  it('mark entity ids for generated forms without changing what the args accept', () => {
+    for (const schema of [EntityDeleteArgs, EntityMoveArgs, EntityRotateArgs]) {
+      const json = z.toJSONSchema(schema, { io: 'input' }) as { properties: Record<string, Record<string, unknown>> };
+      expect(json.properties['id']).toMatchObject({ type: 'integer', minimum: 1, [ARG_REF_KEYWORD]: 'entity' });
+    }
+    expect(EntityDeleteArgs.safeParse({ id: 1 }).success).toBe(true);
+    expect(EntityDeleteArgs.safeParse({ id: 0 }).success).toBe(false);
+    expect(EntityDeleteArgs.safeParse({ id: 1.5 }).success).toBe(false);
+    expect(Object.is(EntityDeleteArgs.parse({ id: 1 }).id, 1)).toBe(true);
+  });
+});
+
 describe('world registry, replay log and cheats', () => {
   it('holds the world, edit and view commands', () => {
     expect(
@@ -201,6 +222,7 @@ describe('world registry, replay log and cheats', () => {
       'entity.move:true',
       'entity.place:true',
       'entity.rotate:true',
+      'palette.open:false',
       'toolbelt.select:false',
       'view.resetLayout:false',
     ]);

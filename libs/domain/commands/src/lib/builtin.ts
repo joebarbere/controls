@@ -51,7 +51,10 @@ export function editCommands<S>(): CommandDef<NoArgs, S>[] {
  * means headless replay (`sim-cli`) knows every id and args schema a log can contain.
  */
 export function defineViewCommand<A, S>(
-  def: Pick<CommandDef<A, S>, 'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding' | 'globalKeybinding'>,
+  def: Pick<
+    CommandDef<A, S>,
+    'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding' | 'globalKeybinding' | 'logged'
+  >,
 ): CommandDef<A, S> {
   return { ...def, undoable: false, run: () => succeed<S>() };
 }
@@ -104,7 +107,24 @@ export function toolBeltBindingDecls(): BindingDecl[] {
   }));
 }
 
+/**
+ * `palette.open`: opens the command palette (plan F1.3). A global binding, so Mod+K and Mod+Shift+P
+ * also work from a text field or a dialog. The palette applies it through `Session.onCommand`.
+ * UI chrome, so `logged: false`: it never enters the replay log (ADR 0006, "What is logged").
+ */
+export function paletteOpenCommand<S>(): CommandDef<NoArgs, S> {
+  return defineViewCommand<NoArgs, S>({
+    id: 'palette.open',
+    title: 'Open command palette',
+    category: 'View',
+    args: NoArgs,
+    keybinding: ['Mod+K', 'Mod+Shift+P'],
+    globalKeybinding: true,
+    logged: false,
+  });
+}
+
 /** Every view command declared so far. */
 export function viewCommands<S>(): AnyCommandDef<S>[] {
-  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>()];
+  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>(), paletteOpenCommand<S>()];
 }

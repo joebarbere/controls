@@ -2,7 +2,7 @@ import { CommandId } from '@controls/save-format';
 import type { AnyCommandDef } from './command';
 import { type ContextKeys, evaluateWhen, parseWhen, type WhenExpr } from './when';
 
-export type RegistrationFailure = 'malformed-id' | 'duplicate-id' | 'malformed-when';
+export type RegistrationFailure = 'malformed-id' | 'duplicate-id' | 'malformed-when' | 'unlogged-state-change';
 
 /** Thrown by {@link CommandRegistry.register}: a malformed command is a programming error. */
 export class CommandRegistrationError extends Error {
@@ -36,6 +36,13 @@ export class CommandRegistry<S> {
         'malformed-id',
         def.id,
         `Command id "${def.id}" must be dotted camelCase segments, e.g. "entity.place" (at most 128 characters)`,
+      );
+    }
+    if (def.logged === false && (def.undoable || def.cheat)) {
+      throw new CommandRegistrationError(
+        'unlogged-state-change',
+        def.id,
+        `Command "${def.id}" is logged: false, so it can't be undoable or a cheat (an unlogged state change would break replay)`,
       );
     }
     if (this.entries.has(def.id)) {

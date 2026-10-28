@@ -1,4 +1,4 @@
-import { type AnyCommandDef, defineCommand, fail, succeed } from '@controls/commands';
+import { type AnyCommandDef, defineCommand, entityRefMeta, fail, succeed } from '@controls/commands';
 import { CatalogRef, Int, MILLIDEGREES_PER_TURN, OrientationMdegV1, PositionMmV1 } from '@controls/save-format';
 import { z } from 'zod';
 import type { Entity, EntityId, OrientationMdeg, World } from './types';
@@ -12,7 +12,8 @@ import type { Entity, EntityId, OrientationMdeg, World } from './types';
  * The argument shapes are persisted in replay logs: changing one is a save-format change.
  */
 
-const EntityIdArg = Int.min(1);
+/** An entity id. The `.meta()` hint only tells generated forms to offer the selection (F1.3). */
+const EntityIdArg = Int.min(1).meta({ ...entityRefMeta, title: 'Entity' });
 
 /** A rotation step per axis in integer millidegrees, strictly less than a full turn either way. */
 const DeltaMdeg = Int.min(-(MILLIDEGREES_PER_TURN - 1)).max(MILLIDEGREES_PER_TURN - 1);

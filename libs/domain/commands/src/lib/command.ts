@@ -79,6 +79,15 @@ export interface CommandDef<A = unknown, S = unknown> {
   readonly undoable: boolean;
   /** Marks the world as assisted when it succeeds (the host decides what that means). */
   readonly cheat?: boolean;
+  /**
+   * Whether a successful run is written to the replay log (default `true`). `false` only for
+   * commands that open or close UI chrome and carry no information replay needs (`palette.open`,
+   * `console.toggle`). They run through the registry and fire listeners but are never written to
+   * the replay log, consume no `seq` and leave undo and redo alone. Because an unlogged state change
+   * would break replay, the registry refuses `logged: false` with `undoable` or `cheat`, and `exec`
+   * refuses (`unlogged-change`) a run that returns a change or a history move.
+   */
+  readonly logged?: boolean;
   /** Pure: reads `ctx.state` and returns a change or a failure. Never mutates. */
   run(ctx: CommandContext<S>, args: A): CommandResult<S>;
 }
