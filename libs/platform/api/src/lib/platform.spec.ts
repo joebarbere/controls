@@ -1,4 +1,5 @@
 import { defaultSettings } from '@controls/save-format';
+import { SaveIoError } from './files';
 import { NOOP_LIFECYCLE } from './lifecycle';
 import type { Platform } from './platform';
 
@@ -20,8 +21,16 @@ describe('Platform', () => {
       canQuit: false,
       quit: () => undefined,
       lifecycle: NOOP_LIFECYCLE,
+      files: {
+        list: async () => [],
+        read: async () => Promise.reject(new SaveIoError('unknown-handle')),
+        write: async () => Promise.reject(new SaveIoError('unavailable')),
+      },
+      dialogs: { open: async () => null, saveAs: async () => null },
     };
     await expect(fake.getAppInfo()).resolves.toMatchObject({ platform: 'web' });
     await expect(fake.settings.load()).resolves.toMatchObject({ fallbackReason: 'missing' });
+    await expect(fake.files.list()).resolves.toEqual([]);
+    await expect(fake.files.read('x')).rejects.toMatchObject({ name: 'SaveIoError', code: 'unknown-handle' });
   });
 });

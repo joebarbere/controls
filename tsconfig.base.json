@@ -29,6 +29,7 @@
       "@controls/ipc-contract/preload": ["./libs/ipc-contract/src/preload.ts"],
       "@controls/renderer": ["./libs/rendering/renderer/src/index.ts"],
       "@controls/platform-api": ["./libs/platform/api/src/index.ts"],
+      "@controls/platform-api/testing": ["./libs/platform/api/src/testing/save-io-contract.ts"],
       "@controls/platform-electron": ["./libs/platform/electron/src/index.ts"],
       "@controls/platform-web": ["./libs/platform/web/src/index.ts"],
       "@controls/ui": ["./libs/ui/src/index.ts"],

@@ -214,14 +214,15 @@ Acceptance, **F1.8a** (schema, ahead of F1.2):
 Acceptance, **F1.8b** (container and I/O, after F1.1, F1.2 and F1.9):
 
 - [x] Reads and writes a `.ctrl` ZIP containing `manifest.json`, `world.json`, an optional `replay.log` and an optional `thumbnail.png` (from the renderer). `prints/`, `plc/` and `hmi/` are tolerated but empty in v1. Output bytes are deterministic (sorted entries, fixed mtimes). Oversized or unexpected entries are rejected. _(Part 1: `writeCtrl` / `readCtrl` in `@controls/save-format`. The ZIP structure is our own code (fflate's `zipSync` stamps local-time-zone dates; `unzipSync` trusts declared sizes), fflate does DEFLATE. Caps: file and total 48 MiB, `world.json` 16 MiB, `replay.log` 32 MiB, thumbnail 4 MiB, manifest 64 KiB, 64 entries; inflation aborts past the declared size; traversal, duplicates, overlap, ZIP64 and encryption refused; manifest first, so newer saves get `newer-than-build`. Golden SHA-256 pinned; fixtures in `fixtures/v1/ctrl/`. The thumbnail is bytes passed in; the renderer capture comes with part 3. [ADR 0007](../docs/decisions/0007-world-document-v1.md#container-bytes-and-loading-a-save-f18b).)_
-- [ ] `FileService` and `DialogService` in `platform-api`. Electron channels (`save:list`, `save:read`, `save:write`, `dialog:open`, `dialog:saveAs`):
+- [x] `FileService` and `DialogService` in `platform-api`. Electron channels (`save:list`, `save:read`, `save:write`, `dialog:open`, `dialog:saveAs`):
   - Zod-validated and size-capped, with `senderFrame` checked;
   - main owns the saves directory, and the renderer gets opaque handles, never raw paths;
   - writes are atomic (temp, fsync, rename), and a test that fails mid-write leaves the old file intact.
-- [ ] The web harness stores saves in OPFS or IndexedDB. Save As / Open use download and upload. One contract test suite runs against both platforms.
+  - _(Part 2, [ADR 0009](../docs/decisions/0009-save-io-boundary.md). `<userData>/saves/<name>.ctrl` and `saves/autosave/slot-N.ctrl`; bytes are opaque. Handles are 22 random base64url characters per `WebContents`; Open gives read-only handles, Save As write-only ones, autosave slots are read-only. 64 MiB cap; names can't express a path; reads refuse symlinks (`lstat` + `O_NOFOLLOW`); one dialog at a time. `writeFileAtomic` also fsyncs the directory; `save-store.spec.ts` fails a write at open, mid-data, at fsync and at the rename. Autosave rotation (`slotCount` passed in) is in main: the next slot this session, else the lowest free, else the oldest; slots above the count are removed. No delete channel yet.)_
+- [x] The web harness stores saves in OPFS or IndexedDB. Save As / Open use download and upload. One contract test suite runs against both platforms. _(OPFS, `WebSaveStore`: same layout, schemas, handles and codes as main; `createWritable()` commits on `close()`. Chosen over IndexedDB for the one-to-one file layout and a dependency-free fake; both work under the CSP and COOP/COEP. `describeSaveIoContract` in `@controls/platform-api/testing` runs against Electron (in-process IPC into the real handlers, temp dir) and the web store (in-memory OPFS); the two picker-only tests skip on the web.)_
 - [ ] Autosave rotates N slots on an interval and when returning to the menu (N and the interval are settings). Continue loads the newest valid slot and skips corrupt ones with a notification.
 - [ ] Loading migrates, validates and then replaces the session. The undo stack is cleared and the replay log continues. _(Part 1, domain side done: `loadGame(bytes)` / `gameFromSave` in `@controls/scripting-api` migrate and validate through `readCtrl`, clear the history (`CommandBus.clearHistory`) and continue the log if it reproduces `world.json`'s hash, else start a new one (`replay.status`). `game.save()` writes. Replacing `Session`'s game is part 3.)_
-- [ ] E2E: save → reload gives the same hash in the web harness, and save/load works in `desktop-e2e` (also part of `release-engineer`'s smoke procedure).
+- [ ] E2E: save → reload gives the same hash in the web harness, and save/load works in `desktop-e2e` (also part of `release-engineer`'s smoke procedure). _(Part 2 covers the I/O layer: `game-e2e` `saves.spec.ts` writes the world JSON to OPFS through the `?e2e=1` platform hook, reloads and reads it back to the same `world.hash`; `desktop-e2e` `saves.spec.ts` writes and reads through the bridge, refuses forged handles and traversal, rotates autosaves, and round-trips Save As and Open with stubbed dialogs. The `.ctrl` round trip through the UI is part 3.)_
 - [x] `docs/history.md` records `schemaVersion` 1. _(With the container noted, F1.8b part 1.)_
 
 ### F1.9 Sandbox "workshop" level
@@ -336,18 +337,18 @@ Numbers are assigned in landing order. Planned:
 
 ## Status
 
-| Feature | Description                   | Status                                                |
-| ------- | ----------------------------- | ----------------------------------------------------- |
-| F1.1    | Shell UI                      | ✅ Done (`view.resetLayout` became a Command in F1.2) |
-| F1.2    | Command system                | ✅ Done                                               |
-| F1.3    | Command palette               | ✅ Done                                               |
-| F1.4    | Keybinding service            | ✅ Done                                               |
-| F1.5    | Dev console                   | ✅ Done                                               |
-| F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
-| F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets in F1.9)        |
-| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
-| F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)     |
-| F1.10   | Wire-routing spike (ADR 0010) | ✅ Done (ADR only; spike branch not merged)           |
+| Feature | Description                   | Status                                                    |
+| ------- | ----------------------------- | --------------------------------------------------------- |
+| F1.1    | Shell UI                      | ✅ Done (`view.resetLayout` became a Command in F1.2)     |
+| F1.2    | Command system                | ✅ Done                                                   |
+| F1.3    | Command palette               | ✅ Done                                                   |
+| F1.4    | Keybinding service            | ✅ Done                                                   |
+| F1.5    | Dev console                   | ✅ Done                                                   |
+| F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)                |
+| F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets in F1.9)            |
+| F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done; F1.8b parts 1–2 (container, save I/O) done |
+| F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)         |
+| F1.10   | Wire-routing spike (ADR 0010) | ✅ Done (ADR only; spike branch not merged)               |
 
 ## Close-out
 

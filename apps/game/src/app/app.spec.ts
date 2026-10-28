@@ -35,6 +35,12 @@ describe('App', () => {
     lifecycle: {
       onBeforeQuit: (flush) => (flushes.add(flush), () => void flushes.delete(flush)),
     },
+    files: {
+      list: async () => [],
+      read: async () => Promise.reject(new Error('no saves in this spec')),
+      write: async () => Promise.reject(new Error('no saves in this spec')),
+    },
+    dialogs: { open: async () => null, saveAs: async () => null },
   };
 
   beforeEach(async () => {

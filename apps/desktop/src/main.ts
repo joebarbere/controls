@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { APP_ENTRY_URL, APP_HOST, APP_ORIGIN, APP_SCHEME, resolveAppPath, SECURITY_HEADERS } from './app-protocol';
 import { FlushCoordinator, QuitGuard } from './flush-before-quit';
-import { registerIpcHandlers } from './ipc';
+import { registerIpcHandlers, type RegisteredIpc } from './ipc';
 import { startAutoUpdate } from './updater';
 
 const RENDERER_ROOT = join(__dirname, 'renderer');
@@ -52,6 +52,8 @@ function hardenSessions(): void {
   });
 }
 
+let ipc: RegisteredIpc | undefined;
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1440,
@@ -71,6 +73,8 @@ function createWindow(): void {
     },
   });
   quitGuard.guardWindow(window);
+  const webContentsId = window.webContents.id;
+  window.webContents.once('destroyed', () => ipc?.forgetWindow(webContentsId)); // its save handles die with it
   window.once('ready-to-show', () => window.show());
   void window.loadURL(APP_ENTRY_URL);
 }
@@ -95,7 +99,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     serveAppProtocol();
     hardenSessions();
-    registerIpcHandlers(flushCoordinator);
+    ipc = registerIpcHandlers(flushCoordinator);
     createWindow();
     startAutoUpdate();
     app.on('activate', () => {

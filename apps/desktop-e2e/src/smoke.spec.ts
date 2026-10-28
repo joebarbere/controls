@@ -50,7 +50,19 @@ test.describe.serial('desktop smoke', () => {
     expect(exposure).toEqual({
       require: 'undefined',
       process: 'undefined',
-      bridgeKeys: ['getAppInfo', 'getSettings', 'setSettings', 'quit', 'onFlushRequest', 'ackFlush'],
+      bridgeKeys: [
+        'getAppInfo',
+        'getSettings',
+        'setSettings',
+        'quit',
+        'onFlushRequest',
+        'ackFlush',
+        'listSaves',
+        'readSave',
+        'writeSave',
+        'showOpenDialog',
+        'showSaveAsDialog',
+      ],
     });
   });
 

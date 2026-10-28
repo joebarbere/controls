@@ -11,11 +11,14 @@ import {
 import {
   runFlushes,
   type AppLifecycle,
+  type DialogService,
+  type FileService,
   type PendingWritesFlush,
   type Platform,
   type SettingsService,
 } from '@controls/platform-api';
 import { defaultSettings, loadSettings, type Settings } from '@controls/save-format';
+import { ElectronDialogService, ElectronFileService } from './electron-files';
 
 /** Reads the preload bridge, if this renderer was loaded by the Controls Electron shell. */
 export function findBridge(globalObject: object = globalThis): ControlsBridge | undefined {
@@ -79,10 +82,14 @@ export class ElectronPlatform implements Platform {
   readonly canQuit = true;
   readonly settings: SettingsService;
   readonly lifecycle: AppLifecycle;
+  readonly files: FileService;
+  readonly dialogs: DialogService;
 
   constructor(private readonly bridge: ControlsBridge) {
     this.settings = new ElectronSettingsService(bridge);
     this.lifecycle = new ElectronAppLifecycle(bridge);
+    this.files = new ElectronFileService(bridge);
+    this.dialogs = new ElectronDialogService(bridge);
   }
 
   async getAppInfo(): Promise<AppInfo> {

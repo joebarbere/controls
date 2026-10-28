@@ -1,6 +1,6 @@
 # World document and saves
 
-> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. File I/O, IPC and the web harness store (F1.8b part 2), and autosave and the Continue/Load UI (part 3) _are later in P1_. Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
+> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). Autosave and the Continue/Load UI (part 3) _are later in P1_. Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
 
 ## Documents
 
@@ -207,7 +207,7 @@ flowchart LR
     WM["@controls/world-model (F1.2)<br/>world ops, sfc32, world.hash"]:::done
     CMD["@controls/commands (F1.2)<br/>replay log entries, clearHistory"]:::done
     API["@controls/scripting-api<br/>Game.save, loadGame (F1.8b)"]:::done
-    IO["platform FileService, IPC,<br/>atomic write (F1.8b part 2)"]:::later
+    IO["save I/O (F1.8b part 2)<br/>platform files and dialogs,<br/>IPC, atomic write"]:::done
     UI["autosave, Continue / Load<br/>(F1.8b part 3)"]:::later
     SET["SettingsService (F1.1)<br/>platform-api"]:::done
     CLI["apps/sim-cli (F1.6)<br/>run --save, replay, hash (.ctrl)"]:::done
@@ -219,13 +219,70 @@ flowchart LR
     CMD --> SF
     API --> WM
     API --> SF
-    IO -->|"opaque bytes"| SF
     UI --> API
     UI --> IO
     SET --> SF
     CLI --> API
     CLI --> LVL
 ```
+
+## Save I/O (F1.8b)
+
+The `.ctrl` bytes are opaque to this layer. `Platform.files` (`FileService`) and `Platform.dialogs` (`DialogService`) from `@controls/platform-api` move them; the renderer only ever holds **handles**. Decisions and alternatives: [ADR 0009](../decisions/0009-save-io-boundary.md); gotchas: [electron caveats](../caveats/electron.md).
+
+```mermaid
+flowchart LR
+    subgraph R["renderer (sandboxed)"]
+        UI["part 3: autosave timer,<br/>Continue, Load"] --> API["Platform.files / .dialogs<br/>(platform-api)"]
+        API --> PE["ElectronFileService<br/>schemas in, re-validate out"]
+        API --> PW["WebSaveStore<br/>(web harness)"]
+    end
+    PE --> PRE["preload bridge<br/>listSaves, readSave, writeSave,<br/>showOpenDialog, showSaveAsDialog"]
+    PRE -->|"invoke save:* / dialog:*"| H
+    subgraph M["Electron main"]
+        H["save-handlers<br/>app:// sender, Zod, size cap"] --> T["SaveHandleTable<br/>token → location, per WebContents"]
+        H --> S["SaveStore<br/>lstat, O_NOFOLLOW, rotation"]
+        H --> D["dialog.showOpenDialog /<br/>showSaveDialog"]
+        S --> AW["writeFileAtomic<br/>temp, fsync, rename, dir fsync"]
+    end
+    AW --> FS[("userData/saves/<br/>Name.ctrl<br/>autosave/slot-N.ctrl")]
+    PW --> OPFS[("OPFS saves/<br/>createWritable → close")]
+    PW --> DL["Open: file input upload<br/>Save As: blob download"]
+```
+
+```mermaid
+sequenceDiagram
+    participant G as game (part 3)
+    participant PE as ElectronFileService
+    participant MAIN as main: save-handlers
+    participant ST as SaveStore
+    G->>PE: write({ kind: 'autosave', slotCount: 3 }, bytes)
+    PE->>PE: SaveWriteRequestSchema, ≤ 64 MiB
+    PE->>MAIN: invoke save:write
+    MAIN->>MAIN: senderFrame is app://, schema, size
+    MAIN->>ST: writeAutosave(3, bytes) (queued)
+    ST->>ST: pickAutosaveSlot(existing, 3, lastWritten)
+    ST->>ST: temp file → fsync → rename → fsync dir
+    ST->>ST: remove slots above 3
+    ST-->>MAIN: { slot, mtime, size }
+    MAIN->>MAIN: handle = table.issue(sender.id, autosave slot)
+    MAIN-->>PE: SaveEntry (no path)
+    PE->>PE: SaveEntrySchema
+    PE-->>G: SaveEntry
+```
+
+| Channel         | Payload (`@controls/ipc-contract`)                                          | Response                                   | Notes                                                                                            |
+| --------------- | --------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `save:list`     | none                                                                        | `SaveEntry[]` (newest first, ≤ 500)        | Manual saves and autosave slots; symlinks, temp files and invalid names are skipped.             |
+| `save:read`     | `SaveReadRequestSchema`: `{ handle }`                                       | `Uint8Array` (≤ 64 MiB)                    | Write-only (Save As) handles are refused.                                                        |
+| `save:write`    | `SaveWriteRequestSchema`: `{ target: manual \| autosave \| handle, bytes }` | `SaveEntry`                                | Atomic. `manual` refuses `exists` unless `overwrite`; autosave and opened handles are read-only. |
+| `dialog:open`   | `DialogOpenRequestSchema`: `{ fileType: 'ctrl' }`                           | read-only `SaveEntry` (`external`) or null | Native dialog, modal to the window, one at a time (`busy`).                                      |
+| `dialog:saveAs` | `DialogSaveAsRequestSchema`: `{ fileType, suggestedName }`                  | write-only `{ handle, name }` or null      | Adds `.ctrl` if missing; writing the handle with `save:write` saves the file.                    |
+
+- **Handles:** 128 random bits per handle, valid only for the `WebContents` they were issued to; one stable handle per save-directory entry, a fresh one per dialog pick. They die with the window, so never persist one.
+- **Autosave rotation:** after the first autosave of a session, the next slot in turn; at the first, the lowest free slot, else the oldest by mtime. Slots above `slotCount` are removed after a successful write; a failed write doesn't advance the rotation.
+- **Web harness:** `WebSaveStore` keeps the same layout in OPFS with the same schemas, handles and codes. Open is an upload and Save As a download (no cancel, named after the suggested name).
+- **One contract:** `describeSaveIoContract` (`@controls/platform-api/testing`) runs against Electron (in-process IPC to the real handlers and a temp directory) and the web store (in-memory OPFS).
 
 ## Determinism hooks
 
@@ -237,5 +294,5 @@ flowchart LR
 
 ## Related
 
-- [Architecture overview](overview.md) · [ADR 0004](../decisions/0004-save-format.md) · [ADR 0007](../decisions/0007-world-document-v1.md) · [save-format caveats](../caveats/save-format.md)
+- [Architecture overview](overview.md) · [ADR 0004](../decisions/0004-save-format.md) · [ADR 0007](../decisions/0007-world-document-v1.md) · [ADR 0009](../decisions/0009-save-io-boundary.md) · [save-format caveats](../caveats/save-format.md) · [electron caveats](../caveats/electron.md)
 - [Phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.8

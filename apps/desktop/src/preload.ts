@@ -14,6 +14,11 @@ const bridge: ControlsBridge = {
     return () => void ipcRenderer.removeListener(IpcChannel.FlushRequest, forward);
   },
   ackFlush: (ack) => ipcRenderer.invoke(IpcChannel.FlushAck, ack),
+  listSaves: () => ipcRenderer.invoke(IpcChannel.SaveList),
+  readSave: (request) => ipcRenderer.invoke(IpcChannel.SaveRead, request),
+  writeSave: (request) => ipcRenderer.invoke(IpcChannel.SaveWrite, request),
+  showOpenDialog: (request) => ipcRenderer.invoke(IpcChannel.DialogOpen, request),
+  showSaveAsDialog: (request) => ipcRenderer.invoke(IpcChannel.DialogSaveAs, request),
 };
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);
