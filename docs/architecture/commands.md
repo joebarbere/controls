@@ -1,6 +1,6 @@
 # Commands and the world model
 
-> **Status (F1.6):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/` and the console-line parser under `console/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The scripting API's `Game` (`@controls/scripting-api`) wraps them; `sim-cli` scripts drive it, and so does the Angular adapter `libs/features/session` (`@controls/feature-session`: `Session`, `KeybindingService` and `ToolBelt`); see [scripting and sim-cli](scripting.md). The command palette (`feature-palette`, F1.3) is the second UI surface; the console UI (F1.5) is still to come. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
+> **Status (F1.6):** the registry, bus, undo/redo, replay and `when` live in `libs/domain/commands` (`@controls/commands`), with the keybinding core (chords, conflicts, resolution, input actions) under `keybindings/` and the console-line parser under `console/`. The world commands, PRNG and `world.hash` live in `libs/domain/world-model` (`@controls/world-model`). The scripting API's `Game` (`@controls/scripting-api`) wraps them; `sim-cli` scripts drive it, and so does the Angular adapter `libs/features/session` (`@controls/feature-session`: `Session`, `KeybindingService` and `ToolBelt`); see [scripting and sim-cli](scripting.md). The command palette (`feature-palette`, F1.3) is the second UI surface; F1.7 added the viewport's view commands (`view.mode`, `view.focus`), bindings whose arguments come from context keys, and mouse and keyboard gestures that commit as `entity.place` / `entity.move` ([rendering](rendering.md#placement-and-moves)). The console UI (F1.5) is the third. Decisions: [ADR 0006](../decisions/0006-command-system.md) (semantics) and [ADR 0007](../decisions/0007-world-document-v1.md) (ids, PRNG, hash). Gotchas: [commands caveats](../caveats/commands.md).
 
 ## One registry, four surfaces
 
@@ -10,6 +10,7 @@ Every surface goes through the same registry and bus. Only the bus changes the w
 flowchart LR
     classDef later fill:#f4f4f4,stroke:#999,stroke-dasharray: 4 3;
     BTN["UI buttons<br/>(Reset layout)"] --> SES
+    GES["Viewport gestures (F1.7)<br/>click, drag, Enter → intents"] --> SES
     PAL["CommandPalette (F1.3)<br/>forms from Zod args"] --> SES
     KEY["KeybindingService (F1.4)<br/>document keydown"] --> SES
     CON["Console (F1.5)"] --> SES
@@ -30,6 +31,8 @@ flowchart LR
     SES -->|"onCommand('view.resetLayout')"| WS["feature-workspace<br/>resets its layout"]
     SES -->|"onCommand('toolbelt.select')"| TB["ToolBelt<br/>active slot, toolbelt.slot key"]
     SES -->|"onCommand('palette.open')"| PAL
+    SES -->|"onCommand('view.mode' / 'view.focus')"| VPT["Viewport<br/>renderer setMode / focus"]
+    SES -->|"world() snapshot"| VPT
 ```
 
 ## `exec`
@@ -89,19 +92,21 @@ Positions are integer mm and angles integer millidegrees, validated by the `save
 
 ## View commands
 
-| Id                 | Args                           | Effect (applied by the UI through `Session.onCommand`)                            |
-| ------------------ | ------------------------------ | --------------------------------------------------------------------------------- |
-| `view.resetLayout` | none                           | the workspace restores its default panel layout                                   |
-| `toolbelt.select`  | `slot`: integer 1–9 (required) | `ToolBelt` sets the active slot and the `toolbelt.slot` context key; HUD shows it |
+| Id                 | Args                                                          | Effect (applied by the UI through `Session.onCommand`)                                                        |
+| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `view.resetLayout` | none                                                          | the workspace restores its default panel layout                                                               |
+| `toolbelt.select`  | `slot`: integer 1–9 (required)                                | `ToolBelt` sets the active slot and the `toolbelt.slot` context key; HUD shows it; the viewport arms its prop |
+| `view.mode`        | `mode`: `walk` or `work` (required)                           | the viewport switches mode and publishes the `mode` context key                                               |
+| `view.focus`       | `target`: view target id, `[a-z][a-z0-9]*(-[a-z0-9]+)*`, ≤ 64 | the viewport frames that target in work mode (an id it can't focus is ignored)                                |
 
-Both are logged, never change the world or its hash, and replay headless as no-ops.
+All are logged, never change the world or its hash, and replay headless as no-ops. `view.mode` and `view.focus` stay logged on purpose: they change what the player sees, unlike the unlogged UI chrome (`palette.open`, `console.toggle`). `view.mode` and `view.focus` are registered by `createWorldRegistry()` (`viewportCommands()` in `@controls/commands`).
 
 ## Keybindings
 
 ```mermaid
 flowchart LR
     subgraph domain["@controls/commands keybindings/ (type:domain)"]
-        DEF["defaultBindingDecls(registry)<br/>CommandDef.keybinding · toolbelt.select.slot1–9 · INPUT_ACTIONS"]
+        DEF["defaultBindingDecls(registry)<br/>CommandDef.keybinding · toolbelt.select.slot1–9 ·<br/>CommandDef.bindings (fixed / context args) · INPUT_ACTIONS"]
         KM["Keymap.create(decls, overrides, platform)<br/>canonical chords · conflicts · invalid overrides"]
         DIS["provablyDisjoint(when, when)<br/>NNF + capped DNF"]
         DEF --> KM
@@ -110,13 +115,15 @@ flowchart LR
     SET["settings controls.keybindings<br/>binding id → chord | null"] -->|"KEYBINDING_OVERRIDES"| KS
     KM --> KS["KeybindingService<br/>(feature-session)"]
     KEYDOWN["document keydown"] --> KS
-    KS -->|"resolve(chord, contextKeys, restricted?)"| EXEC["Session.exec(command, args)"]
+    KS -->|"resolve(chord, contextKeys, restricted?)<br/>bindingArgs(target, contextKeys)"| EXEC["Session.exec(command, args)"]
     KS -->|"inputCodes(): action → codes"| VP["Viewport → ViewportRenderer.setBindings"]
     KS --> UI["Key bindings dialog<br/>(feature-settings)"]
     UI -->|"setBinding / reset / resetAll"| SET
 ```
 
-- **Binding ids** are the settings keys: a command id (`edit.undo`), a fixed-argument binding (`toolbelt.select.slot3` → `toolbelt.select {slot: 3}`) or an input action (`input.moveForward`, reserved namespace). Overrides replace every default of a binding; `null` unbinds.
+- **Binding ids** are the settings keys: a command id (`edit.undo`), a fixed-argument binding (`toolbelt.select.slot3` → `toolbelt.select {slot: 3}`, `view.mode.walk` → `view.mode {mode: 'walk'}`), a context-argument binding (`view.focus.selection`, `entity.delete.selection`) or an input action (`input.moveForward`, reserved namespace). Overrides replace every default of a binding; `null` unbinds.
+- **Context arguments (F1.7):** a command binding may take arguments from context keys (`contextArgs: { id: 'selection.entityId' }`). It only resolves while every such key is set, and `bindingArgs` reads the values at key time, so the log holds concrete arguments. Commands declare these extra bindings in `CommandDef.bindings`.
+- **Viewport keys (F1.7):** `V` is two bindings on disjoint `when`s (`mode == 'work'` → walk, `mode == 'walk'` → work); `F` focuses the selection when `selection.focusable`; `Delete` and `Backspace` delete the selected entity. All three need `viewport.focused`, like the input actions they replaced.
 - **Canonical chords** (`Mod+Shift+Z`): modifiers `Mod`, `Ctrl`, `Meta`, `Alt`, `Shift`, then a key name (`KeyboardEvent.code` without `Key`/`Digit`). `Mod` is Ctrl, or Cmd on macOS. Command letters follow the layout, everything else is positional; input actions are always positional bare keys.
 - **Resolution:** the player's bindings first, then by id. The first command binding whose `when` holds runs; in text fields, code editors and dialogs only `globalKeybinding` commands do. Tab, Shift+Tab and Escape are reserved.
 - **Conflicts:** same chord and `when`s not provably disjoint (input actions count as `viewport.focused`). Shown on both bindings, never shadowed. Rules and the proof are in [ADR 0006](../decisions/0006-command-system.md#keybindings-f14).

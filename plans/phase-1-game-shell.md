@@ -184,17 +184,17 @@ All of this is in `@controls/renderer`, which now depends on `world-model` and `
 
 Acceptance:
 
-- [ ] `mm()` moves to `@controls/units`. Snapshot add/update/remove keeps the scene in sync (scene-graph JSON snapshot test). _(Part 1: `mm()`/`metresToMm()` moved and a scene-graph JSON snapshot test exists; snapshot sync waits for F1.2.)_
+- [x] `mm()` moves to `@controls/units`. Snapshot add/update/remove keeps the scene in sync (scene-graph JSON snapshot test). _(Part 1: `mm()`/`metresToMm()` moved. Part 2: `WorldSync` draws world entities by id with ref-counted prop recipes; snapshots cover add, move and remove; the snap maths moved to `world-model` `snap/`.)_
 - [x] Walk mode: WASD plus mouse look with pointer lock, Esc releases, kept inside the room bounds.
-- [ ] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key. _(Part 1: `setMode`/`focus` renderer API with orbit, zoom and pan limits on the backplate and rails; walls and benches arrive with F1.9; the Commands and context key wait for F1.2.)_
+- [x] Work mode: focus a backplate, wall or bench, then orbit and pan with limits. `view.mode walk|work` and `view.focus --target <id>` are commands, and the mode is a `when` context key. _(Part 1: orbit, zoom and pan limits on the backplate and rails. Part 2: both view commands, the `mode` and `selection.*` context keys, and V/F as their bindings (ADR 0006). Walls and benches become focus targets with F1.9.)_
 - [x] Hover and selection by BVH raycast. Selection is UI state (`selection.kind`), not world state. Keyboard users can cycle through selectable entities.
-- [ ] Placement: _(Part 1: pure integer-mm `snap()` for all three targets with sourced constants, unit- and property-tested; the ghost preview and Commands wait for F1.2.)_
+- [x] Placement: _(Part 1: pure integer-mm `snap()` for all three targets with sourced constants. Part 2: the ghost, one Command per commit through `feature-workspace`, Escape and Delete; keyboard placement with Enter at the reticle and M to pick up. Wall studs are snapped and tested, but no wall exists until F1.9.)_
   - a ghost preview snaps to the DIN rail, the backplate grid and wall studs, with snap increments taken from sourced constants;
   - committing produces **one** `entity.place` or `entity.move` and dragging produces none;
   - Esc cancels without a command;
   - Delete runs `entity.delete`.
 - [x] Every new geometry, material and BVH is disposed when the scene is torn down (unit test). The forced WebGL2 path stays covered by E2E. A dev HUD shows frame time.
-- [ ] E2E: place, move and delete with the mouse gives the same `world.hash` as the equivalent console lines.
+- [x] E2E: place, move and delete with the mouse gives the same `world.hash` as the equivalent console lines. _(`apps/game-e2e/src/placement.spec.ts` (forced WebGL2) and `pnpm sim run apps/sim-cli/scenarios/mouse-place-move-delete.console` both end at the hash pinned in `apps/sim-cli/src/mouse-place-move-delete.spec.ts`. The in-game console (F1.5) should run the same file to it.)_
 
 ### F1.8 World document v1 and the `.ctrl` container
 
@@ -335,7 +335,7 @@ Numbers are assigned in landing order. Planned:
 | F1.4    | Keybinding service            | ✅ Done                                               |
 | F1.5    | Dev console                   | ✅ Done                                               |
 | F1.6    | Scripting API v0 + `sim-cli`  | ✅ Done (`.ctrl` input arrives with F1.8b)            |
-| F1.7    | Cameras and interaction       | 🚧 Part 1                                             |
+| F1.7    | Cameras and interaction       | ✅ Done (walls and benches as targets with F1.9)      |
 | F1.8    | World document v1 + `.ctrl`   | 🚧 F1.8a done (schemas, migrations); F1.8b planned    |
 | F1.9    | Workshop level                | 📐 Planned                                            |
 | F1.10   | Wire-routing spike (ADR 0010) | 📐 Planned                                            |

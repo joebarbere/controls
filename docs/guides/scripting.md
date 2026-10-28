@@ -148,6 +148,29 @@ The full grammar and its rationale are in [ADR 0008](../decisions/0008-console-a
 
 `apps/sim-cli/scenarios/four-surface.{ts,console}` is the P1 acceptance scenario: place, move, rotate and delete with undo and redo. `apps/sim-cli/src/four-surface.spec.ts` drives it through the scripting API in-process, `sim run` of the TypeScript script, `sim run` of the console file and `sim replay` of the written log, and requires the same pinned hash from all of them. It runs in `pnpm nx test sim-cli`, which is part of `pnpm verify`. The palette and keybinding surfaces need the UI and are driven in `apps/game-e2e`, which must reach the same hash.
 
+## Snapping like the mouse
+
+The viewport doesn't invent positions: when you click, it asks `@controls/world-model` where the active prop snaps under the cursor, and runs `entity.place` with exactly that answer. A script can ask the same question:
+
+```ts
+import type { Game } from '@controls/scripting-api';
+import { demoPanelSnapTargets, placeOnTargets } from '@controls/world-model';
+
+export default function (game: Game): void {
+  const box = { id: 'prop.box', version: 1 };
+  // Aim at the backplate point (-150, 300, 0) mm; the 120 x 80 mm box snaps to the 5 mm grid.
+  const placed = placeOnTargets(box, { x: -150, y: 300, z: 0 }, demoPanelSnapTargets());
+  if (!placed.ok) throw new Error(placed.reason);
+  game.execOrThrow('entity.place', {
+    ref: box,
+    positionMm: placed.positionMm,
+    orientationMdeg: placed.orientationMdeg,
+  });
+}
+```
+
+DIN rails win over the backplate behind them, and a move keeps the entity's orientation (pass `{ orientationMdeg }` as the fourth argument). `apps/sim-cli/scenarios/mouse-place-move-delete.{ts,console}` is the F1.7 scenario: the TypeScript version aims like the mouse, the console version spells out the positions, and `apps/sim-cli/src/mouse-place-move-delete.spec.ts` checks both against the hash that the mouse e2e (`apps/game-e2e/src/placement.spec.ts`) also reaches. Until the workshop level (F1.9) the only targets are the demo panel's.
+
 ## Troubleshooting
 
 | Message                                                 | Fix                                                                                         |

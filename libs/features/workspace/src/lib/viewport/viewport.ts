@@ -149,7 +149,7 @@ export class Viewport {
   readonly backend = signal<RenderBackend | undefined>(undefined);
   readonly state = signal<ViewportState | undefined>(undefined);
   readonly stats = signal<ViewportStats | undefined>(undefined);
-  /** `selection.kind` for the HUD and (from F1.2) the `when` context. */
+  /** `selection.kind` for the HUD (the `when` context key is published by `publishContext`). */
   readonly selectionKind = computed(() => this.state()?.selected?.kind ?? null);
   /** `true`/`false` while a ghost is shown (whether committing would produce a command), else absent. */
   protected readonly placementValid = computed(() => {

@@ -26,16 +26,18 @@ What exists today (Phase 0 scaffold):
 - Light and dark themes that follow your system, and reduced motion.
 - Keyboard-first: everything works without a mouse, with visible focus, and focus returns to where it was after a dialog. Notifications are announced to screen readers and can be dismissed from the keyboard.
 - Rebindable keys for every command and every movement key (Settings → Key bindings…), with conflicts shown rather than hidden and `Mod` as Cmd on macOS. Keys never fire while you type.
-- A tool belt: keys 1–9 pick a slot, and the HUD shows what it holds.
+- A tool belt: keys 1–9 pick a slot, and the HUD shows what it holds. The viewport places the slot's prop.
 - A command palette (Ctrl+K or Ctrl+Shift+P, Cmd on macOS): fuzzy search over every command, recent commands first, unavailable ones shown with the reason, and a form for each command's arguments with inline validation. Cheats ask before they mark your world as assisted. Works with the arrow keys, Enter and Esc alone.
 - A dev console (backtick) in Sandbox and dev builds: type `verb.noun --flag value` lines with Tab completion for commands, flags and values, recall earlier lines with ↑/↓ (kept across restarts), read `help [id]` generated from the commands themselves, print `world.hash`, and `run` a console-line file you pick or drop. Errors point at the column, and a banner warns before a cheat marks the save as assisted.
 
 ### Rendering
 
 - Three.js r186 viewport using `WebGPURenderer` with automatic WebGL2 fallback, showing a procedurally built sub-panel with two TS35 DIN rails.
-- Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. Press V to switch and F to focus the selection; all of these keys can be rebound.
+- Two camera modes. Work mode focuses a target and orbits and pans within limits. Walk mode is first person, with WASD, mouse look and pointer lock. V switches mode and F focuses the selection, both through logged commands (`view.mode`, `view.focus`); all of these keys can be rebound.
+- The viewport draws the world document by entity id: placed objects appear, move and disappear as commands run (undo and redo included), as procedural props that share geometry, and removing them returns GPU memory to where it was.
+- Placement with a snapping ghost preview: pick a prop (1–9), aim, click or press Enter to place it; drag an object (or select it, M, Enter) to move it; Delete removes it; Escape cancels. Each commit is exactly one command, so the mouse reaches the same `world.hash` as the equivalent console lines.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). A frame-time HUD shows in dev builds.
-- Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. Placement through commands follows.
+- Integer-millimetre snap maths for DIN rails, the backplate grid and wall studs, with a cited source for every real-world dimension. It lives in the world model, so scripts snap exactly like the mouse.
 
 ### Commands and world
 

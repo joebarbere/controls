@@ -17,6 +17,8 @@
 > **P1 so far (F1.3):** `libs/features/palette` (`@controls/feature-palette`, `type:feature`): the command palette, with argument forms generated from each command's Zod `args`. `palette.open` joined the built-in view commands in `@controls/commands`, with the `.meta()` arg hints (`x-controls-ref`) and the `selection.entityId` context key. See [UI shell](ui-shell.md#command-palette-f13).
 > **P1 so far (F1.5):** `libs/features/console` (`@controls/feature-console`): the dev console on CodeMirror 6 (`@codemirror/state`, `@codemirror/view`, loaded lazily), docked in the workspace, with the `console.toggle` view command in `@controls/commands` and `consoleFields` next to the console-line mapping. See [dev console](console.md).
 >
+> **P1 so far (F1.7):** the renderer draws world snapshots by entity id and turns gestures into intents that `feature-workspace` executes as `entity.place` / `entity.move` (`REND --> WM` is real: snap and placement maths, prop sizes and world types come from `@controls/world-model`). `view.mode` and `view.focus` are view commands. `feature-workspace` now reads the tool belt's props from `feature-settings`. See [rendering](rendering.md).
+>
 > Items marked _(PN)_ below arrive in that phase.
 
 ## Process and thread model
@@ -63,7 +65,7 @@ flowchart TB
 
 ## Module boundaries
 
-Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today (including the F1.1 UI libs and the F1.2 command libs), and the edges between them are the imports that actually exist (`REND --> DOM` is still intended). `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()` and `metresToMm()` from `@controls/units`. `REND --> CMDS` is real since F1.4: the renderer takes its input-action table from `@controls/commands`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
+Nx project tags, enforced by `@nx/enforce-module-boundaries` in the root ESLint config. The authoritative `depConstraints` live in `eslint.config.mjs`; this diagram shows the intent from plan §4.2. Green boxes exist today (including the F1.1 UI libs and the F1.2 command libs), and the edges between them are the imports that actually exist (`REND --> DOM` is still intended). `REND --> UNITS` is real since F1.7: the renderer converts scene units with `mm()`, `metresToMm()` and `mdegToRadians()` from `@controls/units`. `REND --> WM` is real since F1.7 part 2: world types, snapping and placement come from `@controls/world-model`. `REND --> CMDS` is real since F1.4: the renderer takes its input-action table from `@controls/commands`. The renderer's internals are on the [rendering page](rendering.md). E2E projects (`type:e2e`) may import no workspace libs, so they aren't drawn.
 
 ```mermaid
 flowchart LR
@@ -95,7 +97,7 @@ flowchart LR
     DESK --> IPC
     SIMCLI --> SAPI & CMDS & WM & SF
     FEAT --> SAPI & CMDS & WM & SF & REND & UI & PAPI & IPC
-    REND --> UNITS & CMDS & DOM
+    REND --> UNITS & CMDS & WM & DOM
     PAPI --> IPC
     PEL --> PAPI & IPC
     PWEB --> PAPI & IPC & UNITS
