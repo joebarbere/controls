@@ -6,7 +6,7 @@
 >
 > **P1 so far:** `libs/domain/save-format` (`@controls/save-format`, F1.8a): the v1 world, manifest, replay-log and settings schemas, the migration framework, fixtures and JSON Schema export. See [world and saves](world-and-saves.md).
 >
-> **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`. `platform-api` gained `Platform.settings` (`SettingsService`) and `Platform.quit`, and three IPC channels joined `app:info`: `settings:get`, `settings:set` (atomic write of `userData/settings.json`) and `app:quit`. See [UI shell](ui-shell.md).
+> **P1 so far (F1.1):** `libs/ui` (`@controls/ui`, `type:ui`), `libs/features/shell`, `libs/features/workspace` and `libs/features/settings` (`type:feature`). The `Viewport` component moved from `apps/game` into `feature-workspace`. `platform-api` gained `Platform.settings` (`SettingsService`) and `Platform.quit`, and three IPC channels joined `app:info`: `settings:get`, `settings:set` (atomic write of `userData/settings.json`) and `app:quit`. Flush before quit later added `Platform.lifecycle` (`AppLifecycle`) and `app:flush-request` (main → renderer) / `app:flush-ack`, so buffered writes reach disk before a window closes or the app quits. See [UI shell](ui-shell.md#flush-before-quit).
 >
 > **P1 so far (F1.2):** `libs/domain/commands` (`@controls/commands`: registry, bus, undo/redo, replay, `when`), `libs/domain/world-model` (`@controls/world-model`: entity commands, sfc32, SHA-256 `world.hash`) and `libs/features/session` (`@controls/feature-session`, the Angular adapter). See [commands](commands.md).
 

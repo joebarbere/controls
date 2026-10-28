@@ -5,3 +5,4 @@ export * from './lib/new-game/new-game-dialog';
 export * from './lib/notifications/notification.service';
 export * from './lib/notifications/notifications';
 export * from './lib/shell-state';
+export * from './lib/lifecycle/app-lifecycle';

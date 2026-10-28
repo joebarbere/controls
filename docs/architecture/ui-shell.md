@@ -203,6 +203,42 @@ sequenceDiagram
 
 - **Web harness:** `WebSettingsService` stores the same JSON in `localStorage` (`controls.settings`), with every access in try/catch. Both platforms parse stored text with `parseStoredSettings` from `@controls/ipc-contract`, so fallback behaviour is identical.
 - **Quit:** `Platform.quit()` → `app:quit` → `app.quit()` on desktop (including macOS). The web harness has no Quit.
+
+### Flush before quit
+
+Buffered writes (the settings debounce now, autosave from F1.8b) must reach disk before the window closes or the app quits; Angular's `DestroyRef` doesn't run then. Features register a flush with `Platform.lifecycle.onBeforeQuit` (Angular: `APP_LIFECYCLE`), and main holds the close or quit until the renderer acknowledges.
+
+```mermaid
+sequenceDiagram
+    participant P as Player
+    participant MAIN as main: QuitGuard
+    participant FC as FlushCoordinator
+    participant PRE as preload bridge
+    participant LC as ElectronAppLifecycle
+    participant STORE as SettingsStore.flush
+    P->>MAIN: Quit / Cmd+Q / close window
+    MAIN->>MAIN: before-quit or close: preventDefault (once)
+    MAIN->>FC: request(webContents)
+    FC->>PRE: send app:flush-request { requestId }
+    PRE->>LC: onFlushRequest(payload only)
+    LC->>LC: FlushRequestSchema
+    LC->>STORE: run every registered flush
+    STORE-->>LC: pending + in-flight saves settled
+    LC->>PRE: ackFlush({ requestId, ok })
+    PRE->>FC: invoke app:flush-ack
+    FC->>FC: app:// sender, FlushAckSchema, id pending for this WebContents
+    FC-->>MAIN: flushed | failed (or timeout after 2 s, or gone)
+    MAIN->>MAIN: close / app.quit() again (passes)
+```
+
+| Channel             | Direction       | Payload (`@controls/ipc-contract`)                   | Notes                                                                                  |
+| ------------------- | --------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `app:flush-request` | main → renderer | `FlushRequestSchema`: `{ requestId: int > 0 }`       | `webContents.send`; the preload forwards the payload only, never the IPC event.        |
+| `app:flush-ack`     | renderer → main | `FlushAckSchema`: `{ requestId: int > 0, ok: bool }` | `invoke`/`handle`; refused unless the sender is `app://` and the id is pending for it. |
+
+- **Every close path:** `before-quit` (menu Quit through `app:quit`, Cmd+Q, the Dock, `window-all-closed`) flushes every open window; a window's `close` (title-bar button) flushes that window. A close during a quit shares its flush.
+- **Never blocks quitting:** `FLUSH_BEFORE_QUIT_TIMEOUT_MS` (2 s) bounds the wait, a destroyed or crashed renderer isn't waited for, and a failed flush still closes (the store has already shown an error).
+- **Web harness:** `WebAppLifecycle` runs the flushes on `pagehide`. The browser doesn't wait for promises, so each flush is called synchronously (`runFlushes`), which is enough for the `localStorage` write.
 - **Notifications:** info and success auto-dismiss after 8 s; warnings and errors stay until dismissed. Expiry pauses while the pointer or keyboard focus is in the stack. Each toast has a Dismiss button, Escape dismisses the focused toast, and focus then moves to the next toast or back to where it came from.
 
 ## Related

@@ -1,4 +1,5 @@
 import type { AppInfo } from '@controls/ipc-contract';
+import type { AppLifecycle } from './lifecycle';
 import type { SettingsService } from './settings';
 
 /**
@@ -13,6 +14,8 @@ export interface Platform {
   readonly settings: SettingsService;
   /** Whether {@link quit} can end the app. A browser tab can't close itself, so the web harness hides Quit. */
   readonly canQuit: boolean;
-  /** Ends the app. */
+  /** Ends the app. Flushes registered with {@link AppLifecycle.onBeforeQuit} run first. */
   quit(): void;
+  /** Flush-before-quit hooks for features with buffered writes (settings now, autosave from F1.8b). */
+  readonly lifecycle: AppLifecycle;
 }

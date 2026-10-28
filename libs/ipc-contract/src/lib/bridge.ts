@@ -11,8 +11,15 @@ export interface ControlsBridge {
   readonly getSettings: () => Promise<unknown>;
   /** `settings:set`: rejects if main refuses the document (invalid, too large). */
   readonly setSettings: (settings: unknown) => Promise<void>;
-  /** `app:quit`. */
+  /** `app:quit`. Main flushes the renderer (`app:flush-request`) before it really quits. */
   readonly quit: () => Promise<void>;
+  /**
+   * Subscribes to `app:flush-request` (main → renderer). The listener gets only the payload (to be
+   * validated with `FlushRequestSchema`), never the IPC event. Returns an unsubscribe function.
+   */
+  readonly onFlushRequest: (listener: (request: unknown) => void) => () => void;
+  /** `app:flush-ack`: answers a flush request (`FlushAckSchema`). */
+  readonly ackFlush: (ack: unknown) => Promise<void>;
 }
 
 /** Global key the preload uses with `contextBridge.exposeInMainWorld`. */

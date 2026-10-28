@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { NotificationService } from '@controls/feature-shell';
-import type { SettingsLoadResult, SettingsService } from '@controls/platform-api';
+import { APP_LIFECYCLE, NotificationService } from '@controls/feature-shell';
+import type { AppLifecycle, PendingWritesFlush, SettingsLoadResult, SettingsService } from '@controls/platform-api';
 import { defaultSettings, type Settings } from '@controls/save-format';
 import { MemorySettingsService, SETTINGS_SERVICE } from './settings-service';
 import { SAVE_DEBOUNCE_MS, SettingsStore } from './settings-store';
@@ -31,8 +31,25 @@ class FakeService implements SettingsService {
 
 const ok = (settings: Settings = defaultSettings()): SettingsLoadResult => ({ settings, fallbackReason: null });
 
-function setup(service: SettingsService) {
-  TestBed.configureTestingModule({ providers: [{ provide: SETTINGS_SERVICE, useValue: service }] });
+/** Records registered flushes so a test can play the host asking for them before quit. */
+class FakeLifecycle implements AppLifecycle {
+  readonly flushes = new Set<PendingWritesFlush>();
+  onBeforeQuit(flush: PendingWritesFlush): () => void {
+    this.flushes.add(flush);
+    return () => void this.flushes.delete(flush);
+  }
+  beforeQuit(): Promise<unknown> {
+    return Promise.all([...this.flushes].map((flush) => flush()));
+  }
+}
+
+function setup(service: SettingsService, lifecycle: AppLifecycle = new FakeLifecycle()) {
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: SETTINGS_SERVICE, useValue: service },
+      { provide: APP_LIFECYCLE, useValue: lifecycle },
+    ],
+  });
   return { store: TestBed.inject(SettingsStore), notifications: TestBed.inject(NotificationService) };
 }
 
@@ -127,6 +144,63 @@ describe('SettingsStore', () => {
     store.update('display', { units: 'metric' });
     await store.flush();
     expect(service.saved).toHaveLength(1);
+  });
+
+  it('writes a change still inside the debounce when the host is about to quit', async () => {
+    const service = new FakeService(ok());
+    const lifecycle = new FakeLifecycle();
+    const { store } = setup(service, lifecycle);
+    await store.loaded;
+    vi.useFakeTimers();
+    store.update('display', { theme: 'dark' });
+    expect(lifecycle.flushes.size).toBe(1);
+    await lifecycle.beforeQuit(); // no timer advanced: the debounce has not fired
+    expect(service.saved).toHaveLength(1);
+    expect(service.saved[0].display.theme).toBe('dark');
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS * 2);
+    expect(service.saved).toHaveLength(1); // the cancelled debounce does not save again
+  });
+
+  it('flush waits for a save that is already on its way', async () => {
+    const service = new FakeService(ok());
+    let finishSave: () => void = () => undefined;
+    service.save = (settings) => {
+      service.saved.push(settings);
+      return new Promise<void>((resolve) => (finishSave = resolve));
+    };
+    const { store } = setup(service);
+    await store.loaded;
+    vi.useFakeTimers();
+    store.update('display', { units: 'metric' });
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS); // the debounced save starts and hangs
+    expect(service.saved).toHaveLength(1);
+    let flushed = false;
+    void store.flush().then(() => (flushed = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flushed).toBe(false);
+    finishSave();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flushed).toBe(true);
+    expect(service.saved).toHaveLength(1); // nothing was pending, so nothing new was written
+  });
+
+  it('flush still resolves when the save fails (the player is told instead)', async () => {
+    const service = new FakeService(ok());
+    service.save = () => Promise.reject(new Error('disk full'));
+    const { store, notifications } = setup(service);
+    await store.loaded;
+    store.update('display', { units: 'metric' });
+    await expect(store.flush()).resolves.toBeUndefined();
+    expect(notifications.toasts()).toEqual([expect.objectContaining({ level: 'error' })]);
+  });
+
+  it('unregisters its flush when destroyed', async () => {
+    const lifecycle = new FakeLifecycle();
+    const { store } = setup(new MemorySettingsService(), lifecycle);
+    await store.loaded;
+    expect(lifecycle.flushes.size).toBe(1);
+    TestBed.resetTestingModule();
+    expect(lifecycle.flushes.size).toBe(0);
   });
 
   it('restores on-screen defaults but keeps the layout and keybindings', async () => {

@@ -2,12 +2,19 @@ import {
   AppInfoSchema,
   BRIDGE_KEY,
   fallbackReasonFor,
+  FlushRequestSchema,
   SettingsGetResponseSchema,
   type AppInfo,
   type ControlsBridge,
   type SettingsLoadResult,
 } from '@controls/ipc-contract';
-import type { Platform, SettingsService } from '@controls/platform-api';
+import {
+  runFlushes,
+  type AppLifecycle,
+  type PendingWritesFlush,
+  type Platform,
+  type SettingsService,
+} from '@controls/platform-api';
 import { defaultSettings, loadSettings, type Settings } from '@controls/save-format';
 
 /** Reads the preload bridge, if this renderer was loaded by the Controls Electron shell. */
@@ -38,14 +45,44 @@ export class ElectronSettingsService implements SettingsService {
   }
 }
 
+/**
+ * Flush before quit, renderer side. Subscribes to `app:flush-request` as soon as it is created, so
+ * main gets an ack even when nothing is registered. On a valid request it runs every registered
+ * flush, waits for all of them to settle, and answers with `app:flush-ack`. A malformed request is
+ * ignored (main times out). Main enforces the deadline; there is no renderer-side timeout.
+ */
+export class ElectronAppLifecycle implements AppLifecycle {
+  private readonly flushes = new Set<PendingWritesFlush>();
+
+  constructor(private readonly bridge: ControlsBridge) {
+    bridge.onFlushRequest((request) => void this.handleRequest(request));
+  }
+
+  onBeforeQuit(flush: PendingWritesFlush): () => void {
+    // Wrapped, so registering the same function twice gives two independent registrations.
+    const entry: PendingWritesFlush = () => flush();
+    this.flushes.add(entry);
+    return () => void this.flushes.delete(entry);
+  }
+
+  private async handleRequest(request: unknown): Promise<void> {
+    const parsed = FlushRequestSchema.safeParse(request);
+    if (!parsed.success) return;
+    const ok = await runFlushes(this.flushes);
+    await this.bridge.ackFlush({ requestId: parsed.data.requestId, ok }).catch(() => undefined);
+  }
+}
+
 /** {@link Platform} backed by the typed preload bridge. Responses are re-validated renderer-side. */
 export class ElectronPlatform implements Platform {
   readonly kind = 'electron' as const;
   readonly canQuit = true;
   readonly settings: SettingsService;
+  readonly lifecycle: AppLifecycle;
 
   constructor(private readonly bridge: ControlsBridge) {
     this.settings = new ElectronSettingsService(bridge);
+    this.lifecycle = new ElectronAppLifecycle(bridge);
   }
 
   async getAppInfo(): Promise<AppInfo> {

@@ -2,10 +2,15 @@ import { app, BrowserWindow, net, protocol, session, shell } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { APP_ENTRY_URL, APP_HOST, APP_ORIGIN, APP_SCHEME, resolveAppPath, SECURITY_HEADERS } from './app-protocol';
+import { FlushCoordinator, QuitGuard } from './flush-before-quit';
 import { registerIpcHandlers } from './ipc';
 import { startAutoUpdate } from './updater';
 
 const RENDERER_ROOT = join(__dirname, 'renderer');
+
+// Flush before quit: window close and app quit wait for the renderer's pending writes (or a timeout).
+const flushCoordinator = new FlushCoordinator();
+const quitGuard = new QuitGuard(app, () => BrowserWindow.getAllWindows(), flushCoordinator);
 
 // Must run before `ready`: makes app:// a standard, secure origin (fetch, CORS, workers, code cache).
 protocol.registerSchemesAsPrivileged([
@@ -65,6 +70,7 @@ function createWindow(): void {
       spellcheck: false,
     },
   });
+  quitGuard.guardWindow(window);
   window.once('ready-to-show', () => window.show());
   void window.loadURL(APP_ENTRY_URL);
 }
@@ -77,6 +83,7 @@ if (userDataOverride) app.setPath('userData', userDataOverride);
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  quitGuard.install();
   app.on('second-instance', () => {
     const [window] = BrowserWindow.getAllWindows();
     if (window) {
@@ -88,7 +95,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     serveAppProtocol();
     hardenSessions();
-    registerIpcHandlers();
+    registerIpcHandlers(flushCoordinator);
     createWindow();
     startAutoUpdate();
     app.on('activate', () => {
@@ -96,6 +103,7 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 
+  // Each window flushed as it closed, so this quit's `before-quit` has nothing left to wait for.
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });

@@ -8,7 +8,13 @@ const workspaceRoot = join(__dirname, '../../..');
 
 export interface LaunchedControls {
   readonly window: Page;
+  /** Quits the app (`app.quit()` on the dev build, a signal on a packaged one) and waits for it to exit. */
   close(): Promise<void>;
+  /**
+   * Closes the window the way the title-bar button does (`BrowserWindow.close()` in main). Dev build
+   * only: a packaged build has no Node inspector to run it through, so this is undefined there.
+   */
+  readonly closeWindow?: () => Promise<void>;
 }
 
 function chromiumArgs(): string[] {
@@ -65,6 +71,7 @@ export async function launchControls(options: LaunchOptions = {}): Promise<Launc
         await app.close();
         cleanUp();
       },
+      closeWindow: () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close()),
     };
   }
 
