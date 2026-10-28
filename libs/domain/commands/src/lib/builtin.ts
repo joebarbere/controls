@@ -69,6 +69,28 @@ export function resetLayoutCommand<S>(): CommandDef<NoArgs, S> {
   });
 }
 
+/** Context key that gates the dev console (F1.5): true in Sandbox and dev builds while the workspace shows. */
+export const CONSOLE_AVAILABLE_KEY = 'console.available';
+
+/**
+ * `console.toggle`: opens the dev console and focuses its input, or closes it when focus is already
+ * in it (F1.5, ADR 0008). A view command bound to the backtick key as a **global** binding, so it
+ * also fires while typing in the console (a literal backtick can't be typed there unless rebound).
+ * UI chrome, so it must stay out of the replay log: it gets `logged: false` when that field lands
+ * with F1.3 (`palette.open` follows the same rule).
+ */
+export function consoleToggleCommand<S>(): CommandDef<NoArgs, S> {
+  return defineViewCommand<NoArgs, S>({
+    id: 'console.toggle',
+    title: 'Toggle console',
+    category: 'View',
+    args: NoArgs,
+    when: CONSOLE_AVAILABLE_KEY,
+    keybinding: 'Backquote',
+    globalKeybinding: true,
+  });
+}
+
 /**
  * `toolbelt.select {slot}` arguments: the tool-belt slot, 1 to 9. Persisted in the replay log, so
  * the id and this shape are save format (ADR 0006, ADR 0007): changing either needs a
@@ -126,5 +148,5 @@ export function paletteOpenCommand<S>(): CommandDef<NoArgs, S> {
 
 /** Every view command declared so far. */
 export function viewCommands<S>(): AnyCommandDef<S>[] {
-  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>(), paletteOpenCommand<S>()];
+  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>(), paletteOpenCommand<S>(), consoleToggleCommand<S>()];
 }
