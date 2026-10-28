@@ -71,6 +71,9 @@
 
 .bottom {
   grid-area: bottom;
+  // The console (F1.5) fills the space under the title and scrolls its own output.
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-title {

@@ -1,10 +1,12 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   ElementRef,
   inject,
+  Injector,
   input,
   model,
   output,
@@ -12,7 +14,7 @@ import {
 } from '@angular/core';
 import type { RenderBackend, ViewportState } from '@controls/renderer';
 import { Session } from '@controls/feature-session';
-import { Button, Splitter } from '@controls/ui';
+import { Button, focusableElements, restoreFocus, Splitter } from '@controls/ui';
 import {
   BOTTOM_LIMITS,
   DEFAULT_WORKSPACE_LAYOUT,
@@ -30,7 +32,8 @@ type PanelId = keyof WorkspaceLayout;
  * console host), separated by keyboard-operable splitters (ADR 0005).
  *
  * Content slots: `[ctlWorkspaceToolbar]` (start of the toolbar), `[ctlViewportOverlay]` (HUD over
- * the viewport), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders).
+ * the viewport), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders). The
+ * `console.toggle` command opens the bottom panel and focuses its `[data-autofocus]` element.
  *
  * With `chrome` off (behind the main menu) only the viewport is shown, as the menu backdrop.
  * The viewport region is a landmark only; its canvas is the one keyboard focus target.
@@ -114,6 +117,7 @@ type PanelId = keyof WorkspaceLayout;
         (collapseToggle)="togglePanel('bottom')"
       />
       <section
+        #bottomPanel
         id="ctl-bottom-panel"
         class="panel bottom"
         aria-labelledby="ctl-bottom-title"
@@ -154,7 +158,40 @@ export class Workspace {
 
   constructor() {
     const off = this.session.onCommand('view.resetLayout', () => this.resetLayout());
-    inject(DestroyRef).onDestroy(off);
+    const offConsole = this.session.onCommand('console.toggle', () => this.toggleConsole());
+    inject(DestroyRef).onDestroy(() => (off(), offConsole()));
+  }
+
+  private readonly bottomPanel = viewChild<ElementRef<HTMLElement>>('bottomPanel');
+  private readonly injector = inject(Injector);
+  /** Where focus was before `console.toggle` moved it into the bottom panel. */
+  private consoleOpener: Element | null = null;
+
+  /**
+   * The effect of `console.toggle` (F1.5): with focus in the bottom panel, collapse it and put focus
+   * back where it was (else on the viewport); otherwise expand it and focus its `[data-autofocus]`
+   * element (the console input), else its first tab stop.
+   */
+  private toggleConsole(): void {
+    const panel = this.bottomPanel()?.nativeElement;
+    if (!this.chrome() || !panel) return;
+    const active = panel.ownerDocument.activeElement;
+    if (!this.layout().bottom.collapsed && panel.contains(active)) {
+      this.update('bottom', { ...this.layout().bottom, collapsed: true });
+      const opener = this.consoleOpener;
+      this.consoleOpener = null;
+      if (opener === panel.ownerDocument.body || !restoreFocus(opener)) this.focusViewport();
+      return;
+    }
+    this.consoleOpener = active;
+    const focusPanel = () =>
+      (panel.querySelector<HTMLElement>('[data-autofocus]') ?? focusableElements(panel)[0])?.focus();
+    if (!this.layout().bottom.collapsed) {
+      focusPanel(); // already shown: no render is coming, so focus now
+      return;
+    }
+    this.update('bottom', { ...this.layout().bottom, collapsed: false });
+    afterNextRender(focusPanel, { injector: this.injector }); // once [hidden] is gone
   }
 
   /** The Reset layout button: runs the `view.resetLayout` command. */

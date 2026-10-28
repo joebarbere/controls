@@ -98,4 +98,37 @@ test.describe.serial('desktop smoke', () => {
     );
     expect(violations).toEqual([]);
   });
+
+  // F1.5: CodeMirror 6 (a lazy chunk that injects its own <style> element) works under the real CSP.
+  test('the dev console opens with backtick and runs a line under the CSP', async () => {
+    const { window } = running();
+    await window.evaluate(() => {
+      (globalThis as unknown as { cspViolations: string[] }).cspViolations = [];
+    });
+    await expect(window.locator('ctl-viewport canvas')).toBeFocused(); // the workspace, from the test above
+    await expect(window.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached({ timeout: 15_000 });
+    await window.keyboard.press('Backquote');
+    const input = window.getByRole('textbox', { name: 'Console input' });
+    await expect(input).toBeFocused();
+
+    // CodeMirror's styles applied: its base theme lays the editor out as flex, and ours sets the font.
+    const styled = await window.locator('ctl-dev-console .cm-editor').evaluate((el) => ({
+      display: getComputedStyle(el).display,
+      font: getComputedStyle(el).fontFamily,
+    }));
+    expect(styled.display).toBe('flex');
+    expect(styled.font).toContain('monospace');
+
+    await window.keyboard.type('world.hash');
+    await window.keyboard.press('Enter');
+    const output = window.getByRole('log', { name: 'Console output' });
+    await expect(output.locator('.entry').last()).toHaveText(/^[0-9a-f]{64}$/);
+    await window.keyboard.press('Backquote');
+    await expect(window.locator('ctl-viewport canvas')).toBeFocused();
+
+    const violations = await window.evaluate(
+      () => (globalThis as unknown as { cspViolations: string[] }).cspViolations,
+    );
+    expect(violations).toEqual([]);
+  });
 });
