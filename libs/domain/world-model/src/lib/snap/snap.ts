@@ -9,14 +9,15 @@
  *   surface frame. Corners stay integer for any integer footprint; centres would not.
  * - `world` is that anchor in world space, on the target's mounting face.
  *
- * TODO(F1.2): this module moves to `@controls/world-model` (`snap/`) so scripts and `sim-cli` snap
- * identically to the mouse. It imports nothing from Three.js and lint keeps it that way.
+ * It lives in `@controls/world-model` (moved from the renderer in F1.7) so scripts, `sim-cli` and the
+ * mouse snap identically. Domain rules apply: no Three.js or DOM, and the determinism lint.
  */
 import { roundMm } from '@controls/units';
 import {
   BACKPLATE_GRID_PITCH,
   DIN_MODULE_PITCH,
   DIN_RAIL_CAPTURE,
+  SNAP_PLANE_TOLERANCE,
   WALL_STUD_SPACING,
   WALL_STUD_THICKNESS,
   WALL_VERTICAL_PITCH,
@@ -26,6 +27,7 @@ import {
   surfaceToWorld,
   worldToSurface,
   type SurfaceFrame,
+  type SurfaceNormal,
   type SurfacePointMm,
   type Vec3Mm,
 } from './surface';
@@ -78,6 +80,8 @@ export type SnapResult =
       readonly kind: SnapTarget['kind'];
       readonly anchor: SurfacePointMm;
       readonly world: Vec3Mm;
+      /** The target surface's normal (which way a part mounted there faces). */
+      readonly normal: SurfaceNormal;
     }
   | { readonly ok: false; readonly targetId: string; readonly kind: SnapTarget['kind']; readonly reason: SnapFailure };
 
@@ -87,6 +91,7 @@ export const SNAP_STEPS = {
   dinCaptureMm: roundMm(DIN_RAIL_CAPTURE.valueMm),
   backplateGridMm: roundMm(BACKPLATE_GRID_PITCH.valueMm),
   wallVerticalMm: roundMm(WALL_VERTICAL_PITCH.valueMm),
+  planeToleranceMm: roundMm(SNAP_PLANE_TOLERANCE.valueMm),
   /** Half a stud, rounded **up** so a box set against a stud never overlaps it. */
   studHalfThicknessMm: Math.ceil(WALL_STUD_THICKNESS.valueMm / 2),
 } as const;
@@ -105,7 +110,14 @@ function checkFootprint(f: Footprint): void {
 
 function ok(target: SnapTarget, anchor: SurfacePointMm): SnapResult {
   const a = { u: z0(anchor.u), v: z0(anchor.v) };
-  return { ok: true, targetId: target.id, kind: target.kind, anchor: a, world: surfaceToWorld(target.frame, a) };
+  return {
+    ok: true,
+    targetId: target.id,
+    kind: target.kind,
+    anchor: a,
+    world: surfaceToWorld(target.frame, a),
+    normal: target.frame.normal,
+  };
 }
 
 const fail = (target: SnapTarget, reason: SnapFailure): SnapResult => ({

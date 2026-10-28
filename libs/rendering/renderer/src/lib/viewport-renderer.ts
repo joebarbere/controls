@@ -4,7 +4,7 @@ import type { ViewMode } from './cameras/camera-math';
 import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './panel-scene';
-import type { Vec3Mm } from './snap/surface';
+import type { Vec3Mm } from '@controls/world-model';
 import { FrameTimer, type FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,

@@ -83,3 +83,20 @@ export const DIN_RAIL_CAPTURE: SourcedLength = {
   kind: 'game-design',
   source: 'game-design: capture band around the rail centreline',
 };
+
+/** Keep-out border around a backplate's edge for free placement. */
+export const BACKPLATE_MARGIN: SourcedLength = {
+  valueMm: 20,
+  kind: 'game-design',
+  source: 'game-design: 20 mm keep-out border so placed parts never overhang the backplate edge',
+};
+
+/**
+ * How far off a surface's plane (along its normal) a cursor hit may be and still count as on that
+ * surface. Large enough for a hit on top of a TS35 rail (7.5 mm proud of the backplate).
+ */
+export const SNAP_PLANE_TOLERANCE: SourcedLength = {
+  valueMm: 10,
+  kind: 'game-design',
+  source: 'game-design: covers a cursor hit on a TS35 rail top (7.5 mm, EN 60715) plus 2.5 mm slack',
+};

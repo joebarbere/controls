@@ -2,8 +2,7 @@
  * Hover and selection: renderer/UI state, **not** world state. Nothing here is saved or logged;
  * Commands that act on the selection (e.g. `entity.delete`) read it as an argument (F1.2).
  */
-import type { SnapTarget } from '../snap/snap';
-import type { SurfaceNormal } from '../snap/surface';
+import type { SnapTarget, SurfaceNormal } from '@controls/world-model';
 
 export type SelectableKind = 'backplate' | 'din-rail' | 'wall' | 'bench' | 'prop' | 'device';
 
