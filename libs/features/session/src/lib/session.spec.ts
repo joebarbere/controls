@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { createWorld } from '@controls/save-format';
-import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { createGame, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { SANDBOX_LEVEL, Session } from './session';
 
@@ -75,9 +75,66 @@ describe('Session', () => {
     expect(session.isEnabled('edit.undo')).toBe(true);
     expect(session.isEnabled('edit.redo')).toBe(false);
     session.setContext('mode', 'work');
-    expect(session.contextKeys()).toEqual({ mode: 'work', 'history.canUndo': true, 'history.canRedo': false });
+    expect(session.contextKeys()).toEqual({
+      mode: 'work',
+      'history.canUndo': true,
+      'history.canRedo': false,
+      'session.active': false,
+    });
     session.setContext('mode', null);
-    expect(session.contextKeys()).toEqual({ 'history.canUndo': true, 'history.canRedo': false });
+    expect(session.contextKeys()).toEqual({
+      'history.canUndo': true,
+      'history.canRedo': false,
+      'session.active': false,
+    });
+  });
+
+  it('registers the unlogged file commands, offering saves only while a game is in progress (F1.8b)', () => {
+    const session = TestBed.inject(Session);
+    expect(['file.save', 'file.saveAs', 'file.open', 'file.load'].every((id) => session.registry.has(id))).toBe(true);
+    expect(session.active()).toBe(false);
+    expect(session.isEnabled('file.save')).toBe(false);
+    expect(session.isEnabled('file.load')).toBe(true);
+    session.newSandbox({ seed: 1 });
+    expect(session.active()).toBe(true);
+    expect(session.isEnabled('file.save')).toBe(true);
+    const seen: string[] = [];
+    session.onCommand('file.save', (e) => seen.push(e.command.id));
+    expect(session.exec('file.save')).toMatchObject({ ok: true, logged: false });
+    expect(seen).toEqual(['file.save']);
+    expect(session.entries()).toEqual([]);
+  });
+
+  it('saves to .ctrl bytes and adopts a loaded game: same world, cleared history, the log continued (F1.8b)', () => {
+    const session = TestBed.inject(Session);
+    session.newSandbox({ seed: 9 });
+    session.exec('entity.place', place);
+    session.exec('entity.place', { ...place, positionMm: { x: 30, y: 0, z: -20 } });
+    session.exec('edit.undo');
+    const hash = session.hash();
+    const bytes = session.save();
+
+    session.newSandbox({ seed: 10 });
+    expect(session.hash()).not.toBe(hash);
+    const generation = session.generation();
+    const loaded = loadGame(bytes, { registry: session.registry });
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toEqual({ status: 'continued' });
+    session.adopt(loaded.game);
+    expect(session.hash()).toBe(hash);
+    expect(session.generation()).toBe(generation + 1);
+    expect(session.active()).toBe(true);
+    expect(session.canUndo()).toBe(false);
+    expect(session.canRedo()).toBe(false);
+    expect(session.entries().map((e) => e.seq)).toEqual([0, 1, 2]);
+    expect(session.exec('entity.delete', { id: 1 })).toMatchObject({ ok: true, entry: { seq: 3 } });
+    expect(session.entries()).toHaveLength(4);
+    const replayed = replayGame(JSON.parse(JSON.stringify(session.replayLog())));
+    expect(replayed.ok && replayed.game.hash()).toBe(session.hash());
+
+    // A game on another registry would lose the file commands (and any host command): refused.
+    const foreign = loadGame(bytes);
+    expect(() => session.adopt(foreign.ok ? foreign.game : createGame({ seed: 0 }))).toThrow(/registry/);
   });
 
   it('starts a new session with a fresh history and log, and writes a replay log', () => {

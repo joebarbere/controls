@@ -1,4 +1,4 @@
-import { ARG_REF_KEYWORD, entityRefMeta } from '@controls/commands';
+import { ARG_REF_KEYWORD, entityRefMeta, fileCommands } from '@controls/commands';
 import { createWorldRegistry } from '@controls/world-model';
 import { z } from 'zod';
 import {
@@ -214,7 +214,7 @@ describe('values and validation', () => {
 describe('every registered command', () => {
   // The palette must be able to run any command a player or a script can. A command whose args
   // the form can't express fails here, at registration time, not in front of a player.
-  const commands = createWorldRegistry().list();
+  const commands = createWorldRegistry().registerAll(fileCommands()).list(); // plus the game host's file.* (F1.8b)
 
   it.each(commands.map((c) => [c.id, c] as const))('%s has a palette form', (_id, command) => {
     const result = buildArgForm(command.args);

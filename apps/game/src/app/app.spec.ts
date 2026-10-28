@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { SaveGames } from '@controls/feature-saves';
+import { MemorySaveIo } from '@controls/feature-saves/testing';
 import { KeybindingService, Session } from '@controls/feature-session';
 import {
   MemorySettingsService,
@@ -7,10 +9,11 @@ import {
 } from '@controls/feature-settings';
 import type { PendingWritesFlush, Platform } from '@controls/platform-api';
 import { defaultSettings } from '@controls/save-format';
+import { createGame } from '@controls/scripting-api';
 import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
-import { provideLifecycleFromPlatform, provideSettingsFromPlatform } from './app.config';
+import { provideLifecycleFromPlatform, provideSaveIoFromPlatform, provideSettingsFromPlatform } from './app.config';
 import { provideSandboxLevel } from './levels';
 import { PLATFORM } from './platform.token';
 
@@ -18,6 +21,7 @@ describe('App', () => {
   const quit = vi.fn();
   let settings: MemorySettingsService;
   const flushes = new Set<PendingWritesFlush>();
+  let io: MemorySaveIo;
   const fakePlatform: Platform = {
     kind: 'electron',
     getAppInfo: async () => ({
@@ -35,12 +39,12 @@ describe('App', () => {
     lifecycle: {
       onBeforeQuit: (flush) => (flushes.add(flush), () => void flushes.delete(flush)),
     },
-    files: {
-      list: async () => [],
-      read: async () => Promise.reject(new Error('no saves in this spec')),
-      write: async () => Promise.reject(new Error('no saves in this spec')),
+    get files() {
+      return io.files;
     },
-    dialogs: { open: async () => null, saveAs: async () => null },
+    get dialogs() {
+      return io.dialogs;
+    },
   };
 
   beforeEach(async () => {
@@ -48,12 +52,14 @@ describe('App', () => {
     quit.mockReset();
     flushes.clear();
     settings = new MemorySettingsService();
+    io = new MemorySaveIo();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         { provide: PLATFORM, useValue: fakePlatform },
         provideSettingsFromPlatform(),
         provideLifecycleFromPlatform(),
+        provideSaveIoFromPlatform(),
         provideKeybindingOverridesFromSettings(),
         provideSandboxLevel(),
       ],
@@ -287,8 +293,78 @@ describe('App', () => {
     const store = TestBed.inject(SettingsStore);
     await store.loaded;
     store.update('display', { theme: 'dark' });
-    expect(flushes.size).toBe(1); // SettingsStore registered with Platform.lifecycle
+    expect(flushes.size).toBe(2); // SettingsStore and SaveGames (autosave) registered with Platform.lifecycle
     await Promise.all([...flushes].map((flush) => flush()));
     await expect(settings.load()).resolves.toMatchObject({ settings: { display: { theme: 'dark' } } });
+  });
+
+  describe('saves (F1.8b)', () => {
+    const PLACE = { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 100, y: 0, z: -200 } };
+
+    async function startPlaying(fixture: { whenStable(): Promise<unknown> }, user: ReturnType<typeof userEvent.setup>) {
+      await user.keyboard('{Enter}'); // New sandbox
+      await fixture.whenStable();
+      await user.keyboard('{Enter}'); // Start
+      await fixture.whenStable();
+    }
+
+    it('autosaves a changed game on the way to the menu, then saves it by name from the menu', async () => {
+      const { fixture, user } = await setup();
+      const session = TestBed.inject(Session);
+      await startPlaying(fixture, user);
+      screen.getByRole('button', { name: 'Menu' }).focus();
+      await user.keyboard('{Escape}'); // an untouched new sandbox: no autosave
+      await fixture.whenStable();
+      expect(io.calls).not.toContain('write');
+      await user.keyboard('{Escape}'); // resume
+      await fixture.whenStable();
+
+      session.exec('entity.place', PLACE);
+      screen.getByRole('button', { name: 'Menu' }).focus();
+      await user.keyboard('{Escape}');
+      await fixture.whenStable();
+      await waitFor(() => expect(io.names()).toEqual(['Autosave 1']));
+
+      const saveButton = screen.getByRole('button', { name: 'Save game' });
+      await user.click(saveButton);
+      await fixture.whenStable();
+      const field = screen.getByRole('textbox', { name: 'Save name' });
+      await user.clear(field);
+      await user.type(field, 'Shop{Enter}');
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(saveButton);
+      await waitFor(() => expect(io.names().sort()).toEqual(['Autosave 1', 'Shop']));
+      expect(TestBed.inject(SaveGames).saveName()).toBe('Shop');
+      expect(session.entries().map((e) => e.id)).toEqual(['entity.place']); // saving logs nothing
+    });
+
+    it('Continue loads the newest save and enters the workspace with the viewport focused', async () => {
+      const game = createGame({ seed: 12 });
+      game.exec('entity.place', PLACE);
+      io.seed({ kind: 'manual', name: 'Shop' }, game.save());
+      const { fixture, user } = await setup();
+      await TestBed.inject(SaveGames).ready;
+      await fixture.whenStable();
+      const continueButton = screen.getByRole('button', { name: 'Continue' });
+      expect(continueButton.hasAttribute('aria-disabled')).toBe(false);
+      await user.click(continueButton);
+      await waitFor(() => expect(TestBed.inject(Session).hash()).toBe(game.hash()));
+      await fixture.whenStable();
+      expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
+      expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
+      expect(TestBed.inject(Session).canUndo()).toBe(false);
+    });
+
+    it('Load opens the save list from the menu; Escape returns focus to Load', async () => {
+      const { fixture, user } = await setup();
+      const load = screen.getByRole('button', { name: 'Load' });
+      await user.click(load);
+      await waitFor(() => expect(screen.getByRole('dialog', { name: 'Load game' })).toBeTruthy());
+      await fixture.whenStable();
+      await user.keyboard('{Escape}');
+      await fixture.whenStable();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(load);
+    });
   });
 });

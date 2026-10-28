@@ -188,6 +188,29 @@ export class ViewportRenderer {
     };
   }
 
+  /**
+   * A small PNG of what the viewport shows (save thumbnails, F1.8b), scaled to fit `maxWidthPx` ×
+   * `maxHeightPx`. The drawing buffer isn't preserved between frames, so this renders a frame and
+   * copies it onto a 2D canvas in the same task, then encodes that. Null before `init`, for an empty
+   * canvas, or when the browser can't encode.
+   */
+  async captureThumbnail(maxWidthPx = 320, maxHeightPx = 180): Promise<Uint8Array | null> {
+    const renderer = this.renderer;
+    const controller = this.controller;
+    const source = renderer?.domElement;
+    if (!renderer || !controller || !source || source.width === 0 || source.height === 0) return null;
+    const scale = Math.min(1, maxWidthPx / source.width, maxHeightPx / source.height);
+    const canvas = source.ownerDocument.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(source.width * scale));
+    canvas.height = Math.max(1, Math.round(source.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    renderer.render(controller.scene, controller.camera);
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+  }
+
   resize(widthPx: number, heightPx: number, devicePixelRatio: number): void {
     if (!this.renderer || widthPx === 0 || heightPx === 0) return;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));

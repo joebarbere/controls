@@ -76,6 +76,7 @@ export class SettingsStore {
         controls: { ...d.controls, keybindings: s.controls.keybindings },
         display: d.display,
         gameplay: d.gameplay,
+        autosave: d.autosave,
       };
     });
   }

@@ -1,7 +1,8 @@
 import { computed, Injectable, signal } from '@angular/core';
 
 export type ShellScreen = 'menu' | 'workspace';
-export type ShellDialog = 'settings' | 'about' | 'newGame';
+/** `save` and `load` are the Save game and Load game dialogs (F1.8b, `feature-saves`). */
+export type ShellDialog = 'settings' | 'about' | 'newGame' | 'save' | 'load';
 /** Interaction modes (plan §4.9). */
 export type InteractionMode = 'walk' | 'work' | 'editor';
 
@@ -17,15 +18,16 @@ export class ShellState {
 
   readonly screen = this.screenState.asReadonly();
   readonly dialog = this.dialogState.asReadonly();
-  /** A sandbox is running (the menu offers Resume). TODO(F1.2): derive from feature-session. */
+  /** A game is running (the menu offers Resume and Save). Navigation only; `Session.active` is the game's own flag. */
   readonly sessionActive = this.session.asReadonly();
   readonly menuOpen = computed(() => this.screenState() === 'menu');
 
   /**
-   * Enters the workspace for a sandbox that has just started. The new-game dialog (`newGame`) picks
-   * the seed and `Session.newSandbox` loads the workshop level (F1.9); this is only navigation.
+   * Enters the workspace for a game that has just started or loaded. The new-game dialog (`newGame`)
+   * picks the seed and `Session.newSandbox` loads the workshop level (F1.9), or `SaveGames` loads a
+   * save (F1.8b); this is only navigation.
    */
-  newSandbox(): void {
+  enterGame(): void {
     this.session.set(true);
     this.dialogState.set(null);
     this.screenState.set('workspace');

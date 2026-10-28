@@ -1,6 +1,6 @@
 # ADR 0006: Command system semantics
 
-**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`), F1.3 (`palette.open`, unlogged UI-chrome commands, argument hints, cheat confirmation) and F1.7 (`view.mode`, `view.focus`, context-argument bindings, gestures)
+**Status:** Accepted (F1.2); amended in F1.4 (keybindings, input actions, `toolbelt.select`), F1.3 (`palette.open`, unlogged UI-chrome commands, argument hints, cheat confirmation), F1.7 (`view.mode`, `view.focus`, context-argument bindings, gestures) and F1.8b (`file.*` save and load commands)
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6, §4.9; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.2, F1.4, F1.7; [ADR 0007](0007-world-document-v1.md) (ids, PRNG, hash, replay log shape)
 
@@ -151,6 +151,16 @@ A successful `cheat` command sets the world's `assisted` flag through the bus's 
 - **The palette never lists `palette.open`** and runs the chosen command only after its dialog has closed, so the command sees focus where the player left it.
 - **Recents** (settings `palette.recents`) are the commands run from the palette, not every logged command: a keybinding or script shouldn't reorder the palette.
 - **Cheats ask once per world.** Before a `cheat` command runs in a world that isn't assisted yet, the palette asks for confirmation; once the world is assisted there is nothing more to lose, so it doesn't ask again. The flag itself is still set by the bus ("Cheats" above).
+
+### Saving and loading (F1.8b)
+
+**Decision:** saving and loading are four **unlogged UI commands**, `file.save` (`Mod+S`), `file.saveAs` (`Mod+Shift+S`), `file.open` (`Mod+O`) and `file.load` (`Mod+L`), all `NoArgs` and `logged: false`; `file.save` and `file.saveAs` have `when: session.active`. They are declared in `@controls/commands` (`fileCommands()`, next to `palette.open`) and registered by the game host's `Session`, not by `createWorldRegistry()`. `feature-saves` performs them through `Session.onCommand`. Continue is a menu action, not a command.
+
+- **Why commands at all:** neither is a world mutation, but they are player actions the plan wants on every surface (palette, keybindings, console). Registering them is the only way to get that without a second action table, and their keys then get conflict detection and rebinding for free.
+- **Why unlogged:** a save writes the session out and a load replaces it, so neither carries anything a replay needs. Logging them would put host actions into the save format (a replay can't re-run a file dialog), and a `file.load` entry would describe a session the log no longer belongs to: `loadGame` continues the _loaded_ game's log, and the old session's log ends with the old session. The `unlogged-state-change` guard already proves they change nothing.
+- **Why loading isn't a world command:** a load replaces the whole game (world, bus, history and log) with one `loadGame` built from untrusted bytes; there is no `{ apply, invert }` change to log or undo. It follows `Session.newSandbox`, which is also a session replacement outside the registry: `Session.adopt(game)` swaps the game, clears the undo stack (`loadGame` did) and keeps the loaded log. The replay log of the new session starts from that save's own `initialWorld`.
+- **Why the host registers them:** a headless game has no save directory or file dialogs; `sim-cli` saves with `run --save`. A `file.save` that `sim-cli` accepted and silently ignored would mislead a script author. `Session.adopt` refuses a game on another registry, so a loaded game keeps the host's commands.
+- **Rejected:** buttons that call the save service directly (the palette, keys and console would each need their own path, which plan §4.6 forbids); logged `file.*` commands (above); a `file.save --name` argument (the Save game dialog names a save; the palette would show an optional field that only the console needs).
 
 ### Randomness
 

@@ -6,8 +6,10 @@ import { Button } from '@controls/ui';
  * and promise menu-bar semantics). Tab and Shift+Tab work as everywhere; Up/Down, Home and End move
  * between items too. The first item takes focus when the menu appears.
  *
- * Continue and Load stay focusable but `aria-disabled` (with a reason) until saves land in F1.8b,
- * so keyboard and screen-reader users can discover them.
+ * With a game running the menu offers Resume and Save game first. Continue loads the newest save
+ * (F1.8b); with no saves it stays focusable but `aria-disabled`, with the reason, so keyboard and
+ * screen-reader users can still discover it. Load lists the saves (and can open a file), so it is
+ * always available.
  */
 @Component({
   selector: 'ctl-main-menu',
@@ -21,6 +23,9 @@ import { Button } from '@controls/ui';
       <ul class="items">
         @if (sessionActive()) {
           <li><button ctlButton="primary" type="button" (click)="resumeGame.emit()">Resume</button></li>
+          <li>
+            <button ctlButton type="button" aria-haspopup="dialog" (click)="saveGame.emit()">Save game</button>
+          </li>
         }
         <li>
           <button [ctlButton]="sessionActive() ? 'default' : 'primary'" type="button" (click)="newSandbox.emit()">
@@ -28,10 +33,19 @@ import { Button } from '@controls/ui';
           </button>
         </li>
         <li>
-          <button ctlButton type="button" aria-disabled="true" aria-describedby="ctl-main-menu-saves">Continue</button>
+          <!-- One element either way, so focus survives the save list arriving. -->
+          <button
+            ctlButton
+            type="button"
+            [attr.aria-disabled]="canContinue() ? null : 'true'"
+            [attr.aria-describedby]="canContinue() ? null : 'ctl-main-menu-saves'"
+            (click)="canContinue() && continueGame.emit()"
+          >
+            Continue
+          </button>
         </li>
         <li>
-          <button ctlButton type="button" aria-disabled="true" aria-describedby="ctl-main-menu-saves">Load</button>
+          <button ctlButton type="button" aria-haspopup="dialog" (click)="loadGame.emit()">Load</button>
         </li>
         <li><button ctlButton type="button" (click)="openSettings.emit()">Settings</button></li>
         <li><button ctlButton type="button" (click)="openAbout.emit()">About</button></li>
@@ -39,7 +53,9 @@ import { Button } from '@controls/ui';
           <li><button ctlButton type="button" (click)="quitGame.emit()">Quit</button></li>
         }
       </ul>
-      <p id="ctl-main-menu-saves" class="ctl-hint">Saving and loading arrive in a later build.</p>
+      @if (!canContinue()) {
+        <p id="ctl-main-menu-saves" class="ctl-hint">No saved games yet.</p>
+      }
     </nav>
   `,
   styles: `
@@ -88,8 +104,13 @@ export class MainMenu {
   readonly sessionActive = input(false);
   /** The platform can end the app (desktop). The web harness has no Quit. */
   readonly canQuit = input(false);
+  /** There is a save to continue from (F1.8b). */
+  readonly canContinue = input(false);
   readonly resumeGame = output<void>();
+  readonly saveGame = output<void>();
   readonly newSandbox = output<void>();
+  readonly continueGame = output<void>();
+  readonly loadGame = output<void>();
   readonly openSettings = output<void>();
   readonly openAbout = output<void>();
   readonly quitGame = output<void>();

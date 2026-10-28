@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   inject,
   Injector,
   isDevMode,
@@ -21,6 +22,7 @@ import {
   ShellState,
 } from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
+import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
@@ -45,6 +47,8 @@ import { PLATFORM } from './platform.token';
     Button,
     CommandPalette,
     DevConsoleComponent,
+    LoadGameDialog,
+    SaveGameDialog,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
@@ -73,8 +77,12 @@ import { PLATFORM } from './platform.token';
       <ctl-main-menu
         [sessionActive]="shell.sessionActive()"
         [canQuit]="platform.canQuit"
+        [canContinue]="saves.canContinue()"
         (resumeGame)="resume()"
+        (saveGame)="shell.openDialog('save')"
         (newSandbox)="newSandbox()"
+        (continueGame)="continueGame()"
+        (loadGame)="session.exec('file.load')"
         (openSettings)="shell.openDialog('settings')"
         (openAbout)="shell.openDialog('about')"
         (quitGame)="platform.quit()"
@@ -85,6 +93,8 @@ import { PLATFORM } from './platform.token';
       (openChange)="dialogOpenChange($event)"
       (start)="startSandbox($event)"
     />
+    <ctl-save-game-dialog [open]="shell.dialog() === 'save'" (openChange)="dialogOpenChange($event)" />
+    <ctl-load-game-dialog [open]="shell.dialog() === 'load'" (openChange)="dialogOpenChange($event)" />
     <ctl-settings-dialog [open]="shell.dialog() === 'settings'" (openChange)="dialogOpenChange($event)" />
     <ctl-about-dialog
       [open]="shell.dialog() === 'about'"
@@ -106,6 +116,11 @@ export class App {
   protected readonly session = inject(Session);
   /** Keyboard → commands (F1.4). Injected here so its document listener is live from start-up. */
   protected readonly keybindings = inject(KeybindingService);
+  /**
+   * Saving and loading (F1.8b). Injected here so the `file.*` command handlers, the autosave timer
+   * and the quit flush exist from start-up, and Continue knows about saves before the menu is used.
+   */
+  protected readonly saves = inject(SaveGames);
   private readonly toolBelt = inject(ToolBelt);
   /** The active tool-belt slot and the prop it holds (settings `toolBelt.slots`), for the HUD. */
   protected readonly toolLabel = computed(() => {
@@ -135,6 +150,19 @@ export class App {
     }),
   );
 
+  constructor() {
+    // A save (Continue, Load, Open, from any surface) replaced the session: enter the game.
+    const offLoaded = this.saves.onLoaded(() => this.enterGame());
+    // Saves carry a small PNG of the viewport (F1.8b).
+    const offThumbnail = inject(SaveThumbnails).register(
+      async () => (await this.workspace()?.captureThumbnail()) ?? null,
+    );
+    inject(DestroyRef).onDestroy(() => {
+      offLoaded();
+      offThumbnail();
+    });
+  }
+
   /** New sandbox asks for a seed first (the new-game dialog); {@link startSandbox} runs on Start. */
   protected newSandbox(): void {
     this.shell.openDialog('newGame');
@@ -146,8 +174,18 @@ export class App {
    */
   protected startSandbox(seed: number): void {
     this.session.newSandbox({ seed, difficulty: this.settings.settings().gameplay.defaultDifficulty });
+    this.enterGame();
+  }
+
+  /** Continue (F1.8b): loads the newest save that loads; {@link enterGame} runs once it has. */
+  protected continueGame(): void {
+    void this.saves.continueLatest();
+  }
+
+  /** A game started or loaded: the workspace, with the viewport focused. */
+  private enterGame(): void {
     this.toolBelt.clear(); // the tool belt's active slot belongs to the old session
-    this.shell.newSandbox();
+    this.shell.enterGame();
     this.focusViewportAfterRender();
   }
 
@@ -156,8 +194,10 @@ export class App {
     this.focusViewportAfterRender();
   }
 
+  /** Back to the menu; a game with unsaved changes is autosaved on the way (F1.8b). */
   protected openMenu(): void {
     this.shell.openMenu(); // the menu focuses its first item (Resume) when it appears
+    void this.saves.autosave();
   }
 
   protected dialogOpenChange(open: boolean): void {

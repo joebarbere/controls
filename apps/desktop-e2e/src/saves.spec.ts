@@ -1,14 +1,52 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfile, launchControls, removeProfile, type LaunchedControls } from './launch';
 
 /**
- * F1.8b part 2: save I/O over the real bridge, against the real main process and file system
- * (ADR 0009). One launch for the file, so it also runs against a packaged build; the dialog test
- * stubs Electron's `dialog` through the Node inspector, so it runs on the dev build only.
+ * F1.8b: save I/O over the real bridge, against the real main process and file system (ADR 0009,
+ * part 2), and saving and loading a game through the UI (part 3). One launch for the file, so it
+ * also runs against a packaged build (the release smoke procedure); the dialog test stubs
+ * Electron's `dialog` through the Node inspector, so it runs on the dev build only.
  */
+
+const PLACE =
+  'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';
+
+/** New sandbox from the main menu with `seed`, keyboard only once the dialog is open. */
+async function newSandbox(window: Page, seed: number): Promise<void> {
+  await window.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'New sandbox' }).click();
+  await expect(window.getByRole('textbox', { name: 'Seed' })).toBeFocused();
+  await window.keyboard.press('ControlOrMeta+A');
+  await window.keyboard.insertText(String(seed));
+  await window.keyboard.press('Enter');
+  await expect(window.locator('ctl-viewport canvas')).toBeFocused();
+}
+
+/**
+ * Runs console lines and returns `world.hash` after them. The console is the way into the world here:
+ * the desktop app has no test hook. Leaves focus in the console.
+ */
+async function hashAfter(window: Page, ...lines: string[]): Promise<string> {
+  await expect(window.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  const input = window.getByRole('textbox', { name: 'Console input' });
+  if (!(await input.evaluate((el) => el.contains(el.ownerDocument.activeElement)))) {
+    await window.keyboard.press('Backquote');
+  }
+  await expect(input).toBeFocused();
+  const entries = window.getByTestId('console-output').locator('.entry');
+  for (const line of lines) {
+    await window.keyboard.insertText(line);
+    await window.keyboard.press('Enter');
+  }
+  const before = await entries.count();
+  await window.keyboard.insertText('world.hash');
+  await window.keyboard.press('Enter');
+  await expect.poll(() => entries.count()).toBeGreaterThan(before);
+  await expect(entries.last()).toHaveText(/^[0-9a-f]{64}$/);
+  return (await entries.last().textContent()) ?? '';
+}
 
 interface Bridge {
   listSaves(): Promise<{ handle: string; name: string; kind: string; slot: number | null; sizeBytes: number }[]>;
@@ -162,5 +200,31 @@ test.describe.serial('desktop saves', () => {
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
+  });
+
+  test('saves a game from the menu and loads it back from the Load list (F1.8b part 3)', async () => {
+    const { window } = running();
+    const menu = window.getByRole('navigation', { name: 'Controls' });
+    await newSandbox(window, 0);
+    const saved = await hashAfter(window, PLACE);
+
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await menu.getByRole('button', { name: 'Save game' }).click();
+    await expect(window.getByRole('textbox', { name: 'Save name' })).toBeFocused();
+    await window.keyboard.insertText('Desktop E2E'); // replaces the selected suggestion
+    await window.keyboard.press('Enter');
+    await expect(window.getByText('Saved “Desktop E2E”.')).toBeVisible();
+    expect(readdirSync(join(profile, 'saves'))).toContain('Desktop E2E.ctrl');
+
+    await newSandbox(window, 1);
+    expect(await hashAfter(window)).not.toBe(saved);
+
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await menu.getByRole('button', { name: 'Load' }).click();
+    const load = window.getByRole('dialog', { name: 'Load game' });
+    await load.getByRole('button', { name: 'Desktop E2E', exact: true }).click();
+    await expect(load).toBeHidden();
+    await expect(window.getByText('Loaded “Desktop E2E”.')).toBeVisible();
+    expect(await hashAfter(window)).toBe(saved);
   });
 });

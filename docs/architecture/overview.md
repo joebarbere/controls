@@ -19,6 +19,8 @@
 >
 > **P1 so far (F1.7):** the renderer draws world snapshots by entity id and turns gestures into intents that `feature-workspace` executes as `entity.place` / `entity.move` (`REND --> WM` is real: snap and placement maths, prop sizes and world types come from `@controls/world-model`). `view.mode` and `view.focus` are view commands. `feature-workspace` now reads the tool belt's props from `feature-settings`. See [rendering](rendering.md).
 >
+> **P1 so far (F1.8b):** `@controls/save-format` writes and reads the `.ctrl` container; `Platform.files` / `.dialogs` store saves behind opaque handles ([ADR 0009](../decisions/0009-save-io-boundary.md)); `libs/features/saves` (`@controls/feature-saves`) saves, loads, autosaves and continues through the unlogged `file.*` commands that `Session` registers. See [world and saves](world-and-saves.md#saving-and-loading-in-the-game-f18b-part-3).
+>
 > Items marked _(PN)_ below arrive in that phase.
 
 ## Process and thread model

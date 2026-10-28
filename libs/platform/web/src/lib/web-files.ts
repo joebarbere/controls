@@ -384,8 +384,10 @@ export class WebSaveStore {
 
 /**
  * Real pickers: a hidden `<input type="file">` for Open (its `cancel` event reports a dismissed
- * chooser) and an `<a download>` on a `blob:` URL for Save As. `click()` runs synchronously in the
- * caller's gesture, which browsers require for both.
+ * chooser) and an `<a download>` on a `blob:` URL for Save As. Both need the caller's gesture
+ * (transient activation). The file input's `click()` is deferred one task: Chromium shows no
+ * chooser for a click made inside a keydown handler (Mod+O, Enter in the console), and the
+ * activation outlives the task, so the deferred click still opens it.
  */
 export function browserPickers(): WebFilePickers {
   return {
@@ -396,7 +398,7 @@ export function browserPickers(): WebFilePickers {
         input.accept = accept;
         input.addEventListener('change', () => resolve(input.files?.[0] ?? null), { once: true });
         input.addEventListener('cancel', () => resolve(null), { once: true });
-        input.click();
+        setTimeout(() => input.click(), 0);
       }),
     download: (fileName, bytes) => {
       const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));

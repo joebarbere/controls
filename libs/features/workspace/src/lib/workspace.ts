@@ -149,6 +149,11 @@ export class Workspace {
   /** The renderer's view state (mode, hover, selection), for the HUD. Undefined until it starts. */
   readonly viewState = computed<ViewportState | undefined>(() => this.viewport()?.state());
 
+  /** A small PNG of the 3D view, for a save's thumbnail (F1.8b); null before the viewport starts. */
+  captureThumbnail(): Promise<Uint8Array | null> {
+    return this.viewport()?.captureThumbnail() ?? Promise.resolve(null);
+  }
+
   /** Moves keyboard focus to the viewport canvas (after New sandbox or Resume). */
   focusViewport(): void {
     this.viewportPane().nativeElement.querySelector<HTMLElement>('canvas')?.focus();

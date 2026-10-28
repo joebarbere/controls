@@ -13,6 +13,7 @@ import { defaultBindingDecls } from './defaults';
 import { INPUT_ACTIONS } from './input-actions';
 import { type BindingDecl, bindingArgs, commandBindingDecls, inputActionDecls, Keymap, KeymapError } from './keymap';
 import { viewportCommands } from '../view';
+import { fileCommands } from '../file';
 
 const command = (id: string, defaults: string[], extra: Partial<BindingDecl> = {}): BindingDecl => ({
   id,
@@ -149,7 +150,11 @@ describe('conflicts', () => {
   });
 
   it('the shipped defaults have no conflicts', () => {
-    const registry = new CommandRegistry<unknown>().registerAll(editCommands()).registerAll(viewCommands());
+    const registry = new CommandRegistry<unknown>()
+      .registerAll(editCommands())
+      .registerAll(viewCommands())
+      .registerAll(viewportCommands())
+      .registerAll(fileCommands());
     for (const platform of ['mac', 'other'] as const) {
       const keymap = Keymap.create(defaultBindingDecls(registry), {}, platform);
       expect(keymap.conflicts).toEqual([]);

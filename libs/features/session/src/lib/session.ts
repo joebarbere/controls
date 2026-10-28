@@ -1,8 +1,16 @@
 import { DOCUMENT } from '@angular/common';
 import { computed, DestroyRef, inject, Injectable, InjectionToken, signal } from '@angular/core';
-import type { CommandRegistry, ContextKeys, ContextValue, ExecResult, ExecutedEvent } from '@controls/commands';
+import {
+  type CommandRegistry,
+  type ContextKeys,
+  type ContextValue,
+  type ExecResult,
+  type ExecutedEvent,
+  fileCommands,
+  SESSION_ACTIVE_KEY,
+} from '@controls/commands';
 import { createWorld, type ReplayEntry, type ReplayLog } from '@controls/save-format';
-import { createGame, type Game } from '@controls/scripting-api';
+import { createGame, type Game, type SaveGameOptions } from '@controls/scripting-api';
 import {
   createWorldRegistry,
   hashWorldDocument,
@@ -14,6 +22,14 @@ import {
 } from '@controls/world-model';
 
 export type CommandHandler = (event: ExecutedEvent<World>) => void;
+
+/** A save bound to one session's game ({@link Session.saver}). */
+export interface SessionSaver {
+  /** The session it belongs to (`Session.generation` when it was taken). */
+  readonly generation: number;
+  /** That game as `.ctrl` bytes now, with the `world.hash` they hold. Throws `CtrlWriteError` like `Game.save`. */
+  save(options?: SaveGameOptions): { readonly bytes: Uint8Array; readonly hash: string };
+}
 
 /**
  * The level New sandbox starts from (F1.9): an untrusted, `JSON.parse`d world document, validated
@@ -37,13 +53,19 @@ const TEST_HOOK = '__controlsSession';
  * - **View commands** (`view.resetLayout`, …) don't change the world. The feature that owns the
  *   view state reacts with {@link onCommand}, so the command is logged like any other and replays
  *   headless as a no-op.
- * - **Context keys** for `when` are the game's own (`history.canUndo`, `history.canRedo`) plus
- *   whatever the UI sets with {@link setContext} (`mode`, `selection.kind`, … from F1.4/F1.7).
+ * - **Context keys** for `when` are the game's own (`history.canUndo`, `history.canRedo`), the
+ *   session's `session.active`, plus whatever the UI sets with {@link setContext} (`mode`,
+ *   `selection.kind`, … from F1.4/F1.7).
+ * - **Saving and loading** (F1.8b): {@link save} writes the game as `.ctrl` bytes; {@link adopt}
+ *   replaces the game with one `loadGame` built. The registry also holds the unlogged `file.*`
+ *   commands, which the saves feature performs through {@link onCommand}.
  */
 @Injectable({ providedIn: 'root' })
 export class Session {
-  readonly registry: CommandRegistry<World> = createWorldRegistry();
+  /** World, edit and view commands (`createWorldRegistry`) plus the host's unlogged `file.*` commands. */
+  readonly registry: CommandRegistry<World> = createWorldRegistry().registerAll(fileCommands<World>());
   private game!: Game;
+  private readonly activeState = signal(false);
   private unsubscribe: () => void = () => undefined;
   private readonly handlers = new Map<string, Set<CommandHandler>>();
   private readonly worldState = signal<World>(createWorld({ seed: 0 }));
@@ -62,8 +84,17 @@ export class Session {
   readonly entries = this.log.asReadonly();
   readonly canUndo = computed(() => this.history()['history.canUndo']);
   readonly canRedo = computed(() => this.history()['history.canRedo']);
+  /**
+   * A game is in progress (New sandbox or a loaded save). False at start-up, while the session shows
+   * the level behind the main menu. Published as the `session.active` context key.
+   */
+  readonly active = this.activeState.asReadonly();
   /** Every context key, for evaluating `when`. */
-  readonly contextKeys = computed<ContextKeys>(() => ({ ...this.uiContext(), ...this.history() }));
+  readonly contextKeys = computed<ContextKeys>(() => ({
+    ...this.uiContext(),
+    ...this.history(),
+    [SESSION_ACTIVE_KEY]: this.activeState(),
+  }));
   /** Counts {@link start}s: views that keep per-session state (the camera) reset when it changes. */
   readonly generation = this.started.asReadonly();
 
@@ -80,6 +111,7 @@ export class Session {
    */
   newSandbox(options: NewGameOptions): void {
     this.start(newGameWorld(this.level, options));
+    this.activeState.set(true);
   }
 
   /**
@@ -87,13 +119,41 @@ export class Session {
    * world is validated and frozen (`createGame`), so treat it as owned by the session.
    */
   start(world: World): void {
-    this.unsubscribe();
-    this.game = createGame({ world, registry: this.registry });
-    this.unsubscribe = this.game.on('executed', (event) => this.executed(event));
-    this.worldState.set(world);
-    this.history.set(this.game.contextKeys());
-    this.log.set([]);
-    this.started.update((n) => n + 1);
+    this.attach(createGame({ world, registry: this.registry }));
+  }
+
+  /**
+   * Replaces the session with a loaded game (F1.8b): the result of `loadGame(bytes, { registry:
+   * session.registry })`, which has already migrated and validated the save, cleared the undo
+   * history and continued (or restarted) the replay log. The game must run on this session's
+   * registry, so the palette, keybindings and console keep resolving the same commands. Marks the
+   * session active.
+   */
+  adopt(game: Game): void {
+    if (game.registry !== this.registry) throw new Error("Session.adopt needs a game on the session's registry");
+    this.attach(game);
+    this.activeState.set(true);
+  }
+
+  /**
+   * The game as `.ctrl` bytes (`Game.save`): manifest, world, replay log and an optional PNG
+   * thumbnail. Throws `CtrlWriteError` if the save would be over a cap or the thumbnail isn't a PNG.
+   */
+  save(options: SaveGameOptions = {}): Uint8Array {
+    return this.game.save(options);
+  }
+
+  /**
+   * Binds a save to the game running now, for writers that save later (after an `await`): the
+   * returned `save` writes this game, with its state at that time, even if a new sandbox or a load
+   * has replaced the session since. `generation` says which session it belongs to.
+   */
+  saver(): SessionSaver {
+    const game = this.game;
+    return {
+      generation: this.started(),
+      save: (options = {}) => ({ bytes: game.save(options), hash: game.hash() }),
+    };
   }
 
   /** Runs a command. Invalid args or a refused command return a typed error and change nothing. */
@@ -130,6 +190,16 @@ export class Session {
   /** The replay log of this session (for `replay.log` in a save, F1.8b). */
   replayLog(): ReplayLog {
     return this.game.replayLog();
+  }
+
+  private attach(game: Game): void {
+    this.unsubscribe();
+    this.game = game;
+    this.unsubscribe = game.on('executed', (event) => this.executed(event));
+    this.worldState.set(game.world() as World);
+    this.history.set(game.contextKeys());
+    this.log.set([...game.entries()]); // a loaded game continues its log
+    this.started.update((n) => n + 1);
   }
 
   private executed(event: ExecutedEvent<World>): void {

@@ -39,13 +39,14 @@ async function startSandboxByKeyboard(page: Page, m: MainMenu): Promise<Locator>
   return canvas;
 }
 
-test('the main menu at boot: New sandbox focused, Continue and Load disabled, no Quit in a browser', async ({
+test('the main menu at boot: New sandbox focused, Continue disabled with no saves, no Quit in a browser', async ({
   page,
 }) => {
   const { menu } = await openMenu(page);
-  // Continue and Load are present but disabled until saves land.
+  // A fresh profile has no saves: Continue is present but disabled, with the reason; Load still works.
   await expect(menu.getByRole('button', { name: 'Continue' })).toHaveAttribute('aria-disabled', 'true');
-  await expect(menu.getByRole('button', { name: 'Load' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(menu.getByRole('button', { name: 'Continue' })).toHaveAccessibleDescription('No saved games yet.');
+  await expect(menu.getByRole('button', { name: 'Load' })).not.toHaveAttribute('aria-disabled');
   await expect(menu.getByRole('button', { name: 'Quit' })).toHaveCount(0); // a browser tab can't quit
 });
 
