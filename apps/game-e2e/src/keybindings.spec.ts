@@ -122,7 +122,11 @@ test('rebind a command and an input action, use the new keys, and keep them afte
   expect(await cameraZ(page)).toBeLessThan(start);
   expect(await entries(page)).toEqual(logged);
 
-  // And the rebinding screen still shows them; Reset all restores the defaults.
+  // And the rebinding screen still shows them; Reset all restores the defaults. The crate is still
+  // the active tool, so the first Escape puts it away (F1.7: cancel placement, then the menu).
+  await page.keyboard.press('Escape');
+  await expect(tool).toHaveText('None');
+  expect(await entries(page)).toEqual(logged); // cancelling placement is not a command
   await page.keyboard.press('Escape');
   const again = await openKeyBindings(page);
   await expect(again.dialog.getByTestId('keys-toolbelt.select.slot2')).toHaveText('Q');

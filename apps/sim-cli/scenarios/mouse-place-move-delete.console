@@ -1,0 +1,17 @@
+# F1.7: the mouse e2e (apps/game-e2e/src/placement.spec.ts) as console lines. Both must end at
+# MOUSE_PLACE_MOVE_DELETE_HASH (apps/sim-cli/src/mouse-place-move-delete.spec.ts).
+#   pnpm sim run apps/sim-cli/scenarios/mouse-place-move-delete.console
+#
+# Positions are what the demo panel's snap targets give for the cursor points the e2e aims at
+# (placeOnTargets in @controls/world-model; mouse-place-move-delete.ts computes them the same way).
+toolbelt.select 1
+# Click the backplate at (-150, 300): the 120 x 80 box snaps to the 5 mm grid.
+entity.place --ref.id prop.box --ref.version 1 --positionMm.x -210 --positionMm.y 260 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+toolbelt.select 2
+# Click the backplate at (100, -200): the 300 x 200 crate.
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x -50 --positionMm.y -300 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+# Escape puts the tool away (no command). Drag the box onto DIN rail 1 at (-10, 150): 18 mm modules.
+entity.move 1 --positionMm.x -70 --positionMm.y 110 --positionMm.z 0
+# Click the crate to select it, then Delete.
+entity.delete 2
+world.hash

@@ -97,11 +97,15 @@ export function disposeScene(scene: Scene): void {
   materials.forEach((m) => m.dispose());
 }
 
-/** Stable, JSON-plain summary of a scene graph for snapshot tests (positions in integer mm). */
+/**
+ * Stable, JSON-plain summary of a scene graph for snapshot tests: positions in integer mm and, when
+ * not zero, the Euler rotation (x, y, z components) in integer millidegrees.
+ */
 export interface SceneGraphNode {
   name: string;
   type: string;
   positionMm: [number, number, number];
+  rotationMdeg?: [number, number, number];
   visible: boolean;
   selectable?: string;
   children?: SceneGraphNode[];
@@ -115,6 +119,12 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
     positionMm: [metresToMm(p.x), metresToMm(p.y), metresToMm(p.z)],
     visible: object.visible,
   };
+  const r = object.rotation;
+  const mdeg = (radians: number): number => {
+    const v = Math.round((radians * 180_000) / Math.PI);
+    return v === 0 ? 0 : v;
+  };
+  if (r.x !== 0 || r.y !== 0 || r.z !== 0) node.rotationMdeg = [mdeg(r.x), mdeg(r.y), mdeg(r.z)];
   const sel = object.userData['selectable'] as { id: string; kind: string } | undefined;
   if (sel) node.selectable = `${sel.kind}:${sel.id}`;
   if (object.children.length > 0) node.children = object.children.map(describeSceneGraph);

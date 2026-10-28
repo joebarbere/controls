@@ -1,6 +1,8 @@
 import { Box3Helper, Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
-import { PANEL_ROOM_BOUNDS } from './panel-scene';
-import { ViewportController, type ViewportState } from './viewport-controller';
+import { createWorld } from '@controls/save-format';
+import { createWorldBus, demoPanelSnapTargets, placeOnTargets, type Entity, type World } from '@controls/world-model';
+import { describeSceneGraph, PANEL_ROOM_BOUNDS } from './panel-scene';
+import { ViewportController, type ViewportIntent, type ViewportState } from './viewport-controller';
 
 /** EventTarget that tracks live listeners, so tests can prove every one is removed. */
 class TrackingTarget extends EventTarget {
@@ -315,10 +317,381 @@ describe('ViewportController disposal', () => {
     expect(controller.bvhCount).toBe(0);
     meshes.forEach((m) => {
       expect((m.geometry as { boundsTree?: unknown }).boundsTree).toBeUndefined();
-      expect(Object.prototype.hasOwnProperty.call(m, 'raycast')).toBe(false);
+      // Overlays carry their own no-op raycast by design; everything else gets the prototype's back.
+      if (!m.name.startsWith('overlay:')) expect(Object.prototype.hasOwnProperty.call(m, 'raycast')).toBe(false);
     });
     expect(controller.scene.getObjectByName('overlay:hover')).toBeUndefined();
     canvas.dispatchEvent(key('keydown', 'BracketRight'));
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+// --- F1.7 part 2: world sync, placement and moves --------------------------------------------
+
+const BOX = { id: 'prop.box', version: 1 };
+const CRATE = { id: 'prop.crate', version: 1 };
+const entity = (id: number, ref: typeof BOX, x: number, y: number, yaw = 0): Entity => ({
+  id,
+  ref,
+  transform: { positionMm: { x, y, z: 0 }, orientationMdeg: { yaw, pitch: 0, roll: 0 } },
+  extensions: {},
+});
+const worldWith = (...entities: Entity[]): World => ({
+  ...createWorld({ seed: 0 }),
+  nextEntityId: Math.max(0, ...entities.map((e) => e.id)) + 1,
+  entities,
+});
+
+/** Moves the pointer over an integer-mm world point (so the next frame aims the ghost there). */
+const pointAt = (canvas: FakeCanvas, c: ViewportController, x: number, y: number, z = 0) => {
+  const p = c.projectMm({ x, y, z });
+  canvas.dispatchEvent(pointer('pointermove', p.x, p.y));
+  return p;
+};
+const intents = (c: ViewportController) => {
+  const seen: ViewportIntent[] = [];
+  c.onIntent((i) => seen.push(i));
+  return seen;
+};
+const worldGraph = (c: ViewportController) => {
+  const group = c.scene.getObjectByName('world');
+  if (!group) throw new Error('no world group');
+  return describeSceneGraph(group);
+};
+const ghostOf = (c: ViewportController) => c.scene.getObjectByName('overlay:ghost') as Mesh;
+
+describe('ViewportController world sync', () => {
+  it('adds, updates and removes entity objects by id (scene-graph snapshots)', () => {
+    const { controller } = setup();
+    controller.syncWorld(worldWith(entity(1, BOX, -210, 260), entity(2, CRATE, -50, -300, 90_000)));
+    expect(worldGraph(controller)).toMatchSnapshot('two entities');
+    const before = controller.scene.getObjectByName('entity-2');
+
+    controller.syncWorld(worldWith(entity(1, BOX, -70, 110), entity(2, CRATE, -50, -300, 90_000)));
+    expect(worldGraph(controller)).toMatchSnapshot('entity 1 moved');
+    expect(controller.scene.getObjectByName('entity-2')).toBe(before); // untouched, same object
+
+    controller.syncWorld(worldWith(entity(1, BOX, -70, 110)));
+    expect(worldGraph(controller)).toMatchSnapshot('entity 2 removed');
+    controller.dispose();
+  });
+
+  it('keeps picking and keyboard selection in step with the world', () => {
+    const { controller } = setup();
+    controller.syncWorld(worldWith(entity(1, BOX, -210, 260)));
+    expect(controller.selection.all.map((s) => s.id)).toEqual(['backplate', 'din-rail-1', 'din-rail-2', 'entity-1']);
+    const centre = ndcOf(controller, -0.15, 0.3, 0.06);
+    expect(controller.pickAt(centre.x, centre.y)).toMatchObject({ id: 'entity-1', kind: 'prop', entityId: 1 });
+    controller.select('entity-1');
+    expect(controller.state.selected?.label).toBe('Box #1');
+
+    controller.syncWorld(worldWith()); // deleted
+    expect(controller.state.selected).toBeNull();
+    expect(controller.pickAt(centre.x, centre.y)?.id).toBe('backplate');
+    controller.dispose();
+  });
+
+  it('shares one geometry per prop and returns to baseline when every entity is gone', () => {
+    const { controller } = setup();
+    const baselineBvhs = controller.bvhCount;
+    controller.syncWorld(worldWith(entity(1, BOX, -210, 260), entity(2, BOX, 0, 0), entity(3, CRATE, -50, -300)));
+    expect(controller.recipeCount).toBe(2);
+    expect(controller.bvhCount).toBe(baselineBvhs + 2);
+    const a = controller.scene.getObjectByName('entity-1') as Mesh;
+    const b = controller.scene.getObjectByName('entity-2') as Mesh;
+    expect(a.geometry).toBe(b.geometry);
+    const dispose = vi.spyOn(a.geometry, 'dispose');
+    controller.syncWorld(worldWith());
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(baselineBvhs);
+    expect(controller.entityCount).toBe(0);
+    controller.dispose();
+  });
+
+  it('redraws an entity whose ref changed, and draws unknown refs as a placeholder', () => {
+    const { controller } = setup();
+    controller.syncWorld(worldWith(entity(1, BOX, 0, 0)));
+    controller.syncWorld(worldWith(entity(1, CRATE, 0, 0)));
+    expect(controller.selection.get('entity-1')?.label).toBe('Crate #1');
+    expect(controller.recipeCount).toBe(1);
+    controller.syncWorld(worldWith(entity(1, { id: 'prop.mystery', version: 1 }, 0, 0)));
+    expect(controller.selection.get('entity-1')?.label).toBe('Unknown object #1');
+    controller.dispose();
+  });
+});
+
+describe('ViewportController placement', () => {
+  const targets = demoPanelSnapTargets();
+
+  it('the ghost previews the snapped spot; a click commits exactly one place intent', () => {
+    const { canvas, controller } = setup();
+    const seen = intents(controller);
+    controller.setPlacement(BOX);
+    const p = pointAt(canvas, controller, -150, 300);
+    controller.update(1 / 60);
+    expect(ghostOf(controller).visible).toBe(true);
+    expect(controller.state.placement).toMatchObject({
+      kind: 'place',
+      valid: true,
+      targetId: 'backplate',
+      source: 'pointer',
+    });
+    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-210, 260, 0]);
+
+    for (let i = 0; i < 5; i++) {
+      pointAt(canvas, controller, -150 + i * 7, 300);
+      controller.update(1 / 60); // following the pointer emits nothing
+    }
+    expect(seen).toEqual([]);
+
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    const expected = placeOnTargets(BOX, { x: -150, y: 300, z: 0 }, targets);
+    if (!expected.ok) throw new Error('expected a placement');
+    expect(seen).toEqual([
+      { kind: 'place', ref: BOX, positionMm: expected.positionMm, orientationMdeg: expected.orientationMdeg },
+    ]);
+    expect(controller.state.selected).toBeNull(); // placing doesn't select
+    controller.dispose();
+  });
+
+  it('snaps to a DIN rail over the plate behind it', () => {
+    const { canvas, controller } = setup();
+    controller.setPlacement(BOX);
+    pointAt(canvas, controller, -10, 150, 7);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ valid: true, targetId: 'din-rail-1' });
+    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-70, 110, 0]);
+    controller.dispose();
+  });
+
+  it('an orbit drag while placing commits nothing, and off-target clicks commit nothing', () => {
+    const { canvas, controller } = setup();
+    const seen = intents(controller);
+    controller.setPlacement(CRATE);
+    canvas.dispatchEvent(pointer('pointerdown', 600, 300));
+    canvas.dispatchEvent(pointer('pointermove', 700, 320));
+    canvas.dispatchEvent(pointer('pointerup', 700, 320));
+    canvas.dispatchEvent(pointer('pointermove', 2, 2)); // the background
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ valid: false, targetId: null });
+    expect(ghostOf(controller).visible).toBe(false);
+    canvas.dispatchEvent(pointer('pointerdown', 2, 2));
+    canvas.dispatchEvent(pointer('pointerup', 2, 2));
+    expect(seen).toEqual([]);
+    controller.dispose();
+  });
+
+  it('Escape cancels placement without a command, then clears the selection, then falls through', () => {
+    const { canvas, controller } = setup();
+    const seen = intents(controller);
+    controller.select('backplate');
+    controller.setPlacement(BOX);
+    pointAt(canvas, controller, -150, 300);
+    controller.update(1 / 60);
+    const first = key('keydown', 'Escape');
+    canvas.dispatchEvent(first);
+    expect(first.defaultPrevented).toBe(true);
+    expect(seen).toEqual([{ kind: 'cancelPlacement' }]);
+    expect(controller.state.placement).toBeNull();
+    expect(ghostOf(controller).visible).toBe(false);
+    expect(controller.recipeCount).toBe(0); // the ghost gave its geometry back
+    expect(controller.state.selected?.id).toBe('backplate');
+    canvas.dispatchEvent(key('keydown', 'Escape'));
+    expect(controller.state.selected).toBeNull();
+    const third = key('keydown', 'Escape');
+    canvas.dispatchEvent(third);
+    expect(third.defaultPrevented).toBe(false); // the shell opens the menu
+    expect(seen).toEqual([{ kind: 'cancelPlacement' }]);
+    controller.dispose();
+  });
+
+  it('keyboard: Enter places at the reticle when the pointer is not over the canvas', () => {
+    const { canvas, controller } = setup();
+    const seen = intents(controller);
+    controller.setPlacement(BOX);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ source: 'reticle', valid: true });
+    const enter = key('keydown', 'Enter');
+    canvas.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    // The reticle is the view centre, the focused backplate's centre: (0, 0) snaps to (-60, -40).
+    expect(seen).toEqual([
+      {
+        kind: 'place',
+        ref: BOX,
+        positionMm: { x: -60, y: -40, z: 0 },
+        orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+      },
+    ]);
+    controller.setPlacement(null);
+    const idle = key('keydown', 'Enter');
+    canvas.dispatchEvent(idle);
+    expect(idle.defaultPrevented).toBe(false); // nothing to commit
+    controller.dispose();
+  });
+});
+
+describe('ViewportController moves', () => {
+  const setupWithBox = () => {
+    const ctx = setup();
+    ctx.controller.syncWorld(worldWith(entity(1, BOX, -210, 260)));
+    return ctx;
+  };
+
+  it('dragging an entity previews the move and releasing commits exactly one move intent', () => {
+    const { canvas, controller } = setupWithBox();
+    const seen = intents(controller);
+    const box = controller.scene.getObjectByName('entity-1') as Mesh;
+    const eye = controller.camera.position.clone();
+    const start = controller.projectMm({ x: -150, y: 300, z: 60 });
+    canvas.dispatchEvent(pointer('pointermove', start.x, start.y));
+    canvas.dispatchEvent(pointer('pointerdown', start.x, start.y));
+    for (let i = 1; i <= 8; i++) {
+      const p = controller.projectMm({ x: -150 + i * 17.5, y: 300 - i * 18.75, z: 0 });
+      canvas.dispatchEvent(pointer('pointermove', p.x, p.y));
+      controller.update(1 / 60);
+    }
+    expect(controller.state.placement).toMatchObject({
+      kind: 'move',
+      entityId: 1,
+      valid: true,
+      targetId: 'din-rail-1',
+    });
+    expect(box.visible).toBe(false); // the ghost stands in for it
+    expect(seen).toEqual([]); // dragging produces nothing
+
+    const end = controller.projectMm({ x: -10, y: 150, z: 7 });
+    canvas.dispatchEvent(pointer('pointerup', end.x, end.y));
+    expect(seen).toEqual([{ kind: 'move', id: 1, positionMm: { x: -70, y: 110, z: 0 } }]);
+    expect(box.visible).toBe(true);
+    expect(controller.state.placement).toBeNull();
+    expect(controller.camera.position.equals(eye)).toBe(true); // the drag didn't orbit
+    controller.dispose();
+  });
+
+  it('a click on an entity selects it; Escape mid-drag cancels the move with no intent', () => {
+    const { canvas, controller } = setupWithBox();
+    const seen = intents(controller);
+    const start = controller.projectMm({ x: -150, y: 300, z: 60 });
+    canvas.dispatchEvent(pointer('pointerdown', start.x, start.y));
+    canvas.dispatchEvent(pointer('pointerup', start.x + 1, start.y));
+    expect(controller.state.selected).toMatchObject({ id: 'entity-1', entityId: 1 });
+
+    canvas.dispatchEvent(pointer('pointerdown', start.x, start.y));
+    canvas.dispatchEvent(pointer('pointermove', start.x + 60, start.y + 40));
+    expect(controller.state.placement?.kind).toBe('move');
+    canvas.dispatchEvent(key('keydown', 'Escape'));
+    expect(controller.state.placement).toBeNull();
+    canvas.dispatchEvent(pointer('pointerup', start.x + 60, start.y + 40));
+    expect(seen).toEqual([]);
+    expect((controller.scene.getObjectByName('entity-1') as Mesh).visible).toBe(true);
+    controller.dispose();
+  });
+
+  it('dropping where it already is commits nothing', () => {
+    const { canvas, controller } = setupWithBox();
+    const seen = intents(controller);
+    const start = controller.projectMm({ x: -150, y: 300, z: 60 });
+    canvas.dispatchEvent(pointer('pointerdown', start.x, start.y));
+    const away = controller.projectMm({ x: -100, y: 300, z: 0 });
+    canvas.dispatchEvent(pointer('pointermove', away.x, away.y));
+    const back = controller.projectMm({ x: -150, y: 300, z: 0 });
+    canvas.dispatchEvent(pointer('pointermove', back.x, back.y));
+    canvas.dispatchEvent(pointer('pointerup', back.x, back.y));
+    expect(seen).toEqual([]);
+    controller.dispose();
+  });
+
+  it('keyboard: M picks up the selection and Enter drops it at the reticle', () => {
+    const { canvas, controller } = setupWithBox();
+    const seen = intents(controller);
+    canvas.dispatchEvent(key('keydown', 'KeyM')); // nothing selected
+    expect(controller.state.placement).toBeNull();
+    controller.select('entity-1');
+    canvas.dispatchEvent(key('keydown', 'KeyM'));
+    expect(controller.state.placement).toMatchObject({ kind: 'move', entityId: 1, source: 'reticle' });
+    controller.update(1 / 60);
+    canvas.dispatchEvent(key('keydown', 'Enter'));
+    expect(seen).toEqual([{ kind: 'move', id: 1, positionMm: { x: -60, y: -40, z: 0 } }]);
+    controller.dispose();
+  });
+
+  it('a world change to the entity being moved (undo, delete) cancels the move', () => {
+    const { canvas, controller } = setupWithBox();
+    controller.select('entity-1');
+    canvas.dispatchEvent(key('keydown', 'KeyM'));
+    controller.syncWorld(worldWith());
+    expect(controller.state.placement).toBeNull();
+    controller.dispose();
+  });
+
+  it('mode changes and tool changes end a move', () => {
+    const { canvas, controller } = setupWithBox();
+    controller.select('entity-1');
+    canvas.dispatchEvent(key('keydown', 'KeyM'));
+    controller.setMode('walk');
+    expect(controller.state.placement).toBeNull();
+    controller.setMode('work');
+    controller.select('entity-1');
+    canvas.dispatchEvent(key('keydown', 'KeyM'));
+    controller.setPlacement(CRATE);
+    expect(controller.state.placement).toMatchObject({ kind: 'place', ref: CRATE });
+    controller.dispose();
+  });
+});
+
+describe('ViewportController with a live command bus', () => {
+  it('intents executed as Commands give the same world as the equivalent script', () => {
+    const { canvas, controller } = setup();
+    const bus = createWorldBus(createWorld({ seed: 0 }));
+    controller.onIntent((i) => {
+      if (i.kind === 'place')
+        bus.exec('entity.place', { ref: i.ref, positionMm: i.positionMm, orientationMdeg: i.orientationMdeg });
+      if (i.kind === 'move') bus.exec('entity.move', { id: i.id, positionMm: i.positionMm });
+      controller.syncWorld(bus.state);
+    });
+    controller.setPlacement(BOX);
+    const p = pointAt(canvas, controller, -150, 300);
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    expect(bus.entries.map((e) => e.id)).toEqual(['entity.place']);
+    expect(controller.entityCount).toBe(1);
+
+    const script = createWorldBus(createWorld({ seed: 0 }));
+    const placed = placeOnTargets(BOX, { x: -150, y: 300, z: 0 }, demoPanelSnapTargets());
+    if (!placed.ok) throw new Error('expected a placement');
+    script.exec('entity.place', { ref: BOX, positionMm: placed.positionMm, orientationMdeg: placed.orientationMdeg });
+    expect(bus.state).toEqual(script.state);
+    controller.dispose();
+  });
+});
+
+describe('ViewportController disposal with world entities and a ghost', () => {
+  it('releases every entity, recipe, ghost and BVH', () => {
+    const { canvas, controller } = setup();
+    controller.syncWorld(worldWith(entity(1, BOX, -210, 260), entity(2, CRATE, -50, -300)));
+    controller.setPlacement(BOX);
+    pointAt(canvas, controller, -150, 300);
+    controller.update(1 / 60);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh || o instanceof Box3Helper) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(0);
+    expect(controller.scene.getObjectByName('world')).toBeUndefined();
+    expect(controller.scene.getObjectByName('overlay:ghost')).toBeUndefined();
+    expect(canvas.live.size).toBe(0);
   });
 });

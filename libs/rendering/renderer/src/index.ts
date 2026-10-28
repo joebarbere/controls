@@ -8,3 +8,6 @@ export * from './lib/input/input-actions';
 export * from './lib/picking/selection';
 export { markSelectable, selectableOf, findSelectables } from './lib/picking/picker';
 export * from './lib/stats/frame-timer';
+export * from './lib/geometry/props';
+export { WorldSync, entitySelectableId, applyTransform, type SyncResult } from './lib/world/world-sync';
+export type { PickHit } from './lib/picking/picker';

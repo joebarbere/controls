@@ -1,13 +1,27 @@
 /**
  * Everything the viewport does except talk to the GPU: scene, camera, walk/work modes, input
- * actions, BVH hover/selection and overlays. `ViewportRenderer` wraps it with a `WebGPURenderer`
- * and the animation loop. Keeping the GPU out means disposal and picking are unit-tested in Node.
+ * actions, BVH hover/selection, world sync, the placement ghost and overlays. `ViewportRenderer`
+ * wraps it with a `WebGPURenderer` and the animation loop. Keeping the GPU out means disposal,
+ * picking and gestures are unit-tested in Node.
  *
- * The controller never mutates the world. Placement, moves and deletes will be emitted as
- * Commands by `feature-workspace` (TODO(F1.2)); hover, selection, mode and camera pose are view state.
+ * The controller never mutates the world. It draws world snapshots ({@link syncWorld}) and turns
+ * gesture commit points into {@link ViewportIntent}s, which `feature-workspace` executes as Commands
+ * (`entity.place`, `entity.move`). Hover, selection, the ghost, mode and camera pose are view state.
  */
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Box3, PerspectiveCamera, Sphere, Vector3, type Object3D, type Scene } from 'three/webgpu';
+import { metresToMm, mm } from '@controls/units';
+import {
+  placeOnTargets,
+  type CatalogRef,
+  type Entity,
+  type EntityId,
+  type OrientationMdeg,
+  type Placement,
+  type SnapTarget,
+  type Vec3Mm,
+  type World,
+} from '@controls/world-model';
 import {
   applyLook,
   clampToRoom,
@@ -30,6 +44,7 @@ import {
   type TriggeredAction,
 } from './input/input-actions';
 import { KeyboardInput } from './input/keyboard-input';
+import { PlacementGhost } from './overlays/ghost';
 import { SelectionHighlight } from './overlays/highlight';
 import {
   buildPanelScene,
@@ -40,6 +55,7 @@ import {
 } from './panel-scene';
 import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
+import { WorldSync } from './world/world-sync';
 
 export interface ViewportControllerOptions {
   readonly bindings?: InputBindings;
@@ -51,19 +67,64 @@ export interface ViewportControllerOptions {
   readonly initialFocus?: string;
 }
 
-/** View state published to the UI (HUD, inspector, `when` context keys from F1.2). */
+/** The ghost in progress: placing the active tool's prop, or moving an entity. */
+export interface PlacementView {
+  readonly kind: 'place' | 'move';
+  readonly ref: CatalogRef;
+  /** The entity being moved (`move` only). */
+  readonly entityId: EntityId | null;
+  /** Whether committing now would produce a command. */
+  readonly valid: boolean;
+  /** The snap target under the cursor, if any. */
+  readonly targetId: string | null;
+  /** What aims the ghost: the mouse pointer, or the screen-centre reticle (keyboard, pointer lock). */
+  readonly source: 'pointer' | 'reticle';
+}
+
+/** View state published to the UI (HUD, inspector, `when` context keys). */
 export interface ViewportState {
   readonly mode: ViewMode;
   readonly pointerLocked: boolean;
   readonly focusId: string | null;
   readonly hovered: SelectableInfo | null;
   readonly selected: SelectableInfo | null;
+  readonly placement: PlacementView | null;
 }
 
 export type ViewportStateListener = (state: ViewportState) => void;
 
+/**
+ * A gesture's commit point, for the workspace to execute as exactly one Command. `place` and `move`
+ * carry the exact arguments (`placeOnTargets` from `@controls/world-model`, the same maths scripts
+ * use). `cancelPlacement` is Escape while placing: no command, the workspace clears the tool.
+ */
+export type ViewportIntent =
+  | {
+      readonly kind: 'place';
+      readonly ref: CatalogRef;
+      readonly positionMm: Vec3Mm;
+      readonly orientationMdeg: OrientationMdeg;
+    }
+  | { readonly kind: 'move'; readonly id: EntityId; readonly positionMm: Vec3Mm }
+  | { readonly kind: 'cancelPlacement' };
+
+export type ViewportIntentListener = (intent: ViewportIntent) => void;
+
 /** A press-and-release within this many CSS pixels is a click, not an orbit drag (game-design). */
 export const CLICK_SLOP_PX = 4;
+
+interface Moving {
+  readonly id: EntityId;
+  /** The snapshot the move started from; a sync that changes it cancels the move. */
+  readonly entity: Entity;
+  readonly object: Object3D;
+  /** Started by dragging (commits on release) rather than by the keyboard (commits on Enter or click). */
+  readonly byPointer: boolean;
+}
+
+const samePosition = (a: Vec3Mm, b: Vec3Mm): boolean => a.x === b.x && a.y === b.y && a.z === b.z;
+const sameRef = (a: CatalogRef | null, b: CatalogRef | null): boolean =>
+  a === b || (a !== null && b !== null && a.id === b.id && a.version === b.version);
 
 export class ViewportController {
   readonly scene: Scene;
@@ -72,17 +133,31 @@ export class ViewportController {
 
   private readonly disposer = new Disposer();
   private readonly picker = new Picker();
+  /** Picks snap surfaces only (backplate, rails; walls in F1.9), so props never block the ghost. */
+  private readonly surfacePicker = new Picker();
+  private readonly snapTargets: readonly SnapTarget[];
+  private readonly fixed: ReadonlyArray<{ root: Object3D; info: SelectableInfo }>;
+  private readonly world: WorldSync;
+  private readonly ghost: PlacementGhost;
   private readonly highlight: SelectionHighlight;
   private readonly orbit: OrbitControls;
   private readonly keyboard: KeyboardInput;
   private readonly look: PointerLockLook;
   private readonly roots = new Map<string, Object3D>();
   private readonly listeners = new Set<ViewportStateListener>();
+  private readonly intentListeners = new Set<ViewportIntentListener>();
   private readonly walkConfig: WalkConfig;
   private readonly room: RoomBoundsMm;
 
   private modeValue: ViewMode = 'work';
   private focusIdValue: string | null = null;
+  /** The active tool's prop (placement armed), from the tool belt. */
+  private armed: CatalogRef | null = null;
+  private moving: Moving | null = null;
+  /** A press on an entity that becomes a move once it drags past the click slop. */
+  private press: { readonly id: EntityId; readonly pointerId: number } | null = null;
+  private ghostResult: Placement | null = null;
+  private ghostSource: PlacementView['source'] = 'reticle';
 
   // Per-frame scratch (no allocation in update()).
   private readonly pose: WalkPose = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
@@ -106,17 +181,24 @@ export class ViewportController {
     // Teardown runs in reverse: scene last, after everything that references it.
     this.disposer.add(() => disposeScene(this.scene));
 
-    const found = findSelectables(this.scene);
-    found.forEach(({ root, info }) => this.roots.set(info.id, root));
-    this.selection.setSelectables(found.map((f) => f.info));
-    this.picker.setRoots(found.map((f) => f.root));
+    this.fixed = findSelectables(this.scene);
+    this.snapTargets = this.fixed.flatMap((f) => (f.info.snapTarget ? [f.info.snapTarget] : []));
+    this.surfacePicker.setRoots(this.fixed.filter((f) => f.info.snapTarget).map((f) => f.root));
+    this.disposer.add(() => this.surfacePicker.dispose());
     this.disposer.add(() => this.picker.dispose());
+
+    // World entities and the ghost share reference-counted prop recipes; both leave the scene
+    // (releasing their geometry) before the scene itself is disposed.
+    this.world = new WorldSync(this.scene);
+    this.disposer.add(() => this.world.dispose());
+    this.ghost = new PlacementGhost(this.scene, this.world.recipes);
+    this.disposer.add(() => this.ghost.dispose());
 
     this.highlight = new SelectionHighlight(this.scene);
     this.disposer.add(() => this.highlight.dispose());
-    const offSelection = this.selection.onChange((s) => {
-      this.highlight.setHover(s.hovered ? (this.roots.get(s.hovered.id) ?? null) : null);
-      this.highlight.setSelection(s.selected ? (this.roots.get(s.selected.id) ?? null) : null);
+    this.refreshSelectables();
+    const offSelection = this.selection.onChange(() => {
+      this.refreshHighlight();
       this.emit();
     });
     this.disposer.add(() => {
@@ -124,6 +206,9 @@ export class ViewportController {
       this.selection.dispose();
     });
 
+    // Our pointer listeners go first (and in the capture phase) so a press on an entity can switch
+    // orbiting off before OrbitControls sees it: that drag moves the entity instead.
+    this.listenPointer();
     this.orbit = new OrbitControls(this.camera, element);
     this.orbit.enableDamping = true;
     this.disposer.add(() => this.orbit.dispose());
@@ -145,9 +230,10 @@ export class ViewportController {
       () => this.emit(),
     );
     this.disposer.add(() => this.look.dispose());
-
-    this.listenPointer();
-    this.disposer.add(() => this.listeners.clear());
+    this.disposer.add(() => {
+      this.listeners.clear();
+      this.intentListeners.clear();
+    });
 
     const initial = options.initialFocus ?? this.selection.all.find((s) => s.focusNormal)?.id;
     if (initial) this.focus(initial);
@@ -164,12 +250,49 @@ export class ViewportController {
       focusId: this.focusIdValue,
       hovered: this.selection.hovered,
       selected: this.selection.selected,
+      placement: this.placementView(),
     };
   }
 
   onChange(listener: ViewportStateListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Gesture commit points (place, move, cancel). The workspace turns them into Commands. */
+  onIntent(listener: ViewportIntentListener): () => void {
+    this.intentListeners.add(listener);
+    return () => this.intentListeners.delete(listener);
+  }
+
+  /**
+   * Draws a world snapshot: entities are added, updated or removed by id (`WorldSync`), and the
+   * picking BVH and keyboard selection list follow. Never mutates `world`.
+   */
+  syncWorld(world: World): void {
+    const result = this.world.sync(world);
+    if (this.moving && this.world.entityOf(this.moving.id) !== this.moving.entity) this.endMove();
+    if (result.membershipChanged) {
+      this.refreshSelectables();
+    } else if (result.transformsChanged) {
+      this.picker.refit();
+      this.refreshHighlight();
+    }
+    this.hoverDirty = true;
+  }
+
+  /**
+   * Arms placement of `ref` (the active tool-belt prop) or disarms it with `null`. While armed, the
+   * ghost follows the pointer (or the reticle) and a click or Enter commits one `place` intent.
+   */
+  setPlacement(ref: CatalogRef | null): void {
+    if (sameRef(ref, this.armed)) return;
+    if (this.moving) this.endMove();
+    this.armed = ref;
+    this.ghostResult = null;
+    if (!ref) this.ghost.clear();
+    this.hoverDirty = true;
+    this.emit();
   }
 
   /**
@@ -179,6 +302,7 @@ export class ViewportController {
    */
   setMode(mode: ViewMode): void {
     if (mode === this.modeValue) return;
+    if (this.moving) this.endMove();
     this.modeValue = mode;
     if (mode === 'walk') {
       this.orbit.enabled = false;
@@ -235,6 +359,15 @@ export class ViewportController {
     return this.picker.pick(ndcX, ndcY, this.camera)?.info ?? null;
   }
 
+  /** Where an integer-mm world point appears on the canvas, in CSS pixels from its top-left (tests, overlays). */
+  projectMm(p: Vec3Mm): { x: number; y: number } {
+    this.camera.updateMatrixWorld();
+    const v = this.tmpVec.set(mm(p.x), mm(p.y), mm(p.z)).project(this.camera);
+    const w = this.element.clientWidth || 1;
+    const h = this.element.clientHeight || 1;
+    return { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h };
+  }
+
   setBindings(bindings: InputBindings): void {
     this.keyboard.setBindings(bindings);
   }
@@ -248,6 +381,7 @@ export class ViewportController {
     if (widthPx <= 0 || heightPx <= 0) return;
     this.camera.aspect = widthPx / heightPx;
     this.camera.updateProjectionMatrix();
+    this.hoverDirty = true;
   }
 
   /** Per-frame update. Allocation-free on the hot path (no hover change, no input). */
@@ -269,6 +403,7 @@ export class ViewportController {
     if (this.hoverDirty) {
       this.hoverDirty = false;
       this.updateHover();
+      this.updateGhost();
     }
   }
 
@@ -279,11 +414,142 @@ export class ViewportController {
 
   /** Number of geometry BVHs held (0 after dispose). */
   get bvhCount(): number {
-    return this.picker.bvhCount;
+    return this.picker.bvhCount + this.surfacePicker.bvhCount;
+  }
+
+  /** Number of world entities drawn. */
+  get entityCount(): number {
+    return this.world.size;
+  }
+
+  /** Number of live shared prop recipes (geometry + material pairs); 0 once no prop is drawn. */
+  get recipeCount(): number {
+    return this.world.recipes.size;
   }
 
   dispose(): void {
     this.disposer.dispose();
+  }
+
+  // --- gestures ------------------------------------------------------------------------------
+
+  /** The prop the ghost shows, or `null` when no gesture is active. */
+  private gestureRef(): CatalogRef | null {
+    return this.moving?.entity.ref ?? this.armed;
+  }
+
+  private placementView(): PlacementView | null {
+    const ref = this.gestureRef();
+    if (!ref) return null;
+    const r = this.ghostResult;
+    return {
+      kind: this.moving ? 'move' : 'place',
+      ref,
+      entityId: this.moving?.id ?? null,
+      valid: r?.ok === true,
+      targetId: r?.targetId ?? null,
+      source: this.ghostSource,
+    };
+  }
+
+  /** The cursor that aims a gesture: the pointer over the canvas, else the screen-centre reticle. */
+  private cursorNdc(): { x: number; y: number; source: PlacementView['source'] } {
+    const lockedWalk = this.modeValue === 'walk' && this.look.isLocked;
+    if (this.pointer.inside && !lockedWalk) return { x: this.pointer.ndcX, y: this.pointer.ndcY, source: 'pointer' };
+    return { x: 0, y: 0, source: 'reticle' };
+  }
+
+  /** Where the gesture's prop would go now. Pure maths in `@controls/world-model`. */
+  private placementNow(ref: CatalogRef): Placement {
+    const c = this.cursorNdc();
+    this.ghostSource = c.source;
+    this.camera.updateMatrixWorld();
+    const hit = this.surfacePicker.pick(c.x, c.y, this.camera);
+    if (!hit) return { ok: false, reason: 'no-target', targetId: null };
+    const cursor = { x: metresToMm(hit.point.x), y: metresToMm(hit.point.y), z: metresToMm(hit.point.z) };
+    const options = this.moving ? { orientationMdeg: this.moving.entity.transform.orientationMdeg } : {};
+    return placeOnTargets(ref, cursor, this.snapTargets, options);
+  }
+
+  private updateGhost(): void {
+    const ref = this.gestureRef();
+    if (!ref) return;
+    const before = this.placementView();
+    const r = this.placementNow(ref);
+    this.ghostResult = r;
+    if (r.ok) this.ghost.show(ref, r.positionMm, r.orientationMdeg);
+    else this.ghost.hide();
+    const after = this.placementView();
+    if (before?.valid !== after?.valid || before?.targetId !== after?.targetId || before?.source !== after?.source) {
+      this.emit();
+    }
+  }
+
+  /**
+   * Commits the active gesture at the cursor: at most one intent (`place`, or `move` if the position
+   * changed). Returns whether a gesture was active (the key or click is then consumed).
+   */
+  private commit(): boolean {
+    const ref = this.gestureRef();
+    if (!ref) return false;
+    const r = this.placementNow(ref);
+    const moving = this.moving;
+    if (moving) {
+      this.endMove();
+      if (r.ok && !samePosition(r.positionMm, moving.entity.transform.positionMm)) {
+        this.emitIntent({ kind: 'move', id: moving.id, positionMm: r.positionMm });
+      }
+    } else if (r.ok) {
+      this.emitIntent({ kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg });
+    }
+    this.hoverDirty = true;
+    return true;
+  }
+
+  private startMove(id: EntityId, byPointer: boolean): boolean {
+    const entity = this.world.entityOf(id);
+    const object = this.world.objectOf(id);
+    if (!entity || !object) return false;
+    this.moving = { id, entity, object, byPointer };
+    object.visible = false; // the ghost stands in for it until the move commits or cancels
+    this.ghostResult = null;
+    this.hoverDirty = true;
+    this.emit();
+    return true;
+  }
+
+  /** Ends a move without a command: the entity reappears where the world has it. */
+  private endMove(): void {
+    const moving = this.moving;
+    if (!moving) return;
+    moving.object.visible = true;
+    this.moving = null;
+    this.ghostResult = null;
+    if (!this.armed) this.ghost.clear();
+    this.hoverDirty = true;
+    this.emit();
+  }
+
+  private emitIntent(intent: ViewportIntent): void {
+    [...this.intentListeners].forEach((l) => l(intent));
+  }
+
+  // --- internals -----------------------------------------------------------------------------
+
+  /** Rebuilds the selectable list and the picking BVH from the fixed scene plus the world entities. */
+  private refreshSelectables(): void {
+    const all = [...this.fixed, ...this.world.selectables()];
+    this.roots.clear();
+    all.forEach(({ root, info }) => this.roots.set(info.id, root));
+    this.selection.setSelectables(all.map((a) => a.info));
+    this.picker.setRoots(all.map((a) => a.root));
+    this.refreshHighlight();
+  }
+
+  private refreshHighlight(): void {
+    const s = this.selection;
+    this.highlight.setHover(s.hovered ? (this.roots.get(s.hovered.id) ?? null) : null);
+    this.highlight.setSelection(s.selected ? (this.roots.get(s.selected.id) ?? null) : null);
   }
 
   private applyFocus(id: string): void {
@@ -336,54 +602,109 @@ export class ViewportController {
         this.selectPrevious();
         return true;
       case 'clearSelection':
-        // Only consume Escape when there is something to clear, so it can still open the menu.
+        // Escape, innermost first: cancel a move, cancel placement, clear the selection. With
+        // nothing to cancel it isn't consumed, so the shell can still open the menu.
+        if (this.moving) {
+          this.endMove();
+          return true;
+        }
+        if (this.armed) {
+          this.setPlacement(null);
+          this.emitIntent({ kind: 'cancelPlacement' });
+          return true;
+        }
         if (!this.selection.selected) return false;
         this.select(null);
         return true;
       case 'commitPlacement':
-      case 'moveSelection':
-        return false; // placement gestures arrive with world sync (F1.7 part 2)
+        return this.commit();
+      case 'moveSelection': {
+        const id = this.selection.selected?.entityId;
+        if (this.armed || this.moving || id === undefined) return false;
+        return this.startMove(id, false);
+      }
     }
   }
 
   private listenPointer(): void {
     const el = this.element;
+    const capture = { capture: true };
     const toNdc = (e: PointerEvent): void => {
       const w = el.clientWidth || 1;
       const h = el.clientHeight || 1;
+      this.pointer.inside = true;
       this.pointer.ndcX = (e.offsetX / w) * 2 - 1;
       this.pointer.ndcY = -(e.offsetY / h) * 2 + 1;
     };
-    this.disposer.listen<PointerEvent>(el, 'pointermove', (e) => {
-      this.pointer.inside = true;
-      toNdc(e);
-      this.hoverDirty = true;
-    });
+    const dragged = (e: PointerEvent): boolean =>
+      Math.hypot(e.offsetX - this.pointer.downX, e.offsetY - this.pointer.downY) > CLICK_SLOP_PX;
+    this.disposer.listen<PointerEvent>(
+      el,
+      'pointermove',
+      (e) => {
+        toNdc(e);
+        this.hoverDirty = true;
+        if (this.press && !this.moving && this.pointer.down && dragged(e)) {
+          if (this.startMove(this.press.id, true)) el.setPointerCapture?.(this.press.pointerId);
+        }
+      },
+      capture,
+    );
     this.disposer.listen<PointerEvent>(el, 'pointerleave', () => {
       this.pointer.inside = false;
       this.hoverDirty = true;
     });
-    this.disposer.listen<PointerEvent>(el, 'pointerdown', (e) => {
-      if (e.button !== 0) return;
-      this.pointer.down = true;
-      this.pointer.downX = e.offsetX;
-      this.pointer.downY = e.offsetY;
-      el.focus?.({ preventScroll: true }); // keyboard actions need the viewport focused
-    });
-    this.disposer.listen<PointerEvent>(el, 'pointerup', (e) => {
-      if (e.button !== 0 || !this.pointer.down) return;
-      this.pointer.down = false;
-      const moved = Math.hypot(e.offsetX - this.pointer.downX, e.offsetY - this.pointer.downY);
-      if (moved > CLICK_SLOP_PX) return; // an orbit drag, not a click
-      if (this.modeValue === 'walk' && !this.look.isLocked) {
-        this.look.request();
-        return;
-      }
-      toNdc(e);
-      const locked = this.modeValue === 'walk';
-      const hit = locked ? this.pickAt(0, 0) : this.pickAt(this.pointer.ndcX, this.pointer.ndcY);
-      this.selection.select(hit?.id ?? null);
-    });
+    this.disposer.listen<PointerEvent>(
+      el,
+      'pointerdown',
+      (e) => {
+        if (e.button !== 0) return;
+        this.pointer.down = true;
+        this.pointer.downX = e.offsetX;
+        this.pointer.downY = e.offsetY;
+        el.focus?.({ preventScroll: true }); // keyboard actions need the viewport focused
+        if (this.modeValue !== 'work' || this.armed || this.moving) return;
+        toNdc(e);
+        const id = this.pickAt(this.pointer.ndcX, this.pointer.ndcY)?.entityId;
+        if (id === undefined) return;
+        // A press on an entity: a drag moves it rather than orbiting.
+        this.press = { id, pointerId: e.pointerId };
+        this.orbit.enabled = false;
+      },
+      capture,
+    );
+    this.disposer.listen<PointerEvent>(
+      el,
+      'pointerup',
+      (e) => {
+        if (e.button !== 0 || !this.pointer.down) return;
+        this.pointer.down = false;
+        const press = this.press;
+        if (press) {
+          this.press = null;
+          this.orbit.enabled = this.modeValue === 'work';
+          if (el.hasPointerCapture?.(press.pointerId)) el.releasePointerCapture?.(press.pointerId);
+        }
+        toNdc(e);
+        if (this.moving?.byPointer) {
+          this.commit(); // releasing a drag drops the entity: one move, never one per frame
+          return;
+        }
+        if (dragged(e)) return; // an orbit drag, not a click
+        if (this.modeValue === 'walk' && !this.look.isLocked) {
+          this.look.request();
+          return;
+        }
+        if (this.gestureRef()) {
+          this.commit(); // a click places the active prop (or drops a keyboard move)
+          return;
+        }
+        const locked = this.modeValue === 'walk';
+        const hit = locked ? this.pickAt(0, 0) : this.pickAt(this.pointer.ndcX, this.pointer.ndcY);
+        this.selection.select(hit?.id ?? null);
+      },
+      capture,
+    );
   }
 
   private emit(): void {

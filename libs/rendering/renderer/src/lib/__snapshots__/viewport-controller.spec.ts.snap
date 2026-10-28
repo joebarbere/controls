@@ -30,6 +30,11 @@ exports[`ViewportController scene graph > matches the snapshot (positions in int
         -1200,
         1750,
       ],
+      "rotationMdeg": [
+        -90000,
+        0,
+        0,
+      ],
       "type": "Mesh",
       "visible": true,
     },
@@ -67,6 +72,26 @@ exports[`ViewportController scene graph > matches the snapshot (positions in int
       "visible": true,
     },
     {
+      "name": "world",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Group",
+      "visible": true,
+    },
+    {
+      "name": "overlay:ghost",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
       "name": "overlay:hover",
       "positionMm": [
         0,
@@ -94,6 +119,116 @@ exports[`ViewportController scene graph > matches the snapshot (positions in int
     0,
   ],
   "type": "Scene",
+  "visible": true,
+}
+`;
+
+exports[`ViewportController world sync > adds, updates and removes entity objects by id (scene-graph snapshots) > entity 1 moved 1`] = `
+{
+  "children": [
+    {
+      "name": "entity-1",
+      "positionMm": [
+        -70,
+        110,
+        0,
+      ],
+      "selectable": "prop:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "entity-2",
+      "positionMm": [
+        -50,
+        -300,
+        0,
+      ],
+      "rotationMdeg": [
+        0,
+        90000,
+        0,
+      ],
+      "selectable": "prop:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
+exports[`ViewportController world sync > adds, updates and removes entity objects by id (scene-graph snapshots) > entity 2 removed 1`] = `
+{
+  "children": [
+    {
+      "name": "entity-1",
+      "positionMm": [
+        -70,
+        110,
+        0,
+      ],
+      "selectable": "prop:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
+exports[`ViewportController world sync > adds, updates and removes entity objects by id (scene-graph snapshots) > two entities 1`] = `
+{
+  "children": [
+    {
+      "name": "entity-1",
+      "positionMm": [
+        -210,
+        260,
+        0,
+      ],
+      "selectable": "prop:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "name": "entity-2",
+      "positionMm": [
+        -50,
+        -300,
+        0,
+      ],
+      "rotationMdeg": [
+        0,
+        90000,
+        0,
+      ],
+      "selectable": "prop:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
   "visible": true,
 }
 `;

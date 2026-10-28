@@ -25,14 +25,17 @@ import {
   type ViewModeArgs,
   VIEWPORT_FOCUSED_KEY,
 } from '@controls/commands';
-import { KeybindingService, Session } from '@controls/feature-session';
+import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
+import { SettingsStore } from '@controls/feature-settings';
 import {
   inputBindingsFrom,
   ViewportRenderer,
   type RenderBackend,
+  type ViewportIntent,
   type ViewportState,
   type ViewportStats,
 } from '@controls/renderer';
+import { ENTITY_DELETE_SELECTION_BINDING, type CatalogRef } from '@controls/world-model';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -44,7 +47,14 @@ const TEST_HOOK = '__controlsViewport';
  * animation loop and input handling; with zoneless change detection nothing here re-renders per
  * frame. Only view state (mode, hover, selection) and twice-a-second dev stats reach signals.
  * Mode and selection are shown by the shell HUD (`ctl-hud`, fed from `state`); the frame-time dev
- * HUD and the walk-mode crosshair stay here.
+ * HUD and the crosshair (walk mode, or a ghost aimed by the reticle) stay here.
+ *
+ * **World and gestures:** the renderer draws `Session.world()` (it syncs by entity id and never
+ * mutates it) and arms placement with the active tool-belt prop (settings `toolBelt.slots`). Its
+ * gesture intents become exactly one Command each, through `Session.exec`: a click or Enter on a
+ * snapped spot is `entity.place`, dropping a dragged (or `M`-picked) entity is `entity.move`, and
+ * Escape while placing puts the tool away without a command. Delete is the `entity.delete.selection`
+ * binding (the keybinding service runs it, not this component).
  *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
@@ -66,7 +76,7 @@ const TEST_HOOK = '__controlsViewport';
       (focus)="session.setContext(viewportFocusedKey, true)"
       (blur)="session.setContext(viewportFocusedKey, null)"
     ></canvas>
-    @if (state()?.mode === 'walk') {
+    @if (state()?.mode === 'walk' || state()?.placement?.source === 'reticle') {
       <div class="crosshair" aria-hidden="true"></div>
     }
     @if (showHud && stats(); as st) {
@@ -128,6 +138,10 @@ const TEST_HOOK = '__controlsViewport';
     '[attr.data-selected]': 'state()?.selected?.id ?? null',
     '[attr.data-selection-kind]': 'selectionKind()',
     '[attr.data-hovered]': 'state()?.hovered?.id ?? null',
+    '[attr.data-placing]': 'state()?.placement?.kind ?? null',
+    '[attr.data-placement-ref]': 'state()?.placement?.ref?.id ?? null',
+    '[attr.data-placement-valid]': 'placementValid()',
+    '[attr.data-placement-target]': 'state()?.placement?.targetId ?? null',
   },
 })
 export class Viewport {
@@ -137,6 +151,11 @@ export class Viewport {
   readonly stats = signal<ViewportStats | undefined>(undefined);
   /** `selection.kind` for the HUD and (from F1.2) the `when` context. */
   readonly selectionKind = computed(() => this.state()?.selected?.kind ?? null);
+  /** `true`/`false` while a ghost is shown (whether committing would produce a command), else absent. */
+  protected readonly placementValid = computed(() => {
+    const placement = this.state()?.placement;
+    return placement ? String(placement.valid) : null;
+  });
   readonly backendChange = output<RenderBackend | 'unavailable'>();
 
   private readonly params = new URLSearchParams(window.location.search);
@@ -149,6 +168,13 @@ export class Viewport {
   protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
   private readonly keys = inject(KeybindingService);
   private readonly bindings = computed(() => inputBindingsFrom(this.keys.inputBindings()));
+  private readonly toolBelt = inject(ToolBelt);
+  private readonly settings = inject(SettingsStore);
+  /** The prop in the active tool-belt slot: what placement places. `null` when no slot or an empty one. */
+  readonly activeProp = computed<CatalogRef | null>(() => {
+    const slot = this.toolBelt.activeSlot();
+    return slot === null ? null : (this.settings.settings().toolBelt.slots[slot - 1] ?? null);
+  });
   /** The canvas's accessible name, naming the current keys of each input action and view binding. */
   protected readonly label = computed(() => {
     const binding = (id: string) => {
@@ -159,7 +185,10 @@ export class Viewport {
     const walk = ['moveForward', 'moveLeft', 'moveBack', 'moveRight'].map(key).join(' ');
     return (
       `3D workspace. Click to select. ${key('selectPrevious')} and ${key('selectNext')} cycle selection, ` +
-      `${binding(VIEW_FOCUS_SELECTION_BINDING)} focuses it, ${binding(VIEW_MODE_WALK_BINDING)} toggles walk and work mode, ${walk} walk.`
+      `${binding(VIEW_FOCUS_SELECTION_BINDING)} focuses it, ${binding(VIEW_MODE_WALK_BINDING)} toggles walk and work mode, ${walk} walk. ` +
+      `Number keys pick a prop; click or ${key('commitPlacement')} places it at the pointer or the centre. ` +
+      `Drag an object, or ${key('moveSelection')} then ${key('commitPlacement')}, to move it; ` +
+      `${binding(ENTITY_DELETE_SELECTION_BINDING)} deletes it; Escape cancels.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */
@@ -181,8 +210,13 @@ export class Viewport {
       offMode();
       offFocus();
     });
-    // Pushing bindings into the framework-free renderer is an imperative side effect.
+    // Pushing bindings, the world and the active prop into the framework-free renderer is an
+    // imperative side effect. The renderer keeps them until it has started.
     effect(() => this.renderer.setBindings(this.bindings()));
+    effect(() => this.renderer.syncWorld(this.session.world()));
+    effect(() => this.renderer.setPlacement(this.activeProp()));
+    const offIntent = this.renderer.onIntent((intent) => this.onIntent(intent));
+    destroyRef.onDestroy(offIntent);
     afterNextRender(() => {
       const canvas = this.canvas().nativeElement;
       const observer = new ResizeObserver(() => this.resize());
@@ -220,6 +254,32 @@ export class Viewport {
           this.backendChange.emit('unavailable');
         });
     });
+  }
+
+  /** A gesture's commit point → exactly one Command (or, for a cancelled placement, none). */
+  private onIntent(intent: ViewportIntent): void {
+    switch (intent.kind) {
+      case 'place':
+        this.report(
+          this.session.exec('entity.place', {
+            ref: intent.ref,
+            positionMm: intent.positionMm,
+            orientationMdeg: intent.orientationMdeg,
+          }),
+        );
+        return;
+      case 'move':
+        this.report(this.session.exec('entity.move', { id: intent.id, positionMm: intent.positionMm }));
+        return;
+      case 'cancelPlacement':
+        this.toolBelt.clear();
+        return;
+    }
+  }
+
+  /** A refused gesture command is a bug (the renderer only commits valid snaps): say so in the console. */
+  private report(result: { readonly ok: boolean }): void {
+    if (!result.ok) console.warn('viewport gesture command failed', result);
   }
 
   /** Publishes the view state as `when` context keys (`undefined` clears them). */
