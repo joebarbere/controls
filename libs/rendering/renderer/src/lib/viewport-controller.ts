@@ -175,7 +175,7 @@ export class ViewportController {
   /**
    * Switches between walk and work. Entering walk keeps the current eye position (clamped to the
    * room, at eye height) and view direction; entering work re-focuses the last focus target.
-   * TODO(F1.2): exposed as the `view.mode walk|work` Command; mode becomes a `when` context key.
+   * The workspace calls this when the `view.mode` command runs, and publishes `mode` as a context key.
    */
   setMode(mode: ViewMode): void {
     if (mode === this.modeValue) return;
@@ -203,7 +203,7 @@ export class ViewportController {
   /**
    * Focuses a target in work mode (switching to work if needed): the camera frames it along its
    * working face, and orbit and pan are limited around it. Returns false if `id` can't be focused.
-   * TODO(F1.2): exposed as the `view.focus --target <id>` Command.
+   * The workspace calls this when the `view.focus` command runs.
    */
   focus(id: string): boolean {
     if (!this.selection.get(id)?.focusNormal || !this.roots.has(id)) return false;
@@ -340,15 +340,9 @@ export class ViewportController {
         if (!this.selection.selected) return false;
         this.select(null);
         return true;
-      case 'focusSelection': {
-        const s = this.selection.selected;
-        if (!s) return false;
-        this.focus(s.id);
-        return true;
-      }
-      case 'toggleMode':
-        this.setMode(this.modeValue === 'walk' ? 'work' : 'walk');
-        return true;
+      case 'commitPlacement':
+      case 'moveSelection':
+        return false; // placement gestures arrive with world sync (F1.7 part 2)
     }
   }
 

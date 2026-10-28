@@ -16,7 +16,9 @@ describe('paletteItems', () => {
       'entity.place',
       'entity.rotate',
       'toolbelt.select',
+      'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',
+      'view.mode',
       'edit.redo',
       'edit.undo',
       'console.toggle', // disabled here: console.available is unset

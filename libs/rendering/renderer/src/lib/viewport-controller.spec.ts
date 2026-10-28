@@ -170,10 +170,14 @@ describe('ViewportController picking and selection', () => {
     controller.dispose();
   });
 
-  it('focuses a rail from the selection and refuses unknown targets', () => {
+  it('focuses a rail and refuses unknown targets; F and V are Command bindings, not input actions', () => {
     const { canvas, controller } = setup();
     controller.select('din-rail-2');
-    canvas.dispatchEvent(key('keydown', 'KeyF'));
+    const f = key('keydown', 'KeyF');
+    canvas.dispatchEvent(f);
+    expect(f.defaultPrevented).toBe(false); // left for the keybinding service (view.focus)
+    expect(controller.state.focusId).toBe('backplate');
+    expect(controller.focus('din-rail-2')).toBe(true);
     expect(controller.state.focusId).toBe('din-rail-2');
     expect(controller.focus('nope')).toBe(false);
     controller.dispose();
@@ -211,8 +215,8 @@ describe('ViewportController modes', () => {
       selectNext: [],
       selectPrevious: [],
       clearSelection: [],
-      focusSelection: [],
-      toggleMode: [],
+      commitPlacement: [],
+      moveSelection: [],
     });
     const x0 = controller.camera.position.x;
     canvas.dispatchEvent(key('keydown', 'KeyD')); // no longer bound
@@ -230,7 +234,7 @@ describe('ViewportController modes', () => {
 
   it('click in walk mode takes pointer lock; mouse look turns; leaving walk releases the lock', () => {
     const { canvas, controller } = setup();
-    canvas.dispatchEvent(key('keydown', 'KeyV'));
+    controller.setMode('walk');
     expect(controller.mode).toBe('walk');
     canvas.dispatchEvent(pointer('pointerdown', 640, 360));
     canvas.dispatchEvent(pointer('pointerup', 640, 360));

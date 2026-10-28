@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { BindingDecl } from './keybindings/keymap';
 
 /**
  * A reversible state change: the apply/invert pair an undoable command produces (ADR 0006).
@@ -72,6 +73,12 @@ export interface CommandDef<A = unknown, S = unknown> {
    * commands that must work from anywhere: the palette and the console toggle.
    */
   readonly globalKeybinding?: boolean;
+  /**
+   * Extra default bindings that run this command with fixed arguments or with arguments taken from
+   * context keys (`view.mode.walk`, `entity.delete.selection`), for commands whose arguments one
+   * chord can't carry. Collected by `defaultBindingDecls`; each has its own binding id.
+   */
+  readonly bindings?: readonly BindingDecl[];
   /**
    * Whether the change it returns goes on the undo stack. A non-undoable command that still
    * changes the state clears both stacks: history can't be undone past it.

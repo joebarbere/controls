@@ -11,7 +11,8 @@ import { defineCommand, succeed } from '../command';
 import { CommandRegistry } from '../registry';
 import { defaultBindingDecls } from './defaults';
 import { INPUT_ACTIONS } from './input-actions';
-import { type BindingDecl, commandBindingDecls, inputActionDecls, Keymap, KeymapError } from './keymap';
+import { type BindingDecl, bindingArgs, commandBindingDecls, inputActionDecls, Keymap, KeymapError } from './keymap';
+import { viewportCommands } from '../view';
 
 const command = (id: string, defaults: string[], extra: Partial<BindingDecl> = {}): BindingDecl => ({
   id,
@@ -199,12 +200,12 @@ describe('inputCodes', () => {
   });
 
   it('gives a shared key to one action only, the first in resolution order', () => {
-    const keymap = Keymap.create(inputActionDecls(), { 'input.toggleMode': 'W' }, 'other');
+    const keymap = Keymap.create(inputActionDecls(), { 'input.moveSelection': 'W' }, 'other');
     const codes = keymap.inputCodes();
-    expect(codes['toggleMode']).toEqual(['KeyW']);
+    expect(codes['moveSelection']).toEqual(['KeyW']);
     expect(codes['moveForward']).toEqual(['ArrowUp']);
     expect(keymap.conflictsOf('input.moveForward')).toEqual([
-      { chord: 'W', first: 'input.toggleMode', second: 'input.moveForward' },
+      { chord: 'W', first: 'input.moveSelection', second: 'input.moveForward' },
     ]);
   });
 });
@@ -263,5 +264,79 @@ describe('declarations', () => {
       expect(ToolBeltSelectArgs.safeParse(bad).success).toBe(false);
     }
     expect(z.toJSONSchema(ToolBeltSelectArgs)).toMatchObject({ required: ['slot'] });
+  });
+});
+
+describe('context arguments (F1.7)', () => {
+  const del: BindingDecl = {
+    id: 'entity.delete.selection',
+    title: 'Delete',
+    category: 'Test',
+    target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: 'selection.entityId' } },
+    defaults: ['Delete'],
+  };
+
+  it('resolves only while every context argument is set, and fills it from the context', () => {
+    const keymap = Keymap.create([del], {}, 'other');
+    expect(keymap.resolve('Delete', {})).toBeNull();
+    expect(keymap.resolve('Delete', { 'selection.entityId': null })).toBeNull();
+    const binding = keymap.resolve('Delete', { 'selection.entityId': 3 });
+    expect(binding?.id).toBe('entity.delete.selection');
+    expect(bindingArgs(del.target, { 'selection.entityId': 3 })).toEqual({ id: 3 });
+    expect(bindingArgs(del.target, {})).toEqual({ id: null });
+    expect(bindingArgs({ kind: 'input', action: 'x', held: false }, {})).toEqual({});
+  });
+
+  it('falls through to the next binding on the chord when a context argument is missing', () => {
+    const fallback = command('a.fallback', ['Delete']);
+    const keymap = Keymap.create([del, fallback], {}, 'other');
+    expect(keymap.resolve('Delete', {})?.id).toBe('a.fallback');
+  });
+
+  it('refuses an argument that is both fixed and from the context', () => {
+    const bad: BindingDecl = {
+      ...del,
+      target: { kind: 'command', command: 'entity.delete', args: { id: 1 }, contextArgs: { id: 'selection.entityId' } },
+    };
+    expect(() => Keymap.create([bad], {}, 'other')).toThrow(/both fixed and taken from the context/);
+  });
+});
+
+describe('view.mode and view.focus bindings (F1.7)', () => {
+  const registry = new CommandRegistry<unknown>().registerAll(viewCommands()).registerAll(viewportCommands());
+  const keymap = Keymap.create(defaultBindingDecls(registry), {}, 'other');
+  const focused = { 'viewport.focused': true };
+
+  it('V toggles: one binding per mode, on disjoint whens', () => {
+    expect(keymap.resolve('V', { ...focused, mode: 'work' })).toMatchObject({
+      id: 'view.mode.walk',
+      decl: { target: { args: { mode: 'walk' } } },
+    });
+    expect(keymap.resolve('V', { ...focused, mode: 'walk' })?.id).toBe('view.mode.work');
+    expect(keymap.resolve('V', { mode: 'walk' })).toBeNull(); // only on the focused viewport
+    expect(keymap.resolve('V', focused)).toBeNull(); // before the viewport reports a mode
+    expect(keymap.conflicts).toEqual([]);
+  });
+
+  it('F focuses the selection when it is focusable', () => {
+    const context = { ...focused, 'selection.id': 'din-rail-1', 'selection.focusable': true };
+    const binding = keymap.resolve('F', context);
+    expect(binding?.id).toBe('view.focus.selection');
+    expect(binding && bindingArgs(binding.decl.target, context)).toEqual({ target: 'din-rail-1' });
+    expect(keymap.resolve('F', { ...focused, 'selection.id': 'entity-1' })).toBeNull();
+  });
+
+  it('F and V are no longer input actions, and stale input.* overrides are ignored', () => {
+    expect(INPUT_ACTIONS.map((a) => a.action)).not.toContain('toggleMode');
+    expect(INPUT_ACTIONS.map((a) => a.action)).not.toContain('focusSelection');
+    const stale = Keymap.create(
+      defaultBindingDecls(registry),
+      { 'input.toggleMode': 'G', 'input.focusSelection': null },
+      'other',
+    );
+    expect(stale.invalid).toEqual([]);
+    expect(stale.get('input.toggleMode')).toBeUndefined();
+    expect(stale.on('G')).toEqual([]);
+    expect(stale.get('view.mode.walk')?.chords).toEqual(['V']);
   });
 });

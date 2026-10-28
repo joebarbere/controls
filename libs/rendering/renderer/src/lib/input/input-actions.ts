@@ -8,7 +8,8 @@ import { INPUT_ACTIONS, keyNameToCode } from '@controls/commands';
  * The actions, their titles and default keys are data in `@controls/commands` (`INPUT_ACTIONS`),
  * shared with the keybinding service and the rebinding UI; this module implements them. The
  * player's overrides arrive through `ViewportRenderer.setBindings` (from `KeybindingService`).
- * TODO(F1.7): `toggleMode` and `focusSelection` become the `view.mode` / `view.focus` Commands.
+ * Switching mode and focusing are Commands since F1.7 (`view.mode`, `view.focus`), bound by the
+ * keybinding service, not here.
  */
 
 /** Held while the key is down (sampled every frame). */
@@ -18,8 +19,8 @@ export const TRIGGERED_ACTIONS = [
   'selectNext',
   'selectPrevious',
   'clearSelection',
-  'focusSelection',
-  'toggleMode',
+  'commitPlacement',
+  'moveSelection',
 ] as const;
 
 export type HeldAction = (typeof HELD_ACTIONS)[number];

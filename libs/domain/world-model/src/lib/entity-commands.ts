@@ -1,4 +1,12 @@
-import { type AnyCommandDef, defineCommand, entityRefMeta, fail, succeed } from '@controls/commands';
+import {
+  type AnyCommandDef,
+  defineCommand,
+  entityRefMeta,
+  fail,
+  SELECTION_ENTITY_ID_KEY,
+  succeed,
+  VIEWPORT_FOCUSED_KEY,
+} from '@controls/commands';
 import { CatalogRef, Int, MILLIDEGREES_PER_TURN, OrientationMdegV1, PositionMmV1 } from '@controls/save-format';
 import { z } from 'zod';
 import type { Entity, EntityId, OrientationMdeg, World } from './types';
@@ -158,9 +166,14 @@ export const entityRotate = defineCommand<EntityRotateArgs, World>({
   },
 });
 
+/** Binding id of the Delete key: `entity.delete` with `id` taken from the selection (F1.7). */
+export const ENTITY_DELETE_SELECTION_BINDING = 'entity.delete.selection';
+
 /**
  * `entity.delete`: removes an entity. `nextEntityId` is untouched, so the id is never handed out
  * again while undo can bring the entity back; undo reinserts it with the same id and data.
+ * Delete (or Backspace) in the viewport deletes the selected entity: the binding takes `id` from
+ * the `selection.entityId` context key, so the log holds the concrete id.
  */
 export const entityDelete = defineCommand<EntityDeleteArgs, World>({
   id: 'entity.delete',
@@ -168,6 +181,16 @@ export const entityDelete = defineCommand<EntityDeleteArgs, World>({
   category: 'Entity',
   args: EntityDeleteArgs,
   undoable: true,
+  bindings: [
+    {
+      id: ENTITY_DELETE_SELECTION_BINDING,
+      title: 'Delete the selected object',
+      category: 'Entity',
+      target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: SELECTION_ENTITY_ID_KEY } },
+      defaults: ['Delete', 'Backspace'],
+      when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_ENTITY_ID_KEY}`,
+    },
+  ],
   run: ({ state }, { id }) => {
     const entity = findEntity(state, id);
     if (!entity) return notFound(id);

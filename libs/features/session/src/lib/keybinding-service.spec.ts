@@ -166,6 +166,43 @@ describe('KeybindingService', () => {
     ]);
   });
 
+  it('Delete deletes the selected entity, taking its id from the context (F1.7)', () => {
+    const { session } = setup();
+    session.exec('entity.place', place);
+    session.setContext('viewport.focused', true);
+    press(document.body, { key: 'Delete', code: 'Delete' });
+    expect(session.world().entities).toHaveLength(1); // nothing selected: the key is left alone
+    session.setContext('selection.entityId', 1);
+    const event = press(document.body, { key: 'Delete', code: 'Delete' });
+    expect(event.defaultPrevented).toBe(true);
+    expect(session.world().entities).toEqual([]);
+    expect(session.entries().map((e) => [e.id, e.args])).toEqual([
+      ['entity.place', { ...place, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } }],
+      ['entity.delete', { id: 1 }],
+    ]);
+  });
+
+  it('V and F run view.mode and view.focus with arguments from the context (F1.7)', () => {
+    const { session } = setup();
+    const modes: string[] = [];
+    session.onCommand('view.mode', (e) => modes.push((e.command.args as { mode: string }).mode));
+    session.setContext('viewport.focused', true);
+    session.setContext('mode', 'work');
+    press(document.body, { key: 'v', code: 'KeyV' });
+    session.setContext('mode', 'walk');
+    press(document.body, { key: 'v', code: 'KeyV' });
+    expect(modes).toEqual(['walk', 'work']);
+    session.setContext('selection.id', 'din-rail-2');
+    press(document.body, { key: 'f', code: 'KeyF' }); // not focusable: nothing runs
+    session.setContext('selection.focusable', true);
+    press(document.body, { key: 'f', code: 'KeyF' });
+    expect(session.entries().map((e) => [e.id, e.args])).toEqual([
+      ['view.mode', { mode: 'walk' }],
+      ['view.mode', { mode: 'work' }],
+      ['view.focus', { target: 'din-rail-2' }],
+    ]);
+  });
+
   it('labels chords for the platform', () => {
     expect(setup('mac').keys.label('Mod+Shift+Z')).toBe('Cmd+Shift+Z');
     TestBed.resetTestingModule();

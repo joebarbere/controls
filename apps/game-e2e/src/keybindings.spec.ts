@@ -102,9 +102,15 @@ test('rebind a command and an input action, use the new keys, and keep them afte
   await page.keyboard.press('KeyQ');
   await expect(tool).toHaveText('2: Crate');
 
-  // …and the input action, which moves the camera without touching the replay log.
+  // …V is the view.mode command (logged, F1.7)…
   await page.keyboard.press('KeyV');
   await expect(page.locator('ctl-viewport')).toHaveAttribute('data-mode', 'walk');
+  const logged = [
+    { id: 'toolbelt.select', args: { slot: 2 } },
+    { id: 'view.mode', args: { mode: 'walk' } },
+  ];
+  expect(await entries(page)).toEqual(logged);
+  // …and the rebound input action moves the camera without touching the replay log.
   const start = await cameraZ(page);
   await page.keyboard.down('KeyW'); // no longer bound
   await page.waitForTimeout(300);
@@ -114,7 +120,7 @@ test('rebind a command and an input action, use the new keys, and keep them afte
   await page.waitForTimeout(400);
   await page.keyboard.up('KeyI');
   expect(await cameraZ(page)).toBeLessThan(start);
-  expect(await entries(page)).toEqual([{ id: 'toolbelt.select', args: { slot: 2 } }]);
+  expect(await entries(page)).toEqual(logged);
 
   // And the rebinding screen still shows them; Reset all restores the defaults.
   await page.keyboard.press('Escape');

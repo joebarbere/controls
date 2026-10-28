@@ -24,7 +24,7 @@ describe('Viewport', () => {
       '3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, W A S D walk.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
-    TestBed.inject(KeybindingService).setBinding('input.toggleMode', null);
+    TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
     await fixture.whenStable();
     expect(canvas.getAttribute('aria-label')).toContain('unbound toggles walk and work mode, I A S D walk.');
   });

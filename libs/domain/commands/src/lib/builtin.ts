@@ -53,7 +53,7 @@ export function editCommands<S>(): CommandDef<NoArgs, S>[] {
 export function defineViewCommand<A, S>(
   def: Pick<
     CommandDef<A, S>,
-    'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding' | 'globalKeybinding' | 'logged'
+    'id' | 'title' | 'category' | 'args' | 'when' | 'keybinding' | 'globalKeybinding' | 'logged' | 'bindings'
   >,
 ): CommandDef<A, S> {
   return { ...def, undoable: false, run: () => succeed<S>() };
