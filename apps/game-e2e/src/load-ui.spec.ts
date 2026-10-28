@@ -96,6 +96,37 @@ test('keyboard only: Mod+S names a save, Mod+L lists it, Enter loads it back', a
   expect(await hash(page)).toBe(saved);
 });
 
+// The bug Continue had at F1.8b part 3: loading X over unsaved changes autosaves the game being left,
+// and that autosave is then the newest file. Continue must still resume X (settings.saves.lastPlayed).
+test('Continue resumes the game loaded last, not the newer autosave of the game it replaced', async ({ page }) => {
+  await open(page);
+  await startSandbox(page);
+  const x = await placeCrate(page);
+  await page.keyboard.press('Control+S');
+  await expect(page.getByRole('textbox', { name: 'Save name' })).toHaveValue('Sandbox 0');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Saved “Sandbox 0”.')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await menu(page).getByRole('button', { name: 'New sandbox' }).click();
+  await enterSeed(page, 1);
+  await placeCrate(page); // game A, with unsaved changes
+
+  await page.keyboard.press('Control+L');
+  await page.getByRole('dialog', { name: 'Load game' }).getByRole('button', { name: 'Sandbox 0', exact: true }).click();
+  await expect(page.getByText('Loaded “Sandbox 0”.')).toBeVisible();
+  const names = await page.evaluate(async () =>
+    (await (globalThis as unknown as Hooks).__controlsPlatform.files.list()).map((e) => e.name),
+  );
+  expect(names).toEqual(['Autosave 1', 'Sandbox 0']); // A was autosaved, and is the newest save
+
+  await page.reload(); // quit without changing X
+  await open(page);
+  await menu(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('Loaded “Sandbox 0”.')).toBeVisible();
+  expect(await hash(page)).toBe(x);
+});
+
 test('Save to a file downloads the save, and Open file uploads it back to the same hash', async ({ page }) => {
   await open(page);
   await startSandbox(page);

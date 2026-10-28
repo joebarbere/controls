@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SettingsV1 } from './settings/v1';
+import { SettingsV2 } from './settings/v2';
 import { ManifestV1 } from './v1/manifest';
 import { ReplayLogV1 } from './v1/replay-log';
 import { WorldV1 } from './v1/world';
@@ -17,5 +18,6 @@ export function jsonSchemas(): Record<string, Record<string, unknown>> {
     'world.v1.schema.json': generate(WorldV1),
     'replay-log.v1.schema.json': generate(ReplayLogV1),
     'settings.v1.schema.json': generate(SettingsV1),
+    'settings.v2.schema.json': generate(SettingsV2),
   };
 }

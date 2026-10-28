@@ -86,6 +86,26 @@ export class MemorySaveIo {
     return [...this.stored.values()].filter((s) => s.entry.kind !== 'external').map((s) => s.entry.name);
   }
 
+  /** Replaces the bytes of save `name` (to damage it), keeping its handle and time. */
+  corrupt(name: string, bytes: Uint8Array): void {
+    const found = [...this.stored.values()].find((s) => s.entry.name === name);
+    if (found) found.bytes = bytes.slice();
+  }
+
+  /** Deletes save `name`, as the player might between launches. */
+  remove(name: string): void {
+    const found = [...this.stored.values()].find((s) => s.entry.name === name);
+    if (found) this.stored.delete(found.entry.handle);
+  }
+
+  /**
+   * A new launch of the app: like main, the next autosave takes the lowest free slot, else the
+   * oldest, rather than the one after the last written. Saves and handles are kept.
+   */
+  relaunch(): void {
+    this.lastSlot = 0;
+  }
+
   /** The next call of `op` (`list`, `read`, `write`, `open`, `saveAs`) rejects with `code`. */
   failNext(op: string, code: SaveIoErrorCode): void {
     this.failure = { op, code };
@@ -119,7 +139,7 @@ export class MemorySaveIo {
         return this.put({ kind: 'manual', name: target.name, slot: null }, bytes, existing?.entry.handle);
       }
       case 'autosave': {
-        const slot = (this.lastSlot % target.slotCount) + 1;
+        const slot = this.lastSlot === 0 ? this.firstSlot(target.slotCount) : (this.lastSlot % target.slotCount) + 1;
         this.lastSlot = slot;
         const existing = [...this.stored.values()].find((s) => s.entry.kind === 'autosave' && s.entry.slot === slot);
         if (existing) this.stored.delete(existing.entry.handle);
@@ -139,6 +159,15 @@ export class MemorySaveIo {
         };
       }
     }
+  }
+
+  /** The first autosave of a launch: the lowest free slot, else the oldest (`pickAutosaveSlot`). */
+  private firstSlot(slotCount: number): number {
+    const slots = [...this.stored.values()]
+      .map((s) => s.entry)
+      .filter((e) => e.kind === 'autosave' && e.slot !== null && e.slot <= slotCount);
+    for (let slot = 1; slot <= slotCount; slot++) if (!slots.some((e) => e.slot === slot)) return slot;
+    return slots.reduce((a, b) => (b.modifiedMs < a.modifiedMs ? b : a)).slot ?? 1;
   }
 
   private put(

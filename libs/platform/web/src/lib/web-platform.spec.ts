@@ -88,7 +88,7 @@ describe('WebSettingsService', () => {
 
   it.each([
     ['corrupt JSON', '{{', 'corrupt'],
-    ['a newer version', JSON.stringify({ ...defaultSettings(), settingsVersion: 2 }), 'unknown-version'],
+    ['a newer version', JSON.stringify({ ...defaultSettings(), settingsVersion: 99 }), 'unknown-version'],
   ])('falls back to defaults for %s', async (_name, stored, reason) => {
     const storage = new MemoryStorage();
     storage.setItem(WEB_SETTINGS_KEY, stored);

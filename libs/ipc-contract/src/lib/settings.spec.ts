@@ -26,7 +26,7 @@ describe('parseStoredSettings', () => {
     ['an oversized text', ' '.repeat(MAX_SETTINGS_JSON_LENGTH + 1), 'corrupt'],
     ['a JSON array', '[]', 'corrupt'],
     ['a document with no version', '{}', 'unknown-version'],
-    ['a newer version', JSON.stringify({ ...defaultSettings(), settingsVersion: 2 }), 'unknown-version'],
+    ['a newer version', JSON.stringify({ ...defaultSettings(), settingsVersion: 99 }), 'unknown-version'],
     [
       'too many palette recents',
       JSON.stringify({

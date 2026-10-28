@@ -1,4 +1,4 @@
-import { MAX_CONSOLE_HISTORY, MAX_CONSOLE_LINE_LENGTH, SettingsV1, defaultSettings } from '@controls/save-format';
+import { MAX_CONSOLE_HISTORY, MAX_CONSOLE_LINE_LENGTH, Settings, defaultSettings } from '@controls/save-format';
 import { appendHistory, HistoryCursor } from './history';
 
 describe('appendHistory', () => {
@@ -23,7 +23,7 @@ describe('appendHistory', () => {
     expect(appendHistory([], 'x'.repeat(MAX_CONSOLE_LINE_LENGTH))).toHaveLength(1);
     // The result is always a valid settings document.
     const settings = { ...defaultSettings(), console: { history: [...appendHistory(h, 'ok')] } };
-    expect(SettingsV1.safeParse(settings).success).toBe(true);
+    expect(Settings.safeParse(settings).success).toBe(true);
   });
 });
 

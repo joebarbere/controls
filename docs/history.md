@@ -53,9 +53,10 @@ The `.ctrl` save format ([ADR 0004](decisions/0004-save-format.md)) is introduce
 
 Settings are versioned separately (`settingsVersion`):
 
-| settingsVersion | App version        | Change                                                                                                                                                                          |
-| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1               | 0.2.0 (unreleased) | First version (F1.8a): graphics, audio, controls and keybinding overrides, palette recents, console history, display, gameplay defaults, workspace layout, autosave, tool belt. |
+| settingsVersion | App version        | Change                                                                                                                                                                                                                                                                                             |
+| --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1               | 0.2.0 (unreleased) | First version (F1.8a): graphics, audio, controls and keybinding overrides, palette recents, console history, display, gameplay defaults, workspace layout, autosave, tool belt.                                                                                                                    |
+| 2               | 0.2.0 (unreleased) | Adds `saves.lastPlayed` (a manual save by name, an autosave slot, or `null`) for Continue ([ADR 0009](decisions/0009-save-io-boundary.md#continue-and-the-last-played-save)). v1 migrates with `lastPlayed: null`. Bumped rather than edited in place so settings written since F1.1 keep loading. |
 
 ### Device catalogue (`catalogVersion`)
 
