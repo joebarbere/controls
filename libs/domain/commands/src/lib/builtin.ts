@@ -104,7 +104,22 @@ export function toolBeltBindingDecls(): BindingDecl[] {
   }));
 }
 
+/**
+ * `palette.open`: opens the command palette (plan F1.3). A global binding, so Mod+K and Mod+Shift+P
+ * also work from a text field or a dialog. The palette applies it through `Session.onCommand`.
+ */
+export function paletteOpenCommand<S>(): CommandDef<NoArgs, S> {
+  return defineViewCommand<NoArgs, S>({
+    id: 'palette.open',
+    title: 'Open command palette',
+    category: 'View',
+    args: NoArgs,
+    keybinding: ['Mod+K', 'Mod+Shift+P'],
+    globalKeybinding: true,
+  });
+}
+
 /** Every view command declared so far. */
 export function viewCommands<S>(): AnyCommandDef<S>[] {
-  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>()];
+  return [resetLayoutCommand<S>(), toolBeltSelectCommand<S>(), paletteOpenCommand<S>()];
 }

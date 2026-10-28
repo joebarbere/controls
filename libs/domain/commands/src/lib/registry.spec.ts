@@ -98,6 +98,7 @@ describe('CommandRegistry', () => {
     expect(registry.list().map((c) => [c.id, c.category, c.keybinding ?? null, c.undoable])).toEqual([
       ['edit.redo', 'Edit', 'Mod+Shift+Z', false],
       ['edit.undo', 'Edit', 'Mod+Z', false],
+      ['palette.open', 'View', ['Mod+K', 'Mod+Shift+P'], false],
       ['toolbelt.select', 'Tool belt', null, false],
       ['view.resetLayout', 'View', null, false],
     ]);
