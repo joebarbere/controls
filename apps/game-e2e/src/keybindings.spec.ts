@@ -14,7 +14,7 @@ const KEY = 'controls.settings';
 // this file reads them through a local cast so the declarations don't clash.
 type Hooks = {
   __controlsSession?: { entries(): ReadonlyArray<{ id: string; args: Record<string, unknown> }> };
-  __controlsViewport?: { cameraPositionMm(): { z: number } | undefined };
+  __controlsViewport?: { cameraPositionMm(): { z: number } | undefined; afterFrames(count: number): Promise<void> };
 };
 
 const entries = (page: Page) =>
@@ -53,16 +53,13 @@ async function startSandbox(page: Page) {
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
 }
 
-/** Resolves after `count` animation frames: the renderer applies held movement keys once per frame. */
+/**
+ * Resolves after the viewport has drawn `count` more frames (requesting them if nothing else does).
+ * The renderer draws on demand and applies held movement keys once per drawn frame, so browser
+ * animation frames alone prove nothing: a bound key would be walked on each of these.
+ */
 const frames = (page: Page, count: number) =>
-  page.evaluate(
-    (n) =>
-      new Promise<void>((resolve) => {
-        const step = () => (--n <= 0 ? resolve() : requestAnimationFrame(step));
-        requestAnimationFrame(step);
-      }),
-    count,
-  );
+  page.evaluate((n) => (window as unknown as Hooks).__controlsViewport?.afterFrames(n), count);
 
 /** In Key bindings: tool-belt slot 2 → Q (a command) and walk forward → I (an input action). */
 async function rebindSlot2AndWalkForward(page: Page, dialog: ReturnType<Page['getByRole']>) {
@@ -85,7 +82,7 @@ async function closeAndSave(page: Page, keyBindings: Awaited<ReturnType<typeof o
 }
 
 // One flow per test, each from a fresh page (and so fresh localStorage): as a single test this ran
-// to the 30 s timeout on a loaded machine (see support/focus.ts on why every step costs a frame).
+// to the 30 s timeout on a loaded machine (before on-demand rendering every step cost a frame; see support/focus.ts).
 
 test('a conflicting rebind is shown on both bindings, and Escape while capturing cancels only the capture', async ({
   page,

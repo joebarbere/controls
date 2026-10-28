@@ -4,7 +4,7 @@ import { enterSeed, startSandbox } from './support/sandbox';
 
 /**
  * F1.8b part 3: saving and loading through the UI, in the web harness (saves in OPFS). Each test is
- * one short flow from a fresh page (docs/caveats/ui.md: every round trip costs a frame here). World
+ * one short flow from a fresh page (docs/caveats/ui.md: a round trip can cost a frame here). World
  * changes go through the session hook to keep the flows short; saving and loading go through the UI.
  */
 

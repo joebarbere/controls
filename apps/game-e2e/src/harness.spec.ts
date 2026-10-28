@@ -17,10 +17,13 @@ test('3D viewport starts (WebGPU or WebGL2 fallback)', async ({ page }) => {
 
 test('viewport draws a scene, not a blank canvas', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/');
+  await page.goto('/?e2e=1');
   const viewport = page.locator('ctl-viewport');
   await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
-  await page.waitForTimeout(500); // let a few frames land
+  // The viewport draws on demand: wait until everything it asked for (the first frames) is drawn.
+  await page.evaluate(() =>
+    (window as unknown as { __controlsViewport: { whenIdle(): Promise<void> } }).__controlsViewport.whenIdle(),
+  );
   // A uniformly filled 1280×720 PNG compresses to a few KB; the shaded panel + rails is far larger.
   const png = await viewport.screenshot();
   expect(png.byteLength).toBeGreaterThan(20_000);

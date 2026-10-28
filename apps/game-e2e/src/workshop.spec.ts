@@ -36,7 +36,7 @@ test.use({
 
 interface Hooks {
   __controlsSession?: { exec(id: string, args?: unknown): { ok: boolean }; hash(): string };
-  __controlsViewport?: { focus(id: string): boolean; select(id: string | null): boolean };
+  __controlsViewport?: { focus(id: string): boolean; select(id: string | null): boolean; whenIdle(): Promise<void> };
 }
 
 /** Screenshot-only stylesheet: no HUDs, crosshair or focus ring over the canvas. */
@@ -84,6 +84,8 @@ test('the workshop level matches its screenshot baseline (seed 0, WebGL2, DPR 1)
   expect(focused).toBe(true);
   await expect(viewport).toHaveAttribute('data-focus', 'stud-wall');
   await expect(viewport).not.toHaveAttribute('data-hovered', /.*/);
+  // The viewport draws on demand: wait until the props and the new camera are on screen.
+  await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.whenIdle());
 
   // Overlays drawn over the canvas vary by build (the dev HUD) and by frame (its numbers): hide them.
   await page.addStyleTag({ content: HIDE_OVERLAYS });

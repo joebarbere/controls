@@ -17,7 +17,10 @@ interface ViewportHook {
   selectables(): ReadonlyArray<{ id: string; kind: string }>;
   pickAt(x: number, y: number): { id: string } | null;
   cameraPositionMm(): { x: number; y: number; z: number } | undefined;
-  stats(): { geometries: number; bvhs: number; avgMs: number; frames: number };
+  stats(): { geometries: number; bvhs: number; avgMs: number; frames: number; idle: boolean };
+  readonly framesDrawn: number;
+  whenIdle(): Promise<void>;
+  captureThumbnail(): Promise<Uint8Array | null>;
 }
 
 declare global {
@@ -101,8 +104,9 @@ test('keyboard: cycle selection, focus it (view.focus), toggle walk mode (view.m
   await expect(viewport).toHaveAttribute('data-mode', 'walk');
   expect(await logged(page)).toEqual(['view.focus {"target":"din-rail-1"}', 'view.mode {"mode":"walk"}']);
   const before = await hook(page, (h) => h.cameraPositionMm());
+  // A held key keeps the on-demand renderer drawing (and walking) every frame until it is released.
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(400);
+  await expect.poll(async () => (await hook(page, (h) => h.cameraPositionMm()))?.z).toBeLessThan(before?.z ?? 0);
   await page.keyboard.up('KeyW');
   const after = await hook(page, (h) => h.cameraPositionMm());
   expect(after?.z).toBeLessThan(before?.z ?? 0);
@@ -128,18 +132,58 @@ test('mouse: BVH hover and click-to-select on the panel', async ({ page }) => {
 
 test('hover and selection churn allocates no GPU geometry', async ({ page }) => {
   await open(page);
-  // Let the first selection create its outline, then measure.
+  // Let the first selection create its outline (drawn by the frame it requests), then measure.
   await hook(page, (h) => h.select('backplate'));
-  await page.waitForTimeout(300);
+  await hook(page, (h) => h.whenIdle());
   const baseline = await hook(page, (h) => h.stats());
   await hook(page, (h) => {
     for (let i = 0; i < 60; i++) h.selectNext();
   });
-  await page.waitForTimeout(300);
+  await hook(page, (h) => h.whenIdle());
   const after = await hook(page, (h) => h.stats());
   expect(after.geometries).toBe(baseline.geometries);
   // One BVH per fixture geometry: board, plate, bench (top, frame, shelf), the rails' shared one,
   // and the stud wall's framing and snap plane.
   expect(after.bvhs).toBe(8);
   expect(after.frames).toBeGreaterThan(baseline.frames);
+});
+
+test('behind the main menu the viewport draws once and then stays idle; a thumbnail still captures the scene', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  const viewport = page.locator('ctl-viewport');
+  await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+  await expect(page.getByRole('navigation', { name: 'Controls' })).toBeVisible();
+  await hook(page, (h) => h.whenIdle());
+  const drawn = await hook(page, (h) => h.framesDrawn);
+  expect(drawn).toBeGreaterThan(0);
+  await hook(page, (h) => h.stats()); // starts a new timing window
+  // Thirty of the browser's animation frames later (a count, not a delay), nothing more was drawn.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let n = 30;
+        const step = () => (--n <= 0 ? resolve() : requestAnimationFrame(step));
+        requestAnimationFrame(step);
+      }),
+  );
+  expect(await hook(page, (h) => h.framesDrawn)).toBe(drawn);
+  expect(await hook(page, (h) => h.stats())).toMatchObject({ idle: true });
+
+  // A save thumbnail taken while idle draws one frame itself and shows the scene, not a blank canvas.
+  const colours = await page.evaluate(async () => {
+    const png = await window.__controlsViewport?.captureThumbnail();
+    if (!png) return 0;
+    const image = await createImageBitmap(new Blob([png as BlobPart], { type: 'image/png' }));
+    const context = new OffscreenCanvas(image.width, image.height).getContext('2d');
+    if (!context) return 0;
+    context.drawImage(image, 0, 0);
+    const data = context.getImageData(0, 0, image.width, image.height).data;
+    const seen = new Set<number>();
+    for (let i = 0; i < data.length; i += 4) seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    return seen.size;
+  });
+  expect(colours).toBeGreaterThan(50); // a flat fill would be 1; the shaded workshop is a few hundred
+  expect(await hook(page, (h) => h.framesDrawn)).toBe(drawn + 1);
 });

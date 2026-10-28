@@ -60,6 +60,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- **The 3D viewport draws only when something changes.** It used to draw every frame, even behind the main menu and with nothing moving; now it draws on input, world, selection, hover, camera and size changes, keeps drawing while an animation runs (walking with a key held, the camera settling after an orbit), and otherwise sits idle. Behind the main menu it draws once. This saves battery and GPU time, and under software rendering it made the web end-to-end suite more than twice as fast (1.9 min to 42 s locally), because each test step no longer waits for a frame. The dev frame-time HUD now shows what each frame costs, with a frame rate only while frames run back to back, and reads "idle" when nothing is being drawn. Save thumbnails are drawn on request, so they still work while the viewport is idle.
 - `release.yml` now grants `contents: write` only to the packaging job that uploads to the draft release; the workflow default, and the `verify` job, are read-only.
 - The web harness's Open picker clicks its file input one task later: Chromium showed no file chooser for a click made inside a key handler (Ctrl+O).
 - `ShellState.newSandbox()` is now `enterGame()`: it is also how a loaded save enters the workspace.

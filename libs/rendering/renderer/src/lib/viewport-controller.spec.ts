@@ -3,6 +3,8 @@ import { createWorld, migrateWorld } from '@controls/save-format';
 import { createWorldBus, placeOnTargets, worldSnapTargets, type Entity, type World } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ManualFrameClock } from './loop/manual-frame-clock';
+import { RenderLoop } from './loop/render-loop';
 import { DEFAULT_ROOM_BOUNDS, describeSceneGraph } from './scene';
 import { ViewportController, type ViewportIntent, type ViewportState } from './viewport-controller';
 
@@ -866,5 +868,131 @@ describe('ViewportController on the workshop', () => {
     expect(controller.bvhCount).toBe(0);
     expect(controller.scene.getObjectByName('fixtures')).toBeUndefined();
     expect(canvas.live.size).toBe(0);
+  });
+});
+
+describe('ViewportController on-demand rendering (with RenderLoop)', () => {
+  /** The controller driven by a RenderLoop on a hand-ticked clock, counting draws; settled and idle. */
+  const onDemand = (world: World = PANEL) => {
+    const ctx = setup(world);
+    const clock = new ManualFrameClock();
+    const draw = vi.fn();
+    const loop = new RenderLoop({ clock, update: (dt) => ctx.controller.update(dt), draw });
+    ctx.controller.onInvalidate(() => loop.requestRender());
+    loop.requestRender();
+    clock.ticks(5);
+    /** Draws caused by `act`, after any animation it starts has settled (the loop is idle again). */
+    const drawsAfter = (act: () => void, ticks = 5): number => {
+      draw.mockClear();
+      act();
+      clock.ticks(ticks);
+      expect(clock.pendingFrames).toBe(0);
+      return draw.mock.calls.length;
+    };
+    return { ...ctx, clock, draw, loop, drawsAfter };
+  };
+
+  it('an idle viewport draws nothing and requests no frame', () => {
+    const { clock, draw, controller } = onDemand(WORKSHOP);
+    expect(draw).toHaveBeenCalled(); // the first frame
+    draw.mockClear();
+    clock.ticks(600); // ten seconds
+    expect(draw).not.toHaveBeenCalled();
+    expect(clock.pendingFrames).toBe(0);
+    controller.dispose();
+  });
+
+  it('pointer moves draw (hover is resolved in that frame); unbound keys do not', () => {
+    const { canvas, controller, drawsAfter } = onDemand();
+    expect(drawsAfter(() => canvas.dispatchEvent(pointer('pointermove', 640, 360)))).toBeGreaterThan(0);
+    expect(controller.state.hovered?.id).toBe('backplate');
+    expect(drawsAfter(() => canvas.dispatchEvent(pointer('pointerleave', 0, 0)))).toBeGreaterThan(0);
+    expect(controller.state.hovered).toBeNull();
+    expect(drawsAfter(() => canvas.dispatchEvent(key('keydown', 'KeyQ')))).toBe(0);
+    controller.dispose();
+  });
+
+  it('world, selection, placement, mode, focus, reset and resize changes each draw', () => {
+    const { canvas, controller, drawsAfter } = onDemand();
+    expect(drawsAfter(() => controller.syncWorld(worldWith(entity(1, BOX, -210, 260))))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.select('din-rail-1'))).toBeGreaterThan(0);
+    expect(drawsAfter(() => canvas.dispatchEvent(key('keydown', 'BracketRight')))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.setPlacement(CRATE))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.setPlacement(null))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.focus('din-rail-2'))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.setMode('walk'))).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.resetView())).toBeGreaterThan(0);
+    expect(drawsAfter(() => controller.resize(800, 600))).toBeGreaterThan(0);
+    // Requests made before a frame coalesce into it.
+    expect(
+      drawsAfter(() => {
+        controller.select('backplate');
+        controller.select(null);
+        controller.resize(1280, 720);
+      }),
+    ).toBe(1);
+    controller.dispose();
+  });
+
+  it('walk mode keeps drawing while a key is held and stops when it is released', () => {
+    const { canvas, clock, draw, controller, drawsAfter } = onDemand();
+    controller.setMode('walk');
+    clock.ticks(5);
+    const z0 = controller.camera.position.z;
+    draw.mockClear();
+    canvas.dispatchEvent(key('keydown', 'KeyW'));
+    canvas.dispatchEvent(key('keydown', 'KeyW', true)); // auto-repeat changes nothing
+    clock.ticks(30);
+    expect(draw).toHaveBeenCalledTimes(30); // every frame while held
+    expect(controller.camera.position.z).toBeLessThan(z0);
+    expect(drawsAfter(() => canvas.dispatchEvent(key('keyup', 'KeyW')))).toBe(1);
+    const z1 = controller.camera.position.z;
+    clock.ticks(30);
+    expect(controller.camera.position.z).toBe(z1);
+    // Blur releases held keys, and so ends the animation.
+    canvas.dispatchEvent(key('keydown', 'KeyD'));
+    clock.ticks(3);
+    expect(drawsAfter(() => canvas.dispatchEvent(new Event('blur')))).toBe(1);
+    controller.dispose();
+  });
+
+  it('mouse look in walk mode draws', () => {
+    const { canvas, controller, drawsAfter } = onDemand();
+    controller.setMode('walk');
+    canvas.dispatchEvent(pointer('pointerdown', 640, 360));
+    canvas.dispatchEvent(pointer('pointerup', 640, 360)); // takes pointer lock
+    const yaw0 = controller.camera.rotation.y;
+    const look = () =>
+      canvas.ownerDocument.dispatchEvent(Object.assign(new Event('mousemove'), { movementX: -50, movementY: 0 }));
+    expect(drawsAfter(look)).toBe(1);
+    expect(controller.camera.rotation.y).toBeGreaterThan(yaw0);
+    controller.dispose();
+  });
+
+  it('an orbit drag draws, damping keeps drawing until it settles, then the viewport idles', () => {
+    const { canvas, clock, draw, controller } = onDemand();
+    const eye = controller.camera.position.clone();
+    draw.mockClear();
+    // OrbitControls follows a drag on the document (where a real pointer event bubbles to).
+    canvas.dispatchEvent(pointer('pointerdown', 600, 300));
+    canvas.ownerDocument.dispatchEvent(pointer('pointermove', 700, 320));
+    canvas.ownerDocument.dispatchEvent(pointer('pointerup', 700, 320));
+    clock.ticks(10);
+    expect(draw).toHaveBeenCalledTimes(10); // still damping
+    clock.ticks(2000);
+    expect(clock.pendingFrames).toBe(0); // settled
+    const settled = draw.mock.calls.length;
+    expect(controller.camera.position.equals(eye)).toBe(false);
+    clock.ticks(100);
+    expect(draw).toHaveBeenCalledTimes(settled);
+    controller.dispose();
+  });
+
+  it('after dispose nothing requests a frame', () => {
+    const { canvas, clock, controller, loop } = onDemand();
+    controller.dispose();
+    loop.dispose();
+    canvas.dispatchEvent(pointer('pointermove', 640, 360));
+    expect(clock.pendingFrames).toBe(0);
   });
 });

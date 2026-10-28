@@ -5,7 +5,9 @@ import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './scene';
 import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
-import { FrameTimer, type FrameTiming } from './stats/frame-timer';
+import { Disposer } from './disposer';
+import { RenderLoop, windowFrameClock } from './loop/render-loop';
+import type { FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,
   type ViewportControllerOptions,
@@ -19,13 +21,18 @@ export type RenderBackend = 'webgpu' | 'webgl2';
 export interface ViewportOptions extends ViewportControllerOptions {
   /** Skip WebGPU even when available (CI determinism, driver workarounds). */
   readonly forceWebGL?: boolean;
-  /** Called about twice a second with frame time and renderer counters (dev HUD). */
+  /**
+   * Called about twice a second while frames are drawn, and once more after the viewport goes idle
+   * (`idle: true`), with frame cost and renderer counters (dev HUD).
+   */
   readonly onStats?: (stats: ViewportStats) => void;
 }
 
 /** Dev-HUD numbers: frame timing plus the renderer's draw and memory counters. */
 export interface ViewportStats extends FrameTiming {
+  /** Draw calls of the last frame drawn. */
   readonly drawCalls: number;
+  /** Triangles of the last frame drawn. */
   readonly triangles: number;
   readonly geometries: number;
   readonly textures: number;
@@ -38,20 +45,27 @@ export interface ViewportStats extends FrameTiming {
   readonly fixtures: number;
 }
 
-const STATS_INTERVAL_MS = 500;
+const IDLE_TIMING: FrameTiming = { avgMs: 0, worstMs: 0, lastMs: 0, fps: 0, windowFrames: 0, idle: true, frames: 0 };
 
 /**
- * Owns the `WebGPURenderer` (which falls back to WebGL2 by itself) and the animation loop for one
- * canvas. Everything else (scene, cameras, picking, selection) is the GPU-free
+ * Owns the `WebGPURenderer` (which falls back to WebGL2 by itself) and the {@link RenderLoop} for
+ * one canvas. Everything else (scene, cameras, picking, selection) is the GPU-free
  * {@link ViewportController}. Framework-free: Angular hands over a canvas and sizes.
+ *
+ * **On-demand rendering:** a frame is drawn only when the controller invalidates (input, world or
+ * selection changes, hover, mode, focus, the ghost), on a resize, on WebGL context restore or when
+ * the page becomes visible again, or while an animation runs (a held walk key, orbit damping).
+ * Otherwise no animation frame is requested at all. Use {@link requestRender} for anything else.
  */
 export class ViewportRenderer {
   private renderer?: WebGPURenderer;
   private controller?: ViewportController;
+  private loop?: RenderLoop;
   private backendName?: RenderBackend;
-  private readonly timer = new FrameTimer();
-  private lastStatsMs = -1;
-  private lastFrameMs = -1;
+  private readonly disposer = new Disposer();
+  /** Draw counters of the last frame (copied out: `info.render` is reset before each draw). */
+  private lastDrawCalls = 0;
+  private lastTriangles = 0;
   // Kept until the controller exists (WebGPU init is async), then applied.
   private world: World | null = null;
   private placement: CatalogRef | null = null;
@@ -66,26 +80,38 @@ export class ViewportRenderer {
       renderer.dispose();
       throw new Error('viewport disposed during init');
     }
+    stopInternalAnimationLoop(renderer);
     // WebGPURenderer silently falls back to its WebGL2 backend when WebGPU is unavailable.
     this.backendName = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
+    const doc = canvas.ownerDocument;
+    const view = doc.defaultView;
+    if (!view) throw new Error('viewport canvas is not in a window');
     const controller = new ViewportController(canvas, options);
     this.controller = controller;
+    const onStats = options.onStats;
+    const loop = new RenderLoop({
+      clock: windowFrameClock(view),
+      update: (dt) => controller.update(dt),
+      draw: () => {
+        renderer.info.reset();
+        renderer.render(controller.scene, controller.camera);
+        this.lastDrawCalls = renderer.info.render.drawCalls;
+        this.lastTriangles = renderer.info.render.triangles;
+      },
+      onStats: onStats && (() => onStats(this.stats())),
+    });
+    this.loop = loop;
+    this.disposer.add(() => loop.dispose());
+    this.disposer.add(controller.onInvalidate(() => loop.requestRender()));
+    // The canvas can lose its content with the context (GPU process restart) or while hidden.
+    this.disposer.listen(canvas, 'webglcontextrestored', () => loop.requestRender());
+    this.disposer.listen(doc, 'visibilitychange', () => {
+      if (doc.visibilityState === 'visible') loop.requestRender();
+    });
     if (this.world) controller.syncWorld(this.world);
     controller.setPlacement(this.placement);
     controller.onIntent((intent) => this.intentListeners.forEach((l) => l(intent)));
-    const onStats = options.onStats;
-
-    renderer.setAnimationLoop((timeMs: number) => {
-      const dt = this.lastFrameMs < 0 ? 0 : (timeMs - this.lastFrameMs) / 1000;
-      this.lastFrameMs = timeMs;
-      this.timer.tick(timeMs);
-      controller.update(dt);
-      renderer.render(controller.scene, controller.camera);
-      if (onStats && timeMs - this.lastStatsMs >= STATS_INTERVAL_MS) {
-        this.lastStatsMs = timeMs;
-        onStats(this.stats());
-      }
-    });
+    loop.requestRender(); // the first frame
     return this.backendName;
   }
 
@@ -169,16 +195,44 @@ export class ViewportRenderer {
     return p && { x: metresToMm(p.x), y: metresToMm(p.y), z: metresToMm(p.z) };
   }
 
+  /**
+   * Asks for a frame. The controller already does this for input, world, selection, hover, mode,
+   * camera and ghost changes; call it for anything else that changes what is drawn. Cheap and
+   * idempotent: requests before the next frame coalesce.
+   */
+  requestRender(): void {
+    this.loop?.requestRender();
+  }
+
+  /** Frames drawn since init (tests: an idle viewport draws none). */
+  get framesDrawn(): number {
+    return this.loop?.frames ?? 0;
+  }
+
+  /**
+   * Resolves after `count` more frames have been drawn, requesting them if nothing else does. E2E
+   * waits on this rather than on animation frames, which no longer imply a render.
+   */
+  afterFrames(count = 1): Promise<void> {
+    return this.loop?.afterFrames(count) ?? Promise.resolve();
+  }
+
+  /** Resolves once no frame is scheduled: everything requested so far has been drawn. */
+  whenIdle(): Promise<void> {
+    return this.loop?.whenIdle() ?? Promise.resolve();
+  }
+
   sceneGraph(): SceneGraphNode | undefined {
     return this.controller?.sceneGraph();
   }
 
+  /** Frame timing since the last call (a new window starts) plus the renderer's counters. */
   stats(): ViewportStats {
     const info = this.renderer?.info;
     return {
-      ...this.timer.sample(),
-      drawCalls: info?.render.drawCalls ?? 0,
-      triangles: info?.render.triangles ?? 0,
+      ...(this.loop?.sampleTiming() ?? IDLE_TIMING),
+      drawCalls: this.lastDrawCalls,
+      triangles: this.lastTriangles,
       geometries: info?.memory.geometries ?? 0,
       textures: info?.memory.textures ?? 0,
       bvhs: this.controller?.bvhCount ?? 0,
@@ -190,22 +244,21 @@ export class ViewportRenderer {
 
   /**
    * A small PNG of what the viewport shows (save thumbnails, F1.8b), scaled to fit `maxWidthPx` ×
-   * `maxHeightPx`. The drawing buffer isn't preserved between frames, so this renders a frame and
-   * copies it onto a 2D canvas in the same task, then encodes that. Null before `init`, for an empty
-   * canvas, or when the browser can't encode.
+   * `maxHeightPx`. The drawing buffer isn't preserved between frames, so this draws a frame now
+   * (`RenderLoop.renderNow`, idle or not) and copies it onto a 2D canvas in the same task, then
+   * encodes that. Null before `init`, for an empty canvas, or when the browser can't encode.
    */
   async captureThumbnail(maxWidthPx = 320, maxHeightPx = 180): Promise<Uint8Array | null> {
-    const renderer = this.renderer;
-    const controller = this.controller;
-    const source = renderer?.domElement;
-    if (!renderer || !controller || !source || source.width === 0 || source.height === 0) return null;
+    const loop = this.loop;
+    const source = this.renderer?.domElement;
+    if (!loop || !source || source.width === 0 || source.height === 0) return null;
     const scale = Math.min(1, maxWidthPx / source.width, maxHeightPx / source.height);
     const canvas = source.ownerDocument.createElement('canvas');
     canvas.width = Math.max(1, Math.round(source.width * scale));
     canvas.height = Math.max(1, Math.round(source.height * scale));
     const context = canvas.getContext('2d');
     if (!context) return null;
-    renderer.render(controller.scene, controller.camera);
+    loop.renderNow();
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
@@ -216,14 +269,30 @@ export class ViewportRenderer {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setSize(widthPx, heightPx, false);
     this.controller?.resize(widthPx, heightPx);
+    // Resizing clears the canvas. Draw in this task (the host's ResizeObserver runs before paint),
+    // or a blank frame could be composited before the next animation frame.
+    this.loop?.renderNow();
   }
 
   dispose(): void {
-    this.renderer?.setAnimationLoop(null);
+    this.disposer.dispose();
+    this.loop = undefined;
     this.controller?.dispose();
     this.controller = undefined;
     this.renderer?.dispose();
     this.renderer = undefined;
     this.intentListeners.clear();
   }
+}
+
+/**
+ * three r186's `Renderer.init()` starts its own `requestAnimationFrame` loop (it resets `info` and
+ * ticks the node frame every vsync) whether or not `setAnimationLoop` is used. We draw on demand
+ * through {@link RenderLoop}, so stop it, or the page wakes every frame for nothing. `_animation` is
+ * private: if a release renames it this does nothing, and the cost is only that idle wake-up
+ * (drawing stays on demand). See docs/caveats/rendering.md.
+ */
+function stopInternalAnimationLoop(renderer: WebGPURenderer): void {
+  const animation = (renderer as unknown as { _animation?: { stop?: () => void } })._animation;
+  if (typeof animation?.stop === 'function') animation.stop();
 }

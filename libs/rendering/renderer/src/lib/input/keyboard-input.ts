@@ -26,12 +26,14 @@ export class KeyboardInput {
     /** Returns whether the action did anything; an unhandled key keeps its default (e.g. Escape reaches the shell). */
     private readonly onTrigger: (action: TriggeredAction) => boolean,
     bindings: InputBindings = DEFAULT_INPUT_BINDINGS,
+    /** Called when the set of held actions changes (the render loop animates while one is held). */
+    private readonly onHeldChange: () => void = () => undefined,
   ) {
     this.byCode = compileBindings(bindings);
     this.disposer.listen<KeyboardEvent>(element, 'keydown', (e) => this.onKeyDown(e));
     this.disposer.listen<KeyboardEvent>(element, 'keyup', (e) => this.onKeyUp(e));
     // A key released while focus is elsewhere never sends keyup: drop held keys on blur.
-    const release = () => this.held.clear();
+    const release = () => this.releaseAll();
     this.disposer.listen(element, 'blur', release);
     if (windowTarget) this.disposer.listen(windowTarget, 'blur', release);
   }
@@ -39,7 +41,7 @@ export class KeyboardInput {
   /** Swaps bindings at runtime. Held keys are released so none stay stuck under the old map. */
   setBindings(bindings: InputBindings): void {
     this.byCode = compileBindings(bindings);
-    this.held.clear();
+    this.releaseAll();
   }
 
   dispose(): void {
@@ -53,7 +55,9 @@ export class KeyboardInput {
     if (!action) return;
     if (isHeldAction(action)) {
       e.preventDefault(); // stop arrows and space scrolling the page
+      if (this.held.has(action)) return; // auto-repeat
       this.held.add(action);
+      this.onHeldChange();
     } else if (e.repeat || this.onTrigger(action)) {
       e.preventDefault();
     }
@@ -61,6 +65,12 @@ export class KeyboardInput {
 
   private onKeyUp(e: KeyboardEvent): void {
     const action = this.byCode.get(e.code);
-    if (action && isHeldAction(action)) this.held.delete(action);
+    if (action && isHeldAction(action) && this.held.delete(action)) this.onHeldChange();
+  }
+
+  private releaseAll(): void {
+    if (this.held.size === 0) return;
+    this.held.clear();
+    this.onHeldChange();
   }
 }

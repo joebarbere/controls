@@ -7,6 +7,14 @@
  * The controller never mutates the world. It draws world snapshots ({@link syncWorld}) and turns
  * gesture commit points into {@link ViewportIntent}s, which `feature-workspace` executes as Commands
  * (`entity.place`, `entity.move`). Hover, selection, the ghost, mode and camera pose are view state.
+ *
+ * **Rendering is on demand.** The host draws a frame only when the controller asks through
+ * {@link ViewportController.onInvalidate}, or when {@link ViewportController.update} returns `true`
+ * (an animation that hasn't settled). Requests funnel through three places, so a new feature rarely
+ * has to call {@link ViewportController.invalidate} itself: `markHoverDirty()` (anything that moves
+ * the camera, the pointer, the ghost or the scene), `emit()` (any published view-state change) and
+ * the input sources (held keys, mouse look, OrbitControls' `change`). Anything else that changes
+ * what is drawn must call `invalidate()`, or the screen shows the old frame until the next input.
  */
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Box3, PerspectiveCamera, Sphere, Vector3, type Object3D, type Scene } from 'three/webgpu';
@@ -153,6 +161,9 @@ export class ViewportController {
   private readonly roots = new Map<string, Object3D>();
   private readonly listeners = new Set<ViewportStateListener>();
   private readonly intentListeners = new Set<ViewportIntentListener>();
+  private readonly invalidateListeners = new Set<() => void>();
+  /** Inside {@link update}: what changes now is drawn by the frame in progress, so no new request. */
+  private updating = false;
   private readonly walkConfig: WalkConfig;
   private readonly roomOverride: RoomBoundsMm | null;
   private room: RoomBoundsMm;
@@ -224,13 +235,20 @@ export class ViewportController {
     this.listenPointer();
     this.orbit = new OrbitControls(this.camera, element);
     this.orbit.enableDamping = true;
-    this.disposer.add(() => this.orbit.dispose());
+    // OrbitControls applies drags and wheel steps in its own handlers and reports them as `change`.
+    const onOrbitChange = (): void => this.markHoverDirty();
+    this.orbit.addEventListener('change', onOrbitChange);
+    this.disposer.add(() => {
+      this.orbit.removeEventListener('change', onOrbitChange);
+      this.orbit.dispose();
+    });
 
     this.keyboard = new KeyboardInput(
       element,
       element.ownerDocument.defaultView,
       (a) => this.onTrigger(a),
       options.bindings ?? DEFAULT_INPUT_BINDINGS,
+      () => this.invalidate(), // a held key went down or up: walk mode animates while one is held
     );
     this.disposer.add(() => this.keyboard.dispose());
 
@@ -239,6 +257,7 @@ export class ViewportController {
       (dx, dy) => {
         this.lookDx += dx;
         this.lookDy += dy;
+        this.invalidate();
       },
       () => this.emit(),
     );
@@ -246,6 +265,7 @@ export class ViewportController {
     this.disposer.add(() => {
       this.listeners.clear();
       this.intentListeners.clear();
+      this.invalidateListeners.clear();
     });
 
     this.focusInitial();
@@ -277,6 +297,22 @@ export class ViewportController {
     return () => this.intentListeners.delete(listener);
   }
 
+  /** Called whenever something visible changed and a frame should be drawn (the host's render loop). */
+  onInvalidate(listener: () => void): () => void {
+    this.invalidateListeners.add(listener);
+    return () => this.invalidateListeners.delete(listener);
+  }
+
+  /**
+   * Asks the host for a frame. Most changes reach this through `markHoverDirty()` or `emit()`; call
+   * it directly for any other change to what is drawn (a new overlay, a material tweak, …).
+   * Ignored inside {@link update}: the frame in progress draws that change.
+   */
+  invalidate(): void {
+    if (this.updating) return;
+    this.invalidateListeners.forEach((l) => l());
+  }
+
   /**
    * Draws a world snapshot: entities are added, updated or removed by id (`WorldSync`), and the
    * picking BVH and keyboard selection list follow. Never mutates `world`.
@@ -300,7 +336,7 @@ export class ViewportController {
       this.focusIdValue = null;
       this.focusInitial();
     }
-    this.hoverDirty = true;
+    this.markHoverDirty();
   }
 
   /**
@@ -326,7 +362,7 @@ export class ViewportController {
     this.armed = ref;
     this.ghostResult = null;
     if (!ref) this.ghost.clear();
-    this.hoverDirty = true;
+    this.markHoverDirty();
     this.emit();
   }
 
@@ -355,7 +391,7 @@ export class ViewportController {
       this.orbit.enabled = true;
       if (this.focusIdValue) this.applyFocus(this.focusIdValue);
     }
-    this.hoverDirty = true;
+    this.markHoverDirty();
     this.emit();
   }
 
@@ -416,29 +452,43 @@ export class ViewportController {
     if (widthPx <= 0 || heightPx <= 0) return;
     this.camera.aspect = widthPx / heightPx;
     this.camera.updateProjectionMatrix();
-    this.hoverDirty = true;
+    this.markHoverDirty();
   }
 
-  /** Per-frame update. Allocation-free on the hot path (no hover change, no input). */
-  update(dtSeconds: number): void {
-    if (this.modeValue === 'walk') {
-      if (this.lookDx !== 0 || this.lookDy !== 0) {
-        applyLook(this.pose, this.lookDx, this.lookDy, this.walkConfig);
-        this.lookDx = 0;
-        this.lookDy = 0;
-        this.hoverDirty = true;
+  /**
+   * Per-frame update, run by the host before each draw. Allocation-free on the hot path (no hover
+   * change, no input). Returns whether another frame is needed straight away: in walk mode while a
+   * key is held (movement is applied per frame), and in work mode while orbit damping is still
+   * moving the camera. With `false` the host goes idle until the next {@link invalidate}.
+   */
+  update(dtSeconds: number): boolean {
+    this.updating = true;
+    try {
+      let animating = false;
+      if (this.modeValue === 'walk') {
+        if (this.lookDx !== 0 || this.lookDy !== 0) {
+          applyLook(this.pose, this.lookDx, this.lookDy, this.walkConfig);
+          this.lookDx = 0;
+          this.lookDy = 0;
+          this.markHoverDirty();
+        }
+        moveIntent(this.keyboard.held, this.intent);
+        if (this.intent.forward !== 0 || this.intent.strafe !== 0) this.markHoverDirty();
+        stepWalk(this.pose, this.intent, dtSeconds, this.room, this.walkConfig);
+        this.applyPose();
+        animating = this.keyboard.held.size > 0;
+      } else if (this.orbit.update(dtSeconds)) {
+        this.markHoverDirty();
+        animating = true; // damping: keep going until OrbitControls reports no change
       }
-      moveIntent(this.keyboard.held, this.intent);
-      if (this.intent.forward !== 0 || this.intent.strafe !== 0) this.hoverDirty = true;
-      stepWalk(this.pose, this.intent, dtSeconds, this.room, this.walkConfig);
-      this.applyPose();
-    } else if (this.orbit.update(dtSeconds)) {
-      this.hoverDirty = true;
-    }
-    if (this.hoverDirty) {
-      this.hoverDirty = false;
-      this.updateHover();
-      this.updateGhost();
+      if (this.hoverDirty) {
+        this.hoverDirty = false;
+        this.updateHover();
+        this.updateGhost();
+      }
+      return animating;
+    } finally {
+      this.updating = false;
     }
   }
 
@@ -552,7 +602,7 @@ export class ViewportController {
     } else if (r.ok) {
       this.emitIntent({ kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg });
     }
-    this.hoverDirty = true;
+    this.markHoverDirty();
     return true;
   }
 
@@ -563,7 +613,7 @@ export class ViewportController {
     this.moving = { id, entity, object, byPointer };
     object.visible = false; // the ghost stands in for it until the move commits or cancels
     this.ghostResult = null;
-    this.hoverDirty = true;
+    this.markHoverDirty();
     this.emit();
     return true;
   }
@@ -576,7 +626,7 @@ export class ViewportController {
     this.moving = null;
     this.ghostResult = null;
     if (!this.armed) this.ghost.clear();
-    this.hoverDirty = true;
+    this.markHoverDirty();
     this.emit();
   }
 
@@ -649,7 +699,7 @@ export class ViewportController {
     o.enableDamping = false;
     o.update();
     o.enableDamping = true;
-    this.hoverDirty = true;
+    this.markHoverDirty();
   }
 
   private applyPose(): void {
@@ -714,7 +764,7 @@ export class ViewportController {
       'pointermove',
       (e) => {
         toNdc(e);
-        this.hoverDirty = true;
+        this.markHoverDirty();
         if (this.press && !this.moving && this.pointer.down && dragged(e)) {
           if (this.startMove(this.press.id, true)) el.setPointerCapture?.(this.press.pointerId);
         }
@@ -723,7 +773,7 @@ export class ViewportController {
     );
     this.disposer.listen<PointerEvent>(el, 'pointerleave', () => {
       this.pointer.inside = false;
-      this.hoverDirty = true;
+      this.markHoverDirty();
     });
     this.disposer.listen<PointerEvent>(
       el,
@@ -778,7 +828,15 @@ export class ViewportController {
     );
   }
 
+  /** Re-pick hover and re-aim the ghost on the next frame, and ask for that frame. */
+  private markHoverDirty(): void {
+    this.hoverDirty = true;
+    this.invalidate();
+  }
+
+  /** Publishes view state. Every published change is visible (highlight, ghost, mode), so it also asks for a frame. */
   private emit(): void {
+    this.invalidate();
     if (this.listeners.size === 0) return;
     const s = this.state;
     this.listeners.forEach((l) => l(s));

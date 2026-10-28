@@ -3,8 +3,9 @@ import { expect, type Locator, type Page } from '@playwright/test';
 /*
  * Keyboard-focus assertions for the F1.1 acceptance (mouse-free, focus always visible).
  *
- * Every protocol round trip waits for the page's main thread, which is busy drawing the 3D viewport
- * (SwiftShader WebGL2: around 100-200 ms a frame locally, slower on CI runners). `locator.evaluate`
+ * Every protocol round trip waits for the page's main thread, which is busy whenever the 3D viewport
+ * draws a frame (SwiftShader WebGL2: around 100-200 ms a frame locally, slower on CI runners; it
+ * draws on demand, so mostly while the pointer or a held key changes the view). `locator.evaluate`
  * costs several round trips (resolve the selector to a handle, evaluate, release the handle), about
  * five times an `expect(locator)` matcher or a `page.evaluate`. These helpers avoid it: one matcher
  * for identity, then one `page.evaluate` on `document.activeElement`.

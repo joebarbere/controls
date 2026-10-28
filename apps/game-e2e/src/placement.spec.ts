@@ -28,6 +28,7 @@ interface Hooks {
     selectables(): ReadonlyArray<{ id: string }>;
     select(id: string | null): boolean;
     stats(): { geometries: number; entities: number; recipes: number; bvhs: number };
+    whenIdle(): Promise<void>;
   };
   __controlsSession?: {
     hash(): string;
@@ -52,6 +53,8 @@ const logged = (page: Page) =>
   page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.entries() ?? []).map((e) => e.id));
 const hash = (page: Page) => page.evaluate(() => (window as unknown as Hooks).__controlsSession?.hash() ?? '');
 const stats = (page: Page) => viewportHook(page, (h) => h.stats());
+/** Waits until the viewport has drawn everything requested so far (GPU counters follow a draw). */
+const drawn = (page: Page) => viewportHook(page, (h) => h.whenIdle());
 
 /** Page coordinates of an integer-mm world point on the canvas. */
 async function screen(page: Page, canvas: Locator, x: number, y: number, z: number) {
@@ -172,15 +175,15 @@ test('placing and deleting returns GPU geometry and BVHs to baseline', async ({ 
   const plate = await screen(page, canvas, 0, 0, 0);
   await page.mouse.move(plate.x, plate.y);
   await viewportHook(page, (h) => h.select('backplate'));
-  await page.waitForTimeout(300);
+  await drawn(page);
   await viewportHook(page, (h) => h.select(null));
   const viewport = page.locator('ctl-viewport');
   await page.keyboard.press('Digit1');
   await expect(viewport).toHaveAttribute('data-placement-valid', 'true');
-  await page.waitForTimeout(300);
+  await drawn(page);
   await page.keyboard.press('Escape'); // the ghost gives its geometry back
   await expect(viewport).not.toHaveAttribute('data-placing', /.*/);
-  await page.waitForTimeout(300);
+  await drawn(page);
   const baseline = await stats(page);
 
   await page.keyboard.press('Digit1');
@@ -202,7 +205,7 @@ test('placing and deleting returns GPU geometry and BVHs to baseline', async ({ 
     await page.keyboard.press('Delete');
   }
   await expect.poll(() => stats(page)).toMatchObject({ entities: 0, recipes: 0, bvhs: baseline.bvhs });
-  await page.waitForTimeout(300);
+  await drawn(page);
   expect((await stats(page)).geometries).toBe(baseline.geometries);
 });
 

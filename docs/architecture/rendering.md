@@ -15,7 +15,8 @@ flowchart TB
     SET["@controls/feature-settings<br/>SettingsStore (toolBelt.slots)"]
 
     subgraph renderer["@controls/renderer"]
-        VR["ViewportRenderer<br/>WebGPURenderer (WebGL2 fallback),<br/>animation loop, FrameTimer"]
+        VR["ViewportRenderer<br/>WebGPURenderer (WebGL2 fallback),<br/>dev-HUD stats"]
+        RL["loop/render-loop<br/>on-demand frames (no GPU)"]
         VC["ViewportController (no GPU)<br/>scene, camera, modes, input,<br/>picking, gestures → intents"]
         FS["world/fixture-sync<br/>fixtures by id (F1.9)"]
         FR["geometry/fixtures<br/>ref-counted fixture recipes"]
@@ -41,7 +42,9 @@ flowchart TB
     SES -->|"world() snapshot"| VP
     SET -->|"active slot's prop"| VP
     VP -->|"syncWorld, setPlacement, setMode, focus,<br/>setBindings, resize"| VR
-    VR --> VC
+    VR --> VC & RL
+    VC -.->|"onInvalidate → requestRender"| RL
+    RL -->|"update(dt) → draw"| VC
     VC --> FS & WS & GH & PK & HL & CM & IA & SEL
     FS --> FR
     FS -->|"fixtureSnapTarget()"| WM
@@ -54,10 +57,37 @@ flowchart TB
     IA --> CMD
 ```
 
-- **`ViewportRenderer`** owns only the GPU: the `WebGPURenderer` (its WebGL2 backend is forced with `?renderer=webgl2`), the `setAnimationLoop` callback and the dev-HUD stats. It keeps the latest world snapshot and placement prop until `init()` resolves, then hands them to the controller. Each frame it calls `controller.update(dt)` and then `render()`.
+- **`ViewportRenderer`** owns only the GPU: the `WebGPURenderer` (its WebGL2 backend is forced with `?renderer=webgl2`), the draw callback it gives the `RenderLoop`, and the dev-HUD stats. It keeps the latest world snapshot and placement prop until `init()` resolves, then hands them to the controller. Each frame it draws, the loop calls `controller.update(dt)` and then `render()` (see [the frame loop](#the-frame-loop-on-demand)).
 - **`ViewportController`** owns the scene, the camera and every listener. It is constructed against any `HTMLElement`, so unit tests run it in Node with fake event targets, real geometry and real BVHs.
 - **Domain maths** (snapping, placement, prop and fixture sizes) lives in `@controls/world-model`; the renderer imports it. Camera, input and selection maths stay in the renderer's pure, lint-fenced modules.
 - **The base scene** (`buildBaseScene`) holds only the background and lights. Everything else is drawn from the world: fixtures by `FixtureSync`, entities by `WorldSync`. An empty world draws an empty room.
+
+## The frame loop (on demand)
+
+The viewport draws a frame **only when something changed**. With nothing to draw no `requestAnimationFrame` is outstanding, so the page's main thread is free: behind the main menu it draws once and then idles. That saves battery and GPU, and it made every Playwright round trip cheap again (under SwiftShader each frame used to block the page for 100–200 ms; see the [UI caveats](../caveats/ui.md)).
+
+```mermaid
+flowchart LR
+    subgraph triggers["What asks for a frame"]
+        IN["input: pointer move/leave/down/up,<br/>held key down/up/blur, mouse look,<br/>OrbitControls 'change'"]
+        ST["view state: emit()<br/>(selection, mode, focus, placement, pointer lock)"]
+        HD["markHoverDirty()<br/>(world sync, camera, ghost, resize)"]
+        RR["ViewportRenderer: first frame,<br/>webglcontextrestored, visibilitychange,<br/>requestRender()"]
+    end
+    IN & ST & HD -->|"controller.invalidate()"| RL["RenderLoop.requestRender()<br/>one rAF, requests coalesce"]
+    RR --> RL
+    RL -->|"frame"| UP["controller.update(dt)<br/>→ true while animating"]
+    UP --> DR["draw (renderer.render)"]
+    UP -->|"true: held walk key,<br/>orbit damping"| RL
+    RS["resize, captureThumbnail"] -->|"renderNow(): same task"| UP
+```
+
+- **One funnel.** The controller's `invalidate()` notifies the loop. It is called from three places, so features rarely call it themselves: `markHoverDirty()` (every camera, pointer, world, ghost and size change already set the hover-dirty flag), `emit()` (every published view-state change) and the input sources (`KeyboardInput`'s held-set callback, mouse-look deltas, OrbitControls' `change`). Invalidations raised _inside_ `update()` are ignored, because the frame in progress draws them; `update()` returns `true` to ask for the next frame instead.
+- **Animations keep requesting frames until they settle.** `update()` returns `true` in walk mode while any key is held (movement is applied per frame) and in work mode while OrbitControls damping still moves the camera. A frame that follows idle time gets `dt = 0`, so nothing jumps after a pause; back-to-back frames get the real interval.
+- **`renderNow()` draws in the calling task.** A resize clears the canvas, and the host's `ResizeObserver` runs before paint, so drawing there avoids a blank frame. `captureThumbnail()` needs the drawing buffer in the same task (it isn't preserved), so it draws through `renderNow()` too, idle or not.
+- **three's own loop is stopped.** `Renderer.init()` in r186 starts an internal `requestAnimationFrame` loop whether or not `setAnimationLoop` is used; `ViewportRenderer` stops it (`_animation.stop()`, a private field, guarded) and resets `info.render` before each draw itself.
+- **The dev HUD reports cost, not cadence.** `FrameTimer.record(costMs, intervalMs?)` gets each frame's main-thread cost (update + draw submission); the frame rate comes only from back-to-back frames. Stats are reported every 500 ms while drawing and once more after the loop goes idle, so the HUD reads `idle · last frame N ms` instead of freezing on stale numbers.
+- **Tests wait on the loop, not on time.** `RenderLoop` is GPU-free and takes an injected `FrameClock`; `ManualFrameClock` ticks it by hand in `render-loop.spec.ts` and in the controller spec's "on-demand rendering" block. E2E uses `whenIdle()` (everything requested is drawn) and `afterFrames(n)` (draw n more) through the `?e2e=1` hook, and `framesDrawn` to prove the menu idles.
 
 ## Scene sync from world snapshots
 
@@ -200,20 +230,20 @@ stateDiagram-v2
 
 ## Disposal
 
-The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` stops the loop, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
+The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` disposes the `RenderLoop` (cancels the pending frame and the idle-stats timer, releases test waiters) and removes its `webglcontextrestored` and `visibilitychange` listeners, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
 
 Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. Loading a world without fixtures does the same for fixture recipes (`fixtureRecipeCount` reaches zero). Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
 
 ## Performance (F1.7 measurements)
 
-| Measurement (500 props: box, crate, spool)     | Result                                                                                    |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| First sync of 500 entities (Node)              | 42 ms, once: builds the object BVH and 3 geometry BVHs                                    |
-| Sync after one `entity.move` (Node)            | 9 ms: diff, transform update and BVH refit (on commit, never per frame)                   |
-| BVH pick (Node)                                | 27.5 µs per pick                                                                          |
-| Idle `update()` with placement armed (Node)    | 3.7 µs, no allocation                                                                     |
-| 1080p, AMD Radeon RX 7600 (discrete), Chromium | WebGPU and WebGL2 both a steady 60 fps (vsync-capped), 258 draw calls after culling       |
-| 1080p, headless SwiftShader                    | WebGL2 60 fps; WebGPU-on-SwiftShader-Vulkan 3.8 fps (CPU per-draw cost, not a GPU figure) |
+| Measurement (500 props: box, crate, spool)     | Result                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| First sync of 500 entities (Node)              | 42 ms, once: builds the object BVH and 3 geometry BVHs                                     |
+| Sync after one `entity.move` (Node)            | 9 ms: diff, transform update and BVH refit (on commit, never per frame)                    |
+| BVH pick (Node)                                | 27.5 µs per pick                                                                           |
+| Idle `update()` with placement armed (Node)    | 3.7 µs, no allocation (since on-demand rendering, an idle viewport doesn't call it at all) |
+| 1080p, AMD Radeon RX 7600 (discrete), Chromium | WebGPU and WebGL2 both a steady 60 fps (vsync-capped), 258 draw calls after culling        |
+| 1080p, headless SwiftShader                    | WebGL2 60 fps; WebGPU-on-SwiftShader-Vulkan 3.8 fps (CPU per-draw cost, not a GPU figure)  |
 
 The budget target (60 fps on a 2020-era integrated GPU) still needs measuring on such a GPU; props are one draw call each, and instancing repeated props is the obvious next step if that budget is missed.
 
