@@ -1,6 +1,6 @@
 # Phase 2: Circuit engine and power sources ("First light")
 
-**Release:** v0.3.0 · **Status:** 🚧 Kickoff in progress (2026-10-29) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
+**Release:** v0.3.0 · **Status:** 🚧 In progress (kickoff 2026-10-29, done 2026-10-30) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
 
 ## Goal
 
@@ -132,7 +132,7 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
      - **Worker violations are only visible inside the worker.** They fire on the worker's own scope, so tests need a listener there.
      - **Playwright can see the worker.** `page.workers()` works on both the `_electron` and CDP launch paths.
 
-5. [x] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections. _Landed as a stack of three PRs (catalogue v1, world v2 schemas, commands); `electrical-realism-reviewer` and `sim-engine-engineer` reviews pending._
+5. [x] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections. _Landed 2026-10-30 as #40 (catalogue v1), #41 (world v2 schemas, ADR 0013) and #42 (commands), after `electrical-realism-reviewer` and `sim-engine-engineer` approval; their notes were applied before merge._
 6. [x] **Boundary and gate hardening PR** (`test-engineer`). Each rule is proven to fire, as in P1:
    - new libs `libs/domain/sim-core`, `libs/domain/sim-protocol` and `libs/domain/catalog`, all `type:domain`;
    - `libs/sim-worker` with a new `type:worker` tag that may depend only on `type:domain`;
@@ -543,21 +543,21 @@ Numbers are assigned in the order the ADRs land.
 
 ## Status
 
-| Feature | Description                                       | Status                                     |
-| ------- | ------------------------------------------------- | ------------------------------------------ |
-| —       | Kickoff: agents, decisions, boundary PR, audit    | 🚧 In progress (agents and decisions done) |
-| —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted                                |
-| —       | World document v2 + leads + catalogue v1          | 🔍 In review (three stacked PRs)           |
-| F2.1    | Netlist compiler                                  | ⬜ Not started                             |
-| F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started                             |
-| F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started                             |
-| F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                             |
-| F2.4    | Power sources                                     | ⬜ Not started                             |
-| F2.5    | First loads and switching (bench demo)            | ⬜ Not started                             |
-| F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                             |
-| F2.7    | Oracle harness and `sim-cli bench` gate           | ⬜ Not started                             |
-| —       | Phase-acceptance E2E                              | ⬜ Not started                             |
-| —       | v0.3.0 release                                    | ⬜ Not started                             |
+| Feature | Description                                       | Status         |
+| ------- | ------------------------------------------------- | -------------- |
+| —       | Kickoff: agents, decisions, boundary PR, audit    | ✅ Done        |
+| —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted    |
+| —       | World document v2 + leads + catalogue v1          | ✅ Done        |
+| F2.1    | Netlist compiler                                  | ⬜ Not started |
+| F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started |
+| F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started |
+| F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started |
+| F2.4    | Power sources                                     | ⬜ Not started |
+| F2.5    | First loads and switching (bench demo)            | ⬜ Not started |
+| F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started |
+| F2.7    | Oracle harness and `sim-cli bench` gate           | ⬜ Not started |
+| —       | Phase-acceptance E2E                              | ⬜ Not started |
+| —       | v0.3.0 release                                    | ⬜ Not started |
 
 ## Open follow-ups
 
