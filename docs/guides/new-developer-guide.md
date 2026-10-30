@@ -2,7 +2,7 @@
 
 > **Load this when:** you're setting up the repo for the first time or making your first contribution.
 
-Controls is in **Phase 0**: a workspace, an Electron shell and a 3D viewport showing a DIN rail on a backplate. This guide stays short until there's more to tour.
+Controls has completed **Phase 1** (the game shell): a keyboard-first Angular shell in Electron, a 3D workshop you can place props in, one command registry behind the palette, keybindings, dev console and scripting API, and `.ctrl` saves. There is no circuit simulation yet (Phase 2). This guide stays short until there's more to tour.
 
 ## 1. Prerequisites
 

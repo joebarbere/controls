@@ -80,7 +80,7 @@ flowchart LR
         SIMCLI["apps/sim-cli<br/>scope:headless"]:::p0
     end
 
-    FEAT["libs/features/shell, workspace, settings, session, palette, console (P1)<br/>type:feature"]:::p0
+    FEAT["libs/features/shell, workspace, settings, session, palette, console, saves (P1)<br/>type:feature"]:::p0
     UI["libs/ui (P1)<br/>type:ui"]:::p0
     REND["libs/rendering/renderer<br/>type:rendering"]:::p0
     PAPI["libs/platform/api<br/>type:platform"]:::p0

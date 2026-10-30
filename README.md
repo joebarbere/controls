@@ -1,14 +1,14 @@
 # Controls
 
-![version](https://img.shields.io/badge/version-0.1.0-blue) ![status](https://img.shields.io/badge/status-Phase%200%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
+![version](https://img.shields.io/badge/version-0.1.0-blue) ![status](https://img.shields.io/badge/status-Phase%201%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 0 (Foundation) complete, version 0.1.0.** Nothing playable yet. The workspace, Electron shell, 3D viewport, CI (green on Windows, macOS and Linux) and draft-release pipeline are in place. Next: Phase 1, the game shell (UI, commands, cameras, save/load). See [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md).
+> **Status: Phase 1 (Game shell) complete; the v0.2.0 release is pending (current version 0.1.0).** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. There is no circuit simulation yet. Next: the v0.2.0 release, then Phase 2, the circuit engine and power sources. See [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md).
 
 ## Features
 
-What exists today (Phase 0 scaffold):
+What exists today (Phases 0 and 1):
 
 ### Platform
 
@@ -45,7 +45,7 @@ What exists today (Phase 0 scaffold):
 - One command registry for every way of changing the world. Commands validate their arguments, and invalid ones change nothing. Undo and redo cover every world change, and deleting then undoing brings an object back with the same id.
 - A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
 - `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
-- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. Keybindings, the command palette and the dev console drive commands today.
+- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. The mouse, keybindings, the command palette, the dev console and scripts all drive them.
 - A scripting API: TypeScript scripts and console-line files (`entity.move 1 --positionMm.x 150 …`) drive the game through the same registry as the UI, which itself runs on the same `Game` object, so every surface reaches the same `world.hash`.
 
 ### Saves
@@ -91,8 +91,7 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
-- [ ] **P0 Foundation** (v0.1.0): workspace, Electron shell, viewport, CI, release pipeline, docs, Claude agents
-- [ ] **P1 Game shell** (v0.2.0): UI, command palette, keybinds, dev console, scripting API, cameras and save/load are in; the wire-routing spike (ADR 0010) and the release remain
+- [ ] **P1 Game shell** (v0.2.0): every feature has landed; the v0.2.0 release remains. Open follow-ups: placement overlap checks, keybinding conflict detection on AZERTY, the 2020-era integrated-GPU frame budget, a manual WebGPU check on a real GPU, and delete and thumbnails in the Load list
 - [ ] **P2 Circuit engine and power sources** (v0.3.0): netlist compiler, DC and phasor MNA in a worker
 - [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0)
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox
@@ -129,7 +128,7 @@ apps/
   desktop-e2e/     Playwright _electron smoke tests against the built app
   sim-cli/         headless Node CLI (esbuild bundle): run scripts, replay logs, hash worlds; scenarios/
 libs/
-  domain/units/    framework-free domain lib; today only the generated app version
+  domain/units/    framework-free domain lib: length and angle conversions, the generated app version
   domain/save-format/  save and settings schemas (Zod), migrations, fixtures, JSON Schema
   domain/commands/     command registry, bus, undo/redo, replay log, `when` expressions
   domain/world-model/  world commands, world.hash (SHA-256), seeded PRNG (sfc32)
@@ -139,6 +138,7 @@ libs/
   ui/              Angular design system: tokens, dialog, focus trap, splitter, toasts
   features/        Angular features: shell (menu, HUD, notifications), workspace (docking, viewport), settings, session (world signal, exec), palette, console (dev console), saves (save, load, autosave)
   platform/        api (interfaces), electron and web implementations
+content/           level data (levels/workshop.json)
 docs/  plans/  tools/  .claude/
 ```
 
