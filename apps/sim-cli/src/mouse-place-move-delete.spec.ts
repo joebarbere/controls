@@ -15,7 +15,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `mouse-place-move-delete.console`. The game-e2e mouse driver must match it. */
-export const MOUSE_PLACE_MOVE_DELETE_HASH = '827d9590df526f216a734cd4015b93d2af5369e66c97b799cbbd0458edaa0997';
+export const MOUSE_PLACE_MOVE_DELETE_HASH = 'faf3a246446022054772827756be8025060960da1a58856e12cb14fcafb50439';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

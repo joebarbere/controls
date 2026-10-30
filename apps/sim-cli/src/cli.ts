@@ -187,6 +187,7 @@ async function startGame(parsed: Parsed, io: CliIo): Promise<Game> {
     if (seed === undefined) {
       // The game's Load: the saved world, undo cleared, the replay log continued (or restarted).
       const loaded = gameFromSave(read.value);
+      if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
       if (loaded.replay.status === 'restarted') io.stderr(`sim: ${worldFile}: ${loaded.replay.message}`);
       return loaded.game;
     }

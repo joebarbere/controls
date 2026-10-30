@@ -1,5 +1,5 @@
 import { createWorld, migrateWorld, World } from '@controls/save-format';
-import { rawWorldV1Arb } from '@controls/save-format/testing';
+import { rawWorldV2Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -82,7 +82,7 @@ describe('canonicalJson', () => {
 
   it('agrees with the reference canonicaliser on any valid world', () => {
     fc.assert(
-      fc.property(rawWorldV1Arb, (raw) => {
+      fc.property(rawWorldV2Arb, (raw) => {
         const world = World.parse(raw);
         expect(canonicalJson(world)).toBe(referenceCanonical(world));
       }),
@@ -93,7 +93,7 @@ describe('canonicalJson', () => {
 describe('world.hash', () => {
   it('is SHA-256 of the canonical JSON, as lower-case hex, for any valid world', () => {
     fc.assert(
-      fc.property(rawWorldV1Arb, (raw) => {
+      fc.property(rawWorldV2Arb, (raw) => {
         const world = World.parse(raw);
         const hash = worldHash(world);
         expect(hash).toMatch(/^[0-9a-f]{64}$/);
@@ -129,11 +129,11 @@ describe('world.hash', () => {
  * tests prove the hash is identical in Node and Chromium. Change both or neither.
  */
 const GOLDEN = {
-  emptySeed0: '2480470b706e39a15e962b7106a5eb37b3e8e03adf78199d8e007c1299fe0534',
-  propsAndExtensionsFixture: 'a51879789f4e0e693b7d56e1fd2a59e836c22b62839fbdce6ec261a6d384c5ac',
-  scenario: '99990dfb229d89bd028a57439bc21de31868a13434eee41a91c8088d78737526',
+  emptySeed0: '2c6dc51770228d8fc23d1c82c0eaafef8caff86c0f7672e32ab0b624a1db022c',
+  propsAndExtensionsFixture: 'd66ea791bbf59a366bf4ff6f6aef2511fed79e17f91dc8fb8aea9f0e170241df',
+  scenario: 'fc9fa3bd3bc63bc279ba43ce8f5af035f81535191c8e205fd40af23d460e22f9',
   /** `content/levels/workshop.json` (seed 0): New sandbox with seed 0 starts here (F1.9). */
-  workshopSeed0: 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825',
+  workshopSeed0: 'e79e76822ed39bdf3e033330dffbacd9115b9506ed40663e80c9fac8a0d3c174',
 } as const;
 
 /**

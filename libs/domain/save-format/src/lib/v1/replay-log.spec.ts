@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawReplayLogV1Arb } from '../../testing/arbitraries';
-import { createReplayLog, createWorld, migrateReplayLog } from '../documents';
+import { migrateReplayLog } from '../documents';
+import { replayLogV1ToV2 } from '../v2/from-v1';
 import { ReplayLogV1 } from './replay-log';
 
 const entry = (seq: number, tick = 0, id = 'entity.place', args: Record<string, unknown> = {}) => ({
@@ -12,7 +13,18 @@ const entry = (seq: number, tick = 0, id = 'entity.place', args: Record<string, 
 
 const log = (entries: unknown[], initialTick = 0) => ({
   schemaVersion: 1,
-  initialWorld: { ...createWorld({ seed: 1 }), tick: initialTick },
+  initialWorld: {
+    schemaVersion: 1,
+    seed: 1,
+    tick: initialTick,
+    nextEntityId: 1,
+    regionId: 'nec',
+    difficulty: 'apprentice',
+    assisted: false,
+    fixtures: [],
+    entities: [],
+    extensions: {},
+  },
   entries,
 });
 
@@ -22,11 +34,6 @@ const messages = (input: unknown) => {
 };
 
 describe('ReplayLogV1', () => {
-  it('createReplayLog starts an empty log from a world', () => {
-    const initialWorld = createWorld({ seed: 9 });
-    expect(createReplayLog(initialWorld)).toStrictEqual({ schemaVersion: 1, initialWorld, entries: [] });
-  });
-
   it('accepts { seq, tick, id, args } entries with JSON args', () => {
     const args = { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 10, y: 0, z: -20 }, note: null };
     expect(messages(log([entry(0, 0, 'entity.place', args), entry(1, 0, 'edit.undo')]))).toHaveLength(0);
@@ -59,7 +66,11 @@ describe('ReplayLogV1', () => {
         assertNoNegativeZero(parsed);
         const text = JSON.stringify(parsed);
         expect(ReplayLogV1.parse(JSON.parse(text))).toStrictEqual(parsed);
-        expect(migrateReplayLog(JSON.parse(text))).toStrictEqual({ ok: true, value: parsed, fromVersion: 1 });
+        expect(migrateReplayLog(JSON.parse(text))).toStrictEqual({
+          ok: true,
+          value: replayLogV1ToV2(parsed),
+          fromVersion: 1,
+        });
       }),
       { numRuns: 50 },
     );

@@ -1,13 +1,6 @@
-import {
-  createManifest,
-  createReplayLog,
-  createWorld,
-  migrateReplayLog,
-  readCtrl,
-  writeCtrl,
-} from '@controls/save-format';
+import { createReplayLog, createWorld, migrateReplayLog, readCtrl, writeCtrl } from '@controls/save-format';
 import { rawZip } from '@controls/save-format/testing';
-import { createGame, replayGame } from '@controls/scripting-api';
+import { createGame, createSaveManifest as createManifest, replayGame } from '@controls/scripting-api';
 import { hashWorldDocument, loadLevel, newGameWorld, worldHash } from '@controls/world-model';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

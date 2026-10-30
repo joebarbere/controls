@@ -28,7 +28,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after the scenario. The game-e2e drivers (mouse, palette, console) must match it. */
-export const FOUR_SURFACE_HASH = '7510b0555da91f351f9f11f17731cc5c7bc0cc2cec3238bf4126018f84a80dfd';
+export const FOUR_SURFACE_HASH = 'ebcb3178a334e43d69756cecca28efe0905c95ea1a2b8b628b172b0196635bf4';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -124,8 +124,9 @@ describe('the four-surface scenario', () => {
     expect(resumed.status).toBe(0);
   });
 
-  it('5b. the checked-in v1 fixture of this scenario replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v1/ctrl/workshop-four-surface.ctrl');
+  it.each(['v1', 'v2'])('5b. the checked-in %s fixture of this scenario replays to the same hash', (version) => {
+    // v1 (P1) migrates to v2 on load; both reach the same world, so the same hash (ADR 0013).
+    const fixture = join(WORKSPACE_ROOT, `libs/domain/save-format/fixtures/${version}/ctrl/workshop-four-surface.ctrl`);
     const replay = sim('replay', fixture);
     expect(replay.stderr).toBe('');
     expect(replay.stdout).toEqual([FOUR_SURFACE_HASH]);

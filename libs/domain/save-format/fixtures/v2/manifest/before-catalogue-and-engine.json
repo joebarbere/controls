@@ -1,0 +1,10 @@
+{
+  "format": "controls.ctrl",
+  "schemaVersion": 2,
+  "appVersion": "0.2.0",
+  "catalogVersion": 0,
+  "simEngineVersion": 0,
+  "extensions": {
+    "mod.example.kept": true
+  }
+}

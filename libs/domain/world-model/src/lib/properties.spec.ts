@@ -1,17 +1,20 @@
 import type { CommandBus } from '@controls/commands';
 import { createWorld, migrateReplayLog, World } from '@controls/save-format';
-import { catalogRefArb, deepFreeze, rawWorldV1Arb } from '@controls/save-format/testing';
+import { BUILTIN_CATALOG } from '@controls/catalog';
+import { catalogRefArb, deepFreeze, rawWorldV2Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
 import { worldHash } from './hash';
-import { createWorldBus, replayLog, toReplayLog } from './session';
+import { createWorldBus, rebaseReplayLog, replayLog, toReplayLog } from './session';
 
 /*
  * Plan F1.2 properties, over the real world commands:
  * - for any command sequence, undoing everything returns the initial hash;
  * - invert ∘ apply is the identity for every undoable command;
  * - replaying seed + log gives the live hash;
- * plus: view commands never change the hash, and every reachable world is a valid document.
+ * plus: view commands never change the hash, and every reachable world is a valid document;
+ * and for world v2 (ADR 0011 §1 and §3, ADR 0013): every change keeps the tick, the solution record
+ * and each surviving entity's `sim` bag, and a log rebased mid-session replays to the same hash.
  */
 
 const coordinate = fc.integer({ min: -10_000_000, max: 10_000_000 });
@@ -31,12 +34,16 @@ type Op =
   | { kind: 'invalid' };
 
 const pick = fc.nat({ max: 8 });
+const placeable = BUILTIN_CATALOG.devices
+  .filter((d) => d.sizeMm !== null)
+  .map((d) => ({ id: d.id, version: d.version }));
 const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
     weight: 3,
     arbitrary: fc.record({
       kind: fc.constant('place' as const),
-      ref: catalogRefArb,
+      // Catalogue devices (with state bags) as well as unknown refs.
+      ref: fc.oneof(catalogRefArb, fc.constantFrom(...placeable)),
       positionMm: positionArb,
       orientationMdeg: fc.record({ yaw: angle, pitch: angle, roll: angle }),
     }),
@@ -58,7 +65,7 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
 );
 
 const opsArb = fc.array(opArb, { maxLength: 25 });
-const worldArb = rawWorldV1Arb.map((raw) => World.parse(raw));
+const worldArb = rawWorldV2Arb.map((raw) => World.parse(raw));
 
 function pickId(bus: CommandBus<World>, index: number): number {
   const entities = bus.state.entities;
@@ -177,6 +184,53 @@ describe('world command properties', () => {
         expect(worldHash(result.change.invert(applied))).toBe(worldHash(world));
         expect(result.change.apply(result.change.invert(applied))).toEqual(applied);
       }),
+    );
+  });
+
+  it('every change keeps the tick, the solution record and each surviving entity’s sim bag (ADR 0011 §1, §3)', () => {
+    fc.assert(
+      fc.property(worldArb, opsArb, (initial, ops) => {
+        const bus = createWorldBus(deepFreeze(initial));
+        for (const op of ops) {
+          const before = bus.state;
+          run(bus, op);
+          const after = bus.state;
+          expect(after.tick).toBe(before.tick);
+          expect(after.sim).toBe(before.sim);
+          for (const entity of after.entities) {
+            const previous = before.entities.find((e) => e.id === entity.id);
+            // Kept entities keep the very same sim bag; only an insert (place, undo of delete) brings one.
+            if (previous) expect(entity.sim).toBe(previous.sim);
+          }
+        }
+      }),
+    );
+  });
+
+  it('a log rebased onto a mid-session world (sim state included) replays to the same hash (ADR 0013)', () => {
+    fc.assert(
+      fc.property(worldArb, opsArb, opsArb, (initial, before, after) => {
+        // A session that saved and loaded between `before` and `after`: the load clears the history.
+        const live = createWorldBus(initial);
+        before.forEach((op) => run(live, op));
+        const cut = live.entries.length;
+        live.clearHistory();
+        after.forEach((op) => run(live, op));
+        const log = toReplayLog(initial, live);
+
+        const rebased = rebaseReplayLog(log, cut);
+        if (!rebased.ok) throw new Error(rebased.error.message);
+        expect(rebased.log.firstSeq).toBe(cut);
+        expect(rebased.log.entries).toStrictEqual(log.entries.slice(cut));
+        // The rebased log goes through JSON and the loader like a saved one.
+        const loaded = migrateReplayLog(JSON.parse(JSON.stringify(rebased.log)));
+        if (!loaded.ok) throw new Error(loaded.error.message);
+        const replayed = replayLog(loaded.value);
+        if (!replayed.ok) throw new Error(replayed.error.message);
+        expect(replayed.hash).toBe(worldHash(live.state));
+        expect(replayed.bus.entries).toStrictEqual(live.entries.slice(cut));
+      }),
+      { numRuns: 60 },
     );
   });
 });

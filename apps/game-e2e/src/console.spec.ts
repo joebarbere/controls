@@ -15,14 +15,14 @@ import { startSandbox as startWorkshop } from './support/sandbox';
  * F1.9 every session starts on the workshop level with seed 0 (`support/sandbox.ts`), the world the
  * sim-cli scenarios start from (`--world content/levels/workshop.json`).
  */
-const CONSOLE_PLACE_UNDO_HASH = 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825';
-const FOUR_SURFACE_HASH = '7510b0555da91f351f9f11f17731cc5c7bc0cc2cec3238bf4126018f84a80dfd';
+const CONSOLE_PLACE_UNDO_HASH = 'e79e76822ed39bdf3e033330dffbacd9115b9506ed40663e80c9fac8a0d3c174';
+const FOUR_SURFACE_HASH = 'ebcb3178a334e43d69756cecca28efe0905c95ea1a2b8b628b172b0196635bf4';
 /**
  * The palette path's hash (F1.3): the same literal as PALETTE_PLACE_UNDO_HASH in
  * `apps/game-e2e/src/palette.spec.ts` and `apps/sim-cli/src/palette-place-undo.spec.ts`. Change all
  * three together.
  */
-const PALETTE_PLACE_UNDO_HASH = '82b7578708f2759b91a17b49188f1da4cfdf65a7699dfe457cc3f7e930d77362';
+const PALETTE_PLACE_UNDO_HASH = '34a83dc825c1e6b934132ca1f766a36f895c173ecfbc73274d197058b21ba780';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';

@@ -238,19 +238,19 @@ Not a spec feature. It is the persisted contract every P2 feature builds on; P1'
 
 Acceptance:
 
-- [ ] `v2/world.ts`, `v2/manifest.ts` and `v2/replay-log.ts`, with a total v1 → v2 migration. There is one `schemaVersion` for the whole save, so documents that don't change get identity steps. v1 files and fixtures are untouched.
+- [x] `v2/world.ts`, `v2/manifest.ts` and `v2/replay-log.ts`, with a total v1 → v2 migration. There is one `schemaVersion` for the whole save, so documents that don't change get identity steps. v1 files and fixtures are untouched.
   - **`WorldV2.connections`:** strict objects sorted by id. Each is `{ id, ref: CatalogRef (lead type), a: TerminalRef, b: TerminalRef, extensions }`, where `TerminalRef` is `{ entity, terminal }`. ADR 0013 records the id allocation rule.
   - **`EntityV2.state`:** a strict record of named finite numbers, booleans or short enum strings. Absent values are `null`, never optional. It is validated by the device model's own state schema when the world loads, so a new device kind never needs a world `schemaVersion` bump.
   - **`ReplayLogV2.endTick`.**
-- [ ] Fixtures in `fixtures/v2/{world,manifest,replay-log,ctrl}`. Every v1 fixture migrates and validates. A fast-check round-trip property covers v2 (both JSON and the container), and `*.v2.schema.json` JSON Schema is exported with a staleness check.
-- [ ] `content/levels/workshop.json` is rewritten as v2 in canonical form (`levels.spec.ts`). Every pinned golden hash is re-pinned in one change, and the CHANGELOG says so:
+- [x] Fixtures in `fixtures/v2/{world,manifest,replay-log,ctrl}`. Every v1 fixture migrates and validates. A fast-check round-trip property covers v2 (both JSON and the container), and `*.v2.schema.json` JSON Schema is exported with a staleness check.
+- [x] `content/levels/workshop.json` is rewritten as v2 in canonical form (`levels.spec.ts`). Every pinned golden hash is re-pinned in one change, and the CHANGELOG says so:
   - `WORKSHOP_HASH`, `FOUR_SURFACE_HASH`, `PHASE_ACCEPTANCE_HASH`, `PALETTE_PLACE_UNDO_HASH`, `CONSOLE_PLACE_UNDO_HASH`;
   - the Node and Chromium hash goldens.
 - [ ] Commands in `world-model`. Their ids and argument shapes are save format, so `save-format-guardian` reviews them:
   - `lead.connect {ref, a, b}`: undoable. It refuses unknown entities, unknown terminals, `a == b` and duplicate leads.
   - `lead.disconnect {id}`: undoable, and undo restores the same id.
   - `device.operate {id, control, value}`: undoable, and checked against the device's controls in `run`. It **never reads sim-owned state** (ADR 0011).
-- [ ] Catalogue v1:
+- [x] Catalogue v1 (PR 1; `catalogVersion` 1 in the manifest from PR 2):
   - `@controls/catalog` holds the device-definition Zod schema: identity, fictional brand and model, category, terminals `{ id, label, positionMm }`, model `{ kind, params }`, controls and `sources[]`.
   - `content/devices/*.json` holds the P2 devices plus one test-lead type. Lead resistance is computed from resistivity × length ÷ area with a temperature coefficient, never taken from NEC tables.
   - `catalogVersion` 1 goes in the manifest and in `docs/history.md`.
@@ -265,7 +265,7 @@ Acceptance:
 
   The `EntityV2.state` bullet above is superseded by the two bags.
 
-- [ ] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
+- [x] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
 - [ ] Palette forms render every new command (the every-command spec). Console lines and a TS script can connect a lead and operate a switch.
 
 ### F2.1 Netlist compiler

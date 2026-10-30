@@ -42,8 +42,8 @@ describe('scope:headless lint boundary', () => {
         "import { createWorldRegistry } from '@controls/world-model';",
         "import { parseConsoleLine } from '@controls/commands';",
         "import { migrateWorld } from '@controls/save-format';",
-        "import { SIM_CORE_PACKAGE } from '@controls/sim-core';",
-        'export const probe = [createGame, createWorldRegistry, parseConsoleLine, migrateWorld, SIM_CORE_PACKAGE];',
+        "import { SIM_ENGINE_VERSION } from '@controls/sim-core';",
+        'export const probe = [createGame, createWorldRegistry, parseConsoleLine, migrateWorld, SIM_ENGINE_VERSION];',
       ].join('\n'),
     );
     expect(errors).toEqual([]);
@@ -66,11 +66,11 @@ describe('type:worker lint boundary', () => {
 
   it('lets the worker import the sim domain libs', async () => {
     const source = [
-      "import { SIM_CORE_PACKAGE } from '@controls/sim-core';",
+      "import { SIM_ENGINE_VERSION } from '@controls/sim-core';",
       "import { SIM_PROTOCOL_PACKAGE } from '@controls/sim-protocol';",
-      "import { CATALOG_PACKAGE } from '@controls/catalog';",
+      "import { CATALOG_VERSION } from '@controls/catalog';",
       "import { worldHash } from '@controls/world-model';",
-      'export const probe = [SIM_CORE_PACKAGE, SIM_PROTOCOL_PACKAGE, CATALOG_PACKAGE, worldHash];',
+      'export const probe = [SIM_ENGINE_VERSION, SIM_PROTOCOL_PACKAGE, CATALOG_VERSION, worldHash];',
     ].join('\n');
     expect(await boundaryErrors(source, workerProbe)).toEqual([]);
   });

@@ -11,7 +11,7 @@ export type ReplayResult = { readonly ok: true } | { readonly ok: false; readonl
 
 /**
  * Re-runs logged entries through `bus`, which must start from the log's initial state with an
- * empty history and an empty log (or be continuing that same log). Because the bus is
+ * empty history and an empty log at the log's `firstSeq` (or be continuing that same log). Because the bus is
  * deterministic, the state it reaches equals the live session's. Fails, with the offending `seq`,
  * if an entry is out of order, ran at a different tick, no longer succeeds, or logs different
  * arguments than it recorded (for example after a schema change without a log migration). After a
@@ -22,7 +22,7 @@ export type ReplayResult = { readonly ok: true } | { readonly ok: false; readonl
  */
 export function replayEntries<S>(bus: CommandBus<S>, entries: readonly ReplayEntry[]): ReplayResult {
   for (const entry of entries) {
-    const expectedSeq = bus.entries.length;
+    const expectedSeq = bus.nextSeq();
     if (entry.seq !== expectedSeq) {
       return {
         ok: false,

@@ -15,7 +15,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * world exactly, `nextEntityId` included, so the hash is the workshop's own (`WORKSHOP_HASH` in
  * `workshop.spec.ts`, `workshopSeed0` in `libs/domain/world-model/src/lib/hash.spec.ts`).
  */
-export const CONSOLE_PLACE_UNDO_HASH = 'c1ebfb55cff641f18c069027eb0d096900a573e70a3f35a03b73baff75500825';
+export const CONSOLE_PLACE_UNDO_HASH = 'e79e76822ed39bdf3e033330dffbacd9115b9506ed40663e80c9fac8a0d3c174';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/console-place-undo.console');
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');

@@ -6,7 +6,7 @@ import { MAX_COORDINATE_MM, MILLIDEGREES_PER_TURN } from '../lib/v1/world';
 export * from './zip-builder';
 
 /*
- * fast-check arbitraries producing *raw* documents that the v1 schemas accept. Raw on purpose: they
+ * fast-check arbitraries producing *raw* documents that the v1 and v2 schemas accept. Raw on purpose: they
  * include `-0`, which the schemas normalise, so properties exercise the normalisation too.
  * Test-only (excluded from tsconfig.lib.json).
  */
@@ -101,6 +101,102 @@ export const rawWorldV1Arb = fc
     });
   });
 
+/** A device state bag key (lower camelCase). */
+export const stateKeyArb = fc.stringMatching(/^[a-z][a-zA-Z0-9]{0,10}$/);
+
+/** A device state value: finite numbers (including `-0`, subnormals, 17-digit floats), booleans, short strings, null. */
+export const stateValueArb = fc.oneof(
+  finiteNumberArb,
+  fc.boolean(),
+  safeStringArb.filter((s) => s.length <= 32),
+  fc.constant(null),
+);
+
+export const stateBagArb = fc.dictionary(stateKeyArb, stateValueArb, { maxKeys: 4, noNullPrototype: true });
+
+/** A terminal id (ASCII, never `:`). */
+export const terminalIdArb = fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,6}$/);
+
+/** A raw `WorldV2.sim` solution record (or null); `lastSolveTick` is at most `tick`. */
+const simSolutionArb = (tick: number) =>
+  fc.option(
+    fc.record({
+      lastSolveTick: fc.integer({ min: 0, max: tick }),
+      topologyHash: fc.stringMatching(/^[0-9a-f]{64}$/),
+      nodes: fc.array(fc.tuple(finiteNumberArb, finiteNumberArb), { maxLength: 4 }).map((pairs) => pairs.flat()),
+      branches: fc.array(fc.tuple(finiteNumberArb, finiteNumberArb), { maxLength: 4 }).map((pairs) => pairs.flat()),
+      islands: fc.array(
+        fc.record({ flags: fc.integer({ min: 0, max: 255 }), iterations: fc.integer({ min: 0, max: 65_535 }) }),
+        { maxLength: 3 },
+      ),
+    }),
+    { nil: null },
+  );
+
+/**
+ * A raw world document that `WorldV2` accepts: v1's world plus device state bags on every entity,
+ * connections between distinct terminals of existing entities, the connection counter and a
+ * solution record (or null). Ticks reach past 2^31.
+ */
+export const rawWorldV2Arb = rawWorldV1Arb
+  .chain((v1) =>
+    fc.record({
+      v1: fc.constant(v1),
+      tick: fc.oneof(fc.constant(v1.tick), fc.integer({ min: 0, max: 2 ** 40 })),
+      bags: fc.array(fc.tuple(stateBagArb, stateBagArb), {
+        minLength: v1.entities.length,
+        maxLength: v1.entities.length,
+      }),
+      ends: fc.array(fc.tuple(fc.nat(), terminalIdArb, fc.nat(), terminalIdArb, catalogRefArb, jsonObjectArb), {
+        maxLength: v1.entities.length === 0 ? 0 : 4,
+      }),
+      connectionGap: fc.nat({ max: 3 }),
+    }),
+  )
+  .chain(({ v1, tick, bags, ends, connectionGap }) => {
+    // `fc.constant([])` and the tuple arbitrary give a union of array types: widen it to one.
+    const v1Entities = v1.entities as readonly (typeof v1.entities)[number][];
+    const ids = v1Entities.map((e) => e.id);
+    const connections = ends
+      .map(([a, ta, b, tb, ref, extensions]) => ({
+        ref,
+        a: { entity: ids[a % ids.length], terminal: ta },
+        b: { entity: ids[b % ids.length], terminal: tb },
+        extensions,
+      }))
+      .filter((c) => c.a.entity !== c.b.entity || c.a.terminal !== c.b.terminal)
+      .map((c, index) => ({ id: index + 1, ...c }));
+    return fc.record({
+      world: fc.constant({
+        ...v1,
+        schemaVersion: 2 as const,
+        tick,
+        nextConnectionId: connections.length + 1 + connectionGap,
+        entities: v1Entities.map((entity, index) => ({ ...entity, state: bags[index][0], sim: bags[index][1] })),
+        connections,
+      }),
+      sim: simSolutionArb(tick),
+    });
+  })
+  .map(({ world, sim }) => ({ ...world, sim }));
+
+/** A raw replay log that `ReplayLogV2` accepts: any `firstSeq`, and an `endTick` at or after the last entry. */
+export const rawReplayLogV2Arb = fc
+  .record({
+    initialWorld: rawWorldV2Arb,
+    firstSeq: fc.oneof(fc.constant(0), fc.nat({ max: 1_000_000 })),
+    steps: fc.array(fc.record({ dt: fc.nat({ max: 3 }), id: commandIdArb, args: jsonObjectArb }), { maxLength: 6 }),
+    tail: fc.nat({ max: 10_000 }),
+  })
+  .map(({ initialWorld, firstSeq, steps, tail }) => {
+    let tick = initialWorld.tick;
+    const entries = steps.map((step, index) => {
+      tick += step.dt;
+      return { seq: firstSeq + index, tick, id: step.id, args: step.args };
+    });
+    return { schemaVersion: 2 as const, initialWorld, firstSeq, entries, endTick: tick + tail };
+  });
+
 /** A raw replay log that `ReplayLogV1` accepts. */
 export const rawReplayLogV1Arb = fc
   .record({
@@ -184,6 +280,11 @@ export const rawManifestV1Arb = fc.record({
   catalogVersion: fc.oneof(fc.nat({ max: 1000 }), fc.constant(-0)),
   extensions: jsonObjectArb,
 });
+
+/** A raw manifest that `ManifestV2` accepts. */
+export const rawManifestV2Arb = fc
+  .tuple(rawManifestV1Arb, fc.oneof(fc.nat({ max: 1000 }), fc.constant(-0)))
+  .map(([v1, simEngineVersion]) => ({ ...v1, schemaVersion: 2 as const, simEngineVersion }));
 
 /** Bytes that start with the PNG signature (the container checks the signature, not the image). */
 export const pngBytesArb = fc

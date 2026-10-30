@@ -66,7 +66,7 @@ Output: the script's three `console.log` lines, then the final `world.hash` as t
 expected failure: rejected No entity with id 42
 entities: 1, 2
 log: 5 entries
-2099ec551babb486c481d9c394e9359918422e538347123eb3c0eaf7b3003145
+b79a3090139aed2b30a0ba09d3eeb9fcbc1d9baf9df59850b77718d3c5f8fbbb
 ```
 
 `--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document or a level instead, such as `content/levels/workshop.json` (what New sandbox loads). With both, `--world <level> --seed N` is a new game on that level with seed N, exactly as New sandbox with seed N.
