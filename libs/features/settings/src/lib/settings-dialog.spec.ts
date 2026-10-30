@@ -160,6 +160,21 @@ describe('SettingsDialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('renders the rebinding table only while Key bindings is open', async () => {
+    // The shell mounts this dialog from start-up; ~100 hidden buttons there slowed every
+    // accessibility-tree walk of the page (ui caveats: "Closed dialogs stay light").
+    const changeButtons = () => screen.queryAllByRole('button', { name: /^Change /, hidden: true });
+    const { fixture, user, dialog } = await setup();
+    expect(changeButtons()).toEqual([]);
+    await user.click(within(dialog).getByRole('button', { name: 'Key bindings…' }));
+    await fixture.whenStable();
+    expect(changeButtons().length).toBeGreaterThan(0);
+    expect(document.activeElement).toBe(changeButtons()[0]); // the dialog still focuses its first control
+    await user.keyboard('{Escape}');
+    await fixture.whenStable();
+    expect(changeButtons()).toEqual([]);
+  });
+
   it('Back closes the dialog and returns focus to the opener', async () => {
     const { fixture, user, dialog, opener } = await setup();
     within(dialog).getByRole('button', { name: 'Back' }).focus();
