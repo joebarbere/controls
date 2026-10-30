@@ -143,6 +143,61 @@ export const CatalogRef = z
   .meta({ id: 'CatalogRef', description: 'A catalogue entry by reference: id plus integer version.' });
 export type CatalogRef = z.infer<typeof CatalogRef>;
 
+/**
+ * A device terminal id within one catalogue entry (`pos`, `neg`, `a`, `13`, `L1`): an ASCII letter or
+ * digit, then letters, digits, `_` or `-`, at most 32 characters. Never `:`, because scripts name a
+ * terminal as `"<entityId>:<terminalId>"` (`game.probe`, P2). Added for world v2 (ADR 0013).
+ */
+export const TERMINAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
+
+export const TerminalId = z.string().max(32).regex(TERMINAL_ID_PATTERN).meta({
+  id: 'TerminalId',
+  description: 'A terminal id within one device: a letter or digit, then letters, digits, "_" or "-"; at most 32.',
+});
+
+/**
+ * A key in a device state bag (`closed`, `stateOfCharge`): lower camelCase, at most 64 characters
+ * (ADR 0011 §1, ADR 0013). Which keys a device has is decided by its model kind (`MODEL_KINDS` in
+ * `@controls/catalog`), not by the world schema, so a new device kind never needs a `schemaVersion` bump.
+ */
+export const DEVICE_STATE_KEY_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
+
+export const DeviceStateKey = z.string().max(64).regex(DEVICE_STATE_KEY_PATTERN);
+
+/** Longest enum string a device state bag may hold (`'tripped'`, `'blown'`). */
+export const MAX_DEVICE_STATE_STRING = 32;
+
+/** Most keys one device state bag may hold. */
+export const MAX_DEVICE_STATE_KEYS = 64;
+
+/**
+ * One value in a device state bag: a finite number (`-0` normalised), a boolean, a short enum string
+ * or `null` for "absent" (never a missing key). The device model's own schema narrows it per key.
+ */
+export const DeviceStateValue = z
+  .union([FiniteNumber, z.boolean(), SafeString.max(MAX_DEVICE_STATE_STRING), z.null()])
+  .meta({
+    id: 'DeviceStateValue',
+    description: 'A finite number, a boolean, an enum string of at most 32 characters, or null for absent.',
+  });
+export type DeviceStateValue = z.infer<typeof DeviceStateValue>;
+
+/**
+ * A device state bag: named values, keys in {@link DEVICE_STATE_KEY_PATTERN}, at most
+ * {@link MAX_DEVICE_STATE_KEYS}. The world schema checks only this generic shape; the load path
+ * checks each bag against its device's model kind (ADR 0013).
+ */
+export const DeviceStateBag = z
+  .record(DeviceStateKey, DeviceStateValue)
+  .refine((bag) => Object.keys(bag).length <= MAX_DEVICE_STATE_KEYS, {
+    message: `A device state bag holds at most ${MAX_DEVICE_STATE_KEYS} keys`,
+  })
+  .meta({
+    id: 'DeviceStateBag',
+    description: 'Named device state values; keys are lower camelCase (at most 64 characters, at most 64 keys).',
+  });
+export type DeviceStateBag = z.infer<typeof DeviceStateBag>;
+
 /** Built-in props (`prop.*` at version 1) are drawn by renderer recipes until the catalogue lands (ADR 0007). */
 export const BUILTIN_PROP_PREFIX = 'prop.';
 

@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "brand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "modelName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "source",
+        "load",
+        "switch",
+        "lead"
+      ]
+    },
+    "sizeMm": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "widthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "heightMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "depthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "widthMm",
+            "heightMm",
+            "depthMm"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "terminals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/TerminalId"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "positionMm": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "positionMm"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)*$"
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-zA-Z0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "toggle"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "setpoint"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type",
+              "unit",
+              "min",
+              "max",
+              "step"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "selector"
+              },
+              "options": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                }
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type",
+              "options"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "sources": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "real-world",
+              "game-design"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "covers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^(?:model\\.params\\.[a-z][a-zA-Z0-9]*|sizeMm|terminals)$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "citation",
+          "covers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "title",
+    "brand",
+    "modelName",
+    "category",
+    "sizeMm",
+    "terminals",
+    "model",
+    "controls",
+    "sources",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls device catalogue entry, catalogue format v1",
+  "description": "One file in content/devices/ (ADR 0013). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls) and source coverage.",
+  "$defs": {
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    }
+  }
+}
