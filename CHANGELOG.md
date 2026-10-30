@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
+Phase 1, "Hands on the panel": the game shell. A sandbox you can walk around, place, move and delete props in, and save and load. No circuit simulation yet.
+
 ### Added
 
 - **The P1 phase-acceptance test.** One scenario, `apps/sim-cli/scenarios/phase-acceptance.{console,ts}` (place, move and delete with undo and redo on the workshop), now runs through all four drivers: the mouse, the palette and the in-game console in `apps/game-e2e/src/phase-acceptance.spec.ts`, and `sim-cli` (script, console file, replay and a save) in `apps/sim-cli/src/phase-acceptance.spec.ts`. Every driver logs the same commands and reaches the same `world.hash`.
@@ -119,5 +123,6 @@ Phase 0, "Hello, panel": the cross-platform walking skeleton. Nothing playable y
 - Documentation skeleton: README, this changelog, the docs hub, architecture overview, caveats, ADRs 0001–0004, glossary, history, new-developer and releasing guides, `THIRD_PARTY_NOTICES.md` and the MIT licence.
 - Claude Code setup: `CLAUDE.md`, the `docs-keeper`, `version-keeper`, `release-engineer`, `electron-platform-engineer` and `test-engineer` agents, and the `/verify`, `/docs-sync` and `/release` skills.
 
-[Unreleased]: https://github.com/joebarbere/controls/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/joebarbere/controls/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/joebarbere/controls/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/joebarbere/controls/releases/tag/v0.1.0

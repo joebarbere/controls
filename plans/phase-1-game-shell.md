@@ -367,6 +367,6 @@ Known gaps carried past P1. None blocks the phase acceptance; each is picked up 
 ## Close-out
 
 1. [x] `docs-keeper` sync: README features, CHANGELOG, `docs/history.md` P1 narrative and `schemaVersion` 1.
-2. [ ] `version-keeper`: `0.1.0 → 0.2.0`.
+2. [x] `version-keeper`: `0.1.0 → 0.2.0`.
 3. [ ] `release-engineer`: package, smoke test (including new sandbox and save/load), tag on confirmation, check the draft. The user publishes.
 4. [ ] Mark P1 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). P2 kickoff writes `plans/phase-2-*.md` and creates `sim-engine-engineer` and `electrical-realism-reviewer`. P2 is one of the agent-team cases (sim ↔ worker ↔ renderer).

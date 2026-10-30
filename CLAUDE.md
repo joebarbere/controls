@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 1 (Game shell) complete 2026-10-28, awaiting the v0.2.0 release. Version 0.1.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md) (open follow-ups listed there). Next: the v0.2.0 release (`version-keeper`, then `release-engineer`), then the Phase 2 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 1 (Game shell) complete 2026-10-28, released as 0.2.0 (pending the user publishing the draft). Version 0.2.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md) (open follow-ups listed there). Next: the Phase 2 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
