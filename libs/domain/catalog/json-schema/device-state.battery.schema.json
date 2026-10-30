@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "sim": {
+      "type": "object",
+      "properties": {
+        "stateOfCharge": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "stateOfCharge"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "state",
+    "sim"
+  ],
+  "additionalProperties": false,
+  "title": "Device state of model kind battery",
+  "description": "EntityV2.state (commanded) and EntityV2.sim (sim-owned) of a battery device (ADR 0011, ADR 0013). Every key is present; null means absent."
+}

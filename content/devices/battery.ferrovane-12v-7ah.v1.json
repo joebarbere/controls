@@ -1,0 +1,71 @@
+{
+  "id": "battery.ferrovane-12v-7ah",
+  "version": 1,
+  "title": "12 V 7 Ah sealed lead-acid battery",
+  "brand": "Ferrovane",
+  "modelName": "FV12-7",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 151,
+    "heightMm": 65,
+    "depthMm": 98
+  },
+  "terminals": [
+    {
+      "id": "neg",
+      "label": "−",
+      "positionMm": {
+        "x": 18,
+        "y": 32,
+        "z": 98
+      }
+    },
+    {
+      "id": "pos",
+      "label": "+",
+      "positionMm": {
+        "x": 133,
+        "y": 32,
+        "z": 98
+      }
+    }
+  ],
+  "model": {
+    "kind": "battery",
+    "params": {
+      "nominalVoltageV": 12,
+      "openCircuitVoltageFullV": 12.9,
+      "openCircuitVoltageEmptyV": 11.8,
+      "internalResistanceOhm": 0.023,
+      "capacityAh": 7
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "vrla-12v-7ah-class",
+      "kind": "real-world",
+      "citation": "The 12 V 7 Ah valve-regulated lead-acid (VRLA, AGM) monobloc, a common alarm and UPS battery class: six 2 V cells (12 V nominal), 7 Ah at the 20-hour rate, case about 151 × 65 × 94 mm and 98 mm to the terminal tops. Typical of published manufacturer datasheets for the class, paraphrased; not one vendor's values. The size is the footprint on the bench (151 × 65 mm) and the height above it (98 mm).",
+      "covers": ["model.params.nominalVoltageV", "model.params.capacityAh", "sizeMm"]
+    },
+    {
+      "id": "lead-acid-open-circuit-voltage",
+      "kind": "real-world",
+      "citation": "A rested lead-acid cell's open-circuit voltage is roughly its electrolyte's specific gravity plus 0.84 V. For a VRLA monobloc at 25 °C, published state-of-charge charts give about 12.9 V (2.15 V per cell) at full charge and about 11.8 V (1.97 V per cell) fully discharged. Paraphrased from the lead-acid chapters of Linden's Handbook of Batteries (T. B. Reddy, ed., 4th ed., McGraw-Hill, 2011) and VRLA manufacturers' charts.",
+      "covers": ["model.params.openCircuitVoltageFullV", "model.params.openCircuitVoltageEmptyV"]
+    },
+    {
+      "id": "vrla-internal-resistance",
+      "kind": "real-world",
+      "citation": "Internal resistance of a fully charged 12 V 7 Ah VRLA battery at 25 °C: about 23 mΩ, mid-range of the class's published datasheets (roughly 17 to 28 mΩ). Those figures are usually 1 kHz AC tester readings, which read lower than the DC resistance a step load sees; F2.4 records using the AC figure as a DC internal resistance as an abstraction.",
+      "covers": ["model.params.internalResistanceOhm"]
+    },
+    {
+      "id": "terminal-layout",
+      "kind": "game-design",
+      "citation": "game-design: the two terminals sit on the top of the case, 115 mm apart, chosen for drawing leads; not modelled on a product.",
+      "covers": ["terminals"]
+    }
+  ],
+  "extensions": {}
+}

@@ -1,0 +1,24 @@
+{
+  "id": "switch.tessaline-spst-toggle",
+  "version": 1,
+  "title": "SPST toggle switch on a base",
+  "brand": "Tessaline",
+  "modelName": "TS-101",
+  "category": "switch",
+  "sizeMm": { "widthMm": 60, "heightMm": 40, "depthMm": 45 },
+  "terminals": [
+    { "id": "a", "label": "1", "positionMm": { "x": 10, "y": 20, "z": 12 } },
+    { "id": "b", "label": "2", "positionMm": { "x": 50, "y": 20, "z": 12 } }
+  ],
+  "model": { "kind": "switch.spst", "params": {} },
+  "controls": [{ "id": "closed", "label": "Closed", "type": "toggle" }],
+  "sources": [
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: a single-pole, single-throw toggle switch on a 60 × 40 mm base, 45 mm tall, with a screw terminal at each end; not modelled on a product. The switch is ideal in P2 (closed joins its terminals), so it has no electrical parameters yet.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

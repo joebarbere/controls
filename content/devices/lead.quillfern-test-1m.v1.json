@@ -1,0 +1,53 @@
+{
+  "id": "lead.quillfern-test-1m",
+  "version": 1,
+  "title": "1 m 18 AWG test lead with crocodile clips",
+  "brand": "Quillfern",
+  "modelName": "QF-TL1",
+  "category": "lead",
+  "sizeMm": null,
+  "terminals": [],
+  "model": {
+    "kind": "lead",
+    "params": {
+      "lengthMm": 1000,
+      "conductorAreaM2": 8.2305e-7,
+      "resistivityOhmM": 1.724137931034483e-8,
+      "temperatureCoefficientPerK": 0.00393,
+      "referenceTemperatureK": 293.15,
+      "contactResistanceOhm": 0.01
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "annealed-copper-standard",
+      "kind": "real-world",
+      "citation": "International Annealed Copper Standard (IEC 60028, 1925): annealed copper has a resistivity of 1/58 Ω·mm²/m (1.7241 × 10⁻⁸ Ω·m) at 20 °C (293.15 K), and a temperature coefficient of resistance of 0.00393 per kelvin at 20 °C. The lead's resistance is computed from these (resistivity × length ÷ area, with the temperature coefficient), never taken from a conductor table.",
+      "covers": [
+        "model.params.resistivityOhmM",
+        "model.params.temperatureCoefficientPerK",
+        "model.params.referenceTemperatureK"
+      ]
+    },
+    {
+      "id": "awg-18-cross-section",
+      "kind": "real-world",
+      "citation": "18 AWG, the usual gauge of US bench test leads (NEC/US-first). The area is derived from the public AWG definition (ASTM B258): d = 0.127 mm × 92^((36 − n)/39), so 18 AWG is d ≈ 1.0237 mm and A = π d²/4 ≈ 0.8231 mm² (8.2305e-7 m²); it is not taken from any NEC table. Stranding is ignored: real flexible leads measure about 10 % above this solid-wire figure.",
+      "covers": ["model.params.conductorAreaM2"]
+    },
+    {
+      "id": "lead-length",
+      "kind": "game-design",
+      "citation": "game-design: a 1 m bench test lead, a common retail length.",
+      "covers": ["model.params.lengthMm"]
+    },
+    {
+      "id": "clip-contact-resistance",
+      "kind": "real-world",
+      "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
+      "covers": ["model.params.contactResistanceOhm"]
+    }
+  ],
+  "extensions": {}
+}

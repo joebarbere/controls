@@ -195,6 +195,28 @@ flowchart TD
     V0 -- "already current" --> OK
 ```
 
+## The device catalogue (P2 kickoff)
+
+A save names every device by catalogue reference (`{ id, version }`); `@controls/catalog` resolves it. The catalogue's entries are data in `content/devices/<id>.v<version>.json`, mirrored into `builtin-devices.generated.ts` (domain code can't import `content/`, and the game, the sim worker and `sim-cli` must resolve refs identically) and validated when the module loads. Its version, `catalogVersion` (1), goes in each save's manifest. Built-in props (`prop.*`) are not catalogue entries; they stay in `world-model` (`BUILTIN_PROPS`).
+
+```mermaid
+flowchart LR
+    JSON["content/devices/*.json<br/>(authoritative; every number sourced)"] -->|"builtin.spec.ts regenerates,<br/>fails when stale"| GEN["builtin-devices.generated.ts"]
+    GEN --> PARSE["parseCatalog(CATALOG_VERSION, docs)<br/>schema · kind · params · terminals ·<br/>controls · source coverage"]
+    KINDS["MODEL_KINDS<br/>params · terminals ·<br/>state keys (owner, schema, initial)"] --> PARSE
+    PARSE --> CAT["BUILTIN_CATALOG<br/>device(ref) · kindOf(ref)"]
+    KINDS -->|"JSON Schema export"| DS["json-schema/device-state.&lt;kind&gt;.schema.json<br/>(save format)"]
+```
+
+| Model kind          | Placement  | Terminals    | State keys (owner)                   | P2 entry                                     |
+| ------------------- | ---------- | ------------ | ------------------------------------ | -------------------------------------------- |
+| `battery`           | entity     | `neg`, `pos` | `stateOfCharge` (sim, starts 1)      | Ferrovane FV12-7, 12 V 7 Ah sealed lead-acid |
+| `lamp.incandescent` | entity     | `a`, `b`     | `filamentTempK` (sim, starts `null`) | Lumivane LV-12-5, 12 V 5 W                   |
+| `switch.spst`       | entity     | `a`, `b`     | `closed` (commanded, starts `false`) | Tessaline TS-101 toggle                      |
+| `lead`              | connection | none         | none                                 | Quillfern QF-TL1, 1 m, 18 AWG copper         |
+
+Commanded keys are written only by commands (`device.operate`); sim keys only by the sim engine. Which keys a kind has is save format: a new kind needs no `schemaVersion` bump, changing an existing kind's keys does ([save-format caveats](../caveats/save-format.md#the-device-catalogue-p2-kickoff-catalogue-v1)).
+
 ## Who uses it
 
 ```mermaid
@@ -213,6 +235,7 @@ flowchart LR
     SET["SettingsService (F1.1)<br/>platform-api"]:::done
     CLI["apps/sim-cli (F1.6)<br/>run --save, replay, hash (.ctrl)"]:::done
     LVL["content/levels (F1.9)<br/>workshop.json"]:::done
+    CATL["@controls/catalog (P2)<br/>content/devices, MODEL_KINDS"]:::done
 
     SF --> UNITS
     SF --> FF
@@ -225,6 +248,7 @@ flowchart LR
     SET --> SF
     CLI --> API
     CLI --> LVL
+    CATL --> SF
 ```
 
 ## Save I/O (F1.8b)

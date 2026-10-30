@@ -1,0 +1,56 @@
+{
+  "id": "lamp.lumivane-12v-5w",
+  "version": 1,
+  "title": "12 V 5 W incandescent lamp on a base",
+  "brand": "Lumivane",
+  "modelName": "LV-12-5",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 50,
+    "heightMm": 50,
+    "depthMm": 60
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 10,
+        "y": 25,
+        "z": 12
+      }
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 40,
+        "y": 25,
+        "z": 12
+      }
+    }
+  ],
+  "model": {
+    "kind": "lamp.incandescent",
+    "params": {
+      "ratedVoltageV": 12,
+      "ratedPowerW": 5
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "unece-r37-w5w",
+      "kind": "real-world",
+      "citation": "UN ECE Regulation No. 37 (filament lamps for power-driven vehicles), category W5W: a 12 V wedge-base signal lamp whose 5 W is defined at R37's 13.5 V test voltage. Taking 5 W at 12 V (ratedPowerW at ratedVoltageV) is a game-design simplification. Only the rated values are used; the regulation's text and data sheets are not reproduced.",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
+    },
+    {
+      "id": "holder-layout",
+      "kind": "game-design",
+      "citation": "game-design: the lamp stands in a holder on a 50 × 50 mm base, 60 mm tall, with a screw terminal on each side of the base; not modelled on a product.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

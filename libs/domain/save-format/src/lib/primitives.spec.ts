@@ -5,6 +5,9 @@ import {
   CatalogId,
   CatalogRef,
   CommandId,
+  DeviceStateBag,
+  DeviceStateKey,
+  DeviceStateValue,
   Extensions,
   findProtoKey,
   FiniteNumber,
@@ -14,10 +17,12 @@ import {
   jsonDepth,
   JsonKey,
   JsonValue,
+  MAX_DEVICE_STATE_KEYS,
   MAX_JSON_VALUE_DEPTH,
   normaliseZero,
   SafeString,
   SemVer,
+  TerminalId,
 } from './primitives';
 
 function nest(depth: number): unknown {
@@ -190,5 +195,48 @@ describe('identifiers', () => {
   it('app versions are SemVer', () => {
     for (const ok of ['0.1.0', '1.0.0-rc.1', '1.2.3+build.5']) expect(SemVer.safeParse(ok).success, ok).toBe(true);
     for (const bad of ['1.0', 'v1.0.0', '1.0.0 ']) expect(SemVer.safeParse(bad).success, bad).toBe(false);
+  });
+});
+
+describe('device state and terminals (world v2, ADR 0013)', () => {
+  it('terminal ids are short ASCII words without ":"', () => {
+    for (const ok of ['pos', 'neg', 'a', '13', 'L1', 'NO-1', 'x_2', 'A'.repeat(32)]) {
+      expect(TerminalId.safeParse(ok).success, ok).toBe(true);
+    }
+    for (const bad of ['', '-a', '_a', 'a:b', 'a b', 'é', 'A'.repeat(33), '+']) {
+      expect(TerminalId.safeParse(bad).success, bad).toBe(false);
+    }
+  });
+
+  it('state keys are lower camelCase, at most 64 characters', () => {
+    for (const ok of ['closed', 'stateOfCharge', 'v2', 'a'.repeat(64)]) {
+      expect(DeviceStateKey.safeParse(ok).success, ok).toBe(true);
+    }
+    for (const bad of ['', 'Closed', 'state_of_charge', 'state-of-charge', '2v', 'a'.repeat(65)]) {
+      expect(DeviceStateKey.safeParse(bad).success, bad).toBe(false);
+    }
+  });
+
+  it('state values are finite numbers, booleans, short strings or null', () => {
+    for (const ok of [0, -1.5, 5e-324, true, false, 'tripped', 'x'.repeat(32), null]) {
+      expect(DeviceStateValue.safeParse(ok).success, String(ok)).toBe(true);
+    }
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 'x'.repeat(33), '\uD800', {}, [], undefined]) {
+      expect(DeviceStateValue.safeParse(bad).success, String(bad)).toBe(false);
+    }
+    expect(Object.is(DeviceStateValue.parse(-0), 0)).toBe(true);
+  });
+
+  it('a bag holds at most MAX_DEVICE_STATE_KEYS keys and refuses bad keys', () => {
+    const full = Object.fromEntries(Array.from({ length: MAX_DEVICE_STATE_KEYS }, (_, i) => [`k${i}`, i]));
+    expect(DeviceStateBag.safeParse(full).success).toBe(true);
+    expect(DeviceStateBag.safeParse({ ...full, extra: 1 }).success).toBe(false);
+    expect(DeviceStateBag.safeParse({ Bad: 1 }).success).toBe(false);
+    expect(DeviceStateBag.safeParse({ closed: { nested: true } }).success).toBe(false);
+    expect(DeviceStateBag.parse({ closed: true, soc: -0, mode: null })).toStrictEqual({
+      closed: true,
+      soc: 0,
+      mode: null,
+    });
   });
 });
