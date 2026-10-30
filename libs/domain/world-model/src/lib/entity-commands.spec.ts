@@ -215,19 +215,22 @@ describe('entity-reference hints (F1.3)', () => {
 });
 
 describe('world registry, replay log and cheats', () => {
-  it('holds the world, edit and view commands', () => {
+  it('holds the world (entity, lead, device), edit and view commands', () => {
     expect(
       createWorldRegistry()
         .list()
         .map((c) => `${c.id}:${c.undoable}`),
     ).toEqual([
       'console.toggle:false',
+      'device.operate:true',
       'edit.redo:false',
       'edit.undo:false',
       'entity.delete:true',
       'entity.move:true',
       'entity.place:true',
       'entity.rotate:true',
+      'lead.connect:true',
+      'lead.disconnect:true',
       'palette.open:false',
       'toolbelt.select:false',
       'view.focus:false',

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Device"
+    },
+    "control": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-zA-Z0-9]*$",
+      "title": "Control",
+      "description": "The control to set (a switch has closed)"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      ],
+      "title": "Value",
+      "description": "true or false for a switch; a number for a setpoint; an option for a selector"
+    }
+  },
+  "required": [
+    "id",
+    "control",
+    "value"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of device.operate"
+}

@@ -9,8 +9,10 @@ import { z } from 'zod';
  *
  * The form only shapes and types what the player typed; validation is the command's own schema
  * (`validateArgs`), the same one `exec`, the console and scripts use. Shapes the form can't express
- * (arrays, unions, records, recursion) make `buildArgForm` fail, and a spec builds a form for every
- * registered command, so a new command can't silently break the palette.
+ * (arrays, records, recursion, unions other than one of JSON scalar types) make `buildArgForm` fail,
+ * and a spec builds a form for every registered command, so a new command can't silently break the
+ * palette. A union of scalar types (`device.operate`'s `value`: a boolean, a number or a string) is a
+ * text field typed like a console word: `true`/`false`, a JSON number, or the text.
  */
 
 interface FieldBase {
@@ -55,12 +57,25 @@ export interface EnumField extends FieldBase {
   readonly options: readonly EnumOption[];
 }
 
+/** A JSON scalar type a scalar field accepts. */
+export type ScalarType = 'boolean' | 'number' | 'string';
+
+/**
+ * A field whose schema is a union of JSON scalar types (`z.union([z.boolean(), z.number(), z.string()])`):
+ * one text field, typed like a console word (`true`/`false` → boolean, a JSON number → number, else text).
+ */
+export interface ScalarField extends FieldBase {
+  readonly kind: 'scalar';
+  /** The types the union accepts, in schema order. */
+  readonly types: readonly ScalarType[];
+}
+
 export interface ObjectField extends FieldBase {
   readonly kind: 'object';
   readonly fields: readonly ArgField[];
 }
 
-export type ArgField = StringField | NumberField | BooleanField | EnumField | ObjectField;
+export type ArgField = StringField | NumberField | BooleanField | EnumField | ScalarField | ObjectField;
 
 /** A command's argument form: the fields of its args object (empty for argument-less commands). */
 export interface ArgForm {
@@ -177,6 +192,8 @@ function field(
   if (ref !== undefined && schema['type'] !== 'integer')
     throw new Unsupported(id, 'entity references must be integers');
 
+  const types = scalarUnion(schema['anyOf']) ?? scalarTypeList(schema['type']);
+  if (types !== null) return { ...base, kind: 'scalar', types };
   for (const keyword of ['anyOf', 'oneOf', 'allOf', 'not']) {
     if (schema[keyword] !== undefined) throw new Unsupported(id, `${keyword} (unions) is not supported`);
   }
@@ -216,6 +233,39 @@ function field(
     default:
       throw new Unsupported(id, `type ${JSON.stringify(schema['type'] ?? null)} is not supported`);
   }
+}
+
+/** Keywords a scalar union member may carry besides `type` (bounds and hints, never structure). */
+const SCALAR_KEYWORDS = new Set([
+  'type',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'minimum',
+  'maximum',
+  'title',
+  'description',
+]);
+
+/**
+ * The scalar types of an `anyOf` whose every member is a plain `boolean`, `number`, `integer` or
+ * `string` schema (no enum, const, object or nested union), or `null` if it isn't one.
+ */
+function scalarUnion(anyOf: unknown): ScalarType[] | null {
+  if (!Array.isArray(anyOf) || anyOf.length < 2) return null;
+  const types: ScalarType[] = [];
+  for (const member of anyOf) {
+    if (!isObject(member) || !Object.keys(member).every((k) => SCALAR_KEYWORDS.has(k))) return null;
+    const type = member['type'] === 'integer' ? 'number' : member['type'];
+    if (type !== 'boolean' && type !== 'number' && type !== 'string') return null;
+    if (!types.includes(type)) types.push(type);
+  }
+  return types;
+}
+
+/** The scalar types of a `type` list (`["boolean", "number", "string"]`, how Zod writes a union of bare scalars), or `null`. */
+function scalarTypeList(type: unknown): ScalarType[] | null {
+  return Array.isArray(type) ? scalarUnion(type.map((t: unknown) => ({ type: t }))) : null;
 }
 
 /** Every field in the form, depth first (objects before their children). */
@@ -267,6 +317,9 @@ export function initialValues(form: ArgForm, context: ArgFormContext): Record<st
         case 'string':
           values[f.id] = typeof value === 'string' ? value : '';
           break;
+        case 'scalar':
+          values[f.id] = value === undefined || value === null ? '' : String(value);
+          break;
       }
     }
   };
@@ -312,9 +365,22 @@ export function argsFromValues(form: ArgForm, values: ArgValues): Record<string,
         const text = typeof raw === 'string' ? raw : '';
         return text === '' && !f.required ? undefined : text;
       }
+      case 'scalar':
+        return scalarValue(f, typeof raw === 'string' ? raw.trim() : '');
     }
   };
   return build(form.fields);
+}
+
+/**
+ * A scalar field's text as the value a console word would give it, limited to the field's types:
+ * `true`/`false` → boolean, a JSON number → number, anything else → the text. Blank is "not given".
+ */
+export function scalarValue(f: ScalarField, text: string): unknown {
+  if (text === '') return undefined;
+  if (f.types.includes('boolean') && (text === 'true' || text === 'false')) return text === 'true';
+  if (f.types.includes('number') && NUMBER.test(text)) return Number(text);
+  return text;
 }
 
 /** Validation messages: per field id, plus messages that belong to no field. */
@@ -374,4 +440,10 @@ export function numberHint(f: NumberField): string {
   if (f.exclusiveMinimum !== null) parts.push(`more than ${f.exclusiveMinimum}`);
   if (f.exclusiveMaximum !== null) parts.push(`less than ${f.exclusiveMaximum}`);
   return parts.length > 0 ? `${kind}, ${parts.join(', ')}` : kind;
+}
+
+/** Short help for a scalar field: "true or false, a number, or text". */
+export function scalarHint(f: ScalarField): string {
+  const words = f.types.map((t) => ({ boolean: 'true or false', number: 'a number', string: 'text' })[t]);
+  return words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')}, or ${words.at(-1)}`;
 }

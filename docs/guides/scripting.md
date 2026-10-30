@@ -209,3 +209,16 @@ DIN rails win over the backplate behind them, and a move keeps the entity's orie
 | `This save was written by Controls … (save format N)`   | A newer build wrote it. Update, or use that build.                                              |
 | `Not a valid ZIP archive: …`, `… has an unsafe path …`  | The file is damaged or not a save. Nothing was loaded.                                          |
 | `hash mismatch: expected …`                             | The result differs from `--expect`. Replay with an older log to find the diverging command.     |
+
+## Test leads and devices (P2)
+
+Since the world v2 PRs a script or a console file can put devices out and wire them with test leads. No simulation runs yet (F2.3a adds `advance` and `probe`); the leads and the switch position are saved and replayed.
+
+```text
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id switch.tessaline-spst-toggle --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+device.operate 2 closed true
+```
+
+Terminal ids come from the device's catalogue entry (`content/devices/*.json`: the battery has `pos` and `neg`, the switch and the lamp `a` and `b`). `apps/sim-cli/scenarios/bench-leads.{console,ts}` is the full example.

@@ -5,7 +5,7 @@ import { catalogRefArb, deepFreeze, rawWorldV2Arb } from '@controls/save-format/
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
 import { worldHash } from './hash';
-import { createWorldBus, rebaseReplayLog, replayLog, toReplayLog } from './session';
+import { createWorldBus, createWorldRegistry, rebaseReplayLog, replayLog, toReplayLog } from './session';
 
 /*
  * Plan F1.2 properties, over the real world commands:
@@ -31,7 +31,10 @@ type Op =
   | { kind: 'undo' }
   | { kind: 'redo' }
   | { kind: 'view' }
-  | { kind: 'invalid' };
+  | { kind: 'invalid' }
+  | { kind: 'connect'; from: [number, number]; to: [number, number]; lead: boolean }
+  | { kind: 'disconnect'; pick: number }
+  | { kind: 'operate'; pick: number; value: boolean };
 
 const pick = fc.nat({ max: 8 });
 const placeable = BUILTIN_CATALOG.devices
@@ -62,7 +65,28 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   { weight: 1, arbitrary: fc.constant({ kind: 'redo' as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'view' as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'invalid' as const }) },
+  {
+    weight: 3,
+    arbitrary: fc.record({
+      kind: fc.constant('connect' as const),
+      from: fc.tuple(pick, fc.nat({ max: 2 })),
+      to: fc.tuple(pick, fc.nat({ max: 2 })),
+      lead: fc.boolean(),
+    }),
+  },
+  { weight: 1, arbitrary: fc.record({ kind: fc.constant('disconnect' as const), pick }) },
+  { weight: 2, arbitrary: fc.record({ kind: fc.constant('operate' as const), pick, value: fc.boolean() }) },
 );
+
+const LEAD = { id: 'lead.quillfern-test-1m', version: 1 };
+
+/** A terminal of the picked entity's device (or a made-up one, which the command refuses). */
+function pickEnd(bus: CommandBus<World>, [entityIndex, terminalIndex]: [number, number]) {
+  const entity = pickId(bus, entityIndex);
+  const found = bus.state.entities.find((e) => e.id === entity);
+  const terminals = (found && BUILTIN_CATALOG.device(found.ref)?.terminals) || [];
+  return { entity, terminal: terminals[terminalIndex]?.id ?? 'a' };
+}
 
 const opsArb = fc.array(opArb, { maxLength: 25 });
 const worldArb = rawWorldV2Arb.map((raw) => World.parse(raw));
@@ -97,6 +121,21 @@ function run(bus: CommandBus<World>, op: Op): void {
       return;
     case 'invalid':
       bus.exec('entity.move', { id: 1, positionMm: { x: 0.25, y: 0, z: 0 } });
+      return;
+    case 'connect':
+      bus.exec('lead.connect', {
+        ref: op.lead ? LEAD : { id: 'prop.crate', version: 1 },
+        a: pickEnd(bus, op.from),
+        b: pickEnd(bus, op.to),
+      });
+      return;
+    case 'disconnect': {
+      const connections = bus.state.connections;
+      bus.exec('lead.disconnect', { id: op.pick < connections.length ? connections[op.pick].id : 99 + op.pick });
+      return;
+    }
+    case 'operate':
+      bus.exec('device.operate', { id: pickId(bus, op.pick), control: 'closed', value: op.value });
       return;
   }
 }
@@ -166,17 +205,23 @@ describe('world command properties', () => {
   });
 
   it('invert ∘ apply is the identity (and redo re-applies) for every undoable command', () => {
-    const undoable = entityCommands().filter((def) => def.undoable);
-    expect(undoable.map((d) => d.id)).toEqual(['entity.place', 'entity.move', 'entity.rotate', 'entity.delete']);
+    const undoable = createWorldRegistry()
+      .list()
+      .filter((def) => def.undoable);
+    expect(undoable.map((d) => d.id).sort()).toEqual(
+      [...entityCommands().map((d) => d.id), 'lead.connect', 'lead.disconnect', 'device.operate'].sort(),
+    );
     fc.assert(
-      fc.property(worldArb, opArb, (world, op) => {
-        deepFreeze(world);
+      fc.property(worldArb, opsArb, opArb, (initial, prefix, op) => {
+        // A prefix first, so connect, disconnect and operate find devices and leads to act on.
+        const setup = createWorldBus(initial);
+        prefix.forEach((p) => run(setup, p));
+        const world = deepFreeze(setup.state);
         const probe = createWorldBus(world);
         run(probe, op);
         const entry = probe.entries[0];
-        if (!entry || !entry.id.startsWith('entity.')) return; // not a world command, or it failed
-        const def = undoable.find((d) => d.id === entry.id);
-        if (!def) throw new Error(`no def for ${entry.id}`);
+        const def = entry && undoable.find((d) => d.id === entry.id);
+        if (!entry || !def) return; // not an undoable world command, or it failed
         const result = def.run({ state: world, seq: 0, tick: 0, canUndo: false, canRedo: false }, entry.args);
         if (!result.ok || !('change' in result) || !result.change) throw new Error('expected a change');
         const applied = result.change.apply(world);

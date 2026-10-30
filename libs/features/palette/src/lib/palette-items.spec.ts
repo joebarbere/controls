@@ -11,10 +11,13 @@ describe('paletteItems', () => {
   it('lists every command except the palette itself, enabled first, then by category and title', () => {
     const items = paletteItems(registry, idle, '', []);
     expect(ids(items)).toEqual([
+      'device.operate',
       'entity.delete',
       'entity.move',
       'entity.place',
       'entity.rotate',
+      'lead.connect', // Lead, by title: Connect a test lead, Disconnect a test lead
+      'lead.disconnect',
       'toolbelt.select',
       'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',
@@ -37,7 +40,7 @@ describe('paletteItems', () => {
 
   it('puts recents first, most recent first, when there is no query', () => {
     const items = paletteItems(registry, idle, '', ['view.resetLayout', 'entity.move', 'unknown.command']);
-    expect(ids(items).slice(0, 3)).toEqual(['view.resetLayout', 'entity.move', 'entity.delete']);
+    expect(ids(items).slice(0, 3)).toEqual(['view.resetLayout', 'entity.move', 'device.operate']);
     expect(items[0].recentRank).toBe(0);
     expect(items[2].recentRank).toBe(-1);
   });

@@ -23,6 +23,11 @@ const FOUR_SURFACE_HASH = 'ebcb3178a334e43d69756cecca28efe0905c95ea1a2b8b628b172
  * three together.
  */
 const PALETTE_PLACE_UNDO_HASH = '34a83dc825c1e6b934132ca1f766a36f895c173ecfbc73274d197058b21ba780';
+/**
+ * The bench-leads scenario (P2 kickoff, world v2: test leads and `device.operate`): the same literal
+ * as BENCH_LEADS_HASH in `apps/sim-cli/src/bench-leads.spec.ts`. Change both together.
+ */
+const BENCH_LEADS_HASH = '1825e8bac7eeddaeedd7adeca6a69db204ec65c7dac0d6ab22df5a693c92cead';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';
@@ -164,6 +169,32 @@ test('run picks a console-line file and runs it (the four-surface scenario)', as
   await expect(lastOutput(page)).toHaveText('Ran 10 commands from four-surface.console.');
   await expect(log).toContainText(FOUR_SURFACE_HASH);
   expect(await sessionHash(page)).toBe(FOUR_SURFACE_HASH);
+});
+
+test('run connects test leads and operates the switch (the bench-leads scenario, world v2)', async ({ page }) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await openConsole(page);
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.type('run');
+  await page.keyboard.press('Enter');
+  const text = readFileSync(join(__dirname, '../../sim-cli/scenarios/bench-leads.console'));
+  await (await chooser).setFiles({ name: 'bench-leads.console', mimeType: 'text/plain', buffer: text });
+  await expect(lastOutput(page)).toHaveText('Ran 11 commands from bench-leads.console.');
+  expect(await sessionHash(page)).toBe(BENCH_LEADS_HASH);
+  expect(await loggedIds(page)).toEqual([
+    'entity.place',
+    'entity.place',
+    'entity.place',
+    'lead.connect',
+    'lead.connect',
+    'lead.connect',
+    'device.operate',
+    'lead.disconnect',
+    'edit.undo',
+    'device.operate',
+    'edit.undo',
+  ]);
 });
 
 test('typing the palette scenario into the console reaches the palette path hash (F1.3 cross-check)', async ({
