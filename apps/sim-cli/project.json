@@ -14,7 +14,20 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": ["default", "^production", "{workspaceRoot}/eslint.config.mjs", "{workspaceRoot}/tsconfig.base.json"]
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/eslint.config.mjs",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{workspaceRoot}/apps/*/project.json",
+        "{workspaceRoot}/libs/**/project.json"
+      ]
+    },
+    "bench": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": false,
+      "options": { "command": "node dist/apps/sim-cli/main.mjs bench" }
     },
     "typecheck": {
       "executor": "nx:run-commands",

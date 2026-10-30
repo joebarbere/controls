@@ -1,0 +1,25 @@
+{
+  "//": "The sim worker (type:worker) runs in a module Web Worker: `webworker` lib, no `dom` and no ambient `node` types, so `window`, `document` and Node globals fail typecheck. The spec config adds `node` and Vitest types.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2022", "webworker"],
+    "types": [],
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "importHelpers": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true
+  },
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
+}

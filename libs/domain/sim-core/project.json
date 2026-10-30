@@ -1,0 +1,17 @@
+{
+  "name": "sim-core",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/sim-core/src",
+  "projectType": "library",
+  "tags": ["type:domain"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/domain/sim-core/tsconfig.lib.json --noEmit && tsc -p libs/domain/sim-core/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

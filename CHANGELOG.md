@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Developer: P2 boundary and gate hardening (kickoff step 6). Three empty `type:domain` libs for the circuit engine, `@controls/sim-core`, `@controls/sim-protocol` and `@controls/catalog`, and `@controls/sim-worker` under a new `type:worker` tag that may depend only on domain libs (nothing but an app may depend on it; the renderer and features read snapshot types from `sim-protocol`). The determinism lint now covers `libs/sim-worker` except its `src/lib/pacing/` module. A new lint (decision D6; ADR 0014, to be written in F2.1) bans engine-dependent `Math` functions (`exp`, `log*`, `pow`, trigonometric and hyperbolic functions, `hypot`, `cbrt`) and `**` in `sim-core` source, so the engine gives byte-identical results in Node and Chromium. `pnpm sim bench` runs performance cases (warm-up, then the median of N runs) and prints a JSON report, exiting 1 when a case is over budget or not deterministic; the Nx `bench` target runs it from the built bundle as part of `pnpm verify`. For now it has one placeholder case with no budget; F2.7 adds the budgeted ones. Each new rule is proven to fire by `apps/sim-cli/src/lint-boundary.spec.ts` and `lint-determinism.spec.ts`.
+
 ### Fixed
 
 - Smaller installers: the desktop app no longer packs about 31 MB of unused `node_modules` (Angular, three, zod, CodeMirror and others, already bundled into the renderer) into `app.asar`. `app.asar` drops from 34.3 MB to 2.9 MB and the Linux AppImage from 132.1 MB to 126.2 MB. electron-builder also stops running a native-module rebuild on every package.

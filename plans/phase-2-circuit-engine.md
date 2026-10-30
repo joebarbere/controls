@@ -109,7 +109,7 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
    - `crossOriginIsolated` is true inside the worker.
 
 5. [ ] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections.
-6. [ ] **Boundary and gate hardening PR** (`test-engineer`). Each rule is proven to fire, as in P1:
+6. [x] **Boundary and gate hardening PR** (`test-engineer`). Each rule is proven to fire, as in P1:
    - new libs `libs/domain/sim-core`, `libs/domain/sim-protocol` and `libs/domain/catalog`, all `type:domain`;
    - `libs/sim-worker` with a new `type:worker` tag that may depend only on `type:domain`;
    - `type:rendering` and `type:feature` read snapshot types from `@controls/sim-protocol`, never from `sim-worker`;
