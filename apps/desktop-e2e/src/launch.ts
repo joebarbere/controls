@@ -86,7 +86,9 @@ export async function launchControls(options: LaunchOptions = {}): Promise<Launc
     env: env(userDataDir),
     stdio: 'ignore',
   });
-  const browser = await connectWithRetry(`http://127.0.0.1:${port}`);
+  const endpoint = `http://127.0.0.1:${port}`;
+  await waitForAppTarget(endpoint, child);
+  const browser = await connectWithRetry(endpoint);
   const window = captureConsole(await findAppPage(browser.contexts()));
   return {
     window,
@@ -98,11 +100,34 @@ export async function launchControls(options: LaunchOptions = {}): Promise<Launc
   };
 }
 
-async function connectWithRetry(endpoint: string, timeoutMs = 30_000) {
+/**
+ * Waits until the DevTools endpoint lists the game's page, so Playwright attaches to a started app.
+ * Attaching while the app is still creating its window and registering `app://` sometimes never
+ * completes: the WebSocket connects, then `connectOverCDP` hangs until its timeout (release run for
+ * v0.2.0, macOS and Linux). `/json/list` is plain HTTP and attaches to nothing.
+ */
+async function waitForAppTarget(endpoint: string, child: ChildProcess, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (child.exitCode !== null || child.signalCode !== null)
+      throw new Error(`Controls exited during startup (${child.exitCode ?? child.signalCode})`);
+    try {
+      const targets = (await (await fetch(`${endpoint}/json/list`)).json()) as { type: string; url: string }[];
+      if (targets.some((t) => t.type === 'page' && t.url.startsWith('app://game/'))) return;
+    } catch {
+      // Not listening yet.
+    }
+    if (Date.now() > deadline) throw new Error(`Controls never listed its page at ${endpoint}/json/list`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+/** Attaches over CDP. Each attempt has its own timeout, so one hung attach can't use the whole budget. */
+async function connectWithRetry(endpoint: string, timeoutMs = 30_000, attemptMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      return await chromium.connectOverCDP(endpoint);
+      return await chromium.connectOverCDP(endpoint, { timeout: attemptMs });
     } catch (error) {
       if (Date.now() > deadline) throw error;
       await new Promise((resolve) => setTimeout(resolve, 250));
