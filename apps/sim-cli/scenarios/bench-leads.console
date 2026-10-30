@@ -1,0 +1,15 @@
+# P2 kickoff (world v2): put the bench demo's devices out, join them with three test leads and
+# operate the switch, with undo on a lead and on the switch. Same as bench-leads.ts.
+#   pnpm sim run apps/sim-cli/scenarios/bench-leads.console --world content/levels/workshop.json
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id switch.tessaline-spst-toggle --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 3 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal b --b.entity 1 --b.terminal neg
+device.operate 2 closed true    # close the switch
+lead.disconnect 2
+edit.undo                       # lead 2 comes back with the same id
+device.operate 2 closed false   # open it
+edit.undo                       # closed again
+world.hash

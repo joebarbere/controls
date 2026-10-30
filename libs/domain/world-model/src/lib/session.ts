@@ -9,7 +9,9 @@ import {
 } from '@controls/commands';
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { createReplayLog, type ReplayLog } from '@controls/save-format';
+import { deviceCommands } from './device-commands';
 import { entityCommands } from './entity-commands';
+import { leadCommands } from './lead-commands';
 import { worldHash } from './hash';
 import type { World } from './types';
 
@@ -19,7 +21,8 @@ export interface WorldRegistryOptions {
 }
 
 /**
- * A registry holding every command a replay log can contain: the world commands, `edit.undo` /
+ * A registry holding every command a replay log can contain: the world commands (`entity.*`,
+ * `lead.*`, `device.operate`), `edit.undo` /
  * `edit.redo` and the declared view commands (including the viewport's `view.mode` / `view.focus`).
  * Headless replay, the sim worker's mirror bus and the UI all start from this, so they agree on every
  * id and argument schema. Hosts may register more commands on top.
@@ -28,6 +31,8 @@ export function createWorldRegistry(options: WorldRegistryOptions = {}): Command
   const catalog = options.catalog ?? BUILTIN_CATALOG;
   return new CommandRegistry<World>()
     .registerAll(entityCommands(catalog))
+    .registerAll(leadCommands(catalog))
+    .registerAll(deviceCommands(catalog))
     .registerAll(editCommands<World>())
     .registerAll(viewCommands<World>())
     .registerAll(viewportCommands<World>());

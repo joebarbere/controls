@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "ref": {
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "positionMm": {
+      "$ref": "#/$defs/PositionMmV1"
+    },
+    "orientationMdeg": {
+      "default": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "$ref": "#/$defs/OrientationMdegV1"
+    }
+  },
+  "required": [
+    "ref",
+    "positionMm",
+    "orientationMdeg"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "OrientationMdegV1": {
+      "type": "object",
+      "properties": {
+        "yaw": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "pitch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "roll": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        }
+      },
+      "required": [
+        "yaw",
+        "pitch",
+        "roll"
+      ],
+      "additionalProperties": false,
+      "description": "Intrinsic Y-X-Z (yaw, pitch, roll) angles in integer millidegrees, each in [0, 360000)."
+    }
+  },
+  "title": "Arguments of entity.place"
+}

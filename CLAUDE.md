@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 2 (Circuit engine) kickoff in progress, 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Next: the remaining kickoff steps (ADR 0011 sim worker contract by an agent team, world v2 + test leads + catalogue v1, boundary hardening, realism audit of P1 constants), then F2.1. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) kickoff in progress, 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Kickoff steps 1–4, 6 and 7 are done (ADR 0011 accepted); step 5, world v2 + test leads + catalogue v1 (ADR 0013), is in review as a stack of three PRs. Next: F2.1 (netlist compiler). Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

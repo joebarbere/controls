@@ -78,6 +78,16 @@ describe('PaletteArgForm', () => {
     }
   });
 
+  it('shows a scalar union (device.operate value) as one text field with a typing hint', async () => {
+    const form = formOf(z.strictObject({ value: z.union([z.boolean(), z.number(), z.string()]) }));
+    const { host, user } = await mount(form);
+    const field = screen.getByRole('textbox', { name: 'Value' });
+    expect(field.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('true or false, a number, or text')).toBeTruthy();
+    await user.type(field, 'true');
+    expect(host.values()).toStrictEqual({ value: 'true' });
+  });
+
   it('renders each kind of control with its hints and edits values', async () => {
     const form = formOf(
       z.strictObject({

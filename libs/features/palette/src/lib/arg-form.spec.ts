@@ -10,6 +10,9 @@ import {
   initialValues,
   numberHint,
   type NumberField,
+  scalarHint,
+  type ScalarField,
+  scalarValue,
   validateArgs,
 } from './arg-form';
 
@@ -71,7 +74,9 @@ describe('buildArgForm', () => {
 
   it.each([
     ['an array', z.strictObject({ ids: z.array(z.int()) }), 'ids'],
-    ['a union', z.strictObject({ v: z.union([z.string(), z.int()]) }), 'v'],
+    ['a union with an object', z.strictObject({ v: z.union([z.string(), z.strictObject({ a: z.int() })]) }), 'v'],
+    ['a union with an enum', z.strictObject({ v: z.union([z.boolean(), z.enum(['a', 'b'])]) }), 'v'],
+    ['a union with null', z.strictObject({ v: z.union([z.string(), z.null()]) }), 'v'],
     ['a record', z.strictObject({ bag: z.record(z.string(), z.int()) }), 'bag'],
     ['a nullable', z.strictObject({ v: z.int().nullable() }), 'v'],
     ['an object with open keys', z.looseObject({ a: z.int() }), ''],
@@ -211,6 +216,44 @@ describe('values and validation', () => {
   });
 });
 
+describe('scalar unions (a boolean, a number or text in one field)', () => {
+  const Operate = z.strictObject({ value: z.union([z.boolean(), z.number(), z.string().min(1).max(32)]) });
+
+  it('build one text field typed like a console word', () => {
+    const [field] = formOf(Operate).fields as ScalarField[];
+    expect(field).toMatchObject({ kind: 'scalar', types: ['boolean', 'number', 'string'], required: true });
+    expect(initialValues(formOf(Operate), none)).toStrictEqual({ value: '' });
+    const typed = (text: string) => argsFromValues(formOf(Operate), { value: text });
+    expect(typed('true')).toStrictEqual({ value: true });
+    expect(typed(' false ')).toStrictEqual({ value: false });
+    expect(typed('12.5')).toStrictEqual({ value: 12.5 });
+    expect(typed('on')).toStrictEqual({ value: 'on' });
+    expect(typed('')).toStrictEqual({});
+    expect(validateArgs(Operate, formOf(Operate), typed(''))).toMatchObject({
+      ok: false,
+      errors: { fields: { value: ['Required'] } },
+    });
+  });
+
+  it('also reads a bare type list (Zod writes a union of unconstrained scalars that way)', () => {
+    const [field] = formOf(z.strictObject({ v: z.union([z.boolean(), z.string()]) })).fields as ScalarField[];
+    expect(field).toMatchObject({ kind: 'scalar', types: ['boolean', 'string'] });
+  });
+
+  it('only types a word as a type the union has, and keeps a default', () => {
+    const textOrNumber = formOf(z.strictObject({ v: z.union([z.int(), z.string()]).default(3) }));
+    const [field] = textOrNumber.fields as ScalarField[];
+    expect(field.types).toStrictEqual(['number', 'string']);
+    expect(initialValues(textOrNumber, none)).toStrictEqual({ v: '3' });
+    expect(scalarValue(field, 'true')).toBe('true');
+    expect(scalarValue(field, '07')).toBe('07'); // not the JSON-number grammar
+    expect(scalarHint(field)).toBe('a number, or text');
+    expect(scalarHint({ ...field, types: ['boolean'] })).toBe('true or false');
+    const [three] = formOf(Operate).fields as ScalarField[];
+    expect(scalarHint(three)).toBe('true or false, a number, or text');
+  });
+});
+
 describe('every registered command', () => {
   // The palette must be able to run any command a player or a script can. A command whose args
   // the form can't express fails here, at registration time, not in front of a player.
@@ -230,7 +273,14 @@ describe('every registered command', () => {
       })
       .filter(([, f]) => f.kind === 'number' && f.ref === 'entity')
       .map(([id, f]) => `${id}:${f.id}`);
-    expect(ids).toEqual(['entity.delete:id', 'entity.move:id', 'entity.rotate:id']);
+    expect(ids).toEqual([
+      'device.operate:id',
+      'entity.delete:id',
+      'entity.move:id',
+      'entity.rotate:id',
+      'lead.connect:a.entity',
+      'lead.connect:b.entity',
+    ]);
   });
 
   it('entity.place fills its default orientation', () => {

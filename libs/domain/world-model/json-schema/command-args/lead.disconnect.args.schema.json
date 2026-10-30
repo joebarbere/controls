@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "title": "Lead"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of lead.disconnect"
+}

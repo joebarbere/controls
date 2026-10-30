@@ -132,7 +132,7 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
      - **Worker violations are only visible inside the worker.** They fire on the worker's own scope, so tests need a listener there.
      - **Playwright can see the worker.** `page.workers()` works on both the `_electron` and CDP launch paths.
 
-5. [ ] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections.
+5. [x] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections. _Landed as a stack of three PRs (catalogue v1, world v2 schemas, commands); `electrical-realism-reviewer` and `sim-engine-engineer` reviews pending._
 6. [x] **Boundary and gate hardening PR** (`test-engineer`). Each rule is proven to fire, as in P1:
    - new libs `libs/domain/sim-core`, `libs/domain/sim-protocol` and `libs/domain/catalog`, all `type:domain`;
    - `libs/sim-worker` with a new `type:worker` tag that may depend only on `type:domain`;
@@ -246,7 +246,7 @@ Acceptance:
 - [x] `content/levels/workshop.json` is rewritten as v2 in canonical form (`levels.spec.ts`). Every pinned golden hash is re-pinned in one change, and the CHANGELOG says so:
   - `WORKSHOP_HASH`, `FOUR_SURFACE_HASH`, `PHASE_ACCEPTANCE_HASH`, `PALETTE_PLACE_UNDO_HASH`, `CONSOLE_PLACE_UNDO_HASH`;
   - the Node and Chromium hash goldens.
-- [ ] Commands in `world-model`. Their ids and argument shapes are save format, so `save-format-guardian` reviews them:
+- [x] Commands in `world-model`. Their ids and argument shapes are save format, so `save-format-guardian` reviews them:
   - `lead.connect {ref, a, b}`: undoable. It refuses unknown entities, unknown terminals, `a == b` and duplicate leads.
   - `lead.disconnect {id}`: undoable, and undo restores the same id.
   - `device.operate {id, control, value}`: undoable, and checked against the device's controls in `run`. It **never reads sim-owned state** (ADR 0011).
@@ -254,7 +254,7 @@ Acceptance:
   - `@controls/catalog` holds the device-definition Zod schema: identity, fictional brand and model, category, terminals `{ id, label, positionMm }`, model `{ kind, params }`, controls and `sources[]`.
   - `content/devices/*.json` holds the P2 devices plus one test-lead type. Lead resistance is computed from resistivity × length ÷ area with a temperature coefficient, never taken from NEC tables.
   - `catalogVersion` 1 goes in the manifest and in `docs/history.md`.
-- [ ] **Requirements from [ADR 0011](../docs/decisions/0011-sim-worker-contract.md)** (its Consequences give the detail; ADR 0013 records them):
+- [x] **Requirements from [ADR 0011](../docs/decisions/0011-sim-worker-contract.md)** (its Consequences give the detail; ADR 0013 records them):
   - two state bags: `EntityV2.state` (commanded) and `EntityV2.sim` (sim-owned, written only by `materialiseWorld`), with keys matching `^[a-z][a-zA-Z0-9]*$` (at most 64 characters) and enum strings `SafeString` (at most 32); a property test that every change preserves each `sim` bag except on insert and remove;
   - `MODEL_KINDS` in `@controls/catalog` (owner, Zod schema and initial value per key): a new kind is no bump, changing a kind's keys is a `schemaVersion` bump; load checks both bags against it, with a new `invalid-device-state` load error;
   - `WorldV2.sim: { lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] } | null`, in `world.hash`; `-0` normalised and finite numbers only, with an `Object.is` round-trip property;
@@ -266,7 +266,7 @@ Acceptance:
   The `EntityV2.state` bullet above is superseded by the two bags.
 
 - [x] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
-- [ ] Palette forms render every new command (the every-command spec). Console lines and a TS script can connect a lead and operate a switch.
+- [x] Palette forms render every new command (the every-command spec). Console lines and a TS script can connect a lead and operate a switch.
 
 ### F2.1 Netlist compiler
 
@@ -547,7 +547,7 @@ Numbers are assigned in the order the ADRs land.
 | ------- | ------------------------------------------------- | ------------------------------------------ |
 | —       | Kickoff: agents, decisions, boundary PR, audit    | 🚧 In progress (agents and decisions done) |
 | —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted                                |
-| —       | World document v2 + leads + catalogue v1          | 🚧 In progress (three stacked PRs)         |
+| —       | World document v2 + leads + catalogue v1          | 🔍 In review (three stacked PRs)           |
 | F2.1    | Netlist compiler                                  | ⬜ Not started                             |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started                             |
 | F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started                             |

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "ref": {
+      "description": "A test lead in the catalogue (lead.quillfern-test-1m)",
+      "title": "Lead type",
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "a": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-controls-ref": "entity",
+          "title": "Entity"
+        },
+        "terminal": {
+          "description": "A terminal id of that device (pos, neg, a, b, …)",
+          "title": "Terminal",
+          "$ref": "#/$defs/TerminalId"
+        }
+      },
+      "required": [
+        "entity",
+        "terminal"
+      ],
+      "additionalProperties": false,
+      "title": "From"
+    },
+    "b": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-controls-ref": "entity",
+          "title": "Entity"
+        },
+        "terminal": {
+          "description": "A terminal id of that device (pos, neg, a, b, …)",
+          "title": "Terminal",
+          "$ref": "#/$defs/TerminalId"
+        }
+      },
+      "required": [
+        "entity",
+        "terminal"
+      ],
+      "additionalProperties": false,
+      "title": "To"
+    }
+  },
+  "required": [
+    "ref",
+    "a",
+    "b"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    }
+  },
+  "title": "Arguments of lead.connect"
+}

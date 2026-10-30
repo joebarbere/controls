@@ -9,6 +9,7 @@ import {
   isOptionalObject,
   numberHint,
   type NumberField,
+  scalarHint,
 } from './arg-form';
 
 let nextFormId = 0;
@@ -92,6 +93,7 @@ export class PaletteArgForm {
         parts.push(selected ? `Selected: ${selected.id} (${selected.label})` : 'Nothing selected');
       }
     }
+    if (field.kind === 'scalar') parts.push(scalarHint(field));
     if (field.description) parts.push(field.description);
     if (!field.required && field.defaultValue === undefined && field.kind !== 'object') parts.push('Optional');
     return parts.length > 0 ? parts.join('. ') : null;

@@ -81,14 +81,17 @@ flowchart LR
 
 ## World commands
 
-| Id              | Args                                                   | Apply                                                   | Invert                                 |
-| --------------- | ------------------------------------------------------ | ------------------------------------------------------- | -------------------------------------- |
-| `entity.place`  | `ref`, `positionMm`, `orientationMdeg` (default zeros) | appends an entity with id `nextEntityId`, increments it | removes it and restores `nextEntityId` |
-| `entity.move`   | `id`, `positionMm` (absolute)                          | sets the position                                       | restores the old position              |
-| `entity.rotate` | `id`, `deltaMdeg` (each in ±359 999)                   | adds the delta per axis modulo 360 000                  | subtracts it                           |
-| `entity.delete` | `id`                                                   | removes the entity; `nextEntityId` unchanged            | reinserts it, same id, in sorted order |
+| Id                | Args                                                   | Apply                                                              | Invert                                                |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| `entity.place`    | `ref`, `positionMm`, `orientationMdeg` (default zeros) | appends an entity with id `nextEntityId`, increments it            | removes it and restores `nextEntityId`                |
+| `entity.move`     | `id`, `positionMm` (absolute)                          | sets the position                                                  | restores the old position                             |
+| `entity.rotate`   | `id`, `deltaMdeg` (each in ±359 999)                   | adds the delta per axis modulo 360 000                             | subtracts it                                          |
+| `entity.delete`   | `id`                                                   | removes the entity and its leads; `nextEntityId` unchanged         | reinserts it and its leads, same ids, in sorted order |
+| `lead.connect`    | `ref` (a lead), `a`, `b` (`{ entity, terminal }`)      | appends a connection with id `nextConnectionId`, increments it     | removes it and restores `nextConnectionId`            |
+| `lead.disconnect` | `id`                                                   | removes the connection; `nextConnectionId` unchanged               | reinserts it, same id, in sorted order                |
+| `device.operate`  | `id`, `control`, `value` (boolean, number or text)     | sets the commanded state key `control` (never reads the `sim` bag) | restores the previous `state` bag                     |
 
-Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`.
+Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 
 ## View commands
 

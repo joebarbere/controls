@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "speed": {
+      "type": "number",
+      "enum": [
+        0,
+        1,
+        10,
+        60
+      ],
+      "title": "Speed",
+      "description": "0 pauses; 1, 10 or 60 runs at that multiple of real time"
+    }
+  },
+  "required": [
+    "speed"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of sim.setSpeed"
+}
