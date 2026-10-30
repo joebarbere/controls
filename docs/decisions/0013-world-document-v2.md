@@ -26,7 +26,7 @@ P1's world (`schemaVersion` 1, ADR 0007) is a list of props. P2's simulator need
   Both are records of named values: keys `^[a-z][a-zA-Z0-9]*$` (at most 64 characters, at most 64 keys), values a finite number (`-0` normalised), a boolean, a `SafeString` of at most 32 characters, or `null` for absent (never a missing key). The world schema checks only this generic shape (`DeviceStateBag` in `primitives.ts`), so **a new device kind never needs a `schemaVersion` bump**.
 
 - **`ConnectionV2`** `{ id, ref, a, b, extensions }`: a two-ended connection between terminals, `TerminalRef` `{ entity, terminal }`. `ref` names a catalogue entry of a connection kind (P2: the test lead). P3's wires arrive in world v3, alongside leads, not instead of them. **Connections have no state bags in v2**: a lead's own state (its conductor temperature, a termination's quality) arrives with world v3 in P3. A connection with an end on an entity the netlist leaves out (an unknown ref) is left out too.
-- **`sim`**: the solution record `{ lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] }` or `null`. Nodes and branches are interleaved `re, im` pairs in F2.1's order, which is canonical: a pure function of the world, independent of the incremental-recompile history. It is in `world.hash` (decision U3). The engine checks `topologyHash` and the lengths against the compiled netlist when it starts; a mismatch is `start-failed`, never a silent re-solve (F2.3a). `null` means "not solved since the session started", **and a world whose netlist is empty exports `sim: null`**, never an empty record.
+- **`sim`**: the solution record `{ lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] }` or `null`. Nodes and branches are interleaved `re, im` pairs in F2.1's order, which is canonical: a pure function of the world, independent of the incremental-recompile history. It is in `world.hash` (decision U3). The engine checks `topologyHash` and the lengths against the compiled netlist when it starts; a mismatch is `start-failed`, never a silent re-solve (F2.3a). `null` means "not solved since the session started", **and a world whose netlist is empty exports `sim: null`**, never an empty record. "Empty" means exactly `isEmptyNetlist(netlist)`: the netlist has no nodes (`nodes.length === 0`). The order and the hash are defined in [Solution order and `topologyHash`](#solution-order-and-topologyhash).
 
 Schema invariants (refinements, not in the JSON Schema): entities, fixtures and connections are each sorted by strictly ascending id; entity ids are below `nextEntityId` and connection ids below `nextConnectionId`; each connection's ends are entities that exist and two different terminals (two terminals of one entity are allowed: a jumper); `sim.lastSolveTick ≤ tick`, and `nodes` and `branches` have even lengths. So each world still has one serialised form, and nothing dangles.
 
@@ -40,6 +40,26 @@ The same rule as entity ids (ADR 0007), with its own counter:
 - a separate counter, not `nextEntityId`, so connecting leads never shifts the ids a script's later `entity.place` calls get.
 
 So an id can be reused only after the connection that held it was undone out of existence, and "undo everything returns the initial hash" still holds for sessions in which no time passed.
+
+### Solution order and `topologyHash`
+
+Added with F2.1 (`netlist/compile.ts` and `netlist/hash.ts` in `@controls/sim-core`), on `save-format-guardian`'s review.
+
+**Canonical order.** The order of `sim.nodes` and `sim.branches` (and of the snapshot payload) is a pure function of the world, never of the edit or recompile history:
+
+- terminals are ordered by entity id (numerically), then terminal id (UTF-16 code units);
+- a node is a set of terminals joined ideally (union-find over closed switches and terminals a device joins internally); nodes are numbered by their smallest member terminal;
+- branches are every netlisted entity's elements (entity id, then part name in code units), then every netlisted connection by id, exactly one branch each;
+- islands are connected components over the branches, numbered by their smallest node.
+
+**What `topologyHash` covers.** SHA-256 (the pure implementation in `@controls/world-model`) over a canonical byte encoding, lower-case hex. It covers:
+
+- the partition: every node's member terminals `(entity, terminal)`, in node order;
+- per branch, in branch order: the element ref (entity and part, or connection id), the element-kind code, the source domain (none, DC or AC), the model kind and the two end nodes.
+
+It leaves out every value (resistances, setpoints, nameplates), so a value-only change keeps the hash, and the islands, which follow from the partition and the branch ends.
+
+**Versioning.** The encoding starts with the header `CNT` and a version byte (1). Changing the encoding (a field, its order, a code table) bumps that byte and `SIM_ENGINE_VERSION` together. So does any change to a built-in `DeviceNetlistModel` or `ConnectionNetlistModel` that changes the structure it produces: its terminals, parts, joins, element kinds, source domains or `simTopologyKeys`. Either change moves every persisted `topologyHash`. `hash.spec.ts` pins one golden per built-in model kind, so such a change can't land silently.
 
 ### Materialisation
 

@@ -46,19 +46,23 @@
 
 ## Simulation
 
-| Term                 | Meaning                                                                                                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **gmin**             | A tiny conductance from every node to ground so islanded sections still produce a solvable matrix.                                                               |
-| **Island**           | A set of nodes connected to each other but not to the rest of the circuit. DC and AC islands are solved separately.                                              |
-| **MNA**              | Modified nodal analysis: the standard way to assemble circuit equations into a matrix. Controls uses real-valued MNA for DC and complex phasor MNA for 60 Hz AC. |
-| **Netlist**          | The electrical graph (nodes and branches) compiled from the physical as-built wiring.                                                                            |
-| **Netlist compiler** | The `sim-core` step that union-finds connected terminals and turns conductors and terminations into impedance stamps (P2).                                       |
-| **Oracle test**      | A test comparing `sim-core` results with ngspice on random small circuits (P2).                                                                                  |
-| **Phasor**           | A complex number representing a sinusoid's magnitude and phase at a fixed frequency. Lets the AC solver skip time-stepping.                                      |
-| **Quasi-static**     | Solving steady-state phasors at each update rather than a full time-domain transient. See [ADR 0002](decisions/0002-simulation-architecture.md).                 |
-| **Stamp**            | A device's contribution to the MNA matrix. Meters are stamped too, which is why readings are truthful.                                                           |
-| **Tick**             | One integer step of sim time (1 kHz). Sim time is always an integer tick count for determinism.                                                                  |
-| **Union-find**       | A disjoint-set structure used to merge terminals joined by wires and closed contacts before matrix assembly.                                                     |
+| Term                 | Meaning                                                                                                                                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **gmin**             | A tiny conductance from every node to ground so islanded sections still produce a solvable matrix.                                                                                                                                              |
+| **Branch**           | One element between two nodes in the netlist: a lead, a battery cell, a lamp filament. Each lead is exactly one branch; a closed switch is a join, not a branch. Numbered entity elements first (entity id, then part), then connections by id. |
+| **Ideal join**       | Terminals a device connects with zero resistance (a closed switch's two terminals): merged into one node by union-find, with no branch.                                                                                                         |
+| **Island**           | A set of nodes connected to each other but not to the rest of the circuit, solved separately. Classified by its sources: `dc`, `ac`, `empty` (unpowered) or `mixed` (reported as a diagnostic in P2). Numbered by its smallest node.            |
+| **MNA**              | Modified nodal analysis: the standard way to assemble circuit equations into a matrix. Controls uses real-valued MNA for DC and complex phasor MNA for 60 Hz AC.                                                                                |
+| **Netlist**          | The electrical graph (nodes and branches) compiled from the physical as-built wiring.                                                                                                                                                           |
+| **Netlist compiler** | `compileNetlist(world, catalog)` in `sim-core` (F2.1): turns entities, catalogue terminals, connections and device state into nodes, branches and islands, union-finding ideal joins. `NetlistCompiler` recompiles incrementally.               |
+| **Node**             | A set of terminals joined ideally, one voltage in the solver. Numbered by its smallest member terminal (entity id, then terminal id), so the numbering is a pure function of the world.                                                         |
+| **Oracle test**      | A test comparing `sim-core` results with ngspice on random small circuits (P2).                                                                                                                                                                 |
+| **Phasor**           | A complex number representing a sinusoid's magnitude and phase at a fixed frequency. Lets the AC solver skip time-stepping.                                                                                                                     |
+| **Quasi-static**     | Solving steady-state phasors at each update rather than a full time-domain transient. See [ADR 0002](decisions/0002-simulation-architecture.md).                                                                                                |
+| **Stamp**            | A device's contribution to the MNA matrix. Meters are stamped too, which is why readings are truthful.                                                                                                                                          |
+| **Topology hash**    | `topologyHash`: SHA-256 of a canonical byte encoding of a netlist's structure (the node partition, and each branch's element, kinds and ends), without values. Keys the factorisation cache; persisted in `WorldV2.sim` and snapshots.          |
+| **Tick**             | One integer step of sim time (1 kHz). Sim time is always an integer tick count for determinism.                                                                                                                                                 |
+| **Union-find**       | A disjoint-set structure used to merge terminals joined by wires and closed contacts before matrix assembly.                                                                                                                                    |
 
 ## Game and codebase
 
