@@ -95,6 +95,8 @@ sequenceDiagram
 
 **The console scenarios (F1.5).** `scenarios/console-place-undo.console` (place a crate, undo) is pinned to `CONSOLE_PLACE_UNDO_HASH` by `apps/sim-cli/src/console-place-undo.spec.ts`. `apps/game-e2e/src/console.spec.ts` types it into the in-game console, types the lines of `palette-place-undo.console` into a fresh session and asserts `PALETTE_PLACE_UNDO_HASH` (the console-versus-palette cross-check), and `run`s `four-surface.console` to `FOUR_SURFACE_HASH`. Opening the console (`console.toggle`) is unlogged UI chrome too.
 
+**The phase-acceptance scenario.** `scenarios/phase-acceptance.{console,ts}` is the one scenario the P1 phase acceptance runs on all four drivers: place a box and a crate on the workshop backplate, drag the box onto DIN rail 1, delete the crate, then undo, redo and undo again. `apps/game-e2e/src/phase-acceptance.spec.ts` drives it with the mouse (undo and redo on the keyboard), with the palette alone through its generated argument forms, and with the in-game console's `run` of the file; `apps/sim-cli/src/phase-acceptance.spec.ts` runs the snapping script and the console file through `sim run`, replays the script's log and a save of the run. Every driver must log exactly the file's command ids and reach `PHASE_ACCEPTANCE_HASH`.
+
 ## Reserved queries
 
 `game.probe(from, to)` (P2, meter probes on the as-built circuit) and `game.tag(path)` (P10, PLC tags) are in the `Game` type now and throw `NotAvailableError` (`code: 'not-available'`). Reserving them in the type keeps the names stable and gives a script a precise error instead of `is not a function`; implementing them later only widens their return type.
