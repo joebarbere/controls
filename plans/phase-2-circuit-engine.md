@@ -528,7 +528,7 @@ Numbers are assigned in the order the ADRs land.
 | Feature | Description                                       | Status                                     |
 | ------- | ------------------------------------------------- | ------------------------------------------ |
 | —       | Kickoff: agents, decisions, boundary PR, audit    | 🚧 In progress (agents and decisions done) |
-| —       | ADR 0011 sim worker contract (agent team)         | ⬜ Not started                             |
+| —       | ADR 0011 sim worker contract (agent team)         | 🚧 Proposed, in team review                |
 | —       | World document v2 + leads + catalogue v1          | ⬜ Not started                             |
 | F2.1    | Netlist compiler                                  | ⬜ Not started                             |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started                             |
