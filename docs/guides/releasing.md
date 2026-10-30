@@ -59,7 +59,7 @@ sequenceDiagram
 
 ## Dry run (`/release minor dry-run`)
 
-A dry run rehearses everything that can be undone and stops before anything leaves your machine. Use it for the P0 acceptance check and before the first real release of each phase. _(It hasn't been run yet: running it once is a P0 acceptance item.)_
+A dry run rehearses everything that can be undone and stops before anything leaves your machine. Use it for the P0 acceptance check and before the first real release of each phase. For packaging changes, also rehearse on CI with **Actions → release → Run workflow** (`workflow_dispatch`), which packages and smoke-tests all three OSes and uploads nothing; it was run before both v0.1.0 and v0.2.0 ([release caveats](../caveats/release.md)).
 
 1. `version-keeper` works on a throwaway branch (`release-dry-run/vX.Y.Z`): it bumps, rolls the CHANGELOG, runs `version:sync`, `check-version-sync` and `pnpm verify`, and reports the diff. **It does not commit to `main`.**
 2. `release-engineer` packages for the current OS (`pnpm package:desktop`), runs the smoke suite against the packaged binary (`CONTROLS_E2E_EXECUTABLE=… pnpm e2e:desktop`), reads the Fuses, and prints the tag and notes it **would** push.

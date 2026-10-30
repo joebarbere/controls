@@ -1,6 +1,6 @@
 # Phase 1: Game shell ("Hands on the panel")
 
-**Release:** v0.2.0 (pending) · **Status:** ✅ Features and phase-acceptance E2E complete (kickoff 2026-10-27, completed 2026-10-28); awaiting the v0.2.0 release · **Spec:** [plan §6 P1](../controls-development-plan.md#p1--game-shell-ui-commands-cameras-saveload-v020)
+**Release:** v0.2.0 · **Status:** ✅ Shipped as v0.2.0 on 2026-10-29 (kickoff 2026-10-27, features and phase-acceptance E2E completed 2026-10-28) · **Spec:** [plan §6 P1](../controls-development-plan.md#p1--game-shell-ui-commands-cameras-saveload-v020)
 
 ## Goal
 
@@ -350,7 +350,7 @@ Numbers are assigned in landing order. Planned:
 | F1.9    | Workshop level                | ✅ Done (fixtures in `WorldV1`, ADR 0007 amended)                       |
 | F1.10   | Wire-routing spike (ADR 0010) | ✅ Done (ADR only; spike branch not merged)                             |
 | —       | Phase-acceptance E2E          | ✅ Done (one scenario through mouse, palette, console and `sim-cli`)    |
-| —       | v0.2.0 release                | ⏳ Pending (`version-keeper`, then `release-engineer`)                  |
+| —       | v0.2.0 release                | ✅ Done (published 2026-10-29)                                          |
 
 ## Open follow-ups (not done in P1)
 
@@ -368,5 +368,5 @@ Known gaps carried past P1. None blocks the phase acceptance; each is picked up 
 
 1. [x] `docs-keeper` sync: README features, CHANGELOG, `docs/history.md` P1 narrative and `schemaVersion` 1.
 2. [x] `version-keeper`: `0.1.0 → 0.2.0`.
-3. [ ] `release-engineer`: package, smoke test (including new sandbox and save/load), tag on confirmation, check the draft. The user publishes.
-4. [ ] Mark P1 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). P2 kickoff writes `plans/phase-2-*.md` and creates `sim-engine-engineer` and `electrical-realism-reviewer`. P2 is one of the agent-team cases (sim ↔ worker ↔ renderer).
+3. [x] `release-engineer`: package, smoke test (including new sandbox and save/load), tag on confirmation, check the draft. The user publishes.
+4. [x] Mark P1 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). P2 kickoff writes `plans/phase-2-*.md` and creates `sim-engine-engineer` and `electrical-realism-reviewer`. P2 is one of the agent-team cases (sim ↔ worker ↔ renderer).
