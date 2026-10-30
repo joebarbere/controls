@@ -113,7 +113,8 @@ export const FIXTURE_SPECS: readonly FixtureSpec[] = [
     widthMm: 1220,
     heightMm: 1220,
     thicknessMm: 18,
-    source: 'game-design: about a 4 × 4 ft offcut of 18 mm plywood, screwed across the studs behind the backplate',
+    source:
+      'game-design: a 4 × 4 ft (1219.2 mm, rounded to 1220) offcut of nominal 3/4 in plywood (23/32 in, about 18.3 mm actual, drawn at 18 mm), screwed across the studs behind the backplate',
   },
   {
     id: 'prop.stud-wall',

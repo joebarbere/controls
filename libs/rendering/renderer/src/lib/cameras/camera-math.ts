@@ -36,7 +36,7 @@ export interface WalkConfig {
 export const DEFAULT_WALK_CONFIG: WalkConfig = {
   eyeHeightMm: 1600, // game-design: a typical adult standing eye height, rounded
   bodyRadiusMm: 250, // game-design
-  walkSpeedMps: 1.4, // game-design: brisk indoor walk
+  walkSpeedMps: 1.4, // game-design: an average adult walking pace, about 1.4 m/s
   sprintMultiplier: 2, // game-design
   lookRadiansPerPixel: 0.0022, // game-design; F1.1 settings expose look sensitivity
   invertY: false,
