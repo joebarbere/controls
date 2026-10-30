@@ -17,27 +17,29 @@ export const DIN_RAIL_TS35 = {
   widthMm: {
     valueMm: 35,
     kind: 'real-world',
-    source: 'EN 60715:2017 (IEC 60715), top-hat rail TS 35 × 7.5: overall width 35 mm',
+    source: 'IEC 60715:2017 Ed. 2.0 (adopted in Europe as EN IEC 60715), top-hat rail TS 35 × 7.5: overall width 35 mm',
   },
   heightMm: {
     valueMm: 7.5,
     kind: 'real-world',
-    source: 'EN 60715:2017 (IEC 60715), top-hat rail TS 35 × 7.5: depth 7.5 mm',
+    source: 'IEC 60715:2017 Ed. 2.0 (adopted in Europe as EN IEC 60715), top-hat rail TS 35 × 7.5: depth 7.5 mm',
   },
   crownWidthMm: {
     valueMm: 27,
     kind: 'real-world',
-    source: 'EN 60715:2017 (IEC 60715), TS 35 profile: 27 mm between the outer faces of the raised section',
+    source:
+      'IEC 60715:2017 Ed. 2.0 (adopted in Europe as EN IEC 60715), TS 35 profile: 27 mm across the outer faces of the hat walls (the web that sits on the mounting plate; the 35 mm brims stand off it)',
   },
   thicknessMm: {
     valueMm: 1,
     kind: 'real-world',
-    source: 'EN 60715:2017 (IEC 60715), TS 35 × 7.5: 1 mm sheet thickness',
+    source: 'IEC 60715:2017 Ed. 2.0 (adopted in Europe as EN IEC 60715), TS 35 × 7.5: 1 mm sheet thickness',
   },
 } as const satisfies Record<string, SourcedLength>;
 
 /**
- * Width of one module of a modular DIN-rail device (MCBs, relays, multi-pole terminal blocks). Kept
+ * Width of one module of a modular installation device (MCBs, RCDs, modular contactors and relays).
+ * Terminal blocks and slim interface relays use their own pitches and must not snap to this one. Kept
  * exact: slot `k` on a rail starts `round(k × 17.5)` mm from the rail's end, rounded once like the
  * stud layout, so 40 modules span exactly 700 mm. (Until F1.9 this was a rounded 18 mm pitch.)
  */

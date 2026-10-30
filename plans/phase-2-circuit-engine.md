@@ -116,7 +116,9 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
    - the determinism lint extended to `libs/sim-worker`, except its pacing module;
    - the D6 lint banning `Math.exp|log|pow|sin|cos|tan|atan2|hypot|cbrt` and `**` in `sim-core`;
    - an Nx `bench` target on `apps/sim-cli`, added to the `verify` script's `run-many` list. It runs the built bundle, outside coverage instrumentation, because domain tests always run with coverage (`libs/domain/vitest.domain.mts`) and that distorts timings.
-7. [ ] **First audit by `electrical-realism-reviewer`** of P1's sourced non-electrical constants: the snap constants in `libs/domain/world-model/src/lib/snap/constants.ts`, `FIXTURE_SPECS` and the prop sizes. The P1 kickoff decisions and the rendering caveats promised this. Findings are fixed in a small PR, and any value change that moves a golden hash gets a CHANGELOG note.
+7. [x] **First audit by `electrical-realism-reviewer`** of P1's sourced non-electrical constants: the snap constants in `libs/domain/world-model/src/lib/snap/constants.ts`, `FIXTURE_SPECS` and the prop sizes. The P1 kickoff decisions and the rendering caveats promised this. Findings are fixed in a small PR, and any value change that moves a golden hash gets a CHANGELOG note.
+
+   _Done 2026-10-29: approved with notes, no hard fails. All 21 sourced items check out against public data, and there is no NEC text, table value or real vendor name. The wording fixes (DIN module pitch scope, the 27 mm crown dimension, the IEC 60715 edition, plywood thickness, walking pace) landed without moving any hash. Unverified: the 27 mm crown width against the IEC 60715 annex, and whether PS 20-20 is still the current edition._
 
 ## Kickoff decisions (2026-10-29)
 
@@ -263,7 +265,7 @@ Acceptance, **part 1: dense DC**:
 
 Acceptance, **part 2: complex phasor** (needs F2.7):
 
-- [ ] Interleaved complex MNA for AC islands at the region frequency. `RegionProfile` gains its electrical fields (`frequencyHz` 60 and the nominal voltages), each with a `source`; P1 deferred them to P2.
+- [ ] Interleaved complex MNA for AC islands at the region frequency. P2 adds the `RegionProfile` type with its electrical fields (`frequencyHz` 60 and the nominal voltages), each with a `source`, and brings it to `electrical-realism-reviewer`. P1 never created the type: only `RegionId` exists (`save-format` `primitives.ts`), as the kickoff realism audit found.
 - [ ] Complex R, L and C impedance stamps, and phasor sources whose angles are exact constants: 0°, 180° and ±120° (from `cos = -0.5` and `sin = sqrt(3)/2`).
 - [ ] **Golden fixtures:**
   - an unbalanced 120/240 split-phase load, where the neutral current is the phasor sum of the line currents;
