@@ -42,6 +42,7 @@ describe('save and load messages', () => {
         message: HOSTILE,
       },
       { kind: 'invalid-thumbnail', message: HOSTILE },
+      { kind: 'end-tick-mismatch', worldTick: 1, endTick: 2, message: HOSTILE },
       { kind: 'invalid-device-state', issues: [{ path: HOSTILE, message: HOSTILE }], message: HOSTILE },
     ];
     for (const error of errors) {
@@ -51,7 +52,7 @@ describe('save and load messages', () => {
     }
     expect(loadErrorReason(errors[13])).toMatch(/newer version of Controls/);
     expect(loadErrorReason(errors[16])).toMatch(/can’t upgrade/);
-    expect(loadErrorReason(errors[18])).toMatch(/devices/);
+    expect(loadErrorReason(errors[19])).toMatch(/devices/);
   });
 
   it('explain every platform refusal code, and treat anything else as an I/O failure', () => {

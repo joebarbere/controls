@@ -278,6 +278,7 @@ Acceptance:
 - [ ] Union-find merges ideal connections only: a closed switch, and terminals the device joins internally. Leads are resistive branches: R comes from the catalogue derivation, plus a sourced contact resistance at each end. An open switch drops its branch.
 - [ ] **Wired, not drawn.** A device placed touching a battery but not connected to it carries no current and sits at 0 V. When an entity is deleted, the deleting command's change removes its leads; they are never left in the world to be silently compiled.
 - [ ] **Deterministic numbering.** Each node is numbered by its smallest `(entityId, terminalId)` member in code-unit order. Property: permuting the input order of entities and connections gives an identical netlist.
+- [ ] **Canonical solution order.** The persisted order of `WorldV2.sim.nodes` and `branches` (and so the snapshot's) is a pure function of the world: canonical, and independent of the incremental-recompile history. Property: an incrementally recompiled netlist after any edit sequence numbers nodes and branches exactly as a from-scratch compile of the same world (ADR 0013).
 - [ ] **`topologyHash`:** SHA-256 (the pure implementation in `world-model`) over the canonical structure (the partition, branch ends and element kinds), excluding parameter values. Properties:
   - structurally equal netlists hash equally;
   - toggling a switch changes the hash;
@@ -386,7 +387,7 @@ Acceptance:
 - [ ] **Battery:**
   - EMF as a function of state of charge, from a sourced chemistry, under a fictional brand;
   - internal resistance;
-  - state of charge, coulomb-counted, kept in entity `state`.
+  - state of charge, coulomb-counted, kept in the entity's sim-owned `sim` bag (ADR 0011 §1, ADR 0013).
 
   Golden fixtures:
   - terminal voltage = EMF − I·R within 0.5 %;
@@ -426,7 +427,7 @@ Acceptance:
 - [ ] **SPST switch:** `device.operate {control: 'closed'}`. Closed merges its terminals; open drops the branch. It can be operated from the selected entity with the keyboard or a mouse click, the palette, the console and a script, each logging one command.
 - [ ] **Fuse:**
   - blows when ∫I²dt reaches the melting I²t, from a sourced, fictional datasheet;
-  - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in `state`;
+  - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in the fuse's sim-owned `sim` bag (ADR 0011 §1, ADR 0013);
   - melt time at k × rating falls inside the sourced band;
   - replacing a fuse in P2 means deleting it and placing a new one.
 - [ ] **Basic thermal-magnetic breaker** (single-pole, standalone, no panel):

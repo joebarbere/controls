@@ -13,7 +13,14 @@ import {
   type RawZipEntry,
   TINY_PNG,
 } from '../../testing/arbitraries';
-import { createManifest as createManifestWith, createWorld, Manifest, ReplayLog, World } from '../documents';
+import {
+  createManifest as createManifestWith,
+  createReplayLog,
+  createWorld,
+  Manifest,
+  ReplayLog,
+  World,
+} from '../documents';
 import {
   CTRL_ENTRY,
   CTRL_LIMITS,
@@ -40,7 +47,7 @@ function sample(): CtrlInput {
   return {
     manifest: Manifest.parse(fixture('v2/manifest/basic.json')),
     world: World.parse(fixture('v2/world/bench-lamp-mid-interval.json')),
-    replayLog: ReplayLog.parse(fixture('v2/replay-log/first-seq-rebased.json')),
+    replayLog: ReplayLog.parse(fixture('v2/replay-log/bench-lamp-mid-interval.json')),
     thumbnail: TINY_PNG,
   };
 }
@@ -50,7 +57,7 @@ function sample(): CtrlInput {
  * the JSON formatting, the ZIP fields or fflate's DEFLATE output (a fflate upgrade can do that;
  * re-pin it and say so in the changelog). Saves written earlier still load either way.
  */
-const GOLDEN_SAMPLE_SHA256 = 'f82abd572f08c43b3c5e63874321c6d24dd9c8e239ad9b2222eaeed56878b144';
+const GOLDEN_SAMPLE_SHA256 = 'a9296dc2574331a9d0210cf82e9dba419048a76ef0725298df792be90e7d4816';
 
 const text = (value: unknown) => ctrlJson(value);
 const manifestText = () => text(sample().manifest);
@@ -195,6 +202,12 @@ describe('readCtrl', () => {
         fc.option(rawReplayLogV2Arb),
         fc.option(pngBytesArb),
         (manifest, world, log, thumbnail) => {
+          if (log !== null) {
+            // world.json is at the log's endTick (ADR 0013): move both to the later of the two.
+            const tick = Math.max(world.tick, log.endTick);
+            world = { ...world, tick };
+            log = { ...log, endTick: tick };
+          }
           const input = {
             manifest: Manifest.parse(manifest),
             world: World.parse(world),
@@ -433,6 +446,20 @@ describe('readCtrl', () => {
       expect(error.message).toContain('a newer version of Controls');
       expect(error.message).not.toContain('zzz');
     });
+  });
+
+  it('refuses a replay.log whose endTick is not world.json’s tick, and writeCtrl won’t write one (ADR 0013)', () => {
+    const log = text({ ...sample().replayLog, endTick: (sample().replayLog?.endTick ?? 0) + 1 });
+    expect(readError(container({ 'replay.log': { data: log } }))).toMatchObject({
+      kind: 'end-tick-mismatch',
+      worldTick: 2147483655,
+      endTick: 2147483656,
+    });
+    const world = { ...createWorld({ seed: 1 }), tick: 5 };
+    const replayLog = { ...createReplayLog(createWorld({ seed: 1 })), endTick: 4 };
+    expect(() => writeCtrl({ manifest: createManifest(), world, replayLog })).toThrow(
+      expect.objectContaining({ kind: 'invalid-document', entry: 'replay.log' }),
+    );
   });
 
   it('refuses documents whose schemaVersion disagrees with the manifest', () => {

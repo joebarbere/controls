@@ -33,6 +33,7 @@ export function loadErrorReason(error: LoadGameError): string {
     case 'not-utf8':
     case 'not-json':
     case 'version-mismatch':
+    case 'end-tick-mismatch':
     case 'invalid-thumbnail':
       return DAMAGED;
     case 'invalid-device-state':

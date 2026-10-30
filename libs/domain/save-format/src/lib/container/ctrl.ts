@@ -117,6 +117,13 @@ export type CtrlError =
       readonly message: string;
     }
   | { readonly kind: 'invalid-document'; readonly entry: string; readonly error: LoadError; readonly message: string }
+  /** `replay.log`'s `endTick` isn't `world.json`'s `tick`: the two were not taken at the same moment (ADR 0013). */
+  | {
+      readonly kind: 'end-tick-mismatch';
+      readonly worldTick: number;
+      readonly endTick: number;
+      readonly message: string;
+    }
   | { readonly kind: 'invalid-thumbnail'; readonly message: string };
 
 export type CtrlErrorKind = CtrlError['kind'];
@@ -191,6 +198,7 @@ export function readCtrl(bytes: Uint8Array, options: ReadCtrlOptions = {}): Ctrl
     const log = readDocument(bytes, entries, CTRL_ENTRY.replayLog, limits.maxReplayLogBytes, version, migrateReplayLog);
     if (!log.ok) return fail(log.error);
     replayLog = log.value;
+    if (replayLog.endTick !== world.value.tick) return fail(endTickMismatch(world.value.tick, replayLog.endTick));
   }
   let thumbnail: Uint8Array | null = null;
   const thumbnailEntry = entries.get(CTRL_ENTRY.thumbnail);
@@ -237,6 +245,13 @@ export function writeCtrl(input: CtrlInput): Uint8Array {
   const world = checkCurrent(CTRL_ENTRY.world, migrateWorld(input.world));
   const replayLog =
     input.replayLog == null ? null : checkCurrent(CTRL_ENTRY.replayLog, migrateReplayLog(input.replayLog));
+  if (replayLog !== null && replayLog.endTick !== world.tick) {
+    throw new CtrlWriteError(
+      'invalid-document',
+      CTRL_ENTRY.replayLog,
+      endTickMismatch(world.tick, replayLog.endTick).message,
+    );
+  }
   const thumbnail = input.thumbnail ?? null;
 
   const entries: ZipWriteEntry[] = [
@@ -365,6 +380,15 @@ function newerThanBuild(error: Extract<LoadError, { kind: 'newer-than-build' }>,
 
 function invalidDocument(entry: string, error: LoadError): CtrlError {
   return { kind: 'invalid-document', entry, error, message: `${entry}: ${error.message}` };
+}
+
+function endTickMismatch(worldTick: number, endTick: number): Extract<CtrlError, { kind: 'end-tick-mismatch' }> {
+  return {
+    kind: 'end-tick-mismatch',
+    worldTick,
+    endTick,
+    message: `${CTRL_ENTRY.replayLog} ends at tick ${endTick}, but ${CTRL_ENTRY.world} is at tick ${worldTick}.`,
+  };
 }
 
 function invalidThumbnail(): Extract<CtrlError, { kind: 'invalid-thumbnail' }> {

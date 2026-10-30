@@ -1,7 +1,7 @@
 # ADR 0013: World document v2
 
 **Status:** Accepted (2026-10-30). P2 kickoff step 5, the world v2 and minimal connectivity PRs (decisions D2, D3, D4, D8). Frozen once v0.3.0 ships.
-**Review pending:** `sim-engine-engineer` (the bag split, `MODEL_KINDS` and the solution record), `electrical-realism-reviewer` (catalogue v1 values).
+**Review:** `sim-engine-engineer` (the bag split, `MODEL_KINDS` and the solution record) and `electrical-realism-reviewer` (catalogue v1 values) approved with notes, applied in the same PRs: the materialisation scope, the empty-netlist rule, the rebase caveat, the null-initial convention, lead state in v3 and the `endTick` load check below.
 **Date:** 2026-10-30 (Phase 2)
 **Sources:** [phase 2 plan](../../plans/phase-2-circuit-engine.md) decisions D2–D4 and D8 and the kickoff world v2 section; [ADR 0011](0011-sim-worker-contract.md) §1, §3, §9.6, §10, §12 and its Consequences ("Requirements on ADR 0013"); [ADR 0004](0004-save-format.md) (save format rules); [ADR 0007](0007-world-document-v1.md) (v1, ids, hash, replay log); [save-format caveats](../caveats/save-format.md)
 
@@ -25,8 +25,8 @@ P1's world (`schemaVersion` 1, ADR 0007) is a list of props. P2's simulator need
 
   Both are records of named values: keys `^[a-z][a-zA-Z0-9]*$` (at most 64 characters, at most 64 keys), values a finite number (`-0` normalised), a boolean, a `SafeString` of at most 32 characters, or `null` for absent (never a missing key). The world schema checks only this generic shape (`DeviceStateBag` in `primitives.ts`), so **a new device kind never needs a `schemaVersion` bump**.
 
-- **`ConnectionV2`** `{ id, ref, a, b, extensions }`: a two-ended connection between terminals, `TerminalRef` `{ entity, terminal }`. `ref` names a catalogue entry of a connection kind (P2: the test lead). P3's wires arrive in world v3, alongside leads, not instead of them.
-- **`sim`**: the solution record `{ lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] }` or `null` (not solved since the session started). Nodes and branches are interleaved `re, im` pairs in F2.1's order. It is in `world.hash` (decision U3). The engine checks `topologyHash` and the lengths against the compiled netlist when it starts; a mismatch is `start-failed`, never a silent re-solve (F2.3a).
+- **`ConnectionV2`** `{ id, ref, a, b, extensions }`: a two-ended connection between terminals, `TerminalRef` `{ entity, terminal }`. `ref` names a catalogue entry of a connection kind (P2: the test lead). P3's wires arrive in world v3, alongside leads, not instead of them. **Connections have no state bags in v2**: a lead's own state (its conductor temperature, a termination's quality) arrives with world v3 in P3. A connection with an end on an entity the netlist leaves out (an unknown ref) is left out too.
+- **`sim`**: the solution record `{ lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] }` or `null`. Nodes and branches are interleaved `re, im` pairs in F2.1's order, which is canonical: a pure function of the world, independent of the incremental-recompile history. It is in `world.hash` (decision U3). The engine checks `topologyHash` and the lengths against the compiled netlist when it starts; a mismatch is `start-failed`, never a silent re-solve (F2.3a). `null` means "not solved since the session started", **and a world whose netlist is empty exports `sim: null`**, never an empty record.
 
 Schema invariants (refinements, not in the JSON Schema): entities, fixtures and connections are each sorted by strictly ascending id; entity ids are below `nextEntityId` and connection ids below `nextConnectionId`; each connection's ends are entities that exist and two different terminals (two terminals of one entity are allowed: a jumper); `sim.lastSolveTick ≤ tick`, and `nodes` and `branches` have even lengths. So each world still has one serialised form, and nothing dangles.
 
@@ -40,6 +40,12 @@ The same rule as entity ids (ADR 0007), with its own counter:
 - a separate counter, not `nextEntityId`, so connecting leads never shifts the ids a script's later `entity.place` calls get.
 
 So an id can be reused only after the connection that held it was undone out of existence, and "undo everything returns the initial hash" still holds for sessions in which no time passed.
+
+### Materialisation
+
+`materialiseWorld(busWorld, export)` (`sim-protocol`, ADR 0011 §1) **overwrites only the `sim` bags of the entities the engine netlisted** and `WorldV2.sim`. Every other bag (props, unknown refs, and every `state` bag) is copied from the bus world unchanged.
+
+**`null` initial values.** A `sim` key whose `MODEL_KINDS` initial value is `null` (the lamp's `filamentTempK`) means "not yet simulated". The engine initialises it when the device enters the netlist, from the device's params or a sourced `sim-core` constant (an ambient temperature), and never exports `null` for it after that. The key stays nullable in its schema, because a world saved before the engine first ran holds `null`.
 
 ### The device catalogue and `MODEL_KINDS` (D4)
 
@@ -72,6 +78,8 @@ v1's manifest plus **`simEngineVersion: Int`** (D8): `SIM_ENGINE_VERSION` from `
 - **`endTick`**: `endTick ≥ last entry tick ≥ … ≥ initialWorld.tick`; a lower one is refused. "State at T" is as ADR 0011 §3 defines it. Advancing to `endTick` on replay arrives with the time host in F2.3a; until then no time passes, and `toReplayLog` writes the bus's current tick.
 - **A restarted log continues the numbering**: when a save's log doesn't reproduce its world, the new log starts at the dropped log's next `seq` (ADR 0011 §10).
 - **Rebasing** (`rebaseReplayLog(log, count)`) starts a log from the world it reaches after `count` entries, sim bags and solution record included, at `firstSeq + count`. It is exact where no later undo or redo reaches across the cut, which is always true at a load; a property test shows a log rebased at a load point replays to the same hash. Groundwork for the P1 follow-up "the replay log never shrinks" (the cap-triggered rebase is P4).
+  - **It is exact only before the engine runs, or when given a materialised world.** Replaying commands reaches the bus world, whose `sim` bags are inert; once time has passed, the true state at the cut also holds what the engine computed. So the P4 rebase must take the materialised world at the cut (for example `rebaseReplayLog(log, count, worldAtCut)`, from a `state` query at that tick) instead of the replayed one. The signature is left as it is until then.
+- **A save's `world.json` is at the log's `endTick`.** `readCtrl` refuses a container whose `replay.log` `endTick` differs from `world.json`'s `tick` (`end-tick-mismatch`), and `writeCtrl` refuses to write one: the saver captures both at the same tick (ADR 0011 §9.5), so a mismatch is a damaged or hand-edited save, like `version-mismatch`. (A log that merely fails to reproduce the world still loads with a restarted log, ADR 0007.)
 
 ### The v1 → v2 migration
 

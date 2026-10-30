@@ -45,7 +45,9 @@ describe('v1 → v2 migration', () => {
         expect(v2.entities.map(({ state, sim, ...rest }) => ({ rest, state, sim }))).toStrictEqual(
           v1.entities.map((rest) => ({ rest, state: {}, sim: {} })),
         );
-        const { schemaVersion: _a, entities: _b, ...kept } = v1;
+        const kept = Object.fromEntries(
+          Object.entries(v1).filter(([key]) => key !== 'schemaVersion' && key !== 'entities'),
+        );
         expect(v2).toMatchObject(kept);
       }),
     );
