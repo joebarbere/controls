@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29. Version 0.2.0.** Plan: [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md) (open follow-ups listed there). Next: the Phase 2 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) kickoff in progress, 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Next: the remaining kickoff steps (ADR 0011 sim worker contract by an agent team, world v2 + test leads + catalogue v1, boundary hardening, realism audit of P1 constants), then F2.1. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
@@ -62,22 +62,23 @@ Documentation drift is a failing test. Update docs in the same PR as the change 
 
 Project agents live in `.claude/agents/`. Specialists not yet created are made at their phase kickoff.
 
-| When you are…                                                                                    | Use                                                                            |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Finishing any feature or fix, or before opening a PR                                             | `docs-keeper` (or `/docs-sync`)                                                |
-| Bumping the version or preparing a release                                                       | `version-keeper`, then `release-engineer` (or `/release`)                      |
-| Touching packaging, `release.yml`, the updater or signing                                        | `release-engineer`                                                             |
-| Working on Electron main, preload or IPC                                                         | `electron-platform-engineer`                                                   |
-| Working on test infrastructure, CI gates or flaky E2E                                            | `test-engineer`                                                                |
-| Working on Angular UI, the palette, console, keybindings or editors                              | `angular-ui-engineer`                                                          |
-| Working on Three.js, cables, picking or audio                                                    | `renderer-engineer`                                                            |
-| Working on `commands`, `world-model`, `scripting-api`, `feature-session`, `sim-cli` or a Command | main agent until P2; `save-format-guardian` reviews world ops and command args |
-| Changing save or world schemas or migrations                                                     | `save-format-guardian`                                                         |
-| Changing solvers, device electrical models or the worker protocol                                | `sim-engine-engineer`, then `electrical-realism-reviewer` (both created in P2) |
-| Adding devices, tables, jobs or faults                                                           | `content-designer` (created in P3), then `electrical-realism-reviewer`         |
-| Working on the PLC runtime, compilers or ladder/ST editors                                       | `plc-engineer` (created in P10)                                                |
-| Working on HMI/SCADA, networking or alarms                                                       | `scada-engineer` (created in P12)                                              |
-| Starting a phase                                                                                 | Plan agent → `plans/phase-N-*.md`; create that phase's specialists             |
+| When you are…                                                                                                    | Use                                                                                |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Finishing any feature or fix, or before opening a PR                                                             | `docs-keeper` (or `/docs-sync`)                                                    |
+| Bumping the version or preparing a release                                                                       | `version-keeper`, then `release-engineer` (or `/release`)                          |
+| Touching packaging, `release.yml`, the updater or signing                                                        | `release-engineer`                                                                 |
+| Working on Electron main, preload or IPC                                                                         | `electron-platform-engineer`                                                       |
+| Working on test infrastructure, CI gates or flaky E2E                                                            | `test-engineer`                                                                    |
+| Working on Angular UI, the palette, console, keybindings or editors                                              | `angular-ui-engineer`                                                              |
+| Working on Three.js, cables, picking or audio                                                                    | `renderer-engineer`                                                                |
+| Working on `commands`, `world-model`, `scripting-api`, `feature-session`, `sim-cli` (non-sim parts) or a Command | main agent; `save-format-guardian` reviews world ops and command args              |
+| Working on `sim-core`, `sim-protocol`, `sim-worker`, `sim-cli bench`, `game.probe`/`advance` or the oracle       | `sim-engine-engineer`, then `electrical-realism-reviewer` for models and constants |
+| Changing save or world schemas or migrations                                                                     | `save-format-guardian`                                                             |
+| Changing solvers, device electrical models or the worker protocol                                                | `sim-engine-engineer`, then `electrical-realism-reviewer`                          |
+| Adding devices, tables, jobs or faults                                                                           | `content-designer` (created in P3), then `electrical-realism-reviewer`             |
+| Working on the PLC runtime, compilers or ladder/ST editors                                                       | `plc-engineer` (created in P10)                                                    |
+| Working on HMI/SCADA, networking or alarms                                                                       | `scada-engineer` (created in P12)                                                  |
+| Starting a phase                                                                                                 | Plan agent → `plans/phase-N-*.md`; create that phase's specialists                 |
 
 Until a specialist exists, do the work directly and follow the plan section for that area. Default to a single sub-agent; use an agent team only when three or more areas must agree a new contract at once (expected: P2 sim ↔ worker ↔ renderer, P10 PLC ↔ sim ↔ editor, P12 network ↔ HMI ↔ PLC).
 
