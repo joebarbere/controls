@@ -68,7 +68,7 @@ A failure is the load error `invalid-device-state` (`LoadGameError` in `@control
 
 ### `ManifestV2`
 
-v1's manifest plus **`simEngineVersion: Int`** (D8): `SIM_ENGINE_VERSION` from `@controls/sim-core`, bumped whenever snapshot or world goldens are re-pinned for numeric reasons. `catalogVersion` is now the built-in catalogue's (1). The caller supplies both to `createManifest` (save-format depends on neither); `createSaveManifest()` in the scripting API is what `Game.save` writes.
+v1's manifest plus **`simEngineVersion: Int`** (D8): `SIM_ENGINE_VERSION` from `@controls/sim-core`, bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save whose `simEngineVersion` or `catalogVersion` differs from the build's loads with a restarted log (`engine-changed`), never refused, except that a save with both at 0 (a migrated P1 save) is verified first (narrow v0 compatibility, Consequences). `catalogVersion` is now the built-in catalogue's (1). The caller supplies both to `createManifest` (save-format depends on neither); `createSaveManifest()` in the scripting API is what `Game.save` writes.
 
 ### `ReplayLogV2`
 
@@ -99,7 +99,7 @@ Each entity gets `state: {}` and `sim: {}`; the world gets `nextConnectionId: 1`
 - `@controls/commands`: `CommandBusOptions.firstSeq` and `CommandBus.nextSeq()`. `advanceTo`, `withTick` and replay advancing stay F2.3a's.
 - `@controls/sim-core`: `SIM_ENGINE_VERSION` (1).
 - **A known edge:** a P1 save whose entity happens to use a catalogue v1 id (only reachable by typing one in the console) migrates with empty bags and is then refused as `invalid-device-state`. The migration can't fill the bags because it can't read the catalogue.
-- **For F2.3a (D8):** a migrated P1 save has `simEngineVersion` 0 and `catalogVersion` 0, so a literal "differs from the build" check would restart every P1 save's log with `engine-changed`, though P1 saves hold no sim state. Open question for F2.3a: treat 0 as compatible with any engine and catalogue.
+- **D8 for P1 saves (decided 2026-10-30):** a migrated P1 save has `simEngineVersion` 0 and `catalogVersion` 0, so D8's literal "differs from the build" would restart every P1 log though P1 saves hold no sim state. **Narrow v0 compatibility** (decided 2026-10-30 in the world v2 review): a save with `simEngineVersion === 0 && catalogVersion === 0` (a migrated P1 save, which holds no sim state) is verified as normal; if verification fails it falls back to `replay.status: 'restarted'` with reason `engine-changed`, never a refusal. Any other mismatch, including a single 0 on its own, stays `engine-changed` as above. The check is a pure, tested `engineCompatible(manifest, build)` in `scripting-api` (F2.3a). It relies on the empty-netlist rule: a world with no netlist exports `sim: null` (ADR 0013), so a P1 world verifies to the same hash.
 - Fixtures under `fixtures/v2/`: worlds (empty, props and extensions, devices with `sim: null`, a bench lamp mid-interval with a blown and a partly melted fuse, 17-digit floats, a subnormal and a tick above 2³¹), manifests, replay logs (`endTick` past the last entry, `firstSeq > 0`, empty), `.ctrl` saves from `pnpm sim run … --save`; `refused/` (an `endTick` before the last entry) and `start-failed/` (a solution record whose lengths don't match the netlist: valid schema, refused when the engine starts).
 
 ## Alternatives considered
