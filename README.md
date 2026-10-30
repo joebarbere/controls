@@ -1,10 +1,10 @@
 # Controls
 
-![version](https://img.shields.io/badge/version-0.2.0-blue) ![status](https://img.shields.io/badge/status-Phase%201%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
+![version](https://img.shields.io/badge/version-0.2.0-blue) ![status](https://img.shields.io/badge/status-Phase%201%20shipped-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 1 (Game shell) complete, version 0.2.0 (the v0.2.0 release is being cut; the draft awaits publication).** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. There is no circuit simulation yet. Next: Phase 2, the circuit engine and power sources. See [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md).
+> **Status: Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. There is no circuit simulation yet. Next: Phase 2, the circuit engine and power sources. See [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md).
 
 ## Features
 
@@ -91,7 +91,6 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
-- [ ] **P1 Game shell** (v0.2.0): every feature has landed and the version is 0.2.0; the v0.2.0 draft release awaits publication. Open follow-ups: placement overlap checks, keybinding conflict detection on AZERTY, the 2020-era integrated-GPU frame budget, a manual WebGPU check on a real GPU, and delete and thumbnails in the Load list
 - [ ] **P2 Circuit engine and power sources** (v0.3.0): netlist compiler, DC and phasor MNA in a worker
 - [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0)
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox

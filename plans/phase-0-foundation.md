@@ -2,6 +2,8 @@
 
 **Release:** v0.1.0 · **Status:** ✅ Done (2026-10-26) · **Spec:** [plan §6 P0](../controls-development-plan.md#p0--foundation-v010-hello-panel)
 
+> **Final status (2026-10-29):** shipped as v0.1.0 (tag-driven draft built 2026-10-27, published 2026-10-29). The status notes and the Status table below are snapshots from 2026-10-26; the acceptance checklist is the record of what was done.
+>
 > **Status (2026-10-26, later):** pushed to GitHub; `main.yml` is green on all three OSes (verify, web e2e, Electron smoke). v0.1.0 bumped and awaiting its first tag-driven draft release.
 >
 > **Earlier status (2026-10-26):** F0.1–F0.6 are implemented and verified locally on Linux: `pnpm verify` exits 0, the web-harness e2e (3 tests) and the Electron smoke e2e (2 tests) pass, and the packaged unpacked Linux build passes the same smoke suite over CDP. Not done yet: the repo isn't pushed to GitHub, so no workflow has run (no macOS/Windows evidence), there is no tag or draft release, the `/release` dry run hasn't been run, and nobody has launched `pnpm start` / `pnpm start:web` by hand. Unticked items below say what is missing.
@@ -117,6 +119,8 @@ Acceptance:
 - [x] `/docs-sync` exercised once (2026-10-26, on the working tree before the first commit).
 
 ## Status
+
+_Snapshot from 2026-10-26, before the first push; see the final status at the top._
 
 | Feature | Description       | Status                                                          |
 | ------- | ----------------- | --------------------------------------------------------------- |
