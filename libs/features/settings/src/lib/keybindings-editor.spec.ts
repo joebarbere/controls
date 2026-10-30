@@ -24,7 +24,14 @@ async function setup(keybindings: Record<string, string | null> = {}) {
   document.body.appendChild(fixture.nativeElement);
   await fixture.whenStable();
   const user = userEvent.setup();
-  const row = (title: string) => screen.getByRole('row', { name: new RegExp(`^${title}`) });
+  // Find a row by its row header's text, not getByRole('row', { name }): a row's accessible name is
+  // computed from its whole subtree for every row in the table, which is slow in jsdom (ui caveats).
+  const row = (title: string) => {
+    const header = screen.getByText(new RegExp(`^${title}`), { selector: 'th[scope="row"]' });
+    const tr = header.closest('tr');
+    if (!tr) throw new Error(`no row for ${title}`);
+    return tr as HTMLElement;
+  };
   return { fixture, store, user, row, keys: TestBed.inject(KeybindingService), session: TestBed.inject(Session) };
 }
 
