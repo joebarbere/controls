@@ -30,7 +30,12 @@ export interface StateKeyDef {
   readonly type: StateValueType;
   /** Validates the value. Always narrower than `DeviceStateValue` (a property test checks it). */
   readonly schema: z.ZodType<DeviceStateValue>;
-  /** The value a newly placed device starts with (`entity.place`), `null` for "absent". */
+  /**
+   * The value a newly placed device starts with (`entity.place`). `null` (for a `sim` key) means the
+   * engine initialises it when the device enters the netlist, from the device's params or a sourced
+   * `sim-core` constant (the lamp's filament starts at ambient), and never exports `null` after that.
+   * The key stays nullable in its schema, because a world saved before the engine first ran holds `null`.
+   */
   readonly initial: DeviceStateValue;
   /** For `type: 'enum'`, every value the key can hold. */
   readonly values: readonly string[] | null;
@@ -85,7 +90,10 @@ export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
 export const LampIncandescentParams = z.strictObject({
   /** Rated (design) voltage (V). */
   ratedVoltageV: positive,
-  /** Rated power at the rated voltage (W). */
+  /**
+   * Rated power (W), taken at the rated voltage. A lamp category may define its wattage at another test
+   * voltage (UNECE R37's W5W: 13.5 V); taking it at the rated voltage is a game-design simplification.
+   */
   ratedPowerW: positive,
 });
 export type LampIncandescentParams = z.infer<typeof LampIncandescentParams>;
@@ -153,7 +161,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
         'number',
         FiniteNumber.positive().nullable(),
         null,
-        'Filament temperature (K); null until the engine first simulates the lamp (it then starts at ambient).',
+        'Filament temperature (K). null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
       ),
     },
     description: 'An incandescent lamp: a tungsten filament whose resistance rises with its temperature.',

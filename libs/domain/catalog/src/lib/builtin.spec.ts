@@ -72,10 +72,14 @@ describe('the built-in catalogue (content/devices)', () => {
     expect(BUILTIN_CATALOG.kindOf({ id: 'prop.crate', version: 1 })).toBeUndefined();
   });
 
-  it('the test lead is about 33 mΩ at 20 °C, derived from resistivity (never a table)', () => {
+  it('the 18 AWG test lead is about 41 mΩ at 20 °C, derived from resistivity (never a table)', () => {
     const lead = BUILTIN_CATALOG.device({ id: 'lead.quillfern-test-1m', version: 1 });
     const params = LeadParams.parse(lead?.model.params);
-    // ρ L / A = (1/58e6 Ω·m × 1 m) / 0.75e-6 m² = 22.99 mΩ, plus 2 × 5 mΩ of clip contact.
-    expect(leadResistanceOhm(params, 293.15)).toBeCloseTo(0.022988505747126436 + 0.01, 15);
+    // 18 AWG: d = 0.127 mm × 92^(18/39) ≈ 1.0237 mm, A = π d²/4 ≈ 8.2305e-7 m² (the AWG formula, no table).
+    const d = 0.127e-3 * 92 ** ((36 - 18) / 39);
+    expect(params.conductorAreaM2).toBeCloseTo((Math.PI * d * d) / 4, 10);
+    // ρ L / A = (1/58e6 Ω·m × 1 m) / 8.2305e-7 m² ≈ 20.95 mΩ, plus 2 × 10 mΩ of clip contact.
+    expect(leadResistanceOhm(params, 293.15)).toBeCloseTo(1 / 58e6 / 8.2305e-7 + 0.02, 15);
+    expect(leadResistanceOhm(params, 293.15)).toBeCloseTo(0.04095, 5);
   });
 });

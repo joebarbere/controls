@@ -9,6 +9,10 @@ import type { LeadParams } from './model-kinds';
 /**
  * The conductor's resistance at `conductorTemperatureK` (Ω), by the linear model of a metal's
  * resistance against temperature: R(T) = ρ₀ · L / A · (1 + α · (T − T₀)).
+ *
+ * The linear α model holds for copper over roughly −50 to +150 °C (223 to 423 K). This function doesn't
+ * clamp: the caller (F2.1's netlist compiler, P3's conductor heating) must clamp the temperature it
+ * supplies to that range, or document why it may leave it.
  */
 export function leadConductorResistanceOhm(params: LeadParams, conductorTemperatureK: number): number {
   const lengthM = params.lengthMm / 1000;

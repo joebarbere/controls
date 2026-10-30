@@ -213,7 +213,7 @@ flowchart LR
 | `battery`           | entity     | `neg`, `pos` | `stateOfCharge` (sim, starts 1)      | Ferrovane FV12-7, 12 V 7 Ah sealed lead-acid |
 | `lamp.incandescent` | entity     | `a`, `b`     | `filamentTempK` (sim, starts `null`) | Lumivane LV-12-5, 12 V 5 W                   |
 | `switch.spst`       | entity     | `a`, `b`     | `closed` (commanded, starts `false`) | Tessaline TS-101 toggle                      |
-| `lead`              | connection | none         | none                                 | Quillfern QF-TL1, 1 m, 0.75 mm² copper       |
+| `lead`              | connection | none         | none                                 | Quillfern QF-TL1, 1 m, 18 AWG copper         |
 
 Commanded keys are written only by commands (`device.operate`); sim keys only by the sim engine. Which keys a kind has is save format: a new kind needs no `schemaVersion` bump, changing an existing kind's keys does ([save-format caveats](../caveats/save-format.md#the-device-catalogue-p2-kickoff-catalogue-v1)).
 

@@ -1,7 +1,7 @@
 {
   "id": "lead.quillfern-test-1m",
   "version": 1,
-  "title": "1 m test lead with crocodile clips",
+  "title": "1 m 18 AWG test lead with crocodile clips",
   "brand": "Quillfern",
   "modelName": "QF-TL1",
   "category": "lead",
@@ -11,11 +11,11 @@
     "kind": "lead",
     "params": {
       "lengthMm": 1000,
-      "conductorAreaM2": 7.5e-7,
+      "conductorAreaM2": 8.2305e-7,
       "resistivityOhmM": 1.724137931034483e-8,
       "temperatureCoefficientPerK": 0.00393,
       "referenceTemperatureK": 293.15,
-      "contactResistanceOhm": 0.005
+      "contactResistanceOhm": 0.01
     }
   },
   "controls": [],
@@ -31,9 +31,9 @@
       ]
     },
     {
-      "id": "nominal-cross-section",
+      "id": "awg-18-cross-section",
       "kind": "real-world",
-      "citation": "0.75 mm² is one of the standard nominal conductor cross-sections (the IEC 60228 series of nominal areas) and is common for flexible test leads. The area is nominal and stranding is ignored; IEC 60228's resistance values are not used.",
+      "citation": "18 AWG, the usual gauge of US bench test leads (NEC/US-first). The area is derived from the public AWG definition (ASTM B258): d = 0.127 mm × 92^((36 − n)/39), so 18 AWG is d ≈ 1.0237 mm and A = π d²/4 ≈ 0.8231 mm² (8.2305e-7 m²); it is not taken from any NEC table. Stranding is ignored: real flexible leads measure about 10 % above this solid-wire figure.",
       "covers": ["model.params.conductorAreaM2"]
     },
     {
@@ -44,8 +44,8 @@
     },
     {
       "id": "clip-contact-resistance",
-      "kind": "game-design",
-      "citation": "game-design, pending electrical-realism review: about 5 mΩ where a sprung crocodile clip grips a clean terminal, chosen as an order of magnitude. F2.1, which first uses it, confirms it against a published source or replaces it.",
+      "kind": "real-world",
+      "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
       "covers": ["model.params.contactResistanceOhm"]
     }
   ],

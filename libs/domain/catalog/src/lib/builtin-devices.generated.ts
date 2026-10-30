@@ -69,7 +69,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "vrla-internal-resistance",
       "kind": "real-world",
-      "citation": "Internal resistance of a fully charged 12 V 7 Ah VRLA battery at 25 °C: about 23 mΩ, typical of the class's published datasheets (roughly 18 to 25 mΩ).",
+      "citation": "Internal resistance of a fully charged 12 V 7 Ah VRLA battery at 25 °C: about 23 mΩ, mid-range of the class's published datasheets (roughly 17 to 28 mΩ). Those figures are usually 1 kHz AC tester readings, which read lower than the DC resistance a step load sees; F2.4 records using the AC figure as a DC internal resistance as an abstraction.",
       "covers": [
         "model.params.internalResistanceOhm"
       ]
@@ -129,7 +129,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "unece-r37-w5w",
       "kind": "real-world",
-      "citation": "UN ECE Regulation No. 37 (filament lamps for power-driven vehicles), category W5W: a wedge-base signal lamp rated 12 V, 5 W. Only the rated values are used; the regulation's text and data sheets are not reproduced.",
+      "citation": "UN ECE Regulation No. 37 (filament lamps for power-driven vehicles), category W5W: a 12 V wedge-base signal lamp whose 5 W is defined at R37's 13.5 V test voltage. Taking 5 W at 12 V (ratedPowerW at ratedVoltageV) is a game-design simplification. Only the rated values are used; the regulation's text and data sheets are not reproduced.",
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedPowerW"
@@ -150,7 +150,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
 {
   "id": "lead.quillfern-test-1m",
   "version": 1,
-  "title": "1 m test lead with crocodile clips",
+  "title": "1 m 18 AWG test lead with crocodile clips",
   "brand": "Quillfern",
   "modelName": "QF-TL1",
   "category": "lead",
@@ -160,11 +160,11 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     "kind": "lead",
     "params": {
       "lengthMm": 1000,
-      "conductorAreaM2": 7.5e-7,
+      "conductorAreaM2": 8.2305e-7,
       "resistivityOhmM": 1.724137931034483e-8,
       "temperatureCoefficientPerK": 0.00393,
       "referenceTemperatureK": 293.15,
-      "contactResistanceOhm": 0.005
+      "contactResistanceOhm": 0.01
     }
   },
   "controls": [],
@@ -180,9 +180,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       ]
     },
     {
-      "id": "nominal-cross-section",
+      "id": "awg-18-cross-section",
       "kind": "real-world",
-      "citation": "0.75 mm² is one of the standard nominal conductor cross-sections (the IEC 60228 series of nominal areas) and is common for flexible test leads. The area is nominal and stranding is ignored; IEC 60228's resistance values are not used.",
+      "citation": "18 AWG, the usual gauge of US bench test leads (NEC/US-first). The area is derived from the public AWG definition (ASTM B258): d = 0.127 mm × 92^((36 − n)/39), so 18 AWG is d ≈ 1.0237 mm and A = π d²/4 ≈ 0.8231 mm² (8.2305e-7 m²); it is not taken from any NEC table. Stranding is ignored: real flexible leads measure about 10 % above this solid-wire figure.",
       "covers": [
         "model.params.conductorAreaM2"
       ]
@@ -197,8 +197,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "clip-contact-resistance",
-      "kind": "game-design",
-      "citation": "game-design, pending electrical-realism review: about 5 mΩ where a sprung crocodile clip grips a clean terminal, chosen as an order of magnitude. F2.1, which first uses it, confirms it against a published source or replaces it.",
+      "kind": "real-world",
+      "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
       "covers": [
         "model.params.contactResistanceOhm"
       ]

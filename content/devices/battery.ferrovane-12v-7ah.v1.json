@@ -5,10 +5,30 @@
   "brand": "Ferrovane",
   "modelName": "FV12-7",
   "category": "source",
-  "sizeMm": { "widthMm": 151, "heightMm": 65, "depthMm": 98 },
+  "sizeMm": {
+    "widthMm": 151,
+    "heightMm": 65,
+    "depthMm": 98
+  },
   "terminals": [
-    { "id": "neg", "label": "−", "positionMm": { "x": 18, "y": 32, "z": 98 } },
-    { "id": "pos", "label": "+", "positionMm": { "x": 133, "y": 32, "z": 98 } }
+    {
+      "id": "neg",
+      "label": "−",
+      "positionMm": {
+        "x": 18,
+        "y": 32,
+        "z": 98
+      }
+    },
+    {
+      "id": "pos",
+      "label": "+",
+      "positionMm": {
+        "x": 133,
+        "y": 32,
+        "z": 98
+      }
+    }
   ],
   "model": {
     "kind": "battery",
@@ -37,7 +57,7 @@
     {
       "id": "vrla-internal-resistance",
       "kind": "real-world",
-      "citation": "Internal resistance of a fully charged 12 V 7 Ah VRLA battery at 25 °C: about 23 mΩ, typical of the class's published datasheets (roughly 18 to 25 mΩ).",
+      "citation": "Internal resistance of a fully charged 12 V 7 Ah VRLA battery at 25 °C: about 23 mΩ, mid-range of the class's published datasheets (roughly 17 to 28 mΩ). Those figures are usually 1 kHz AC tester readings, which read lower than the DC resistance a step load sees; F2.4 records using the AC figure as a DC internal resistance as an abstraction.",
       "covers": ["model.params.internalResistanceOhm"]
     },
     {
