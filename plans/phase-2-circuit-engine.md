@@ -274,18 +274,25 @@ Acceptance:
 
 Acceptance:
 
-- [ ] `compileNetlist(world, catalog)` is a pure function. It turns entities, catalogue terminals, `connections` and commanded device state into nodes, branches, elements and islands.
-- [ ] Union-find merges ideal connections only: a closed switch, and terminals the device joins internally. Leads are resistive branches: R comes from the catalogue derivation, plus a sourced contact resistance at each end. An open switch drops its branch.
-- [ ] **Wired, not drawn.** A device placed touching a battery but not connected to it carries no current and sits at 0 V. When an entity is deleted, the deleting command's change removes its leads; they are never left in the world to be silently compiled.
-- [ ] **Deterministic numbering.** Each node is numbered by its smallest `(entityId, terminalId)` member in code-unit order. Property: permuting the input order of entities and connections gives an identical netlist.
-- [ ] **Canonical solution order.** The persisted order of `WorldV2.sim.nodes` and `branches` (and so the snapshot's) is a pure function of the world: canonical, and independent of the incremental-recompile history. Property: an incrementally recompiled netlist after any edit sequence numbers nodes and branches exactly as a from-scratch compile of the same world (ADR 0013).
-- [ ] **`topologyHash`:** SHA-256 (the pure implementation in `world-model`) over the canonical structure (the partition, branch ends and element kinds), excluding parameter values. Properties:
+- [x] `compileNetlist(world, catalog)` is a pure function. It turns entities, catalogue terminals, `connections` and commanded device state into nodes, branches, elements and islands.
+- [x] Union-find merges ideal connections only: a closed switch, and terminals the device joins internally. Leads are resistive branches: R comes from the catalogue derivation, plus a sourced contact resistance at each end. An open switch drops its branch.
+- [x] **Wired, not drawn.** A device placed touching a battery but not connected to it carries no current and sits at 0 V. When an entity is deleted, the deleting command's change removes its leads; they are never left in the world to be silently compiled.
+- [x] **Deterministic numbering.** Each node is numbered by its smallest `(entityId, terminalId)` member in code-unit order. Property: permuting the input order of entities and connections gives an identical netlist.
+- [x] **Canonical solution order.** The persisted order of `WorldV2.sim.nodes` and `branches` (and so the snapshot's) is a pure function of the world: canonical, and independent of the incremental-recompile history. Property: an incrementally recompiled netlist after any edit sequence numbers nodes and branches exactly as a from-scratch compile of the same world (ADR 0013).
+- [x] **`topologyHash`:** SHA-256 (the pure implementation in `world-model`) over the canonical structure (the partition, branch ends and element kinds), excluding parameter values. Properties:
   - structurally equal netlists hash equally;
   - toggling a switch changes the hash;
   - changing only a value, such as a bench-supply setpoint, does not.
-- [ ] **Incremental recompile** on connect, disconnect, operate and sim topology events (trip, blow) equals a from-scratch compile. This is checked with fast-check over random edit sequences on random bench circuits.
-- [ ] **Islands** are connected components, each classified `dc`, `ac` or `empty`. A `mixed` island is reported as a diagnostic, since P2 has no converters.
-- [ ] `formatNetlist(netlist)` gives deterministic text, used by F2.6's `netlist.dump`. Coverage is at least 90 %.
+- [x] **Incremental recompile** on connect, disconnect, operate and sim topology events (trip, blow) equals a from-scratch compile. This is checked with fast-check over random edit sequences on random bench circuits.
+- [x] **Islands** are connected components, each classified `dc`, `ac` or `empty`. A `mixed` island is reported as a diagnostic, since P2 has no converters.
+- [x] `formatNetlist(netlist)` gives deterministic text, used by F2.6's `netlist.dump`. Coverage is at least 90 %.
+
+_Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+
+- _`topologyHash` digests a compact canonical **byte** encoding of the structure, not text: hashing 87 KB of text took 1.25 ms of a 1.9 ms structural recompile at 2,000 nodes; the encoding brings the recompile to about 1.3 ms (AMD Ryzen 5 5600X, Node 24). Element refs are in the hash, because the solution record is ordered by branch._
+- _Sim topology events (trip, blow) are proven with a test-only fuse kind, since the real fuse and breaker arrive in F2.5. The engine passes its sim state as `options.sim`; a model sees only the keys it lists in `simTopologyKeys`._
+- _The entity-delete cascade (deleting an entity removes its leads in the same change, and undo restores them with their ids) shipped with the world v2 commands in #42; this PR adds a `world-model` property test for it._
+- _ADR 0014 (`dmath`) isn't written here: the compiler needs no transcendental. It belongs with the first use of `dmath` (the lamp's R(T) in F2.5, or earlier if F2.2 needs one)._
 
 ### F2.2 DC and phasor MNA solvers
 
@@ -548,7 +555,7 @@ Numbers are assigned in the order the ADRs land.
 | —       | Kickoff: agents, decisions, boundary PR, audit    | ✅ Done        |
 | —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted    |
 | —       | World document v2 + leads + catalogue v1          | ✅ Done        |
-| F2.1    | Netlist compiler                                  | ⬜ Not started |
+| F2.1    | Netlist compiler                                  | ✅ Done        |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started |
 | F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started |

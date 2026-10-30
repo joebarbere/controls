@@ -27,15 +27,16 @@ flowchart TD
 
 ## Architecture
 
-| Page                                               | Covers                                                                                              |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design            |
-| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; save I/O and handles; `.ctrl` container |
-| [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal        |
-| [Commands](architecture/commands.md)               | Command registry and bus, undo/redo, the replay log, world commands, `world.hash` and the PRNG      |
-| [UI shell](architecture/ui-shell.md)               | Shell libraries, screens and focus flow, the docking workspace, settings, theming and notifications |
-| [Scripting and sim-cli](architecture/scripting.md) | The scripting API `Game`, console-line files, `sim-cli` run/replay/hash, the four-surface scenario  |
-| [Dev console](architecture/console.md)             | The in-game console: CodeMirror input, completion, history, `help`, `run`, cheat banner, gating     |
+| Page                                               | Covers                                                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [Overview](architecture/overview.md)               | Process and thread model, module boundaries, what P0 implements versus the target design                         |
+| [World and saves](architecture/world-and-saves.md) | World document v1, settings, migrations, the load pipeline; save I/O and handles; `.ctrl` container              |
+| [Rendering](architecture/rendering.md)             | Renderer layers, walk/work cameras, BVH picking and selection, integer-mm snapping, disposal                     |
+| [Commands](architecture/commands.md)               | Command registry and bus, undo/redo, the replay log, world commands, `world.hash` and the PRNG                   |
+| [UI shell](architecture/ui-shell.md)               | Shell libraries, screens and focus flow, the docking workspace, settings, theming and notifications              |
+| [Scripting and sim-cli](architecture/scripting.md) | The scripting API `Game`, console-line files, `sim-cli` run/replay/hash, the four-surface scenario               |
+| [Dev console](architecture/console.md)             | The in-game console: CodeMirror input, completion, history, `help`, `run`, cheat banner, gating                  |
+| [Simulation](architecture/simulation.md)           | The netlist compiler: fragments, union-find, canonical numbering, islands, `topologyHash`, incremental recompile |
 
 Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds them.
 

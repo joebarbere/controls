@@ -252,6 +252,25 @@ describe('world command properties', () => {
     );
   });
 
+  it('deleting an entity removes exactly its connections, and undo restores them with the same ids (plan F2.1)', () => {
+    fc.assert(
+      fc.property(worldArb, opsArb, pick, (initial, ops, target) => {
+        const bus = createWorldBus(initial);
+        ops.forEach((op) => run(bus, op));
+        const before = bus.state;
+        const id = pickId(bus, target);
+        if (!bus.exec('entity.delete', { id }).ok) return; // a missing id: refused, nothing to check
+        const touches = (c: World['connections'][number]) => c.a.entity === id || c.b.entity === id;
+        // No connection is left with an end on the deleted entity, and every other one is kept as it was.
+        expect(bus.state.connections).toStrictEqual(before.connections.filter((c) => !touches(c)));
+        expect(bus.state.nextConnectionId).toBe(before.nextConnectionId);
+        expect(bus.exec('edit.undo').ok).toBe(true);
+        expect(bus.state.connections).toStrictEqual(before.connections);
+        expect(worldHash(bus.state)).toBe(worldHash(before));
+      }),
+    );
+  });
+
   it('a log rebased onto a mid-session world (sim state included) replays to the same hash (ADR 0013)', () => {
     fc.assert(
       fc.property(worldArb, opsArb, opsArb, (initial, before, after) => {
