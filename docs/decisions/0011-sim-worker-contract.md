@@ -1,8 +1,9 @@
 # ADR 0011: Sim worker contract
 
-**Status:** Proposed (P2 kickoff step 3, agent-team review). Drafted by `sim-engine-engineer`; awaiting `renderer-engineer`, `angular-ui-engineer`, `electron-platform-engineer` and `save-format-guardian` (see [Open for review](#open-for-review)). Becomes Accepted when every owner has signed off, and before F2.3b starts.
+**Status:** Accepted (2026-10-29). P2 kickoff step 3, the agent-team contract. Drafted by `sim-engine-engineer`.
+**Review:** `renderer-engineer`, `angular-ui-engineer`, `electron-platform-engineer` and `save-format-guardian` reviewed the proposal and every required change is applied below. The user decided U1–U3 (hidden window suspends, engine-changed saves load with a restarted log, the solution record is saved and hashed), and the main agent ruled on the three conflicts (R1–R3); see [Resolved in review](#resolved-in-review) and the [phase 2 plan](../../plans/phase-2-circuit-engine.md) decisions D7 and D8.
 **Date:** 2026-10-29 (Phase 2)
-**Sources:** plan §4.3–§4.5, §4.11; [phase 2 plan](../../plans/phase-2-circuit-engine.md) kickoff step 3 and decisions D1–D6, F2.3a, F2.3b, F2.5, F2.6; [ADR 0002](0002-simulation-architecture.md) (layers, worker, SAB); [ADR 0004](0004-save-format.md) and [ADR 0007](0007-world-document-v1.md) (save format, ticks, hash, replay log); [ADR 0006](0006-command-system.md) (bus, undo, logging); [ADR 0009](0009-save-io-boundary.md) (saves, quit flush); [ADR 0010](0010-wire-routing-spike.md) (frame-cost practice); [commands](../caveats/commands.md), [rendering](../caveats/rendering.md), [electron](../caveats/electron.md) and [save-format](../caveats/save-format.md) caveats
+**Sources:** plan §4.3–§4.5, §4.11; [phase 2 plan](../../plans/phase-2-circuit-engine.md) kickoff step 3 and decisions D1–D8, F2.3a, F2.3b, F2.5, F2.6; [ADR 0002](0002-simulation-architecture.md) (layers, worker, SAB); [ADR 0004](0004-save-format.md) and [ADR 0007](0007-world-document-v1.md) (save format, ticks, hash, replay log); [ADR 0006](0006-command-system.md) (bus, undo, logging); [ADR 0009](0009-save-io-boundary.md) (saves, quit flush); [ADR 0010](0010-wire-routing-spike.md) (frame-cost practice); [commands](../caveats/commands.md), [rendering](../caveats/rendering.md), [electron](../caveats/electron.md) and [save-format](../caveats/save-format.md) caveats
 
 ## Context
 
@@ -28,67 +29,80 @@ The hard constraints:
 
 ### 1. Ownership and threads
 
-| Thread                       | Owns                                                                                                                                                                                                                                                | Never                                                                            |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Main** (Angular, renderer) | The world bus (`CommandBus<World>`), the undo and redo stacks, the replay log, `seq`, the clock (the current tick and the pacing), the save and load flow                                                                                           | Runs `sim-core` during play (only to verify a log on load, [§10](#10-lifecycle)) |
-| **Sim worker**               | The `SimEngine`: netlist, solver, layers and all **sim-owned state** (tripped, blown, melt and thermal fractions, state of charge, filament temperature, PSU mode and hiccup timers, the last electrical solution); the snapshot buffer; sim events | Allocates `seq`, decides a tick, logs anything, or originates a world change     |
+| Thread                       | Owns                                                                                                                                                                                                                                                | Never                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Main** (Angular, renderer) | The world bus (`CommandBus<World>`), the undo and redo stacks, the replay log, `seq`, the clock (the current tick and the pacing), the save and load flow                                                                                           | Runs `sim-core` in the game, not even to verify a log on load: the worker does that ([§10](#10-lifecycle)) |
+| **Sim worker**               | The `SimEngine`: netlist, solver, layers and all **sim-owned state** (tripped, blown, melt and thermal fractions, state of charge, filament temperature, PSU mode and hiccup timers, the last electrical solution); the snapshot buffer; sim events | Allocates `seq`, decides a tick, logs anything, or originates a world change                               |
 
-- **The worker keeps a mirror bus.** It runs `createWorldRegistry()` over its own `CommandBus<World>`, built with the new `firstSeq` option (§3), and re-executes every logged entry it receives. `run` is pure and never reads sim-owned state, so the mirror reaches the same world as the main bus. The worker compares each result with the entry it was sent (the same `seq`, tick and args checks as `replayEntries`); any difference is a `desync` error (§10).
+- **The worker keeps a mirror bus.** It runs `createWorldRegistry()` over its own `CommandBus<World>`, built with the `firstSeq` option (§3), and re-executes every logged entry it receives. `run` is pure and never reads sim-owned state, so the mirror reaches the same world as the main bus. The worker compares each result with the entry it was sent (the same `seq`, tick and args checks as `replayEntries`); any difference is a `desync` error (§10).
 - **Commands record intent; the sim resolves the effect.** A command's `run` never reads sim-owned state. Example: `device.operate {id, control: 'handle', value: 'on'}` on a breaker records the handle position; whether it stays tripped is the engine's decision at that tick ("after a trip, the handle must go off and then on again" is engine logic).
-- **Commanded versus sim-owned state keys.** Each device model declares every key of its entity `state` bag (world v2, ADR 0013) as either:
-  - **commanded**: written only by commands (a switch's `closed`, a supply's setpoint and current limit, a breaker's handle). It lives in the bus world like any other field;
-  - **sim-owned**: written only by the engine. The bus world's copy is inert: it holds the value at the session's start or last load and is **never read during play**, by the engine or by the UI.
-- **Materialisation.** The world document a save writes, and the one `world.hash` hashes, is `materialiseWorld(busWorld, simState)` (in `sim-protocol`): the bus world at tick T with every sim-owned key and the solution record overlaid from the engine's export at T. Headless (`sim-cli`), the export is synchronous. In the game it is a round trip to the worker (§9).
-- **UI rule.** The UI and the renderer read sim-owned values from snapshots (§6), never from `world().entities[].state`.
+- **Commanded versus sim-owned state is declared in code,** per model kind, in `MODEL_KINDS` in `@controls/catalog`: for every key, its owner (commanded or sim), its Zod schema and its initial value. World v2 (ADR 0013) persists them as **two bags**:
+  - **`EntityV2.state`, commanded:** written only by commands (a switch's `closed`, a supply's setpoint and current limit, a breaker's handle);
+  - **`EntityV2.sim`, sim-owned:** written only by `materialiseWorld`. The bus world's copy is inert: it holds the value at the session's start or last load and is **never read during play**, by the engine or by the UI. A property test shows every change preserves each entity's `sim` bag, except on insert and remove.
+- **Materialisation.** The world document a save writes, and the one `world.hash` hashes, is `materialiseWorld(busWorld, simState)` (in `sim-protocol`): the bus world at tick T with every entity's `sim` bag and the solution record (`WorldV2.sim`, §9.6) taken from the engine's export at T. No wall-clock value reaches the export or `materialiseWorld`. Headless (`sim-cli`), the export is synchronous. In the game it is a round trip to the worker (§9.5).
+- **UI rule.** The UI and the renderer read sim-owned values from snapshots (§6), never from the world. `Session.world().tick` and `world().entities[].sim` are never displayed.
 
 ### 2. Clock and pacing
 
 - **1 tick = 1 ms of sim time**, an integer. Ticks are stored as JS numbers (exact up to 2^53) and as `Float64` in the snapshot, never as `Int32`: 2^31 ms is under 25 days, which a 60× sandbox reaches in about 10 hours.
-- **Speeds:** 0 (paused), 1×, 10× and 60×. `sim.step {ticks}` advances by an exact number of ticks at any speed. It is meant for paused use, and works the same while running (the anchor moves, see below).
-- **The pacing is on the main thread, in `SimHost`** (D1: main owns the clock). The policy is a pure class, `Pacer` in `sim-protocol`, that takes the wall time as an argument. `SimHost` is the only code that reads the wall clock for pacing. The plan put "pacing" in `libs/sim-worker`; this ADR splits it, because the main thread decides the tick. The worker's lint-excepted module (`libs/sim-worker/src/lib/worker-clock.ts`) reads the wall clock only for work slicing, publish throttling and the unhashed diagnostics (§5.6).
-- **Each pacing tick** (a `setTimeout` loop every `PACE_INTERVAL_MS`, not `requestAnimationFrame`, so pacing never wakes the render loop):
+- **Speeds:** 0 (paused), 1×, 10× and 60×. `sim.step {ticks}` advances by an exact number of ticks at any speed. It is meant for paused use, and works the same while running (the anchor moves, see below) and while suspended.
+- **The pacing is on the main thread, in `SimHost`** (D1: main owns the clock). The policy is a pure class, `Pacer` in `sim-protocol`, that takes the wall time as an argument. `SimHost` reads the wall clock only through an injected `SIM_CLOCK` token (`now`, `setTimeout`, `clearTimeout`), next to `SIM_WORKER_FACTORY`, so pacing specs use fake timers and the disposal spec can count them. The plan put "pacing" in `libs/sim-worker`; this ADR splits it, because the main thread decides the tick. The worker's lint-excepted module, `libs/sim-worker/src/lib/pacing/worker-clock.ts` (the boundary PR exempts `src/lib/pacing/**`), reads the wall clock only for work slicing, publish throttling and the unhashed diagnostics (§5.6).
+- **Each pacing tick** (a `setTimeout` loop every `PACE_INTERVAL_MS`, not `requestAnimationFrame`, so pacing never wakes the render loop). The loop runs only while the speed is above 0 and the sim isn't suspended or held:
 
   ```text
   desired  = anchorTick + floor((nowMs − anchorWallMs) × speed)
-  progress = the tick of the latest snapshot (§6.3)
+  progress = the tick of the latest snapshot read (§6.3)
   maxLead  = speed × MAX_LEAD_WALL_MS                 (ticks)
   target   = min(desired, progress + maxLead)
   if target > bus.currentTick(): bus.advanceTo(target); post { type: 'advance', tick: target }
   if desired > target: anchorTick = target; anchorWallMs = nowMs   // drop the lost time: no catch-up spiral
   ```
 
-  `sim.setSpeed` and `sim.pause` re-anchor at the current tick and time. `sim.step {ticks}` calls `bus.advanceTo(current + ticks)` at once, posts the advance and re-anchors. It isn't capped by the lead, so the worker may then need time to catch up, and the HUD shows "catching up".
+  `sim.setSpeed` and `sim.resume` re-anchor at the current tick and time. `sim.step {ticks}` advances at once through the time host (§3), posts the advance and re-anchors. It isn't capped by the lead, so the worker may then need time to catch up (§13).
 
-- **Effective speed** is Δtick ÷ Δwall over a 1 s window. "Falling behind" is raised when the effective speed is below 0.9 × the requested speed for two windows in a row, and cleared after one window at 0.97 × or better (hysteresis, so it doesn't flicker). The HUD announces it through `aria-live="polite"`.
+- **Pacing writes no signals at 100 Hz.** The HUD's signals are sampled at the panel rate (§9.3).
+- **Suspended (U1).** When the document becomes hidden (`visibilitychange`), `SimHost` stops pacing; this is host state, not a logged command, and the speed is unchanged. When it becomes visible again, `SimHost` re-anchors at the current tick and time and resumes at the player's speed. "Falling behind", the effective-speed windows and the watchdog (§10) are held while suspended. `sim.step` still works. `backgroundThrottling` stays at its default. The web harness behaves the same. Running in the background may become a setting later.
+- **Held.** `SimHost.hold()` suspends pacing the same way while a console script runs (§9.5).
+- **Effective speed** is Δtick ÷ Δwall over a 1 s window. "Falling behind" is raised when the effective speed is below 0.9 × the requested speed for two windows in a row, and cleared after one window at 0.97 × or better (hysteresis, so it doesn't flicker).
 - **Determinism.** Wall-clock floats decide only _which_ integer tick the main thread advances to. Everything that reaches the bus, the log, the worker and the hash is an integer tick.
 
-| Constant               | Value            | Kind                                                                                                                                                           |
-| ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TICK_MS`              | 1                | spec §4.3 (1 kHz)                                                                                                                                              |
-| `SIM_SPEEDS`           | `[0, 1, 10, 60]` | spec §4.3                                                                                                                                                      |
-| `SOLVE_INTERVAL_TICKS` | 10               | numerical choice inside spec §4.5's 10–20 ms                                                                                                                   |
-| `MAX_STEP_TICKS`       | 3 600 000 (1 h)  | game-design bound on `sim.step`                                                                                                                                |
-| `PACE_INTERVAL_MS`     | 10               | numerical choice: under a frame, coarse enough to be cheap                                                                                                     |
-| `MAX_LEAD_WALL_MS`     | 25               | numerical choice: at most about 25 ms of wall time between what is shown and what is commanded; at least 2 × `PACE_INTERVAL_MS`, or 60× could never be reached |
-| `WORK_SLICE_MS`        | 8                | numerical choice: the worker yields to its message queue at least this often                                                                                   |
-| `PUBLISH_MIN_WALL_MS`  | 4                | numerical choice: the throttle on cadence publishes (§7)                                                                                                       |
-| `MAX_READ_ATTEMPTS`    | 4                | numerical choice: seqlock attempts per slot (§6.2)                                                                                                             |
-| `PANEL_SAMPLE_HZ`      | 10 (at most 30)  | spec §4.1                                                                                                                                                      |
+| Constant                  | Value            | Kind                                                                                                                                                           |
+| ------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TICK_MS`                 | 1                | spec §4.3 (1 kHz)                                                                                                                                              |
+| `SIM_SPEEDS`              | `[0, 1, 10, 60]` | spec §4.3                                                                                                                                                      |
+| `SOLVE_INTERVAL_TICKS`    | 10               | numerical choice inside spec §4.5's 10–20 ms                                                                                                                   |
+| `MAX_STEP_TICKS`          | 600 000 (10 min) | game-design bound on `sim.step`: a step can't be cancelled. It may be raised later without a bump, never lowered (§12)                                         |
+| `DEFAULT_STEP_TICKS`      | 1 000            | game-design default of `sim.step`'s form                                                                                                                       |
+| `PACE_INTERVAL_MS`        | 10               | numerical choice: under a frame, coarse enough to be cheap                                                                                                     |
+| `MAX_LEAD_WALL_MS`        | 25               | numerical choice: at most about 25 ms of wall time between what is shown and what is commanded; at least 2 × `PACE_INTERVAL_MS`, or 60× could never be reached |
+| `WORK_SLICE_MS`           | 8                | numerical choice: the worker yields to its message queue at least this often                                                                                   |
+| `PUBLISH_MIN_WALL_MS`     | 4                | numerical choice: the throttle on cadence publishes (§7). F2.3b may try 8                                                                                      |
+| `MAX_READ_ATTEMPTS`       | 4                | numerical choice: seqlock attempts per slot (§6.2)                                                                                                             |
+| `PANEL_SAMPLE_HZ`         | 10 (at most 30)  | spec §4.1                                                                                                                                                      |
+| `WATCHDOG_MS`             | 3 000            | numerical choice: no publish for this long while the target is ahead of progress is a crash (§10)                                                              |
+| `MAX_SLOT_BYTES`          | 64 MiB           | numerical choice: a generation that needs more is `error {code: 'capacity'}` (§7)                                                                              |
+| `STATE_QUERY_TIMEOUT_MS`  | 5 000            | numerical choice: the deadline of a `state` or `snapshot` query (§9.5). F2.3b tunes it                                                                         |
+| `SIM_SETTLE_MS`           | 1 000            | numerical choice: the most the quit flush, a replace or a teardown waits for pending `state` queries (§9.5, §10)                                               |
+| `AUTOSAVE_MAX_BEHIND_MS`  | 2 000            | numerical choice: an autosave is skipped if the worker is further behind than this, in wall time (§9.5). F2.3b tunes it                                        |
+| `EVENT_TOAST_COALESCE_MS` | 2 000            | game-design choice: `tripped` and `blown` toasts are coalesced per entity over this window (§4)                                                                |
 
 ### 3. Time versus undo
 
-- **Time passing is not a command** and never touches the undo or redo stacks. This supersedes ADR 0006's example of `sim.step` as "a non-undoable change": `sim.step` changes nothing, so it leaves both stacks alone.
-- **`CommandBus.advanceTo(tick)`** sets the state's tick through a new bus option, `withTick(state, tick)` (for `World`, `{ ...world, tick }`). It is unlogged, takes no `seq`, leaves the history alone and fires no `executed` event. It throws for `tick < currentTick()`, and is a no-op for an equal tick.
+- **Time passing is not a command** and never touches the undo or redo stacks. This supersedes ADR 0006's example of `sim.step` as "a non-undoable change": `sim.step` changes nothing in the world, so it leaves both stacks alone.
+- **`CommandBus.advanceTo(tick)`** sets the state's tick through a new bus option, `withTick(state, tick)` (for `World`, `{ ...world, tick }`). It is unlogged, takes no `seq`, leaves the history alone and fires no `executed` event. It throws for a tick that isn't `Number.isSafeInteger`, for `tick < currentTick()`, and on a bus constructed without `withTick`; it is a no-op for an equal tick.
+- **`bus.nextSeq()`** is the one source of the next `seq`, used by `exec`, `replayEntries` and `carryOver` (today each computes `log.length`).
+- **`CommandBusOptions.firstSeq`** (default 0) starts a bus at a later `seq` with an empty log and history. It is persisted as `ReplayLogV2.firstSeq`, with `entries[i].seq === firstSeq + i`, so a rebased or restarted log keeps its `seq`s. This matters because randomness is keyed by `commandStreamKey(seq)`.
+- **The time host.** `createGame({ world, registry, time })` takes a `TimeHost` (a `SimDriver`): `advanceTo(tick)`, `applied(entry, world)` and an optional `exportState()`. The headless in-process engine and `SimHost` in the game are the only implementations. `sim.step` takes effect only there, synchronously inside `exec`, so the next console line is stamped at the new tick. No bus listener drives time.
 - **Every change preserves `tick`:** `change.apply(s).tick === s.tick` and `change.invert(s).tick === s.tick`, for every world command (a fast-check property in `world-model`). A change must never capture and restore a whole world, or undo would rewind time.
-- **The "undo everything" property is restated:** for a session in which no time passed (every entry at the initial tick) and no cheat ran, undoing everything returns the initial `world.hash`. When time has passed, undoing everything returns a world whose commanded part (entities, connections, commanded state, `nextEntityId`, `fixtures`) equals the initial one; `tick` and the sim-owned state are whatever time made them.
-- **Undoing a delete restores the entity as it was deleted.** When an entity leaves the world, the engine keeps its sim-owned state as a tombstone, keyed by entity id. Reinserting that id restores it, so a blown fuse comes back blown. A tombstone is dropped once its id is no longer below `nextEntityId` (its place was undone, so the id can be reused by a fresh entity). Tombstones aren't persisted: after a load the undo stack is empty, and ADR 0007's argument shows no logged undo can reach a pre-load delete.
-- **`replayEntries(bus, entries, { time?, endTick? })`** no longer refuses an entry whose tick is ahead. For each entry with `tick > bus.currentTick()`, it calls `time.advanceTo(entry.tick)` (the engine; absent in P1 callers) and then `bus.advanceTo(entry.tick)` before executing it. At the end it advances to `endTick`, if given. A tick **lower** than the current one is still `tick-mismatch`. v1 logs (every entry at tick 0, no `endTick`) replay exactly as before (a property test on the P1 fixtures).
-- **Host listeners never run during a replay.** Time in a replay comes only from entry ticks and `endTick`. A `sim.step` entry at tick t is a no-op on replay; the next entry's tick (or `endTick`) carries its effect.
-- **`CommandBusOptions.firstSeq`** (default 0) starts a bus at a later `seq` with an empty log and history. Only the worker's mirror uses it, for a loaded game (§10). Such a bus can't produce a self-contained replay log.
+- **The "undo everything" property is restated:** for a session in which no time passed (every entry at the initial tick) and no cheat ran, undoing everything returns the initial `world.hash`. When time has passed, undoing everything returns a world whose commanded part (entities and their `state` bags, connections, `nextEntityId`, `fixtures`) equals the initial one; `tick`, the `sim` bags and the solution are whatever time made them.
+- **Undoing a delete restores the entity as it was deleted.** When an entity is deleted, the engine keeps its sim-owned state as a tombstone, keyed by entity id. Reinserting that id restores it, so a blown fuse comes back blown. When an entity leaves because its `entity.place` was undone, its sim state is dropped immediately (the id can be reused by a fresh entity). Tombstones are never persisted: after a load the undo stack is empty, and ADR 0007's argument shows no logged undo can reach a pre-load delete. A parity test deletes a blown fuse, saves, loads, places a fuse and compares with a straight run.
+- **`endTick` and "state at T".** `endTick ≥ last entry tick ≥ initialWorld.tick`. The state at tick T means: after every command logged at T so far, before step T's cadence solve.
+- **`replayEntries(bus, entries, { time?, endTick? })`** no longer refuses an entry whose tick is ahead. For each entry with `tick > bus.currentTick()`, it calls `time.advanceTo(entry.tick)` (reaching the start of that tick) and then `bus.advanceTo(entry.tick)`, executes the entry and calls `time.applied(entry, world)`. At the end it advances to `endTick`, if given. A tick **lower** than the current one is still `tick-mismatch`. v1 logs (every entry at tick 0, migrated with `endTick` = `max(initialWorld.tick, last entry tick)`) replay exactly as before (a property test on the P1 fixtures).
+- **Time in a replay comes only from entry ticks and `endTick`.** A `sim.step` entry at tick t doesn't advance on replay; the next entry's tick (or `endTick`) carries its effect.
 
 ### 4. Command flow and sim events
 
-**Order.** `SimHost` subscribes to the game's `executed` events and forwards every **logged** entry (world, view, `edit.*` and `sim.*` commands: the mirror needs every `seq`) in `seq` order. Unlogged UI chrome (`palette.open`, `file.*`) is never sent. Advances and commands share one `postMessage` channel, so the worker sees them in the order main produced them. Main stamps each entry with its own current tick, which is never below anything the worker has reached, because the worker never goes past the last advance it was sent.
+**Order.** `SimHost` gets each logged entry through `time.applied` and forwards every **logged** entry (world, view, `edit.*` and `sim.*` commands: the mirror needs every `seq`) in `seq` order. Unlogged UI chrome (`palette.open`, `file.*`, `sim.restart`) is never sent. Advances and commands share one `postMessage` channel, so the worker sees them in the order main produced them. Main stamps each entry with its own current tick, which is never below anything the worker has reached, because the worker never goes past the last advance it was sent. Commands executed before `ready` are queued by `postMessage` order and handled after `init`.
 
 **The worker's step order** (also `SimEngine`'s, headless). `S_t` is the state at tick t; tick t's commands apply to `S_t`:
 
@@ -99,7 +113,7 @@ The hard constraints:
    2. the discrete layer (empty in P2), then continuous, then protection, over [t, t+1);
    3. if protection changed the topology (a trip or a blow), recompile and re-solve at t+1, and emit the event at t+1.
 
-A command whose tick is ahead of the engine waits in the inbox until the engine reaches that tick. Messages are consumed strictly in order: an `advance` isn't consumed until the engine has reached it, and a `query` is answered only after every earlier message has been handled (§9).
+A command whose tick is ahead of the engine waits in the inbox until the engine reaches that tick. Messages are consumed strictly in order: an `advance` isn't consumed until the engine has reached it, and a `query` is answered only after every earlier message has been handled (§9.5). The worker yields to its queue through a `MessageChannel` at least every `WORK_SLICE_MS`, never through nested `setTimeout`; when idle it waits for the next message. It never calls `Atomics.wait`.
 
 **Messages** (Zod schemas in `@controls/sim-protocol`, parsed on receipt at both ends; `World`, `ReplayEntry` and `ReplayLog` are the save-format types):
 
@@ -116,8 +130,8 @@ type HostToWorker =
   | { type: 'stop' };
 
 type SimStart =
-  | { kind: 'world'; world: World; firstSeq: number } // world is materialised (sim-owned keys and solution set)
-  | { kind: 'replay'; log: ReplayLog }; // initialWorld + entries + endTick: restart after a crash
+  | { kind: 'world'; world: World; firstSeq: number } // world is materialised (sim bags and WorldV2.sim set)
+  | { kind: 'replay'; log: ReplayLog }; // initialWorld + firstSeq + entries + endTick: load verification and crash restart
 
 type WatchTarget =
   | { kind: 'branch'; element: ElementRef } // current through a branch
@@ -129,7 +143,7 @@ type WorkerToHost =
       type: 'ready';
       protocol: number;
       transport: 'sab' | 'message';
-      isolated: boolean;
+      isolated: boolean; // self.crossOriginIsolated, from the worker's own scope
       buffer: SharedArrayBuffer | null;
       tick: number;
     }
@@ -141,7 +155,17 @@ type WorkerToHost =
   | { type: 'snapshotBytes'; id: number; tick: number; bytes: ArrayBuffer } // reply to query 'snapshot'
   | { type: 'error'; code: SimErrorCode; message: string; seq: number | null; tick: number | null };
 
-type SimErrorCode = 'protocol-mismatch' | 'start-failed' | 'invalid-message' | 'desync' | 'engine-threw';
+type SimErrorCode =
+  | 'protocol-mismatch'
+  | 'start-failed' // includes a big-endian platform and a solution record that doesn't match the netlist (§9.6)
+  | 'invalid-message' // the message text never echoes the payload
+  | 'desync'
+  | 'engine-threw' // also self.onerror, unhandledrejection, and a non-finite value reaching the export
+  | 'csp-violation' // a securitypolicyviolation seen in the worker scope
+  | 'capacity'; // a slot can't be allocated (over MAX_SLOT_BYTES, or the allocation failed); never a partial publish
+
+/** Host-side rejections of a pending query (never on the wire). */
+type SimQueryError = 'superseded' | 'timeout' | 'crashed' | 'unavailable';
 
 interface SimEvent {
   readonly tick: number;
@@ -154,19 +178,26 @@ interface SimEvent {
   readonly detail: Readonly<Record<string, number | string | boolean>>;
 }
 
+/** Both persisted shapes are z.infer of @controls/save-format schemas: no hand-written persisted interface (ADR 0004). */
 interface SimStateExport {
   readonly tick: number;
-  /** Sim-owned keys only, entities sorted by id; every sim-owned key present, absent values null. */
-  readonly entities: readonly {
-    readonly id: number;
-    readonly state: Readonly<Record<string, number | boolean | string | null>>;
-  }[];
-  /** The last electrical solution (§9): needed so a load continues bit-exactly between solves. */
-  readonly solution: SolutionRecord;
+  /** Every entity with a model kind, sorted by id; `state` is the entity's sim bag, every sim key present, absent values null. */
+  readonly entities: readonly { readonly id: number; readonly state: z.infer<EntityV2['sim']> }[];
+  /** The last electrical solution (§9.6). */
+  readonly solution: NonNullable<z.infer<WorldV2['sim']>>;
 }
 ```
 
-- **Sim events** are batched with each publish and sorted by tick, then entity id, then kind. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content is deterministic: `game.on('sim')` gets the same list headless. Events are not in any hash. They feed the HUD, notifications and the netlist inspector.
+`sim-protocol` parses every export with the save-format schemas before materialising it.
+
+- **Sim events** are batched with each publish and sorted by tick, then entity id, then kind. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content is deterministic: `game.on('sim')` gets the same list headless. Events are not in any hash. Where they go in the UI:
+
+  | Event                                   | UI                                                                                        |
+  | --------------------------------------- | ----------------------------------------------------------------------------------------- |
+  | `tripped`, `blown`                      | One warning toast, coalesced per entity over `EVENT_TOAST_COALESCE_MS`; HUD and inspector |
+  | `hiccup`                                | HUD and inspector only                                                                    |
+  | `nonConverged`, `singular`, `overRated` | Inspector and dev console only                                                            |
+
 - **Traces** sample each watched quantity at every electrical solve (cadence and topology solves both), so the bench demo's current trace shows the cold-filament inrush: the topology solve at the switch's tick is the peak. Watches are view state, never logged, and never change the engine.
 
 ### 5. Snapshot layout (`SIM_PROTOCOL_VERSION` 1)
@@ -214,16 +245,18 @@ Slot `i` starts at `slotsOffset + i × slotBytes`. The plan listed the tick, the
 
 Sections are packed in this order, each starting 8-aligned. Offsets are computed from the counts, which are constant within a topology generation.
 
-| Section  | Size               | Entry layout                                                                                                                                                                             |
-| -------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nodes    | `nodeCount × 16`   | `f64 re`, `f64 im`: the node voltage in V against the solver's ground                                                                                                                    |
-| Branches | `branchCount × 16` | `f64 re`, `f64 im`: the branch current in A, positive from the descriptor's end `a` to end `b`                                                                                           |
-| Islands  | `islandCount × 16` | `u8 kind` (0 empty, 1 dc, 2 ac, 3 mixed), `u8 flags` (bit 0 singular, bit 1 nonConverged), `u16 iterations`, `u32 referenceNode` (`0xFFFFFFFF` for none), `u32 unknowns`, `u32` reserved |
-| Devices  | `deviceDataBytes`  | Fixed-width records at the descriptor's `recordOffset`, laid out by their kind's output schema (§5.4)                                                                                    |
+| Section  | Size               | Entry layout                                                                                                                                                                                                                          |
+| -------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nodes    | `nodeCount × 16`   | `f64 re`, `f64 im`: the node voltage in V against the solver's ground                                                                                                                                                                 |
+| Branches | `branchCount × 16` | `f64 re`, `f64 im`: the branch current in A, positive from the descriptor's end `a` to end `b`                                                                                                                                        |
+| Islands  | `islandCount × 16` | `u8 kind` (0 empty, 1 dc, 2 ac, 3 mixed), `u8 flags` (bit 0 singular, bit 1 nonConverged), `u16 iterations`, `u32 referenceNode` (`0xFFFFFFFF` for none), `u32 unknowns`, `u8 band` (an index into `NOMINAL_BANDS`), 3 bytes reserved |
+| Devices  | `deviceDataBytes`  | Fixed-width records at the descriptor's `recordOffset`, laid out by their kind's output schema (§5.4)                                                                                                                                 |
 
 - **AC values are RMS phasors** (V_rms∠θ) at the region frequency. DC values have `im = 0`.
 - **Reference node.** For a grounded island, the reference is ground. For a floating DC island, it is the most negative source terminal. Readers subtract `V(referenceNode)` to show a voltage. No reader computes any other electrical quantity.
-- **Every value is finite, and `-0` is written as `+0`.** The solver flags a singular island instead of producing NaN (F2.2); the writer turns any non-finite value that slips through into 0, sets the island's flag, and fails a debug assertion.
+- **Magnitudes.** Readers may take the complex magnitude |V| or |I| for overlays. A mixed island is shown as AC.
+- **The nominal band.** `NOMINAL_BANDS` in `sim-protocol` is a fixed table (0 = none; then 12 V DC, 24 V DC, 120 V AC, …), chosen by the engine from the island's source nameplates and setpoints, so overlays can pick a scale without computing anything. It is hashed; appending a band bumps the protocol (§12).
+- **Every value is finite, and `-0` is `+0`.** The engine normalises `-0` to `+0` and refuses non-finite values wherever it stores sim-owned state and the solution, not only in the snapshot writer; the solver flags a singular island instead of producing NaN (F2.2). A non-finite value that still reaches the writer or the export is `engine-threw`.
 - `iterations` is the outer-loop count of the island's last solve (1 for a linear island).
 
 #### 5.4 Device records and output schemas
@@ -245,7 +278,7 @@ interface DeviceOutputField {
 }
 ```
 
-Fields are ordered `f64`, then 4-byte, then `u8`, and the record is zero-padded to 8 bytes. Records are in device-index order (entity id ascending), one for each entity whose model publishes outputs. Props publish none. The P2 schemas below are **provisional**: each device-model PR (F2.4, F2.5) finalises its own schema with `renderer-engineer` and `angular-ui-engineer`, and the ADR is amended in that PR.
+Fields are ordered `f64`, then 4-byte, then `u8`, and the record is zero-padded to 8 bytes. Records are in device-index order (entity id ascending), one for each entity whose model publishes outputs. Props publish none. Readers join a descriptor device to a world entity by **(id, kind)**; a mismatch means the device is treated as absent. The P2 schemas below are **provisional**: each device-model PR (F2.4, F2.5) finalises its own schema with `renderer-engineer` and `angular-ui-engineer`, and the ADR is amended in that PR.
 
 | Kind                 | Fields (offset: type name)                                                              | Bytes |
 | -------------------- | --------------------------------------------------------------------------------------- | ----: |
@@ -262,13 +295,13 @@ Switches publish no record: the renderer draws the handle from the world's comma
 
 #### 5.5 Hashed and unhashed
 
-- **Hashed:** the slot's hashed region (§5.2). It is a pure function of (seed, log, tick), the same in every runtime and through either transport.
+- **Hashed:** the slot's hashed region (§5.2). It is a pure function of (seed, log, tick), the same in every runtime and through either transport. `encodeSnapshot` at T is a pure function of (the compiled netlist, the sim-owned state, the solution record), so everything hashed in a slot is derivable from the export (§9.6).
 - **Not hashed:** `slotSeq`, `topologyGeneration`, the buffer header, the diagnostics area, events and traces, and **which** ticks get published. Publishing is throttled by the wall clock (§7), so the set of published ticks varies between runs. The content of a snapshot at tick t never does.
 - **Publishing never changes the engine.** It only serialises. Encoding at an off-cadence tick doesn't solve.
 
 #### 5.6 Diagnostics (bytes 64–255, unhashed)
 
-Guarded by `diagSeq` with the same seqlock rule as a slot. All `f64`, written by the worker clock module: 64 `lastSolveMs`, 72 `maxSolveMs` (over 1 s), 80 `meanTickUs` (over 1 s), 88 `ticksPerSecond`, 96 `busyFraction`, 104 `solveCount`, 112 `throttledPublishes`; 120–255 reserved. Solve timings live **only** here: never in a slot, an event, a trace or a save.
+Guarded by `diagSeq` with the same seqlock rule as a slot. All `f64`, written by the worker clock module: 64 `lastSolveMs`, 72 `maxSolveMs` (over 1 s), 80 `meanTickUs` (over 1 s), 88 `ticksPerSecond`, 96 `busyFraction`, 104 `solveCount`, 112 `throttledPublishes`; 120–255 reserved. Solve timings live **only** here: never in a slot, an event, a trace or a save. Without cross-origin isolation `performance.now()` is coarser, which affects these diagnostics only.
 
 ### 6. Seqlock and reading
 
@@ -282,6 +315,7 @@ encodeSnapshot(engine, slotBytes[w]); // plain typed-array stores, padding zeroe
 Atomics.store(i32, slotSeqIndex[w], s + 2); // even: complete
 Atomics.store(i32, LATEST_SLOT, w);
 Atomics.add(i32, PUBLISH_SEQ, 1);
+Atomics.notify(i32, PUBLISH_SEQ); // wakes SimHost's waitAsync
 ```
 
 A reader of the latest slot conflicts only if the writer publishes **twice** while it copies. Atomics operations are sequentially consistent, and in V8 they are full fences on x64 and arm64. Formally, the plain reads race with the plain writes and may see torn values; the seqlock's second check discards every read that overlapped a write.
@@ -296,14 +330,17 @@ latest():
     repeat MAX_READ_ATTEMPTS times:
       s1 = Atomics.load(slotSeq[slot]); if s1 is odd: continue
       copy the slot's used bytes into the reader's private buffer           // preallocated; see below
-      s2 = Atomics.load(slotSeq[slot]); if s1 === s2: accept; lastSeen = p; return current
+      s2 = Atomics.load(slotSeq[slot]); if s1 === s2: goto accept
   misses++; return current                                                  // keep the previous snapshot
-accept: if the copy's generation has no descriptor yet, keep the previous snapshot and retry on the next call
+accept:
+  if the copy's generation has no descriptor yet: awaitingDescriptor = true; return current  // lastSeen unchanged
+  lastSeen = p; return the new view
 ```
 
-- **The copy is preallocated.** The reader holds one private `ArrayBuffer` of `slotBytes` with its typed views, plus, for each slot, a `Uint8Array` view of the used length, which is rebuilt only when the generation (and so the counts) changes. A read is one `set()`, two `Atomics.load` calls and no allocation.
+- **The copy is preallocated.** The reader holds one private `ArrayBuffer` of `slotBytes` with its typed views, plus, for each slot, a `Uint8Array` view of the used length, which is rebuilt only when the generation (and so the counts) changes. A read is one `set()`, two `Atomics.load` calls and no allocation. A whole-slot copy is kept for P2; a devices-only read can be added later inside `SnapshotReader` without a version bump.
 - **`latest()` returns the same `SnapshotView` object every time,** backed by the private copy. It stays valid until the next `latest()` call. Never keep it across calls; copy out the numbers you need.
-- **The generation join.** The reader keeps the descriptors of the current and the previous generation. A slot whose generation has no descriptor yet (the message is slower than the SAB) is never shown; the previous snapshot stays current. A slot from an older generation than the current descriptor is ignored.
+- **The generation join.** The reader keeps the descriptors of the current and the previous generation. A slot whose generation has no descriptor yet (the message is slower than the SAB) is never shown, and `lastSeen` isn't updated; when the `topology` message arrives, `SimHost` re-reads and notifies. A slot from an older generation than the current descriptor is ignored. A test delivers a slot of a new generation before its descriptor.
+- **Misses** are counted by `SimHost` and shown on the dev frame-time HUD and in the `sim.stats` console query (with the diagnostics), never on the player's HUD. The bench e2e asserts `misses === 0`.
 
 #### 6.3 `SnapshotView`
 
@@ -323,11 +360,12 @@ interface SnapshotView {
   islandFlags(island: number): number;
   islandReference(island: number): number; // −1 for none
   islandIterations(island: number): number;
+  islandBand(island: number): number; // index into NOMINAL_BANDS
   read(field: FieldRef): number; // u8 enums return the code; descriptor.schemas gives the names
   hashedBytes(): Uint8Array; // tests and `snapshot.hash` only (a view, no copy)
 }
-// Resolved once per generation, never per frame:
-// descriptor.field(entityId, 'lightOutputRel') → FieldRef | null
+// Resolved once per generation, never per frame. The descriptor stays plain JSON:
+// DescriptorIndex.of(descriptor).field(entityId, 'lightOutputRel') → FieldRef | null
 ```
 
 The same `SnapshotView` is used headless (`game.snapshot()` returns the hashed bytes; `SnapshotView.fromBytes` wraps them) and in tests, so the renderer and the UI develop against fake snapshots that `encodeSnapshot` builds from fixtures.
@@ -358,7 +396,12 @@ type ElementRef =
   | { readonly kind: 'connection'; readonly connection: ConnectionId }; // a lead (wires from P3)
 ```
 
-- **Capacity.** The worker sizes the SAB for twice the first topology, with minimums (1 024 nodes, 2 048 branches, 256 islands, 64 KiB of device records). A generation that doesn't fit gets a new, larger buffer, sent in the same `topology` message. Readers switch on that message; the worker never writes the old buffer again.
+- **Descriptor identity.** A new `TopologyDescriptor` object is made for each generation and for each worker. Readers' caches key on the descriptor's identity, never on the generation number (a restarted worker counts generations from 0 again).
+- **Netlist guarantees** (F2.1 tests them; the overlays rely on them):
+  - each connection compiles to **exactly one branch**, with its contact resistances summed into it; `a` is `connection.a`'s node and `b` is `connection.b`'s node;
+  - a closed switch, or any other ideal merge, has no branch;
+  - every catalogue terminal of every netlisted entity appears in exactly one node's `members`, and every node has at least one member.
+- **Capacity.** The worker sizes the SAB for twice the first topology, with minimums (1 024 nodes, 2 048 branches, 256 islands, 64 KiB of device records), up to `MAX_SLOT_BYTES`. A generation that doesn't fit gets a new, larger buffer, sent in the same `topology` message; readers switch on that message and drop the old SAB, and the worker never writes the old buffer again. In the fallback, the worker drops released buffers smaller than the new `slotBytes`. A generation over `MAX_SLOT_BYTES`, or a failed allocation, is `error {code: 'capacity'}`, never a partial publish.
 - **Publish cadence:**
   - after every electrical solve (every `SOLVE_INTERVAL_TICKS` and on every topology or value change), throttled to one per `PUBLISH_MIN_WALL_MS` of worker wall time;
   - **always**, unthrottled: after `init`, on a new generation, and when the engine reaches its current target and goes idle. So a paused sim always shows its exact tick, and an e2e test that steps and then waits sees that tick;
@@ -367,75 +410,174 @@ type ElementRef =
 
 ### 8. The `postMessage` fallback (`?sab=0`)
 
-- **When:** the page isn't `crossOriginIsolated`, `SharedArrayBuffer` is missing, or the URL has `?sab=0` (the test switch; any build). `init.transport` asks; `ready.transport` says what the worker chose.
+- **When:** the page isn't `crossOriginIsolated`, `SharedArrayBuffer` is missing, or the URL has `?sab=0` (the test switch; any build). `init.transport` asks; `ready.transport` says what the worker chose. On Electron, falling back without `?sab=0` logs an error, and the about box shows the transport.
 - **The same bytes:** the worker keeps a pool of three `ArrayBuffer`s of `slotBytes`. Each publish encodes one slot into a free one with the same `encodeSnapshot`, `slotSeq` even, and transfers it in a `snapshot` message. The reader copies it into its private buffer, exactly as in the SAB path, and sends the buffer back with `release`. With no free buffer, the worker skips a throttled publish, and remembers a forced one until a buffer comes back.
+- **Reading is message-driven:** `SimHost` reads on each `snapshot` message instead of `waitAsync`.
 - **Allocation:** one small `Uint8Array` view per received message (the transferred buffer is a new object). That is per snapshot, not per frame.
 - **Tested:** the web harness runs `bench-lamp.console` with and without `?sab=0`, and both `snapshotHash`es equal `sim-cli`'s golden.
 
 ### 9. Readers: the renderer, Angular and saves
 
-- **One reader per game.** `SimHost` owns the `SnapshotReader`. On each pacing tick, or each `snapshot` message in the fallback, it calls `latest()`. If the tick or generation moved, it calls its snapshot listeners synchronously with the view. Nobody else reads the buffer.
-- **The renderer** (`type:rendering`) gets a `SnapshotSource` (an interface from `sim-protocol`: `subscribe(listener) → unsubscribe`) from the viewport host. It never imports `feature-session` or `sim-worker`. In its listener it:
-  1. reads the fields it draws through `FieldRef`s resolved at the generation change;
-  2. maps each to a **display step** in preallocated arrays: lamp emissive as `round(255 × displayCurve(lightOutputRel))`, where the display curve is a documented game-design function in a lint-fenced pure module; and overlay colours as a bin index on the overlay's fixed scale;
-  3. calls `invalidate()` only if any display step changed. A moving current overlay is an animation (its `update` returns `true`), and is static under `prefers-reduced-motion`.
+#### 9.1 One reader, pushed to listeners
 
-  The renderer never computes an electrical quantity. Voltage overlays colour by `|V(node) − V(islandReference)|`, a complex magnitude for AC.
+- **`SimHost` owns the one `SnapshotReader`.** With the SAB it waits with `Atomics.waitAsync(i32, PUBLISH_SEQ, lastSeen)`, re-armed after each read (not while awaiting a descriptor: the `topology` message triggers that read), instead of polling; in the fallback it reads on each `snapshot` message. Nobody else reads the buffer. The reader is replaced when a crashed worker is restarted.
+- **Notifying.** Listeners are called synchronously after every accepted read whose `publishSeq` differs from the last one delivered, including a re-solve at the same tick in the same generation (a setpoint change while paused). Listeners are never called from inside a rAF `update()`.
+- **The listener signature** is `(view: SnapshotView | null) => void`. `null` means a source reset (a new sandbox, an adopt, a teardown or a crash restart), and readers return to their defaults: lamps dark, no overlays.
 
-- **Angular panels** don't subscribe per snapshot. `SimHost.select(selector, hz = PANEL_SAMPLE_HZ)` returns a `Signal<T>` that runs `selector(view)` at most `hz` times a second (at most 30) and sets the signal only when the result changes (`equal`). Selectors return small plain values. The HUD gets `SimHost.status`, `speed`, `effectiveSpeed`, `behind` and `simTick` (the latest snapshot's tick, which is what the player sees) as signals at the same rate.
-- **`Session.world()` is updated by commands only.** Its `tick` is the tick of the last command. Read the current time from `SimHost.simTick`.
-- **Saving (`state` query).** A save is taken at the main thread's current tick T:
-  1. synchronously capture the bus world at T, the log up to the last `seq`, and `endTick = T`;
-  2. post `query {query: 'state', tick: T}`. The worker answers once it has reached T and handled every earlier message: in order, so before any later advance;
-  3. `materialiseWorld(capturedWorld, export)`, then `writeCtrl`.
+#### 9.2 The renderer
 
-  Main doesn't pause; the worker is never past T when the query arrives (§4). `world.hash` in the game is the same round trip, hashed instead of written: `SimHost.hashAt()` returns `Promise<{ tick, hash }>`. So the console's `world.hash`, `runConsoleScript` and the `?e2e=1` hook's `hash()` become asynchronous in a sim game. `snapshot.hash` (a console query and an e2e hook) uses `query {query: 'snapshot'}`, which returns the bytes encoded at exactly that tick.
+The renderer (`type:rendering`) gets a `SnapshotSource` (an interface from `sim-protocol`: `subscribe(listener) → unsubscribe`, plus `running: boolean`) from the viewport host. It never imports `feature-session` or `sim-worker`. Its subscription is registered with its `Disposer` and listed in the disposal spec. In its listener it:
 
-- **The solution record.** A load at a tick between solves must continue bit-exactly, and the continuous layer between solves uses the last solution. So the export carries a `SolutionRecord` (`lastSolveTick`, `topologyHash`, and node voltages and branch currents in F2.1 order), and every solve's starting guess (CV/CC mode, any warm start) must come from sim-owned state or that record, never from engine history that isn't exported. Caches that never change results, such as the factorisation cache, are exempt. How the record is stored in world v2 is for `save-format-guardian` ([Open for review](#open-for-review)).
+1. reads the fields it draws through `FieldRef`s resolved once per descriptor;
+2. maps each to a **display step** in preallocated arrays:
+   - lamp emissive: `round(255 × displayCurve(lightOutputRel))`, steps of 1/255;
+   - overlays: 32 bins per overlay scale plus an over-range bin, chosen by the island's band;
+   - half-step hysteresis on both;
+3. calls `invalidate()` only if any display step changed.
+
+The rules:
+
+- **Display modules.** The display curve, the overlay scales and the display steps live in `libs/rendering/renderer/src/lib/sim/{display-curve,overlay-scale,display-steps}.ts`, pure-module fenced by lint, each with a game-design `source`. The renderer never computes an electrical quantity: voltage overlays colour by `|V(node) − V(islandReference)|`, a complex magnitude for AC, and current overlays by |I|.
+- **What a step change writes.** Only uniforms or instance attributes: never the light count, `visible` or material defines, and no storage buffers. Lamps get their own emissive material or instance attribute, not the shared `PropRecipes` material. The scene-graph snapshot records integer steps.
+- **Current animation** runs only while `SnapshotSource.running` is true and some lead's |I| bin is above 0, with its phase driven by wall time (its `update` returns `true`). It is static while paused and under `prefers-reduced-motion`.
+- **A generation change** rebuilds CPU-side index arrays only. GPU buffers are sized from the world and grow by doubling with a full re-upload (no `addUpdateRange`).
+- **Picking.** Overlays recolour the existing lead and terminal meshes. Arrow meshes have a no-op `raycast` and are never among the picker's roots, so no BVH rebuild.
+- **CI covers WebGL2 only.** The emissive and the overlays get the plan's manual WebGPU check.
+- **Read budget:** at most 0.1 ms per read at p99 on a 500-device plant, measured in F2.3b together with the click-to-lamp latency (about 40–45 ms expected).
+
+#### 9.3 Angular panels and the HUD
+
+- **Panels don't subscribe per snapshot.** `SimHost.select(selector, hz = PANEL_SAMPLE_HZ)` returns a `Signal<T>` that runs `selector(view)` at most `hz` times a second (at most 30):
+  - selectors return small plain values, display-rounded before the `equal` check, so the signal is set only when what is shown changes;
+  - a trailing sample is taken when the sim goes idle or pauses, so the last value is exact;
+  - it is bound to the caller's `DestroyRef`;
+  - it resets on a generation change, with a selector memo per generation;
+  - while crashed, values freeze and its `stale` flag is true.
+- **`SimHost` signals,** at the panel rate unless noted: `status`, `speed`, `effectiveSpeed`, `behind`, `simTick` (the latest snapshot's tick, which is what the player sees), `commandedTick` (for "catching up x of y", §13) and `descriptor: Signal<TopologyDescriptor | null>` (unthrottled).
+- **Never displayed:** `Session.world().tick` (the tick of the last command) and the world's `sim` bags. Read the time from `SimHost.simTick`.
+
+#### 9.4 Hashes in the game
+
+- **No synchronous materialisation in the game.** There, `game.hash()` and `game.save()` throw `NotAvailableError`. Callers use `SimHost.hashAt(): Promise<{ tick, hash }>` and `SimHost.saveAt()`. `Session.hash` is removed. The migrated callers are listed in Consequences.
+- **The console.** `runConsoleScript` is async everywhere, with `ConsoleTarget.hash(): Promise<string>`; headless targets resolve at once. While a console script runs, `SimHost.hold()` suspends pacing, and the console is `aria-busy` and refuses input. An interactive `world.hash` line shows a placeholder, then fills in.
+- **`snapshot.hash`** (a console query and an e2e hook) uses `query {query: 'snapshot'}`, which returns the bytes encoded at exactly that tick.
+- **The `?e2e=1` hook:** `hash(): Promise<string>`, `simTick()`, `waitForTick(t)`, `snapshotHash(): Promise<string>` and `simStatus()`. `world()` is renamed `busWorld()`.
+- **`world.hash` cost** at 2k and 20k nodes is measured in F2.3b, next to the read cost. It is never called per frame.
+
+#### 9.5 Saving (`state` query)
+
+A save is taken at the main thread's current tick T, the moment Save was pressed (not after the thumbnail):
+
+1. `Session.saver()` synchronously captures the bus world at T, the log up to the last `seq` (with `firstSeq`), and `endTick = T`, and posts `query {query: 'state', tick: T}` in the same task, bound to that worker;
+2. the worker answers once it has reached T and handled every earlier message: in order, so before any later advance;
+3. `materialiseWorld(capturedWorld, export)`, then `writeCtrl`.
+
+Main doesn't pause; the worker is never past T when the query arrives (§4). The rules around it:
+
+- **Deadline.** A query is rejected with `timeout` after `STATE_QUERY_TIMEOUT_MS`.
+- **Replacement.** Replace and teardown first settle pending queries for up to `SIM_SETTLE_MS`, then reject them with `superseded`.
+- **Saving while crashed is refused** with "Restart simulation first" (R1). Autosaves and the quit autosave are skipped while crashed.
+- **Quit flush.** The sim gets at most `SIM_SETTLE_MS` of `FLUSH_BEFORE_QUIT_TIMEOUT_MS`; then the settings flush (including the last-played pointer) always runs. With no answer, the quit autosave is skipped and the previous one stands. In the web harness the quit autosave is best effort; the periodic autosave is the guarantee. No new `Platform` capability or IPC.
+- **Autosave** is skipped when the worker is behind by more than `AUTOSAVE_MAX_BEHIND_MS`, when there's no answer, when the sim has crashed, or when (`lastSeq`, tick) hasn't changed since the last one.
+- **A manual save while catching up** shows progress and can be cancelled. Concurrent saves are merged.
+- **The dirty model.** A game is dirty when its commanded world differs from the stored one (a synchronous `commandedHash`, with no tick and no `sim` bags), or when time has passed since the last store **and** the session has at least one logged world command. `sim.*` and view commands alone never make a game dirty, so an untouched running sandbox is never autosaved.
+
+#### 9.6 The solution record
+
+A load at a tick between solves must continue bit-exactly, and the continuous layer between solves uses the last solution. So the export carries the solution record, persisted in `WorldV2.sim` and included in `world.hash` (U3):
+
+```text
+sim: { lastSolveTick: Int, topologyHash: hex64,
+       nodes: FiniteNumber[]      /* re,im interleaved, F2.1 order */,
+       branches: FiniteNumber[]   /* re,im interleaved, F2.1 order */,
+       islands: { flags: Int, iterations: Int }[] } | null
+```
+
+- `null` means "not solved since start": the engine solves at the start tick if `sim` is null, and adopts the record otherwise.
+- On start, the engine checks the record's `topologyHash` and array lengths against the compiled netlist. A mismatch is `start-failed` with a reason, never a silent re-solve.
+- Every solve's starting guess (CV/CC mode, any warm start) comes from sim-owned state or this record, never from engine history that isn't exported. Caches that never change results, such as the factorisation cache, are exempt.
+- Size: about 40 bytes of JSON per node or branch, roughly 200–260 KB at 2 000 nodes.
+- A property test: export → JSON → start → export is identical under `Object.is`.
 
 ### 10. Lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> none: menu backdrop (no worker)
-    none --> starting: newSandbox / adopt
+    none --> starting: newSandbox / adopt (load verifies here)
     starting --> running: ready (speed > 0)
     starting --> paused: ready (speed 0)
-    running --> paused: sim.pause / setSpeed 0
-    paused --> running: setSpeed 1, 10 or 60
-    running --> crashed: error / onerror
-    paused --> crashed: error / onerror
-    crashed --> starting: Restart simulation (replay start)
+    starting --> unavailable: protocol-mismatch
+    starting --> crashed: start-failed / onerror before ready
+    running --> paused: setSpeed 0
+    paused --> running: setSpeed 1, 10 or 60 / sim.resume
+    running --> suspended: document hidden
+    suspended --> running: document visible (re-anchor)
+    running --> crashed: error / onerror / watchdog (terminate)
+    paused --> crashed: error / onerror (terminate)
+    suspended --> crashed: error / onerror (terminate)
+    crashed --> starting: sim.restart (replay start)
     running --> none: newSandbox / adopt / teardown (terminate)
     paused --> none: newSandbox / adopt / teardown (terminate)
-    crashed --> none: newSandbox / adopt / teardown (terminate)
+    suspended --> none: newSandbox / adopt / teardown (terminate)
+    crashed --> none: newSandbox / adopt / teardown
+    unavailable --> none: newSandbox / adopt / teardown
 ```
 
 - **One worker per game.** The main-menu backdrop has none: the reader is empty, and the renderer draws its defaults (lamps dark, no overlays).
-- **The worker factory lives in `apps/game`:** `new Worker(new URL(…, import.meta.url), { type: 'module' })`, provided to `SimHost` through a `SIM_WORKER_FACTORY` token. So `feature-session` never imports `sim-worker`, and specs inject a fake or in-process worker.
-- **Start:** `Session.newSandbox` sends `start {kind: 'world', world, firstSeq: 0}`. `Session.adopt(loaded)` sends `start {kind: 'world', world: <the loaded world.json>, firstSeq: <entries.length>}`; both sides have an empty history. A new game starts paused (speed 0) in P2.
-- **Replace and teardown:** `worker.terminate()`, drop the listeners, the reader and the descriptors, and ignore any late message from the old worker. A disposal spec proves that no worker, timer or listener is left.
-- **Crash** (`worker.onerror`, `onmessageerror`, or an `error` message):
-  - pacing stops (the sim is paused), and a notification names the code and tick;
+- **The worker factory** is the literal `new Worker(new URL('<relative>', import.meta.url), { type: 'module' })`, alone in one factory module in `apps/game`, provided to `SimHost` through the `SIM_WORKER_FACTORY` token. Never `blob:`. So `feature-session` never imports `sim-worker`, and specs inject a fake or in-process worker. `apps/game` declares `implicitDependencies: ["sim-worker"]`, and `sim-worker` has its own typecheck target in `verify`.
+- **The worker entry's first import** calls `z.config({ jitless: true })` (the page does the same in a module imported first) and adds a `securitypolicyviolation` listener on `self` that forwards any violation as `error {code: 'csp-violation'}`. It also turns `self.onerror` and `unhandledrejection` into `error {code: 'engine-threw'}`. The plan's follow-up "A CSP violation on every start" lands before F2.3b.
+- **Electron.** F2.3b sets `nodeIntegrationInWorker: false` and `nodeIntegrationInSubFrames: false` explicitly. Fuses, IPC and the CSP are unchanged.
+- **Start:** `Session.newSandbox` sends `start {kind: 'world', world, firstSeq: 0}`. A new game starts paused (speed 0) in P2.
+- **Load** (R3, U2). In the game, `loadGame` is a synchronous parse plus an asynchronous sim check; headless, it stays synchronous with an in-process engine:
+  1. parse and validate the `.ctrl`, then check every entity's `state` and `sim` bags against `MODEL_KINDS` (a failure is the new load error `invalid-device-state`);
+  2. if the save's `simEngineVersion` or `catalogVersion` differs from the build's, skip verification: start from `world.json` with a new log (`replay.status: 'restarted'`, reason `engine-changed`). `REPLAY_MISMATCH_POLICY` never refuses this case;
+  3. otherwise replay the log on the main thread without an engine (commanded state only, cheap), start the worker with `{kind: 'replay', log}` up to `endTick`, and send a `state` query;
+  4. materialise and compare the hash with `world.json`'s. If they agree, that worker carries on. If not, terminate it and start one from `world.json` with `restarted`, subject to `REPLAY_MISMATCH_POLICY` as in P1.
+
+  The loading UI yields a frame before blocking work and shows that the save is being checked. A restarted log starts from the loaded world with `firstSeq` = the loaded log's next `seq`; a `world` start after a load uses that same `firstSeq`.
+
+- **Replace and teardown:** settle pending queries (§9.5), `worker.terminate()`, drop the listeners (they get `null`), the reader and the descriptors, and ignore any late message from the old worker. A disposal spec proves that no worker, timer, `waitAsync` or listener is left.
+- **Crash.** Any of `onerror`, `onmessageerror`, an `error` message, or the watchdog (the target is ahead of progress and nothing has been published for `WATCHDOG_MS`; held while suspended) moves to `crashed` **and terminates the worker**. An `onerror` before `ready` is `start-failed`. Then:
+  - pacing stops, listeners get `null`, `select` values freeze as `stale`, and a toast names the code and tick, with a **Restart simulation** action;
   - the world and the log are untouched, and world commands keep running on main;
-  - **Restart simulation** (offered in the notification) starts a new worker with `start {kind: 'replay', log}`: the session's replay log with `endTick` = the current tick. The worker replays deterministically to that tick (it rebuilds a superset of the live undo stacks, which is harmless by ADR 0007's argument) and resumes paused. If it fails again, the sim stays stopped.
-  - A save while crashed writes the bus world's inert sim-owned values (from the start or last load), and loading it reports `replay.status: 'restarted'` if the log no longer reaches it. The UI warns before such a save.
-- **Protocol check:** `init.protocol !== SIM_PROTOCOL_VERSION` in the worker gives `error protocol-mismatch`. The host shows "simulation unavailable" and doesn't retry.
-- **Loading verifies the log on main:** `loadGame` replays the log with an in-process engine, then that engine is dropped and the worker starts from `world.json`. This blocks the main thread for the length of the replay; moving the check into the worker is a P4 follow-up, alongside the log rebase.
+  - **`sim.restart`** (unlogged, registered by the host next to `file.*`, not in the headless registry, `when: sim.status == 'crashed'`) starts a new worker and reader with `start {kind: 'replay', log}`: the session's replay log with `endTick` = the current tick. The worker replays deterministically to that tick (it rebuilds a superset of the live undo stacks, which is harmless by ADR 0007's argument) and resumes paused. If it fails again, the sim stays stopped;
+  - saving is refused until then (§9.5).
+- **A renderer process crash** is main's `render-process-gone` path (reload with a crash-loop limit), a separate P2 PR. The latest good autosave is the recovery point.
+- **Protocol check:** `init.protocol !== SIM_PROTOCOL_VERSION` in the worker gives `error protocol-mismatch`. The host moves to `unavailable`, shows "simulation unavailable" and doesn't retry.
 
 ### 11. Headless parity (`sim-cli`)
 
-- `sim-cli` and every domain test run the same `SimEngine` in-process through the scripting API: `game.advance(ticks)`, `game.advanceTo(tick)`, `game.snapshot()` (the hashed bytes of `encodeSnapshot` at the current tick), `game.on('sim')`, and a synchronous `game.hash()` that materialises.
+- `sim-cli` and every domain test run the same `SimEngine` in-process as the `TimeHost` through the scripting API: `game.advance(ticks)`, `game.advanceTo(tick)`, `game.snapshot()` (the hashed bytes of `encodeSnapshot` at the current tick), `game.on('sim')`, and a synchronous `game.hash()` and `game.save()` that materialise.
 - **The bytes match by construction:** the worker and `sim-cli` call the same `encodeSnapshot` and differ only in transport. D6's `dmath` makes the floats match across V8 builds.
 - **Pinned goldens:** the bench demo's `snapshotHash` and `world.hash` are pinned in `apps/sim-cli` (Node) and `apps/game-e2e` (Chromium: the worker, and the worker with `?sab=0`). Change them together, with the scripting caveats.
-- A headless host implements `sim.step` by advancing, so a `.console` file steps time the same way in `sim-cli` and in the game. `sim.setSpeed` and `sim.pause` are no-ops headless.
+- A headless host implements `sim.step` by advancing, so a `.console` file steps time the same way in `sim-cli` and in the game. `sim.setSpeed` and `sim.resume` are no-ops headless.
 
 ### 12. Versioning
 
-- `SIM_PROTOCOL_VERSION` (an integer in `@controls/sim-protocol`, starting at **1**) covers everything in §4–§8: the message union, the buffer header, the slot header, the section order and entry layouts, the island encoding, every `DeviceOutputSchema` and the descriptor shape.
-- **Any change bumps it,** including additive ones: a new device kind, a new field, a new event kind. Nothing here is persisted, so a bump needs no migration. But hashed bytes usually change, so the pinned snapshot goldens are re-pinned in the same PR, with a CHANGELOG line.
+- `SIM_PROTOCOL_VERSION` (an integer in `@controls/sim-protocol`, starting at **1**) covers everything in §4–§8: the message union, the buffer header, the slot header, the section order and entry layouts, the island encoding including `NOMINAL_BANDS`, every `DeviceOutputSchema` and the descriptor shape.
+- **Any change bumps it,** including additive ones: a new device kind, a new field, a new event kind, a new band. Nothing here is persisted, so a bump needs no migration. But hashed bytes usually change, so the pinned snapshot goldens are re-pinned in the same PR, with a CHANGELOG line.
 - **To change the contract:** amend this ADR in the same PR as the code, get sign-off from the owners of every affected reader (renderer, UI, Electron for transport, save-format for anything in §3 or §9), and bump the version. Never change it silently.
-- **Not covered by this version** (save format, owned by `save-format-guardian`): the `sim.*` command ids and args, the entity state keys, `SolutionRecord`'s persisted form, and `endTick`. Those follow `schemaVersion` (ADR 0004, ADR 0013).
+- **`ManifestV2.simEngineVersion`** (an integer, U2) is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save from another engine or catalogue version loads with a restarted log (§10).
+- **Not covered by this version** (save format, owned by `save-format-guardian`): the `sim.*` command ids and args, the state keys in `MODEL_KINDS`, the solution record's persisted form, `firstSeq` and `endTick`. Those follow `schemaVersion` (ADR 0004, ADR 0013). For the `sim.*` args, raising `MAX_STEP_TICKS` or adding a speed needs no bump; lowering or removing one is never allowed. Every logged command's argument JSON Schema is frozen in a staleness-checked export.
+
+### 13. Time commands, keys and the HUD
+
+- **Commands** (logged, `sim.*`, save format):
+  - `sim.setSpeed {speed}`: `z.literal([0, 1, 10, 60])` (JSON Schema `enum`; a union of literals gives `anyOf`, which `buildArgForm` rejects), with `.meta` labels;
+  - `sim.resume {}`: restores the last non-zero speed, 1× by default;
+  - `sim.step {ticks}`: an integer from 1 to `MAX_STEP_TICKS`, default `DEFAULT_STEP_TICKS`, `.meta({ title: 'Sim time (ms)' })`.
+
+  There is no `sim.pause`: pausing is `sim.setSpeed {speed: 0}`.
+
+- **Context keys:** `sim.status` (`'none' | 'starting' | 'running' | 'paused' | 'suspended' | 'crashed' | 'unavailable'`), `sim.paused` (boolean) and `sim.speed` (number). Time commands add `&& sim.status != 'crashed'` to their `when`. `exec` doesn't evaluate `when`, so headless runs are unaffected.
+- **Chords** (none bound today; Space is avoided because it would hijack focused buttons):
+  - `P`: `sim.setSpeed {speed: 0}` when `session.active && !sim.paused`, and `sim.resume {}` when `sim.paused`;
+  - `Shift+1`, `Shift+2`, `Shift+3`: 1×, 10×, 60×;
+  - `Period`: `sim.step {ticks: 10}`; `Shift+Period`: `sim.step {ticks: 1000}`.
+- **Catching up.** While `commandedTick − simTick` exceeds the lead, the HUD shows "Catching up" with progress. Commands are still stamped at the commanded tick.
+- **Toasts** gain `action?: { label; commandId }`, used by the crash toast for `sim.restart`.
+- **Accessibility.** The sim clock and the numbers are never in a live region. Only transitions are announced, once each, in a polite live region: falling behind, catching up, crashed, paused, suspended. Speed is one native radio group. Spinners are static under reduced motion.
 
 ## Sequence: a command and a snapshot
 
@@ -450,19 +592,20 @@ sequenceDiagram
     participant R as Renderer
     participant A as Angular panels
 
-    loop every PACE_INTERVAL_MS
+    loop every PACE_INTERVAL_MS (speed > 0, not suspended)
         H->>H: target = min(desired, progress + maxLead)
         H->>S: bus.advanceTo(target) (unlogged)
         H->>W: advance {tick: target}
     end
     P->>S: exec('device.operate', {id, control: 'closed', value: true})
     S->>S: run (pure, no sim reads) → entry {seq N, tick T}
-    S-->>H: executed (logged)
+    S-->>H: time.applied(entry)
     H->>W: command {entry}
     W->>W: reach T, mirror bus exec + check, recompile, solve
-    W->>B: seqlock write slot (odd → payload → even), latestSlot, publishSeq++
+    W->>B: seqlock write slot (odd → payload → even), latestSlot, publishSeq++, notify
     W-->>H: events [...] (if any)
-    H->>B: Atomics.load(publishSeq) changed → copy slot, recheck seq
+    B-->>H: Atomics.waitAsync(publishSeq) resolves
+    H->>B: copy slot, recheck seq, re-arm waitAsync
     H->>R: listener(view)
     R->>R: display steps changed? (lamp 1/255, overlay bin)
     R-->>R: invalidate() → one rAF draw
@@ -475,41 +618,108 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant U as Saves feature (file.save / autosave)
-    participant H as SimHost (main)
+    participant H as Session.saver() + SimHost (main)
     participant G as Game + bus (main)
     participant W as Sim worker
     participant F as Platform files
 
-    U->>H: save request
-    H->>G: capture world @T, log, endTick = T (sync)
-    H->>W: query {id, query: 'state', tick: T}
-    Note over H,W: main keeps pacing, and later advances queue behind the query
-    W->>W: reach T, handle earlier messages, export sim-owned state + solution
+    U->>H: save request (refused while crashed)
+    H->>G: capture world @T, log (firstSeq), endTick = T (sync)
+    H->>W: query {id, query: 'state', tick: T} (same task, bound to this worker)
+    Note over H,W: main keeps pacing; later advances queue behind the query; deadline STATE_QUERY_TIMEOUT_MS
+    W->>W: reach T, handle earlier messages, export sim bags + solution
     W-->>H: state {id, tick: T, export, snapshotHash}
-    H->>H: materialiseWorld(captured world, export)
-    H->>U: .ctrl bytes (writeCtrl: manifest, world, replay log with endTick)
+    H->>H: parse export (save-format schemas), materialiseWorld(captured world, export)
+    H->>U: .ctrl bytes (writeCtrl: manifest, world, replay log with firstSeq and endTick)
     U->>F: write (atomic, ADR 0009)
+```
+
+## Sequence: load
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Saves feature (loadGame)
+    participant S as Session (main)
+    participant H as SimHost (main)
+    participant W as Sim worker
+    participant W2 as Fresh worker
+
+    U->>U: parse .ctrl, validate, MODEL_KINDS check (sync)
+    alt simEngineVersion or catalogVersion differs
+        U->>S: adopt(world.json, replay restarted: engine-changed)
+        H->>W: init {start: world, firstSeq}
+    else same engine and catalogue
+        U->>U: yield a frame, show "Checking save"
+        U->>S: replay log without an engine (commanded state only)
+        H->>W: init {start: replay, log} (to endTick)
+        H->>W: query {query: 'state', tick: endTick}
+        W-->>H: state {export}
+        H->>H: materialiseWorld, hash == world.json hash?
+        alt equal
+            H->>S: replay ok, worker carries on
+        else differs (REPLAY_MISMATCH_POLICY)
+            H->>W: terminate
+            H->>W2: init {start: world (world.json), firstSeq}
+            H->>S: replay restarted
+        end
+    end
 ```
 
 ## Consequences
 
-- **New libraries:** `@controls/sim-protocol` (`type:domain`: the layout constants, `encodeSnapshot`'s slot writer, `SnapshotReader`, `SnapshotView`, `Pacer`, the message schemas, `DEVICE_OUTPUT_SCHEMAS`, `materialiseWorld`) and `libs/sim-worker` (`type:worker`: the entry, the inbox and run loop, and `worker-clock.ts`). `sim-core` depends on `sim-protocol`, not the other way round. The renderer and features depend only on `sim-protocol`.
-- **`@controls/commands` gains** `CommandBus.advanceTo`, the `withTick` and `firstSeq` options, and the `time`/`endTick` options of `replayEntries` (F2.3a). ADR 0006's "Ticks" section and its `sim.step` example are amended when F2.3a lands.
-- **The scripting API's `world.hash` is asynchronous in the game.** `ConsoleTarget.hash` may return a promise, `runConsoleScript` becomes async, and the e2e hook's `hash()` returns a promise. Headless callers stay synchronous.
-- **Device-model PRs** must declare each state key as commanded or sim-owned, finalise their output schema here, and keep every solve a function of exported state (§9). The save-and-load parity property catches violations.
-- **ADR 0013** (world v2) must carry the sim-owned keys and the solution record, and include both in `world.hash` (D3).
+- **New libraries:** `@controls/sim-protocol` (`type:domain`: the layout constants, `NOMINAL_BANDS`, `encodeSnapshot`'s slot writer, `SnapshotReader`, `SnapshotView`, `DescriptorIndex`, `Pacer`, the message schemas, `DEVICE_OUTPUT_SCHEMAS`, `materialiseWorld`) and `libs/sim-worker` (`type:worker`: the entry, the inbox and run loop, and `src/lib/pacing/worker-clock.ts`). `sim-core` depends on `sim-protocol`, not the other way round. The renderer and features depend only on `sim-protocol`. `@controls/catalog` gains `MODEL_KINDS`.
+- **`@controls/commands` gains** `CommandBus.advanceTo`, `nextSeq()`, the `withTick` and `firstSeq` options, and the `time`/`endTick` options of `replayEntries` (F2.3a); the scripting API gains the `TimeHost` option of `createGame`. ADR 0006's "Ticks" section and its `sim.step` example are amended when F2.3a lands.
+- **Callers migrated to the asynchronous hash and save** (F2.3b):
+  - `Session.saver()` (capture and query synchronously, §9.5) and the removal of `Session.hash`;
+  - `SaveGames.isDirty`, `markStored` and `apply` (the dirty model, §9.5);
+  - `DevConsole`'s `target.hash` and its `world.hash` query, and `runConsoleScript` (async everywhere);
+  - the `?e2e=1` hook (`hash()`, `snapshotHash()`, `busWorld()`, `simTick()`, `waitForTick()`, `simStatus()`) and the game-e2e drivers that use it.
+- **Device-model PRs** must declare each state key in `MODEL_KINDS` (owner, schema, initial value), finalise their output schema here, and keep every solve a function of exported state (§9.6). The save-and-load parity property catches violations.
+- **Nx:** `apps/game` declares `implicitDependencies: ["sim-worker"]`, with a test that `nx show project game` lists it; `sim-worker` gets its own typecheck target in `verify`.
+- **Requirements on ADR 0013 (world v2),** owned by `save-format-guardian`:
+  - **Two state bags:** `EntityV2.state` (commanded) and `EntityV2.sim` (sim-owned, written only by `materialiseWorld`), absent values `null`. Keys match `^[a-z][a-zA-Z0-9]*$`, at most 64 characters; enum strings are `SafeString`, at most 32. A property test shows every change preserves each entity's `sim` bag except on insert and remove.
+  - **`MODEL_KINDS` in `@controls/catalog`:** owner, Zod schema and initial value per key. Adding a kind is no bump; changing an existing kind's keys is a `schemaVersion` bump. Load checks every entity's bags against it, with the new error kind `invalid-device-state` in the exhaustive `loadErrorReason` switch.
+  - **`WorldV2.sim`,** the solution record of §9.6 or `null`, in `world.hash`. `SimStateExport` types are `z.infer` of `EntityV2['sim']` and `NonNullable<WorldV2['sim']>`.
+  - **Numbers:** `FiniteNumber` only, `-0` normalised to `+0` by the engine; export → JSON → start → export is identical under `Object.is`. No wall-clock value in the export or `materialiseWorld`.
+  - **`ReplayLogV2.firstSeq`,** with `entries[i].seq === firstSeq + i`.
+  - **`ReplayLogV2.endTick`:** `endTick ≥ last entry tick ≥ initialWorld.tick`, with "state at T" as in §3. `endTick` below the last entry's tick is refused.
+  - **`ManifestV2.simEngineVersion: Int`,** bumped on numeric re-pins; `catalogVersion` kept. A save whose either version differs loads with a restarted log (`engine-changed`), never refused.
+  - **Exported JSON Schemas,** staleness-checked: `json-schema/device-state.<kind>.schema.json` for each kind, and every logged command's argument schema (including `sim.setSpeed`, `sim.resume` and `sim.step` with `MAX_STEP_TICKS` = 600 000).
+  - **Undo after delete:** tombstones never persisted; the delete-blown-fuse save/load parity test.
+  - **v1 → v2 migration:** each entity gets `state: {}` and `sim: {}`; the world gets `connections: []` and `sim: null`; the log gets `firstSeq: 0` and `endTick: max(initialWorld.tick, last entry tick)`; the manifest's `catalogVersion` is kept; every golden is re-pinned once.
+  - **Fixtures:**
+    - a bench lamp mid-interval, with a blown fuse, a partly melted fuse, a 17-digit float, a subnormal and a tick above 2^31;
+    - electrical devices with `sim: null`;
+    - `endTick` greater than the last entry's tick;
+    - `firstSeq > 0`;
+    - a `.ctrl` save from `pnpm sim run … --save`;
+    - refused cases: `endTick` below the last entry's tick, and mismatched record lengths (refused at start, `start-failed`).
 - **Tests this contract requires:**
   - codec round trip;
   - a torn read detected and retried, with a simulated concurrent writer;
+  - a slot of a new generation arriving before its descriptor;
   - the fallback giving identical bytes;
   - mirror desync detection;
   - the step order (a command at T before step T);
-  - `advanceTo` and tick preservation;
+  - `advanceTo` (safe integers, no `withTick`) and tick preservation;
   - replay advancing, including v1 logs;
   - save and load at a mid-interval tick equalling a straight run;
-  - disposal;
-  - the worker under `app://` with `crossOriginIsolated` (`desktop-e2e`);
-  - the main-thread read cost per frame, recorded in `docs/architecture/rendering.md`.
+  - load verification in the worker, and the `engine-changed` restart;
+  - pacing with fake timers through `SIM_CLOCK`, including suspend and re-anchor;
+  - disposal (worker, timers, `waitAsync`, listeners, the renderer's subscription);
+  - the main-thread read cost per frame and the `world.hash` cost, recorded in `docs/architecture/rendering.md`;
+  - the bench e2e asserting `misses === 0`.
+- **`desktop-e2e` tests:**
+  - `ready.transport === 'sab'`, and isolation read from the worker's own scope (`page.waitForEvent('worker')`, then `.evaluate(() => self.crossOriginIsolated)`);
+  - no `require` or `process` in the worker;
+  - the forwarded `securitypolicyviolation` listener;
+  - a crash via `worker.evaluate(() => setTimeout(() => { throw new Error('e2e') }))`;
+  - a hang via `worker.evaluate(() => setTimeout(() => { for (;;); }))` (the watchdog);
+  - hide/minimise suspend (dev build only);
+  - `forcefullyCrashRenderer` (dev build only);
+  - on the packaged CDP path, at least the isolation and violation checks.
+- **Platform follow-ups in P2:** the main-thread `render-process-gone` handler, and the Zod `jitless` fix, which lands before F2.3b.
 
 ## Alternatives considered
 
@@ -523,44 +733,46 @@ sequenceDiagram
 - **Sim-owned state kept live in the main bus world** (the worker posting state changes back). Two writers to one document, and the delete-and-undo capture would differ between a straight run and a loaded one, breaking save parity.
 - **`Int32` ticks for Atomics.** They overflow after 24.8 days of sim time; a `Float64` tick under the seqlock costs nothing.
 - **Growable `SharedArrayBuffer`** (ES2024 `grow()`). Supported in our runtimes, but views need length tracking and readers must recheck bounds on every read. Reallocating on a rare generation change is simpler.
+- **Verifying the log on the main thread at load** with an in-process engine (the proposal). It blocks the main thread for the length of the replay (R3); the worker does it instead.
+- **A `sim.pause` command** (the proposal). Redundant with `sim.setSpeed {speed: 0}`; `P` toggles with `sim.resume` instead (R2).
+- **Saving while crashed** with the inert sim values and a warning (the UI review's "Save anyway"). It writes a world the log may not reach; refused instead (R1).
+- **`backgroundThrottling: false`, or letting a hidden window run slowly.** The first burns power in the background; the second gives an unpredictable effective speed. A hidden window suspends (U1).
+- **Refusing saves from another engine version.** Every numeric re-pin would orphan the player's saves; they load with a restarted log instead (U2).
+- **Saving only at solve ticks**, to avoid persisting the solution record. A save would have to move time (U3).
 
-## Open for review
+## Resolved in review
 
-Each item names the owner whose sign-off it needs. The proposed default stands if the owner agrees.
+The proposal's open questions, by number:
 
-**`renderer-engineer`**
+1. **Lead bound:** `MAX_LEAD_WALL_MS` = 25 agreed; click-to-lamp latency is measured in F2.3b.
+2. **Push, not poll:** agreed. `SimHost` wakes on `Atomics.waitAsync`, listeners take `SnapshotView | null`, notify on every new `publishSeq`, never inside rAF (§9.1).
+3. **Display steps:** 1/255 for lamps, 32 bins plus over-range per overlay, half-step hysteresis, in `sim/{display-curve,overlay-scale,display-steps}.ts` (§9.2).
+4. **Payload:** nothing per-terminal; netlist guarantees added (one branch per connection, every terminal in one node), and the island entry gains `u8 band` (§5.3, §7).
+5. **Whole-slot copy:** kept; a devices-only read can come later without a bump; budget 0.1 ms p99 at 500 devices (§6.2, §9.2).
+6. **Asynchronous `world.hash`:** accepted and widened: `game.hash()`/`game.save()` throw in the game, `ConsoleTarget.hash()` is always a promise, `hold()` during scripts, a new e2e hook (§9.4).
+7. **`sim.*` commands and chords:** no `sim.pause`; `sim.resume`; `setSpeed` as `z.literal`; `step` 1–600 000, default 1 000; `P`, `Shift+1–3`, `Period`, `Shift+Period`; `sim.status`/`paused`/`speed` keys (§13, R2).
+8. **`select`:** agreed at 10 Hz, with a trailing sample, `DestroyRef`, a per-generation reset and memo, display rounding and a `stale` flag (§9.3).
+9. **Crash UX:** unlogged host `sim.restart` with a toast action; saving while crashed is refused (§10, R1).
+10. **HUD tick:** `simTick` shown; `Session.world().tick` never displayed; `commandedTick` added for catching up (§9.3, §13).
+11. **Worker factory:** the literal constructor alone in one `apps/game` module, no `blob:`, `implicitDependencies`, an own typecheck target; isolation read from the worker scope (§10, Consequences).
+12. **Hidden window:** suspends, host-side, `backgroundThrottling` default (§2, U1).
+13. **Quit flush:** the sim gets at most 1 000 ms, the settings flush always runs, skip on no answer or crash; best effort on the web (§9.5).
+14. **State split:** in code, `MODEL_KINDS` in `@controls/catalog`, persisted as two bags (§1).
+15. **Solution record:** `WorldV2.sim` with nodes, branches and island flags/iterations, hashed, checked at start (§9.6, U3).
+16. **Tombstones:** never persisted; undoing a place drops state at once; a parity test (§3).
+17. **Bus additions:** agreed, plus `nextSeq()`, a persisted `firstSeq`, `isSafeInteger` checks, the `TimeHost` and the `endTick` rules (§3).
+18. **`sim.*` args:** save format; arg JSON Schemas frozen; raise without a bump, never lower (§12).
+19. **Load verification on main:** rejected; the worker verifies via a replay start and a `state` query; engine-changed saves restart (§10, R3, U2).
+20. **`MAX_READ_ATTEMPTS`** = 4; misses on the dev HUD and `sim.stats`, asserted zero in the bench e2e (§6.2).
+21. **Descriptor by message:** agreed, with a test of a slot arriving before its descriptor (§6.2).
+22. **`PUBLISH_MIN_WALL_MS`** = 4 (F2.3b may try 8) and **`WORK_SLICE_MS`** = 8, with `MessageChannel` yielding (§2, §4).
 
-1. **Lead bound:** `MAX_LEAD_WALL_MS` = 25 (lead = speed × 25 ticks). Is about 25 ms between a commanded change and its first possible snapshot acceptable, given `PACE_INTERVAL_MS` = 10?
-2. **Push, not poll:** the renderer gets snapshots through `SnapshotSource.subscribe` (pushed from `SimHost`'s pacing tick), with the view valid only during the callback, rather than polling `latest()` in its own `update`. Agree?
-3. **Display steps:** 1/255 for lamp emissive; how many colour bins per overlay scale (proposal: 32), and is the display curve's home `libs/rendering/renderer/src/lib/sim/display-curve.ts` (lint-fenced)?
-4. **Is anything missing** from the payload for F2.6, such as per-terminal values or a lead's end-to-end voltage drop? Proposal: no; derive from node voltages and branch currents by indexing, not by computing.
-5. **Whole-slot copy:** a full copy on each new publish (at most about 100 Hz into the reader). Do you want a section-only read (devices only, when overlays are off)?
+## Deferred to implementation
 
-**`angular-ui-engineer`**
+F2.3b measures and records these (in `docs/architecture/rendering.md` and the PR):
 
-6. **Asynchronous `world.hash` in the game:** `ConsoleTarget.hash()` returning `string | Promise<string>`, `runConsoleScript` becoming async, and the e2e hook's `hash()` returning a promise. Acceptable for F1.5's console and the game-e2e drivers?
-7. **`sim.*` commands and chords:** `sim.pause {}` and `sim.setSpeed {speed: 0|1|10|60}` (is `sim.pause` redundant with `setSpeed 0`, or should it be a toggle expressed as two bindings on disjoint `when`s, the way `V` is?); `sim.step {ticks: 1..3 600 000}`; the default chords, and the `sim.paused` / `sim.speed` context keys.
-8. **`SimHost.select(selector, hz)`** with an equality check, and `PANEL_SAMPLE_HZ` = 10 by default: enough for the inspector (F2.6 says up to 10 Hz)?
-9. **Crash UX:** a "Restart simulation" action in the notification (is it an unlogged `sim.restart` command, so it is on every surface?), and the warning before saving while crashed.
-10. **The HUD shows `simTick`** (the latest snapshot's tick), not the bus tick, which can be up to the lead ahead. Agree, and is `Session.world().tick` being "the tick of the last command" acceptable, or should `Session` expose `tick` itself?
-
-**`electron-platform-engineer`**
-
-11. **The worker factory** in `apps/game` (`new URL(…, import.meta.url)` pointing into `libs/sim-worker`): confirm that `@angular/build` bundles it from a lib path, and that the chunk gets COOP/COEP and the CSP from the `app://` handler (kickoff step 4). `ready.isolated` reports `self.crossOriginIsolated` for `desktop-e2e` to assert.
-12. **Hidden or minimised window:** timers are throttled (`backgroundThrottling`), so pacing slows and the effective speed drops; nothing catches up afterwards. Keep that, pause explicitly on `visibilitychange`, or set `backgroundThrottling: false` for the game window?
-13. **Quit flush:** the autosave on quit now needs a `state` round trip inside `FLUSH_BEFORE_QUIT_TIMEOUT_MS` (2 s). If the worker doesn't answer in time (or has crashed), proposal: skip that autosave, so the previous one stands, rather than write sim-less state.
-
-**`save-format-guardian`**
-
-14. **Commanded versus sim-owned keys:** declared per device model; the bus world's sim-owned copies are inert during play, and materialisation overlays them. Does ADR 0013 record the split in the catalogue entry, or in the model's state schema in code?
-15. **The solution record:** where it lives in world v2 (proposal: `WorldV2.sim: { lastSolveTick, topologyHash, nodeV, branchI } | null`, in `world.hash`). Plain JSON numbers round-trip exactly; a 2 000-node plant adds about 100 KB to `world.json`. Or should saves be restricted to solve ticks instead (rejected here: a save would have to move time)?
-16. **Tombstones** for undo-of-delete are engine memory only, never persisted. Agree that ADR 0007's post-load argument covers it?
-17. **Bus additions:** `advanceTo`, `withTick`, `firstSeq`, and `replayEntries(bus, entries, { time, endTick })`, with a lower tick still `tick-mismatch`.
-18. **The `sim.*` argument shapes** (item 7) are save format once logged. `MAX_STEP_TICKS` = 3 600 000 goes in the schema.
-19. **Load verification on the main thread** with an in-process engine (it blocks for the length of the replay): acceptable for P2, with the move into the worker deferred to P4 with the log rebase?
-
-**All (lead's own open choices)**
-
-20. `MAX_READ_ATTEMPTS` = 4 per slot before falling back to the other slot, then to the previous snapshot. Should misses be shown on the frame-time HUD?
-21. **The descriptor by message** (this ADR) versus in the SAB with generation numbers (Alternatives). By message is proposed; revisit if F2.3b measures a visible lag on topology changes.
-22. `PUBLISH_MIN_WALL_MS` = 4 and `WORK_SLICE_MS` = 8: to be confirmed by F2.3b's measurements.
+- the read cost per frame: at most 0.1 ms at p99 on a 500-device plant;
+- the click-to-lamp latency (about 40–45 ms expected);
+- the `world.hash` cost at 2k and 20k nodes;
+- the publish and slice tuning: `PUBLISH_MIN_WALL_MS` 4 or 8, `WORK_SLICE_MS`, `STATE_QUERY_TIMEOUT_MS` and `AUTOSAVE_MAX_BEHIND_MS`;
+- whether headless Chromium and xvfb report the page as visible, so suspend (U1) doesn't stall the e2e runs.
