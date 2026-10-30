@@ -98,7 +98,7 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
      - a save asks the worker for sim state at the save tick.
    - **Headless parity.** `sim-cli` runs the same `sim-core` engine and codec in-process. A worker snapshot and a `sim-cli` snapshot of the same log are byte-identical.
 
-4. [ ] `release-engineer` re-checks versions and licences, and records what it checked and where:
+4. [x] `release-engineer` re-checks versions and licences, and records what it checked and where:
    - **ngspice:** the version used for the oracle and the licence of that exact build, including whether KLU (LGPL) is linked;
    - **eecircuit-engine, `@spice-ts/core` and brownout,** if any is used or adapted: the research doc (2026-10-26) says v1.9.0, v0.4.0 and v0.6.5, all MIT; verify;
    - **fast-check:** `^4.10.2` in `package.json`.
@@ -107,6 +107,28 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
    - module Web Workers bundle with `@angular/build` (`new Worker(new URL(…, import.meta.url), { type: 'module' })`) from a lib path;
    - the worker loads from `app://` with COOP/COEP and the current CSP (`worker-src 'self' blob:`);
    - `crossOriginIsolated` is true inside the worker.
+
+   _Done 2026-10-29._
+   - **ngspice 47** (2026-08-11): the core is Modified BSD, but numparam (LGPL) is always compiled in. The Fedora, Homebrew, Ubuntu and Windows builds all link KLU (LGPL), and some add readline (GPL-3), libsndfile (LGPL) or the `table.cm` plugin (GPL).
+     - So ADR 0003 now has an exception for external programs that developers run and whose numeric outputs alone are checked in.
+     - Each deck sets `.options sparse`, so the results don't depend on whether a build has KLU.
+     - Installs for the guide: Fedora `dnf` (47), Homebrew (47), Scoop `extras/ngspice` or the official `ngspice-47_64.7z` extracted to `C:\Spice64`. Not Ubuntu 24.04's apt, which has 42.
+   - **eecircuit-engine 1.9.0:** the MIT licence covers only the wrapper. Its WASM bundles KLU and numparam (LGPL) without notices. It stays rejected (D5).
+   - **@spice-ts/core 0.4.0:** MIT, but there is no git tag for 0.4.0, so pin a commit SHA if any of it is adapted.
+   - **brownout 0.6.5:** MIT. Its AMD follows SuiteSparse AMD (BSD-3), so adapting it means notices rows for both.
+   - **fast-check 4.10.2:** current.
+   - **Stay reference-only:** klu-js, SuiteSparse KLU, BTF and CSparse (all LGPL), and the code listings in Davis's book. SuiteSparse `AMD/` and `COLAMD/` are BSD-3, so they may be read.
+   - **Citations confirmed:** Gilbert–Peierls 1988 (doi:10.1137/0909058); Amestoy–Davis–Duff 1996 (doi:10.1137/S0895479894278952) and 2004 (doi:10.1145/1024074.1024081).
+   - **Module worker check** (`electron-platform-engineer`, a throwaway spike): passed in the web harness, under `app://` in the dev build, and in the packaged app.
+     - `crossOriginIsolated` is true in the page and the worker, and a `SharedArrayBuffer` is really shared.
+     - The CSP needs no change: `worker-src 'self'` covers the worker, and the CSP is enforced inside it.
+
+     Gotchas for F2.3b:
+     - **The constructor must be literal.** `@angular/build` only rewrites a literal `new Worker(new URL('…', import.meta.url), { type: 'module' })`, so keep it in one factory module provided by the app (features can't import `sim-worker`).
+     - **The worker isn't type-checked by the game build.** `sim-worker` has its own typecheck target.
+     - **A CSP violation already happens on every start.** Zod's eval probe triggers one; `z.config({ jitless: true })` fixes it.
+     - **Worker violations are only visible inside the worker.** They fire on the worker's own scope, so tests need a listener there.
+     - **Playwright can see the worker.** `page.workers()` works on both the `_electron` and CDP launch paths.
 
 5. [ ] **World document v2 and minimal connectivity PR** (`save-format-guardian`; see its section below). It lands before F2.1 reads connections.
 6. [x] **Boundary and gate hardening PR** (`test-engineer`). Each rule is proven to fire, as in P1:
@@ -484,22 +506,22 @@ Numbers are assigned in the order the ADRs land.
 
 ## Risks
 
-| Risk                                                                                             | Mitigation                                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The sim, worker and renderer disagree on the contract and churn it                               | Agent-team ADR 0011 before any consumer code; `SIM_PROTOCOL_VERSION`; a codec in one domain lib that all three import; the renderer and UI develop against fake snapshots.                                                               |
-| Cross-runtime float drift (Node 24's V8 vs Electron's Chromium V8) breaks save and replay parity | D6: IEEE-exact operations plus `dmath`, enforced by lint; a Node-vs-Chromium snapshot golden as a tripwire; `loadGame` already restarts a diverging log rather than refusing the save.                                                   |
-| `sim-cli bench` is flaky or over budget on shared CI runners (three OSes)                        | Built bundle, outside coverage; warm-up, then the median of N runs; report the margin on every run. If a runner can't meet the §4.5 budget, raise it with the user; never loosen it silently or skip it per OS (no CI-only differences). |
-| Singular or ill-conditioned matrices                                                             | Union-find merging, `gmin`, pivoting and a `singular` flag instead of NaN; fast-check fuzzing of random topologies.                                                                                                                      |
-| The nonlinear outer loop oscillates (CV/CC flip-flop, lamp R(T))                                 | Damping, hysteresis, an iteration cap, the `nonConverged` flag, and a property test bounding the iterations.                                                                                                                             |
-| Time passing interacts badly with undo                                                           | ADR 0011's rule: time passing is not a change, and `apply`/`invert` preserve the tick (property test). The weakened "undo everything" property is stated explicitly.                                                                     |
-| 60× is unattainable on big plants                                                                | Pacing is capped by the worker's progress, with an effective-speed indicator; P2's circuits are small.                                                                                                                                   |
-| Worker bundling, or a module worker under `app://`, fails                                        | `electron-platform-engineer` verifies it at kickoff, before F2.3b starts, plus a `desktop-e2e` check.                                                                                                                                    |
-| Overlays never redraw (with on-demand rendering), or redraw at 60 Hz for nothing                 | Invalidate only on a display-step change (ADR 0011); a rendering caveat; an E2E check that the lamp intensity changes.                                                                                                                   |
-| The oracle disagrees because of ngspice options or printed precision                             | Match `gmin` and the options and record them in the corpus header; ADR 0012 fixes the tolerance after measuring.                                                                                                                         |
-| Licence contamination (CircuitJS1 GPL-2.0, SimulIDE AGPL, klu-js LGPL, ngspice builds with KLU)  | Agents never open GPL or LGPL source; ngspice is a regeneration tool, not a dependency (D5), and its build licence is checked at kickoff; any adapted MIT code gets a notices row.                                                       |
-| The research doc's NEC Chapter 9 resistance values and IEC breaker figures leak into content     | Resistance from resistivity (ADR 0003); NEC-region trip data from manufacturer-style sources; the reviewer hard-fails table values.                                                                                                      |
-| Scope creep into P3–P6 (routing, terminal picker, panels, meters, relays)                        | The "Not in P2" fence in the Goal; leads only through commands and scripts; utility and three-phase sources headless only.                                                                                                               |
-| Schema churn                                                                                     | One v2 for the whole phase (D3), with a generic entity `state` so new device kinds don't bump the schema; P3's wires are v3.                                                                                                             |
+| Risk                                                                                                                                 | Mitigation                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The sim, worker and renderer disagree on the contract and churn it                                                                   | Agent-team ADR 0011 before any consumer code; `SIM_PROTOCOL_VERSION`; a codec in one domain lib that all three import; the renderer and UI develop against fake snapshots.                                                               |
+| Cross-runtime float drift (Node 24's V8 vs Electron's Chromium V8) breaks save and replay parity                                     | D6: IEEE-exact operations plus `dmath`, enforced by lint; a Node-vs-Chromium snapshot golden as a tripwire; `loadGame` already restarts a diverging log rather than refusing the save.                                                   |
+| `sim-cli bench` is flaky or over budget on shared CI runners (three OSes)                                                            | Built bundle, outside coverage; warm-up, then the median of N runs; report the margin on every run. If a runner can't meet the §4.5 budget, raise it with the user; never loosen it silently or skip it per OS (no CI-only differences). |
+| Singular or ill-conditioned matrices                                                                                                 | Union-find merging, `gmin`, pivoting and a `singular` flag instead of NaN; fast-check fuzzing of random topologies.                                                                                                                      |
+| The nonlinear outer loop oscillates (CV/CC flip-flop, lamp R(T))                                                                     | Damping, hysteresis, an iteration cap, the `nonConverged` flag, and a property test bounding the iterations.                                                                                                                             |
+| Time passing interacts badly with undo                                                                                               | ADR 0011's rule: time passing is not a change, and `apply`/`invert` preserve the tick (property test). The weakened "undo everything" property is stated explicitly.                                                                     |
+| 60× is unattainable on big plants                                                                                                    | Pacing is capped by the worker's progress, with an effective-speed indicator; P2's circuits are small.                                                                                                                                   |
+| Worker bundling, or a module worker under `app://`, fails                                                                            | `electron-platform-engineer` verifies it at kickoff, before F2.3b starts, plus a `desktop-e2e` check.                                                                                                                                    |
+| Overlays never redraw (with on-demand rendering), or redraw at 60 Hz for nothing                                                     | Invalidate only on a display-step change (ADR 0011); a rendering caveat; an E2E check that the lamp intensity changes.                                                                                                                   |
+| The oracle disagrees because of ngspice options or printed precision                                                                 | Match `gmin` and the options and record them in the corpus header; ADR 0012 fixes the tolerance after measuring.                                                                                                                         |
+| Licence contamination (CircuitJS1 GPL-2.0, SimulIDE AGPL, klu-js LGPL; every ngspice build has LGPL numparam and most link LGPL KLU) | Agents never open GPL or LGPL source; ngspice is a regeneration tool, not a dependency (D5), and its build licence is checked at kickoff; any adapted MIT code gets a notices row.                                                       |
+| The research doc's NEC Chapter 9 resistance values and IEC breaker figures leak into content                                         | Resistance from resistivity (ADR 0003); NEC-region trip data from manufacturer-style sources; the reviewer hard-fails table values.                                                                                                      |
+| Scope creep into P3–P6 (routing, terminal picker, panels, meters, relays)                                                            | The "Not in P2" fence in the Goal; leads only through commands and scripts; utility and three-phase sources headless only.                                                                                                               |
+| Schema churn                                                                                                                         | One v2 for the whole phase (D3), with a generic entity `state` so new device kinds don't bump the schema; P3's wires are v3.                                                                                                             |
 
 ## Status
 
@@ -536,7 +558,7 @@ Numbers are assigned in the order the ADRs land.
 
 ### New in P2
 
-None yet.
+- **A CSP violation on every start.** Zod 4's eval probe (`new Function("")`, caught) triggers a `script-src eval` violation at start-up under `app://` and in the web harness with the CSP. `smoke.spec.ts` attaches its listener too late to see it. Fix: call `z.config({ jitless: true })` before the first parse, in the page and in the worker if it ever parses with Zod, and have the smoke test listen from page load. It must land before F2.3b's "no `securitypolicyviolation`" check. **Owner:** `electron-platform-engineer`.
 
 ## Close-out
 
