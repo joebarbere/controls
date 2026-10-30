@@ -11,6 +11,9 @@ import {
 import { hashWorldDocument, newGameWorld, worldHash } from '@controls/world-model';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
+import { type BenchCase, runBench } from './bench/bench';
+import { BENCH_CASES } from './bench/cases';
+import { wallClockMs } from './bench/clock';
 import { readDocument } from './documents';
 import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
 
@@ -20,9 +23,10 @@ import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
  *   sim run <script> [--world <file>] [--seed N] [--log <out.json>] [--save <out.ctrl>] [--expect <hash>]
  *   sim replay <save.ctrl | replay-log.json> [--expect <hash>]
  *   sim hash <save.ctrl | world.json> [--expect <hash>]
+ *   sim bench
  *
  * stdout carries data only (hashes, a script's own output); diagnostics go to stderr. Exit codes:
- * 0 success, 1 failure (bad document, failing script, hash mismatch), 2 usage error.
+ * 0 success, 1 failure (bad document, failing script, hash mismatch, bench over budget), 2 usage error.
  */
 
 export interface CliIo {
@@ -30,6 +34,10 @@ export interface CliIo {
   readonly cwd: string;
   stdout(line: string): void;
   stderr(line: string): void;
+  /** Test seam for `sim bench`: the cases to run (default {@link BENCH_CASES}). */
+  readonly benchCases?: readonly BenchCase[];
+  /** Test seam for `sim bench`: the clock, in ms (default the wall clock). */
+  readonly now?: () => number;
 }
 
 export const EXIT_OK = 0;
@@ -54,6 +62,9 @@ Commands:
                    equals the hash of the save's world.json
   hash <file>      Print world.hash of a .ctrl save's world.json, or of a world
                    document (world.json, a level)
+  bench            Run the performance cases (warm-up, then the median of N runs)
+                   and print a JSON report; fail if a case is over its budget or
+                   not deterministic
   help             Show this help
 
 Common options:
@@ -63,6 +74,7 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   run: ['seed', 'world', 'log', 'save', 'expect'],
   replay: ['expect'],
   hash: ['expect'],
+  bench: [],
 };
 
 class UsageError extends Error {}
@@ -94,6 +106,10 @@ function parseArgv(argv: readonly string[]): Parsed | 'help' {
     if (Object.prototype.hasOwnProperty.call(options, name)) throw new UsageError(`${arg} is given twice`);
     options[name] = value;
   }
+  if (command === 'bench') {
+    if (positionals.length !== 0) throw new UsageError('"bench" takes no arguments');
+    return { command, file: '', options };
+  }
   if (positionals.length !== 1) throw new UsageError(`"${command}" takes exactly one file`);
   return { command, file: positionals[0], options };
 }
@@ -113,6 +129,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
       io.stdout(USAGE);
       return EXIT_OK;
     }
+    if (parsed.command === 'bench') return bench(io);
     const path = resolve(io.cwd, parsed.file);
     const hash =
       parsed.command === 'run'
@@ -136,6 +153,19 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     io.stderr(`sim: ${error instanceof Failure ? error.message : describe(error)}`);
     return EXIT_FAILURE;
   }
+}
+
+/** `sim bench`: prints the report as JSON (stdout stays data only); exit 1 unless every case passed. */
+function bench(io: CliIo): number {
+  const report = runBench(io.benchCases ?? BENCH_CASES, io.now ?? wallClockMs);
+  io.stdout(JSON.stringify(report, null, 2));
+  for (const result of report.cases) {
+    if (!result.deterministic) io.stderr(`sim: bench case "${result.name}" returned different checksums across runs`);
+    else if (!result.ok) {
+      io.stderr(`sim: bench case "${result.name}" over budget: median ${result.medianMs} ms > ${result.budgetMs} ms`);
+    }
+  }
+  return report.ok ? EXIT_OK : EXIT_FAILURE;
 }
 
 function describe(error: unknown): string {

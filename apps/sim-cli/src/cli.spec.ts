@@ -406,17 +406,28 @@ describe('script import boundary', () => {
   it('allows relative files, type:domain aliases and zod only', async () => {
     const aliases = await domainAliases();
     expect([...aliases].sort()).toEqual([
+      '@controls/catalog',
       '@controls/commands',
       '@controls/save-format',
       '@controls/save-format/testing',
       '@controls/scripting-api',
+      '@controls/sim-core',
+      '@controls/sim-protocol',
       '@controls/units',
       '@controls/world-model',
     ]);
     for (const ok of ['./x', '../y', '/abs/z', '@controls/world-model', 'zod', 'zod/v4']) {
       expect(isAllowedImport(ok, aliases)).toBe(true);
     }
-    for (const banned of ['node:fs', 'fs', 'three', '@controls/renderer', '@controls/feature-session', 'esbuild']) {
+    for (const banned of [
+      'node:fs',
+      'fs',
+      'three',
+      '@controls/renderer',
+      '@controls/feature-session',
+      '@controls/sim-worker',
+      'esbuild',
+    ]) {
       expect(isAllowedImport(banned, aliases)).toBe(false);
     }
   });

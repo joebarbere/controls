@@ -34,46 +34,118 @@ const frameworkPackages = [
 const domainLibsDir = fileURLToPath(new URL('./libs/domain', import.meta.url));
 /** apps/sim-cli and its scenario scripts: headless runs must be as deterministic as the domain they drive. */
 const simCliDir = fileURLToPath(new URL('./apps/sim-cli', import.meta.url));
+/** libs/sim-worker (P2, `type:worker`): runs sim-core in a Web Worker, so it is held to the domain rules. */
+const simWorkerDir = fileURLToPath(new URL('./libs/sim-worker', import.meta.url));
+/** libs/domain/sim-core (P2): its source is also held to the D6 deterministic-maths rule below. */
+const simCoreDir = fileURLToPath(new URL('./libs/domain/sim-core', import.meta.url));
+
+/** Every file pattern the path-scoped rules below apply to. */
+const sourceFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'];
+/** Tooling configs, exempt from the path-scoped rules. */
+const toolingConfigs = ['**/*.config.*', 'vitest.domain.mts'];
+/** Specs and tests: they run only under Vitest in Node. */
+const specFiles = ['**/*.spec.*', '**/*.test.*'];
 
 const determinismHint =
   'Domain code must be deterministic: use the seeded PRNG in @controls/world-model and the integer sim tick (F1.2), never the wall clock or ambient randomness.';
 
-/** Bans wall-clock time and ambient randomness (type:domain libs and sim-cli). */
+/** Bans wall-clock time and ambient randomness (type:domain libs, sim-worker outside pacing, and sim-cli outside its bench clock). */
 const determinismRules = {
   'no-restricted-properties': [
     'error',
     {
       object: 'Math',
       property: 'random',
-      message: `Math.random() is banned in domain code and sim-cli. ${determinismHint}`,
+      message: `Math.random() is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
     },
-    { object: 'Date', property: 'now', message: `Date.now() is banned in domain code and sim-cli. ${determinismHint}` },
+    {
+      object: 'Date',
+      property: 'now',
+      message: `Date.now() is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
+    },
     ...['performance', 'crypto', 'Date', 'Math'].map((property) => ({
       object: 'globalThis',
       property,
-      message: `globalThis.${property} is banned in domain code and sim-cli (it bypasses the determinism lint). ${determinismHint}`,
+      message: `globalThis.${property} is banned in domain code, sim-worker and sim-cli (it bypasses the determinism lint). ${determinismHint}`,
     })),
   ],
   'no-restricted-globals': [
     'error',
     {
       name: 'performance',
-      message: `performance (performance.now() etc.) is banned in domain code and sim-cli. ${determinismHint}`,
+      message: `performance (performance.now() etc.) is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
     },
     {
       name: 'crypto',
-      message: `crypto (randomUUID, getRandomValues) is banned in domain code and sim-cli. Entity ids come from the world counter. ${determinismHint}`,
+      message: `crypto (randomUUID, getRandomValues) is banned in domain code, sim-worker and sim-cli. Entity ids come from the world counter. ${determinismHint}`,
     },
   ],
   'no-restricted-syntax': [
     'error',
     {
       selector: "NewExpression[callee.name='Date']",
-      message: `new Date() is banned in domain code and sim-cli. ${determinismHint}`,
+      message: `new Date() is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
     },
     {
       selector: "CallExpression[callee.name='Date']",
-      message: `Date() is banned in domain code and sim-cli. ${determinismHint}`,
+      message: `Date() is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
+    },
+  ],
+};
+
+/**
+ * Decision D6 (plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1): sim-core must give
+ * byte-identical results in Node's V8 and Electron's Chromium V8. ECMAScript only requires these
+ * functions to be "implementation-approximated", so engines may round them differently; `+ - * /`,
+ * `Math.sqrt`, `Math.fround`, `Math.abs`, `Math.min/max`, `Math.floor/ceil/round/trunc` are exact.
+ */
+const d6EngineDependentMath = [
+  'exp',
+  'expm1',
+  'log',
+  'log1p',
+  'log2',
+  'log10',
+  'pow',
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
+  'sinh',
+  'cosh',
+  'tanh',
+  'asinh',
+  'acosh',
+  'atanh',
+  'hypot',
+  'cbrt',
+];
+const d6Hint =
+  'sim-core may use only IEEE-exact operations (+ - * /, Math.sqrt, …) and its own dmath, so a snapshot is byte-identical in Node and Chromium (decision D6 in plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1).';
+
+/** sim-core source: the determinism rules plus D6. Flat config replaces a rule's options wholesale, so the lists are merged. */
+const simCoreRules = {
+  ...determinismRules,
+  'no-restricted-properties': [
+    ...determinismRules['no-restricted-properties'],
+    ...d6EngineDependentMath.map((property) => ({
+      object: 'Math',
+      property,
+      message: `Math.${property}() is engine-dependent and banned in sim-core source. ${d6Hint}`,
+    })),
+  ],
+  'no-restricted-syntax': [
+    ...determinismRules['no-restricted-syntax'],
+    {
+      selector: "BinaryExpression[operator='**']",
+      message: `The ** operator is engine-dependent (it is Math.pow) and banned in sim-core source. ${d6Hint}`,
+    },
+    {
+      selector: "AssignmentExpression[operator='**=']",
+      message: `The **= operator is engine-dependent (it is Math.pow) and banned in sim-core source. ${d6Hint}`,
     },
   ],
 };
@@ -97,6 +169,14 @@ export default [
           depConstraints: [
             {
               sourceTag: 'type:domain',
+              onlyDependOnLibsWithTags: ['type:domain'],
+              bannedExternalImports: frameworkPackages,
+            },
+            // libs/sim-worker (P2): the worker entry and pacing. Domain libs only (sim-core, sim-protocol, catalog),
+            // with domain's banned npm imports. No other lib tag lists type:worker, so only apps can depend on
+            // it; the renderer and features read snapshot types from @controls/sim-protocol (type:domain).
+            {
+              sourceTag: 'type:worker',
               onlyDependOnLibsWithTags: ['type:domain'],
               bannedExternalImports: frameworkPackages,
             },
@@ -135,18 +215,32 @@ export default [
   // Domain determinism (plan §4.6, phase-1 "Determinism and invariant hooks"). Applies to specs too:
   // a domain test that reads the clock or Math.random is a flaky test. Tooling configs are exempt.
   // sim-cli (F1.6) gets the same rules: a scenario script that reads the clock can't be re-run to the same hash.
-  ...[domainLibsDir, simCliDir].map((basePath) => ({
+  // Its bench clock (P2) is the one exemption: `sim bench` measures wall time, and nothing it times is hashed.
+  // sim-worker (P2) too, except its pacing module, which turns wall time into tick targets (ADR 0011).
+  ...[
+    { basePath: domainLibsDir, ignores: [] },
+    { basePath: simCliDir, ignores: ['src/bench/clock.ts'] },
+    { basePath: simWorkerDir, ignores: ['src/lib/pacing/**'] },
+  ].map(({ basePath, ignores }) => ({
     basePath,
-    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'],
-    ignores: ['**/*.config.*', 'vitest.domain.mts'],
+    files: sourceFiles,
+    ignores: [...toolingConfigs, ...ignores],
     rules: determinismRules,
   })),
-  // Domain source runs in the renderer and the sim worker as well as Node, so no Node built-ins.
-  // Specs run only under Vitest in Node and may use them (e.g. node:fs to read fixtures).
+  // D6 deterministic maths, sim-core source only (after the block above, which it extends). Specs are exempt
+  // so they can compare dmath against Math; they run only in Node, so their rounding never reaches a hash.
   {
-    basePath: domainLibsDir,
-    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'],
-    ignores: ['**/*.config.*', 'vitest.domain.mts', '**/*.spec.*', '**/*.test.*'],
+    basePath: simCoreDir,
+    files: sourceFiles,
+    ignores: [...toolingConfigs, ...specFiles],
+    rules: simCoreRules,
+  },
+  // Domain source runs in the renderer and the sim worker as well as Node, so no Node built-ins; the
+  // worker's own source neither. Specs run only under Vitest in Node and may use them (e.g. node:fs).
+  ...[domainLibsDir, simWorkerDir].map((basePath) => ({
+    basePath,
+    files: sourceFiles,
+    ignores: [...toolingConfigs, ...specFiles],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -165,7 +259,7 @@ export default [
         },
       ],
     },
-  },
+  })),
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts', '**/*.js', '**/*.jsx', '**/*.cjs', '**/*.mjs'],
     // Override or add rules here

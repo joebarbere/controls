@@ -31,7 +31,7 @@ Typed public API · unit tests (plus property/oracle tests for solver code) · a
 
 ```bash
 corepack enable && pnpm install   # Node 24 (.nvmrc), pnpm 11 (packageManager)
-pnpm verify            # == CI: prettier --check, nx lint/typecheck/test/build (all), check-version-sync
+pnpm verify            # == CI: prettier --check, nx lint/typecheck/test/build/bench (all), check-version-sync
 pnpm format            # prettier --write (fixes verify format failures)
 pnpm start             # build game + desktop, launch Electron
 pnpm start:web         # browser dev harness (nx serve game)
@@ -44,6 +44,7 @@ pnpm package:desktop   # electron-builder installers for this OS (package:deskto
 pnpm version:sync      # root version -> apps/desktop/package.json + libs/domain/units/src/lib/version.ts
 pnpm sim run <script>  # headless: a .ts module exporting (game) => … or a .console file; prints world.hash (--seed, --world, --log, --expect)
 pnpm sim replay <log>  # replay a .ctrl or replay-log JSON, print the hash; `pnpm sim hash <file>` hashes a .ctrl or world JSON; `sim run … --save x.ctrl` writes a save
+pnpm sim bench         # perf cases (warm-up, median of N), JSON report, exit 1 over budget; the Nx `bench` target in verify runs the built bundle
 ```
 
 Run Nx through pnpm (`pnpm nx …`), never a global `nx`. Use `pnpm --silent sim …` when piping (stdout is data only). Guide: [`docs/guides/scripting.md`](docs/guides/scripting.md).
@@ -90,7 +91,7 @@ Load the matching file before working in an area. The code tells you what shippe
 
 | File                                                         | Load when working on…                                                                                                      |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/caveats/workspace.md`](docs/caveats/workspace.md)     | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags, `pnpm verify`                                       |
+| [`docs/caveats/workspace.md`](docs/caveats/workspace.md)     | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags (`type:worker`), D6 lint, `bench`, `pnpm verify`     |
 | [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                              |
 | [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                    |
 | [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log) |

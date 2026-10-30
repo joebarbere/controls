@@ -118,8 +118,8 @@ flowchart LR
 - `type:domain` is pure TypeScript (no Angular, DOM or Electron) and depends only on other domain libs. That's what lets `sim-cli` run the game headless. Since the P1 kickoff this is enforced beyond tags: banned npm imports (Angular, RxJS, Electron, Three.js, …), a no-`dom` tsconfig, no Node built-ins in source, a determinism lint (no `Math.random`, wall clock, `performance` or `crypto`), and a 90 % coverage gate. See [workspace caveats](../caveats/workspace.md).
 - `scope:headless` (`apps/sim-cli`) may depend only on domain libs, on top of its `type:app` tag. A test lints a probe import with the real config to keep it that way.
 - `type:content` (`content/`, F1.9) is data only and imports nothing. The game bundles levels through `@controls/content/*`; `sim-cli` and specs read the files from disk.
-- `sim-worker` depends on domain libs only.
-- `type:rendering` depends on `world-model`, `catalog` and `units`, plus read-only snapshot types from `sim-worker`. It is framework-free.
+- `type:worker` (`libs/sim-worker`, P2 kickoff) depends on domain libs only (`sim-core`, `sim-protocol`, `catalog`, …), with domain's banned npm imports, a `webworker` (not `dom`) tsconfig and the determinism lint outside its pacing module. Only apps may depend on it.
+- `type:rendering` depends on domain libs (`world-model`, `catalog`, `units`), plus read-only snapshot types from `sim-protocol`, never from `sim-worker`. It is framework-free.
 - `type:feature` may depend on domain, rendering, ui and `platform/api`, **never** on a concrete platform implementation.
 - `type:app` projects assemble features and inject a platform implementation (`platform-electron` inside Electron, `platform-web` in the browser harness).
 - `type:contract` (`ipc-contract`) is shared by the Electron main process, the preload and the platform libs, so the bridge has one source of truth. The preload imports only `@controls/ipc-contract/preload` (channel names and the bridge type, no Zod) to stay tiny. Main validates each response with Zod, and `platform-electron` validates it again in the renderer.

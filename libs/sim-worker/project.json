@@ -1,0 +1,17 @@
+{
+  "name": "sim-worker",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/sim-worker/src",
+  "projectType": "library",
+  "tags": ["type:worker", "scope:game"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/sim-worker/tsconfig.lib.json --noEmit && tsc -p libs/sim-worker/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}

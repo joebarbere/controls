@@ -1,0 +1,17 @@
+{
+  "name": "catalog",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/catalog/src",
+  "projectType": "library",
+  "tags": ["type:domain"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "options": {
+        "command": "tsc -p libs/domain/catalog/tsconfig.lib.json --noEmit && tsc -p libs/domain/catalog/tsconfig.spec.json --noEmit"
+      }
+    }
+  }
+}
