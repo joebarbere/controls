@@ -223,21 +223,21 @@ Slot `i` starts at `slotsOffset + i × slotBytes`. The plan listed the tick, the
 
 #### 5.2 Slot header (slot bytes 0–95)
 
-| Offset | Type     | Field                | Hashed | Notes                                                                                      |
-| -----: | -------- | -------------------- | :----: | ------------------------------------------------------------------------------------------ |
-|      0 | `i32`    | `slotSeq`            |   no   | **Atomics** seqlock: odd while being written                                               |
-|      4 | `u32`    | `topologyGeneration` |   no   | Counts topology changes since this engine started, so it differs after a load or a restart |
-|      8 | `f64`    | `tick`               |  yes   | The tick this snapshot describes                                                           |
-|     16 | `f64`    | `lastSolveTick`      |  yes   | The tick of the electrical solution in this slot                                           |
-|     24 | `u32`    | `nodeCount`          |  yes   |                                                                                            |
-|     28 | `u32`    | `branchCount`        |  yes   |                                                                                            |
-|     32 | `u32`    | `islandCount`        |  yes   |                                                                                            |
-|     36 | `u32`    | `deviceCount`        |  yes   |                                                                                            |
-|     40 | `u32`    | `deviceDataBytes`    |  yes   | A multiple of 8                                                                            |
-|     44 | `u32`    | `flags`              |  yes   | bit 0: an island is singular; bit 1: an island didn't converge; bit 2: an island is mixed  |
-|     48 | `u8[32]` | `topologyHash`       |  yes   | The raw SHA-256 bytes of F2.1's `topologyHash`                                             |
-|     80 | `u32`    | `payloadBytes`       |  yes   | The bytes used after the header                                                            |
-|  84–95 | —        | reserved             |  yes   | 0                                                                                          |
+| Offset | Type     | Field                | Hashed | Notes                                                                                        |
+| -----: | -------- | -------------------- | :----: | -------------------------------------------------------------------------------------------- |
+|      0 | `i32`    | `slotSeq`            |   no   | **Atomics** seqlock: odd while being written                                                 |
+|      4 | `u32`    | `topologyGeneration` |   no   | Counts topology changes since this engine started, so it differs after a load or a restart   |
+|      8 | `f64`    | `tick`               |  yes   | The tick this snapshot describes                                                             |
+|     16 | `f64`    | `lastSolveTick`      |  yes   | The tick of the electrical solution in this slot                                             |
+|     24 | `u32`    | `nodeCount`          |  yes   |                                                                                              |
+|     28 | `u32`    | `branchCount`        |  yes   |                                                                                              |
+|     32 | `u32`    | `islandCount`        |  yes   |                                                                                              |
+|     36 | `u32`    | `deviceCount`        |  yes   |                                                                                              |
+|     40 | `u32`    | `deviceDataBytes`    |  yes   | A multiple of 8                                                                              |
+|     44 | `u32`    | `flags`              |  yes   | bit 0: an island is singular; bit 1: an island didn't converge; bit 2: an island is mixed    |
+|     48 | `u8[32]` | `topologyHash`       |  yes   | The raw SHA-256 bytes of F2.1's `topologyHash` (ADR 0013, "Solution order and topologyHash") |
+|     80 | `u32`    | `payloadBytes`       |  yes   | The bytes used after the header                                                              |
+|  84–95 | —        | reserved             |  yes   | 0                                                                                            |
 
 **The hashed region** is slot bytes `[8, 96 + payloadBytes)`. `snapshotHash` is its SHA-256 (the pure implementation in `world-model`), in lowercase hex.
 

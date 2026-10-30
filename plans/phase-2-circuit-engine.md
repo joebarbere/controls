@@ -292,6 +292,7 @@ _Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md),
 - _`topologyHash` digests a compact canonical **byte** encoding of the structure, not text: hashing 87 KB of text took 1.25 ms of a 1.9 ms structural recompile at 2,000 nodes; the encoding brings the recompile to about 1.3 ms (AMD Ryzen 5 5600X, Node 24). Element refs are in the hash, because the solution record is ordered by branch._
 - _Sim topology events (trip, blow) are proven with a test-only fuse kind, since the real fuse and breaker arrive in F2.5. The engine passes its sim state as `options.sim`; a model sees only the keys it lists in `simTopologyKeys`._
 - _The entity-delete cascade (deleting an entity removes its leads in the same change, and undo restores them with their ids) shipped with the world v2 commands in #42; this PR adds a `world-model` property test for it._
+- _Review notes for later features: F2.2 gives every island its own reference node, including floating or partly floating nodes after an open switch or a dangling lead (`electrical-realism-reviewer`); an `empty` island must not be assumed dead once storage elements (capacitors, inductors with state) arrive. F2.3a: a save whose netlist is empty (`isEmptyNetlist`: no nodes) but whose `sim` is not `null` is `start-failed` (`save-format-guardian`)._
 - _ADR 0014 (`dmath`) isn't written here: the compiler needs no transcendental. It belongs with the first use of `dmath` (the lamp's R(T) in F2.5, or earlier if F2.2 needs one)._
 
 ### F2.2 DC and phasor MNA solvers

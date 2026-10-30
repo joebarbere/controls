@@ -148,16 +148,15 @@ interface PlacedConnection {
 }
 
 /**
- * What the netlist's structure is a function of, as flat arrays compared element by element: per
- * entity its id and structure key; per connection its id, its plant-wide ends and its structure key
- * (or why it is absent). Equal structures give equal nodes, islands, devices, diagnostics and hash.
+ * Everything `assemble` reads except values, recorded in one flat list as each input is placed:
+ * per entity `'e', id, structure key` (the fragment's kind, terminals, joins and elements, or why it
+ * is absent); per connection `'c', id, end a, end b, structure key` (its element kind and model, or
+ * why it is absent). Plant-wide terminal indices follow from the entity entries. So two compiles with
+ * equal lists give equal nodes, islands, devices, diagnostics and hash, by construction: an input
+ * that isn't recorded here can't reach `assemble`. Ids are recorded with what they resolved to, so an
+ * id reused after an undo (a reconnect to other terminals) can never match a stale entry.
  */
-interface Structure {
-  readonly entityIds: number[];
-  readonly entityKeys: string[];
-  readonly connectionNumbers: number[];
-  readonly connectionKeys: string[];
-}
+type Structure = (number | string)[];
 
 const ABSENT_KEYS: Readonly<Record<AbsentConnectionReason, string>> = {
   'unknown-ref': 'absent unknown-ref',
@@ -167,17 +166,11 @@ const ABSENT_KEYS: Readonly<Record<AbsentConnectionReason, string>> = {
   'unknown-terminal': 'absent unknown-terminal',
 };
 
-const sameArray = <T>(x: readonly T[], y: readonly T[]): boolean => {
+const sameStructure = (x: Structure, y: Structure): boolean => {
   if (x.length !== y.length) return false;
   for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
   return true;
 };
-
-const sameStructure = (x: Structure, y: Structure): boolean =>
-  sameArray(x.entityIds, y.entityIds) &&
-  sameArray(x.entityKeys, y.entityKeys) &&
-  sameArray(x.connectionNumbers, y.connectionNumbers) &&
-  sameArray(x.connectionKeys, y.connectionKeys);
 
 const byId = <T extends { readonly id: number }>(items: readonly T[]): readonly T[] => {
   for (let i = 1; i < items.length; i++) {
@@ -208,7 +201,7 @@ export class NetlistCompiler {
    */
   compile(world: World, options: CompileOptions = {}): Netlist {
     const epoch = ++this.epoch;
-    const structure: Structure = { entityIds: [], entityKeys: [], connectionNumbers: [], connectionKeys: [] };
+    const structure: Structure = [];
     const entityDiagnostics: NetlistDiagnostic[] = [];
     const connectionDiagnostics: NetlistDiagnostic[] = [];
 
@@ -219,8 +212,7 @@ export class NetlistCompiler {
     const entities = byId(world.entities);
     for (const entity of entities) {
       const entry = this.entityEntry(entity, options, epoch);
-      structure.entityIds.push(entity.id);
-      structure.entityKeys.push(entry.structureKey);
+      structure.push('e', entity.id, entry.structureKey);
       if (entry.result.netlisted) {
         const placed = { entity: entity.id, fragment: entry.result.fragment, base: terminalCount };
         devices.push(placed);
@@ -247,13 +239,12 @@ export class NetlistCompiler {
         if (a === ABSENT_END || b === ABSENT_END) reason = 'absent-end';
         else if (a < 0 || b < 0) reason = 'unknown-terminal';
       }
-      structure.connectionNumbers.push(connection.id, a, b);
       if (reason !== null || !result.ok) {
         const absentReason = reason as AbsentConnectionReason;
-        structure.connectionKeys.push(ABSENT_KEYS[absentReason]);
+        structure.push('c', connection.id, a, b, ABSENT_KEYS[absentReason]);
         connectionDiagnostics.push({ code: 'absent-connection', connection: connection.id, reason: absentReason });
       } else {
-        structure.connectionKeys.push(result.structureKey);
+        structure.push('c', connection.id, a, b, result.structureKey);
         connections.push({ id: connection.id, result, a, b });
       }
     }
@@ -369,7 +360,7 @@ export function compileNetlist(
   return new NetlistCompiler(catalog, options).compile(world, options);
 }
 
-/** Whether a netlist has nothing to solve: such a world exports `sim: null` (ADR 0013). */
+/** Whether a netlist has no nodes (`nodes.length === 0`): such a world exports `sim: null` (ADR 0013). */
 export function isEmptyNetlist(netlist: Netlist): boolean {
   return netlist.nodes.length === 0;
 }
@@ -406,7 +397,8 @@ const simKeyOf = (model: DeviceNetlistModel, view: StateBag): string =>
 function sortedValues(values: Readonly<Record<string, number>>): Readonly<Record<string, number>> {
   const sorted: Record<string, number> = {};
   for (const key of Object.keys(values).sort()) sorted[key] = values[key];
-  return sorted;
+  // Frozen: one values object is shared by the cache and every netlist that reuses the fragment.
+  return Object.freeze(sorted);
 }
 
 function buildFragment(

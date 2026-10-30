@@ -89,6 +89,23 @@ function pickEnd(bus: CommandBus<World>, [entityIndex, terminalIndex]: [number, 
 }
 
 const opsArb = fc.array(opArb, { maxLength: 25 });
+/**
+ * Which entity the delete property deletes: biased to one with leads (`withLeads`), else any entity
+ * or, past the end, a missing id.
+ */
+const deleteTargetArb = fc.record({
+  withLeads: fc.oneof({ weight: 3, arbitrary: fc.constant(true) }, { weight: 1, arbitrary: fc.constant(false) }),
+  pick: fc.nat({ max: 8 }),
+});
+
+function deleteTarget(world: World, target: { withLeads: boolean; pick: number }): number {
+  const linked = world.entities.filter((e) =>
+    world.connections.some((c) => c.a.entity === e.id || c.b.entity === e.id),
+  );
+  if (target.withLeads && linked.length > 0) return linked[target.pick % linked.length].id;
+  const pool = world.entities;
+  return target.pick < pool.length ? pool[target.pick].id : world.nextEntityId + target.pick;
+}
 const worldArb = rawWorldV2Arb.map((raw) => World.parse(raw));
 
 function pickId(bus: CommandBus<World>, index: number): number {
@@ -252,23 +269,55 @@ describe('world command properties', () => {
     );
   });
 
-  it('deleting an entity removes exactly its connections, and undo restores them with the same ids (plan F2.1)', () => {
+  it('deleting an entity removes exactly its connections; undo restores them with the same ids, redo removes the same ids (plan F2.1)', () => {
     fc.assert(
-      fc.property(worldArb, opsArb, pick, (initial, ops, target) => {
+      fc.property(worldArb, opsArb, deleteTargetArb, (initial, ops, target) => {
         const bus = createWorldBus(initial);
         ops.forEach((op) => run(bus, op));
         const before = bus.state;
-        const id = pickId(bus, target);
+        const id = deleteTarget(before, target);
         if (!bus.exec('entity.delete', { id }).ok) return; // a missing id: refused, nothing to check
         const touches = (c: World['connections'][number]) => c.a.entity === id || c.b.entity === id;
+        const kept = before.connections.filter((c) => !touches(c));
         // No connection is left with an end on the deleted entity, and every other one is kept as it was.
-        expect(bus.state.connections).toStrictEqual(before.connections.filter((c) => !touches(c)));
+        expect(bus.state.connections).toStrictEqual(kept);
         expect(bus.state.nextConnectionId).toBe(before.nextConnectionId);
         expect(bus.exec('edit.undo').ok).toBe(true);
         expect(bus.state.connections).toStrictEqual(before.connections);
         expect(worldHash(bus.state)).toBe(worldHash(before));
+        expect(bus.exec('edit.redo').ok).toBe(true);
+        expect(bus.state.connections.map((c) => c.id)).toStrictEqual(kept.map((c) => c.id));
       }),
     );
+  });
+
+  it('the delete property usually deletes an entity that has leads (generator health)', () => {
+    const samples = fc.sample(fc.tuple(worldArb, opsArb, deleteTargetArb), { seed: 20261030, numRuns: 200 });
+    const withLeads = samples.filter(([initial, ops, target]) => {
+      const bus = createWorldBus(initial);
+      ops.forEach((op) => run(bus, op));
+      const id = deleteTarget(bus.state, target);
+      return bus.state.connections.some((c) => c.a.entity === id || c.b.entity === id);
+    }).length;
+    expect(withLeads / samples.length).toBeGreaterThanOrEqual(0.4);
+  });
+
+  it('deleting a battery with two leads removes both; undo restores ids 1 and 2; redo removes them again', () => {
+    const bus = createWorldBus(createWorld({ seed: 1 }));
+    const origin = { x: 0, y: 0, z: 0 };
+    bus.exec('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: origin });
+    bus.exec('entity.place', { ref: { id: 'lamp.lumivane-12v-5w', version: 1 }, positionMm: origin });
+    bus.exec('lead.connect', { ref: LEAD, a: { entity: 1, terminal: 'pos' }, b: { entity: 2, terminal: 'a' } });
+    bus.exec('lead.connect', { ref: LEAD, a: { entity: 2, terminal: 'b' }, b: { entity: 1, terminal: 'neg' } });
+    const before = bus.state;
+    expect(before.connections.map((c) => c.id)).toStrictEqual([1, 2]);
+    expect(bus.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    expect(bus.state.connections).toStrictEqual([]);
+    expect(bus.exec('edit.undo').ok).toBe(true);
+    expect(bus.state).toStrictEqual(before);
+    expect(bus.exec('edit.redo').ok).toBe(true);
+    expect(bus.state.connections).toStrictEqual([]);
+    expect(bus.state.nextConnectionId).toBe(3);
   });
 
   it('a log rebased onto a mid-session world (sim state included) replays to the same hash (ADR 0013)', () => {

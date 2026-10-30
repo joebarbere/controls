@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import type { CommandBus } from '@controls/commands';
 import { World } from '@controls/save-format';
-import { rawWorldV2Arb } from '@controls/save-format/testing';
+import { deepFreeze, rawWorldV2Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import {
   AC_SOURCE,
@@ -29,21 +29,29 @@ import type { Netlist, StateBag } from './types';
  * (place, connect, disconnect, operate, delete, move, undo, redo) plus sim topology events (a test
  * fuse blowing or being restored in the engine's state):
  *
- * - an incrementally recompiled netlist equals a from-scratch compile after every edit;
+ * - an incrementally recompiled netlist equals a from-scratch compile, compiling only on some steps,
+ *   so a compiler that is handed several edits at once (an undo then a reconnect that reuses an id)
+ *   is checked too;
  * - permuting the input order of entities and connections gives an identical netlist;
  * - the ADR 0011 §7 guarantees and the canonical numbering hold for every reachable world;
- * - `topologyHash` ignores values and changes when a switch toggles.
+ * - `topologyHash` is equal exactly when the structure is, and ignores values.
  *
+ * Every run starts from a bench seeded with 3–8 netlistable devices, connects real terminals and
+ * blows only fuses that exist, and the generator-health test pins floors on how often the runs
+ * produce leads, blows, value changes and AC and mixed islands, so the properties can't go vacuous.
  * Every arbitrary is built once, here at module level (never inside `.chain`): building
  * `fc.stringMatching` in a chain body once made a spec ten times slower.
  */
 
-const REFS = [BATTERY, SPST, LAMP, FUSE, AC_SOURCE, SUPPLY, CRATE, UNKNOWN];
+/** Devices the seed placements use: every one is netlisted. */
+const DEVICES = [BATTERY, SPST, LAMP, FUSE, AC_SOURCE, SUPPLY];
+/** Later placements may also add a prop or an unknown device (both absent from the netlist). */
+const REFS = [...DEVICES, CRATE, UNKNOWN];
 const LEADS = [LEAD, LEAD_2M];
 
 type Op =
   | { kind: 'place'; ref: number }
-  | { kind: 'connect'; a: [number, number]; b: [number, number]; lead: number }
+  | { kind: 'connect'; a: number; offset: number; lead: number }
   | { kind: 'disconnect'; pick: number }
   | { kind: 'toggle'; pick: number; value: boolean }
   | { kind: 'setpoint'; pick: number; value: number }
@@ -53,88 +61,118 @@ type Op =
   | { kind: 'redo' }
   | { kind: 'blow'; pick: number };
 
-const pick = fc.nat({ max: 12 });
-const terminalPick: fc.Arbitrary<[number, number]> = fc.tuple(pick, fc.nat({ max: 3 }));
+const pick = fc.nat({ max: 63 });
 const opArb: fc.Arbitrary<Op> = fc.oneof(
-  { weight: 4, arbitrary: fc.record({ kind: fc.constant('place' as const), ref: fc.nat({ max: REFS.length - 1 }) }) },
+  { weight: 2, arbitrary: fc.record({ kind: fc.constant('place' as const), ref: fc.nat({ max: REFS.length - 1 }) }) },
   {
-    weight: 6,
+    weight: 8,
     arbitrary: fc.record({
       kind: fc.constant('connect' as const),
-      a: terminalPick,
-      b: terminalPick,
+      a: pick,
+      offset: pick,
       lead: fc.nat({ max: LEADS.length - 1 }),
     }),
   },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('disconnect' as const), pick }) },
   { weight: 2, arbitrary: fc.record({ kind: fc.constant('toggle' as const), pick, value: fc.boolean() }) },
   {
-    weight: 1,
+    weight: 2,
     arbitrary: fc.record({ kind: fc.constant('setpoint' as const), pick, value: fc.integer({ min: 0, max: 30 }) }),
   },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('delete' as const), pick }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('move' as const), pick, x: fc.integer({ min: -9, max: 9 }) }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'undo' as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'redo' as const }) },
-  { weight: 1, arbitrary: fc.record({ kind: fc.constant('blow' as const), pick }) },
+  { weight: 2, arbitrary: fc.record({ kind: fc.constant('blow' as const), pick }) },
 );
-const opsArb = fc.array(opArb, { minLength: 1, maxLength: 40 });
+
+/** A run: the seed bench, then edits, each flagged with whether to compile after it. */
+interface Run {
+  readonly seed: readonly number[];
+  readonly withFuse: boolean;
+  readonly steps: readonly (readonly [Op, boolean])[];
+}
+const runArb: fc.Arbitrary<Run> = fc.record({
+  seed: fc.array(fc.nat({ max: DEVICES.length - 1 }), { minLength: 3, maxLength: 8 }),
+  withFuse: fc.boolean(),
+  steps: fc.array(fc.tuple(opArb, fc.boolean()), { minLength: 1, maxLength: 40, size: 'max' }),
+});
+/** Two runs, how to derive the second world, one more op and a setpoint (the hash-equivalence property). */
+const pairArb = fc.tuple(runArb, runArb, fc.nat({ max: 2 }), opArb, fc.integer({ min: 0, max: 30 }));
 /** Sort keys for permuting a world's entities and connections (no `fc.shuffledSubarray` in a chain). */
 const permutationArb = fc.array(fc.integer(), { minLength: 64, maxLength: 64 });
 
 /** The engine's sim-owned state, as the engine would hand it to the compiler. */
 type SimState = Map<number, StateBag>;
 
-function terminalOf(world: World, [entityPick, terminal]: [number, number]): { entity: number; terminal: string } {
-  const entity = world.entities[entityPick % Math.max(world.entities.length, 1)];
-  if (!entity) return { entity: 1, terminal: 'a' };
-  const terminals = TEST_CATALOG.device(entity.ref)?.terminals ?? [];
-  return { entity: entity.id, terminal: terminals.length > 0 ? terminals[terminal % terminals.length].id : 'a' };
+/** What a run did, for the generator-health test. */
+interface Tally {
+  connects: number;
+  acceptedConnects: number;
+  effectiveBlows: number;
+  valueChanges: number;
 }
 
-function entityOfKind(world: World, kind: string, index: number): number {
-  const matches = world.entities.filter((e) => TEST_CATALOG.kindOf(e.ref)?.kind === kind);
-  return matches.length > 0 ? matches[index % matches.length].id : 999;
+/** Every terminal of every entity whose device the catalogue knows, in world order. */
+function terminals(world: World): { entity: number; terminal: string }[] {
+  return world.entities.flatMap((e) =>
+    (TEST_CATALOG.device(e.ref)?.terminals ?? []).map((t) => ({ entity: e.id, terminal: t.id })),
+  );
 }
 
-/** Applies one op. Refused commands are fine: they change nothing, as in play. */
-function apply(bus: CommandBus<World>, sim: SimState, op: Op): void {
+function entitiesOfKind(world: World, kind: string): World['entities'] {
+  return world.entities.filter((e) => TEST_CATALOG.kindOf(e.ref)?.kind === kind);
+}
+
+const nth = <T>(items: readonly T[], index: number): T | undefined =>
+  items.length === 0 ? undefined : items[index % items.length];
+
+/** Applies one op. Refused commands are fine (they change nothing, as in play), but rare by design. */
+function apply(bus: CommandBus<World>, sim: SimState, op: Op, tally: Tally): void {
   const world = bus.state;
   switch (op.kind) {
     case 'place':
       bus.exec('entity.place', { ref: REFS[op.ref], positionMm: origin });
       return;
-    case 'connect':
-      bus.exec('lead.connect', { ref: LEADS[op.lead], a: terminalOf(world, op.a), b: terminalOf(world, op.b) });
-      return;
-    case 'disconnect': {
-      const connection = world.connections[op.pick % Math.max(world.connections.length, 1)];
-      bus.exec('lead.disconnect', { id: connection?.id ?? 1 });
+    case 'connect': {
+      // Real terminals of existing devices, and b is never a.
+      const all = terminals(world);
+      if (all.length < 2) return;
+      const ia = op.a % all.length;
+      const ib = (ia + 1 + (op.offset % (all.length - 1))) % all.length;
+      tally.connects++;
+      if (bus.exec('lead.connect', { ref: LEADS[op.lead], a: all[ia], b: all[ib] }).ok) tally.acceptedConnects++;
       return;
     }
-    case 'toggle':
-      bus.exec('device.operate', {
-        id: entityOfKind(world, 'switch.spst', op.pick),
-        control: 'closed',
-        value: op.value,
-      });
+    case 'disconnect': {
+      const connection = nth(world.connections, op.pick);
+      if (connection) bus.exec('lead.disconnect', { id: connection.id });
       return;
-    case 'setpoint':
-      bus.exec('device.operate', {
-        id: entityOfKind(world, 'test.supply', op.pick),
-        control: 'setpointV',
-        value: op.value,
-      });
+    }
+    case 'toggle': {
+      const target = nth(entitiesOfKind(world, 'switch.spst'), op.pick);
+      if (target) bus.exec('device.operate', { id: target.id, control: 'closed', value: op.value });
       return;
-    case 'delete':
-      bus.exec('entity.delete', { id: world.entities[op.pick % Math.max(world.entities.length, 1)]?.id ?? 1 });
+    }
+    case 'setpoint': {
+      const target = nth(entitiesOfKind(world, 'test.supply'), op.pick);
+      if (!target) return;
+      const changed = target.state['setpointV'] !== op.value;
+      if (bus.exec('device.operate', { id: target.id, control: 'setpointV', value: op.value }).ok && changed) {
+        tally.valueChanges++;
+      }
       return;
-    case 'move':
-      bus.exec('entity.move', {
-        id: world.entities[op.pick % Math.max(world.entities.length, 1)]?.id ?? 1,
-        positionMm: { x: op.x, y: 0, z: 0 },
-      });
+    }
+    case 'delete': {
+      const target = nth(world.entities, op.pick);
+      if (target) bus.exec('entity.delete', { id: target.id });
       return;
+    }
+    case 'move': {
+      const target = nth(world.entities, op.pick);
+      if (target) bus.exec('entity.move', { id: target.id, positionMm: { x: op.x, y: 0, z: 0 } });
+      return;
+    }
     case 'undo':
       bus.exec('edit.undo');
       return;
@@ -143,8 +181,10 @@ function apply(bus: CommandBus<World>, sim: SimState, op: Op): void {
       return;
     case 'blow': {
       // A sim topology event: the engine blows (or, for the test, restores) a fuse. Not a command.
-      const id = entityOfKind(world, 'test.fuse', op.pick);
-      sim.set(id, { blown: !(sim.get(id)?.['blown'] === true) });
+      const fuse = nth(entitiesOfKind(world, 'test.fuse'), op.pick);
+      if (!fuse) return;
+      sim.set(fuse.id, deepFreeze({ blown: !(sim.get(fuse.id)?.['blown'] === true) }));
+      tally.effectiveBlows++;
       return;
     }
   }
@@ -153,13 +193,38 @@ function apply(bus: CommandBus<World>, sim: SimState, op: Op): void {
 const fromScratch = (world: World, sim: SimState): Netlist =>
   compileNetlist(world, TEST_CATALOG, { models: TEST_MODELS, sim: (id) => sim.get(id) });
 
-/** Runs `ops` on a fresh test bench and returns the world and the engine's sim state. */
-function build(ops: readonly Op[]): { world: World; sim: SimState } {
+/** A fresh test bench with the run's seed devices placed. */
+function seeded(run: Run): CommandBus<World> {
   const bus = benchBus(TEST_CATALOG);
-  const sim: SimState = new Map();
-  for (const op of ops) apply(bus, sim, op);
-  return { world: bus.state, sim };
+  const refs = [...run.seed.map((i) => DEVICES[i]), ...(run.withFuse ? [FUSE] : [])];
+  for (const ref of refs) bus.exec('entity.place', { ref, positionMm: origin });
+  return bus;
 }
+
+/** Runs every step and returns the world, the engine's sim state and what happened. */
+function build(run: Run): { world: World; sim: SimState; tally: Tally } {
+  const bus = seeded(run);
+  const sim: SimState = new Map();
+  const tally: Tally = { connects: 0, acceptedConnects: 0, effectiveBlows: 0, valueChanges: 0 };
+  for (const [op] of run.steps) apply(bus, sim, op, tally);
+  return { world: bus.state, sim, tally };
+}
+
+/** The structure `topologyHash` covers: the partition and each branch without its values. */
+const projection = (netlist: Netlist): string =>
+  JSON.stringify([
+    netlist.nodes.map((n) => n.members),
+    netlist.branches.map(({ element, kind, model, source, a, b }) => [element, kind, model, source, a, b]),
+  ]);
+
+/** The world with every lead swapped for the other length and every supply at `setpointV`. */
+const revalued = (world: World, setpointV: number): World => ({
+  ...world,
+  connections: world.connections.map((c) => ({ ...c, ref: c.ref.id === LEAD.id ? LEAD_2M : LEAD })),
+  entities: world.entities.map((e) =>
+    TEST_CATALOG.kindOf(e.ref)?.kind === 'test.supply' ? { ...e, state: { setpointV } } : e,
+  ),
+});
 
 const memberKey = (m: { entity: number; terminal: string }) => [m.entity, m.terminal] as const;
 const before = (x: readonly [number, string], y: readonly [number, string]) =>
@@ -215,6 +280,7 @@ function checkInvariants(world: World, netlist: Netlist, catalog: Catalog = TEST
     expect(branch.index).toBe(index);
     expect(netlist.nodes[branch.a].island).toBe(branch.island);
     expect(netlist.nodes[branch.b].island).toBe(branch.island);
+    expect(Object.isFrozen(branch.values)).toBe(true);
   });
   const islandNodes = netlist.islands.flatMap((island, index) => {
     expect(island.index).toBe(index);
@@ -226,39 +292,77 @@ function checkInvariants(world: World, netlist: Netlist, catalog: Catalog = TEST
     return island.nodes;
   });
   expect(islandNodes.sort((x, y) => x - y)).toStrictEqual(netlist.nodes.map((n) => n.index));
+  // `mixed-island` diagnostics name exactly the mixed islands.
+  expect(netlist.diagnostics.flatMap((d) => (d.code === 'mixed-island' ? [d.island] : []))).toStrictEqual(
+    netlist.islands.filter((i) => i.kind === 'mixed').map((i) => i.index),
+  );
   expect(netlist.topologyHash).toBe(computeTopologyHash(netlist.nodes, netlist.branches));
 }
 
+/**
+ * Raw world documents with most entities mapped to built-in devices and most connections to the
+ * built-in lead between real terminals (some left bogus or unknown), so the robustness property
+ * compiles real circuits, not only absent refs.
+ */
+const BUILTIN_DEVICES = [BATTERY, SPST, LAMP];
+const mappedWorldArb = rawWorldV2Arb.map((raw) => {
+  const world = World.parse(raw);
+  const entities = world.entities.map((e) => (e.id % 4 === 0 ? e : { ...e, ref: BUILTIN_DEVICES[e.id % 3] }));
+  const realTerminal = (end: { entity: number; terminal: string }, salt: number) => {
+    const entity = entities.find((e) => e.id === end.entity);
+    const device = entity && BUILTIN_CATALOG.device(entity.ref);
+    return device && salt % 7 !== 0 ? { ...end, terminal: device.terminals[salt % 2].id } : end;
+  };
+  const connections = world.connections.map((c) => {
+    const mapped = {
+      ...c,
+      ref: c.id % 5 === 0 ? c.ref : LEAD,
+      a: realTerminal(c.a, c.id),
+      b: realTerminal(c.b, c.id + 1),
+    };
+    const same = mapped.a.entity === mapped.b.entity && mapped.a.terminal === mapped.b.terminal;
+    return same ? { ...mapped, a: c.a, b: c.b } : mapped;
+  });
+  return World.parse({ ...world, entities, connections });
+});
+
 describe('netlist properties (plan F2.1)', () => {
-  it('incremental recompile equals a from-scratch compile after every edit and sim topology event', () => {
+  it('incremental recompile equals a from-scratch compile, compiling only on flagged steps', () => {
     fc.assert(
-      fc.property(opsArb, (ops) => {
-        const bus = benchBus(TEST_CATALOG);
+      fc.property(runArb, (run) => {
+        const bus = seeded(run);
         const sim: SimState = new Map();
+        const tally: Tally = { connects: 0, acceptedConnects: 0, effectiveBlows: 0, valueChanges: 0 };
         const compiler = new NetlistCompiler(TEST_CATALOG, { models: TEST_MODELS });
-        for (const op of ops) {
-          apply(bus, sim, op);
-          expect(compiler.compile(bus.state, { sim: (id) => sim.get(id) })).toStrictEqual(fromScratch(bus.state, sim));
+        compiler.compile(deepFreeze(bus.state));
+        for (const [op, compile] of run.steps) {
+          apply(bus, sim, op, tally);
+          if (!compile) continue;
+          // Frozen inputs: the compiler must never mutate the world or the engine's state.
+          const world = deepFreeze(bus.state);
+          const incremental = compiler.compile(world, { sim: (id) => sim.get(id) });
+          expect(incremental).toStrictEqual(fromScratch(world, sim));
+          for (const branch of incremental.branches) expect(Object.isFrozen(branch.values)).toBe(true);
         }
       }),
-      { numRuns: 150 },
+      { numRuns: 60 },
     );
   });
 
   it('every reachable world compiles to a netlist that keeps the ADR 0011 §7 guarantees', () => {
     fc.assert(
-      fc.property(opsArb, (ops) => {
-        const { world, sim } = build(ops);
+      fc.property(runArb, (run) => {
+        const { world, sim } = build(run);
         checkInvariants(world, fromScratch(world, sim));
       }),
-      { numRuns: 150 },
+      { numRuns: 120 },
     );
   });
 
   it('permuting the order of entities and connections gives an identical netlist', () => {
     fc.assert(
-      fc.property(opsArb, permutationArb, (ops, keys) => {
-        const { world, sim } = build(ops);
+      fc.property(runArb, permutationArb, (run, keys) => {
+        const { world, sim } = build(run);
         const permute = <T>(items: readonly T[]) =>
           items
             .map((item, i) => ({ item, key: keys[i % keys.length] + i / 1000 }))
@@ -269,55 +373,112 @@ describe('netlist properties (plan F2.1)', () => {
         expect(netlist).toStrictEqual(fromScratch(world, sim));
         expect(formatNetlist(netlist)).toBe(formatNetlist(fromScratch(world, sim)));
       }),
-      { numRuns: 100 },
+      { numRuns: 150 },
     );
   });
 
   it('topologyHash ignores values: other lead types and setpoints keep the hash', () => {
     fc.assert(
-      fc.property(opsArb, fc.integer({ min: 0, max: 30 }), (ops, setpoint) => {
-        const { world, sim } = build(ops);
-        const revalued: World = {
-          ...world,
-          connections: world.connections.map((c) => ({ ...c, ref: c.ref.id === LEAD.id ? LEAD_2M : LEAD })),
-          entities: world.entities.map((e) =>
-            TEST_CATALOG.kindOf(e.ref)?.kind === 'test.supply' ? { ...e, state: { setpointV: setpoint } } : e,
-          ),
-        };
+      fc.property(runArb, fc.integer({ min: 0, max: 30 }), (run, setpoint) => {
+        const { world, sim } = build(run);
         const original = fromScratch(world, sim);
-        const changed = fromScratch(revalued, sim);
+        const changed = fromScratch(revalued(world, setpoint), sim);
         expect(changed.topologyHash).toBe(original.topologyHash);
-        expect(changed.nodes).toStrictEqual(original.nodes);
+        expect(projection(changed)).toBe(projection(original));
       }),
-      { numRuns: 100 },
+      { numRuns: 150 },
+    );
+  });
+
+  it('topologyHash is equal exactly when the structural projection is, over pairs of reachable worlds', () => {
+    fc.assert(
+      fc.property(pairArb, ([run, other, how, op, setpoint]) => {
+        const first = build(run);
+        // The second world: an unrelated one, the same one revalued, or the same one plus one more edit.
+        let second = first;
+        if (how === 0) second = build(other);
+        else if (how === 1) second = { ...first, world: revalued(first.world, setpoint) };
+        else second = build({ ...run, steps: [...run.steps, [op, true]] });
+        const x = fromScratch(first.world, first.sim);
+        const y = fromScratch(second.world, second.sim);
+        expect(x.topologyHash === y.topologyHash).toBe(projection(x) === projection(y));
+      }),
+      { numRuns: 150 },
     );
   });
 
   it('toggling a switch always changes topologyHash', () => {
     fc.assert(
-      fc.property(opsArb, pick, (ops, which) => {
-        const { world, sim } = build([...ops, { kind: 'place', ref: REFS.indexOf(SPST) }]);
-        const id = entityOfKind(world, 'switch.spst', which);
+      fc.property(runArb, pick, (run, which) => {
+        const { world, sim } = build({
+          ...run,
+          steps: [...run.steps, [{ kind: 'place', ref: REFS.indexOf(SPST) }, true]],
+        });
+        const target = nth(entitiesOfKind(world, 'switch.spst'), which);
         const toggled: World = {
           ...world,
           entities: world.entities.map((e) =>
-            e.id === id ? { ...e, state: { closed: e.state['closed'] !== true } } : e,
+            e.id === target?.id ? { ...e, state: { closed: e.state['closed'] !== true } } : e,
           ),
         };
         expect(fromScratch(toggled, sim).topologyHash).not.toBe(fromScratch(world, sim).topologyHash);
       }),
-      { numRuns: 100 },
+      { numRuns: 150 },
     );
   });
 
-  it('any valid world document compiles without throwing (unknown refs and props are absent)', () => {
+  it('any valid world document compiles without throwing and keeps the guarantees', () => {
     fc.assert(
-      fc.property(rawWorldV2Arb, (raw) => {
-        const world = World.parse(raw);
-        const netlist = compileNetlist(world, BUILTIN_CATALOG);
-        checkInvariants(world, netlist, BUILTIN_CATALOG);
+      fc.property(mappedWorldArb, (world) => {
+        checkInvariants(world, compileNetlist(world, BUILTIN_CATALOG), BUILTIN_CATALOG);
       }),
       { numRuns: 100 },
     );
+  });
+});
+
+describe('generator health (the properties above are not vacuous)', () => {
+  it('runs build real circuits: leads, blows, value changes, AC and mixed islands', () => {
+    const runs = fc.sample(runArb, { seed: 20261030, numRuns: 200 });
+    let withLeads = 0;
+    let withBlow = 0;
+    let withValueChange = 0;
+    let withAc = 0;
+    let withMixed = 0;
+    let revaluedChangesValues = 0;
+    let connects = 0;
+    let accepted = 0;
+    for (const run of runs) {
+      const { world, sim, tally } = build(run);
+      const netlist = fromScratch(world, sim);
+      connects += tally.connects;
+      accepted += tally.acceptedConnects;
+      if (netlist.branches.filter((b) => b.element.kind === 'connection').length >= 3) withLeads++;
+      if (tally.effectiveBlows > 0) withBlow++;
+      if (tally.valueChanges > 0) withValueChange++;
+      if (netlist.islands.some((i) => i.kind === 'ac' || i.kind === 'mixed')) withAc++;
+      if (netlist.islands.some((i) => i.kind === 'mixed')) withMixed++;
+      const changed = fromScratch(revalued(world, 7), sim);
+      if (changed.branches.some((b, i) => JSON.stringify(b.values) !== JSON.stringify(netlist.branches[i].values))) {
+        revaluedChangesValues++;
+      }
+    }
+    const share = (n: number) => n / runs.length;
+    expect(share(withLeads)).toBeGreaterThanOrEqual(0.5);
+    expect(share(withBlow)).toBeGreaterThanOrEqual(0.3);
+    expect(share(withValueChange)).toBeGreaterThanOrEqual(0.2);
+    expect(share(withAc)).toBeGreaterThanOrEqual(0.3);
+    expect(share(withMixed)).toBeGreaterThanOrEqual(0.1);
+    expect(share(revaluedChangesValues)).toBeGreaterThanOrEqual(0.5);
+    expect(accepted / connects).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('the robustness property’s worlds mostly hold netlisted devices and leads', () => {
+    const worlds = fc.sample(mappedWorldArb, { seed: 20261030, numRuns: 200 });
+    const netlists = worlds.map((world) => compileNetlist(world, BUILTIN_CATALOG));
+    const withDevice = netlists.filter((n) => n.devices.length > 0).length;
+    const withLead = netlists.filter((n) => n.branches.some((b) => b.element.kind === 'connection')).length;
+    expect(withDevice / worlds.length).toBeGreaterThanOrEqual(0.4);
+    expect(withLead / worlds.length).toBeGreaterThanOrEqual(0.2);
   });
 });

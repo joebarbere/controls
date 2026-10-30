@@ -365,6 +365,22 @@ describe('NetlistCompiler (incremental)', () => {
     expect(compiler.stats).toStrictEqual({ structural: 2, valuesOnly: 0, unchanged: 2 });
   });
 
+  it('a reconnect that reuses an undone lead’s id, between other terminals, is never mistaken for the old one', () => {
+    // Test-engineer review of #45: connect, compile, undo, connect other ends (id 1 again), compile.
+    const compiler = new NetlistCompiler(BUILTIN_CATALOG);
+    const bus = benchBus();
+    for (const ref of [BATTERY, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') });
+    const first = compiler.compile(bus.state);
+    run(bus, 'edit.undo');
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'neg'), b: end(2, 'b') });
+    expect(bus.state.connections.map((c) => c.id)).toStrictEqual([1]);
+    const second = compiler.compile(bus.state);
+    expect(second).toStrictEqual(compile(bus.state));
+    expect(second.topologyHash).not.toBe(first.topologyHash);
+    expect(second.branches[2]).toMatchObject({ element: { kind: 'connection', connection: 1 }, a: 0, b: 3 });
+  });
+
   it('a value-only change rebuilds only the branch values: same nodes, islands and hash', () => {
     const compiler = new NetlistCompiler(TEST_CATALOG, { models: TEST_MODELS });
     const bus = benchBus(TEST_CATALOG);

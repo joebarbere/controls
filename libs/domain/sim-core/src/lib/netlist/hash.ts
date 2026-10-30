@@ -1,5 +1,5 @@
 import { sha256, toHex } from '@controls/world-model';
-import type { ElementKind, ElementRef, NetlistBranch, NetlistNode } from './types';
+import type { ElementKind, ElementRef, NetlistBranch, NetlistNode, SourceDomain } from './types';
 
 /*
  * `topologyHash` (plan F2.1, ADR 0011 §5.2 and §9.6): SHA-256, by the pure implementation in
@@ -7,7 +7,7 @@ import type { ElementKind, ElementRef, NetlistBranch, NetlistNode } from './type
  * netlist's structure:
  *
  * - the partition: every node's members, in node order;
- * - every branch's element, element kind, model kind and end nodes, in branch order.
+ * - every branch's element, element kind, source domain, model kind and end nodes, in branch order.
  *
  * Values (resistances, setpoints, nameplates) are left out, so a value-only change keeps the hash and
  * the factorisation cache (F2.2 part 3) can reuse a symbolic factorisation. Islands are left out too:
@@ -26,7 +26,8 @@ import type { ElementKind, ElementRef, NetlistBranch, NetlistNode } from './type
  * varint branchCount
  *   per branch: u8 0, varint entity, str part   (an entity's element)
  *            or u8 1, varint connection         (a connection)
- *               u8 element kind (ELEMENT_KIND_CODES), str model, varint a, varint b
+ *               u8 element kind (ELEMENT_KIND_CODES), u8 source (SOURCE_CODES), str model,
+ *               varint a, varint b
  * ```
  *
  * Changing the encoding moves every persisted `topologyHash`: bump the version byte and
@@ -38,6 +39,9 @@ export const TOPOLOGY_ENCODING_HEADER: readonly number[] = [0x43, 0x4e, 0x54, 0x
 
 /** Element kinds as encoded. Append only: a new kind gets the next code. */
 export const ELEMENT_KIND_CODES: Readonly<Record<ElementKind, number>> = { resistor: 0, vsource: 1 };
+
+/** Source domains as encoded: 0 for a passive element. Append only. */
+export const SOURCE_CODES: Readonly<Record<SourceDomain, number>> = { dc: 1, ac: 2 };
 
 /** `e<entity>.<part>` or `c<connection>`: how `formatNetlist` names a branch's element. */
 export function elementKey(element: ElementRef): string {
@@ -116,6 +120,7 @@ export function topologyBytes(nodes: readonly NetlistNode[], branches: readonly 
       out.varint(element.connection);
     }
     out.byte(ELEMENT_KIND_CODES[branch.kind]);
+    out.byte(branch.source === null ? 0 : SOURCE_CODES[branch.source]);
     out.ascii(branch.model);
     out.varint(branch.a);
     out.varint(branch.b);
