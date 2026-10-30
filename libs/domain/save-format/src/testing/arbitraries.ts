@@ -117,21 +117,44 @@ export const stateBagArb = fc.dictionary(stateKeyArb, stateValueArb, { maxKeys: 
 /** A terminal id (ASCII, never `:`). */
 export const terminalIdArb = fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,6}$/);
 
+/*
+ * Every arbitrary built from a constant is a module-level constant: building one (above all
+ * `fc.stringMatching`, which compiles its regex, about 3 ms) inside a `.chain` body costs that for
+ * every sample. Chain bodies build only what depends on the sample (lengths, `lastSolveTick`).
+ */
+const topologyHashArb = fc.stringMatching(/^[0-9a-f]{64}$/);
+const reImPairsArb = fc
+  .array(fc.tuple(finiteNumberArb, finiteNumberArb), { maxLength: 4 })
+  .map((pairs) => pairs.flat());
+const islandArb = fc.record({
+  flags: fc.integer({ min: 0, max: 255 }),
+  iterations: fc.integer({ min: 0, max: 65_535 }),
+});
+
+/** A raw `WorldV2.sim` solution record without its `lastSolveTick` (which depends on the world's tick), or null. */
+const simSolutionBodyArb = fc.option(
+  fc.record({
+    topologyHash: topologyHashArb,
+    nodes: reImPairsArb,
+    branches: reImPairsArb,
+    islands: fc.array(islandArb, { maxLength: 3 }),
+  }),
+  { nil: null },
+);
+
 /** A raw `WorldV2.sim` solution record (or null); `lastSolveTick` is at most `tick`. */
 const simSolutionArb = (tick: number) =>
-  fc.option(
-    fc.record({
-      lastSolveTick: fc.integer({ min: 0, max: tick }),
-      topologyHash: fc.stringMatching(/^[0-9a-f]{64}$/),
-      nodes: fc.array(fc.tuple(finiteNumberArb, finiteNumberArb), { maxLength: 4 }).map((pairs) => pairs.flat()),
-      branches: fc.array(fc.tuple(finiteNumberArb, finiteNumberArb), { maxLength: 4 }).map((pairs) => pairs.flat()),
-      islands: fc.array(
-        fc.record({ flags: fc.integer({ min: 0, max: 255 }), iterations: fc.integer({ min: 0, max: 65_535 }) }),
-        { maxLength: 3 },
-      ),
-    }),
-    { nil: null },
-  );
+  fc
+    .tuple(simSolutionBodyArb, fc.integer({ min: 0, max: tick }))
+    .map(([body, lastSolveTick]) => (body === null ? null : { lastSolveTick, ...body }));
+
+const v2TickArb = fc.integer({ min: 0, max: 2 ** 40 });
+const bagPairArb = fc.tuple(stateBagArb, stateBagArb);
+const connectionEndsArb = fc.tuple(fc.nat(), terminalIdArb, fc.nat(), terminalIdArb, catalogRefArb, jsonObjectArb);
+type ConnectionEnds = typeof connectionEndsArb extends fc.Arbitrary<infer T> ? T : never;
+const noEndsArb = fc.constant<ConnectionEnds[]>([]);
+const someEndsArb = fc.array(connectionEndsArb, { maxLength: 4 });
+const connectionGapArb = fc.nat({ max: 3 });
 
 /**
  * A raw world document that `WorldV2` accepts: v1's world plus device state bags on every entity,
@@ -142,15 +165,10 @@ export const rawWorldV2Arb = rawWorldV1Arb
   .chain((v1) =>
     fc.record({
       v1: fc.constant(v1),
-      tick: fc.oneof(fc.constant(v1.tick), fc.integer({ min: 0, max: 2 ** 40 })),
-      bags: fc.array(fc.tuple(stateBagArb, stateBagArb), {
-        minLength: v1.entities.length,
-        maxLength: v1.entities.length,
-      }),
-      ends: fc.array(fc.tuple(fc.nat(), terminalIdArb, fc.nat(), terminalIdArb, catalogRefArb, jsonObjectArb), {
-        maxLength: v1.entities.length === 0 ? 0 : 4,
-      }),
-      connectionGap: fc.nat({ max: 3 }),
+      tick: fc.oneof(fc.constant(v1.tick), v2TickArb),
+      bags: fc.array(bagPairArb, { minLength: v1.entities.length, maxLength: v1.entities.length }),
+      ends: v1.entities.length === 0 ? noEndsArb : someEndsArb,
+      connectionGap: connectionGapArb,
     }),
   )
   .chain(({ v1, tick, bags, ends, connectionGap }) => {
