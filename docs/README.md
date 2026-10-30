@@ -7,7 +7,7 @@ flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
     HUB --> G["guides/<br/>new developer, releasing, scripting"]
     HUB --> A["architecture/<br/>overview"]
-    HUB --> D["decisions/<br/>ADRs 0001-0010"]
+    HUB --> D["decisions/<br/>ADRs 0001-0011"]
     HUB --> C["caveats/<br/>per-area gotchas"]
     HUB --> GL["glossary.md"]
     HUB --> H["history.md"]
@@ -53,6 +53,7 @@ Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds the
 | [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror 6 under the CSP (F1.5)  |
 | [0009 Save I/O boundary](decisions/0009-save-io-boundary.md)              | Main-owned save directory, opaque handles, atomic writes, OPFS in the web harness, autosave rotation                    |
 | [0010 Wire-routing spike](decisions/0010-wire-routing-spike.md)           | F1.10 findings: two-click auto-routed wires, instanced segments, screen-space terminal picking, deterministic bake (P3) |
+| [0011 Sim worker contract](decisions/0011-sim-worker-contract.md)         | P2: main-thread clock and bus, mirror bus in the worker, SAB snapshot layout and seqlock, descriptor, fallback, readers |
 
 ## Reference
 

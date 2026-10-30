@@ -43,7 +43,9 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
    - **Routing:** the main agent keeps `commands` and `world-model`. `sim-engine-engineer` owns `sim-core`, `sim-protocol`, `sim-worker`, the sim-facing scripting API (`probe`, `advance`, sim events) and `sim-cli bench`. `save-format-guardian` still reviews world ops and command args.
    - The `CLAUDE.md` routing table is updated to match.
 2. [x] The user answered the kickoff decisions (below, 2026-10-29). The spec is amended to v1.3: §4.3 now sends commands to the worker by `postMessage`, and §6 P2 makes the oracle a checked-in corpus.
-3. [ ] **Agent-team contract** (ADR 0011). It comes before F2.3b and before any renderer or UI code reads sim output. This is one of the planned agent-team cases (`CLAUDE.md`).
+3. [x] **Agent-team contract** (ADR 0011). It comes before F2.3b and before any renderer or UI code reads sim output. This is one of the planned agent-team cases (`CLAUDE.md`).
+
+   **Done (2026-10-29):** [ADR 0011](../docs/decisions/0011-sim-worker-contract.md) is accepted after review by `renderer-engineer`, `angular-ui-engineer`, `electron-platform-engineer` and `save-format-guardian`, with the user's decisions D7 and D8 below and the main agent's rulings on three conflicts: saving while crashed is refused, there is no `sim.pause` (`P` toggles `sim.setSpeed {speed: 0}` and `sim.resume`), and load verification runs in the worker rather than on the main thread. It fixes the SAB layout (with an island `u8 band`), the seqlock reader woken by `Atomics.waitAsync`, the descriptor and its netlist guarantees, the asynchronous hash and save paths in the game (with a `TimeHost` driving `sim.step`), the crash and watchdog model, the time commands, chords and context keys, and the `desktop-e2e` checks. Its requirements on world v2 are listed in the world v2 PR's section below; the measurements it leaves to F2.3b are in its "Deferred to implementation" list.
 
    **The team:**
    - `sim-engine-engineer` (lead);
@@ -144,7 +146,7 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
 
 ## Kickoff decisions (2026-10-29)
 
-The user chose the recommended option for D1, D2, D3 and D5, and accepted the recommendations for D4 and D6.
+The user chose the recommended option for D1, D2, D3 and D5, and accepted the recommendations for D4 and D6. D7 and D8 were decided in the ADR 0011 review.
 
 - **D1 Thread and ownership.** The main-thread bus, world and clock stay authoritative, and the worker follows deterministically. `Session.exec` stays synchronous, so every P1 surface is unchanged. Commands reach the worker by `postMessage` with their tick; spec §4.3 is amended, because commands are rare and don't need a ring buffer. _Rejected:_ moving the whole game into the worker (a rewrite of every P1 surface), and a worker-owned clock (unreliable `ctx.tick`).
 - **D2 Minimal P2 connectivity: test leads.**
@@ -172,6 +174,9 @@ The user chose the recommended option for D1, D2, D3 and D5, and accepted the re
   _Rejected:_ eecircuit-engine (ngspice in WASM) running live in `verify` (about 43 MB, unverified under Node 24, and its KLU linkage is LGPL), and a system ngspice in CI (no verified Windows install, and a CI-only check).
 
 - **D6 Cross-runtime float determinism.** `sim-core` uses only IEEE-exact operations plus its own `dmath` for exp, log and pow, enforced by lint, and fixed phasor angles come from `sqrt`. A Node-vs-Chromium snapshot golden in `game-e2e` is the tripwire. Node 24's V8 and Electron's Chromium V8 are different builds, and `docs/caveats/commands.md` already treats `Math.sin`/`Math.cbrt` as engine-dependent. ADR 0014 records it.
+
+- **D7 A hidden or minimised window suspends the sim** (ADR 0011 review, U1). It is host-side state in `SimHost`, not a logged `sim.pause`: pacing stops on `visibilitychange` and re-anchors at the player's speed when the window is visible again. "Falling behind" and the effective-speed windows are held, `sim.step` still works, and `backgroundThrottling` stays at its default. The web harness behaves the same. Running in the background may become a setting later. _Rejected:_ letting throttled timers slow the sim, and `backgroundThrottling: false`.
+- **D8 Engine changes don't break old saves** (ADR 0011 review, U2). `ManifestV2.simEngineVersion` is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save whose `simEngineVersion` or `catalogVersion` differs from the build's skips log verification and loads `world.json` as saved with a new log (`replay.status: 'restarted'`, reason `engine-changed`), which `REPLAY_MISMATCH_POLICY` never refuses. _Rejected:_ refusing such saves.
 
 The spec also settles one point: the sim worker is a **module Web Worker** in the renderer (§4.3, ADR 0002). A `utilityProcess` can't share a `SharedArrayBuffer` with the renderer and doesn't exist in the web harness. `sim-cli` runs the engine in-process.
 
@@ -249,6 +254,17 @@ Acceptance:
   - `@controls/catalog` holds the device-definition Zod schema: identity, fictional brand and model, category, terminals `{ id, label, positionMm }`, model `{ kind, params }`, controls and `sources[]`.
   - `content/devices/*.json` holds the P2 devices plus one test-lead type. Lead resistance is computed from resistivity × length ÷ area with a temperature coefficient, never taken from NEC tables.
   - `catalogVersion` 1 goes in the manifest and in `docs/history.md`.
+- [ ] **Requirements from [ADR 0011](../docs/decisions/0011-sim-worker-contract.md)** (its Consequences give the detail; ADR 0013 records them):
+  - two state bags: `EntityV2.state` (commanded) and `EntityV2.sim` (sim-owned, written only by `materialiseWorld`), with keys matching `^[a-z][a-zA-Z0-9]*$` (at most 64 characters) and enum strings `SafeString` (at most 32); a property test that every change preserves each `sim` bag except on insert and remove;
+  - `MODEL_KINDS` in `@controls/catalog` (owner, Zod schema and initial value per key): a new kind is no bump, changing a kind's keys is a `schemaVersion` bump; load checks both bags against it, with a new `invalid-device-state` load error;
+  - `WorldV2.sim: { lastSolveTick, topologyHash, nodes, branches, islands: { flags, iterations }[] } | null`, in `world.hash`; `-0` normalised and finite numbers only, with an `Object.is` round-trip property;
+  - `ReplayLogV2.firstSeq` (`entries[i].seq === firstSeq + i`) and `endTick` (`endTick ≥ last entry tick ≥ initialWorld.tick`; lower is refused);
+  - `ManifestV2.simEngineVersion: Int` (D8);
+  - staleness-checked JSON Schema exports for `device-state.<kind>` and every logged command's arguments, including `sim.setSpeed`, `sim.resume` and `sim.step` (`MAX_STEP_TICKS` 600 000);
+  - the v1 → v2 migration (`state: {}`, `sim: {}`, `connections: []`, `sim: null`, `firstSeq: 0`, `endTick: max(initialWorld.tick, last entry tick)`) and the fixtures listed in the ADR.
+
+  The `EntityV2.state` bullet above is superseded by the two bags.
+
 - [ ] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
 - [ ] Palette forms render every new command (the every-command spec). Console lines and a TS script can connect a lead and operate a switch.
 
@@ -528,7 +544,7 @@ Numbers are assigned in the order the ADRs land.
 | Feature | Description                                       | Status                                     |
 | ------- | ------------------------------------------------- | ------------------------------------------ |
 | —       | Kickoff: agents, decisions, boundary PR, audit    | 🚧 In progress (agents and decisions done) |
-| —       | ADR 0011 sim worker contract (agent team)         | ⬜ Not started                             |
+| —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted                                |
 | —       | World document v2 + leads + catalogue v1          | ⬜ Not started                             |
 | F2.1    | Netlist compiler                                  | ⬜ Not started                             |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started                             |
@@ -558,7 +574,8 @@ Numbers are assigned in the order the ADRs land.
 
 ### New in P2
 
-- **A CSP violation on every start.** Zod 4's eval probe (`new Function("")`, caught) triggers a `script-src eval` violation at start-up under `app://` and in the web harness with the CSP. `smoke.spec.ts` attaches its listener too late to see it. Fix: call `z.config({ jitless: true })` before the first parse, in the page and in the worker if it ever parses with Zod, and have the smoke test listen from page load. It must land before F2.3b's "no `securitypolicyviolation`" check. **Owner:** `electron-platform-engineer`.
+- **A CSP violation on every start.** Zod 4's eval probe (`new Function("")`, caught) triggers a `script-src eval` violation at start-up under `app://` and in the web harness with the CSP. `smoke.spec.ts` attaches its listener too late to see it. Fix: call `z.config({ jitless: true })` in a module imported first, in the page and in the sim worker (ADR 0011), and have the smoke test listen from page load. It must land before F2.3b's "no `securitypolicyviolation`" check. **Owner:** `electron-platform-engineer`.
+- **Renderer process crash recovery.** Main handles `render-process-gone` by reloading the window, with a crash-loop limit; the latest good autosave is the recovery point (ADR 0011 §10). A separate P2 PR. **Owner:** `electron-platform-engineer`.
 
 ## Close-out
 
