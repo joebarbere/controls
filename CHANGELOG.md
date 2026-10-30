@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Smaller installers: the desktop app no longer packs about 31 MB of unused `node_modules` (Angular, three, zod, CodeMirror and others, already bundled into the renderer) into `app.asar`. `app.asar` drops from 34.3 MB to 2.9 MB and the Linux AppImage from 132.1 MB to 126.2 MB. electron-builder also stops running a native-module rebuild on every package.
+
 ## [0.2.0] - 2026-10-29
 
 Phase 1, "Hands on the panel": the game shell. A sandbox you can walk around, place, move and delete props in, and save and load. No circuit simulation yet.
