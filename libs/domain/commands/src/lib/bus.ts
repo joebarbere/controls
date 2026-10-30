@@ -58,6 +58,12 @@ export interface CommandBusOptions<S> {
    * clear the mark (the world's `assisted` flag is never cleared). Optional for states without one.
    */
   markAssisted?(state: S): S;
+  /**
+   * The `seq` of the first entry this bus logs (default 0). A bus continuing a rebased or restarted
+   * log starts at that log's `firstSeq`, with an empty log and history, so `seq`-keyed randomness
+   * (`commandStreamKey(seq)`) stays put (ADR 0011 §3, `ReplayLogV2.firstSeq`).
+   */
+  readonly firstSeq?: number;
 }
 
 /** Reported at most this many argument issues per error. */
@@ -107,12 +113,22 @@ export class CommandBus<S> {
   private readonly listeners = new Set<ExecutedListener<S>>();
   private readonly tickOf: (state: S) => number;
   private readonly markAssisted: ((state: S) => S) | undefined;
+  /** The `seq` of `entries[0]`: `entries[i].seq === firstSeq + i`. */
+  readonly firstSeq: number;
 
   constructor(options: CommandBusOptions<S>) {
+    const firstSeq = options.firstSeq ?? 0;
+    if (!Number.isSafeInteger(firstSeq) || firstSeq < 0) throw new RangeError('firstSeq must be a safe integer >= 0');
     this.registry = options.registry;
     this.current = options.initialState;
     this.tickOf = options.tickOf;
     this.markAssisted = options.markAssisted;
+    this.firstSeq = firstSeq;
+  }
+
+  /** The `seq` the next logged command gets: `firstSeq` + the entries logged so far. The one source of `seq`s. */
+  nextSeq(): number {
+    return this.firstSeq + this.log.length;
   }
 
   /** The current state. Treat it as immutable. */
@@ -155,7 +171,7 @@ export class CommandBus<S> {
         error: { kind: 'invalid-args', id, message: `Invalid arguments for "${id}"`, issues: issues(parsed.error) },
       };
     }
-    const seq = this.log.length;
+    const seq = this.nextSeq();
     const tick = this.tickOf(this.current);
     const entry = ReplayEntry.safeParse({ seq, tick, id, args: parsed.data });
     if (!entry.success) {
@@ -221,7 +237,7 @@ export class CommandBus<S> {
   carryOver(entry: ReplayEntry): void {
     const def = this.registry.get(entry.id);
     if (!def || def.logged !== false) throw new Error(`"${entry.id}" is not an unlogged command`);
-    if (entry.seq !== this.log.length) throw new Error(`Expected seq ${this.log.length}, found ${entry.seq}`);
+    if (entry.seq !== this.nextSeq()) throw new Error(`Expected seq ${this.nextSeq()}, found ${entry.seq}`);
     if (entry.tick !== this.currentTick()) throw new Error(`Entry ${entry.seq} is at a different tick`);
     this.log.push(deepFreeze(structuredCloneJson(entry)));
   }

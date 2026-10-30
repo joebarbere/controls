@@ -6,14 +6,21 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   pngBytesArb,
-  rawManifestV1Arb,
-  rawReplayLogV1Arb,
-  rawWorldV1Arb,
+  rawManifestV2Arb,
+  rawReplayLogV2Arb,
+  rawWorldV2Arb,
   rawZip,
   type RawZipEntry,
   TINY_PNG,
 } from '../../testing/arbitraries';
-import { createManifest, createWorld, Manifest, ReplayLog, World } from '../documents';
+import {
+  createManifest as createManifestWith,
+  createReplayLog,
+  createWorld,
+  Manifest,
+  ReplayLog,
+  World,
+} from '../documents';
 import {
   CTRL_ENTRY,
   CTRL_LIMITS,
@@ -32,13 +39,15 @@ const fixturesRoot = join(import.meta.dirname, '../../../fixtures');
 const fixture = (path: string): unknown => JSON.parse(readFileSync(join(fixturesRoot, path), 'utf8'));
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const MiB = 1024 * 1024;
+/** A manifest for this build (the catalogue and engine versions don't matter to the container). */
+const createManifest = () => createManifestWith({ catalogVersion: 1, simEngineVersion: 1 });
 
 /** The golden sample: fixed documents (not `createManifest`, whose `appVersion` moves with every release). */
 function sample(): CtrlInput {
   return {
-    manifest: Manifest.parse(fixture('v1/manifest/basic.json')),
-    world: World.parse(fixture('v1/world/props-and-extensions.json')),
-    replayLog: ReplayLog.parse(fixture('v1/replay-log/place-move-delete-undo.json')),
+    manifest: Manifest.parse(fixture('v2/manifest/basic.json')),
+    world: World.parse(fixture('v2/world/bench-lamp-mid-interval.json')),
+    replayLog: ReplayLog.parse(fixture('v2/replay-log/bench-lamp-mid-interval.json')),
     thumbnail: TINY_PNG,
   };
 }
@@ -48,7 +57,7 @@ function sample(): CtrlInput {
  * the JSON formatting, the ZIP fields or fflate's DEFLATE output (a fflate upgrade can do that;
  * re-pin it and say so in the changelog). Saves written earlier still load either way.
  */
-const GOLDEN_SAMPLE_SHA256 = '78995241b284799385fc3a42c68ae9c3d7d33c1c5a0bd637cfd5aba38660ad04';
+const GOLDEN_SAMPLE_SHA256 = 'a9296dc2574331a9d0210cf82e9dba419048a76ef0725298df792be90e7d4816';
 
 const text = (value: unknown) => ctrlJson(value);
 const manifestText = () => text(sample().manifest);
@@ -106,7 +115,7 @@ describe('writeCtrl', () => {
     expect(Object.keys(files).sort()).toStrictEqual(['manifest.json', 'replay.log', 'thumbnail.png', 'world.json']);
     const manifest = utf8Decode(files['manifest.json']);
     expect(manifest).toBe(
-      '{\n  "appVersion": "0.1.0",\n  "catalogVersion": 0,\n  "extensions": {},\n  "format": "controls.ctrl",\n  "schemaVersion": 1\n}\n',
+      '{\n  "appVersion": "0.3.0",\n  "catalogVersion": 1,\n  "extensions": {},\n  "format": "controls.ctrl",\n  "schemaVersion": 2,\n  "simEngineVersion": 1\n}\n',
     );
     expect(files['thumbnail.png']).toStrictEqual(TINY_PNG);
   });
@@ -169,7 +178,7 @@ describe('writeCtrl', () => {
   });
 
   it('refuses a document from a future version', () => {
-    const manifest = { ...createManifest(), schemaVersion: 2 } as unknown as Manifest;
+    const manifest = { ...createManifest(), schemaVersion: 3 } as unknown as Manifest;
     expect(() => writeCtrl({ manifest, world: createWorld({ seed: 1 }) })).toThrow(
       expect.objectContaining({ kind: 'invalid-document', entry: 'manifest.json' }),
     );
@@ -181,18 +190,24 @@ describe('readCtrl', () => {
     const input = sample();
     expect(readCtrl(writeCtrl(input))).toStrictEqual({
       ok: true,
-      value: { ...input, fromVersion: 1 },
+      value: { ...input, fromVersion: 2 },
     });
   });
 
   it('round-trips arbitrary valid documents losslessly, and re-writing gives identical bytes', () => {
     fc.assert(
       fc.property(
-        rawManifestV1Arb,
-        rawWorldV1Arb,
-        fc.option(rawReplayLogV1Arb),
+        rawManifestV2Arb,
+        rawWorldV2Arb,
+        fc.option(rawReplayLogV2Arb),
         fc.option(pngBytesArb),
         (manifest, world, log, thumbnail) => {
+          if (log !== null) {
+            // world.json is at the log's endTick (ADR 0013): move both to the later of the two.
+            const tick = Math.max(world.tick, log.endTick);
+            world = { ...world, tick };
+            log = { ...log, endTick: tick };
+          }
           const input = {
             manifest: Manifest.parse(manifest),
             world: World.parse(world),
@@ -202,7 +217,7 @@ describe('readCtrl', () => {
           // Raw documents (with -0) are accepted and normalised.
           const bytes = writeCtrl({ manifest, world, replayLog: log, thumbnail } as unknown as CtrlInput);
           const read = readCtrl(bytes);
-          expect(read).toStrictEqual({ ok: true, value: { ...input, fromVersion: 1 } });
+          expect(read).toStrictEqual({ ok: true, value: { ...input, fromVersion: 2 } });
           if (!read.ok) return;
           expect(writeCtrl(read.value)).toStrictEqual(bytes);
           expect(JSON.parse(JSON.stringify(read.value.world))).toStrictEqual(read.value.world);
@@ -217,7 +232,7 @@ describe('readCtrl', () => {
   it('reads containers from other ZIP writers (fflate zipSync, extra directory entries)', () => {
     const files = unzipSync(writeCtrl(sample()));
     const other = zipSync({ ...files, 'prints/': new Uint8Array(0), 'plc/': new Uint8Array(0) }, { level: 9 });
-    expect(readCtrl(other)).toStrictEqual({ ok: true, value: { ...sample(), fromVersion: 1 } });
+    expect(readCtrl(other)).toStrictEqual({ ok: true, value: { ...sample(), fromVersion: 2 } });
   });
 
   it('tolerates the empty reserved directories prints/, plc/ and hmi/', () => {
@@ -412,16 +427,16 @@ describe('readCtrl', () => {
   describe('a save from a newer build', () => {
     const newer = (appVersion: unknown) =>
       container(
-        { 'manifest.json': { data: text({ ...sample().manifest, schemaVersion: 2, appVersion }) } },
+        { 'manifest.json': { data: text({ ...sample().manifest, schemaVersion: 3, appVersion }) } },
         // A later version may define entries this build doesn't know: the version is checked first.
         [{ name: 'prints/sheet-1.json', data: '{}' }],
       );
 
     it('is refused with a typed error naming the writer', () => {
       const error = readError(newer('0.9.0'));
-      expect(error).toMatchObject({ kind: 'newer-than-build', found: 2, supported: 1, appVersion: '0.9.0' });
+      expect(error).toMatchObject({ kind: 'newer-than-build', found: 3, supported: 2, appVersion: '0.9.0' });
       expect(error.message).toBe(
-        `This save was written by Controls 0.9.0 (save format 2). This build (${APP_VERSION}) reads save formats up to 1. Update the game to open it.`,
+        `This save was written by Controls 0.9.0 (save format 3). This build (${APP_VERSION}) reads save formats up to 2. Update the game to open it.`,
       );
     });
 
@@ -433,13 +448,27 @@ describe('readCtrl', () => {
     });
   });
 
+  it('refuses a replay.log whose endTick is not world.json’s tick, and writeCtrl won’t write one (ADR 0013)', () => {
+    const log = text({ ...sample().replayLog, endTick: (sample().replayLog?.endTick ?? 0) + 1 });
+    expect(readError(container({ 'replay.log': { data: log } }))).toMatchObject({
+      kind: 'end-tick-mismatch',
+      worldTick: 2147483655,
+      endTick: 2147483656,
+    });
+    const world = { ...createWorld({ seed: 1 }), tick: 5 };
+    const replayLog = { ...createReplayLog(createWorld({ seed: 1 })), endTick: 4 };
+    expect(() => writeCtrl({ manifest: createManifest(), world, replayLog })).toThrow(
+      expect.objectContaining({ kind: 'invalid-document', entry: 'replay.log' }),
+    );
+  });
+
   it('refuses documents whose schemaVersion disagrees with the manifest', () => {
-    const world = text({ ...sample().world, schemaVersion: 2 });
+    const world = text({ ...sample().world, schemaVersion: 1 });
     expect(readError(container({ 'world.json': { data: world } }))).toMatchObject({
       kind: 'version-mismatch',
       entry: 'world.json',
-      expected: 1,
-      found: 2,
+      expected: 2,
+      found: 1,
     });
   });
 

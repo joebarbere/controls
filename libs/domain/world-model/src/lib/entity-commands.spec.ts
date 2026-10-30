@@ -14,6 +14,7 @@ import {
 import { worldHash } from './hash';
 import { createWorldBus, createWorldRegistry, replayLog, toReplayLog } from './session';
 import type { Entity } from './types';
+import { BUILTIN_CATALOG } from '@controls/catalog';
 
 const crate = { id: 'prop.crate', version: 1 };
 const origin = { x: 0, y: 0, z: 0 };
@@ -23,6 +24,8 @@ function entity(id: number, x = 0): Entity {
     id,
     ref: crate,
     transform: { positionMm: { x, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+    state: {},
+    sim: {},
     extensions: {},
   };
 }
@@ -46,6 +49,8 @@ describe('entity.place', () => {
       id: 9,
       ref: crate,
       transform: { positionMm: { x: 5, y: 6, z: -7 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+      state: {},
+      sim: {},
       extensions: {},
     });
     expect(World.safeParse(bus.state).success).toBe(true);
@@ -276,6 +281,8 @@ describe('world registry, replay log and cheats', () => {
         id: 1,
         ref: crate,
         transform: { positionMm: { x: 150, y: 0, z: -200 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+        state: {},
+        sim: {},
         extensions: {},
       },
     ]);
@@ -286,9 +293,11 @@ describe('world registry, replay log and cheats', () => {
 
   it('reports a log that no longer replays', () => {
     const log = ReplayLog.parse({
-      schemaVersion: 1,
+      schemaVersion: 2,
       initialWorld: createWorld({ seed: 0 }),
+      firstSeq: 0,
       entries: [{ seq: 0, tick: 0, id: 'entity.delete', args: { id: 1 } }],
+      endTick: 0,
     });
     expect(replayLog(log)).toMatchObject({ ok: false, error: { kind: 'failed', seq: 0 } });
   });
@@ -326,5 +335,76 @@ describe('world registry, replay log and cheats', () => {
     expect(bus.state).toBe(assisted); // already assisted: same object
     bus.exec('edit.undo');
     expect(bus.state.assisted).toBe(true);
+  });
+});
+
+describe('world v2: devices and connections (ADR 0013)', () => {
+  const battery = { id: 'battery.ferrovane-12v-7ah', version: 1 };
+  const spst = { id: 'switch.tessaline-spst-toggle', version: 1 };
+  const testLead = { id: 'lead.quillfern-test-1m', version: 1 };
+  const lead = (id: number, a: [number, string], b: [number, string]) => ({
+    id,
+    ref: testLead,
+    a: { entity: a[0], terminal: a[1] },
+    b: { entity: b[0], terminal: b[1] },
+    extensions: {},
+  });
+
+  it('a placed catalogue device starts with its model kind’s initial bags', () => {
+    const bus = createWorldBus(createWorld({ seed: 1 }));
+    bus.exec('entity.place', { ref: battery, positionMm: origin });
+    bus.exec('entity.place', { ref: spst, positionMm: origin });
+    bus.exec('entity.place', { ref: { id: 'mod.example-widget', version: 3 }, positionMm: origin });
+    expect(bus.state.entities.map((e) => [e.state, e.sim])).toStrictEqual([
+      [{}, { stateOfCharge: 1 }],
+      [{ closed: false }, {}],
+      [{}, {}], // unknown to the catalogue: empty bags
+    ]);
+    expect(World.safeParse(bus.state).success).toBe(true);
+  });
+
+  it('a test lead can’t be placed: lead.connect makes it', () => {
+    const bus = createWorldBus(createWorld({ seed: 1 }));
+    expect(bus.exec('entity.place', { ref: testLead, positionMm: origin })).toMatchObject({
+      ok: false,
+      error: { kind: 'rejected', code: 'not-placeable' },
+    });
+  });
+
+  it('the registry resolves refs against the catalogue it was given', () => {
+    const registry = createWorldRegistry({ catalog: { ...BUILTIN_CATALOG, kindOf: () => undefined } });
+    const bus = createWorldBus(createWorld({ seed: 1 }), registry);
+    bus.exec('entity.place', { ref: spst, positionMm: origin });
+    expect(bus.state.entities[0].state).toStrictEqual({});
+  });
+
+  it('deleting an entity removes its connections; undo restores them with their ids', () => {
+    const world = World.parse({
+      ...createWorld({ seed: 1 }),
+      nextEntityId: 4,
+      nextConnectionId: 5,
+      entities: [entity(1), entity(2), entity(3)].map((e) => ({ ...e, ref: spst, state: { closed: false } })),
+      connections: [lead(1, [1, 'a'], [2, 'a']), lead(2, [2, 'b'], [3, 'a']), lead(4, [3, 'b'], [1, 'b'])],
+    });
+    const bus = createWorldBus(world);
+    expect(bus.exec('entity.delete', { id: 3 }).ok).toBe(true);
+    expect(bus.state.connections.map((c) => c.id)).toStrictEqual([1]);
+    expect(bus.state.nextConnectionId).toBe(5);
+    expect(World.safeParse(bus.state).success).toBe(true);
+    bus.exec('edit.undo');
+    expect(bus.state).toStrictEqual(world);
+    bus.exec('edit.redo');
+    expect(bus.state.connections.map((c) => c.id)).toStrictEqual([1]);
+    // An entity with no connections leaves the list alone (same array).
+    const before = bus.state.connections;
+    bus.exec('entity.delete', { id: 2 });
+    bus.exec('edit.undo');
+    expect(bus.state.connections).toStrictEqual(before);
+    const lone = createWorldBus(World.parse({ ...world, connections: [lead(1, [1, 'a'], [2, 'a'])] }));
+    const untouched = lone.state.connections;
+    lone.exec('entity.delete', { id: 3 });
+    expect(lone.state.connections).toBe(untouched);
+    lone.exec('edit.undo');
+    expect(lone.state.connections).toBe(untouched);
   });
 });

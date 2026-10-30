@@ -398,7 +398,7 @@ type ElementRef =
 
 - **Descriptor identity.** A new `TopologyDescriptor` object is made for each generation and for each worker. Readers' caches key on the descriptor's identity, never on the generation number (a restarted worker counts generations from 0 again).
 - **Netlist guarantees** (F2.1 tests them; the overlays rely on them):
-  - each connection compiles to **exactly one branch**, with its contact resistances summed into it; `a` is `connection.a`'s node and `b` is `connection.b`'s node;
+  - each **netlisted** connection compiles to **exactly one branch**, with its contact resistances summed into it; `a` is `connection.a`'s node and `b` is `connection.b`'s node. A connection with an end on an absent entity (one whose ref the catalogue doesn't know, ADR 0013) is itself absent from the netlist and the descriptor (amended in the world v2 review);
   - a closed switch, or any other ideal merge, has no branch;
   - every catalogue terminal of every netlisted entity appears in exactly one node's `members`, and every node has at least one member.
 - **Capacity.** The worker sizes the SAB for twice the first topology, with minimums (1 024 nodes, 2 048 branches, 256 islands, 64 KiB of device records), up to `MAX_SLOT_BYTES`. A generation that doesn't fit gets a new, larger buffer, sent in the same `topology` message; readers switch on that message and drop the old SAB, and the worker never writes the old buffer again. In the fallback, the worker drops released buffers smaller than the new `slotBytes`. A generation over `MAX_SLOT_BYTES`, or a failed allocation, is `error {code: 'capacity'}`, never a partial publish.

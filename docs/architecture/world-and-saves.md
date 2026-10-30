@@ -1,6 +1,6 @@
 # World document and saves
 
-> **Status (P1):** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). F1.8b part 3 has landed saving and loading in the game: the unlogged `file.*` commands, the Save game and Load game dialogs, Continue and autosave ([below](#saving-and-loading-in-the-game-f18b-part-3)). Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
+> **Status (P2 kickoff):** world v2 has landed (connections, device state bags, the solution record, `firstSeq`/`endTick`; [ADR 0013](../decisions/0013-world-document-v2.md)) with the device catalogue v1. **P1:** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). F1.8b part 3 has landed saving and loading in the game: the unlogged `file.*` commands, the Save game and Load game dialogs, Continue and autosave ([below](#saving-and-loading-in-the-game-f18b-part-3)). Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
 
 ## Documents
 
@@ -9,18 +9,20 @@ A `.ctrl` save is a ZIP of JSON documents that share one `schemaVersion`. Settin
 ```mermaid
 classDiagram
     direction LR
-    class ManifestV1 {
+    class ManifestV2 {
         format = "controls.ctrl"
-        schemaVersion = 1
+        schemaVersion = 2
         appVersion: SemVer
-        catalogVersion: int (0 = none yet)
+        catalogVersion: int (1; 0 = before the catalogue)
+        simEngineVersion: int (0 = before the engine)
         extensions
     }
-    class WorldV1 {
-        schemaVersion = 1
+    class WorldV2 {
+        schemaVersion = 2
         seed: uint32
-        tick: int (0 until P2)
+        tick: int (1 tick = 1 ms)
         nextEntityId: int
+        nextConnectionId: int
         regionId: "nec"
         difficulty
         assisted: boolean
@@ -32,23 +34,45 @@ classDiagram
         transform (int mm, int millidegrees)
         extensions
     }
-    class EntityV1 {
+    class EntityV2 {
         id: int (sorted, unique)
         ref: CatalogRef
         transform.positionMm: x, y, z (int mm)
         transform.orientationMdeg: yaw, pitch, roll (int millidegrees)
+        state: commanded bag
+        sim: sim-owned bag
         extensions
+    }
+    class ConnectionV2 {
+        id: int (sorted, unique, from nextConnectionId)
+        ref: CatalogRef (a lead)
+        a: TerminalRef
+        b: TerminalRef
+        extensions
+    }
+    class TerminalRef {
+        entity: int
+        terminal: "pos"
+    }
+    class SimSolutionV2 {
+        lastSolveTick: int
+        topologyHash: hex64
+        nodes: re, im, …
+        branches: re, im, …
+        islands: flags, iterations
     }
     class CatalogRef {
         id: "prop.crate"
         version: 1
     }
-    class ReplayLogV1 {
-        schemaVersion = 1
-        initialWorld: WorldV1
+    class ReplayLogV2 {
+        schemaVersion = 2
+        initialWorld: WorldV2
+        firstSeq: int
+        endTick: int
     }
-    class ReplayEntryV1 {
-        seq: 0, 1, 2…
+    class ReplayEntryV2 {
+        seq: firstSeq, firstSeq + 1…
         tick: non-decreasing
         id: command id
         args: JSON object
@@ -62,24 +86,30 @@ classDiagram
         saves.lastPlayed (v2)
         extensions
     }
-    WorldV1 "1" *-- "*" FixtureV1 : fixtures
-    WorldV1 "1" *-- "*" EntityV1 : entities
+    WorldV2 "1" *-- "*" FixtureV1 : fixtures
+    WorldV2 "1" *-- "*" EntityV2 : entities
+    WorldV2 "1" *-- "*" ConnectionV2 : connections
+    WorldV2 "1" *-- "0..1" SimSolutionV2 : sim
+    ConnectionV2 *-- TerminalRef : a, b
     FixtureV1 --> CatalogRef
-    EntityV1 --> CatalogRef
-    ReplayLogV1 *-- WorldV1 : initialWorld
-    ReplayLogV1 "1" *-- "*" ReplayEntryV1 : entries
+    EntityV2 --> CatalogRef
+    ConnectionV2 --> CatalogRef
+    ReplayLogV2 *-- WorldV2 : initialWorld
+    ReplayLogV2 "1" *-- "*" ReplayEntryV2 : entries
     SettingsV2 --> CatalogRef : toolBelt.slots
 ```
 
 | Document                | File in `.ctrl`           | Schema         | Version key       |
 | ----------------------- | ------------------------- | -------------- | ----------------- |
-| Manifest                | `manifest.json`           | `ManifestV1`   | `schemaVersion`   |
-| World                   | `world.json`              | `WorldV1`      | `schemaVersion`   |
-| Replay log              | `replay.log` (optional)   | `ReplayLogV1`  | `schemaVersion`   |
+| Manifest                | `manifest.json`           | `ManifestV2`   | `schemaVersion`   |
+| World                   | `world.json`              | `WorldV2`      | `schemaVersion`   |
+| Replay log              | `replay.log` (optional)   | `ReplayLogV2`  | `schemaVersion`   |
 | Prints, PLC, HMI        | `prints/`, `plc/`, `hmi/` | (P6, P10, P12) | `schemaVersion`   |
 | Settings (not in saves) | settings store (F1.1)     | `SettingsV2`   | `settingsVersion` |
 
-JSON Schema for each document is generated from Zod into `libs/domain/save-format/json-schema/` for docs, mods and tools. Zod stays authoritative.
+JSON Schema for each document is generated from Zod into `libs/domain/save-format/json-schema/` for docs, mods and tools (every version keeps its file). Zod stays authoritative.
+
+**World v2** (P2, [ADR 0013](../decisions/0013-world-document-v2.md)) adds connections (test leads) with their own id counter, two device state bags on every entity (`state`, commanded; `sim`, written only by the simulator), and the last electrical solution (`sim`). The bags' keys come from each device's model kind and are checked at load (`invalid-device-state`); the world schema checks only their generic shape, so a new device kind needs no bump. The log gains `firstSeq` and `endTick`, and the manifest `simEngineVersion`. v1 migrates with empty bags, no connections and no solution.
 
 ## Fixtures and levels (F1.9)
 

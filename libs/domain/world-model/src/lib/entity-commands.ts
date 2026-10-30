@@ -7,15 +7,19 @@ import {
   succeed,
   VIEWPORT_FOCUSED_KEY,
 } from '@controls/commands';
+import { BUILTIN_CATALOG, type Catalog, initialBags } from '@controls/catalog';
 import { CatalogRef, Int, MILLIDEGREES_PER_TURN, OrientationMdegV1, PositionMmV1 } from '@controls/save-format';
 import { z } from 'zod';
-import type { Entity, EntityId, OrientationMdeg, World } from './types';
+import type { Connection, Entity, EntityId, OrientationMdeg, World } from './types';
 
 /*
  * The world document operations (plan F1.2), as undoable commands. Each `run` validates against the
  * current world and returns an apply/invert pair; nothing mutates. Invariants kept (ADR 0007):
  * entities stay sorted by ascending id, ids come from `nextEntityId` (undoing a place restores it),
- * and undoing a delete reinserts the entity with its same id.
+ * and undoing a delete reinserts the entity with its same id. World v2 (ADR 0013): a placed device
+ * starts with its model kind's initial state bags, and deleting an entity removes its connections in
+ * the same change (undo restores them with their ids), so no connection ever dangles. Every change
+ * keeps `tick` and leaves every other entity's `sim` bag alone (ADR 0011 §1, §3).
  *
  * The argument shapes are persisted in replay logs: changing one is a save-format change.
  */
@@ -64,11 +68,21 @@ export function findEntity(world: World, id: EntityId): Entity | undefined {
   return index < 0 ? undefined : world.entities[index];
 }
 
-/** A copy of `entities` with `entity` inserted at its sorted position (its id must be absent). */
-function insertSorted(entities: readonly Entity[], entity: Entity): Entity[] {
+/** A copy of `items` with `item` inserted at its sorted position by id (its id must be absent). */
+export function insertSorted<T extends { readonly id: number }>(items: readonly T[], item: T): T[] {
   let index = 0;
-  while (index < entities.length && entities[index].id < entity.id) index++;
-  return [...entities.slice(0, index), entity, ...entities.slice(index)];
+  while (index < items.length && items[index].id < item.id) index++;
+  return [...items.slice(0, index), item, ...items.slice(index)];
+}
+
+/** Whether a connection has an end on entity `id`. */
+export function touchesEntity(connection: Connection, id: EntityId): boolean {
+  return connection.a.entity === id || connection.b.entity === id;
+}
+
+/** A copy of `connections` with each of `restored` (absent ids) put back at its sorted position. */
+function insertAllSorted(connections: readonly Connection[], restored: readonly Connection[]): Connection[] {
+  return restored.reduce<Connection[]>((list, connection) => insertSorted(list, connection), [...connections]);
 }
 
 function withoutEntity(entities: readonly Entity[], id: EntityId): Entity[] {
@@ -98,30 +112,41 @@ function rotateBy(o: OrientationMdeg, d: OrientationMdeg, sign: 1 | -1): Orienta
 
 /**
  * `entity.place`: adds an entity by catalogue reference. Its id is the world's `nextEntityId`,
- * which then increments; undo removes the entity and restores the counter.
+ * which then increments; undo removes the entity and restores the counter. A catalogue device starts
+ * with its model kind's initial bags (`initialBags`); a built-in prop, or a ref the catalogue doesn't
+ * know, starts with empty ones. A connection kind (a test lead) can't be placed: `lead.connect` makes it.
  */
-export const entityPlace = defineCommand<EntityPlaceArgs, World>({
-  id: 'entity.place',
-  title: 'Place object',
-  category: 'Entity',
-  args: EntityPlaceArgs,
-  undoable: true,
-  run: ({ state }, args) => {
-    const id = state.nextEntityId;
-    if (!Number.isSafeInteger(id + 1)) return fail('ids-exhausted', 'No entity ids left in this world');
-    const entity: Entity = {
-      id,
-      ref: { ...args.ref },
-      transform: { positionMm: { ...args.positionMm }, orientationMdeg: { ...args.orientationMdeg } },
-      extensions: {},
-    };
-    return succeed({
-      // The new id is above every existing one, so appending keeps the order.
-      apply: (w) => ({ ...w, nextEntityId: id + 1, entities: [...w.entities, entity] }),
-      invert: (w) => ({ ...w, nextEntityId: id, entities: withoutEntity(w.entities, id) }),
-    });
-  },
-});
+export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
+  return defineCommand<EntityPlaceArgs, World>({
+    id: 'entity.place',
+    title: 'Place object',
+    category: 'Entity',
+    args: EntityPlaceArgs,
+    undoable: true,
+    run: ({ state }, args) => {
+      const id = state.nextEntityId;
+      if (!Number.isSafeInteger(id + 1)) return fail('ids-exhausted', 'No entity ids left in this world');
+      const kind = catalog.kindOf(args.ref);
+      if (kind?.placement === 'connection') {
+        return fail('not-placeable', `${args.ref.id} is a connection: make it with lead.connect`);
+      }
+      const bags = kind ? initialBags(kind) : { state: {}, sim: {} };
+      const entity: Entity = {
+        id,
+        ref: { ...args.ref },
+        transform: { positionMm: { ...args.positionMm }, orientationMdeg: { ...args.orientationMdeg } },
+        state: bags.state,
+        sim: bags.sim,
+        extensions: {},
+      };
+      return succeed({
+        // The new id is above every existing one, so appending keeps the order.
+        apply: (w) => ({ ...w, nextEntityId: id + 1, entities: [...w.entities, entity] }),
+        invert: (w) => ({ ...w, nextEntityId: id, entities: withoutEntity(w.entities, id) }),
+      });
+    },
+  });
+}
 
 /** `entity.move`: sets an entity's position (absolute, integer mm). Undo restores the old one. */
 export const entityMove = defineCommand<EntityMoveArgs, World>({
@@ -170,10 +195,12 @@ export const entityRotate = defineCommand<EntityRotateArgs, World>({
 export const ENTITY_DELETE_SELECTION_BINDING = 'entity.delete.selection';
 
 /**
- * `entity.delete`: removes an entity. `nextEntityId` is untouched, so the id is never handed out
- * again while undo can bring the entity back; undo reinserts it with the same id and data.
- * Delete (or Backspace) in the viewport deletes the selected entity: the binding takes `id` from
- * the `selection.entityId` context key, so the log holds the concrete id.
+ * `entity.delete`: removes an entity and every connection with an end on it (plan F2.1: deleting
+ * never leaves a lead in the world to be silently compiled). `nextEntityId` is untouched, so the id
+ * is never handed out again while undo can bring the entity back; undo reinserts it, and its
+ * connections, with the same ids and data. Delete (or Backspace) in the viewport deletes the selected
+ * entity: the binding takes `id` from the `selection.entityId` context key, so the log holds the
+ * concrete id.
  */
 export const entityDelete = defineCommand<EntityDeleteArgs, World>({
   id: 'entity.delete',
@@ -194,14 +221,23 @@ export const entityDelete = defineCommand<EntityDeleteArgs, World>({
   run: ({ state }, { id }) => {
     const entity = findEntity(state, id);
     if (!entity) return notFound(id);
+    const removed = state.connections.filter((c) => touchesEntity(c, id));
     return succeed({
-      apply: (w) => ({ ...w, entities: withoutEntity(w.entities, id) }),
-      invert: (w) => ({ ...w, entities: insertSorted(w.entities, entity) }),
+      apply: (w) => ({
+        ...w,
+        entities: withoutEntity(w.entities, id),
+        connections: removed.length === 0 ? w.connections : w.connections.filter((c) => !touchesEntity(c, id)),
+      }),
+      invert: (w) => ({
+        ...w,
+        entities: insertSorted(w.entities, entity),
+        connections: removed.length === 0 ? w.connections : insertAllSorted(w.connections, removed),
+      }),
     });
   },
 });
 
-/** The world commands, in a fixed order. */
-export function entityCommands(): AnyCommandDef<World>[] {
-  return [entityPlace, entityMove, entityRotate, entityDelete];
+/** The entity commands, in a fixed order, resolving refs against `catalog`. */
+export function entityCommands(catalog: Catalog = BUILTIN_CATALOG): AnyCommandDef<World>[] {
+  return [entityPlaceCommand(catalog), entityMove, entityRotate, entityDelete];
 }

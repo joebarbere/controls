@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "seed": 0,
   "tick": 0,
   "nextEntityId": 1,
+  "nextConnectionId": 1,
   "regionId": "nec",
   "difficulty": "apprentice",
   "assisted": false,
@@ -72,5 +73,7 @@
     }
   ],
   "entities": [],
+  "connections": [],
+  "sim": null,
   "extensions": {}
 }

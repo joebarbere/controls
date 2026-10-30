@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 2,
+  "seed": 4294967295,
+  "tick": 0,
+  "nextEntityId": 6,
+  "nextConnectionId": 1,
+  "regionId": "nec",
+  "difficulty": "realistic",
+  "assisted": true,
+  "fixtures": [
+    {
+      "id": "bench",
+      "ref": {
+        "id": "prop.bench",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 700,
+          "y": -1200,
+          "z": 80
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    },
+    {
+      "id": "stud-wall-2",
+      "ref": {
+        "id": "prop.stud-wall",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -2500,
+          "y": -1200,
+          "z": 3000
+        },
+        "orientationMdeg": {
+          "yaw": 90000,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {
+        "mod.example.paint": "primer"
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "prop.bench",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "prop.crate",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -1250,
+          "y": 0,
+          "z": 610
+        },
+        "orientationMdeg": {
+          "yaw": 90000,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "prop.spool",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 300,
+          "y": 915,
+          "z": -10000000
+        },
+        "orientationMdeg": {
+          "yaw": 359999,
+          "pitch": 270000,
+          "roll": 12345
+        }
+      },
+      "state": {},
+      "sim": {},
+      "extensions": {
+        "mod.example.tint": "#c0ffee",
+        "mod.example.wear": [0.25, -1e-7, 6.02e23]
+      }
+    }
+  ],
+  "connections": [],
+  "sim": null,
+  "extensions": {
+    "mod.example.notes": "Entities 3 and 5 were deleted, so ids skip and are never reused; unicode: é 中 🔌",
+    "mod.example.nested": {
+      "a": [
+        true,
+        false,
+        null,
+        {
+          "b": {
+            "c": []
+          }
+        }
+      ]
+    }
+  }
+}

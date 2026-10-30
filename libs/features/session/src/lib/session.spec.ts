@@ -146,7 +146,7 @@ describe('Session', () => {
     expect(session.canUndo()).toBe(false);
     expect(session.entries()).toEqual([]);
     session.exec('entity.place', place);
-    expect(session.replayLog()).toMatchObject({ schemaVersion: 1, initialWorld: world, entries: [{ seq: 0 }] });
+    expect(session.replayLog()).toMatchObject({ schemaVersion: 2, initialWorld: world, entries: [{ seq: 0 }] });
   });
 
   it('runs the same code as a scripting-api game: same console lines, same hash, same replay log', () => {

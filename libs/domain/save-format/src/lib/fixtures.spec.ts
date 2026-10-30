@@ -20,6 +20,8 @@ import type { z } from 'zod';
  * Every fixture of every version must load forever (ADR 0004). Layout:
  *   fixtures/v<schemaVersion>/<kind>/*.json      kind = world | manifest | replay-log
  *   fixtures/v<schemaVersion>/ctrl/*.ctrl        whole .ctrl containers (F1.8b)
+ *   fixtures/v<schemaVersion>/refused/<kind>/    documents the loaders must refuse (v2 on)
+ *   fixtures/v<schemaVersion>/start-failed/<kind>/ valid documents the sim engine refuses at start (v2 on)
  *   fixtures/settings/v<settingsVersion>/*.json
  * Fixtures of a published version are never edited; a new version adds a new directory.
  */
@@ -151,5 +153,28 @@ describe('fixtures', () => {
       const result = c.kind.migrator.migrate(c.json);
       expect(result.ok && result.value, c.file).toStrictEqual(c.json);
     }
+  });
+});
+
+describe('v2 fixtures that must not load as they are', () => {
+  const read = (path: string): unknown => JSON.parse(readFileSync(join(fixturesRoot, path), 'utf8'));
+
+  it('refused/replay-log/end-tick-below-last-entry.json: an endTick before the last entry is refused', () => {
+    const result = replayLogMigrator.migrate(read('v2/refused/replay-log/end-tick-below-last-entry.json'));
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'invalid',
+        version: 2,
+        issues: [{ path: 'endTick', message: 'endTick must not be before the last entry (or the initial world)' }],
+      },
+    });
+  });
+
+  it('start-failed/world/solution-length-mismatch.json: valid schema; the engine refuses it at start (F2.3a)', () => {
+    // The schema can't know the netlist: lengths are checked against it when the engine starts, as
+    // `start-failed` (ADR 0011 §9.6). F2.3a's start check must refuse this fixture.
+    const result = worldMigrator.migrate(read('v2/start-failed/world/solution-length-mismatch.json'));
+    expect(result.ok && result.value.sim?.nodes).toHaveLength(6);
   });
 });

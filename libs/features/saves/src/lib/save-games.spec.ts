@@ -3,8 +3,8 @@ import { Session } from '@controls/feature-session';
 import { MemorySettingsService, SETTINGS_SERVICE, SettingsStore } from '@controls/feature-settings';
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
 import type { PendingWritesFlush, SaveEntry } from '@controls/platform-api';
-import { createManifest, createWorld, defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
-import { createGame, loadGame } from '@controls/scripting-api';
+import { createWorld, defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
+import { createGame, createSaveManifest, loadGame } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
 import { findLastPlayed, lastPlayedOf, REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
@@ -168,7 +168,7 @@ describe('SaveGames', () => {
   it('loads a save whose replay log does not match its world with a notice, or refuses it by policy', async () => {
     const world = { ...createWorld({ seed: 8 }) };
     const otherLog = createGame({ seed: 9 }).replayLog();
-    const mismatched = writeCtrl({ manifest: createManifest(), world, replayLog: otherLog, thumbnail: null });
+    const mismatched = writeCtrl({ manifest: createSaveManifest(), world, replayLog: otherLog, thumbnail: null });
 
     const notify = setup();
     const entry = notify.io.seed({ kind: 'manual', name: 'Odd' }, mismatched);

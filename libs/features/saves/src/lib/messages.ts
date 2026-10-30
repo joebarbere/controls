@@ -1,5 +1,5 @@
 import { SaveIoError, type SaveIoErrorCode } from '@controls/platform-api';
-import type { CtrlError } from '@controls/save-format';
+import type { LoadGameError } from '@controls/scripting-api';
 
 /*
  * Player-facing messages for save and load failures (F1.8b). Written here, from the error's kind or
@@ -10,7 +10,7 @@ import type { CtrlError } from '@controls/save-format';
 const DAMAGED = 'The save is damaged, or it isn’t a Controls save.';
 
 /** Why `loadGame` / `readCtrl` refused a save, for a notification. */
-export function loadErrorReason(error: CtrlError): string {
+export function loadErrorReason(error: LoadGameError): string {
   switch (error.kind) {
     case 'too-large':
     case 'total-too-large':
@@ -33,8 +33,11 @@ export function loadErrorReason(error: CtrlError): string {
     case 'not-utf8':
     case 'not-json':
     case 'version-mismatch':
+    case 'end-tick-mismatch':
     case 'invalid-thumbnail':
       return DAMAGED;
+    case 'invalid-device-state':
+      return 'The save holds devices this version of Controls doesn’t recognise in that state, or it is damaged.';
   }
 }
 

@@ -1,30 +1,36 @@
 import { CommandRegistry } from '@controls/commands';
-import {
-  createManifest,
-  createReplayLog,
-  createWorld,
-  CtrlWriteError,
-  readCtrl,
-  writeCtrl,
-} from '@controls/save-format';
+import { createReplayLog, createWorld, CtrlWriteError, readCtrl, writeCtrl } from '@controls/save-format';
 import { TINY_PNG } from '@controls/save-format/testing';
 import { createWorldRegistry, type World, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createGame, type Game, gameFromSave, loadGame, replayLogGame } from './game';
+import {
+  createGame,
+  createSaveManifest,
+  type Game,
+  gameFromSave,
+  GameOptionsError,
+  loadGame,
+  replayLogGame,
+} from './game';
 
-const ctrlFixtures = join(import.meta.dirname, '../../../save-format/fixtures/v1/ctrl');
+const fixturesRoot = join(import.meta.dirname, '../../../save-format/fixtures');
+const ctrlFixtures = ['v1', 'v2'].flatMap((version) =>
+  readdirSync(join(fixturesRoot, version, 'ctrl'))
+    .filter((name) => name.endsWith('.ctrl'))
+    .map((name) => `${version}/ctrl/${name}`),
+);
+
+/** A manifest for this build, as `Game.save` writes it. */
+const createManifest = createSaveManifest;
 
 describe('the .ctrl fixtures', () => {
-  it.each(readdirSync(ctrlFixtures).filter((name) => name.endsWith('.ctrl')))(
-    '%s loads, and its replay log (if any) reproduces its world',
-    (name) => {
-      const result = loadGame(new Uint8Array(readFileSync(join(ctrlFixtures, name))));
-      if (!result.ok) throw new Error(result.error.message);
-      expect(result.replay.status).toBe(name === 'world-only.ctrl' ? 'absent' : 'continued');
-    },
-  );
+  it.each(ctrlFixtures)('%s loads, and its replay log (if any) reproduces its world', (path) => {
+    const result = loadGame(new Uint8Array(readFileSync(join(fixturesRoot, path))));
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.replay.status).toBe(path.endsWith('world-only.ctrl') ? 'absent' : 'continued');
+  });
 });
 
 const crate = { id: 'prop.crate', version: 1 };
@@ -56,7 +62,7 @@ describe('Game.save', () => {
         world: game.world(),
         replayLog: game.replayLog(),
         thumbnail: null,
-        fromVersion: 1,
+        fromVersion: 2,
       },
     });
   });
@@ -78,7 +84,7 @@ describe('loadGame', () => {
     const result = loaded(original.save());
     const game = result.game;
     expect(result.replay).toEqual({ status: 'continued' });
-    expect(result.fromVersion).toBe(1);
+    expect(result.fromVersion).toBe(2);
     expect(result.manifest).toStrictEqual(createManifest());
     expect(game.hash()).toBe(original.hash());
     expect(game.world()).toStrictEqual(original.world());
@@ -134,6 +140,9 @@ describe('loadGame', () => {
     expect(result.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
     expect(result.replay.status === 'restarted' && result.replay.message).toContain('Entry 0');
     expect(result.game.entries()).toEqual([]);
+    // The new log continues the dropped log's numbering (ADR 0011 §10): seq-keyed streams don't repeat.
+    expect(result.game.replayLog().firstSeq).toBe(1);
+    expect(result.game.execOrThrow('view.resetLayout')?.seq).toBe(1);
   });
 
   it('returns the typed container error for a bad or newer save', () => {
@@ -149,9 +158,9 @@ describe('loadGame', () => {
     const read = readCtrl(bytes);
     if (!read.ok) throw new Error('unreadable');
     const empty = gameFromSave(read.value, { registry: new CommandRegistry<World>() });
-    expect(empty.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+    expect(empty.ok && empty.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
     const full = gameFromSave(read.value, { registry: createWorldRegistry() });
-    expect(full.replay).toEqual({ status: 'continued' });
+    expect(full.ok && full.replay).toEqual({ status: 'continued' });
   });
 
   it('property: save, load and continue at any point replays to the live hash', () => {
@@ -188,5 +197,51 @@ describe('loadGame', () => {
       }),
       { numRuns: 60 },
     );
+  });
+});
+
+describe('the device check (invalid-device-state, ADR 0013)', () => {
+  const spst = { id: 'switch.tessaline-spst-toggle', version: 1 };
+  const withSwitch = (state: Record<string, unknown>): World =>
+    ({
+      ...createWorld({ seed: 3 }),
+      nextEntityId: 2,
+      entities: [
+        {
+          id: 1,
+          ref: spst,
+          transform: { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+          state,
+          sim: {},
+          extensions: {},
+        },
+      ],
+    }) as World;
+
+  it('loadGame refuses a save whose bags don’t match the device’s model kind, without echoing values', () => {
+    const bytes = writeCtrl({ manifest: createManifest(), world: withSwitch({ closed: 'secret' }) });
+    const result = loadGame(bytes);
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'invalid-device-state',
+        issues: [{ path: 'entities[0].state.closed', message: 'Not a valid switch.spst closed value' }],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(loadGame(writeCtrl({ manifest: createManifest(), world: withSwitch({ closed: true }) })).ok).toBe(true);
+  });
+
+  it('createGame refuses such a world too', () => {
+    expect(() => createGame({ world: withSwitch({}) })).toThrow(GameOptionsError);
+    expect(createGame({ world: withSwitch({ closed: false }) }).world().entities[0].state).toStrictEqual({
+      closed: false,
+    });
+  });
+});
+
+describe('createSaveManifest', () => {
+  it('records the built-in catalogue and the engine version', () => {
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 1 });
   });
 });

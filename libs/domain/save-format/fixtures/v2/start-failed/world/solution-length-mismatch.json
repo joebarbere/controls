@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 2,
+  "seed": 4294967295,
+  "tick": 2147483655,
+  "nextEntityId": 6,
+  "nextConnectionId": 5,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [
+    {
+      "id": "bench",
+      "ref": {
+        "id": "prop.bench",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 700,
+          "y": -1200,
+          "z": 80
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "battery.ferrovane-12v-7ah",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 800,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "stateOfCharge": 0.9876543210987654
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "switch.tessaline-spst-toggle",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1100,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "closed": true
+      },
+      "sim": {},
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "lamp.lumivane-12v-5w",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1300,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "filamentTempK": 2712.3456789012344
+      },
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "fuse.fixture-glass-1a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 900,
+          "y": -300,
+          "z": 400
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "blown": true,
+        "meltFraction": 1
+      },
+      "extensions": {
+        "fixture.note": "not in catalogue v1: a schema-level stand-in for F2.5's fuse"
+      }
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "fuse.fixture-glass-1a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1000,
+          "y": -300,
+          "z": 400
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "blown": false,
+        "meltFraction": 0.43750000000000006
+      },
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "pos"
+      },
+      "b": {
+        "entity": 2,
+        "terminal": "a"
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 2,
+        "terminal": "b"
+      },
+      "b": {
+        "entity": 5,
+        "terminal": "a"
+      },
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 5,
+        "terminal": "b"
+      },
+      "b": {
+        "entity": 3,
+        "terminal": "a"
+      },
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 3,
+        "terminal": "b"
+      },
+      "b": {
+        "entity": 1,
+        "terminal": "neg"
+      },
+      "extensions": {
+        "mod.example.colour": "black"
+      }
+    }
+  ],
+  "sim": {
+    "lastSolveTick": 2147483650,
+    "topologyHash": "4181c97144b2462094036e432df76ebf437ec2510aadb4664a1c81a53ce5c36a",
+    "nodes": [12.633908764829172, 0, 12.633908764829172, 0, 12.598712345678901, 5e-324],
+    "branches": [
+      0.41233578271934446, 0, 0.41233578271934446, 2.2250738585072014e-308, 0.41233578271934446, 0,
+      -0.41233578271934446, 0
+    ],
+    "islands": [
+      {
+        "flags": 0,
+        "iterations": 3
+      }
+    ]
+  },
+  "extensions": {
+    "fixture.note": "valid schema; the engine refuses it at start (start-failed): 3 nodes where the netlist has 4"
+  }
+}

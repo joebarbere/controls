@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawWorldV1Arb } from '../../testing/arbitraries';
-import { createWorld, migrateWorld } from '../documents';
+import { migrateWorld } from '../documents';
+import { worldV1ToV2 } from '../v2/from-v1';
 import { MAX_COORDINATE_MM, WorldV1 } from './world';
 
 const crate = (id: number, x = 0) => ({
@@ -32,15 +33,6 @@ const issuesOf = (input: unknown) => {
 describe('WorldV1', () => {
   it('accepts a minimal world', () => {
     expect(WorldV1.parse(world())).toStrictEqual(world());
-  });
-
-  it('createWorld builds an empty, valid world with P1 defaults', () => {
-    expect(createWorld({ seed: 7 })).toStrictEqual({
-      ...world({ seed: 7, nextEntityId: 1, fixtures: [], entities: [] }),
-    });
-    expect(createWorld({ seed: 0, difficulty: 'realistic', regionId: 'nec' }).difficulty).toBe('realistic');
-    expect(() => createWorld({ seed: 2 ** 32 })).toThrow();
-    expect(() => createWorld({ seed: -1 })).toThrow();
   });
 
   it('requires integer millimetres within ±10 km', () => {
@@ -142,9 +134,9 @@ describe('WorldV1', () => {
         expect(JSON.stringify(again)).toBe(text);
         // Parsing is idempotent: a valid document is a fixed point.
         expect(WorldV1.parse(w)).toStrictEqual(w);
-        // The loader agrees with the schema.
+        // The loader agrees with the schema, and migrates the world to the current version.
         const loaded = migrateWorld(JSON.parse(text));
-        expect(loaded).toStrictEqual({ ok: true, value: w, fromVersion: 1 });
+        expect(loaded).toStrictEqual({ ok: true, value: worldV1ToV2(w), fromVersion: 1 });
       }),
     );
   });

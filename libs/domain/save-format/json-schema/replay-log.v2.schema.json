@@ -1,0 +1,513 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "initialWorld": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 2
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextEntityId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nextConnectionId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "regionId": {
+          "type": "string",
+          "enum": [
+            "nec"
+          ]
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "trainee",
+            "apprentice",
+            "journeyman",
+            "realistic"
+          ]
+        },
+        "assisted": {
+          "type": "boolean"
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureV1"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityV2"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionV2"
+          }
+        },
+        "sim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimSolutionV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "seed",
+        "tick",
+        "nextEntityId",
+        "nextConnectionId",
+        "regionId",
+        "difficulty",
+        "assisted",
+        "fixtures",
+        "entities",
+        "connections",
+        "sim",
+        "extensions"
+      ],
+      "additionalProperties": false,
+      "title": "Controls world document, schemaVersion 2",
+      "description": "world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013). Zod in @controls/save-format is authoritative; this JSON Schema omits cross-field rules (sorted unique entity, fixture and connection ids below their counters, connections joining two different terminals of existing entities, sim solution pairs and tick), string well-formedness, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json in @controls/catalog)."
+    },
+    "firstSeq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReplayEntryV2"
+      }
+    },
+    "endTick": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "initialWorld",
+    "firstSeq",
+    "entries",
+    "endTick"
+  ],
+  "additionalProperties": false,
+  "title": "Controls replay log, schemaVersion 2",
+  "description": "replay.log in a .ctrl save (ADR 0004, ADR 0007, ADR 0013). Zod in @controls/save-format is authoritative; this JSON Schema omits the seq, tick and endTick ordering rules.",
+  "$defs": {
+    "FixtureV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FixtureIdV1"
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "FixtureIdV1": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Lower-case words joined by single hyphens, at most 64 characters."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "TransformV1": {
+      "type": "object",
+      "properties": {
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "orientationMdeg": {
+          "$ref": "#/$defs/OrientationMdegV1"
+        }
+      },
+      "required": [
+        "positionMm",
+        "orientationMdeg"
+      ],
+      "additionalProperties": false
+    },
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "OrientationMdegV1": {
+      "type": "object",
+      "properties": {
+        "yaw": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "pitch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "roll": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        }
+      },
+      "required": [
+        "yaw",
+        "pitch",
+        "roll"
+      ],
+      "additionalProperties": false,
+      "description": "Intrinsic Y-X-Z (yaw, pitch, roll) angles in integer millidegrees, each in [0, 360000)."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    },
+    "EntityV2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "state": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "sim": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "state",
+        "sim",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceStateBag": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z][a-zA-Z0-9]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/DeviceStateValue"
+      },
+      "description": "Named device state values; keys are lower camelCase (at most 64 characters, at most 64 keys)."
+    },
+    "DeviceStateValue": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 32
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A finite number, a boolean, an enum string of at most 32 characters, or null for absent."
+    },
+    "ConnectionV2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "a": {
+          "$ref": "#/$defs/TerminalRefV2"
+        },
+        "b": {
+          "$ref": "#/$defs/TerminalRefV2"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "a",
+        "b",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "TerminalRefV2": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalId"
+        }
+      },
+      "required": [
+        "entity",
+        "terminal"
+      ],
+      "additionalProperties": false,
+      "description": "A terminal of an entity: its entity id and the terminal id."
+    },
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    },
+    "SimSolutionV2": {
+      "type": "object",
+      "properties": {
+        "lastSolveTick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "topologyHash": {
+          "$ref": "#/$defs/Sha256HexV2"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "islands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "flags": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "iterations": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "flags",
+              "iterations"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "lastSolveTick",
+        "topologyHash",
+        "nodes",
+        "branches",
+        "islands"
+      ],
+      "additionalProperties": false
+    },
+    "Sha256HexV2": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 digest as 64 lower-case hex digits."
+    },
+    "ReplayEntryV2": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+        },
+        "args": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      },
+      "required": [
+        "seq",
+        "tick",
+        "id",
+        "args"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

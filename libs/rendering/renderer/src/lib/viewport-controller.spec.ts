@@ -359,6 +359,8 @@ const entity = (id: number, ref: typeof BOX, x: number, y: number, yaw = 0): Ent
   id,
   ref,
   transform: { positionMm: { x, y, z: 0 }, orientationMdeg: { yaw, pitch: 0, roll: 0 } },
+  state: {},
+  sim: {},
   extensions: {},
 });
 const worldWith = (...entities: Entity[]): World => ({
@@ -824,7 +826,7 @@ describe('ViewportController on the workshop', () => {
     controller.syncWorld({
       ...WORKSHOP,
       nextEntityId: 2,
-      entities: [{ id: 1, ref: SPOOL, transform, extensions: {} }],
+      entities: [{ id: 1, ref: SPOOL, transform, state: {}, sim: {}, extensions: {} }],
     });
     const spool = controller.scene.getObjectByName('entity-1') as Mesh;
     const bounds = new Box3().setFromObject(spool);

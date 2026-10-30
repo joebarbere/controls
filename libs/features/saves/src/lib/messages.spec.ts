@@ -1,5 +1,5 @@
 import { SaveIoError } from '@controls/platform-api';
-import type { CtrlError } from '@controls/save-format';
+import type { LoadGameError } from '@controls/scripting-api';
 import { SaveIoErrorCode as Codes } from '@controls/ipc-contract';
 import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
 
@@ -7,7 +7,7 @@ const HOSTILE = '../../do-not-echo/<script>';
 
 describe('save and load messages', () => {
   it('explain every refused save without echoing anything from the file', () => {
-    const errors: CtrlError[] = [
+    const errors: LoadGameError[] = [
       { kind: 'not-a-zip', message: HOSTILE },
       { kind: 'unsupported-zip', message: HOSTILE },
       { kind: 'too-many-entries', limit: 64, message: HOSTILE },
@@ -42,6 +42,8 @@ describe('save and load messages', () => {
         message: HOSTILE,
       },
       { kind: 'invalid-thumbnail', message: HOSTILE },
+      { kind: 'end-tick-mismatch', worldTick: 1, endTick: 2, message: HOSTILE },
+      { kind: 'invalid-device-state', issues: [{ path: HOSTILE, message: HOSTILE }], message: HOSTILE },
     ];
     for (const error of errors) {
       const reason = loadErrorReason(error);
@@ -50,6 +52,7 @@ describe('save and load messages', () => {
     }
     expect(loadErrorReason(errors[13])).toMatch(/newer version of Controls/);
     expect(loadErrorReason(errors[16])).toMatch(/can’t upgrade/);
+    expect(loadErrorReason(errors[19])).toMatch(/devices/);
   });
 
   it('explain every platform refusal code, and treat anything else as an I/O failure', () => {

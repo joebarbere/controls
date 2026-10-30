@@ -561,6 +561,54 @@ describe('replayEntries', () => {
   });
 });
 
+describe('firstSeq (a rebased or restarted log keeps its seq numbering, ADR 0011 §3)', () => {
+  const startingAt = (firstSeq: number) =>
+    new CommandBus<Toy>({
+      registry: new CommandRegistry<Toy>().registerAll(defs),
+      initialState: initial,
+      tickOf: (s) => s.tick,
+      firstSeq,
+    });
+
+  it('defaults to 0, and nextSeq is firstSeq + the entries logged', () => {
+    const bus = createBus();
+    expect(bus.firstSeq).toBe(0);
+    expect(bus.nextSeq()).toBe(0);
+    bus.exec('list.push', { value: 1 });
+    expect(bus.nextSeq()).toBe(1);
+  });
+
+  it('a bus starting at firstSeq logs from there, and passes that seq to run', () => {
+    const bus = startingAt(40);
+    const seqs: number[] = [];
+    bus.subscribe((event) => seqs.push(event.entry?.seq ?? -1));
+    bus.exec('list.push', { value: 1 });
+    bus.exec('edit.undo');
+    expect(bus.entries.map((e) => e.seq)).toStrictEqual([40, 41]);
+    expect(seqs).toStrictEqual([40, 41]);
+    expect(bus.nextSeq()).toBe(42);
+  });
+
+  it('replays a log that starts at firstSeq, and refuses one that starts elsewhere', () => {
+    const live = startingAt(7);
+    live.exec('list.push', { value: 3 });
+    live.exec('list.push', { value: 4 });
+    const replayed = startingAt(7);
+    expect(replayEntries(replayed, live.entries)).toStrictEqual({ ok: true });
+    expect(replayed.state).toStrictEqual(live.state);
+    expect(replayEntries(startingAt(0), live.entries)).toMatchObject({
+      ok: false,
+      error: { kind: 'out-of-order', message: 'Expected seq 0, found 7' },
+    });
+  });
+
+  it('refuses a firstSeq that is not a safe integer >= 0', () => {
+    for (const bad of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+      expect(() => startingAt(bad)).toThrow(RangeError);
+    }
+  });
+});
+
 describe('unlogged commands (logged: false)', () => {
   it('run and notify listeners, but take no seq, no log entry and no history', () => {
     const bus = createBus();

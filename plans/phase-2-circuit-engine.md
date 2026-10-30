@@ -176,7 +176,7 @@ The user chose the recommended option for D1, D2, D3 and D5, and accepted the re
 - **D6 Cross-runtime float determinism.** `sim-core` uses only IEEE-exact operations plus its own `dmath` for exp, log and pow, enforced by lint, and fixed phasor angles come from `sqrt`. A Node-vs-Chromium snapshot golden in `game-e2e` is the tripwire. Node 24's V8 and Electron's Chromium V8 are different builds, and `docs/caveats/commands.md` already treats `Math.sin`/`Math.cbrt` as engine-dependent. ADR 0014 records it.
 
 - **D7 A hidden or minimised window suspends the sim** (ADR 0011 review, U1). It is host-side state in `SimHost`, not a logged `sim.pause`: pacing stops on `visibilitychange` and re-anchors at the player's speed when the window is visible again. "Falling behind" and the effective-speed windows are held, `sim.step` still works, and `backgroundThrottling` stays at its default. The web harness behaves the same. Running in the background may become a setting later. _Rejected:_ letting throttled timers slow the sim, and `backgroundThrottling: false`.
-- **D8 Engine changes don't break old saves** (ADR 0011 review, U2). `ManifestV2.simEngineVersion` is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save whose `simEngineVersion` or `catalogVersion` differs from the build's skips log verification and loads `world.json` as saved with a new log (`replay.status: 'restarted'`, reason `engine-changed`), which `REPLAY_MISMATCH_POLICY` never refuses. _Rejected:_ refusing such saves.
+- **D8 Engine changes don't break old saves** (ADR 0011 review, U2). `ManifestV2.simEngineVersion` is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save whose `simEngineVersion` or `catalogVersion` differs from the build's skips log verification and loads `world.json` as saved with a new log (`replay.status: 'restarted'`, reason `engine-changed`), which `REPLAY_MISMATCH_POLICY` never refuses. **Narrow v0 compatibility** (decided 2026-10-30 in the world v2 review): a save with `simEngineVersion === 0 && catalogVersion === 0` (a migrated P1 save, which holds no sim state) is verified as normal; if verification fails it falls back to `replay.status: 'restarted'` with reason `engine-changed`, never a refusal. Any other mismatch, including a single 0 on its own, stays `engine-changed` as above. The check is a pure, tested `engineCompatible(manifest, build)` in `scripting-api` (F2.3a). It relies on the empty-netlist rule: a world with no netlist exports `sim: null` (ADR 0013), so a P1 world verifies to the same hash. _Rejected:_ refusing such saves.
 
 The spec also settles one point: the sim worker is a **module Web Worker** in the renderer (§4.3, ADR 0002). A `utilityProcess` can't share a `SharedArrayBuffer` with the renderer and doesn't exist in the web harness. `sim-cli` runs the engine in-process.
 
@@ -238,19 +238,19 @@ Not a spec feature. It is the persisted contract every P2 feature builds on; P1'
 
 Acceptance:
 
-- [ ] `v2/world.ts`, `v2/manifest.ts` and `v2/replay-log.ts`, with a total v1 → v2 migration. There is one `schemaVersion` for the whole save, so documents that don't change get identity steps. v1 files and fixtures are untouched.
+- [x] `v2/world.ts`, `v2/manifest.ts` and `v2/replay-log.ts`, with a total v1 → v2 migration. There is one `schemaVersion` for the whole save, so documents that don't change get identity steps. v1 files and fixtures are untouched.
   - **`WorldV2.connections`:** strict objects sorted by id. Each is `{ id, ref: CatalogRef (lead type), a: TerminalRef, b: TerminalRef, extensions }`, where `TerminalRef` is `{ entity, terminal }`. ADR 0013 records the id allocation rule.
   - **`EntityV2.state`:** a strict record of named finite numbers, booleans or short enum strings. Absent values are `null`, never optional. It is validated by the device model's own state schema when the world loads, so a new device kind never needs a world `schemaVersion` bump.
   - **`ReplayLogV2.endTick`.**
-- [ ] Fixtures in `fixtures/v2/{world,manifest,replay-log,ctrl}`. Every v1 fixture migrates and validates. A fast-check round-trip property covers v2 (both JSON and the container), and `*.v2.schema.json` JSON Schema is exported with a staleness check.
-- [ ] `content/levels/workshop.json` is rewritten as v2 in canonical form (`levels.spec.ts`). Every pinned golden hash is re-pinned in one change, and the CHANGELOG says so:
+- [x] Fixtures in `fixtures/v2/{world,manifest,replay-log,ctrl}`. Every v1 fixture migrates and validates. A fast-check round-trip property covers v2 (both JSON and the container), and `*.v2.schema.json` JSON Schema is exported with a staleness check.
+- [x] `content/levels/workshop.json` is rewritten as v2 in canonical form (`levels.spec.ts`). Every pinned golden hash is re-pinned in one change, and the CHANGELOG says so:
   - `WORKSHOP_HASH`, `FOUR_SURFACE_HASH`, `PHASE_ACCEPTANCE_HASH`, `PALETTE_PLACE_UNDO_HASH`, `CONSOLE_PLACE_UNDO_HASH`;
   - the Node and Chromium hash goldens.
 - [ ] Commands in `world-model`. Their ids and argument shapes are save format, so `save-format-guardian` reviews them:
   - `lead.connect {ref, a, b}`: undoable. It refuses unknown entities, unknown terminals, `a == b` and duplicate leads.
   - `lead.disconnect {id}`: undoable, and undo restores the same id.
   - `device.operate {id, control, value}`: undoable, and checked against the device's controls in `run`. It **never reads sim-owned state** (ADR 0011).
-- [ ] Catalogue v1:
+- [x] Catalogue v1 (PR 1; `catalogVersion` 1 in the manifest from PR 2):
   - `@controls/catalog` holds the device-definition Zod schema: identity, fictional brand and model, category, terminals `{ id, label, positionMm }`, model `{ kind, params }`, controls and `sources[]`.
   - `content/devices/*.json` holds the P2 devices plus one test-lead type. Lead resistance is computed from resistivity × length ÷ area with a temperature coefficient, never taken from NEC tables.
   - `catalogVersion` 1 goes in the manifest and in `docs/history.md`.
@@ -265,7 +265,7 @@ Acceptance:
 
   The `EntityV2.state` bullet above is superseded by the two bags.
 
-- [ ] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
+- [x] Rebasing a replay log works: a test shows a log rebased onto a mid-session v2 world, sim state included, replays to the same hash. This is the groundwork for the P1 follow-up "the replay log never shrinks".
 - [ ] Palette forms render every new command (the every-command spec). Console lines and a TS script can connect a lead and operate a switch.
 
 ### F2.1 Netlist compiler
@@ -278,6 +278,7 @@ Acceptance:
 - [ ] Union-find merges ideal connections only: a closed switch, and terminals the device joins internally. Leads are resistive branches: R comes from the catalogue derivation, plus a sourced contact resistance at each end. An open switch drops its branch.
 - [ ] **Wired, not drawn.** A device placed touching a battery but not connected to it carries no current and sits at 0 V. When an entity is deleted, the deleting command's change removes its leads; they are never left in the world to be silently compiled.
 - [ ] **Deterministic numbering.** Each node is numbered by its smallest `(entityId, terminalId)` member in code-unit order. Property: permuting the input order of entities and connections gives an identical netlist.
+- [ ] **Canonical solution order.** The persisted order of `WorldV2.sim.nodes` and `branches` (and so the snapshot's) is a pure function of the world: canonical, and independent of the incremental-recompile history. Property: an incrementally recompiled netlist after any edit sequence numbers nodes and branches exactly as a from-scratch compile of the same world (ADR 0013).
 - [ ] **`topologyHash`:** SHA-256 (the pure implementation in `world-model`) over the canonical structure (the partition, branch ends and element kinds), excluding parameter values. Properties:
   - structurally equal netlists hash equally;
   - toggling a switch changes the hash;
@@ -342,6 +343,7 @@ Acceptance:
   - `game.advance(ticks)` and `game.advanceTo(tick)`;
   - `game.probe(a, b)`, now implemented: an **ideal, non-loading** voltage difference between two terminals, given as `"<entityId>:<terminalId>"`. It returns DC volts, or AC RMS and phase. It is a script and test query, not a player instrument (DMMs are P5). `NotAvailableError` stays for `tag` (P10);
   - `game.snapshot()` (codec bytes) and `game.on('sim')`.
+- [ ] **`engineCompatible(manifest, build)`** (D8, narrow v0 compatibility): pure and tested in `scripting-api`. Same `simEngineVersion` and `catalogVersion` → verify the log; both 0 (a migrated P1 save) → verify, falling back to `restarted` (`engine-changed`) on failure, never a refusal; any other mismatch, a single 0 included → `engine-changed` without verifying.
 - [ ] **Sim commands.** `sim.step {ticks}`, `sim.setSpeed {speed: 0|1|10|60}` and `sim.pause` are declared in domain code; they are logged and don't change the world. A headless host implements `sim.step` by advancing, so a `.console` file can step time both in `sim-cli` and in the game.
 - [ ] **Determinism:**
   - the same seed and log give byte-identical snapshots over 10 s of sim time on the bench demo, across two runs and a replay;
@@ -386,7 +388,7 @@ Acceptance:
 - [ ] **Battery:**
   - EMF as a function of state of charge, from a sourced chemistry, under a fictional brand;
   - internal resistance;
-  - state of charge, coulomb-counted, kept in entity `state`.
+  - state of charge, coulomb-counted, kept in the entity's sim-owned `sim` bag (ADR 0011 §1, ADR 0013).
 
   Golden fixtures:
   - terminal voltage = EMF − I·R within 0.5 %;
@@ -426,7 +428,7 @@ Acceptance:
 - [ ] **SPST switch:** `device.operate {control: 'closed'}`. Closed merges its terminals; open drops the branch. It can be operated from the selected entity with the keyboard or a mouse click, the palette, the console and a script, each logging one command.
 - [ ] **Fuse:**
   - blows when ∫I²dt reaches the melting I²t, from a sourced, fictional datasheet;
-  - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in `state`;
+  - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in the fuse's sim-owned `sim` bag (ADR 0011 §1, ADR 0013);
   - melt time at k × rating falls inside the sourced band;
   - replacing a fuse in P2 means deleting it and placing a new one.
 - [ ] **Basic thermal-magnetic breaker** (single-pole, standalone, no panel):

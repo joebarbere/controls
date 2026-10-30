@@ -7,6 +7,7 @@ import type {
   ExecutedEvent,
   ReplayError,
 } from '@controls/commands';
+import { CATALOG_VERSION } from '@controls/catalog';
 import {
   createManifest,
   createWorld,
@@ -23,7 +24,9 @@ import {
   World as WorldSchema,
   writeCtrl,
 } from '@controls/save-format';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import {
+  checkWorldDevices,
   createWorldBus,
   createWorldRegistry,
   replayLog as replayWorldLog,
@@ -166,6 +169,14 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/**
+ * A manifest for a save this build writes: its `APP_VERSION`, the built-in catalogue's
+ * `CATALOG_VERSION` and the engine's `SIM_ENGINE_VERSION` (what {@link Game.save} writes).
+ */
+export function createSaveManifest(): Manifest {
+  return createManifest({ catalogVersion: CATALOG_VERSION, simEngineVersion: SIM_ENGINE_VERSION });
+}
+
 /** Wraps an existing world bus. The bus must not be driven from anywhere else afterwards. */
 function wrap(bus: CommandBus<World>, initialWorld: World): Game {
   deepFreeze(initialWorld);
@@ -194,7 +205,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World): Game {
     replayLog: () => toReplayLog(initialWorld, bus),
     save: (options = {}) =>
       writeCtrl({
-        manifest: createManifest(),
+        manifest: createSaveManifest(),
         world: bus.state,
         replayLog: toReplayLog(initialWorld, bus),
         thumbnail: options.thumbnail ?? null,
@@ -223,9 +234,9 @@ function wrap(bus: CommandBus<World>, initialWorld: World): Game {
 
 /**
  * Starts a game: an empty world from `seed`, or the given `world`, with a fresh history and an
- * empty replay log. The world is validated (and frozen; treat it as owned by the game). Throws
- * {@link GameOptionsError} for an invalid world, an out-of-range seed or a seed that contradicts
- * the world's.
+ * empty replay log. The world is validated, its device state and connections included
+ * (`checkWorldDevices`), and frozen; treat it as owned by the game. Throws {@link GameOptionsError}
+ * for an invalid world, an out-of-range seed or a seed that contradicts the world's.
  */
 export function createGame(options: GameOptions): Game {
   let world: World;
@@ -242,6 +253,10 @@ export function createGame(options: GameOptions): Game {
     }
     if (options.seed !== undefined && options.seed !== options.world.seed) {
       throw new GameOptionsError(`seed ${options.seed} contradicts the world's seed ${options.world.seed}`);
+    }
+    const devices = checkWorldDevices(options.world);
+    if (devices.length > 0) {
+      throw new GameOptionsError("The world's device state doesn't match the device catalogue", devices);
     }
     world = options.world;
   } else {
@@ -309,13 +324,29 @@ export interface LoadedGame {
   readonly replay: SaveReplayStatus;
 }
 
-export type LoadGameResult = LoadedGame | { readonly ok: false; readonly error: CtrlError };
+/**
+ * A save whose device state or connections don't match the device catalogue (ADR 0011 §10 step 1,
+ * ADR 0013): a bag with the wrong keys or an invalid value for its device's model kind, a lead on a
+ * terminal its device doesn't have. `issues` are value-free, like a `LoadError`'s.
+ */
+export interface InvalidDeviceStateError {
+  readonly kind: 'invalid-device-state';
+  readonly issues: readonly ValidationIssue[];
+  readonly message: string;
+}
+
+/** Why {@link loadGame} refused a save: the container's error, or the device check's. */
+export type LoadGameError = CtrlError | InvalidDeviceStateError;
+
+export type LoadGameResult = LoadedGame | { readonly ok: false; readonly error: LoadGameError };
 
 export type LoadGameOptions = CommonOptions & ReadCtrlOptions;
 
 /**
  * Loads a `.ctrl` save from untrusted bytes (F1.8b). `readCtrl` reads, migrates and validates it
- * (otherwise a typed `CtrlError`, including `newer-than-build`); then a game is built on its world.
+ * (otherwise a typed `CtrlError`, including `newer-than-build`); then its world's device state and
+ * connections are checked against the device catalogue (otherwise `invalid-device-state`), and a
+ * game is built on its world.
  * **The undo stack is cleared and the replay log continues:** the log is replayed from its initial
  * world and, if it reproduces the saved world's hash, the game continues it (same `seq` numbering,
  * so seeded streams stay put); otherwise a new log starts (see {@link SaveReplayStatus}). Never
@@ -327,10 +358,28 @@ export function loadGame(bytes: Uint8Array, options: LoadGameOptions = {}): Load
   return gameFromSave(read.value, options);
 }
 
-/** {@link loadGame} for contents already read with `readCtrl`. Never throws. */
-export function gameFromSave(contents: CtrlContents, options: CommonOptions = {}): LoadedGame {
+/**
+ * {@link loadGame} for contents already read with `readCtrl`. Never throws. A restarted log
+ * continues the saved log's numbering (`firstSeq` = its next `seq`, ADR 0011 §10), so seeded
+ * streams keyed by `seq` don't repeat.
+ */
+export function gameFromSave(
+  contents: CtrlContents,
+  options: CommonOptions = {},
+): LoadedGame | { readonly ok: false; readonly error: InvalidDeviceStateError } {
   const registry = options.registry ?? createWorldRegistry();
   const { world, replayLog: log } = contents;
+  const devices = checkWorldDevices(world);
+  if (devices.length > 0) {
+    return {
+      ok: false,
+      error: {
+        kind: 'invalid-device-state',
+        issues: devices,
+        message: "The save's device state doesn't match the device catalogue.",
+      },
+    };
+  }
   let game: Game;
   let replay: SaveReplayStatus;
   const replayed = log === null ? null : replayWorldLog(log, registry);
@@ -339,7 +388,8 @@ export function gameFromSave(contents: CtrlContents, options: CommonOptions = {}
     game = wrap(replayed.bus, log.initialWorld);
     replay = { status: 'continued' };
   } else {
-    game = wrap(createWorldBus(world, registry), world);
+    const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
+    game = wrap(createWorldBus(world, registry, { firstSeq }), world);
     if (replayed === null) {
       replay = { status: 'absent' };
     } else if (replayed.ok) {

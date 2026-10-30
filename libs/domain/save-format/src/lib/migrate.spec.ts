@@ -48,9 +48,23 @@ const chain = migrationChain('test world', 'schemaVersion', WorldV1)
   .then(WorldV3Test, v2ToV3)
   .build();
 
+/** An empty v1 world, as P1's `createWorld` built it. */
+const v1World = (seed: number) => ({
+  schemaVersion: 1,
+  seed,
+  tick: 0,
+  nextEntityId: 1,
+  regionId: 'nec',
+  difficulty: 'apprentice',
+  assisted: false,
+  fixtures: [],
+  entities: [],
+  extensions: {},
+});
+
 const placed = () =>
   WorldV1.parse({
-    ...createWorld({ seed: 5 }),
+    ...v1World(5),
     assisted: true,
     nextEntityId: 2,
     entities: [
@@ -182,7 +196,7 @@ describe('the real world chain', () => {
     const error = expectError(worldMigrator.migrate(JSON.parse(text)));
     expect(error).toMatchObject({
       kind: 'invalid',
-      version: 1,
+      version: CURRENT_SCHEMA_VERSION,
       issues: [{ path: 'extensions.mod.a.__proto__', message: 'The key "__proto__" is not allowed' }],
     });
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
