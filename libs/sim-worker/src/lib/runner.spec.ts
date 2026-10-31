@@ -362,17 +362,30 @@ describe('the worker matches the headless game (property)', () => {
   );
   const scenarioArb = fc.record({
     transport: fc.constantFrom('sab' as const, 'message' as const),
-    ops: fc.array(opArb, { maxLength: 14 }),
+    ops: fc.array(opArb, { maxLength: 10 }), // capped: a session of 10 ops is enough to mix every kind
     slice: fc.constantFrom(0, 1, 3),
   });
+
+  // Every run starts from the bench circuit's world, built once: building it command by command (in
+  // the reference, through the worker and again in the replay start) was nearly all of a run's time
+  // under coverage, not the session. The bench's commands through the worker: 'following the host'.
+  let benchWorld: World | null = null;
+  const circuit = (): World => {
+    if (benchWorld === null) {
+      const game = reference();
+      runBench(game);
+      benchWorld = game.world() as World;
+    }
+    return benchWorld;
+  };
 
   it('same snapshot bytes and materialised hash after any session, either transport, any slicing', () => {
     fc.assert(
       fc.property(scenarioArb, ({ transport, ops, slice }) => {
-        const game = reference();
+        const game = reference(circuit());
         const h = harness();
         h.msPerRead = slice;
-        h.init({ kind: 'world', world: game.world() as World, firstSeq: 0 }, transport);
+        h.init({ kind: 'world', world: circuit(), firstSeq: 0 }, transport);
         let sent = 0;
         let advanced = 0;
         const sync = () => {
@@ -384,8 +397,6 @@ describe('the worker matches the headless game (property)', () => {
           sent = game.entries().length;
           if (game.tick() > advanced) h.send({ type: 'advance', tick: (advanced = game.tick()) });
         };
-        for (const [id, args] of ENGINE_BENCH) game.execOrThrow(id, args);
-        sync();
         for (const op of ops) {
           if (op.kind === 'operate') game.exec('device.operate', { id: 2, control: 'closed', value: op.value });
           else if (op.kind === 'advance') game.advance(op.ticks);
@@ -409,7 +420,7 @@ describe('the worker matches the headless game (property)', () => {
         expect(replay.of('error')).toEqual([]);
         expect(replay.view()?.hashedBytes()).toEqual(game.snapshot());
       }),
-      { numRuns: 20 },
+      { numRuns: 25 },
     );
   });
 });
