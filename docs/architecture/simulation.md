@@ -1,6 +1,6 @@
 # Simulation
 
-How `@controls/sim-core` turns the as-built world into something a solver can run. This page grows with Phase 2: today it covers the netlist compiler (F2.1) and the dense DC solver (F2.2 part 1). The phasor and sparse solvers (F2.2 parts 2 and 3), the engine loop (F2.3a) and the worker transport (F2.3b, [ADR 0011](../decisions/0011-sim-worker-contract.md)) are added as they land. Gotchas: [simulation caveats](../caveats/simulation.md).
+How `@controls/sim-core` turns the as-built world into something a solver can run. This page grows with Phase 2: today it covers the netlist compiler (F2.1), the DC solver (F2.2 part 1), sparse LU and the factorisation cache (part 3), the phasor solver (part 2), the oracle corpus and the bench (F2.7). The engine loop (F2.3a) and the worker transport (F2.3b, [ADR 0011](../decisions/0011-sim-worker-contract.md)) are added as they land. Gotchas: [simulation caveats](../caveats/simulation.md).
 
 ## The netlist compiler (F2.1)
 
@@ -92,7 +92,7 @@ Netlists are read-only: fragments and their frozen `values` objects are shared b
 
 ## The DC solver (F2.2 part 1)
 
-`DcSolver.solve(netlist, values, out?)` in `sim-core/src/lib/mna/` solves every `dc` and `empty` island of a netlist by modified nodal analysis (MNA), with the dense LU in `sim-core/src/lib/lu/`. Both are reimplemented from published sources: Ho, Ruehli and Brennan's 1975 MNA paper, and Gaussian elimination with partial pivoting as in Golub and Van Loan. No third-party code is used. `ac` and `mixed` islands are left at zero with `solved: false`, for part 2's phasor solver.
+`DcSolver.solve(netlist, values, out?)` in `sim-core/src/lib/mna/` solves every `dc` and `empty` island of a netlist by modified nodal analysis (MNA), with the dense LU in `sim-core/src/lib/lu/`. Both are reimplemented from published sources: Ho, Ruehli and Brennan's 1975 MNA paper, and Gaussian elimination with partial pivoting as in Golub and Van Loan. No third-party code is used. `ac` and `mixed` islands are left at zero with `solved: false`: `ac` islands are the phasor solver's (part 2, below), and `mixed` ones are solved by neither.
 
 ```mermaid
 flowchart LR
@@ -198,7 +198,7 @@ flowchart TB
 
 1. finds, by an iterative depth-first search over L's graph, the rows the column reaches (Gilbert–Peierls: exactly the pattern of the triangular solve);
 2. applies the earlier columns in topological order;
-3. picks the pivot by **threshold partial pivoting**. The diagonal row is kept while |a_kk| ≥ `PIVOT_THRESHOLD` (0.1) × the largest candidate; otherwise the largest wins, the lowest row on a tie.
+3. picks the pivot by **threshold partial pivoting**. The diagonal row is kept while |a_kk| ≥ `PIVOT_THRESHOLD` × the largest candidate; otherwise the largest wins, the lowest row on a tie. `PIVOT_THRESHOLD` was 0.1 and is 1 since #51 (plain partial pivoting, multipliers at most 1, as dense): u = 0.1's multipliers of up to 10 put about 3,000 ulps of noise on one node of a fresh-seed circuit, and the outer loop, which expects partial-pivoting precision, stalled at 41 iterations where dense took 18. On the seeded 2,000-node plants u = 1 costs 0.33 % more L + U entries and falls back from replay less often (19 against 227 fallbacks over 2,197 nonlinear islands). It moved the sparse pins, so `SIM_ENGINE_VERSION` is 2.
 
 MNA's zero diagonals (ideal sources) make off-diagonal pivots routine. Floating components keep part 1's structural pinning, since both paths stamp the same rows. A property drives clusters of 70–160 nodes, down to 0.1 mΩ, through the sparse path: they are never singular, and gmin · ΣV equals the feed to 1e-13.
 
@@ -254,12 +254,16 @@ flowchart LR
     HK --> FP{"x is the last solve and<br/>values unchanged?"}
     FP -- yes --> DONE["converged"]
     FP -- no --> LS["linear solve → x̃"]
-    LS --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
+    LS --> SC{"hook(x̃) gives the values<br/>x̃ was solved with, to RELTOL?"}
+    SC -- yes --> DONE
+    SC -- no --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
     CV -- yes --> DONE
     CV -- "no, under the cap" --> DAMP["α halves on oscillation (to 1/16),<br/>doubles back when steps shrink;<br/>x ← x + α (x̃ − x)"]
     DAMP --> X
     CV -- "cap (50 solves)" --> NC["flags: nonConverged"]
 ```
+
+**Two stopping tests (#51).** After each solve the loop asks the hook for its values at x̃: if they are the values x̃ was solved with, to `OUTER_LOOP_RELTOL` and in the same stamp mode, x̃ is the fixed point and the loop stops. Otherwise the older step test on voltages and currents still applies. The value-space test was added because a current is only as repeatable as the solve resolves it (cond · ε · V · g): on ill-conditioned islands small currents repeated only to 5e-5 relative, and the step test alone stalled to 42 and 50 iterations on the dense path. With it, 6,542 seeded islands take at most 20 iterations forced dense and 26 forced sparse (median 16), within the bound of 40 that the damping schedule's contraction gives.
 
 The reported solution is always the last linear solve, never a damped blend, so every row holds for the values left in `values`. A linear island takes one solve, and a singular solve ends the loop.
 
@@ -297,6 +301,76 @@ A `nonConverged` island's values are the last linear solve's: self-consistent, s
   - properties bounding the iterations at 40, on random bench worlds with self-heating lamps (hot/cold up to 21×) and on large sparse circuits. The bound is measured: from a cold start the median is 16, the 99th percentile about 21, and the most seen 32.
 - **Generator health** floors on both generators, and 17 planted faults, all killed (listed in the PR).
 
+## The phasor solver (F2.2 part 2)
+
+`AcSolver.solve(netlist, values, frequencyHz, out?)` in `sim-core/src/lib/mna/ac.ts` solves every `ac` island as **phasors**: the steady state at one frequency, the region's (`RegionProfile.frequencyHz`, 60 Hz for NEC). It is the DC solver's formulation in complex arithmetic, with the same unknowns in the same order (the non-reference node voltages, then each `vsource` element's current) and the same reference node. Values are RMS phasors, `re, im` interleaved in the same `DcSolution` record DC writes (ADR 0011 §5.3), so one record holds both kinds of island.
+
+```mermaid
+flowchart LR
+    RP["RegionProfile<br/>(catalog: frequencyHz 60,<br/>120/240, 208Y/120, 480Y/277)"] --> W["ω = 2π f<br/>(angularFrequency)"]
+    V["AcBranchValues<br/>R, L, C, phasor E behind R"] --> Y["admittances at ω:<br/>1/R, −j/(ωL), jωC"]
+    W --> Y
+    N["Netlist: ac islands only"] --> SING{"ideal-source loop?<br/>(union-find)"}
+    SING -- yes --> S["singular, all +0"]
+    SING -- no --> P{"unknowns ≥ 64?"}
+    Y --> P
+    P -- no --> D["ComplexDenseLu<br/>(interleaved, CABS1 pivots)"]
+    P -- yes --> SP["ComplexSparseLu<br/>(AMD, cached symbolic,<br/>replayed numeric)"]
+    D --> OUT["DcSolution record<br/>(re, im per node and branch)"]
+    SP --> OUT
+```
+
+- **Order of solves.** `AcSolver` writes only `ac` islands and leaves every other island's entries in `out` as they are, so the engine (F2.3a) runs `DcSolver.solve` then `AcSolver.solve` into one record (`DcSolver` zeroes every island it doesn't solve). `mixed` islands are solved by neither: they stay a diagnostic, since P2 has no converters.
+- **Values** (`mna/ac-values.ts`): `AcBranchValues` holds per branch a stamp (`resistor`, `inductor`, `capacitor` on a `resistor` element; `vsource` on a `vsource` element), R, L, C and the EMF phasor. `vsourcePolar(branch, rms, angle, ohms)` takes the angle from `phasorUnit`. Inductance and capacitance are **stamp modes, not element kinds**: F2.1's `ElementKind` and `topologyHash` are unchanged, and every passive stamp has the same four-entry pattern. `acBranchValues(netlist, hook?)` fills `ac` islands from a hook, else `AC_DEFAULT_VALUES` (a lead's resistance). There is no AC current source yet (caveats).
+- **Angles** (`mna/phasor.ts`): 0°, 180° and ±120° only, from exact constants (cos 120° = −0.5, sin 120° = `Math.sqrt(3) / 2`, decision D6). ω = `2 * Math.PI * f`, two correctly rounded products.
+- **Singular is structural, as in DC.** With M = [[Y, B], [−Bᵀ, R]], Re(xᴴMx) = Vᴴ Re(Y) V + Iᴴ R I: the incidence terms only add an imaginary part, and an inductor's or capacitor's admittance is purely imaginary. gmin on every node makes it positive unless current circulates in zero-ohm sources only. So an island is singular exactly when its ideal sources close a loop, and the same union-find decides it. An L–C pair at resonance is ill-conditioned, not singular.
+- **No floating components.** Every AC stamp conducts, so an island is one conductive component holding its reference; the DC solver's pinning isn't needed.
+
+### Complex LU, not the real 2n system
+
+The equivalent real system [[Re, −Im], [Im, Re]] of order 2n has the same solution and could reuse `DenseLu` and `SparseLu` unchanged. It was measured and rejected:
+
+| n (complex) | `ComplexDenseLu` | `DenseLu` on the 2n system |
+| ----------- | ---------------- | -------------------------- |
+| 16          | 4.1 µs           | 25 µs (6.1×)               |
+| 32          | 23 µs            | 94 µs (4.1×)               |
+| 64          | 164 µs           | 689 µs (4.2×)              |
+| 128         | 1.27 ms          | 5.33 ms (4.2×)             |
+
+(Node 24, AMD Ryzen 5 5600X, factor and solve, median of 7.) It stores 4n² numbers instead of 2n², does twice the real flops (16n³/3 against 8n³/3), and its partial pivoting is free to pick a real row that splits a complex entry's pair, so its rounding isn't a complex factorisation's. Sparse, it would quadruple the pattern.
+
+- **`ComplexDenseLu`** (`lu/complex-dense-lu.ts`): interleaved row-major storage, partial pivoting by CABS1 (|re| + |im|, LAPACK's choice for complex pivoting: no square root, within √2 of the modulus), the lowest row on a tie. Each pivot's reciprocal is computed once by Smith's algorithm (1962), which never forms |p|², and reused by the back substitution.
+- **`ComplexSparseLu`** (`lu/complex-sparse-lu.ts`): the real sparse LU's algorithm with complex values. The pattern work is shared: the CSC pattern, `sparseReach` (the depth-first search, factored out of `sparse-lu.ts`), AMD, `buildSymbolic` (now in `mna/shared.ts`) and the generic `FactorisationCache<ComplexSparseFactors>`. Replay works as in DC: the last pivot sequence is reused only when the full pivot rule picks it again.
+- **The stamp program** records value codes (gmin, ±1, the source's R, ±y), never values. Each solve recomputes every admittance from its own ω and values before assembly, so a cached factorisation can't carry a frequency or a value into another solve (planted faults prove both). The cache signature is each branch's pattern class (passive or source), so changing a resistor into an inductor is a hit.
+
+### The crossover
+
+The same shape as DC (vitest, Node 24, plant-like single islands):
+
+| Unknowns | Dense   | Sparse, warm | Sparse, cold |
+| -------- | ------- | ------------ | ------------ |
+| 19       | 14 µs   | 16 µs        | 72 µs        |
+| 31       | 13 µs   | 8.3 µs       | 99 µs        |
+| 48       | 29 µs   | 12 µs        | 86 µs        |
+| 111      | 193 µs  | 27 µs        | 222 µs       |
+| 237      | 1.30 ms | 84 µs        | 632 µs       |
+
+Warm sparse wins from about 30 unknowns, cold from about 120, so `SPARSE_MIN_UNKNOWNS` (64) is shared by both solvers.
+
+### Tests (part 2)
+
+The floor policy (plan F2.2) with complex magnitudes, in `src/testing/ac.ts`: KCL at every node within `1e-9 · max|I| + 1e-12 A` plus the island's Σ 2 · 16 ε |y_b| (|V_a| + |V_b|) (a source behind R > 0 counting as y = 1 / R, with |E| added to its voltages, as in DC since #51) and the source-row term; each source row Vb − Va + R I = E; each passive element's law I = y (Va − Vb).
+
+- **Goldens** (`testing/ac-goldens.ts`, both paths), each with its derivation in the fixture:
+  - series RL at 60 Hz: 120 V into 10 Ω + 50 mH, I = 5.6238 A lagging 62.05°, P = 316.27 W, Q = 596.16 var;
+  - unbalanced 120/240 V split-phase with a 0.05 Ω service neutral: the neutral carries the **phasor** sum of the line currents, 7.153 A, where the magnitudes differ by 1.29 A;
+  - balanced 208Y/120 V wye of 8 + j6 Ω: 12 A per phase, the neutral about 0 (under 1e-9 A), |V_A − V_B| = 120√3.
+- **Properties** (`mna/ac-properties.spec.ts`): KCL, source rows and element laws; real power balance (sources against R and gmin); reactive power bookkeeping (sources against Σ ωL|I|² − Σ |I|²/(ωC)), both within 1e-9 of their terms (apparent power for a source) plus the Tellegen floor; linearity bit for bit for k = 0, ±2^m and ±j·2^m (a quarter turn only swaps and negates parts), in residual space for other k (including the exact 120° rotation) and for superposition; singular ⇔ an ideal-source loop; bit identity across solvers, frequencies solved in between and a dirty `out`; a frequency change is an input, not state; a pinned SHA-256 over 300 seeded dense solves, and a generator-health ceiling on floor / max|I|.
+- **Dense against sparse** (`mna/ac-sparse.spec.ts`): residuals on every circuit (40–260 nodes, and 2–24 forced sparse); values on the well-conditioned subset (a resistive 1 Ω–10 kΩ spanning tree, impedances of 1 Ω–10 kΩ, sources behind ≥ 0.1 Ω: Re(Y) stays definite, which bounds ‖M⁻¹‖ however the reactances cancel); warm equals cold across frequency and value changes; the cache round trip; the `topologyHash` tripwire; and a pinned SHA-256 over 40 seeded large sparse solves.
+- **LU** (`lu/complex-lu.spec.ts`): backward stability on random complex systems, dense against sparse, exact scaling by j, bit-identical reuse and replay, fallbacks, the singular contract and a 20 000-long chain.
+- **The AC oracle** (`oracle/ac-oracle.spec.ts`), on both paths: below.
+- **Generator health** floors, and 12 planted faults, all killed (listed in the PR).
+
 ## The oracle corpus (F2.7)
 
 The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
@@ -316,7 +390,7 @@ flowchart LR
 
 - **Circuits:** 2–30 nodes, one island, node 0 the reference sim-core picks (the negative end of the first voltage source). DC: R, V with internal R, I. AC at 60 Hz: R, L, C, phasor V at 0°, 180°, ±120° from exact constants. A spanning tree plus random chords, then biconnected (current sources ignored), so every element shares a loop with a source: about 99 % of branches carry more than 1e-6 of their circuit's largest current (at least 95 % is checked).
 - **Decks:** `.options sparse`, explicit `gmin` resistors on the circuit nodes, a 0 V sense source per element (its current is the branch current), `noopac`, `set numdgt=17`.
-- **In `pnpm verify`:** the decks regenerate byte for byte; the results were solved from those decks; ngspice's solution satisfies every element equation and KCL in `oracleNetlist` (about 3e-9 of the circuit's scale, allowed 1e-7). **The DC comparison is on** (`dc-oracle.spec.ts`): each DC circuit is adapted to the solver's input (`oracleDcInput`: a `Netlist` plus `DcBranchValues`, a current source as a `resistor` element stamped `DC_STAMP_ISOURCE`), solved by `DcSolver`, and its values compared at `1e-6·|x_ref| + max(1e-12, 1e-7·max|x_ref|)`, set by ngspice's own noise of about 3e-9; sim-core's own KCL and source-row checks run on the same solution. The worst value uses 1.06e-3 of its allowance (ADR 0012). The AC comparison is `it.todo` until F2.2 part 2.
+- **In `pnpm verify`:** the decks regenerate byte for byte; the results were solved from those decks; ngspice's solution satisfies every element equation and KCL in `oracleNetlist` (about 3e-9 of the circuit's scale, allowed 1e-7). **The DC comparison is on** (`dc-oracle.spec.ts`): each DC circuit is adapted to the solver's input (`oracleDcInput`: a `Netlist` plus `DcBranchValues`, a current source as a `resistor` element stamped `DC_STAMP_ISOURCE`), solved by `DcSolver`, and its values compared at `1e-6·|x_ref| + max(1e-12, 1e-7·max|x_ref|)`, set by ngspice's own noise of about 3e-9; sim-core's own KCL and source-row checks run on the same solution. The worst value uses 1.06e-3 of its allowance (ADR 0012). **The AC comparison is on too** (`ac-oracle.spec.ts`, F2.2 part 2): `oracleAcInput` maps R, L and C to `resistor` elements with their AC stamp and each phasor source to a `vsource` element with its EMF from the exact angle constants; `AcSolver` solves at 60 Hz and every value is compared with complex magnitudes at the same tolerance, with sim-core's own complex KCL and source rows alongside. The worst uses 1.8e-5 of its allowance for volts and 5.0e-4 for amps (ADR 0012), on both the dense and the forced-sparse path.
 - `sim-cli`'s `oracle regen` does the file and process work; `sim-core` stays framework-free.
 
 ## The bench (F2.7)
@@ -342,7 +416,7 @@ Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm ve
 
 ## Not yet
 
-- **Solvers** (F2.2 part 2): complex phasor MNA for AC islands (on the dense and sparse paths).
+- **AC sources and loads** (F2.4, F2.5): the utility and three-phase sources and AC loads reach the phasor solver through `AcValueHook`; an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **The re-solve gate** (spec §4.5's 2 ms): reported now; the recompile optimisation and the calibrated gate follow (plan F2.2 part 3b).
 - **Engine loop** (F2.3a): the tick layers, and calling `NetlistCompiler.compile` on each command and topology event with the engine's sim state.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

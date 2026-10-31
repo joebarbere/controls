@@ -4,6 +4,7 @@
  * reasons (a solver, a device model or a constant changes what the engine computes). A save from
  * another engine version loads `world.json` as saved with a restarted log (`engine-changed`, F2.3a),
  * never refused. 0 means "written before the engine existed" (a migrated v1 save); 1 is the first
- * engine (P2), and it may move freely until v0.3.0 ships.
+ * engine (P2), and it may move freely until v0.3.0 ships. 2: sparse LU uses plain partial pivoting
+ * (`PIVOT_THRESHOLD` 1, #51), which moved the sparse solver pins.
  */
-export const SIM_ENGINE_VERSION = 1;
+export const SIM_ENGINE_VERSION = 2;

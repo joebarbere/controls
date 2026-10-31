@@ -66,7 +66,9 @@ export function largeCircuit(spec: LargeCircuitSpec): LargeCircuit {
   const decades = spec.wellConditioned ? WELL_DECADES : DECADES;
   const ohms = () => (1 + rng.below(9000) / 1000) * decades[rng.below(decades.length)];
   const emf = () => (rng.below(9601) - 4800) / 100;
-  const sourceOhms = () => (spec.wellConditioned ? 0.1 + rng.below(1000) / 100 : rng.below(3) === 0 ? 0 : ohms() / 100);
+  // Non-ideal sources keep at least 1e-4 Ω, the plan's smallest generated resistance (F2.2).
+  const sourceOhms = () =>
+    spec.wellConditioned ? 0.1 + rng.below(1000) / 100 : rng.below(3) === 0 ? 0 : Math.max(1e-4, ohms() / 100);
   const edges: SyntheticBranch[] = [];
   const stamps: Stamp[] = [];
   const push = (a: number, b: number, stamp: Stamp) => {

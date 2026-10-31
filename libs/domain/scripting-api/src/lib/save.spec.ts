@@ -242,6 +242,6 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
-    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 1 });
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 2 });
   });
 });

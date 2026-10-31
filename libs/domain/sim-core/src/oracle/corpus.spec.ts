@@ -20,7 +20,7 @@ import { type OracleCircuitResult, parseOracleResults } from './results';
  *   netlist (`oracleNetlist`), and KCL with `gmin`. That proves the deck and the netlist describe the
  *   same circuit with the same sign conventions, and that the results parse into the right slots,
  *   before any solver is compared against them.
- * - **The DC comparison** is `dc-oracle.spec.ts` (F2.2 part 1); the AC comparison waits for part 2.
+ * - **The comparisons** are `dc-oracle.spec.ts` (F2.2 part 1) and `ac-oracle.spec.ts` (part 2).
  */
 
 const corpusDir = join(import.meta.dirname, '../../oracle');
@@ -120,10 +120,6 @@ describe.each(ORACLE_DOMAINS)('the %s oracle corpus', (domain) => {
     }
     expect(live / total).toBeGreaterThanOrEqual(0.95);
   });
-});
-
-describe('sim-core against the AC oracle corpus', () => {
-  it.todo('AC: complex phasor MNA matches every AC circuit within ORACLE_TOLERANCE (F2.2 part 2)');
 });
 
 /**

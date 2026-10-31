@@ -15,7 +15,7 @@ import {
   TEST_MODELS,
 } from '../../testing/bench';
 import { sha256 } from '@controls/world-model';
-import { linearResidual, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { floorShares, linearResidual, quantile, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
 import { checkPhysics, checkRows, type Circuit, expectSameBits, isSingular } from '../../testing/solver-checks';
 import { GMIN_S } from '../constants';
 import { compileNetlist } from '../netlist/compile';
@@ -135,7 +135,8 @@ function build(draw: CircuitDraw): Circuit {
     const k = conducting ? e.kind % 9 : e.kind;
     const source = e.sourceValue / 100;
     if (k <= 5) v.resistor(branch.index, ohmsOf(e));
-    else if (k <= 8) v.vsource(branch.index, source, e.ideal === 0 ? 0 : ohmsOf(e) / 100);
+    // A non-ideal source keeps at least 1e-4 Ω, the plan's smallest generated resistance (F2.2).
+    else if (k <= 8) v.vsource(branch.index, source, e.ideal === 0 ? 0 : Math.max(1e-4, ohmsOf(e) / 100));
     else v.isource(branch.index, source / 10);
     return true;
   });
@@ -479,7 +480,9 @@ describe('DC MNA properties (synthetic circuits)', () => {
       offset += c.length;
     }
     const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
-    expect(hex).toBe('8144f9c42ec00e5537b2fc98b190a4d6caadba3a692b2c6412c5f7cd623ab66d');
+    // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
+    // changed, not the solver (no solver source changed): that re-pin alone did not bump SIM_ENGINE_VERSION. Was 8144f9c4….
+    expect(hex).toBe('467fcc5190fb05ac31680077daa9afd6aa74dd730443bd3f25e18755f2af129b');
   });
 
   it('a current source into a floating cluster is held by gmin: never singular, KCL and power hold', () => {
@@ -537,9 +540,11 @@ describe('generator health (the properties above are not vacuous)', () => {
     let withSelfLoop = 0;
     let withSingular = 0;
     let withCurrent = 0;
+    const shares: number[] = [];
     for (const draw of draws) {
       const { netlist, values } = build(draw);
       const solution = solveDc(netlist, values);
+      shares.push(...floorShares(netlist, values, solution));
       nodes += netlist.nodes.length;
       if (netlist.branches.length > netlist.nodes.length - netlist.islands.length) withLoop++;
       if (netlist.islands.length > 1) multiIsland++;
@@ -569,6 +574,13 @@ describe('generator health (the properties above are not vacuous)', () => {
     expect(share(withSingular)).toBeGreaterThanOrEqual(0.02);
     expect(share(withSingular)).toBeLessThanOrEqual(0.25);
     expect(share(withCurrent)).toBeGreaterThanOrEqual(0.7);
+    // The floor policy's ceiling (PR #51 review): on islands carrying real current, the KCL floor stays
+    // a small share of the largest current, so the floors check something. Measured on this seed:
+    // p99 6.1e-6 of max|I| (max 3.6e-4, 233 islands).
+    expect(quantile(shares, 0.99)).toBeLessThanOrEqual(3e-5);
+    // And the median (measured about 1e-9): catches a loosened relative term or resistor term, which
+    // moves every island, not just the tail.
+    expect(quantile(shares, 0.5)).toBeLessThanOrEqual(1e-8);
   });
 
   it('bench worlds hold powered circuits with current flowing', () => {

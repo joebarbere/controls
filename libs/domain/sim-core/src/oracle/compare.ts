@@ -1,7 +1,7 @@
 import type { OracleCircuitResult } from './results';
 
 /*
- * How a sim-core solution is compared with the corpus (ADR 0012, Proposed). Each node voltage and
+ * How a sim-core solution is compared with the corpus (ADR 0012, Accepted for DC and AC). Each node voltage and
  * branch current is a phasor `x` (a real `x` in DC has `im = 0`), checked against ngspice's `x_ref`:
  *
  *   |x − x_ref| ≤ relative · |x_ref| + floor
@@ -13,8 +13,9 @@ import type { OracleCircuitResult } from './results';
  * 30 times it. A float64 MNA solver emulated on the corpus stays at 0.03 of the allowance or less. This
  * floor bounds disagreement with a noisy reference; it is not the floor policy that bounds sim-core's
  * own KCL residuals in its property tests (F2.2 part 1, #46), which plays a different role.
- * `relative` and `scale` are to be confirmed by measurement when F2.2 part 1 lands; whatever is
- * chosen stays far inside the 0.5 % golden bound.
+ * `relative` and `scale` were confirmed by measurement with the real solvers: the worst value uses
+ * 1.06e-3 of its allowance in DC (F2.2 part 1) and 5.0e-4 in AC (part 2), far inside the 0.5 % golden
+ * bound.
  */
 
 export interface OracleTolerance {
@@ -29,8 +30,8 @@ export interface OracleTolerance {
 }
 
 /**
- * ADR 0012's proposed tolerance: `|x − x_ref| ≤ 1e-6·|x_ref| + max(1e-12, 1e-7·max|x_ref|)`, the same
- * for volts and amps. Numerical test choices; to be confirmed by measurement (F2.2 part 1).
+ * ADR 0012's tolerance: `|x − x_ref| ≤ 1e-6·|x_ref| + max(1e-12, 1e-7·max|x_ref|)`, the same
+ * for volts and amps. Numerical test choices, confirmed by measurement (F2.2 parts 1 and 2).
  */
 export const ORACLE_TOLERANCE: OracleTolerance = {
   relative: 1e-6,

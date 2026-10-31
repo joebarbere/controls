@@ -377,6 +377,31 @@ describe('DcSolver.solveNonlinear', () => {
     }
   });
 
+  it('does not stop where the hook gives the same numbers in another stamp mode (#51 review, N2)', () => {
+    // The setters write only their own fields, so a supply that has been in current limit before
+    // keeps `amps` = Ilim while in CV. Its cold CV solve into 6 Ω draws 2 A > Ilim; the hook then
+    // asks for CC with every number (ohms, emfV, amps) unchanged and only the mode different. The
+    // value-space stop must see the mode change and carry on to CC, not report CV at 2 A.
+    const vset = 12;
+    const rint = 0.01;
+    const ilim = 1;
+    for (const sparseMinUnknowns of [Number.MAX_SAFE_INTEGER, 1]) {
+      const circuit = loop(vset, rint);
+      circuit.values.resistor(1, 6);
+      circuit.values.isource(0, ilim);
+      circuit.values.vsource(0, vset, rint);
+      expect(circuit.values.amps[0]).toBe(ilim);
+      const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(circuit.netlist, circuit.values, {
+        hook: cvcc(0, vset, rint, ilim),
+      });
+      expect(solution.islands[0].flags).toBe(0);
+      expect(circuit.values.stamps[0]).toBe(DC_STAMP_ISOURCE);
+      expect(solution.branches[0]).toBe(ilim);
+      expect(solution.islands[0].iterations).toBeGreaterThan(1);
+      checkRows(circuit, solution);
+    }
+  });
+
   it('stops at a singular solve without flagging nonConverged, and leaves AC islands unsolved', () => {
     const shorted = syntheticNetlist(2, [
       { a: 0, b: 1, kind: 'vsource' },
@@ -498,10 +523,39 @@ function selfConsistent(
 }
 
 /**
- * The properties' iteration bound, set from a measurement: over 1,500 fresh large circuits (about
- * 2,200 islands) no island failed to converge, the median took 16 iterations, the 99th percentile
- * about 21 and the most 26; a fresh seed in the flake runs took 32 (kept as an example). 40 leaves
- * room under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
+ * The properties' iteration bound. Where it comes from:
+ *
+ * - **Contraction.** A self-heating law R = R0 + k|I| gives the undamped iteration a Jacobian whose
+ *   eigenvalues λ lie in (−1, 0] (each element's slope is −k I / (R_th + R0 + k I)). The damping
+ *   schedule settles into alternating α = 1 and α = 1/2 (the traces show it), whose iteration matrices
+ *   have eigenvalues λ and (1 + λ) / 2: per pair, |λ (1 + λ) / 2| ≤ 1/8 on [−1, 0]. So the error
+ *   falls at least 8× every two iterations. From a cold start a heated current is off by up to the
+ *   hot ratio (15×), and the loop stops at 1e-6 relative, a 1.5e7 reduction: 2 ⌈log₈ 1.5e7⌉ = 16
+ *   iterations, plus the cold solve and the schedule's first undamped pair: about 19.
+ * - **What the proof doesn't cover.** The schedule decides from one max-norm and one dot product over
+ *   all voltages and currents together, so it can lose the alternation for a few steps (two α = 1 in a
+ *   row, or a halving to 1/4 near the end): each such excursion costs at most about 4 iterations
+ *   (1/16 ← 1 is four halvings).
+ * - **Why the derivation failed twice (#51), and what fixed it.** The contraction argument bounds how
+ *   fast the iterate approaches the fixed point, but the loop used to stop only when every branch
+ *   current repeated between solves to 1e-6 relative + 1 pA. A current is only as repeatable as the
+ *   linear solve resolves it, cond · ε · V · g: on ill-conditioned islands (current sources driving
+ *   39–108 kV through 10 kΩ) small currents repeat only to 5e-5 relative, so the loop stalled at the
+ *   noise floor and drifted to 41, 42 and 50 (the cap) on both LU paths: no contraction bound can
+ *   cover that. The loop now also stops in value space, when the hook's values for the last solve
+ *   are the ones it was solved with to 1e-6 (the fixed point itself; see `solveNonlinear`), which the
+ *   contraction argument does bound.
+ * - **Measured** (value-space stop, partial pivoting): over 6,542 islands from 3 seeded samples,
+ *   forced dense, the median is 16, the 99th percentile 19 and the most 20; forced sparse the most is
+ *   26. The earlier 32 is kept as an example.
+ *
+ * - **Scope: laws with slope λ ≤ 0 only** (self-heating resistors, a lamp's PTC filament, a CV/CC
+ *   supply). A positive-feedback law (an NTC thermistor, λ → +1) contracts as slowly as 1 / (1 − λ)
+ *   per step, and the value-space stop's 1e-6 residual becomes an error of 1e-6 / (1 − λ) in the
+ *   solution: F2.5 (and any later NTC model) must budget for that in its tolerance or its cap, and
+ *   re-derive this bound for its law.
+ *
+ * 40 is the derived 19 plus five excursions, under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
  */
 const ITERATION_BOUND = 40;
 
@@ -574,26 +628,41 @@ describe('outer-loop properties', () => {
     );
   });
 
-  it('converges within a bounded number of iterations on large circuits (sparse path)', () => {
+  it('converges within a bounded number of iterations on large circuits, forced dense and forced sparse', () => {
     fc.assert(
       fc.property(largeArb, nonlinearShare, hotRatio, (spec, every, ratio) => {
         const { circuit, hook, copy } = heatedCircuit(spec, every, ratio);
-        const values = copy();
-        const solution = new DcSolver().solveNonlinear(circuit.netlist, values, { hook });
-        for (const island of solution.islands) {
-          if (!island.solved || (island.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
-          expect(island.flags & ISLAND_FLAG_NON_CONVERGED).toBe(0);
-          expect(island.iterations).toBeLessThanOrEqual(ITERATION_BOUND);
+        // Islands of these circuits fall either side of SPARSE_MIN_UNKNOWNS, so each path is forced.
+        for (const sparseMinUnknowns of [Number.MAX_SAFE_INTEGER, 1]) {
+          const values = copy();
+          const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(circuit.netlist, values, { hook });
+          for (const island of solution.islands) {
+            if (!island.solved || (island.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
+            expect(island.flags & ISLAND_FLAG_NON_CONVERGED).toBe(0);
+            expect(island.iterations).toBeLessThanOrEqual(ITERATION_BOUND);
+          }
+          checkRows({ netlist: circuit.netlist, values }, solution);
         }
-        checkRows({ netlist: circuit.netlist, values }, solution);
       }),
       {
-        numRuns: 12,
+        // Each run solves both paths, so half the draws of a one-path property keep the same work.
+        numRuns: 6,
         examples: [
           // Ran to nonConverged on rounding noise before the current tolerance took the solve's resolution.
           [{ nodes: 177, islands: 1, seed: 11, meshPercent: 3, wellConditioned: true }, 2, 13],
           // Took 32 iterations: the tail of the distribution (see ITERATION_BOUND).
           [{ nodes: 62, islands: 2, seed: 867437101, meshPercent: 7, wellConditioned: true }, 2, 4],
+          // Took 41 (F2.3a's fresh-seed runs, #51): with PIVOT_THRESHOLD 0.1 the sparse LU's multipliers up
+          // to 10 put ~3,000 ulps of noise on a node, so a 3.5e-7 A source current behind 1.85 Ω moved by
+          // 5e-12 A between solves, above its tolerance, from iteration 25 on. Partial pivoting: 18.
+          [{ nodes: 149, islands: 2, seed: 1770462711, meshPercent: 24, wellConditioned: true }, 3, 8],
+          // Took 42 on the dense path (#51 re-verification): a 1.06e-6 A current through 67 Ω beside the
+          // reference, in an island reaching 39 kV, repeated only to 4.5e-12 A (the solve's normwise
+          // error), above its 2.1e-12 A current tolerance. Converged in value space now: 17.
+          [{ nodes: 85, islands: 2, seed: 1309828083, meshPercent: 19, wellConditioned: true }, 3, 9],
+          // Ran to nonConverged (50) forced dense: 2e-7 A currents between 108 kV nodes repeat only to
+          // about 5e-5 relative. Value space: 20.
+          [{ nodes: 154, islands: 2, seed: 850638045, meshPercent: 5, wellConditioned: true }, 3, 12],
         ],
       },
     );

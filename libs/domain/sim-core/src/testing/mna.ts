@@ -3,7 +3,15 @@ import { type DcSolution, ISLAND_FLAG_SINGULAR } from '../lib/mna/dc';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_VSOURCE, type DcBranchValues } from '../lib/mna/values';
 import { computeTopologyHash } from '../lib/netlist/hash';
 import { UnionFind } from '../lib/netlist/union-find';
-import type { ElementKind, IslandKind, Netlist, NetlistBranch, NetlistIsland, NetlistNode } from '../lib/netlist/types';
+import type {
+  ElementKind,
+  IslandKind,
+  Netlist,
+  NetlistBranch,
+  NetlistIsland,
+  NetlistNode,
+  SourceDomain,
+} from '../lib/netlist/types';
 
 /*
  * Helpers for the MNA specs (F2.2): synthetic netlists built straight from an edge list, and the
@@ -18,11 +26,16 @@ export interface SyntheticBranch {
 
 /**
  * A netlist of `nodeCount` nodes and the given branches, with islands computed as the compiler
- * would (connected components numbered by their smallest node) and classified `dc` when they hold a
- * `vsource` element, else `empty`. Node `i` has the single member `(i + 1, 't')`; branch `i` is
- * connection `i + 1` of model `test.element`.
+ * would (connected components numbered by their smallest node) and classified `dc` (or `ac`, with
+ * `domain` 'ac': every source is then an AC source) when they hold a `vsource` element, else `empty`.
+ * Node `i` has the single member `(i + 1, 't')`; branch `i` is connection `i + 1` of model
+ * `test.element`.
  */
-export function syntheticNetlist(nodeCount: number, branches: readonly SyntheticBranch[]): Netlist {
+export function syntheticNetlist(
+  nodeCount: number,
+  branches: readonly SyntheticBranch[],
+  domain: SourceDomain = 'dc',
+): Netlist {
   const sets = new UnionFind(nodeCount);
   for (const branch of branches) sets.union(branch.a, branch.b);
   const islandOfRoot = new Map<number, number>();
@@ -46,7 +59,7 @@ export function syntheticNetlist(nodeCount: number, branches: readonly Synthetic
     element: { kind: 'connection', connection: index + 1 },
     kind: branch.kind,
     model: 'test.element',
-    source: branch.kind === 'vsource' ? 'dc' : null,
+    source: branch.kind === 'vsource' ? domain : null,
     a: branch.a,
     b: branch.b,
     island: islandOfNode[branch.a],
@@ -54,7 +67,7 @@ export function syntheticNetlist(nodeCount: number, branches: readonly Synthetic
   }));
   const islands: NetlistIsland[] = [...islandOfRoot.values()].map((index) => {
     const islandBranches = netBranches.filter((b) => b.island === index);
-    const kind: IslandKind = islandBranches.some((b) => b.kind === 'vsource') ? 'dc' : 'empty';
+    const kind: IslandKind = islandBranches.some((b) => b.kind === 'vsource') ? domain : 'empty';
     return {
       index,
       kind,
@@ -97,14 +110,21 @@ const EPS = Number.EPSILON;
 /**
  * A branch's rounding term in the floor policy (plan F2.2, decided in the #46 review):
  * 16 · ε · |y_b| · (|V_a| + |V_b|). A resistor's current is g · (Va − Vb) from node voltages known only
- * to an ulp, so it carries about g · ulp(V) of rounding however exact the solve. Sources stamp no
- * admittance between their ends (their current is an unknown or exact), so their term is 0.
+ * to an ulp, so it carries about g · ulp(V) of rounding however exact the solve. A voltage-mode source
+ * behind a series R > 0 is a branch of admittance 1 / R too (PR #51 review): its current is
+ * (E − Vb + Va) / R, which its row resolves only to 16 ε (|V_a| + |V_b| + |E|) / R, the slack the
+ * source-row bound already allows. Ideal sources (R = 0) and current sources have an exact or unknown
+ * current: 0.
  */
 export function branchRounding(netlist: Netlist, values: DcBranchValues, solution: DcSolution, branch: number): number {
-  if (values.stamps[branch] !== DC_STAMP_RESISTOR) return 0;
   const { a, b } = netlist.branches[branch];
-  const y = 1 / values.ohms[branch];
-  return 16 * EPS * y * (Math.abs(voltage(solution, a)) + Math.abs(voltage(solution, b)));
+  const volts = Math.abs(voltage(solution, a)) + Math.abs(voltage(solution, b));
+  const stamp = values.stamps[branch];
+  if (stamp === DC_STAMP_RESISTOR) return 16 * EPS * (1 / values.ohms[branch]) * volts;
+  if (stamp === DC_STAMP_VSOURCE && values.ohms[branch] > 0) {
+    return (16 * EPS * (volts + Math.abs(values.emfV[branch]))) / values.ohms[branch];
+  }
+  return 0;
 }
 
 /**
@@ -187,6 +207,31 @@ export function kcl(netlist: Netlist, values: DcBranchValues, solution: DcSoluti
 }
 
 /**
+ * Each live island's KCL floor as a share of its largest current (non-singular islands carrying more
+ * than 1e-6 A): the generator-health ceiling on the floor policy (PR #51 review), so a generator can't
+ * drift into values (a 1 µΩ source) whose rounding terms swamp the currents being checked.
+ */
+export function floorShares(netlist: Netlist, values: DcBranchValues, solution: DcSolution): number[] {
+  const shares: number[] = [];
+  for (const island of netlist.islands) {
+    const record = solution.islands[island.index];
+    if (!record.solved || (record.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
+    const largest = island.branches.reduce((m, b) => Math.max(m, Math.abs(current(solution, b))), 0);
+    if (!(largest > 1e-6)) continue;
+    const floor = kclFloors(netlist, values, solution, island).get(island.nodes[0]) ?? 0;
+    shares.push(floor / largest);
+  }
+  return shares;
+}
+
+/** The q-quantile (nearest rank) of `values`; 0 for none. */
+export function quantile(values: readonly number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((x, y) => x - y);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
+}
+
+/**
  * Power over a solved island: what the sources deliver, what the resistances (and each source's own
  * series resistance) and `gmin` dissipate, the sum of every term's magnitude (the scale for the 1e-9
  * relative bound, since sources can absorb as well as deliver), and the KCL floor carried through
@@ -263,7 +308,7 @@ function twoProduct(a: number, b: number): [number, number] {
 }
 
 /** A compensated accumulator (sum and running error). */
-class Accumulator {
+export class Accumulator {
   private hi = 0;
   private lo = 0;
   add(x: number): void {

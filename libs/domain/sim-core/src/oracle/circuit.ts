@@ -1,3 +1,5 @@
+import { PHASOR_ANGLES, type PhasorAngle, phasorUnit } from '../lib/mna/phasor';
+
 /*
  * The oracle's intermediate representation (plan F2.7, decision D5, ADR 0012): one linear circuit,
  * from which both a SPICE deck (`deck.ts`) and a sim-core netlist (`netlist.ts`) are emitted, so the
@@ -34,30 +36,11 @@ export function valueNumber(value: OracleValue): number {
 }
 
 /**
- * A phasor source's angle in degrees. Only the angles whose cosine and sine are exact constants
- * (decision D6: no `Math.cos`/`Math.sin` in sim-core), the angles of a split-phase or three-phase
- * supply.
+ * A phasor source's angle in degrees: only the angles whose cosine and sine are exact constants
+ * (decision D6), the angles of a split-phase or three-phase supply. The solver's own definitions
+ * (`lib/mna/phasor.ts`), re-exported so the corpus and the solver can't disagree.
  */
-export type PhasorAngle = 0 | 180 | 120 | -120;
-
-export const PHASOR_ANGLES: readonly PhasorAngle[] = [0, 180, 120, -120];
-
-/** sin 120° = √3 / 2, from `Math.sqrt` (IEEE-exact, D6). */
-const SIN_120 = Math.sqrt(3) / 2;
-
-/** `cos θ` and `sin θ` of an allowed angle, as exact constants. */
-export function phasorUnit(angle: PhasorAngle): { readonly re: number; readonly im: number } {
-  switch (angle) {
-    case 0:
-      return { re: 1, im: 0 };
-    case 180:
-      return { re: -1, im: 0 };
-    case 120:
-      return { re: -0.5, im: SIN_120 };
-    case -120:
-      return { re: -0.5, im: -SIN_120 };
-  }
-}
+export { PHASOR_ANGLES, type PhasorAngle, phasorUnit };
 
 /** A resistor, `a` → `b`. */
 export interface OracleResistor {
