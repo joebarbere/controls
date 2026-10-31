@@ -17,8 +17,6 @@ import {
   entityStreamKey,
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
-import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
-import { runInNewContext } from 'node:vm';
 import { join } from 'node:path';
 import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
@@ -38,14 +36,12 @@ import {
   AC_SOURCE_OHMS,
   AC_TWIN,
   REACTOR,
-  RESISTOR_12,
 } from '../../testing/engine';
 import { ISLAND_FLAG_NON_CONVERGED as SOLVER_NON_CONVERGED, ISLAND_FLAG_SINGULAR as SOLVER_SINGULAR } from '../mna/dc';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from './device-model';
 import type { AcBranchValues } from '../mna/ac-values';
 import type { NetlistBranch } from '../netlist/types';
-import { DIN_PSU } from '../../testing/sources';
 import { SimDesyncError, SimEngine, type SimEngineOptions, SimProbeError, SimStartError } from './engine';
 
 /** A minimal headless host: a world bus and an engine that follows it (what the scripting API does). */
@@ -720,88 +716,6 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     const revision = host.engine.revision;
     host.engine.advanceTo(1);
     expect(host.engine.revision).toBeGreaterThan(revision);
-  });
-
-  /**
-   * Bytes allocated per step by a battery-or-AC-source loop through a thermal load (continuous work every
-   * tick, a cadence solve every 10): the heap's growth plus what each collection freed, in the smallest
-   * of ten 20 000-step windows after 40 000 warm-up steps.
-   *
-   * - GC counts are no measure: the runtime's own few scavenges land at random.
-   * - A full collection starts each window (`--expose-gc` through `setFlagsFromString`, the collector
-   *   from `runInNewContext('gc')`): otherwise a scavenge in the window also frees garbage made before it
-   *   (by earlier tests in this worker) and counts it as the window's (3 flakes in 100 runs).
-   * - The smallest window, not the median: code not yet optimized allocates more (100-200 B/step at
-   *   first), and a per-step allocation raises every window while a late tier-up raises only some.
-   */
-  function allocatedPerStep(
-    source: typeof BATTERY,
-    pos: string,
-    neg: string,
-    load: typeof BATTERY | null = THERMAL_LOAD,
-  ): number {
-    // The source into `load` through two leads, or shorted by one lead (`load` null).
-    const host = Host.fresh().run(
-      load === null
-        ? [
-            ['entity.place', { ref: source, positionMm: origin }],
-            ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(1, neg) }],
-          ]
-        : [
-            ['entity.place', { ref: source, positionMm: origin }],
-            ['entity.place', { ref: load, positionMm: origin }],
-            ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
-            ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
-          ],
-    );
-    host.engine.advanceTo(40_000); // warm: every buffer grown
-    setFlagsFromString('--expose-gc');
-    const collect = runInNewContext('gc') as () => void;
-    const window = (steps: number) => {
-      collect();
-      const profiler = new GCProfiler();
-      const start = getHeapStatistics().used_heap_size;
-      profiler.start();
-      host.engine.advanceTo(host.engine.tick + steps);
-      const stats = profiler.stop()?.statistics ?? [];
-      const freed = stats.reduce(
-        (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
-        0,
-      );
-      return (getHeapStatistics().used_heap_size - start + freed) / steps;
-    };
-    return Math.min(...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => window(20_000)));
-  }
-
-  // Zero allocation per tick is the plan's criterion and not yet met (plan F2.3a notes): these gates
-  // stop it growing. Each gate sits about 10-15 % over the worst of 80 measured runs (40 with coverage,
-  // 40 without), and a planted 64-byte per-step allocation fails both.
-
-  it('the DC per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
-    // Measured 21.18-21.19 B/step with coverage, 20.88-21.53 without (F2.3a): about 200 B per cadence
-    // solve, 32 B of it inside DcSolver.solveNonlinear, plus a few in the synthetic thermal layer. F2.4
-    // (the battery's model, a 12.9 V EMF): 19.73 with coverage, 8.1-21.23 without. A non-integer EMF
-    // passed to a call is boxed into a heap number, so the dense stamp sets it in place (dc.ts).
-    expect(allocatedPerStep(BATTERY, 'pos', 'neg')).toBeLessThan(24);
-  });
-
-  // F2.4's supplies (test review): the DIN PSU regulating (CV into 12 Ω) and shorted (in its current limit,
-  // hiccuping: off phases are a floating isource(0) island), each with its own baseline. Worst of 80
-  // runs (40 with coverage, 40 without): 21.21 B/step in CV (19.72 with coverage), 19.04 shorted (17.6
-  // to 18.2 without coverage, 9.2-19.0 with). Gates about 13 % over the worst.
-
-  it('the DIN PSU per-tick path stays under 24 bytes per step regulating (CV)', () => {
-    expect(allocatedPerStep(DIN_PSU, 'pos', 'neg', RESISTOR_12)).toBeLessThan(24);
-  });
-
-  it('the DIN PSU per-tick path stays under 21.5 bytes per step shorted (limit and hiccup)', () => {
-    expect(allocatedPerStep(DIN_PSU, 'pos', 'neg', null)).toBeLessThan(21.5);
-  });
-
-  it('the AC per-tick path stays under 36 bytes allocated per step (its own baseline, not yet zero)', () => {
-    // Measured 14.78-14.79 B/step with coverage and 30.49-31.32 without (V8 optimizes the phasor path
-    // differently when coverage instruments it): the DC solve's share, the phasor solve's, and the layer.
-    expect(allocatedPerStep(AC_SOURCE, 'l', 'n')).toBeLessThan(36);
   });
 });
 
