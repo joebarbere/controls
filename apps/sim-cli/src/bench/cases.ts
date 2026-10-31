@@ -14,7 +14,8 @@ import {
 } from '@controls/sim-core';
 import { ENGINE_TEST_CATALOG, engineTestOptions, I2T_FUSE, THERMAL_LOAD } from '@controls/sim-core/testing';
 import { createWorldRegistry } from '@controls/world-model';
-import type { BenchCase, PendingBenchCase } from './bench';
+import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
+import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
 
 /*
@@ -24,9 +25,19 @@ import { buildPlant, type Plant } from './plant';
  *
  * The netlist cases have no budget of their own. Compiling is only a part of §4.5's re-solve after a
  * topology change (2 ms for a 2,000-node plant, compile and solve together), so its budget belongs to
- * the re-solve case (F2.2 part 3), which runs and reports its timing while its gate is pending (see
- * the case), which is listed as pending with its budget. The per-tick case (F2.3a) is gated.
+ * the re-solve case, which is gated against it as scaled by the calibration loop (F2.2 part 3b, see
+ * calibration.ts). The per-tick case (F2.3a) is gated.
  */
+
+/** Spec §4.5: a 2,000-node re-solve after a topology change, on the reference machine. */
+const RESOLVE_BUDGET_MS = 2;
+
+/** The re-solve gate's calibration (calibration.ts): its budget is scaled by this loop's speed here. */
+const CALIBRATION: BenchCalibration = {
+  name: 'calibration-loop',
+  referenceMs: CALIBRATION_REFERENCE_MS.value,
+  run: runCalibration,
+};
 
 let plant: { readonly plant: Plant; readonly closed: World; readonly open: World } | null = null;
 
@@ -156,14 +167,15 @@ export const BENCH_CASES: readonly BenchCase[] = [
     // leaves the compiler and the solver on the closed plant; the timed run opens the feeder's root
     // switch, recompiles (structurally, from cached fragments), fills the values and solves the 8
     // islands (about 250 unknowns each, so sparse LU). The factorisation cache holds both switch
-    // states after the first warm-up run, as it does for a player toggling a switch. Reported without
-    // a gate (the user's decision, 2026-10-31): CI measured 2.12, 3.74 and 4.77 ms on Ubuntu, macOS
-    // and Windows against 1.47 ms locally, so its 2 ms budget stays in PENDING_BENCH_CASES until F2.2
-    // part 3b optimises the recompile and gates it as a ratio to a same-process calibration loop.
+    // states after the first warm-up run, as it does for a player toggling a switch. Gated at the
+    // spec's 2 ms on the reference machine, scaled to this one by the calibration loop timed beside
+    // it (F2.2 part 3b, the user's decision of 2026-10-31): a raw 2 ms gate would fail the CI runners
+    // (2.12, 3.74 and 4.77 ms on Ubuntu, macOS and Windows before the recompile was optimised).
     name: 'plant-resolve-topology-change',
     warmup: 10,
     runs: 51,
-    budgetMs: null,
+    budgetMs: RESOLVE_BUDGET_MS,
+    calibration: CALIBRATION,
     prepare: () => {
       warmResolver ??= newResolver();
       resolve(warmResolver, plantWorlds().closed);
@@ -237,11 +249,4 @@ function bagDigest(engine: SimEngine): string {
 }
 
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
-export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
-  // Runs and reports above (`plant-resolve-topology-change`); its gate waits for the user's decision.
-  {
-    name: 'plant-resolve-topology-change',
-    budgetMs: 2,
-    enabledBy: 'F2.2 part 3b (recompile optimisation, calibrated gate)',
-  },
-];
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [];

@@ -445,13 +445,13 @@ flowchart LR
 
 `pnpm sim bench` (the Nx `bench` target, in `pnpm verify`, from the built bundle) builds a seeded synthetic plant of exactly 2,000 netlist nodes from P2's catalogue: 8 battery feeders, each a random recursive tree of units (an SPST switch and a lamp, with the return path mirroring the supply tree), about 1 unit in 50 adding a tie lead (a loop) and about 1 switch in 20 open. It times:
 
-| Case                            | What                                                                                                                         | Budget                                           |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `plant-compile`                 | A from-scratch `compileNetlist`, as on a load                                                                                | None in the spec (reported)                      |
-| `plant-recompile-switch`        | One topology change: open a feeder's root switch (an untimed `prepare` closes it first)                                      | None of its own: part of the re-solve (reported) |
-| `plant-resolve-topology-change` | The same change, then the values and the sparse solve of all 8 islands, with the factorisation cache warm (both states seen) | 2 ms (spec §4.5): reported, gate pending (below) |
-| `plant-resolve-new-topology`    | The same, with the cache cleared in `prepare`: every symbolic factorisation is rebuilt                                       | None in the spec (reported)                      |
-| `tick-device-mix`               | One step's discrete, continuous and protection layers on 250 battery–fuse–load loops (750 devices), no solve (F2.3a)         | 0.3 ms (spec §4.5), gated                        |
+| Case                            | What                                                                                                                         | Budget                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `plant-compile`                 | A from-scratch `compileNetlist`, as on a load                                                                                | None in the spec (reported)                                   |
+| `plant-recompile-switch`        | One topology change: open a feeder's root switch (an untimed `prepare` closes it first)                                      | None of its own: part of the re-solve (reported)              |
+| `plant-resolve-topology-change` | The same change, then the values and the sparse solve of all 8 islands, with the factorisation cache warm (both states seen) | 2 ms (spec §4.5) on the reference machine, calibrated (below) |
+| `plant-resolve-new-topology`    | The same, with the cache cleared in `prepare`: every symbolic factorisation is rebuilt                                       | None in the spec (reported)                                   |
+| `tick-device-mix`               | One step's discrete, continuous and protection layers on 250 battery–fuse–load loops (750 devices), no solve (F2.3a)         | 0.3 ms (spec §4.5), gated                                     |
 
 Each case reports its median and p90 in the JSON. Budgets gate on the median. Nx hides a passing task's output, so the `bench` target also writes the report to `dist/apps/sim-cli/bench-report.json` (`sim bench --report <file>`), and a CI step after `pnpm verify` prints it on every OS. That step only prints, so `verify` still equals CI.
 
@@ -460,12 +460,36 @@ Measured 2026-10-30 on an AMD Ryzen 5 5600X under Node 24: `plant-compile` took 
 - **1.45–1.49 ms** with a warm cache (p90 2.5 ms);
 - **4.5–4.6 ms** for a topology never seen (about 0.37 ms of AMD and pattern building per 250-unknown island).
 
-Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm verify`'s parallel test workers it measured 2.3–2.6 ms, and CI runners are slower than this machine. The CI runners measured it at 2.12 ms (Ubuntu), 3.74 ms (macOS) and 4.77 ms (Windows). **Decided 2026-10-31:** the case stays reported-only, the structural recompile (about 75 % of the cost) is optimised next, and then a gate switches on with the 2 ms budget scaled by a calibration loop timed in the same process (plan F2.2 part 3b), so `verify` stays identical to CI. §4.5's 2 ms remains the target on player hardware.
+Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm verify`'s parallel test workers it measured 2.3–2.6 ms, and CI runners are slower than this machine. The CI runners measured it at 2.12 ms (Ubuntu), 3.74 ms (macOS) and 4.77 ms (Windows). **Decided 2026-10-31:** optimise the structural recompile (about 75 % of the cost), then gate the case with the 2 ms budget scaled by a calibration loop timed in the same process, so `verify` stays identical to CI. §4.5's 2 ms remains the target on player hardware.
+
+### The recompile optimisation and the calibrated gate (F2.2 part 3b)
+
+The structural recompile after one switch toggle is **0.94 ms, from 1.20 ms** (in-process, interleaved with the old compiler, 5,000 toggles each), with the netlist, `topologyHash` and every golden unchanged. In the built bundle, alternating old and new over 16 runs each under ambient load, the warm re-solve's best median went from 1.50 to 1.21 ms (median of medians 1.78 → 1.36 ms). SHA-256 of the 62 KB encoding is now about a third of it. What changed:
+
+- **No structure list per compile.** The compiler overwrites its previous structure list in place and compares while it writes, instead of building a second list of about 13,700 entries and comparing them after.
+- **Connection ends resolved once.** Each connection's cache entry keeps the entity entries its ends resolved to; a recompile looks an end up again only when that entity's entry was rebuilt or the entity is gone (its `epoch` is stale). No per-compile `Map` of placed devices.
+- **Members and element refs built once per fragment**, shared by every netlist that reuses it (netlists are read-only).
+- **Reused storage:** the union-finds (`UnionFind.reset`), the per-terminal, per-branch and per-island index arrays, and the encoding buffer grow to the largest plant seen and are reused.
+- **The encoding is written directly** by `TopologyWriter` (`netlist/encode.ts`) into that buffer, one capacity check per member and per branch; `topologyBytes` stays the reference it is checked against.
+
+Rejected: a local renumber (nodes are numbered canonically by their smallest member, so a split shifts every later node and branch end, ADR 0011 §7); hashing only what changed (SHA-256 is sequential, and every later branch's end nodes change, so a tree hash would move every persisted `topologyHash`); caching each fragment's encoded bytes (0.1 ms saved per recompile, 0.75 ms lost per load).
+
+The gate (`apps/sim-cli/src/bench/bench.ts`, `calibration.ts`):
+
+```mermaid
+flowchart LR
+  P["prepare (untimed):<br/>closed plant"] --> T["time tᵢ:<br/>re-solve after the toggle"]
+  T --> C["time cᵢ:<br/>calibration loop"]
+  C -->|"51 timed runs<br/>after 10 warm-up"| G{"median of tᵢ × ref / cᵢ<br/>≤ 2 ms?"}
+  G -->|yes| OK[ok]
+  G -->|no| FAIL["exit 1"]
+```
+
+Each timed re-solve is put in the reference machine's milliseconds by the calibration run beside it, so a slower or loaded runner slows both halves of every pair. The calibration loop is a fixed workload sharing no code with sim-core (a scattered float multiply-add, SHA-like integer rounds, short-lived records and a pointer chase, roughly in the re-solve's proportions), and `CALIBRATION_REFERENCE_MS` (0.69 ms) is its median on the reference machine, an AMD Ryzen 5 5600X under Node 24.12.0. The report carries the raw median and `calibration.scale` beside the gated `ratio`. Measured on the reference machine: the gated ratio is 0.50–0.79 under ambient load (31 runs, median 0.67) and 0.43–0.91 beside a saturating parallel test load (32 runs, all passing), and an exact 1.5× slowdown planted in the re-solve fails 25 of 30 runs (a planted triple hash in the compile, about 1.6×, fails 20 of 20). On the CI runners, inside `pnpm verify` on the PR that switched it on, the raw medians were 3.35 ms (Ubuntu), 3.23 ms (macOS) and 3.32 ms (Windows), and the gated ratios 0.76, 0.58 and 0.85. How to re-baseline, and why the pairing: [simulation caveats](../caveats/simulation.md).
 
 ## Not yet
 
 - **AC sources and loads** (F2.4, F2.5): the utility and three-phase sources and AC loads reach the phasor solver through `AcValueHook`; an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
-- **The re-solve gate** (spec §4.5's 2 ms): reported now; the recompile optimisation and the calibrated gate follow (plan F2.2 part 3b).
 - **Device models** (F2.4, F2.5): the battery's state of charge, the supplies, the lamp's filament, the fuse and breaker. The engine's hooks exist (above); the built-in kinds have no bank yet.
 - **The sim worker** (F2.3b): the seqlock transport, the descriptor, pacing and `SimHost`; until then the game runs the engine in-process.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

@@ -196,7 +196,14 @@ async function bench(parsed: Parsed, io: CliIo): Promise<number> {
   if (reportFile !== undefined) await writeFile(resolve(io.cwd, reportFile), `${json}\n`);
   for (const result of report.cases) {
     if (!result.deterministic) io.stderr(`sim: bench case "${result.name}" returned different checksums across runs`);
-    else if (!result.ok) {
+    else if (!result.ok && result.calibration !== null) {
+      const { calibration } = result;
+      io.stderr(
+        `sim: bench case "${result.name}" over budget: ${result.gatedMs} ms on the reference machine > ${result.budgetMs} ms ` +
+          `(median ${result.medianMs} ms here, beside the ${calibration.name} at ${calibration.medianMs} ms ` +
+          `against its reference ${calibration.referenceMs} ms)`,
+      );
+    } else if (!result.ok) {
       io.stderr(`sim: bench case "${result.name}" over budget: median ${result.medianMs} ms > ${result.budgetMs} ms`);
     }
   }
