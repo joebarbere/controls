@@ -117,29 +117,32 @@ async function ngspiceVersion(options: RegenOptions): Promise<string> {
 }
 
 /**
- * Runs `tasks` with at most `jobs` in flight; results in task order. The first failure stops every
- * worker from starting another task; the pool waits for the runs already going, then rejects with
- * that first failure.
+ * Runs `tasks` with at most `jobs` in flight; results in task order. A failure stops every worker
+ * from starting another task; the pool waits for the runs already going, then rejects with the
+ * failure of the *lowest-numbered* task. Tasks start in order, so every task below a failed one has
+ * already run: the reported failure is the first in task order, whichever run happened to finish first.
  */
 async function pool<T>(jobs: number, tasks: readonly (() => Promise<T>)[]): Promise<T[]> {
   const results = new Array<T>(tasks.length);
   let next = 0;
-  let aborted = false;
-  let firstFailure: unknown = null;
+  let failedAt = -1;
+  let failure: unknown = null;
   const worker = async () => {
-    while (!aborted && next < tasks.length) {
+    while (failedAt < 0 && next < tasks.length) {
       const i = next++;
       try {
         results[i] = await tasks[i]();
       } catch (error) {
-        if (!aborted) firstFailure = error;
-        aborted = true;
+        if (failedAt < 0 || i < failedAt) {
+          failedAt = i;
+          failure = error;
+        }
       }
     }
   };
   // Wait for the runs already going before rejecting, so none still holds a staging file open.
   await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, tasks.length)) }, worker));
-  if (aborted) throw firstFailure;
+  if (failedAt >= 0) throw failure;
   return results;
 }
 

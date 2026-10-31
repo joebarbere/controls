@@ -20,7 +20,7 @@ pnpm nx test sim-core                       # the staleness and consistency chec
 git add libs/domain/sim-core/oracle         # commit decks and results together
 ```
 
-It writes every deck into a staging directory (`.regen/`) inside the corpus directory, runs each with `ngspice -n -b` in parallel (`--jobs <n>` to limit it; `-n` stops a `.spiceinit` from changing the results), and only once every circuit has solved renames `dc/`, `ac/`, `dc.results.txt` and `ac.results.txt` into place. A failed run leaves the corpus as it was. It fails, naming the circuit, if ngspice exits with an error, times out, prints too few values, or didn't use the Sparse solver; the first failure stops new runs. If ngspice isn't installed it says so and points here. A full run takes a few seconds.
+It writes every deck into a staging directory (`.regen/`) inside the corpus directory, runs each with `ngspice -n -b` in parallel (`--jobs <n>` to limit it; `-n` stops a `.spiceinit` from changing the results), and only once every circuit has solved renames `dc/`, `ac/`, `dc.results.txt` and `ac.results.txt` into place. A failed run leaves the corpus as it was. It fails, naming the circuit, if ngspice exits with an error, times out, prints too few values, or didn't use the Sparse solver; a failure stops new runs, and the circuit it names is the first failing one in corpus order (the same on every run, however the parallel runs finish). If ngspice isn't installed it says so and points here. A full run takes a few seconds.
 
 The last printed digits can differ between ngspice builds and operating systems. That is expected and not a failure: the tolerance is far above it. The current corpus was regenerated on Fedora 44 (x86_64) with its ngspice 47 package.
 
