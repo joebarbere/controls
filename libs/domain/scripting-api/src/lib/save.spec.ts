@@ -46,7 +46,26 @@ describe('the .ctrl fixtures', () => {
         // start, F2.4 save-format review). Engine 1 never ran, so its worlds hold no record anyway.
         const saved = readCtrlOrThrow(join(fixturesRoot, path)).world;
         expect(result.game.world()).toStrictEqual({ ...saved, sim: null });
-        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual({ ...saved, sim: null });
+        // A null-initial sim key the older engine never set (a lamp's filamentTempK before F2.5's
+        // filament model) is initialised by this one when the device enters the netlist; every other
+        // saved value is kept exactly.
+        const initialised = {
+          ...saved,
+          sim: null,
+          entities: saved.entities.map((e, i) => ({
+            ...e,
+            sim: Object.fromEntries(
+              Object.entries(e.sim).map(([key, value]) => [
+                key,
+                value === null ? result.game.materialisedWorld().entities[i].sim[key] : value,
+              ]),
+            ),
+          })),
+        };
+        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual(initialised);
+        for (const entity of result.game.materialisedWorld().entities) {
+          for (const value of Object.values(entity.sim)) expect(value).not.toBeNull();
+        }
       } else {
         expect(result.replay.status).toBe('continued');
       }
@@ -270,6 +289,6 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
-    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 4 });
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 5 });
   });
 });

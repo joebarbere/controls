@@ -1,3 +1,4 @@
+import { createWorld } from '@controls/save-format';
 import { ManualFrameClock } from './loop/manual-frame-clock';
 
 /**
@@ -152,6 +153,41 @@ describe('ViewportRenderer (fake GPU)', () => {
     doc.visibilityState = 'hidden';
     expect(drawsAfter(() => doc.dispatchEvent(new Event('visibilitychange')))).toBe(0);
     expect(viewport.stats()).toMatchObject({ drawCalls: 3, triangles: 12 });
+    viewport.dispose();
+  });
+
+  it('keeps lamp outputs given before init, and draws a lamp change only when a drawn level moves', async () => {
+    const clock = new ManualFrameClock();
+    const doc = new FakeDocument(new FakeWindow(clock));
+    const canvas = new FakeCanvas(doc);
+    const viewport = new ViewportRenderer();
+    const lamp = {
+      id: 1,
+      ref: { id: 'lamp.lumivane-12v-5w', version: 1 },
+      transform: { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+      state: {},
+      sim: {},
+      extensions: {},
+    };
+    viewport.syncWorld({ ...createWorld({ seed: 0 }), nextEntityId: 2, entities: [lamp] });
+    viewport.setLampOutputs(new Map([[1, { lightOutputRel: 1, status: 'solved' as const }]]));
+    await viewport.init(canvas as unknown as HTMLCanvasElement);
+    const gpu = fake.renderers.at(-1) as FakeRenderer;
+    clock.ticks(3);
+    const world = () => viewport.sceneGraph()?.children?.find((c) => c.name === 'world');
+    expect(world()?.children?.[0]?.lamp).toStrictEqual({ level: 204, status: 'solved' });
+    const drawsAfter = (act: () => void) => {
+      gpu.render.mockClear();
+      act();
+      clock.ticks(3);
+      return gpu.render.mock.calls.length;
+    };
+    expect(drawsAfter(() => viewport.setLampOutputs(new Map([[1, { lightOutputRel: 1, status: 'solved' }]])))).toBe(0);
+    expect(drawsAfter(() => viewport.setLampOutputs(new Map([[1, { lightOutputRel: 0.5, status: 'solved' }]])))).toBe(
+      1,
+    );
+    expect(drawsAfter(() => viewport.setLampOutputs(new Map()))).toBe(1); // unknown
+    expect(world()?.children?.[0]?.lamp).toStrictEqual({ level: 0, status: 'unknown' });
     viewport.dispose();
   });
 

@@ -2,7 +2,7 @@ import baseConfig from '../../../eslint.config.mjs';
 
 /** Message shared by the pure-module rules below. */
 const pureHint =
-  'Pure renderer maths (cameras/camera-math, input/input-actions, picking/selection, stats/frame-timer) must stay GPU-, DOM- and clock-free so it is unit-testable and deterministic. Snap and placement maths live in @controls/world-model (snap/).';
+  'Pure renderer maths (cameras/camera-math, input/input-actions, picking/selection, stats/frame-timer, sim/display-curve, sim/lamp-display) must stay GPU-, DOM- and clock-free so it is unit-testable and deterministic. Snap and placement maths live in @controls/world-model (snap/).';
 
 export default [
   ...baseConfig,
@@ -13,6 +13,8 @@ export default [
       'src/lib/input/input-actions*.ts',
       'src/lib/picking/selection*.ts',
       'src/lib/stats/frame-timer*.ts',
+      'src/lib/sim/display-curve*.ts',
+      'src/lib/sim/lamp-display*.ts',
     ],
     rules: {
       'no-restricted-imports': [

@@ -59,7 +59,8 @@ import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
 import { buildBaseScene, DEFAULT_ROOM_BOUNDS, describeSceneGraph, disposeScene, type SceneGraphNode } from './scene';
 import { FixtureSync } from './world/fixture-sync';
-import { WorldSync } from './world/world-sync';
+import type { DrawnLamp } from './sim/lamp-display';
+import { WorldSync, type LampOutputs } from './world/world-sync';
 
 export interface ViewportControllerOptions {
   readonly bindings?: InputBindings;
@@ -337,6 +338,24 @@ export class ViewportController {
       this.focusInitial();
     }
     this.markHoverDirty();
+  }
+
+  /**
+   * Lamp sim outputs by entity id (`{ lightOutputRel, status }`, decoded by the host from each lamp's
+   * device record). The renderer computes no electrical quantity: it maps `lightOutputRel` through the
+   * display curve (`sim/display-curve`) and draws by the validity rule (`sim/lamp-display`): a lamp
+   * that is not `solved` is never drawn as an off lamp (`unsolved`, `singular` or missing: unknown;
+   * `unsettled`: lit, marked unsettled). Calls {@link invalidate} only when some lamp's drawn level or
+   * status changed. The map is kept (not copied) and read again for lamps added later, so a host may
+   * reuse one map and mutate it, as long as it calls this after each change.
+   */
+  setLampOutputs(outputs: LampOutputs): void {
+    if (this.world.setLampOutputs(outputs)) this.invalidate();
+  }
+
+  /** What lamp entity `id` is drawn as, or `undefined` when no lamp `id` is drawn. */
+  lampOf(id: EntityId): DrawnLamp | undefined {
+    return this.world.lampOf(id);
   }
 
   /**

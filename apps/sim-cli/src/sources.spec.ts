@@ -13,10 +13,10 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v2/ctrl/sources-engine-4.ctrl` is its save, written by
+ * Node's V8 and Chromium's). `fixtures/v2/ctrl/sources-engine-5.ctrl` is its save (`-engine-4` is F2.4's, now `engine-changed`), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v2/ctrl/sources-engine-4.ctrl
+ *     --save libs/domain/save-format/fixtures/v2/ctrl/sources-engine-5.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
@@ -27,7 +27,7 @@ export const SOURCES_SNAPSHOT_HASH = '153b26d1a977fda513661e938672c4d53502ffc583
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sources.console');
 const ctrlDir = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl');
-const fixture = join(ctrlDir, 'sources-engine-4.ctrl');
+const fixture = join(ctrlDir, 'sources-engine-5.ctrl');
 
 function sim(...argv: string[]): { status: number | null; stdout: string[] } {
   const result = spawnSync(process.execPath, [bundle, ...argv], {
@@ -78,7 +78,7 @@ describe('the sources scenario (F2.4)', () => {
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(4);
+    expect(loaded.manifest.simEngineVersion).toBe(5);
     expect(loaded.game.hash()).toBe(SOURCES_HASH);
     expect(loaded.game.snapshotHash()).toBe(SOURCES_SNAPSHOT_HASH);
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SOURCES_HASH] });

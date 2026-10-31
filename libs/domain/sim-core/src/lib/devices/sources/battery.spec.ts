@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG, type BatteryParams } from '@controls/catalog';
 import { deviceOutputSchemaProblems } from '@controls/sim-protocol';
-import { AC_SOURCE, BATTERY, LAMP } from '../../../testing/bench';
-import { engineTestOptions, FLIP, RESISTOR_2_4, THERMAL_LOAD } from '../../../testing/engine';
+import { AC_SOURCE, BATTERY } from '../../../testing/bench';
+import { engineTestOptions, FLIP, OPAQUE, RESISTOR_2_4, THERMAL_LOAD } from '../../../testing/engine';
 import { SimEngine } from '../../engine/engine';
 import { BENCH_SUPPLY, SourceHost } from '../../../testing/sources';
 import { World } from '@controls/save-format';
@@ -101,8 +101,8 @@ describe('the battery model (golden)', () => {
     expect(batteryEmfV(params, soc)).toBeLessThan(12.9 - 0.01);
   });
 
-  it('counts only a solved island: an unmodelled one (the lamp until F2.5) or a mixed one never drains it', () => {
-    const lamp = loop(LAMP).advance(500);
+  it('counts only a solved island: an unmodelled one (a load nothing can value) or a mixed one never drains it', () => {
+    const lamp = loop(OPAQUE).advance(500);
     expect(lamp.sim(1)['stateOfCharge']).toBe(1);
     expect(lamp.record(1)).toStrictEqual({
       emfV: 12.9,

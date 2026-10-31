@@ -4,11 +4,11 @@
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. There is no circuit simulation yet. Next: Phase 2, the circuit engine and power sources. See [`plans/phase-1-game-shell.md`](plans/phase-1-game-shell.md).
+> **Status: Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29; Phase 2 (circuit engine) is in progress.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
 
 ## Features
 
-What exists today (Phases 0 and 1):
+What exists today (Phases 0 and 1, and Phase 2 so far):
 
 ### Platform
 
@@ -39,6 +39,7 @@ What exists today (Phases 0 and 1):
 - Placement with a snapping ghost preview: pick a prop (1–9), aim, click or press Enter to place it; drag an object (or select it, M, Enter) to move it; Delete removes it; Escape cancels. Each commit is exactly one command, so the mouse reaches the same `world.hash` as the equivalent console lines.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). The viewport draws only when something changes (idle behind the menu); a frame-time HUD shows in dev builds.
 - Procedural 3D models of the bench battery, the bench supply and the DIN-rail supply, sized from their catalogue entries and labelled with their fictional brands.
+- The lamp glows with its solved light output; a lamp whose circuit isn't solved is shown as unknown, never as an off lamp.
 - Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
 
 ### Simulation
@@ -46,6 +47,7 @@ What exists today (Phases 0 and 1):
 - Batteries that run down: the EMF follows the state of charge (a new 12 V lead-acid battery rests at 12.9 V), behind its internal resistance, and the charge delivered is counted every millisecond and kept in saves.
 - A bench DC supply (0–30 V, 0–5 A) with a voltage setpoint, a current limit and an output switch, and a clean constant-voltage/constant-current crossover; a 24 V DIN-rail supply whose overload protection hiccups (off for a second, then retry).
 - Mains supplies, from scripts for now: a 120/240 V split-phase utility service and 208Y/120 V and 480Y/277 V three-phase services, each behind its transformer's impedance (so a short draws its real fault current), and the ANSI C84.1 voltage ranges.
+- An incandescent lamp with a real tungsten filament: its resistance rises as it heats, so switching on a cold lamp draws a surge of about 14 times its running current, and its light follows the filament's temperature. A power resistor that says when it is over its rating, and a 12 V heater element.
 - Honest readings: a device's record says whether its circuit was solved, and an unsettled solve is never shown as a steady value.
 
 ### Commands and world
@@ -53,7 +55,7 @@ What exists today (Phases 0 and 1):
 - One command registry for every way of changing the world. Commands validate their arguments, and invalid ones change nothing. Undo and redo cover every world change, and deleting then undoing brings an object back with the same id.
 - A replay log of every successful command (undo, redo and view actions included). Replaying it from the starting world reproduces the session exactly, which is what makes bug reports and headless tests reproducible.
 - `world.hash`: a SHA-256 fingerprint of the world that is identical in Node and in the browser. Seeded randomness (sfc32) means the same seed and commands always give the same world.
-- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees. The mouse, keybindings, the command palette, the dev console and scripts all drive them.
+- World commands so far: place, move, rotate and delete objects, in integer millimetres and millidegrees; connect devices with test leads; operate a device (flip a switch, set a supply). The mouse, keybindings, the command palette, the dev console and scripts all drive them: select a switch and press E, or double-click it, to flip it.
 - A scripting API: TypeScript scripts and console-line files (`entity.move 1 --positionMm.x 150 …`) drive the game through the same registry as the UI, which itself runs on the same `Game` object, so every surface reaches the same `world.hash`.
 
 ### Saves
@@ -69,7 +71,7 @@ What exists today (Phases 0 and 1):
 - Nx 24 + pnpm 11 monorepo with enforced module boundaries.
 - `pnpm verify` runs exactly what CI runs, including the Prettier format check.
 - `sim-cli` runs the game headless in plain Node: `pnpm sim run <script>` (TypeScript or console lines; `--world content/levels/workshop.json` to run on the workshop), `pnpm sim replay <log>` and `pnpm sim hash <world>` print the world hash, and `--expect` turns any of them into a check. See the [scripting guide](docs/guides/scripting.md).
-- `sim-cli` runs the circuit engine headless too (P2, F2.3a): scripts and console files let sim time pass (`game.advance`, `sim.step`), probe the circuit they wired with an ideal voltmeter (`game.probe('1:pos', '1:neg')`), and pin byte-identical snapshots of the simulation, the same in Node and in the browser. Circuits the simulator can't solve yet (AC, and anything holding the lamp until its filament model lands) are reported as unsolved, never as a 0 V reading.
+- `sim-cli` runs the circuit engine headless too (P2, F2.3a): scripts and console files let sim time pass (`game.advance`, `sim.step`), probe the circuit they wired with an ideal voltmeter (`game.probe('1:pos', '1:neg')`), and pin byte-identical snapshots of the simulation, the same in Node and in the browser. `game.device(id)` reads a device's record (a lamp's light output, a resistor's power). Circuits the simulator can't solve (a mixed AC and DC circuit, or one it can't settle) are reported as unsolved or unsettled, never as a 0 V reading.
 - An ngspice oracle for the circuit solvers: 500 DC and 500 AC random circuits with ngspice's results, checked in and compared with sim-core's DC and phasor solvers on every `pnpm verify`, so it needs no ngspice; `pnpm sim oracle regen` refreshes them. `pnpm sim bench` times the netlist compiler and the re-solve after a switch toggle (compile plus sparse solve, warm and cold factorisation cache) on a 2,000-node synthetic plant inside `pnpm verify`, reporting each case's median and p90. See the [oracle guide](docs/guides/oracle.md).
 - Playwright end-to-end tests: the browser harness (`apps/game-e2e`) and an Electron smoke suite (`apps/desktop-e2e`). The smoke suite can also attach to a packaged build.
 - GitHub Actions: `pr.yml` and `main.yml` both call one reusable workflow, `ci.yml` (verify and both e2e suites on Windows, macOS and Linux), so a pull request runs exactly what `main` runs; and `release.yml` (tag → installers for all three OSes in a draft GitHub Release, each smoke-tested, with auto-update metadata).
