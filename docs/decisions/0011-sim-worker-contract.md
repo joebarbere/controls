@@ -495,6 +495,8 @@ sim: { lastSolveTick: Int, topologyHash: hex64,
 
 - `null` means "not solved since start": the engine solves at the start tick if `sim` is null, and adopts the record otherwise.
 - On start, the engine checks the record's `topologyHash` and array lengths against the compiled netlist. A mismatch is `start-failed` with a reason, never a silent re-solve.
+  - **Exception (F2.3a, D8):** for a save whose `simEngineVersion` or `catalogVersion` differs from the build's (`engineCompatible` isn't `verify`), a record that doesn't fit is another engine's: the load drops it and starts from `{ ...world, sim: null }`, so the engine solves at the save's tick and the log restarts as `engine-changed`. Such saves are never refused. `start-failed` stays for a same-engine save, where a misfit record means damage.
+  - **`iterations` 0 means the island was not solved** (an AC island before F2.2 part 2, a mixed island, or an unmodelled one): its values are zeros and no reading.
 - Every solve's starting guess (CV/CC mode, any warm start) comes from sim-owned state or this record, never from engine history that isn't exported. Caches that never change results, such as the factorisation cache, are exempt.
 - Size: about 40 bytes of JSON per node or branch, roughly 200–260 KB at 2 000 nodes.
 - A property test: export → JSON → start → export is identical under `Object.is`.

@@ -6,6 +6,7 @@ import { CommandBus, type ExecutedEvent } from './bus';
 import { type CommandDef, defineCommand, fail, succeed } from './command';
 import { CommandRegistry } from './registry';
 import { replayEntries, type ReplayTime } from './replay';
+import { simCommands } from './sim-args';
 
 /*
  * Time passing (ADR 0011 §3, plan F2.3a): `CommandBus.advanceTo` and replay advancing. A toy state
@@ -59,7 +60,10 @@ const chrome = defineCommand<NoArgs, Toy>({
   run: () => succeed(),
 });
 
-const defs = [push, pop, chrome, ...editCommands<Toy>(), ...viewCommands<Toy>()] as CommandDef<never, Toy>[];
+const defs = [push, pop, chrome, ...editCommands<Toy>(), ...viewCommands<Toy>(), ...simCommands<Toy>()] as CommandDef<
+  never,
+  Toy
+>[];
 
 /** A bus that can move time (`withTick`), as world buses are. */
 function timedBus(state: Toy = initial): CommandBus<Toy> {
@@ -292,6 +296,32 @@ describe('replayEntries with time', () => {
         expect(calls.filter((c) => c.startsWith('applied'))).toHaveLength(live.entries.length);
       }),
     );
+  });
+
+  it('refuses a log that contradicts a sim.step: an entry or the end before the step is over', () => {
+    const live = timedBus();
+    live.exec('sim.step', { ticks: 50 });
+    live.advanceTo(50); // what the time host does
+    live.exec('list.push', { value: 1 });
+    expect(replayEntries(timedBus(), live.entries, { endTick: 50 })).toStrictEqual({ ok: true });
+    const [step, after] = live.entries;
+    expect(replayEntries(timedBus(), [step, { ...after, tick: 49 }])).toStrictEqual({
+      ok: false,
+      error: {
+        kind: 'tick-mismatch',
+        seq: 1,
+        message: 'Entry 0 (sim.step) runs to tick 50, but the log continues at tick 49',
+      },
+    });
+    expect(replayEntries(timedBus(), [step], { endTick: 30 })).toStrictEqual({
+      ok: false,
+      error: {
+        kind: 'tick-mismatch',
+        seq: 1,
+        message: 'Entry 0 (sim.step) runs to tick 50, but the log continues at tick 30',
+      },
+    });
+    expect(replayEntries(timedBus(), [step], { endTick: 80 })).toStrictEqual({ ok: true });
   });
 
   it('the timed-session generator spreads commands over many ticks and shares some (generator health)', () => {

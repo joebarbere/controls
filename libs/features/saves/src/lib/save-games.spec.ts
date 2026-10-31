@@ -4,17 +4,17 @@ import { MemorySettingsService, SETTINGS_SERVICE, SettingsStore } from '@control
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
 import type { PendingWritesFlush, SaveEntry } from '@controls/platform-api';
 import { createWorld, defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
-import { createGame, createSaveManifest, loadGame } from '@controls/scripting-api';
+import {
+  createGame,
+  createSaveManifest,
+  ENGINE_CHANGED_MESSAGE,
+  loadGame,
+  MAX_VERIFY_TICKS,
+  TOO_LONG_TO_VERIFY_MESSAGE,
+} from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
-import {
-  ENGINE_CHANGED_MESSAGE,
-  findLastPlayed,
-  lastPlayedOf,
-  REPLAY_RESTARTED_MESSAGE,
-  SaveGames,
-  suggestedSaveName,
-} from './save-games';
+import { findLastPlayed, lastPlayedOf, REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -20 } });
@@ -202,6 +202,16 @@ describe('SaveGames', () => {
     expect(await refuse.saves.load(entry)).toBe(true);
     expect(refuse.session.world().seed).toBe(8);
     expect(refuse.toasts()).toEqual(['success: Loaded “Old engine”.', `info: ${ENGINE_CHANGED_MESSAGE}`]);
+  });
+
+  it('loads a save too long to verify with a notice, never refusing it, even by policy', async () => {
+    const game = createGame({ seed: 8 });
+    game.execOrThrow('view.resetLayout');
+    game.advance(MAX_VERIFY_TICKS.value + 1);
+    const refuse = setup({ policy: 'refuse' });
+    const entry = refuse.io.seed({ kind: 'manual', name: 'Long' }, game.save());
+    expect(await refuse.saves.load(entry)).toBe(true);
+    expect(refuse.toasts()).toEqual(['success: Loaded “Long”.', `info: ${TOO_LONG_TO_VERIFY_MESSAGE}`]);
   });
 
   it('Continue loads the newest save that loads, skipping damaged ones with one warning', async () => {

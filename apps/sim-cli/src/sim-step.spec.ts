@@ -1,4 +1,5 @@
-import { createGame, type Game, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { createGame, type Game, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -91,6 +92,21 @@ describe('the sim-step scenario', () => {
       status: 0,
       stderr: '',
     });
+  });
+
+  it('its checked-in save (engine 2, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-2.ctrl');
+    const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.manifest.simEngineVersion).toBe(2);
+    expect(loaded.game.tick()).toBe(1234);
+    expect(loaded.game.hash()).toBe(SIM_STEP_HASH);
+    const record = loaded.game.materialisedWorld().sim;
+    expect(record?.lastSolveTick).toBe(1230);
+    expect(record?.islands.map((i) => i.iterations)).toContain(1); // the short is solved
+    expect(record?.islands.map((i) => i.iterations)).toContain(0); // the lamp's island isn't
+    expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SIM_STEP_HASH] });
   });
 
   it('gives byte-identical snapshots over 10 s of sim time, across two runs and a replay', async () => {

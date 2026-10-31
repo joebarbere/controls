@@ -1,4 +1,4 @@
-import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { createGame, ENGINE_CHANGED_MESSAGE, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -105,11 +105,14 @@ describe('the bench-leads scenario', () => {
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_1_HASH}`);
     expect(replay.stderr).toContain('written by sim engine 1, catalogue 1; this build is engine 2, catalogue 1');
+    expect(replay.stderr).toContain(ENGINE_CHANGED_MESSAGE);
+    expect(replay.stderr).toContain(`"sim run <empty.console> --world ${fixture}"`);
+    expect(replay.stderr).toContain(`"sim hash ${fixture}"`);
     // Loaded as the game loads it: world.json as saved, a new log, and the engine solves at the start.
     const empty = join(dir, 'empty.console');
     writeFileSync(empty, '');
     const run = sim('run', empty, '--world', fixture);
-    expect(run.stderr).toContain('written by another version of the simulator');
+    expect(run.stderr).toContain(ENGINE_CHANGED_MESSAGE);
     expect(run.stdout).toEqual([BENCH_LEADS_HASH]);
   });
 });

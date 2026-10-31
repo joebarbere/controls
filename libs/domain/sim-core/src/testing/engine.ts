@@ -23,6 +23,10 @@ import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TES
  * - `test.flip`: a resistance that jumps with the current through it, so the outer loop can't settle
  *   (the iteration hook and `nonConverged`);
  * - `test.orderA` and `test.orderB`: no elements; each layer call is journalled (the layer order);
+ * - `test.droop`: a resistance that rises with its own current, R = R0 (1 + k |I|): a contraction the
+ *   outer loop settles by its tolerance stop (the warm start from the solution record);
+ * - `test.leaky`: **deliberately wrong**, a step counter kept only in its bank and not in its bag, so
+ *   the save-and-load property must fail on it (never in `engineTestOptions`, only `leakyTestOptions`);
  * - `test.twinSupply`: two ideal sources (12 V and 13 V) between the same terminals, a loop of zero-ohm
  *   sources (the singular island).
  */
@@ -33,6 +37,8 @@ export const FLIP = { id: 'load.test-flip', version: 1 };
 export const ORDER_A = { id: 'probe.test-order-a', version: 1 };
 export const ORDER_B = { id: 'probe.test-order-b', version: 1 };
 export const TWIN_SUPPLY = { id: 'supply.test-twin', version: 1 };
+export const DROOP = { id: 'load.test-droop', version: 1 };
+export const LEAKY = { id: 'load.test-leaky', version: 1 };
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
 const twoTerminals = ['a', 'b'];
@@ -89,6 +95,22 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
     }),
     keys: {},
     description: 'A test resistance that jumps with its own current (it never settles).',
+  },
+  'test.droop': {
+    kind: 'test.droop',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({ coldOhm: FiniteNumber.positive(), perAmp: FiniteNumber.min(0) }),
+    keys: {},
+    description: 'A test resistance that rises with its own current (it settles).',
+  },
+  'test.leaky': {
+    kind: 'test.leaky',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({}),
+    keys: {},
+    description: 'A deliberately wrong test model: state kept outside its bag.',
   },
   'test.twinSupply': {
     kind: 'test.twinSupply',
@@ -176,6 +198,8 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(I2T_FUSE, 'Test I²t fuse', 'test.i2tFuse', { resistanceOhm: 0.01, meltA2s: 4 }),
   entry(FLIP, 'Test flip load', 'test.flip', { lowOhm: 0.1, highOhm: 100, thresholdA: 1 }),
   entry(TWIN_SUPPLY, 'Test twin supply', 'test.twinSupply', {}, ['neg', 'pos']),
+  entry(DROOP, 'Test droop load', 'test.droop', { coldOhm: 2, perAmp: 0.1 }),
+  entry(LEAKY, 'Test leaky load', 'test.leaky', {}),
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
 ];
@@ -205,6 +229,8 @@ export const ENGINE_TEST_MODELS: NetlistModels = {
       topology: (input) => (input.sim['blown'] === true ? { joins: [], elements: [] } : resistorBetween('link')(input)),
     },
     'test.flip': { kind: 'test.flip', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.droop': { kind: 'test.droop', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.leaky': { kind: 'test.leaky', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.twinSupply': {
       kind: 'test.twinSupply',
       simTopologyKeys: [],
@@ -351,6 +377,43 @@ const flip: SimDeviceModel = {
   },
 };
 
+const droop: SimDeviceModel = {
+  kind: 'test.droop',
+  output: null,
+  bank(devices) {
+    const params = devices.map((d) => d.params);
+    const r = (i: number, amps: number) => params[i]['coldOhm'] * (1 + params[i]['perAmp'] * Math.abs(amps));
+    return {
+      bag: () => ({}),
+      dcValue: (i, b, values) => {
+        values.resistor(b.index, r(i, 0));
+        return true;
+      },
+      iterate: (i, b, iterate, values) =>
+        values.resistor(b.index, r(i, iterate === null ? 0 : iterate.branches[2 * b.index])),
+    };
+  },
+};
+
+/** Deliberately wrong: `steps` lives only in the bank, so a rebuild or a load forgets it. */
+const leaky: SimDeviceModel = {
+  kind: 'test.leaky',
+  output: null,
+  bank(devices) {
+    const steps = new Float64Array(devices.length);
+    return {
+      bag: () => ({}),
+      dcValue: (i, b, values) => {
+        values.resistor(b.index, 1 + 0.01 * steps[i]);
+        return true;
+      },
+      continuous: () => {
+        for (let i = 0; i < steps.length; i++) steps[i]++;
+      },
+    };
+  },
+};
+
 const twinSupply: SimDeviceModel = {
   kind: 'test.twinSupply',
   output: null,
@@ -399,6 +462,7 @@ export function engineTestOptions(journal: string[] = []): Required<SimEngineOpt
       'test.i2tFuse': i2tFuse,
       'test.flip': flip,
       'test.twinSupply': twinSupply,
+      'test.droop': droop,
       'test.orderA': orderProbe('test.orderA', journal),
       'test.orderB': orderProbe('test.orderB', journal),
     },
@@ -426,3 +490,9 @@ export const ENGINE_BENCH: readonly (readonly [string, object])[] = [
   ['lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') }],
   ['device.operate', { id: 2, control: 'closed', value: true }],
 ];
+
+/** {@link engineTestOptions} plus the deliberately leaky model: the save-and-load property must fail on it. */
+export function leakyTestOptions(): Required<SimEngineOptions> {
+  const options = engineTestOptions();
+  return { ...options, deviceModels: { ...options.deviceModels, 'test.leaky': leaky } };
+}

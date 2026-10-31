@@ -1,5 +1,6 @@
 import type { ReplayEntry } from '@controls/save-format';
 import type { CommandBus, ExecError } from './bus';
+import { SIM_STEP_COMMAND } from './sim-args';
 
 export type ReplayError =
   | { readonly kind: 'out-of-order'; readonly seq: number; readonly message: string }
@@ -53,6 +54,9 @@ export function replayEntries<S>(
   options: ReplayOptions<S> = {},
 ): ReplayResult {
   const time = options.time;
+  // A logged `sim.step` at tick t of n ticks means nothing ran before t + n: the next entry (and the
+  // log's end) must be at or after it, or the log contradicts itself.
+  let stepEnd: { seq: number; tick: number } | null = null;
   for (const entry of entries) {
     const expectedSeq = bus.nextSeq();
     if (entry.seq !== expectedSeq) {
@@ -64,6 +68,8 @@ export function replayEntries<S>(
     if (entry.tick < bus.currentTick() || (entry.tick > bus.currentTick() && !bus.canAdvance)) {
       return { ok: false, error: tickMismatch(entry.seq, entry.tick, bus.currentTick()) };
     }
+    if (stepEnd !== null && entry.tick < stepEnd.tick)
+      return { ok: false, error: stepContradiction(entry.seq, entry.tick, stepEnd) };
     if (entry.tick > bus.currentTick()) {
       time?.advanceTo(entry.tick);
       bus.advanceTo(entry.tick);
@@ -111,8 +117,13 @@ export function replayEntries<S>(
       };
     }
     time?.applied(result.entry, bus.state);
+    stepEnd =
+      entry.id === SIM_STEP_COMMAND ? { seq: entry.seq, tick: entry.tick + (entry.args['ticks'] as number) } : null;
   }
   const endTick = options.endTick;
+  if (endTick !== undefined && stepEnd !== null && endTick < stepEnd.tick) {
+    return { ok: false, error: stepContradiction(bus.nextSeq(), endTick, stepEnd) };
+  }
   if (endTick !== undefined && endTick !== bus.currentTick()) {
     if (!Number.isSafeInteger(endTick) || endTick < bus.currentTick() || !bus.canAdvance) {
       return {
@@ -128,6 +139,14 @@ export function replayEntries<S>(
     bus.advanceTo(endTick);
   }
   return { ok: true };
+}
+
+function stepContradiction(seq: number, tick: number, step: { seq: number; tick: number }): ReplayError {
+  return {
+    kind: 'tick-mismatch',
+    seq,
+    message: `Entry ${step.seq} (sim.step) runs to tick ${step.tick}, but the log continues at tick ${tick}`,
+  };
 }
 
 function tickMismatch(seq: number, logged: number, replayed: number): ReplayError {

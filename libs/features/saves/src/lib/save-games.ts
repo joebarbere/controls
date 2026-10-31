@@ -10,11 +10,10 @@ import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
 import { REPLAY_MISMATCH_POLICY, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
 
 /**
- * Shown when a save from another version of the simulator loaded (D8): its world loads as saved and a
- * new replay log starts, because the old log can't be checked against this engine.
+ * Restart reasons that mean the log wasn't checked, not that it failed: never refused, an info toast
+ * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`).
  */
-export const ENGINE_CHANGED_MESSAGE =
-  'The save was made with another version of the simulator, so a new replay log started from the loaded game. The game itself loaded normally.';
+const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify']);
 
 /** The name offered for a game that hasn't been saved under one yet (always a valid `SaveName`). */
 export function suggestedSaveName(seed: number): SaveName {
@@ -394,10 +393,11 @@ export class SaveGames {
     }
     const loaded = loadGame(bytes, { registry: this.session.registry });
     if (!loaded.ok) return { ok: false, reason: loadErrorReason(loaded.error) };
-    // A save from another engine version is never refused (D8): its log simply isn't verified.
+    // A save from another engine version, or one too long to verify, is never refused: its log simply
+    // isn't verified (D8, `MAX_VERIFY_TICKS`).
     if (
       loaded.replay.status === 'restarted' &&
-      loaded.replay.reason !== 'engine-changed' &&
+      !UNVERIFIED.has(loaded.replay.reason) &&
       this.replayPolicy === 'refuse'
     ) {
       return { ok: false, reason: 'Its replay log doesn’t match its world.' };
@@ -419,9 +419,9 @@ export class SaveGames {
     this.setLastPlayed(lastPlayedOf(entry));
     this.notifications.notify(`Loaded ${quoted(entry.name)}.`, { level: 'success' });
     if (loaded.replay.status === 'restarted') {
-      const engineChanged = loaded.replay.reason === 'engine-changed';
-      this.notifications.notify(engineChanged ? ENGINE_CHANGED_MESSAGE : REPLAY_RESTARTED_MESSAGE, {
-        level: engineChanged ? 'info' : 'warning',
+      const unverified = UNVERIFIED.has(loaded.replay.reason);
+      this.notifications.notify(unverified ? loaded.replay.message : REPLAY_RESTARTED_MESSAGE, {
+        level: unverified ? 'info' : 'warning',
       });
     }
     for (const listener of [...this.loadedListeners]) listener();

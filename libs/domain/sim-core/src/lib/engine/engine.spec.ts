@@ -16,9 +16,11 @@ import {
   entityStreamKey,
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
+import { GCProfiler } from 'node:v8';
 import { join } from 'node:path';
 import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
+  DROOP,
   ENGINE_BENCH,
   ENGINE_TEST_CATALOG,
   engineBus,
@@ -389,6 +391,10 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
     host.exec('edit.undo'); // un-places 5
     host.exec('entity.place', { ref: I2T_FUSE, positionMm: origin }); // 5 again, fresh
     expect(host.materialised().entities.find((e) => e.id === 5)?.sim).toStrictEqual({ blown: false, heatA2s: 0 });
+    // Un-placing must drop the state even when another kind takes the id next (a fuzzed counterexample).
+    host.exec('edit.undo'); // un-places the fuse at 5
+    host.exec('entity.place', { ref: THERMAL_LOAD, positionMm: origin }); // 5, a thermal load
+    expect(host.materialised().entities.find((e) => e.id === 5)?.sim).toStrictEqual({ tempK: THERMAL_PARAMS.ambientK });
   });
 
   it('a replay with the engine as its time host reaches byte-identical snapshots and the same events', () => {
@@ -401,12 +407,24 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
     live.advanceTo(1_250);
     live.exec('device.operate', { id: 2, control: 'closed', value: true });
     live.advanceTo(4_000);
+    // A second load in its own loop, a delete and its undo (a tombstone), then on to 10 s.
+    live.run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: DROOP, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(5, 'pos'), b: end(6, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(6, 'b'), b: end(5, 'neg') }],
+    ]);
+    live.advanceTo(6_333);
+    live.exec('entity.delete', { id: 3 });
+    live.advanceTo(7_001);
+    live.exec('edit.undo');
+    live.advanceTo(10_000);
     liveEvents.push(...live.engine.takeEvents());
 
     const replayed = new Host(engineBus());
-    const result = replayEntries(replayed.bus, live.bus.entries, { time: replayed.engine, endTick: 4_000 });
+    const result = replayEntries(replayed.bus, live.bus.entries, { time: replayed.engine, endTick: 10_000 });
     expect(result).toStrictEqual({ ok: true });
-    expect(replayed.engine.tick).toBe(4_000);
+    expect(replayed.engine.tick).toBe(10_000);
     expect(replayed.engine.snapshot()).toStrictEqual(live.engine.snapshot());
     expect(replayed.engine.takeEvents()).toStrictEqual(liveEvents);
     expect(liveEvents.map((e) => e.kind)).toStrictEqual(['blown']);
@@ -459,6 +477,67 @@ describe('SimEngine: the snapshot', () => {
     host.exec('device.operate', { id: 2, control: 'closed', value: true });
     expect(host.engine.topologyGeneration).toBe(generation + 2);
     expect(host.engine.snapshotHash()).toBe(hash);
+  });
+});
+
+describe('SimEngine: the warm start, readability and revisions', () => {
+  const droopLoop: readonly (readonly [string, object])[] = [
+    ['entity.place', { ref: BATTERY, positionMm: origin }],
+    ['entity.place', { ref: DROOP, positionMm: origin }],
+    ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+    ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+  ];
+
+  it('a steady re-solve warm-started from the solution record takes 1 iteration, a cold one more', () => {
+    const host = Host.fresh().run(droopLoop);
+    // The last command changed the topology: solved cold, the outer loop iterating to its tolerance.
+    const cold = host.engine.islands()[0].iterations;
+    expect(cold).toBeGreaterThan(1);
+    expect(host.engine.islands()[0].status).toBe('solved');
+    host.advanceTo(11); // the cadence solve at 10, warm from the record: already at the fixed point
+    expect(host.engine.lastSolveTick).toBe(10);
+    expect(host.engine.islands()[0].iterations).toBe(1);
+    // After a load, the record is the warm start too.
+    const loaded = SimEngine.start(host.materialised(), engineTestOptions());
+    loaded.advanceTo(21);
+    expect(loaded.islands()[0].iterations).toBe(1);
+  });
+
+  it('a non-converged island is not readable: a load in it never heats', () => {
+    const host = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: FLIP, positionMm: origin }],
+      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(3, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') }],
+    ]);
+    expect(host.engine.islands()[0].status).toBe('nonConverged');
+    host.advanceTo(50);
+    expect(host.materialised().entities[2].sim['tempK']).toBe(THERMAL_PARAMS.ambientK);
+  });
+
+  it('advancing bumps the revision (the cache key of hashes and exports)', () => {
+    const host = Host.fresh().run(ENGINE_BENCH);
+    const revision = host.engine.revision;
+    host.engine.advanceTo(1);
+    expect(host.engine.revision).toBeGreaterThan(revision);
+  });
+
+  it('a million steps allocate nothing that needs a scavenge (the per-tick hot path)', () => {
+    // A thermal load in a battery loop: continuous work every tick, a cadence solve every 10.
+    const host = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+    ]);
+    host.engine.advanceTo(10_000); // warm: every buffer grown, the JIT settled
+    const profiler = new GCProfiler();
+    profiler.start();
+    host.engine.advanceTo(1_010_000);
+    const scavenges = (profiler.stop()?.statistics ?? []).filter((s) => s.gcType === 'Scavenge').length;
+    expect(scavenges).toBeLessThanOrEqual(1);
   });
 });
 

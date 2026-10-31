@@ -438,6 +438,9 @@ _Done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#t
 - _**`SIM_ENGINE_VERSION` is 2** (D8): saves and `world.hash` now hold the materialised solution record, so engine-1 saves (the world v2 kickoff's) load as `engine-changed`. Only goldens of worlds with a netlist moved (`BENCH_LEADS_HASH`); props-only worlds export `sim: null` and kept theirs._
 - _**The game runs the engine in-process until F2.3b** (ADR 0011, "Implementation notes"), so the in-game console's `sim.step` works and the D6 golden runs in the page through the console's `run`._
 - _The per-tick bench case (`tick-device-mix`: 750 devices, layers only) is gated at §4.5's 0.3 ms: 0.015 ms median on an AMD Ryzen 5 5600X._
+- _**Load verification is bounded** (#52 review): a save's log is replayed to verify it only if it spans at most `MAX_VERIFY_TICKS` (10 000 ticks, 10 s of sim time; deterministic, never the wall clock). Past it the log restarts as `too-long-to-verify` (never refused, an info toast). The bound comes from `sim bench`'s `plant-advance-1000-ticks` (45 ms per 1,000 ticks of the 2,000-node plant locally, about 0.15 ms per tick on the slowest CI runner), for verification under about 2 s. So in practice only short sessions are verified for now._
+- _**Open user decision (#52 review): should long logs be rebased or checkpointed so verification stays bounded?** For example a materialised checkpoint world every N ticks (ADR 0013's rebase caveat), verifying only the tail; or a bound in work (ticks × netlist size) rather than ticks. **Default until decided:** skip verification and restart the log past `MAX_VERIFY_TICKS`._
+- _**The D6 golden moves to the bench lamp at F2.5:** `sim-step.console` is a stand-in with no device model; F2.5 re-pins the Node-vs-Chromium snapshot golden on `bench-lamp.console`, whose lamp runs `dmath` (the first transcendental, where V8 builds could differ)._
 
 ### F2.3b Sim worker, snapshot transport and time control
 
@@ -467,6 +470,10 @@ Acceptance:
   - with `?sab=0` (the fallback), the hash is the same;
   - `desktop-e2e` shows the worker running under `app://`, with `crossOriginIsolated === true` inside it and no `securitypolicyviolation`.
 - [ ] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page.
+- [ ] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
+- [ ] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `acPending`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
+- [ ] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
+- [ ] **`Session.hash` is deleted, not adapted** (ADR 0011 §9.4); nothing in F2.3b is built on `Session.world().tick` or `Session.hash`: read `SimHost.simTick` and `SimHost.hashAt()`.
 
 ### F2.4 Power sources
 
@@ -532,6 +539,7 @@ Acceptance:
   - `lightOutputRel` lies inside its band, and opening the switch takes it to 0;
   - the snapshot and world hashes are pinned in the spec, the game-e2e driver and the scripting caveats, together.
 - [ ] **Lamp rendering:** emissive intensity follows `lightOutputRel` through the documented display curve. The scene-graph snapshot records it, and a change calls `invalidate()`.
+- [ ] **A lamp on an unsolved island is not "dark = 0 W"** (#52 review): when its island isn't `solved` (0 iterations: unmodelled, AC pending, mixed; or singular, or non-converged), the record's values are no reading, and the renderer and inspector show the lamp as unknown or unsettled by a written validity rule, never as an off lamp drawing 0 W.
 
 ### F2.6 Debug tools
 
@@ -546,6 +554,8 @@ Acceptance:
 - [ ] **Netlist inspector:** a docked panel listing islands, nodes (with their member terminals) and branches, with live V and I at up to 10 Hz. It is keyboard-navigable, and selecting a node highlights its terminals in 3D (view state only).
 - [ ] **`netlist.dump`:** a read-only console command, like `world.hash`. It prints `formatNetlist` plus the island diagnostics, gives the same text headless and in the game, and is golden-tested on the bench demo.
 - [ ] **E2E:** the inspector's lamp-branch current equals the value derived from `game.probe`, within display rounding.
+- [ ] **Band 0 means "no scale"**, not the first bin of some scale: an island in band 0 (`none`, every island until F2.4's sources choose one) gets no overlay colour (#52 review).
+- [ ] **The HUD's "last solve" keys off `islandCount > 0`**: with no islands the snapshot holds no solution and writes `lastSolveTick` 0, which is not a solve at tick 0 (#52 review).
 
 ### F2.7 Oracle harness and performance gate
 

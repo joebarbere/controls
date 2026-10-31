@@ -29,6 +29,7 @@ import {
 import {
   type ProbeReading,
   SIM_ENGINE_VERSION,
+  type SourcedConstant,
   SimEngine,
   type SimEngineOptions,
   type SimIslandInfo,
@@ -543,10 +544,12 @@ export type SaveReplayStatus =
    * `replay-failed`: it didn't reproduce the world (the UI should say so; `message` names the first
    * failing entry, if any). `engine-changed` (D8): the save is from another sim engine or catalogue,
    * so its log wasn't (or, for a migrated P1 save, couldn't be) verified; never refused.
+   * `too-long-to-verify`: the log spans more than {@link MAX_VERIFY_TICKS}, so verifying it would block
+   * the load; never refused.
    */
   | {
       readonly status: 'restarted';
-      readonly reason: 'replay-failed' | 'hash-mismatch' | 'engine-changed';
+      readonly reason: 'replay-failed' | 'hash-mismatch' | 'engine-changed' | 'too-long-to-verify';
       readonly message: string;
     };
 
@@ -606,8 +609,27 @@ export function loadGame(bytes: Uint8Array, options: LoadGameOptions = {}): Load
   return gameFromSave(read.value, options);
 }
 
-const ENGINE_CHANGED_MESSAGE =
-  'The save was written by another version of the simulator, so its replay log was not checked; a new log starts from the loaded game.';
+/** Why a save's log restarted as `engine-changed` (D8): shown by the game and `sim-cli` alike. */
+export const ENGINE_CHANGED_MESSAGE =
+  'The save was made with another version of the simulator, so its replay log wasn’t checked and a new log started from the loaded game. The game itself loaded normally.';
+
+/** Why a save's log restarted as `too-long-to-verify`: shown by the game and `sim-cli` alike. */
+export const TOO_LONG_TO_VERIFY_MESSAGE =
+  'The save’s replay log covers too much sim time to check while loading, so a new log started from the loaded game. The game itself loaded normally.';
+
+/**
+ * The most sim time, in ticks, a load verifies by replaying a save's log (`endTick` − the initial
+ * world's tick). Deterministic, never the wall clock: a save past it isn't replayed and restarts its
+ * log as `too-long-to-verify`, never refused. Without a bound a crafted `endTick` (1e12) would step
+ * the engine for hours, synchronously, while the game loads.
+ */
+export const MAX_VERIFY_TICKS: SourcedConstant = {
+  value: 10_000,
+  unit: 'tick',
+  kind: 'numerical',
+  source:
+    'numerical: `sim bench` case `plant-advance-1000-ticks` (the 2,000-node plant, 100 cadence solves and 1,000 layer steps) measured 45 ms per 1,000 ticks (0.045 ms per tick) on an AMD Ryzen 5 5600X under Node 24, built bundle. CI runners run the plant re-solve about 1.4× (Ubuntu) to 3.2× (Windows) slower, so about 0.15 ms per tick on the slowest. For load verification under about 2 s on CI-class hardware that allows about 13 800 ticks; 10 000 (10 s of sim time) leaves headroom: about 0.45 s locally and 1.45 s on the slowest runner. Small P2 benches replay far faster. Whether long logs are later rebased or checkpointed, so verification stays bounded, is an open user decision (plan F2.3a).',
+};
 
 /**
  * {@link loadGame} for contents already read with `readCtrl`. Never throws. A restarted log
@@ -645,6 +667,8 @@ export function gameFromSave(
     replay = { status: 'absent' };
   } else if (compatibility === 'engine-changed') {
     replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
+  } else if (log.endTick - log.initialWorld.tick > MAX_VERIFY_TICKS.value) {
+    replay = { status: 'restarted', reason: 'too-long-to-verify', message: TOO_LONG_TO_VERIFY_MESSAGE };
   } else {
     const replayed = replayWithEngine(log, options);
     if (replayed.ok && replayed.hash === worldHash(world)) {
@@ -665,19 +689,29 @@ export function gameFromSave(
   }
   const registry = options.registry ?? createWorldRegistry();
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
+  let start = world;
   let engine: SimEngine | null;
   try {
-    engine = startEngine(world, options);
+    engine = startEngine(start, options);
   } catch (error) {
     if (!(error instanceof SimStartError)) throw error;
-    return {
-      ok: false,
-      error: {
-        kind: 'start-failed',
-        reason: error.reason,
-        message: "The save's simulation state doesn't fit its circuit.",
-      },
-    };
+    if (compatibility === 'verify') {
+      return {
+        ok: false,
+        error: {
+          kind: 'start-failed',
+          reason: error.reason,
+          message: "The save's simulation state doesn't fit its circuit.",
+        },
+      };
+    }
+    // D8: a save from another engine is never refused. Its solution record may not fit this build's
+    // netlist (another engine's models), so drop the record: the engine solves at the save's tick.
+    start = { ...world, sim: null };
+    engine = startEngine(start, options);
+    if (replay.status === 'restarted' && replay.reason !== 'engine-changed') {
+      replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
+    }
   }
-  return done(wrap(createWorldBus(world, registry, { firstSeq }), world, engine), replay);
+  return done(wrap(createWorldBus(start, registry, { firstSeq }), start, engine), replay);
 }

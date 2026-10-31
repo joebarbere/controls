@@ -201,8 +201,40 @@ export const BENCH_CASES: readonly BenchCase[] = [
       engine.advanceTo(2);
       return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.netlist.devices.length}`;
     },
+    // A digest of the bags the layers wrote (Σ tempK, Σ heatA2s), untimed: idle layers can't pass.
+    checksum: () => bagDigest(tickEngine as SimEngine),
+  },
+  {
+    // The basis of `MAX_VERIFY_TICKS` (scripting-api): load verification replays a log tick by tick,
+    // cadence solves included. 1,000 ticks of the 2,000-node plant with no command: 100 cadence
+    // solves (unchanged topology, warm factorisation cache) and 1,000 steps of the layers.
+    name: 'plant-advance-1000-ticks',
+    warmup: 3,
+    runs: 21,
+    budgetMs: null,
+    prepare: () => {
+      plantEngine ??= SimEngine.start(plantWorlds().closed);
+    },
+    run: () => {
+      const engine = plantEngine as SimEngine;
+      engine.advanceTo(engine.tick + 1_000);
+      return `${engine.stats.cadenceSolves % 100}:${engine.netlist.topologyHash}`;
+    },
   },
 ];
+
+let plantEngine: SimEngine | null = null;
+
+/** Σ tempK and Σ heatA2s over the engine's exported bags. */
+function bagDigest(engine: SimEngine): string {
+  let temp = 0;
+  let heat = 0;
+  for (const { state } of engine.exportState().entities) {
+    if (typeof state['tempK'] === 'number') temp += state['tempK'];
+    if (typeof state['heatA2s'] === 'number') heat += state['heatA2s'];
+  }
+  return `${temp}:${heat}`;
+}
 
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
 export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [

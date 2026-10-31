@@ -18,7 +18,10 @@ import type { Netlist, NetlistBranch, StateBag } from '../netlist/types';
  * affects the future**, exactly (finite numbers survive JSON bit for bit): a value kept only in a bank
  * would be lost at the next topology change and on a save, and the save-and-load parity property
  * catches it. Hidden per-device constants that are a pure function of the device are fine (a tolerance
- * drawn from its seeded stream, a parameter).
+ * drawn from its seeded stream, a parameter). **A model that keeps drawing from its seeded stream
+ * (wear, a random trip within a band) must persist how far it has drawn in its bag**: `stream()`
+ * restarts the stream on every bank build, so the n-th draw after a load would otherwise repeat the
+ * first. Draw only at bank build (a fixed tolerance), or store the count and skip ahead on build.
  *
  * **Inputs.** A model reads the catalogue parameters, its bag, the electrical solution and the
  * netlist (its branches' values carry commanded inputs such as a setpoint). Never the world's own

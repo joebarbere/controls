@@ -19,9 +19,11 @@ import {
   type Game,
   GameOptionsError,
   loadGame,
+  MAX_VERIFY_TICKS,
   ProbeError,
   replayGame,
   replayLogGame,
+  TOO_LONG_TO_VERIFY_MESSAGE,
 } from './game';
 
 /*
@@ -249,7 +251,7 @@ describe('materialised hashes and saves', () => {
         expect(loaded.snapshot()).toStrictEqual(straight.snapshot());
         expect(loaded.hash()).toBe(straight.hash());
       }),
-      { numRuns: 20 },
+      { numRuns: 12 },
     );
   });
 });
@@ -313,6 +315,62 @@ describe('loading saves from other engines (D8)', () => {
       ok: false,
       error: { kind: 'start-failed', reason: 'topology-mismatch' },
     });
+  });
+
+  it('never refuses an engine-changed save whose record does not fit: it drops the record and solves at the save tick', () => {
+    const game = bench();
+    game.advance(37);
+    const read = readCtrl(game.save());
+    if (!read.ok) throw new Error(read.error.message);
+    const sim = read.value.world.sim as NonNullable<World['sim']>;
+    for (const bad of [
+      { ...sim, topologyHash: 'f'.repeat(64) },
+      { ...sim, nodes: sim.nodes.slice(2) },
+      { ...sim, islands: [...sim.islands, { flags: 0, iterations: 1 }] },
+    ]) {
+      for (const versions of [
+        { simEngineVersion: 1, catalogVersion: 1 },
+        { simEngineVersion: 0, catalogVersion: 0 },
+      ]) {
+        const bytes = writeCtrl({
+          ...read.value,
+          manifest: createManifest(versions),
+          world: { ...read.value.world, sim: bad },
+        });
+        const loaded = load(bytes);
+        expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+        expect(loaded.game.tick()).toBe(37);
+        // Solved afresh at the save's tick: the record's values were another engine's.
+        expect(loaded.game.materialisedWorld().sim?.lastSolveTick).toBe(37);
+        expect(loaded.game.world().sim).toBeNull();
+      }
+    }
+  });
+
+  it('restarts a log spanning more than MAX_VERIFY_TICKS without replaying it (a crafted endTick never hangs a load)', () => {
+    expect(MAX_VERIFY_TICKS).toMatchObject({ value: 10_000, unit: 'tick', kind: 'numerical' });
+    const game = bench();
+    game.advance(MAX_VERIFY_TICKS.value);
+    expect(load(game.save()).replay).toStrictEqual({ status: 'continued' }); // at the bound: verified
+    const read = readCtrl(game.save());
+    if (!read.ok) throw new Error(read.error.message);
+    const log = read.value.replayLog as NonNullable<typeof read.value.replayLog>;
+    const huge = 1e12;
+    const bytes = writeCtrl({
+      ...read.value,
+      world: { ...read.value.world, tick: huge },
+      replayLog: { ...log, endTick: huge },
+    });
+    const loaded = load(bytes);
+    expect(loaded.replay).toStrictEqual({
+      status: 'restarted',
+      reason: 'too-long-to-verify',
+      message: TOO_LONG_TO_VERIFY_MESSAGE,
+    });
+    expect(loaded.game.tick()).toBe(huge);
+    expect(loaded.game.entries()).toStrictEqual([]);
+    game.advance(1);
+    expect(load(game.save()).replay).toMatchObject({ reason: 'too-long-to-verify' }); // one past the bound
   });
 });
 

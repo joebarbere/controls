@@ -291,6 +291,31 @@ describe('world command properties', () => {
     );
   });
 
+  it('only edit.undo and edit.redo bring back an id below nextEntityId; a new id is exactly nextEntityId (the engine’s tombstone rule)', () => {
+    fc.assert(
+      fc.property(worldArb, opsArb, (initial, ops) => {
+        const bus = createWorldBus(initial);
+        for (const op of ops) {
+          const before = bus.state;
+          const logged = bus.entries.length;
+          run(bus, op);
+          const entry = bus.entries[logged];
+          const had = new Set(before.entities.map((e) => e.id));
+          for (const entity of bus.state.entities) {
+            if (had.has(entity.id)) continue;
+            if (entity.id < before.nextEntityId) {
+              expect(['edit.undo', 'edit.redo']).toContain(entry?.id);
+            } else {
+              // A fresh place, or the redo of an undone one: either way the id at nextEntityId.
+              expect(['entity.place', 'edit.redo']).toContain(entry?.id);
+              expect(entity.id).toBe(before.nextEntityId);
+            }
+          }
+        }
+      }),
+    );
+  });
+
   it('the timed sessions reach later ticks and run undoable changes there (generator health)', () => {
     const samples = fc.sample(fc.tuple(worldArb, timedOpsArb), { seed: 20261031, numRuns: 150 });
     let advancedChanges = 0;

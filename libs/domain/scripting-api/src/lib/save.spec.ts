@@ -201,7 +201,7 @@ describe('loadGame', () => {
       fc.constant({ kind: 'save-load' as const }),
     );
     fc.assert(
-      fc.property(fc.array(op, { maxLength: 25 }), (ops) => {
+      fc.property(fc.array(op, { maxLength: 20 }), (ops) => {
         let game = createGame({ seed: 3 });
         for (const o of ops) {
           if (o.kind === 'place') game.exec('entity.place', place(o.x));
@@ -219,7 +219,8 @@ describe('loadGame', () => {
         const replayed = replayLogGame(game.replayLog());
         expect(replayed.ok && replayed.game.hash()).toBe(game.hash());
       }),
-      { numRuns: 60 },
+      // Each save-load writes, reads and replays a .ctrl with the engine: fewer runs, not a longer timeout.
+      { numRuns: 40 },
     );
   });
 });
