@@ -1,7 +1,16 @@
 import { Session } from 'node:inspector';
+import type { CatalogRef } from '@controls/save-format';
 import { AC_SOURCE, BATTERY, end, LEAD, origin } from '../../testing/bench';
-import { engineBus, engineTestOptions, RESISTOR_12, THERMAL_LOAD } from '../../testing/engine';
-import { DIN_PSU } from '../../testing/sources';
+import {
+  DROOP,
+  engineBus,
+  engineTestOptions,
+  REACTOR,
+  RESISTOR_12,
+  RHEOSTAT,
+  THERMAL_LOAD,
+} from '../../testing/engine';
+import { BENCH_SUPPLY, DIN_PSU } from '../../testing/sources';
 import type { SimDeviceModel } from './device-model';
 import { SimEngine, type SimEngineOptions } from './engine';
 
@@ -104,26 +113,40 @@ interface Allocation {
  * smallest of ten hid a planted 8 B/step.
  */
 function allocatedPerStep(
-  source: typeof BATTERY,
+  source: CatalogRef,
   pos: string,
   neg: string,
-  load: typeof BATTERY | null = THERMAL_LOAD,
+  load: CatalogRef | null = THERMAL_LOAD,
+  measure: MeasureOptions = {},
+): Allocation {
+  return allocatedBy(loopCommands(1, source, pos, neg, load), measure);
+}
+
+type Command = [string, object];
+
+/** `source` (placed as entity `id`) into `load` (entity `id + 1`) through two leads, or shorted by one. */
+function loopCommands(id: number, source: CatalogRef, pos: string, neg: string, load: CatalogRef | null): Command[] {
+  if (load === null) {
+    return [
+      ['entity.place', { ref: source, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(id, pos), b: end(id, neg) }],
+    ];
+  }
+  return [
+    ['entity.place', { ref: source, positionMm: origin }],
+    ['entity.place', { ref: load, positionMm: origin }],
+    ['lead.connect', { ref: LEAD, a: end(id, pos), b: end(id + 1, 'a') }],
+    ['lead.connect', { ref: LEAD, a: end(id + 1, 'b'), b: end(id, neg) }],
+  ];
+}
+
+/** As `allocatedPerStep`, for the world `commands` build. */
+function allocatedBy(
+  commands: readonly Command[],
   { options = engineTestOptions(), warmUpSteps = WARM_UP_STEPS, windowCount = WINDOWS }: MeasureOptions = {},
 ): Allocation {
   const bus = engineBus(11);
   const engine = SimEngine.start(bus.state, options);
-  const commands: [string, object][] =
-    load === null
-      ? [
-          ['entity.place', { ref: source, positionMm: origin }],
-          ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(1, neg) }],
-        ]
-      : [
-          ['entity.place', { ref: source, positionMm: origin }],
-          ['entity.place', { ref: load, positionMm: origin }],
-          ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
-          ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
-        ];
   for (const [id, args] of commands) {
     const result = bus.exec(id, args);
     if (!result.ok) throw new Error(`${id} failed: ${JSON.stringify(result.error)}`);
@@ -174,6 +197,31 @@ function plantedOptions(): SimEngineOptions {
   return { ...options, deviceModels: { ...options.deviceModels, 'test.thermalLoad': planted } };
 }
 
+/**
+ * Every source kind and a nonlinear load in one world, each its own island: the game's worker runs
+ * every device kind in one process, so the solver's call sites see all of them (polymorphic feedback),
+ * which per-source gates in a fresh process never do. A battery into a heating load (1, 2); a DIN PSU
+ * regulating into 12 Ω (3, 4), hiccuping into a heating load (5, 6) and shorted (7); a bench supply in
+ * current limit into a rheostat (8, 9); a battery into a load whose resistance rises with its current,
+ * which the outer loop iterates (10, 11); the AC source into a reactor (12, 13) and into a heating load
+ * (14, 15).
+ */
+function mixedCommands(): Command[] {
+  return [
+    ...loopCommands(1, BATTERY, 'pos', 'neg', THERMAL_LOAD),
+    ...loopCommands(3, DIN_PSU, 'pos', 'neg', RESISTOR_12),
+    ...loopCommands(5, DIN_PSU, 'pos', 'neg', THERMAL_LOAD),
+    ...loopCommands(7, DIN_PSU, 'pos', 'neg', null),
+    ...loopCommands(8, BENCH_SUPPLY, 'pos', 'neg', RHEOSTAT),
+    ['device.operate', { id: 8, control: 'setpointV', value: 12 }],
+    ['device.operate', { id: 8, control: 'currentLimitA', value: 1 }],
+    ['device.operate', { id: 8, control: 'outputOn', value: true }],
+    ...loopCommands(10, BATTERY, 'pos', 'neg', DROOP),
+    ...loopCommands(12, AC_SOURCE, 'l', 'n', REACTOR),
+    ...loopCommands(14, AC_SOURCE, 'l', 'n', THERMAL_LOAD),
+  ];
+}
+
 describe('SimEngine per-tick allocation (regression gates, not yet zero)', () => {
   it('the DC path (a battery into a heating load) stays under 4 bytes per step', () => {
     const { perStep, report } = allocatedPerStep(BATTERY, 'pos', 'neg');
@@ -185,14 +233,26 @@ describe('SimEngine per-tick allocation (regression gates, not yet zero)', () =>
     expect(perStep, report).toBeLessThan(6);
   });
 
-  it('the DIN PSU shorted (in its limit and hiccuping) stays under 10.5 bytes per step', () => {
+  it('the DIN PSU shorted (in its limit and hiccuping) stays under 6 bytes per step', () => {
     const { perStep, report } = allocatedPerStep(DIN_PSU, 'pos', 'neg', null);
-    expect(perStep, report).toBeLessThan(10.5);
+    expect(perStep, report).toBeLessThan(6);
   });
 
-  it('the AC path (a phasor source into a heating load) stays under 36 bytes per step', () => {
+  it('the AC path (a phasor source into a heating load) stays under 6 bytes per step', () => {
     const { perStep, report } = allocatedPerStep(AC_SOURCE, 'l', 'n');
-    expect(perStep, report).toBeLessThan(36);
+    expect(perStep, report).toBeLessThan(6);
+  });
+
+  // The 2 Ω cold load asks 12 A of a 5 A supply: 100 ms in current limit, 1 s off, retry, and every
+  // retry re-solves a load whose resistance moved while it cooled (more outer-loop iterations a solve).
+  it('the DIN PSU hiccuping into a heating load stays under 6 bytes per step', () => {
+    const { perStep, report } = allocatedPerStep(DIN_PSU, 'pos', 'neg');
+    expect(perStep, report).toBeLessThan(6);
+  });
+
+  it('every source kind and a nonlinear load in one world (polymorphic call sites) stays under 6 bytes per step', () => {
+    const { perStep, report } = allocatedBy(mixedCommands());
+    expect(perStep, report).toBeLessThan(6);
   });
 
   // Last, because a second variant of the thermal model's bank changes the feedback every later test

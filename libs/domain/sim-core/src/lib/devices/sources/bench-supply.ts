@@ -10,7 +10,7 @@ import {
   READING_UNSOLVED,
   statusField,
 } from '../readings';
-import { iterateRegulated, REG_CC, REG_CV, stampedMode, stampRegulated } from './regulator';
+import { iterateRegulated, REG_CC, REG_CV, RegulatorSettings, stampedMode, stampRegulated } from './regulator';
 
 /*
  * The bench DC supply (plan F2.4, kind `supply.bench`): a CV/CC regulated output (`regulator.ts`)
@@ -60,27 +60,32 @@ export const BENCH_SUPPLY_MODEL: SimDeviceModel = {
     const n = devices.length;
     const mode = new Uint8Array(n);
     const branch = new Int32Array(n);
-    const ohms = new Float64Array(n);
+    // The setpoint and limit are controls (the branch's netlist values), copied in by `dcValue`.
+    const settings = new RegulatorSettings(n);
     devices.forEach((d, i) => {
       const m = d.bag['mode'];
       // The load check (`checkBags`) only lets `cv` and `cc` in: anything else is a programming error.
       if (m !== 'cv' && m !== 'cc') throw new Error(`supply.bench ${d.entity}: unknown mode ${String(m)}`);
       mode[i] = m === 'cc' ? REG_CC : REG_CV;
       branch[i] = d.branches[0];
-      ohms[i] = (d.params as BenchSupplyParams).outputResistanceOhm;
+      settings.ohms[i] = (d.params as BenchSupplyParams).outputResistanceOhm;
     });
     return {
       bag: (i) => ({ mode: SIM_MODES[mode[i]] }),
       dcValue: (i, b, values) => {
         const v = b.values;
+        settings.setpointV[i] = v['setpointV'];
+        settings.limitA[i] = v['currentLimitA'];
         if (v['outputOn'] !== 1) values.isource(b.index, 0);
-        else stampRegulated(values, b.index, mode[i], v['setpointV'], v['currentLimitA'], ohms[i]);
+        else stampRegulated(values, b.index, mode[i], settings, i);
         return true;
       },
       iterate: (i, b, iterate, values) => {
         const v = b.values;
+        settings.setpointV[i] = v['setpointV'];
+        settings.limitA[i] = v['currentLimitA'];
         if (v['outputOn'] !== 1) values.isource(b.index, 0);
-        else iterateRegulated(b, iterate, values, mode[i], v['setpointV'], v['currentLimitA'], ohms[i]);
+        else iterateRegulated(b, iterate, values, mode[i], settings, i);
       },
       afterSolve: (ctx, values) => {
         for (let i = 0; i < n; i++) {

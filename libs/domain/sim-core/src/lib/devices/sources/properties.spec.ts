@@ -1,5 +1,6 @@
 import { replayEntries } from '@controls/commands';
 import type { CatalogRef } from '@controls/save-format';
+import { compareSimEvents } from '@controls/sim-protocol';
 import { worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { BATTERY } from '../../../testing/bench';
@@ -155,6 +156,27 @@ function apply(host: SourceHost, op: Op): void {
   }
 }
 
+/**
+ * Replays `ops`' log with the engine as time host and checks it reaches the live session's snapshot,
+ * world and events. Events are compared in canonical delivery order (`compareSimEvents`: tick, entity,
+ * kind). `takeEvents` sorts each batch it delivers, and the live session takes one batch per command
+ * while the replay takes one at the end, so the live concatenation is in order only within each
+ * batch. Sorting it is exact, not a loosening: the sort is stable and each batch kept its ties in
+ * emission order, so the sorted concatenation is the one sort of everything emitted, which is what
+ * the replay's single batch is. Main's engine property drains once, at the end, on both sides.
+ */
+function checkReplay(ops: readonly Op[]): SourceHost {
+  const live = sourceBench();
+  ops.forEach((op) => apply(live, op));
+  const replay = new SourceHost();
+  const replayed = replayEntries(replay.bus, live.bus.entries, { time: replay.engine, endTick: live.engine.tick });
+  expect(replayed).toStrictEqual({ ok: true });
+  expect(replay.engine.snapshot()).toStrictEqual(live.engine.snapshot());
+  expect(replay.engine.takeEvents()).toStrictEqual([...live.events].sort(compareSimEvents));
+  expect(worldHash(replay.materialised())).toBe(worldHash(live.materialised()));
+  return live;
+}
+
 const fingerprint = (host: SourceHost) => ({
   tick: host.engine.tick,
   snapshot: host.engine.snapshotHash(),
@@ -191,18 +213,31 @@ describe('source determinism properties (F2.4)', () => {
   it("replaying the session's log with the engine as time host reaches the same snapshot bytes and events", () => {
     fc.assert(
       fc.property(sourceSessionArb, ({ before, after }) => {
-        const live = sourceBench();
-        [...before, ...after].forEach((op) => apply(live, op));
-        const replay = new SourceHost();
-        expect(
-          replayEntries(replay.bus, live.bus.entries, { time: replay.engine, endTick: live.engine.tick }),
-        ).toStrictEqual({ ok: true });
-        expect(replay.engine.snapshot()).toStrictEqual(live.engine.snapshot());
-        expect(replay.engine.takeEvents()).toStrictEqual(live.events);
-        expect(worldHash(replay.materialised())).toBe(worldHash(live.materialised()));
+        checkReplay([...before, ...after]);
       }),
       { numRuns: 8 },
     );
+  });
+
+  it('a replay delivers the same events, in canonical order, as a session taking them command by command', () => {
+    // The flake loop's counterexample (seed 682033826, path 1:5:3:4:6:8:7:7): two battery loops into
+    // never-settling loads, a lead removed, and a delete undone. Live, the session takes events after
+    // every command, so the second loop's `nonConverged` (entities 8, 9) arrives in an earlier batch
+    // than the undone delete's (6, 7), both at tick 0; the replay takes them in one batch, in canonical
+    // order (6, 7 first). The engine raised the same events both times: comparing the concatenated
+    // batches with one batch was the test's error, not the engine's.
+    const ops: Op[] = [
+      { kind: 'batteryLoop', load: 2 },
+      { kind: 'disconnect', pick: 0 },
+      { kind: 'batteryLoop', load: 2 },
+      { kind: 'deleteUndo', pick: 5 },
+    ];
+    const live = checkReplay(ops);
+    const islandEvents = live.events.filter((e) => e.kind === 'nonConverged').map((e) => e.entities);
+    expect(islandEvents.slice(-2)).toStrictEqual([
+      [8, 9],
+      [6, 7],
+    ]);
   });
 
   it('the cuts land mid-hiccup, in current limit and on a discharged battery (generator health, at the cut)', () => {

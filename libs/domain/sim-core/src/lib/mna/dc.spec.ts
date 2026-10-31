@@ -50,6 +50,38 @@ describe('DcBranchValues', () => {
     values.clear();
     expect(values.stamp(0)).toBeNull();
   });
+
+  it('stores and refuses exactly the same by slot as by value (resistorFrom, vsourceAt, isourceAt)', () => {
+    const cases = [2, 0.5, 0, -0, -1, 12.9, NaN, Infinity, -Infinity, Number.MIN_VALUE];
+    const outcome = (set: () => void, values: DcBranchValues) => {
+      try {
+        set();
+        return { stamps: [...values.stamps], ohms: [...values.ohms], emfV: [...values.emfV], amps: [...values.amps] };
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+    for (const a of cases) {
+      for (const b of cases) {
+        const byValue = new DcBranchValues(1);
+        const bySlot = new DcBranchValues(1);
+        const slot = (x: number) => Float64Array.of(7, x);
+        expect(outcome(() => bySlot.resistorFrom(0, { ohms: a }, 'ohms'), bySlot)).toStrictEqual(
+          outcome(() => byValue.resistor(0, a), byValue),
+        );
+        expect(outcome(() => bySlot.vsourceAt(0, slot(a), slot(b), 1), bySlot)).toStrictEqual(
+          outcome(() => byValue.vsource(0, a, b), byValue),
+        );
+        expect(outcome(() => bySlot.isourceAt(0, slot(a), 1), bySlot)).toStrictEqual(
+          outcome(() => byValue.isource(0, a), byValue),
+        );
+      }
+    }
+    // −0 normalised by slot too (toStrictEqual tells −0 from +0).
+    const values = new DcBranchValues(1);
+    values.vsourceAt(0, Float64Array.of(12), Float64Array.of(-0), 0);
+    expect(Object.is(values.ohms[0], 0)).toBe(true);
+  });
 });
 
 describe('dcBranchValues', () => {

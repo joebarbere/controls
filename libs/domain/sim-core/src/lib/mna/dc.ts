@@ -12,7 +12,7 @@ import { DenseLu } from '../lu/dense-lu';
 import { SparseFactors, SparseLu } from '../lu/sparse-lu';
 import type { Netlist, NetlistIsland } from '../netlist/types';
 import { FactorisationCache, type IslandSymbolic } from './factorisation-cache';
-import { buildSymbolic, endsChecksum, find, grow, positiveZero, type StampProgram } from './shared';
+import { buildSymbolic, endsChecksum, find, grow, type StampProgram } from './shared';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_UNSET, DC_STAMP_VSOURCE, type DcBranchValues } from './values';
 
 /*
@@ -127,7 +127,8 @@ function fits(solution: DcSolution, netlist: Netlist): boolean {
  * one source that is its most negative source terminal (ADR 0011 §5.3).
  */
 export function islandReferenceNode(netlist: Netlist, island: NetlistIsland): number {
-  for (const index of island.branches) {
+  for (let bi = 0; bi < island.branches.length; bi++) {
+    const index = island.branches[bi];
     const branch = netlist.branches[index];
     if (branch.kind === 'vsource') return branch.a;
   }
@@ -275,7 +276,10 @@ export class DcSolver {
    */
   solve(netlist: Netlist, values: DcBranchValues, out?: DcSolution): DcSolution {
     const solution = this.prepare(netlist, values, out);
-    for (const island of netlist.islands) this.solveIsland(netlist, island, values, solution);
+    for (let ii = 0; ii < netlist.islands.length; ii++) {
+      const island = netlist.islands[ii];
+      this.solveIsland(netlist, island, values, solution);
+    }
     return solution;
   }
 
@@ -324,7 +328,8 @@ export class DcSolver {
     if (this.previousStep.length < stepLength) this.previousStep = new Float64Array(stepLength);
     const given = options.warmStart ?? null;
     const warm = given !== null && given.topologyHash === netlist.topologyHash && fits(given, netlist) ? given : null;
-    for (const island of netlist.islands) {
+    for (let ii = 0; ii < netlist.islands.length; ii++) {
+      const island = netlist.islands[ii];
       const dc = island.kind === 'dc' || island.kind === 'empty';
       if (!dc) {
         this.solveIsland(netlist, island, values, solution);
@@ -409,7 +414,8 @@ export class DcSolver {
       const abstol = OUTER_LOOP_ABSTOL.value;
       const resolution = this.branchResolution;
       const reltol = OUTER_LOOP_RELTOL.value;
-      for (const node of island.nodes) {
+      for (let ni = 0; ni < island.nodes.length; ni++) {
+        const node = island.nodes[ni];
         const next = solution.nodes[2 * node];
         const now = iterate.nodes[2 * node];
         const d = next - now;
@@ -418,7 +424,8 @@ export class DcSolver {
         step[s++] = d;
         norm = Math.max(norm, Math.abs(d));
       }
-      for (const index of island.branches) {
+      for (let bi = 0; bi < island.branches.length; bi++) {
+        const index = island.branches[bi];
         const next = solution.branches[2 * index];
         const now = iterate.branches[2 * index];
         const d = next - now;
@@ -448,8 +455,14 @@ export class DcSolver {
         iterateIsLastSolve = true;
       } else {
         s = 0;
-        for (const node of island.nodes) iterate.nodes[2 * node] += alpha * step[s++];
-        for (const index of island.branches) iterate.branches[2 * index] += alpha * step[s++];
+        for (let ni = 0; ni < island.nodes.length; ni++) {
+          const node = island.nodes[ni];
+          iterate.nodes[2 * node] += alpha * step[s++];
+        }
+        for (let bi = 0; bi < island.branches.length; bi++) {
+          const index = island.branches[bi];
+          iterate.branches[2 * index] += alpha * step[s++];
+        }
         copyRecord(result, iterate.islands[island.index]);
         iterateIsLastSolve = false;
       }
@@ -478,8 +491,12 @@ export class DcSolver {
     const nodeTerm = this.nodeResolution;
     const out = this.branchResolution;
     const scale = 32 * Number.EPSILON;
-    for (const node of island.nodes) nodeTerm[node] = scale * GMIN_S.value * Math.abs(nodes[2 * node]);
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      nodeTerm[node] = scale * GMIN_S.value * Math.abs(nodes[2 * node]);
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       out[index] = 0;
       if (values.stamps[index] !== DC_STAMP_RESISTOR) continue;
       const branch = netlist.branches[index];
@@ -488,7 +505,8 @@ export class DcSolver {
       nodeTerm[branch.a] += term;
       if (branch.b !== branch.a) nodeTerm[branch.b] += term;
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       if (values.stamps[index] !== DC_STAMP_VSOURCE) continue;
       const branch = netlist.branches[index];
       const ohms = values.ohms[index];
@@ -524,11 +542,13 @@ export class DcSolver {
 
   /** Copies an island's node voltages and branch currents from `from` into `to`. */
   private copyIsland(netlist: Netlist, island: NetlistIsland, from: DcSolution, to: DcSolution): void {
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       to.nodes[2 * node] = from.nodes[2 * node];
       to.nodes[2 * node + 1] = from.nodes[2 * node + 1];
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       to.branches[2 * index] = from.branches[2 * index];
       to.branches[2 * index + 1] = from.branches[2 * index + 1];
     }
@@ -536,7 +556,8 @@ export class DcSolver {
   }
 
   private restoreValues(island: NetlistIsland, values: DcBranchValues): void {
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       values.stamps[index] = this.savedStamps[index];
       values.ohms[index] = this.savedOhms[index];
       values.emfV[index] = this.savedEmf[index];
@@ -545,7 +566,8 @@ export class DcSolver {
   }
 
   private saveValues(island: NetlistIsland, values: DcBranchValues): void {
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       this.savedStamps[index] = values.stamps[index];
       this.savedOhms[index] = values.ohms[index];
       this.savedEmf[index] = values.emfV[index];
@@ -564,7 +586,8 @@ export class DcSolver {
     const reltol = OUTER_LOOP_RELTOL.value;
     const vntol = OUTER_LOOP_VNTOL.value;
     const abstol = OUTER_LOOP_ABSTOL.value;
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       if (this.savedStamps[index] !== values.stamps[index]) return false;
       const ohmsWas = this.savedOhms[index];
       const ohmsNow = values.ohms[index];
@@ -582,7 +605,8 @@ export class DcSolver {
   }
 
   private valuesUnchanged(island: NetlistIsland, values: DcBranchValues): boolean {
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       if (
         this.savedStamps[index] !== values.stamps[index] ||
         !Object.is(this.savedOhms[index], values.ohms[index]) ||
@@ -613,8 +637,12 @@ export class DcSolver {
     const nodeUnknown = this.nodeUnknown;
     const branchUnknown = this.branchUnknown;
     let n = 0;
-    for (const node of island.nodes) nodeUnknown[node] = node === reference ? -1 : n++;
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      nodeUnknown[node] = node === reference ? -1 : n++;
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const stamp = values.stamps[index];
       if (stamp === DC_STAMP_UNSET) throw new Error(`DcSolver: branch ${index} has no DC value`);
@@ -670,7 +698,8 @@ export class DcSolver {
     const nodes = solution.nodes;
     const branches = solution.branches;
     let ok = true;
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       const i = nodeUnknown[node];
       const root = comp[node];
       let v = 0;
@@ -678,12 +707,13 @@ export class DcSolver {
         // A floating member's unknown is u = V − c; its representative's is c itself.
         v = root === this.referenceRoot || node === root ? rhs[i] : rhs[nodeUnknown[root]] + rhs[i];
       }
-      v = positiveZero(v);
+      v += 0; // −0 becomes +0, so every stored value has one bit pattern (inline: a call returning a double boxes it)
       if (!Number.isFinite(v)) ok = false;
       nodes[2 * node] = v;
       nodes[2 * node + 1] = 0;
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const k = branchUnknown[index];
       let current: number;
@@ -695,7 +725,7 @@ export class DcSolver {
         // Inside a floating component, from the differences u, not from c + u: no common mode to cancel.
         current = (this.relative(branch.a) - this.relative(branch.b)) * (1 / values.ohms[index]);
       }
-      current = positiveZero(current);
+      current += 0; // as `v` above
       if (!Number.isFinite(current)) ok = false;
       branches[2 * index] = current;
       branches[2 * index + 1] = 0;
@@ -859,7 +889,8 @@ export class DcSolver {
     this.stampOhms = values.ohms;
     this.stampEmf = values.emfV;
     this.stampAmps = values.amps;
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       const i = nodeUnknown[node];
       if (i < 0) continue;
       const root = comp[node];
@@ -877,7 +908,8 @@ export class DcSolver {
         this.add(r, r, VALUE_GMIN, -1);
       }
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const stamp = values.stamps[index];
       const k = branchUnknown[index];
@@ -922,8 +954,12 @@ export class DcSolver {
   /** Whether the island's zero-ohm voltage sources close a loop (a self-loop included). */
   private hasIdealSourceLoop(netlist: Netlist, island: NetlistIsland, values: DcBranchValues): boolean {
     const parent = this.parent;
-    for (const node of island.nodes) parent[node] = node;
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      parent[node] = node;
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       if (values.stamps[index] !== DC_STAMP_VSOURCE || values.ohms[index] !== 0) continue;
       const branch = netlist.branches[index];
       const ra = find(parent, branch.a);
@@ -942,8 +978,12 @@ export class DcSolver {
    */
   private conductiveComponents(netlist: Netlist, island: NetlistIsland, values: DcBranchValues): void {
     const comp = this.comp;
-    for (const node of island.nodes) comp[node] = node;
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      comp[node] = node;
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const stamp = values.stamps[index];
       if (stamp !== DC_STAMP_RESISTOR && stamp !== DC_STAMP_VSOURCE) continue;
       const branch = netlist.branches[index];
@@ -953,7 +993,10 @@ export class DcSolver {
       else if (rb < ra) comp[ra] = rb;
     }
     // Union by the smaller root keeps every root its component's smallest node.
-    for (const node of island.nodes) comp[node] = find(comp, node);
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      comp[node] = find(comp, node);
+    }
   }
 
   /**
@@ -1010,11 +1053,13 @@ export class DcSolver {
   }
 
   private zero(netlist: Netlist, island: NetlistIsland, solution: DcSolution): void {
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       solution.nodes[2 * node] = 0;
       solution.nodes[2 * node + 1] = 0;
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       solution.branches[2 * index] = 0;
       solution.branches[2 * index + 1] = 0;
     }

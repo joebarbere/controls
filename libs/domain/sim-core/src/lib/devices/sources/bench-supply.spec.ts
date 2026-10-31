@@ -4,14 +4,20 @@ import fc from 'fast-check';
 import { FLIP, RESISTOR_12, RHEOSTAT, THERMAL_LOAD } from '../../../testing/engine';
 import { BENCH_SUPPLY, SourceHost } from '../../../testing/sources';
 import { BENCH_SUPPLY_OUTPUT } from './bench-supply';
+import type { DcSolution } from '../../mna/dc';
+import { DcBranchValues } from '../../mna/values';
+import type { NetlistBranch } from '../../netlist/types';
 import {
   currentBand,
   CV_CC_HYSTERESIS,
   CV_CC_HYSTERESIS_AMPS,
   CV_CC_HYSTERESIS_VOLTS,
+  iterateRegulated,
   REG_CC,
   REG_CV,
   regulate,
+  RegulatorSettings,
+  stampedMode,
   voltageBand,
 } from './regulator';
 
@@ -70,6 +76,48 @@ describe('regulate: the CV/CC decision with hysteresis', () => {
     const vEdge = 12 - 2 * R_OUT + voltageBand(12);
     expect(regulate(REG_CC, 2, vEdge, 12, 2, R_OUT)).toBe(REG_CC);
     expect(regulate(REG_CC, 2, vEdge + 1e-12, 12, 2, R_OUT)).toBe(REG_CV);
+  });
+});
+
+/**
+ * An iterate near either edge of the band: a setpoint, a limit and an output resistance, and a current
+ * and voltage within a few bands of the CV → CC and CC → CV thresholds (or on them exactly).
+ */
+const edgeArb = fc
+  .record({
+    mode: fc.constantFrom(REG_CV, REG_CC),
+    setpointV: fc.double({ min: 0, max: 30, noNaN: true }),
+    limitA: fc.double({ min: 0, max: 5, noNaN: true }),
+    ohms: fc.constantFrom(R_OUT, 0.01, 0.05),
+    offset: fc.oneof(fc.constant(0), fc.double({ min: -3, max: 3, noNaN: true })),
+  })
+  .map(({ mode, setpointV, limitA, ohms, offset }) => {
+    const amps = limitA + currentBand(limitA) * (1 + offset);
+    const volts = setpointV - limitA * ohms + voltageBand(setpointV) * (1 + offset);
+    return { mode, setpointV, limitA, ohms, amps, volts };
+  });
+
+describe('iterateRegulated: the outer loop step on a bank slot', () => {
+  it('stamps what `regulate` decides (it writes the law out on the slot)', () => {
+    const branch = { index: 0, a: 0, b: 1 } as NetlistBranch;
+    fc.assert(
+      fc.property(edgeArb, ({ mode, setpointV, limitA, ohms, amps, volts }) => {
+        const settings = new RegulatorSettings(2);
+        settings.setpointV[1] = setpointV;
+        settings.limitA[1] = limitA;
+        settings.ohms[1] = ohms;
+        const values = new DcBranchValues(1);
+        if (mode === REG_CC) values.isource(0, limitA);
+        else values.vsource(0, setpointV, ohms);
+        const iterate = { nodes: Float64Array.of(0, 0, volts, 0), branches: Float64Array.of(amps, 0) };
+        iterateRegulated(branch, iterate as unknown as DcSolution, values, REG_CV, settings, 1);
+        const expected = regulate(mode, amps, volts, setpointV, limitA, ohms);
+        expect(stampedMode(values, 0)).toBe(expected);
+        if (expected === REG_CC) expect(values.amps[0]).toBe(limitA);
+        else expect([values.emfV[0], values.ohms[0]]).toStrictEqual([setpointV, ohms]);
+      }),
+      { numRuns: 200 },
+    );
   });
 });
 

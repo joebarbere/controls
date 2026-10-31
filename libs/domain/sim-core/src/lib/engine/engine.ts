@@ -237,6 +237,14 @@ export class SimEngine {
   private discreteBanks: SimDeviceBank[] = [];
   private continuousBanks: SimDeviceBank[] = [];
   private protectionBanks: SimDeviceBank[] = [];
+  /**
+   * Per discrete and protection bank: 1 if its kind lists `simTopologyKeys`, so a change it reports may
+   * move the netlist (a blown fuse); 0 if only a value its `dcValue` reads can have moved (a PSU's
+   * hiccup), which needs a re-solve but no recompile: the compile reads a bag only through those keys.
+   */
+  private discreteTopology = new Uint8Array(0);
+  private protectionTopology = new Uint8Array(0);
+  private readonly netlistModels: NetlistModels;
   private afterSolveBanks: SimDeviceBank[] = [];
   private devices = new Map<number, DeviceSlot>();
   private readonly tombstones = new Map<number, StateBag>();
@@ -277,7 +285,8 @@ export class SimEngine {
   private constructor(world: World, options: SimEngineOptions) {
     this.catalog = options.catalog ?? BUILTIN_CATALOG;
     this.deviceModels = options.deviceModels ?? BUILTIN_DEVICE_MODELS;
-    this.compiler = new NetlistCompiler(this.catalog, { models: options.netlistModels ?? BUILTIN_NETLIST_MODELS });
+    this.netlistModels = options.netlistModels ?? BUILTIN_NETLIST_MODELS;
+    this.compiler = new NetlistCompiler(this.catalog, { models: this.netlistModels });
     this.world = world;
     this.tickNow = world.tick;
     // The world's sim bags are what was materialised: right at a start (CompileOptions.sim falls back to them).
@@ -464,23 +473,30 @@ export class SimEngine {
     ctx.solution = this.solution;
     // Indexed loops over preallocated arrays: a step allocates nothing (no iterators, no closures).
     let topologyChanged = false;
+    let valuesChanged = false;
     const discrete = this.discreteBanks;
     for (let i = 0; i < discrete.length; i++) {
-      if ((discrete[i].discrete as (c: LayerContext) => boolean)(ctx)) topologyChanged = true;
+      if ((discrete[i].discrete as (c: LayerContext) => boolean)(ctx)) {
+        if (this.discreteTopology[i] === 1) topologyChanged = true;
+        else valuesChanged = true;
+      }
     }
     const continuous = this.continuousBanks;
     for (let i = 0; i < continuous.length; i++) (continuous[i].continuous as (c: LayerContext) => void)(ctx);
     const protection = this.protectionBanks;
     for (let i = 0; i < protection.length; i++) {
-      if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) topologyChanged = true;
+      if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) {
+        if (this.protectionTopology[i] === 1) topologyChanged = true;
+        else valuesChanged = true;
+      }
     }
     this.tickNow = t + 1;
-    // A layer changed the topology or a value the solve reads (a PSU switching off, F2.4): recompile if
-    // the topology moved, and re-solve at t + 1 either way, so the change is tick-exact.
-    if (topologyChanged) {
-      this.recompile();
-      this.solve(t + 1, 'layer');
-    }
+    // A layer changed the topology (a fuse blew) or a value the solve reads (a PSU switching off, F2.4):
+    // recompile only if it may have moved the topology (a kind with sim topology keys), and re-solve at
+    // t + 1 either way, so the change is tick-exact. A value-only change never compiles: the compile
+    // walks the whole world, allocating (an F2.4 gate: 12 B/step for two hiccuping PSUs in 15 devices).
+    if (topologyChanged) this.recompile();
+    if (topologyChanged || valuesChanged) this.solve(t + 1, 'layer');
   }
 
   /** Recompiles the commanded world with the live sim state; true if the netlist changed. */
@@ -795,9 +811,15 @@ export class SimEngine {
       this.stats.bankBuilds++;
     }
     this.devices = devices;
-    this.discreteBanks = banks.filter((b) => b.bank.discrete !== undefined).map((b) => b.bank);
+    const topological = (b: Bank) =>
+      (ownModel(this.netlistModels.devices, b.kind)?.simTopologyKeys.length ?? 0) > 0 ? 1 : 0;
+    const discrete = banks.filter((b) => b.bank.discrete !== undefined);
+    const protection = banks.filter((b) => b.bank.protection !== undefined);
+    this.discreteBanks = discrete.map((b) => b.bank);
+    this.discreteTopology = Uint8Array.from(discrete, topological);
     this.continuousBanks = banks.filter((b) => b.bank.continuous !== undefined).map((b) => b.bank);
-    this.protectionBanks = banks.filter((b) => b.bank.protection !== undefined).map((b) => b.bank);
+    this.protectionBanks = protection.map((b) => b.bank);
+    this.protectionTopology = Uint8Array.from(protection, topological);
     this.afterSolveBanks = banks.filter((b) => b.bank.afterSolve !== undefined).map((b) => b.bank);
 
     const branchCount = netlist.branches.length;

@@ -109,8 +109,9 @@ export interface SimDeviceBank {
   afterSolve?(ctx: LayerContext, values: DcBranchValues): void;
   /**
    * The discrete layer (relays, P6). Returns whether it changed what the electrical layer sees: the
-   * topology, or a value a model's `dcValue` reads from its bank. Either way the engine recompiles if
-   * needed and re-solves at `tick + 1`, within the step.
+   * topology, or a value a model's `dcValue` reads from its bank. Either way the engine re-solves at
+   * `tick + 1`, within the step; it recompiles first only for a kind that lists `simTopologyKeys` (the
+   * compile reads a bag through those keys alone, so no other kind's change can move the netlist).
    */
   discrete?(ctx: LayerContext): boolean;
   /** The continuous layer (filament temperature, state of charge): integrates over the step. */
@@ -118,7 +119,8 @@ export interface SimDeviceBank {
   /**
    * The protection layer (fuse I²t, breaker, PSU hiccup). Returns whether it changed what the
    * electrical layer sees (a blown fuse's topology, a PSU switching its output off): the engine then
-   * re-solves at `tick + 1`, within the step, so the change is tick-exact.
+   * re-solves at `tick + 1`, within the step, so the change is tick-exact (recompiling first only for a
+   * kind with `simTopologyKeys`, as `discrete`).
    */
   protection?(ctx: LayerContext): boolean;
   /**

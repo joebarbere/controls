@@ -10,7 +10,7 @@ import {
   READING_UNSOLVED,
   statusField,
 } from '../readings';
-import { iterateRegulated, REG_CC, REG_CV, stampedMode, stampRegulated } from './regulator';
+import { iterateRegulated, REG_CC, REG_CV, RegulatorSettings, stampedMode, stampRegulated } from './regulator';
 
 /*
  * The DIN-rail switch-mode supply (plan F2.4, kind `supply.dinPsu`): a fixed `ratedVoltageV` behind
@@ -70,6 +70,7 @@ export const DIN_PSU_MODEL: SimDeviceModel = {
     const branch = new Int32Array(n);
     const entity = new Int32Array(n);
     const params = devices.map((d) => d.params as DinPsuParams);
+    const settings = new RegulatorSettings(n);
     devices.forEach((d, i) => {
       const m = DIN_PSU_MODES.indexOf(d.bag['mode'] as (typeof DIN_PSU_MODES)[number]);
       // The load check (`checkBags`) only lets the three modes in: anything else is a programming error.
@@ -78,21 +79,21 @@ export const DIN_PSU_MODEL: SimDeviceModel = {
       phase[i] = d.bag['phaseTicks'] as number;
       branch[i] = d.branches[0];
       entity[i] = d.entity;
+      settings.setpointV[i] = params[i].ratedVoltageV;
+      settings.limitA[i] = params[i].currentLimitA;
+      settings.ohms[i] = params[i].outputResistanceOhm;
     });
     const regulation = (i: number) => (mode[i] === MODE_LIMIT ? REG_CC : REG_CV);
     return {
       bag: (i) => ({ mode: DIN_PSU_MODES[mode[i]], phaseTicks: phase[i] }),
       dcValue: (i, b, values) => {
-        const p = params[i];
         if (mode[i] === MODE_OFF) values.isource(b.index, 0);
-        else stampRegulated(values, b.index, regulation(i), p.ratedVoltageV, p.currentLimitA, p.outputResistanceOhm);
+        else stampRegulated(values, b.index, regulation(i), settings, i);
         return true;
       },
       iterate: (i, b, iterate, values) => {
-        const p = params[i];
         if (mode[i] === MODE_OFF) values.isource(b.index, 0);
-        else
-          iterateRegulated(b, iterate, values, regulation(i), p.ratedVoltageV, p.currentLimitA, p.outputResistanceOhm);
+        else iterateRegulated(b, iterate, values, regulation(i), settings, i);
       },
       afterSolve: (ctx, values) => {
         for (let i = 0; i < n; i++) {

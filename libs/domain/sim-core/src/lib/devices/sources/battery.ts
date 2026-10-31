@@ -53,11 +53,14 @@ import { branchReading, f64Field, READING_SOLVED, statusField } from '../reading
  *
  * - the internal resistance is the full-charge figure at every state of charge (it rises as a real
  *   battery empties) and a 1 kHz tester's figure used as a DC resistance (the catalogue says so);
- * - capacity doesn't depend on the discharge rate (Peukert's effect): above about C/5 the model's
- *   capacity is optimistic by roughly 30–40 % (at 0.7C a real 7 Ah VRLA is near its cutoff within the
- *   hour, where this one has used 71 %); nor on temperature;
+ * - capacity doesn't depend on the discharge rate (Peukert's effect): the model's capacity is
+ *   optimistic by about 20 % at C/5, 40 % at C/2 and roughly 70 % at 1C (at 0.7C a real 7 Ah VRLA is
+ *   near its cutoff within the hour, where this one has used 71 %); nor on temperature;
  * - charging is counted at 100 % coulombic efficiency, and the charge EMF is a straight line to
- *   gassing, not a measured charge curve;
+ *   gassing, not a measured charge curve. There is no charge overpotential, so bulk charge reads low
+ *   and runs fast (a half-charged battery taking 5 A reads about 12.47 V; a stiff source drives about
+ *   9C), a 13.8 V float charges only to about 93 %, and overcharge is limited by the internal
+ *   resistance alone (about 26 A at 15 V, where a real battery takes C/50 to C/20);
  * - the EMF follows s at once: the surface charge and the recovery of a rested cell are ignored;
  *   sulphation and wear are a later fault and wear feature.
  */
@@ -165,7 +168,7 @@ export const BATTERY_MODEL: SimDeviceModel = {
       dcValue: (i, b, values) => {
         emf[i] = batteryEmfV(params[i], soc[i]);
         chargeEmf[i] = batteryChargeEmfV(params[i], soc[i]);
-        values.vsource(b.index, emf[i], ohms[i]);
+        values.vsourceAt(b.index, emf, ohms, i);
         return true;
       },
       // The cell's segment from the iterate's terminal voltage (see the header): discharge (E behind R),
@@ -173,8 +176,8 @@ export const BATTERY_MODEL: SimDeviceModel = {
       iterate: (i, b, iterate, values) => {
         const k = b.index;
         const v = iterate === null ? emf[i] : iterate.nodes[2 * b.b] - iterate.nodes[2 * b.a];
-        if (v <= emf[i]) values.vsource(k, emf[i], ohms[i]);
-        else if (v >= chargeEmf[i]) values.vsource(k, chargeEmf[i], ohms[i]);
+        if (v <= emf[i]) values.vsourceAt(k, emf, ohms, i);
+        else if (v >= chargeEmf[i]) values.vsourceAt(k, chargeEmf, ohms, i);
         else values.isource(k, 0);
       },
       continuous: (ctx) => {

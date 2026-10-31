@@ -91,17 +91,34 @@ export function regulate(
   return volts > setpointV - limitA * ohms + voltageBand(setpointV) ? REG_CV : REG_CC;
 }
 
-/** Stamps `branch` in `mode`. */
+/**
+ * A bank's regulated outputs' settings, one slot per device: what `stampRegulated` and
+ * `iterateRegulated` read by index. They take a slot, never the values: a non-integer double passed
+ * to a call V8 doesn't inline is boxed into a heap number, and these run in the outer loop of every
+ * solve (simulation caveats, "Allocation that depends on inlining").
+ */
+export class RegulatorSettings {
+  readonly setpointV: Float64Array;
+  readonly limitA: Float64Array;
+  readonly ohms: Float64Array;
+
+  constructor(count: number) {
+    this.setpointV = new Float64Array(count);
+    this.limitA = new Float64Array(count);
+    this.ohms = new Float64Array(count);
+  }
+}
+
+/** Stamps `branch` in `mode`, with slot `i`'s settings. */
 export function stampRegulated(
   values: DcBranchValues,
   branch: number,
   mode: number,
-  setpointV: number,
-  limitA: number,
-  ohms: number,
+  settings: RegulatorSettings,
+  i: number,
 ): void {
-  if (mode === REG_CC) values.isource(branch, limitA);
-  else values.vsource(branch, setpointV, ohms);
+  if (mode === REG_CC) values.isourceAt(branch, settings.limitA, i);
+  else values.vsourceAt(branch, settings.setpointV, settings.ohms, i);
 }
 
 /** The mode `branch` is stamped in: CC for a current source, else CV. */
@@ -118,15 +135,24 @@ export function iterateRegulated(
   iterate: DcSolution | null,
   values: DcBranchValues,
   start: number,
-  setpointV: number,
-  limitA: number,
-  ohms: number,
+  settings: RegulatorSettings,
+  i: number,
 ): void {
   const b = branch.index;
   let mode = start;
   if (iterate !== null) {
-    const volts = iterate.nodes[2 * branch.b] - iterate.nodes[2 * branch.a];
-    mode = regulate(stampedMode(values, b), iterate.branches[2 * b], volts, setpointV, limitA, ohms);
+    // `regulate`, written out on the slot's settings (so no double crosses a call): the same
+    // expressions in the same order, so the same bits (`bench-supply.spec.ts` checks the two agree).
+    const setpointV = settings.setpointV[i];
+    const limitA = settings.limitA[i];
+    if (stampedMode(values, b) === REG_CV) {
+      const band = CV_CC_HYSTERESIS.value * limitA + CV_CC_HYSTERESIS_AMPS.value;
+      mode = iterate.branches[2 * b] > limitA + band ? REG_CC : REG_CV;
+    } else {
+      const volts = iterate.nodes[2 * branch.b] - iterate.nodes[2 * branch.a];
+      const band = CV_CC_HYSTERESIS.value * setpointV + CV_CC_HYSTERESIS_VOLTS.value;
+      mode = volts > setpointV - limitA * settings.ohms[i] + band ? REG_CV : REG_CC;
+    }
   }
-  stampRegulated(values, b, mode, setpointV, limitA, ohms);
+  stampRegulated(values, b, mode, settings, i);
 }
