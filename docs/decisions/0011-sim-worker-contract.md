@@ -801,6 +801,16 @@ F2.3b implemented the transport and the worker (part 1) and `SimHost` with the s
 
 - **`netlist.dump` needs no message** (F2.6). `SimHost.netlistDumpAt()` captures the world as `hashAt` does (the `state` query, §9.4), materialises it and runs `sim-core`'s pure `netlistDump` on the main thread, so the text is byte for byte `sim-cli`'s. The message union is unchanged (protocol stays 3). The HUD's "Last solve" reads `SnapshotView.lastSolveTick` only when `islandCount > 0` (§5.2: an empty netlist writes 0).
 
+## Implementation notes (F2.6 overlays)
+
+F2.6 implemented §9.2's overlays (`renderer-engineer`). Where the text above left a point open, or the implementation pinned one down:
+
+- **Overlays draw their own lead and terminal geometry** (§9.2 "Picking"): nothing drew leads before P3, so `SimOverlays` draws instanced lead segments and terminal markers from the world (connections and catalogue terminals). They are still never pickable nor among the picker's roots; when P3 draws conductors, the overlays recolour those.
+- **`NetlistReadout` in `sim-protocol`** is the one place a reader turns a `SnapshotView` into |V(node) − V(islandReference)|, |I|, a DC direction and each island's `islandStatus` and band (§5.3), allocation-free and cached per descriptor, so the overlays and the netlist inspector agree. It is not a layout change: no protocol bump. `fakeSnapshotView` builds views from plain values through `encodeSnapshot` (§6.3's fake snapshots).
+- **Band names are the join** (§5.3): the renderer resolves `NOMINAL_BANDS[band]` by name to a voltage scale (`dc12`, `dc24`, `ac120-240`, `ac208y120`, `ac480y277`); index 0 (`none`) and an unknown name are no scale. Appending a band remains a protocol bump (§12); a renderer spec fails until the name has a scale.
+- **The current scale is one for every band** (logarithmic, 1 mA to 100 A): current follows the load, not the supply. Band 0 still shows current.
+- **AC shows magnitude only:** AC and mixed islands get no direction (`branchDirection` 0).
+
 ## Resolved in review
 
 The proposal's open questions, by number:

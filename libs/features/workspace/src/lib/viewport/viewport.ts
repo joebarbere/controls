@@ -44,6 +44,8 @@ import {
   selectionToggle,
 } from '@controls/world-model';
 import { LampSnapshotFeed } from './lamp-feed';
+import { OverlayLegend } from './overlay-legend';
+import { connectViewportOverlays } from './viewport-overlays';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -82,6 +84,7 @@ const TEST_HOOK = '__controlsViewport';
 @Component({
   selector: 'ctl-viewport',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [OverlayLegend],
   template: `
     <canvas
       #canvas
@@ -108,6 +111,9 @@ const TEST_HOOK = '__controlsViewport';
         }
         {{ st.drawCalls }} draws · {{ st.geometries }} geo · {{ st.bvhs }} bvh
       </div>
+    }
+    @if (overlays.active()) {
+      <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
     }
   `,
   styles: `
@@ -166,6 +172,7 @@ const TEST_HOOK = '__controlsViewport';
     '[attr.data-placement-ref]': 'state()?.placement?.ref?.id ?? null',
     '[attr.data-placement-valid]': 'placementValid()',
     '[attr.data-placement-target]': 'state()?.placement?.targetId ?? null',
+    '[attr.data-overlays]': 'overlays.active()',
   },
 })
 export class Viewport {
@@ -188,6 +195,8 @@ export class Viewport {
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly renderer = new ViewportRenderer();
+  /** The debug overlays (F2.6): `view.overlay`, sim snapshots from `SimHost`, reduced motion, the legend. */
+  protected readonly overlays = connectViewportOverlays(this.renderer);
   protected readonly session = inject(Session);
   protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
   private readonly keys = inject(KeybindingService);

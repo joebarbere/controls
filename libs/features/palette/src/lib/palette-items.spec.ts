@@ -27,7 +27,8 @@ describe('paletteItems', () => {
       'sim.resume', // disabled here: no game (session.active); Sim, by title
       'sim.setSpeed',
       'sim.step',
-      'console.toggle', // disabled here: console.available is unset
+      'view.overlay', // disabled here: console.available is unset; View, by title: Show or hide a debug overlay, Toggle console
+      'console.toggle',
     ]);
     expect(ids(items)).not.toContain('palette.open');
     expect([...PALETTE_HIDDEN_COMMANDS]).toEqual(['palette.open']);

@@ -4,6 +4,7 @@ import {
   encodeSnapshot,
   type FieldRef,
   LATEST_SLOT_INDEX,
+  NetlistReadout,
   PUBLISH_SEQ_INDEX,
   slotCapacityFor,
   snapshotSlotBytes,
@@ -22,6 +23,10 @@ import { runInNewContext } from 'node:vm';
  * the 500 device fields a renderer would draw. Each "frame" first announces a publish (both slots are
  * encoded once, up front, and the announcement only flips `latestSlot` and bumps `publishSeq`), so
  * every read is a real copy and nothing but the reader runs in the measured window.
+ *
+ * With `netlist` (F2.6's overlays and inspector), each frame also reads the whole netlist out of the
+ * copy: every node's |V| against its island reference, every branch's |I| and direction, and each
+ * island's status and band (`NetlistReadout.read`), what the voltage and current overlays draw from.
  */
 
 /** The plant: 500 devices of one 24-byte record each, 1,000 nodes, 1,500 branches, 50 islands. */
@@ -44,7 +49,7 @@ export interface SnapshotReadRig {
   sum(): number;
 }
 
-export function snapshotReadRig(plant = READ_PLANT): SnapshotReadRig {
+export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?: boolean } = {}): SnapshotReadRig {
   const { devices, nodes, branches, islands } = plant;
   const source: SnapshotSource = {
     topologyGeneration: 0,
@@ -83,15 +88,28 @@ export function snapshotReadRig(plant = READ_PLANT): SnapshotReadRig {
     protocol: SIM_PROTOCOL_VERSION,
     generation: 0,
     topologyHash: 'ab'.repeat(32),
-    nodes: [],
-    branches: [],
-    islands: [],
+    // The netlist the overlays read (F2.6): nodes and branches spread over the islands. Only the
+    // netlist rig needs it; the plain rig keeps the empty one it was measured with.
+    nodes: options.netlist
+      ? Array.from({ length: nodes }, (_, i) => ({ island: i % islands, members: [{ entity: i + 1, terminal: 'a' }] }))
+      : [],
+    branches: options.netlist
+      ? Array.from({ length: branches }, (_, i) => ({
+          element: { kind: 'connection' as const, connection: i + 1 },
+          a: i % nodes,
+          b: (i + 1) % nodes,
+          island: i % islands,
+        }))
+      : [],
+    islands: options.netlist ? Array.from({ length: islands }, () => ({ kind: 'dc' as const, nodes: [] })) : [],
     devices: Array.from({ length: devices }, (_, i) => ({ entity: i + 1, kind: schema.kind, recordOffset: 24 * i })),
     schemas: { [schema.kind]: schema },
   };
   const index = DescriptorIndex.of(descriptor);
   const refs = descriptor.devices.map((d) => index.field(d.entity, 'lightOutputRel') as FieldRef);
   const out = new Float64Array(devices);
+  const readout = options.netlist ? NetlistReadout.of(descriptor) : null;
+  const reading = readout?.createReading() ?? null;
   const reader = new SnapshotReader();
   reader.attach(buffer);
   reader.setDescriptor(descriptor);
@@ -105,10 +123,15 @@ export function snapshotReadRig(plant = READ_PLANT): SnapshotReadRig {
       const view = reader.latest();
       if (view === null || reader.stats.reads === before) throw new Error('the read copied nothing');
       view.readAll(refs, out);
+      if (readout !== null && reading !== null) readout.read(view, reading);
     },
     sum() {
       let sum = 0;
       for (let i = 0; i < out.length; i++) sum += out[i];
+      if (reading !== null) {
+        for (let n = 0; n < reading.nodeVolts.length; n++) sum += reading.nodeVolts[n];
+        for (let b = 0; b < reading.branchAmps.length; b++) sum += reading.branchAmps[b] * reading.branchDirection[b];
+      }
       return sum;
     },
   };

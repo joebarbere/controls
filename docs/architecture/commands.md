@@ -101,6 +101,7 @@ Positions are integer mm and angles integer millidegrees, validated by the `save
 | `toolbelt.select`  | `slot`: integer 1–9 (required)                                | `ToolBelt` sets the active slot and the `toolbelt.slot` context key; HUD shows it; the viewport arms its prop |
 | `view.mode`        | `mode`: `walk` or `work` (required)                           | the viewport switches mode and publishes the `mode` context key                                               |
 | `view.focus`       | `target`: view target id, `[a-z][a-z0-9]*(-[a-z0-9]+)*`, ≤ 64 | the viewport frames that target in work mode (an id it can't focus is ignored)                                |
+| `view.overlay`     | `name`: `voltage` or `current`; `on`: boolean (both required) | the viewport shows or hides that debug overlay (F2.6; `when: console.available`, no default key)              |
 
 All are logged, never change the world or its hash, and replay headless as no-ops. `view.mode` and `view.focus` stay logged on purpose: they change what the player sees, unlike the unlogged UI chrome (`palette.open`, `console.toggle`). `view.mode` and `view.focus` are registered by `createWorldRegistry()` (`viewportCommands()` in `@controls/commands`).
 
