@@ -338,11 +338,11 @@ Measured 2026-10-30 on an AMD Ryzen 5 5600X under Node 24: `plant-compile` took 
 - **1.45–1.49 ms** with a warm cache (p90 2.5 ms);
 - **4.5–4.6 ms** for a topology never seen (about 0.37 ms of AMD and pattern building per 250-unknown island).
 
-Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm verify`'s parallel test workers it measured 2.3–2.6 ms, and CI runners are slower than this machine. So its gate stays in `PENDING_BENCH_CASES` until the CI runners' numbers are in and the user decides between running `bench` uncontended, another gate, or a spec change. The F2.2 part 3 PR lays out the options.
+Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm verify`'s parallel test workers it measured 2.3–2.6 ms, and CI runners are slower than this machine. The CI runners measured it at 2.12 ms (Ubuntu), 3.74 ms (macOS) and 4.77 ms (Windows). **Decided 2026-10-31:** the case stays reported-only, the structural recompile (about 75 % of the cost) is optimised next, and then a gate switches on with the 2 ms budget scaled by a calibration loop timed in the same process (plan F2.2 part 3b), so `verify` stays identical to CI. §4.5's 2 ms remains the target on player hardware.
 
 ## Not yet
 
 - **Solvers** (F2.2 part 2): complex phasor MNA for AC islands (on the dense and sparse paths).
-- **The re-solve gate** (spec §4.5's 2 ms): reported, pending the CI runners' numbers and the user's decision.
+- **The re-solve gate** (spec §4.5's 2 ms): reported now; the recompile optimisation and the calibrated gate follow (plan F2.2 part 3b).
 - **Engine loop** (F2.3a): the tick layers, and calling `NetlistCompiler.compile` on each command and topology event with the engine's sim state.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

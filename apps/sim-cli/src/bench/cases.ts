@@ -116,9 +116,9 @@ export const BENCH_CASES: readonly BenchCase[] = [
     // switch, recompiles (structurally, from cached fragments), fills the values and solves the 8
     // islands (about 250 unknowns each, so sparse LU). The factorisation cache holds both switch
     // states after the first warm-up run, as it does for a player toggling a switch. Reported without
-    // a gate for now: its 2 ms budget stays in PENDING_BENCH_CASES until the CI runners' numbers are
-    // in and the user decides how it is gated (F2.2 part 3 PR; measured 1.45 ms alone on a Ryzen 5
-    // 5600X, but 2.3–2.6 ms beside `pnpm verify`'s parallel test workers).
+    // a gate (the user's decision, 2026-10-31): CI measured 2.12, 3.74 and 4.77 ms on Ubuntu, macOS
+    // and Windows against 1.47 ms locally, so its 2 ms budget stays in PENDING_BENCH_CASES until F2.2
+    // part 3b optimises the recompile and gates it as a ratio to a same-process calibration loop.
     name: 'plant-resolve-topology-change',
     warmup: 10,
     runs: 51,
@@ -149,6 +149,10 @@ export const BENCH_CASES: readonly BenchCase[] = [
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
 export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
   // Runs and reports above (`plant-resolve-topology-change`); its gate waits for the user's decision.
-  { name: 'plant-resolve-topology-change', budgetMs: 2, enabledBy: 'the CI-runner decision (F2.2 part 3)' },
+  {
+    name: 'plant-resolve-topology-change',
+    budgetMs: 2,
+    enabledBy: 'F2.2 part 3b (recompile optimisation, calibrated gate)',
+  },
   { name: 'plant-tick', budgetMs: 0.3, enabledBy: 'F2.3a' },
 ];
