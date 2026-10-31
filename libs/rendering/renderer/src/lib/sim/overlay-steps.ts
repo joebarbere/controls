@@ -77,6 +77,15 @@ export function createOverlaySteps(terminals: number, leads: number): OverlaySte
   };
 }
 
+/** Sets every step back to unknown (a new descriptor: no bin carries over). Allocation-free. */
+export function resetOverlaySteps(steps: OverlaySteps): void {
+  steps.terminalVolts.fill(STEP_UNKNOWN);
+  steps.leadVoltsA.fill(STEP_UNKNOWN);
+  steps.leadVoltsB.fill(STEP_UNKNOWN);
+  steps.leadAmps.fill(STEP_UNKNOWN);
+  steps.leadDirection.fill(0);
+}
+
 /** Everything a step update needs besides the steps themselves. */
 export interface StepInputs {
   readonly readout: NetlistReadout | null;

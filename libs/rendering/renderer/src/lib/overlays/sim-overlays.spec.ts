@@ -2,12 +2,15 @@ import { Box3Helper, InstancedMesh, Mesh, Scene, type BufferGeometry, type Mater
 import { createWorld } from '@controls/save-format';
 import {
   fakeSnapshotView,
+  NetlistReadout,
   SIM_PROTOCOL_VERSION,
   type FakeIsland,
   type SnapshotView,
   type TopologyDescriptor,
 } from '@controls/sim-protocol';
 import { createWorldBus, type World } from '@controls/world-model';
+import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { ManualFrameClock } from '../loop/manual-frame-clock';
 import { RenderLoop } from '../loop/render-loop';
 import { describeSceneGraph } from '../scene';
@@ -330,6 +333,154 @@ describe('SimOverlays in the viewport', () => {
     expect(overlays.describe().leads).toHaveLength(8);
     expect(after.visible).toBe(true);
     controller.dispose();
+  });
+});
+
+describe('SimOverlays per descriptor', () => {
+  it('resolves the netlist lookups once per descriptor, not per snapshot', () => {
+    const { controller, feed, overlays } = setup();
+    overlays.setOverlay('current', true);
+    const of = vi.spyOn(NetlistReadout, 'of');
+    const d1 = benchDescriptor();
+    feed.publish(benchSnapshot(d1));
+    feed.publish(benchSnapshot(d1, {}, 5));
+    expect(of).toHaveBeenCalledTimes(1);
+    feed.publish(benchSnapshot(benchDescriptor())); // a new generation: a new descriptor object
+    expect(of).toHaveBeenCalledTimes(2);
+    of.mockRestore();
+    controller.dispose();
+  });
+
+  it('restarts the steps on a new descriptor, so no bin carries over from the old band', () => {
+    const scene = new Scene();
+    const overlays = new SimOverlays(scene, () => undefined, undefined, ['none', 'dc12', 'dc24']);
+    overlays.syncWorld(benchWorld());
+    const feed = new FakeFeed();
+    overlays.attach(feed);
+    overlays.setOverlay('voltage', true);
+    const pos = () => overlays.describe().terminals.find((t) => t.entity === 1 && t.terminal === 'pos')?.volts;
+    // dc12 (16 V full scale): 11.9 V is coordinate 23.8, bin 23.
+    feed.publish(benchSnapshot(benchDescriptor(), { band: 1 }, 50, 11.9));
+    expect(pos()).toBe(23);
+    // dc24 (32 V): 24.2 V is coordinate 24.2. Within half a bin of 23, so hysteresis on the same
+    // descriptor would keep 23; a new descriptor starts over and reads bin 24.
+    feed.publish(benchSnapshot(benchDescriptor(), { band: 2 }, 50, 24.2));
+    expect(pos()).toBe(24);
+    overlays.dispose();
+  });
+});
+
+/**
+ * Bytes allocated per call of `run`, by `sim bench`'s method (apps/sim-cli/src/bench/snapshot-read.ts
+ * `bytesPerRead`, which sim-cli can't share: it may import domain libs only, and this path is the
+ * renderer's): a collection before each window, heap growth plus what each GC freed, the smallest of
+ * a few windows, and the slope between window sizes so the profiler's fixed cost cancels out.
+ */
+function bytesPerCall(run: () => void, calls = 200, windows = 1, warmup = 1_000): number {
+  setFlagsFromString('--expose-gc');
+  const collect = runInNewContext('gc') as () => void;
+  for (let i = 0; i < warmup; i++) run();
+  const window = (count: number) => {
+    collect();
+    const profiler = new GCProfiler();
+    const start = getHeapStatistics().used_heap_size;
+    profiler.start();
+    for (let i = 0; i < count; i++) run();
+    const stats = profiler.stop()?.statistics ?? [];
+    const freed = stats.reduce(
+      (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
+      0,
+    );
+    return getHeapStatistics().used_heap_size - start + freed;
+  };
+  for (const count of [calls, 2 * calls, 3 * calls]) window(count);
+  const smallest = (count: number) => Math.min(...Array.from({ length: windows }, () => window(count)));
+  const [one, two, three] = [smallest(calls), smallest(2 * calls), smallest(3 * calls)];
+  return Math.max(0, Math.min(two - one, three - two) / calls);
+}
+
+describe('SimOverlays allocation', () => {
+  it('the measure catches a call that allocates', () => {
+    const kept: number[][] = [];
+    expect(bytesPerCall(() => (kept[0] = new Array(8).fill(1)))).toBeGreaterThan(32);
+  });
+
+  it('a snapshot whose steps did not move, and a frame of animation, allocate nothing', () => {
+    // 20 battery-and-switch pairs (40 devices, 40 leads): the gate is about per-call allocation (any
+    // object is 12 B or more against a 1 B gate), so the plant only needs every kind of item.
+    const pairs = 20;
+    const bus = createWorldBus(createWorld({ seed: 0 }));
+    const lead = ref('lead.quillfern-test-1m');
+    for (let i = 0; i < pairs; i++) {
+      bus.exec('entity.place', { ref: ref('battery.ferrovane-12v-7ah'), ...at(900 + 100 * i) });
+      bus.exec('entity.place', { ref: ref('switch.tessaline-spst-toggle'), ...at(900 + 100 * i) });
+      const [b, w] = [1 + 2 * i, 2 + 2 * i];
+      bus.exec('lead.connect', { ref: lead, a: { entity: b, terminal: 'pos' }, b: { entity: w, terminal: 'a' } });
+      bus.exec('lead.connect', { ref: lead, a: { entity: w, terminal: 'b' }, b: { entity: b, terminal: 'neg' } });
+    }
+    const term = (entity: number, terminal: string) => ({ entity, terminal });
+    const descriptor: TopologyDescriptor = {
+      ...benchDescriptor(),
+      nodes: Array.from({ length: pairs }, (_, i) => [
+        { island: i, members: [term(1 + 2 * i, 'neg')] },
+        { island: i, members: [term(1 + 2 * i, 'pos')] },
+        { island: i, members: [term(2 + 2 * i, 'a'), term(2 + 2 * i, 'b')] },
+      ]).flat(),
+      branches: Array.from({ length: pairs }, (_, i) => [
+        { element: { kind: 'entity' as const, entity: 1 + 2 * i, part: 'cell' }, a: 3 * i, b: 3 * i + 1, island: i },
+        { element: { kind: 'connection' as const, connection: 1 + 2 * i }, a: 3 * i + 1, b: 3 * i + 2, island: i },
+        { element: { kind: 'connection' as const, connection: 2 + 2 * i }, a: 3 * i + 2, b: 3 * i, island: i },
+      ]).flat(),
+      islands: Array.from({ length: pairs }, (_, i) => ({ kind: 'dc' as const, nodes: [3 * i, 3 * i + 1, 3 * i + 2] })),
+    };
+    const view = (amps: number) =>
+      fakeSnapshotView({
+        descriptor,
+        nodes: Array.from(
+          { length: pairs },
+          () =>
+            [
+              [0, 0],
+              [12, 0],
+              [6, 0],
+            ] as const,
+        ).flat(),
+        branches: Array.from(
+          { length: pairs },
+          () =>
+            [
+              [-amps, 0],
+              [amps, 0],
+              [amps, 0],
+            ] as const,
+        ).flat(),
+        islands: Array.from({ length: pairs }, (_, i) => ({ reference: 3 * i, band: 1 })),
+      });
+    const overlays = new SimOverlays(new Scene(), () => undefined, undefined, ['none', 'dc12']);
+    overlays.syncWorld(bus.state);
+    const feed = new FakeFeed();
+    overlays.attach(feed);
+    overlays.setOverlay('voltage', true);
+    overlays.setOverlay('current', true);
+    // Two views of one generation, values within one bin's hysteresis: the steady per-snapshot path
+    // (the readout, then the step update finding nothing to redraw).
+    const [a, b] = [view(5), view(5.01)];
+    feed.publish(a);
+    const graph = overlays.describe();
+    expect(graph.leads.every((l) => typeof l.amps === 'number' && l.amps > 0)).toBe(true);
+    expect(graph.terminals.some((t) => t.volts === 24)).toBe(true);
+    // Call the subscribed listener itself, as SimHost does: the fake's `publish` loop isn't measured.
+    const [listener] = [...feed.listeners];
+    let flip = false;
+    const snapshotBytes = bytesPerCall(() => {
+      flip = !flip;
+      listener(flip ? b : a);
+    });
+    feed.running = true;
+    const frameBytes = bytesPerCall(() => overlays.update(1 / 60));
+    expect(snapshotBytes).toBeLessThan(1);
+    expect(frameBytes).toBeLessThan(1);
+    overlays.dispose();
   });
 });
 

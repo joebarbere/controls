@@ -8,8 +8,8 @@ import { startSandbox } from './support/sandbox';
  * bench (a battery shorted by a closed switch through two test leads, and an unwired lamp) and steps
  * 1.234 s. Then `view.overlay` from the console and from the palette switches the voltage and
  * current overlays. Every island is in band 0 until sources choose a nominal band, so the voltage
- * overlay shows "no scale" on the battery loop, never a 0 V colour; the lamp's island is not solved
- * yet, so its terminals show no reading. The current overlay shows the short's current on both
+ * overlay shows "no scale" on the battery loop, never a 0 V colour. A second battery tied to a
+ * utility service is a mixed island, which isn't solved, so it shows no reading. The current overlay shows the short's current on both
  * leads, with its direction (DC). Waits are on the page's own state (`data-overlays`, the overlay
  * graph from the `?e2e=1` hook, the legend), never on time.
  */
@@ -38,7 +38,7 @@ type Hooks = {
 const graph = (page: Page) =>
   page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.overlayGraph() ?? null);
 
-/** Types one line into the focused console input and waits for its own `ok`. */
+/** Types one command line into the focused console input and waits for its own `ok`. */
 async function runConsoleLine(page: Page, line: string): Promise<void> {
   const input = page.getByRole('textbox', { name: 'Console input' });
   await expect(input).toBeFocused();
@@ -46,7 +46,8 @@ async function runConsoleLine(page: Page, line: string): Promise<void> {
   await expect(input).toHaveText(line);
   await page.keyboard.press('Enter');
   await expect(input).toHaveText('');
-  await expect(page.getByTestId('console-output').locator('.entry').last()).toHaveText(/view\.overlay: ok/);
+  const id = line.split(' ')[0].replace('.', '\\.');
+  await expect(page.getByTestId('console-output').locator('.entry').last()).toHaveText(new RegExp(`${id}: ok`));
 }
 
 test('voltage and current overlays from the console and the palette, on the real sim worker', async ({ page }) => {
@@ -70,6 +71,20 @@ test('voltage and current overlays from the console and the palette, on the real
     'Ran 7 commands from sim-step.console.',
   );
   await page.evaluate(() => (window as unknown as Hooks).__controlsSession?.waitForTick(1234));
+  // A circuit the engine can't solve: a second battery tied to a utility service by one lead is a
+  // mixed DC and AC island (P2 has no converters), so it has no reading.
+  await runConsoleLine(
+    page,
+    'entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 500',
+  );
+  await runConsoleLine(
+    page,
+    'entity.place --ref.id utility.larkmoor-split-phase-25kva --ref.version 1 --positionMm.x 1200 --positionMm.y -300 --positionMm.z 500',
+  );
+  await runConsoleLine(
+    page,
+    'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 4 --a.terminal neg --b.entity 5 --b.terminal n',
+  );
 
   // Console: both overlays on (positional words: name, then on).
   await runConsoleLine(page, 'view.overlay voltage true');
@@ -80,16 +95,22 @@ test('voltage and current overlays from the console and the palette, on the real
     .poll(async () =>
       (await graph(page))?.leads.map((l) => l.amps !== 'unknown' && l.amps > 0 && l.direction !== 'none'),
     )
-    .toEqual([true, true]);
+    .toEqual([true, true, false]);
   const g = (await graph(page)) as Graph;
   expect(g).toMatchObject({ voltage: true, current: true, inScene: true });
   // Band 0: the battery loop has no voltage scale. Never 0 V, never bin 0.
-  expect(g.terminals.filter((t) => t.entity !== 3).map((t) => t.volts)).toEqual(Array(4).fill('noScale'));
-  expect(g.leads.flatMap((l) => l.volts)).toEqual(Array(4).fill('noScale'));
-  // The unwired lamp is not solved: no reading.
-  expect(g.terminals.filter((t) => t.entity === 3).map((t) => t.volts)).toEqual(['unknown', 'unknown']);
+  expect(g.terminals.filter((t) => t.entity <= 2).map((t) => t.volts)).toEqual(Array(4).fill('noScale'));
+  expect(g.leads.slice(0, 2).flatMap((l) => l.volts)).toEqual(Array(4).fill('noScale'));
+  // The mixed island is not solved: no reading on its terminals or its lead, never 0 V or 0 A.
+  expect(g.terminals.filter((t) => t.entity >= 4).every((t) => t.volts === 'unknown')).toBe(true);
+  expect(g.leads[2]).toMatchObject({
+    connection: 3,
+    volts: ['unknown', 'unknown'],
+    amps: 'unknown',
+    direction: 'none',
+  });
   // The short runs from the battery's + through lead 1 (pos → switch a) and back through lead 2 (switch b → neg).
-  expect(g.leads.map((l) => l.direction)).toEqual(['a→b', 'a→b']);
+  expect(g.leads.slice(0, 2).map((l) => l.direction)).toEqual(['a→b', 'a→b']);
 
   const legend = page.getByTestId('overlay-legend');
   await expect(legend).toBeVisible();

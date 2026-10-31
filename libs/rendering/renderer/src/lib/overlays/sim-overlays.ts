@@ -58,6 +58,7 @@ import {
 import {
   createOverlaySteps,
   joinOverlayItems,
+  resetOverlaySteps,
   updateOverlaySteps,
   type OverlayItems,
   type OverlayJoin,
@@ -464,9 +465,13 @@ export class SimOverlays {
       this.join = joinOverlayItems(this.items, null);
     } else {
       if (view.descriptor !== this.readout?.descriptor) {
+        // A new generation (or worker): lookups once per descriptor, CPU-side index arrays only. The
+        // steps restart from unknown, so hysteresis never carries a bin over from the old numbering
+        // or an island's old band.
         this.readout = NetlistReadout.of(view.descriptor);
         this.reading = this.readout.createReading();
-        this.join = joinOverlayItems(this.items, this.readout); // CPU-side index arrays only
+        this.join = joinOverlayItems(this.items, this.readout);
+        resetOverlaySteps(this.steps);
       }
       this.readout.read(view, this.reading as NetlistReading);
     }
@@ -495,6 +500,11 @@ export class SimOverlays {
     return false;
   }
 
+  /**
+   * Recomputes the legend state and notifies only if it changed. Runs on an overlay switch, a world
+   * change or a step change, never on a snapshot whose steps didn't move, so the closure and the
+   * `bands` array it builds are not per-snapshot allocations.
+   */
   private publishLegend(): void {
     this.bandsUsed.fill(0);
     let noScale = false;
