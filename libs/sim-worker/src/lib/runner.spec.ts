@@ -13,6 +13,7 @@ import {
   THERMAL_LOAD,
 } from '@controls/sim-core/testing';
 import {
+  LIVENESS_PUBLISH_MS,
   MIN_SLOT_BYTES,
   PUBLISH_MIN_WALL_MS,
   PUBLISH_SEQ_INDEX,
@@ -340,6 +341,34 @@ describe('following the host', () => {
 });
 
 describe('publishing (ADR 0011 §7)', () => {
+  it('a burst of commands is drained in slices, republishing so a busy worker is never silent', () => {
+    // 1,250 crates at tick 0 (no topology change, so nothing forces a publish) on a slow machine:
+    // every clock read takes 1 ms. The worker must yield and be heard at least every
+    // LIVENESS_PUBLISH_MS of its own wall time, long before the host's WATCHDOG_MS.
+    const game = reference();
+    const crate = { id: 'prop.crate', version: 1 };
+    for (let i = 0; i < 1_250; i++) game.execOrThrow('entity.place', { ref: crate, positionMm: { x: i, y: 0, z: 0 } });
+    const h = harness();
+    h.init({ kind: 'world', world: createWorld({ seed: 11 }), firstSeq: 0 }, 'message');
+    h.drain();
+    h.msPerRead = 1;
+    const published: number[] = [h.time];
+    for (const entry of game.entries()) h.send({ type: 'command', entry });
+    let slices = 0;
+    while (h.tasks.length > 0) {
+      const before = h.of('snapshot').length;
+      (h.tasks.shift() as () => void)();
+      slices++;
+      if (h.of('snapshot').length > before) published.push(h.time);
+    }
+    const gaps = published.slice(1).map((t, i) => t - published[i]);
+    expect(h.time).toBeGreaterThan(4 * LIVENESS_PUBLISH_MS); // long enough that a single drain would be silent
+    expect(slices).toBeGreaterThan(10);
+    expect(Math.max(...gaps)).toBeLessThan(2 * LIVENESS_PUBLISH_MS);
+    expect(h.of('error')).toEqual([]);
+    expect(h.view()?.hashedBytes()).toEqual(game.snapshot()); // and the same bytes in the end
+  });
+
   it('throttles cadence publishes to PUBLISH_MIN_WALL_MS but always publishes on reaching the target', () => {
     const fast = harness();
     fast.init({ kind: 'world', world: game0(), firstSeq: 0 });

@@ -353,6 +353,24 @@ describe('SimHost: crashes (ADR 0011 §10)', () => {
     expect(fakes.workers[0].terminated).toBe(true);
   });
 
+  it('the watchdog measures liveness: a busy worker that still talks is never crashed; a silent one is', async () => {
+    const { host, clock, fakes, start, game } = setup();
+    start();
+    await settle();
+    game().execOrThrow('sim.setSpeed', { speed: 1 });
+    await clock.advance(100);
+    fakes.workers[0].hang(); // no more snapshots: it is draining a burst
+    for (let i = 0; i < 6; i++) {
+      await clock.advance(WATCHDOG_MS / 2);
+      fakes.workers[0].sendRaw({ type: 'events', events: [] }); // but it is heard from
+      await settle();
+    }
+    expect(host.crash()).toBeNull();
+    expect(host.status()).toBe('running'); // three watchdog periods without a snapshot
+    await clock.advance(WATCHDOG_MS + 100); // now silent
+    expect(host.crash()?.code).toBe('watchdog');
+  });
+
   it('a protocol mismatch is unavailable: no crash toast, no retry', async () => {
     const { host, fakes, start } = setup({ worker: { protocol: 999 } });
     const crashes: unknown[] = [];

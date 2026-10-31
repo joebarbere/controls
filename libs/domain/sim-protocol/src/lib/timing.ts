@@ -30,8 +30,19 @@ export const PANEL_SAMPLE_HZ = 10;
 /** Spec §4.1: the most a panel may sample. */
 export const MAX_PANEL_SAMPLE_HZ = 30;
 
-/** Numerical choice: no publish for this long while the target is ahead of progress is a crash (§10). */
+/**
+ * Numerical choice: nothing heard from the worker (no message, no accepted publish) for this long
+ * while the target is ahead of progress is a crash (§10). A busy worker is never silent this long: it
+ * yields every {@link WORK_SLICE_MS} and republishes at least every {@link LIVENESS_PUBLISH_MS}.
+ */
 export const WATCHDOG_MS = 3_000;
+
+/**
+ * Numerical choice: while it is busy (a burst of commands, a long catch-up) the worker republishes
+ * at a slice's end if it hasn't published for this long, so the host hears it well inside
+ * {@link WATCHDOG_MS} (a sixth of it). A republish is an ordinary publish: no new message.
+ */
+export const LIVENESS_PUBLISH_MS = 500;
 
 /** Numerical choice: a generation needing a bigger slot than this is `error {code: 'capacity'}`. */
 export const MAX_SLOT_BYTES = 64 * 1024 * 1024;

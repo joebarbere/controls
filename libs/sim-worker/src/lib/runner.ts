@@ -6,6 +6,7 @@ import {
   type HostToWorker,
   MAX_SLOT_BYTES,
   parseHostMessage,
+  LIVENESS_PUBLISH_MS,
   PUBLISH_MIN_WALL_MS,
   SIM_PROTOCOL_VERSION,
   type SimErrorCode,
@@ -271,6 +272,12 @@ export class SimWorkerRunner {
 
   // --- the loop -------------------------------------------------------------------------------
 
+  /** Ends a slice with work left: republishes if the host hasn't seen a publish for a while, then yields. */
+  private yieldSlice(): void {
+    if (this.env.clock.now() - this.lastPublishWall >= LIVENESS_PUBLISH_MS) this.publish(true);
+    this.schedulePump();
+  }
+
   private schedulePump(): void {
     if (this.scheduled || this.phase !== 'running') return;
     this.scheduled = true;
@@ -284,11 +291,17 @@ export class SimWorkerRunner {
     try {
       while (this.inbox.length > 0) {
         if (!this.handle(this.inbox[0], sliceStart)) {
-          this.schedulePump(); // yielded mid-message: carry on after the queue
+          this.yieldSlice(); // yielded mid-message: carry on after the queue
           return;
         }
         this.inbox.shift();
         if (this.phase !== 'running') return;
+        // A burst of commands is drained in slices too, so `release`, `stop` and the host's own
+        // supervision get through, and the host hears from a busy worker (never a false watchdog).
+        if (this.inbox.length > 0 && this.env.clock.now() - sliceStart >= WORK_SLICE_MS) {
+          this.yieldSlice();
+          return;
+        }
       }
       // Idle: the engine reached its target. Always publish, so a paused sim shows its exact tick.
       if (this.dirty || this.forcedPending) this.publish(true);
