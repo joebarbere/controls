@@ -1,0 +1,17 @@
+netlist.dump tick 1234
+netlist 5 nodes, 4 branches, 2 islands
+topology 7a487bc77a19d85bcca3303b4f7705b0299e13ec4ef79974f6bcc4261a4f6df6
+island 0 dc nodes 0 1 2 branches 0 2 3
+island 1 empty nodes 3 4 branches 1
+node 0 island 0: 1:neg
+node 1 island 0: 1:pos
+node 2 island 0: 2:a 2:b
+node 3 island 1: 3:a
+node 4 island 1: 3:b
+branch 0 e1.cell vsource battery dc 0 -> 1 island 0 internalResistanceOhm=0.023 openCircuitVoltageFullV=12.9
+branch 1 e3.filament resistor lamp.incandescent 3 -> 4 island 1 ratedPowerW=5 ratedVoltageV=12
+branch 2 c1 resistor lead 1 -> 2 island 0 resistanceOhm=0.04094815541017536
+branch 3 c2 resistor lead 2 -> 0 island 0 resistanceOhm=0.04094815541017536
+solution tick 1230
+solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band none
+solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1

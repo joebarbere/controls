@@ -786,6 +786,8 @@ F2.3b implemented the transport and the worker (part 1) and `SimHost` with the s
 - **`desktop-e2e`'s violation probes are a blocked `fetch` and a deferred eval**: DevTools evaluation is exempt from the eval check only for the duration of the call, so the eval is scheduled with `setTimeout` and runs as the worker's own task (#60 review). The `forcefullyCrashRenderer` check waits for the `render-process-gone` handler (its own P2 PR).
 - **`autosave`'s behind test** is `(lastAdvance − progress) ÷ max(1, requested speed)` against `AUTOSAVE_MAX_BEHIND_MS`: the commanded lead in wall time at the requested speed.
 
+- **`netlist.dump` needs no message** (F2.6). `SimHost.netlistDumpAt()` captures the world as `hashAt` does (the `state` query, §9.4), materialises it and runs `sim-core`'s pure `netlistDump` on the main thread, so the text is byte for byte `sim-cli`'s. The message union is unchanged (protocol stays 3). The HUD's "Last solve" reads `SnapshotView.lastSolveTick` only when `islandCount > 0` (§5.2: an empty netlist writes 0).
+
 ## Resolved in review
 
 The proposal's open questions, by number:

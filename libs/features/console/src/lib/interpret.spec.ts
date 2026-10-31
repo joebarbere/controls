@@ -37,6 +37,8 @@ describe('resolveConsoleLine', () => {
     expect(resolve('run')).toEqual({ kind: 'run' });
     expect(resolve('clear')).toEqual({ kind: 'clear' });
     expect(resolve('world.hash')).toEqual({ kind: 'query', id: 'world.hash' });
+    expect(resolve('netlist.dump')).toEqual({ kind: 'query', id: 'netlist.dump' });
+    expect(isConsoleWord(registry, 'netlist.dump')).toBe(true);
     expect(isConsoleWord(registry, 'help')).toBe(true);
     expect(isConsoleWord(registry, 'entity.place')).toBe(false);
   });
@@ -46,6 +48,7 @@ describe('resolveConsoleLine', () => {
     expect(resolve('help --all')).toMatchObject({ kind: 'error', message: 'help takes no flags', column: 6 });
     expect(resolve('clear now')).toMatchObject({ kind: 'error', message: 'clear takes no arguments', column: 7 });
     expect(resolve('world.hash 1')).toMatchObject({ kind: 'error', column: 12 });
+    expect(resolve('netlist.dump --all')).toMatchObject({ kind: 'error', message: 'netlist.dump takes no flags' });
     expect(resolve('run scenario.console')).toMatchObject({ kind: 'error', column: 5 });
     expect((resolve('run x') as { message: string }).message).toContain('F1.8b');
   });
@@ -62,6 +65,7 @@ describe('consoleHelp', () => {
     expect(text).toMatch(/edit\.undo\s+Undo {2}\[Ctrl\+Z]/);
     expect(text).toMatch(/cheat\.money\s+Free money {2}\[cheat]/);
     expect(text).toMatch(/world\.hash\s+Print the current world hash/);
+    expect(text).toMatch(/netlist\.dump\s+Print the netlist and each island’s solve status/);
   });
 
   it('documents one command from its args schema', () => {

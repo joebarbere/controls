@@ -130,6 +130,8 @@ describe('createGame', () => {
     expect(() => still.snapshot()).toThrow(NotAvailableError);
     expect(() => still.snapshotHash()).toThrow(NotAvailableError);
     expect(() => still.islands()).toThrow(NotAvailableError);
+    // netlist.dump needs no live engine: it is a pure function of the (materialised) world.
+    expect(still.netlistDump()).toBe(game.netlistDump());
     let thrown: unknown;
     try {
       game.tag('PLC1:Motor.Run');

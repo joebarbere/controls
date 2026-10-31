@@ -129,6 +129,33 @@ export interface SimIslandInfo {
 }
 
 /**
+ * One island's diagnostics in the solution the engine holds (`netlist.dump`, plan F2.6): what the
+ * snapshot's island entry says about it (ADR 0011 §5.3) plus why an unsolved island wasn't solved.
+ * Derived from the netlist and the solution record alone, so a loaded engine says what a straight run
+ * says.
+ */
+export interface SimIslandDiagnostic {
+  readonly index: number;
+  readonly kind: IslandKind;
+  readonly status: SimIslandStatus;
+  /** `ISLAND_FLAG_*` bits of its last solve. */
+  readonly flags: number;
+  /** Outer-loop iterations of its last solve; 0 when not solved. */
+  readonly iterations: number;
+  /** Its reference node when solved, else −1 (the snapshot's `referenceNode`). */
+  readonly referenceNode: number;
+  /** The order of its MNA system when solved, else 0. */
+  readonly unknowns: number;
+  /** Its nominal band: an index into `NOMINAL_BANDS` (0 = `none`, no scale). */
+  readonly band: number;
+  /** `unmodelled`: the branches no device model or default could value, ascending. Else empty. */
+  readonly unvalued: readonly number[];
+  /** `mixed`: its DC and AC source branches, ascending (P2 has no converters). Else empty. */
+  readonly dcSources: readonly number[];
+  readonly acSources: readonly number[];
+}
+
+/**
  * An ideal, non-loading probe between two terminals (`game.probe`, plan F2.3a): what an ideal
  * voltmeter would read, red on `a`, black on `b`, without being part of the circuit. Only `dc` is a
  * reading; every other kind says why there is none.
@@ -216,6 +243,8 @@ export class SimEngine {
     startSolves: 0,
     bankBuilds: 0,
   };
+  /** The options it was started with (an engine for the same world, such as `netlistDump`'s, takes them). */
+  readonly options: SimEngineOptions;
   private readonly catalog: Catalog;
   private readonly deviceModels: Readonly<Record<string, SimDeviceModel>>;
   private readonly compiler: NetlistCompiler;
@@ -269,6 +298,8 @@ export class SimEngine {
   private branchAcDefault: (AcDefaultValue | undefined)[] = [];
   // Per island: unmodelled, the entities, the flags of the last solve, and the snapshot's arrays.
   private unmodelled = new Uint8Array(0);
+  /** Per branch: 1 if the last value pass found no model or default to value it (its island is unmodelled). */
+  private unvalued = new Uint8Array(0);
   private islandEntities: (readonly number[])[] = [];
   private previousFlags = new Uint8Array(0);
   private islandKinds = new Uint8Array(0);
@@ -304,6 +335,7 @@ export class SimEngine {
   private readonly simOf = (entity: number): StateBag | undefined => this.liveBag(entity);
 
   private constructor(world: World, options: SimEngineOptions) {
+    this.options = options;
     this.catalog = options.catalog ?? BUILTIN_CATALOG;
     this.deviceModels = options.deviceModels ?? BUILTIN_DEVICE_MODELS;
     this.netlistModels = options.netlistModels ?? BUILTIN_NETLIST_MODELS;
@@ -472,6 +504,37 @@ export class SimEngine {
       entities: this.islandEntities[island.index],
       iterations: this.solution.islands[island.index].iterations,
     }));
+  }
+
+  /**
+   * Every island's diagnostics in the solution the engine holds (`netlist.dump`, F2.6). To say which
+   * branches no model can value it runs a value pass over the current netlist, as every solve does
+   * first: the pass only fills the solver's scratch values, which the next solve fills again, so it
+   * changes no state, no snapshot and no hash. Allocates: a console query, never per tick.
+   */
+  islandDiagnostics(): SimIslandDiagnostic[] {
+    const netlist = this.current;
+    if (!isEmptyNetlist(netlist)) this.fillValues();
+    return netlist.islands.map((island) => {
+      const result = this.solution.islands[island.index];
+      const solved = result.iterations > 0;
+      const status = this.status(island.index);
+      const of = (keep: (index: number) => boolean) => island.branches.filter(keep);
+      const source = (domain: 'dc' | 'ac') => (index: number) => netlist.branches[index].source === domain;
+      return {
+        index: island.index,
+        kind: island.kind,
+        status,
+        flags: result.flags,
+        iterations: result.iterations,
+        referenceNode: solved ? islandReferenceNode(netlist, island) : -1,
+        unknowns: this.unknownsOf(island, solved),
+        band: this.islandBands[island.index],
+        unvalued: status === 'unmodelled' ? of((index) => this.unvalued[index] === 1) : [],
+        dcSources: status === 'mixed' ? of(source('dc')) : [],
+        acSources: status === 'mixed' ? of(source('ac')) : [],
+      };
+    });
   }
 
   /**
@@ -693,6 +756,7 @@ export class SimEngine {
     const netlist = this.current;
     const values = this.values;
     values.clear();
+    this.unvalued.fill(0);
     const islands = netlist.islands;
     for (let k = 0; k < islands.length; k++) {
       const island = islands[k];
@@ -721,6 +785,7 @@ export class SimEngine {
         if (branch.kind === 'vsource') values.isource(index, 0);
         else values.resistor(index, 1);
         this.unmodelled[island.index] = 1;
+        this.unvalued[index] = 1;
       }
     }
   }
@@ -750,6 +815,7 @@ export class SimEngine {
       if (branch.kind === 'vsource') values.vsource(index, 0, 0, 1);
       else values.resistor(index, 1);
       this.unmodelled[island.index] = 1;
+      this.unvalued[index] = 1;
     }
   }
 
@@ -883,6 +949,7 @@ export class SimEngine {
 
     const islandCount = netlist.islands.length;
     this.unmodelled = new Uint8Array(islandCount);
+    this.unvalued = new Uint8Array(branchCount);
     this.previousFlags = new Uint8Array(islandCount);
     this.islandKinds = new Uint8Array(netlist.islands.map((island) => KIND_CODES[island.kind]));
     this.islandFlags = new Uint8Array(islandCount);

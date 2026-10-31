@@ -126,6 +126,7 @@ It prints the hash twice (the file's own `world.hash` query, then the final hash
 | `tag(path)`                               | **Reserved for P10** (read a PLC tag such as `PLC1:Motor.Run`). Throws `NotAvailableError`.                                                                                                                                                                                                                                                       |
 | `replayGame(json)`                        | Validates and migrates a replay log, replays it and returns a game at its end that continues the same log.                                                                                                                                                                                                                                        |
 | `loadGame(bytes)`                         | Loads a `.ctrl` as the game does: `{ ok: true, game, manifest, thumbnail, fromVersion, replay }` or `{ ok: false, error }` (a typed `CtrlError`, e.g. `newer-than-build`, or `start-failed`). Undo is cleared; the log continues if it reproduces the world (`replay.status`); a save from another engine version restarts it (`engine-changed`). |
+| `netlistDump()`                           | The `netlist.dump` text of the materialised world (F2.6): `formatNetlist` plus each island's status, flags, iterations, reference, unknowns, nominal band and why an unsolved one wasn't solved. Read-only. Throws `NotAvailableError` in the game, where `Session.netlistDumpAt()` answers.                                                      |
 | `runConsoleScript(game, text)`            | Runs a console-line file against a game (or the in-game console). Returns a promise: a `world.hash` line waits for the hash, which in the game comes from the sim worker.                                                                                                                                                                         |
 | `toConsoleScript(entries)`                | Writes replay entries as console lines, so any recorded session can be re-run from a console-line file.                                                                                                                                                                                                                                           |
 
@@ -143,6 +144,14 @@ command.id positional… --flag value --nested.flag value --boolean-flag
 - `--a.b value` sets a nested field. A flag with no value (followed by another flag or the end of the line) means `true`.
 - Words are typed by the argument schema: `12` is a number for a number field and the text `"12"` for a string field. Quote strings with spaces or that would look like something else: `"two words"`, `'it\'s'`, `"--not-a-flag"`.
 - `#` starts a comment. `world.hash` prints the current hash and is never logged.
+- `netlist.dump` (F2.6) prints the compiled netlist and its island diagnostics, one output line per text line, and is never logged either. After the netlist (`netlist …`, `topology …`, `island …`, `node …`, `branch …`, `diagnostic …` lines) come `solution tick T` (the tick of the solve shown, or `solution none` without a circuit) and one line per island:
+
+  ```text
+  solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band none
+  solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1
+  ```
+
+  The status is `solved`, `singular`, `nonConverged`, `unmodelled` (followed by `unvalued` and the branches no model can value) or `mixed` (followed by `sources dc … ac …`). `band` is the island's nominal band (`none` = no overlay scale). The text is the same in `sim-cli` and in the game's console, byte for byte; from TypeScript, `game.netlistDump()` returns it.
 
 The full grammar and its rationale are in [ADR 0008](../decisions/0008-console-and-scripts.md).
 

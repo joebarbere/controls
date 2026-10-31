@@ -218,7 +218,12 @@ describe('Session', () => {
       'entity.delete 1',
       'edit.undo',
     ].join('\n');
-    const target = { registry: session.registry, exec: session.exec.bind(session), hash: () => session.hashAt() };
+    const target = {
+      registry: session.registry,
+      exec: session.exec.bind(session),
+      hash: () => session.hashAt(),
+      netlistDump: () => session.netlistDumpAt(),
+    };
     expect(await runConsoleScript(target, script)).toMatchObject({ ok: true, executed: 5 });
     expect(await runConsoleScript(game, script)).toMatchObject({ ok: true, executed: 5 });
     expect(await session.hashAt()).toBe(game.hash());
@@ -227,6 +232,31 @@ describe('Session', () => {
     expect(replayed.ok && replayed.game.hash()).toBe(await session.hashAt());
     // The session's world is the game's frozen snapshot.
     expect(Object.isFrozen(session.world())).toBe(true);
+  });
+
+  it('netlist.dump from the sim worker is byte for byte the headless game’s (F2.6)', async () => {
+    const { session } = withWorker();
+    session.newSandbox({ seed: 0 });
+    const game = createGame({ seed: 0 });
+    const script = [
+      'entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 0 --positionMm.y 0 --positionMm.z 0',
+      'entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 200 --positionMm.y 0 --positionMm.z 0',
+      'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 1 --b.terminal neg',
+      'sim.step 25',
+      'netlist.dump',
+    ].join('\n');
+    const target = {
+      registry: session.registry,
+      exec: session.exec.bind(session),
+      hash: () => session.hashAt(),
+      netlistDump: () => session.netlistDumpAt(),
+    };
+    const inGame = await runConsoleScript(target, script);
+    const headless = await runConsoleScript(game, script);
+    expect(inGame).toStrictEqual(headless);
+    expect(inGame.output[0]).toBe('netlist.dump tick 25');
+    expect(inGame.output).toContain('solution tick 20');
+    expect(await session.netlistDumpAt()).toBe(game.netlistDump());
   });
 
   describe('the sandbox level (F1.9)', () => {

@@ -178,6 +178,24 @@ describe('DevConsoleComponent', () => {
     expect(session.entries()).toEqual([]);
   });
 
+  it('prints netlist.dump one line per entry, from the sim worker, without logging anything (F2.6)', async () => {
+    const { session, user } = await setup();
+    session.exec('entity.place', {
+      ref: { id: 'battery.ferrovane-12v-7ah', version: 1 },
+      positionMm: { x: 0, y: 0, z: 0 },
+    });
+    const entries = session.entries().length;
+    const input = await editor();
+    input.set('netlist.dump');
+    await user.keyboard('{Enter}');
+    const lines = (await session.netlistDumpAt()).trimEnd().split('\n');
+    expect(lines[0]).toBe('netlist.dump tick 0');
+    await waitFor(() => expect(lastEntry()).toBe(lines.at(-1)));
+    const shown = [...output().querySelectorAll('.entry')].map((e) => e.textContent?.trim());
+    expect(shown.slice(-lines.length - 1)).toEqual(['> netlist.dump', ...lines]);
+    expect(session.entries()).toHaveLength(entries);
+  });
+
   it('warns before a cheat runs, and runs it only when confirmed', async () => {
     const { session, user } = await setup();
     const input = await editor();
@@ -274,5 +292,16 @@ describe('DevConsoleComponent', () => {
     await TestBed.inject(DevConsole).runFile({ name: 'h.console', size: 11, text: async () => 'world.hash\n' });
     await fixture.whenStable();
     expect(lastEntry()).toContain('h.console: the simulation didn’t answer');
+  });
+
+  it('says so when the sim does not answer a netlist.dump', async () => {
+    const { session, user } = await setup();
+    const input = await editor();
+    vi.spyOn(session, 'netlistDumpAt').mockRejectedValue(new Error('crashed'));
+    input.set('netlist.dump');
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(lastEntry()).toBe('netlist.dump: the simulation didn’t answer (restart it if it crashed).'),
+    );
   });
 });

@@ -23,6 +23,7 @@ import {
   TWIN_SUPPLY,
 } from '../../testing/engine';
 import { BUILTIN_DEVICE_MODELS } from './device-model';
+import { formatEngineDump, netlistDump } from './dump';
 import { SimEngine, type SimEngineOptions } from './engine';
 
 /*
@@ -290,6 +291,35 @@ describe('engine determinism properties', () => {
         expect(fingerprint({ bus, engine })).toStrictEqual(fingerprint(live));
       }),
       { numRuns: 15 },
+    );
+  });
+
+  it('netlist.dump: a loaded engine dumps what the live one does, and taking dumps changes no byte (F2.6)', () => {
+    fc.assert(
+      fc.property(sessionArb, ({ before, after }) => {
+        const live = benchHost();
+        const control = benchHost();
+        for (const op of before) {
+          apply(live, op);
+          apply(control, op);
+          formatEngineDump(live.engine);
+        }
+        const text = formatEngineDump(live.engine);
+        const saved = migrateWorld(
+          JSON.parse(JSON.stringify(materialiseWorld(live.bus.state, live.engine.exportState()))),
+        );
+        if (!saved.ok) throw new Error(saved.error.message);
+        expect(netlistDump(saved.value, engineTestOptions())).toBe(text);
+        for (const op of after) {
+          apply(live, op);
+          apply(control, op);
+          formatEngineDump(live.engine);
+          expect(live.engine.snapshotHash()).toBe(control.engine.snapshotHash());
+        }
+        expect(live.engine.takeEvents()).toStrictEqual(control.engine.takeEvents());
+        expect(fingerprint(live)).toStrictEqual(fingerprint(control));
+      }),
+      { numRuns: 8 },
     );
   });
 

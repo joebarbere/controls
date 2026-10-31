@@ -3,6 +3,7 @@ import { DestroyRef, inject, Injectable, InjectionToken, type Signal, signal } f
 import { SIM_STEP_COMMAND } from '@controls/commands';
 import type { ReplayEntry, ReplayLog } from '@controls/save-format';
 import type { TimeHost } from '@controls/scripting-api';
+import { netlistDump } from '@controls/sim-core';
 import {
   materialiseWorld,
   MAX_LEAD_WALL_MS,
@@ -304,6 +305,18 @@ export class SimHost {
     const captured = this.capture();
     const world = await captured.world;
     return { tick: captured.tick, hash: worldHash(world) };
+  }
+
+  /**
+   * The `netlist.dump` text at the bus's current tick T (plan F2.6): the world {@link capture}d now,
+   * materialised with the worker's export at T, dumped on the main thread by `sim-core`'s pure
+   * `netlistDump`, so it is byte for byte what `sim-cli` prints for the same session. The worker
+   * contract needs no new message (ADR 0011 §9.4). Rejects as {@link hashAt} does.
+   */
+  async netlistDumpAt(): Promise<{ readonly tick: number; readonly text: string }> {
+    const captured = this.capture();
+    const world = await captured.world;
+    return { tick: captured.tick, text: netlistDump(world) };
   }
 
   /**

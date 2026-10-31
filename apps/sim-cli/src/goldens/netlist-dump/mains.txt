@@ -1,0 +1,13 @@
+netlist.dump tick 100
+netlist 3 nodes, 4 branches, 1 island
+topology 457603335f8bb48cdf5a219deb7d84a8f41928e7d584d976409bda3ae7de6ee4
+island 0 ac nodes 0 1 2 branches 0 1 2 3
+node 0 island 0: 1:l1
+node 1 island 0: 1:l2
+node 2 island 0: 1:n
+branch 0 e1.l1 vsource utility.splitPhase ac 2 -> 0 island 0
+branch 1 e1.l2 vsource utility.splitPhase ac 2 -> 1 island 0
+branch 2 c1 resistor lead 0 -> 2 island 0 resistanceOhm=0.04094815541017536
+branch 3 c2 resistor lead 0 -> 1 island 0 resistanceOhm=0.04094815541017536
+solution tick 90
+solve island 0 solved flags none iterations 1 reference 2 unknowns 4 band none

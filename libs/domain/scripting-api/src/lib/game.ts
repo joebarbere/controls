@@ -30,6 +30,7 @@ import {
   type ProbeReading,
   SIM_ENGINE_VERSION,
   type SourcedConstant,
+  netlistDump,
   SimEngine,
   type SimEngineOptions,
   type SimIslandInfo,
@@ -235,6 +236,13 @@ export interface Game {
   materialisedWorld(): DeepReadonly<World>;
   /** `world.hash` of the materialised world (SHA-256 of its canonical JSON, ADR 0007, ADR 0013). */
   hash(): string;
+  /**
+   * The `netlist.dump` text of the materialised world (plan F2.6): `formatNetlist` plus each island's
+   * status, flags, iterations, nominal band and why an unsolved one wasn't solved. Read-only and never
+   * logged, like {@link hash}; the game's console prints the same bytes from the sim worker's export.
+   * Throws {@link NotAvailableError} in the game (use `Session.netlistDumpAt()`).
+   */
+  netlistDump(): string;
   /** The current sim tick (1 tick = 1 ms). */
   tick(): number;
   /**
@@ -417,6 +425,10 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
         hashed = { world: bus.state, revision: revision(), hash: worldHash(materialisedWorld()) };
       }
       return hashed.hash;
+    },
+    netlistDump() {
+      if (time !== undefined && time.exportState === undefined) throw new NotAvailableError('netlistDump', 'worker');
+      return netlistDump(materialisedWorld(), engine?.options);
     },
     tick: () => bus.currentTick(),
     advance(ticks) {

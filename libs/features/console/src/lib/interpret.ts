@@ -17,6 +17,10 @@ export const CONSOLE_WORDS: Readonly<Record<string, { readonly usage: string; re
   run: { usage: 'run', summary: 'Run a file of console lines: pick one, or drop it on the console' },
   clear: { usage: 'clear', summary: 'Clear the console output' },
   'world.hash': { usage: 'world.hash', summary: 'Print the current world hash (read-only, not logged)' },
+  'netlist.dump': {
+    usage: 'netlist.dump',
+    summary: 'Print the netlist and each island’s solve status and nominal band (read-only, not logged)',
+  },
 };
 
 export type ConsoleAction =

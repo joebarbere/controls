@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject } from '@angular/core';
 import { SIM_SPEEDS, type SimSpeed } from '@controls/commands';
+import type { SnapshotView } from '@controls/sim-protocol';
 import { Session } from './session';
 import { SimHost } from './sim-host';
 
@@ -22,8 +23,23 @@ export function formatSpeed(speed: number): string {
 }
 
 /**
+ * The tick of the electrical solution a snapshot holds, or `null` when it holds none (plan F2.6, #52
+ * review). It keys off `islandCount > 0`: with no islands (no circuit, or an empty netlist) the
+ * snapshot writes `lastSolveTick` 0, which is not a solve at tick 0.
+ */
+export function lastSolveOf(view: Pick<SnapshotView, 'islandCount' | 'lastSolveTick'>): number | null {
+  return view.islandCount > 0 ? view.lastSolveTick : null;
+}
+
+/** The HUD's "Last solve" text: the solve's sim time, or `None` when the snapshot holds no solution. */
+export function formatLastSolve(tick: number | null): string {
+  return tick === null ? 'None' : formatSimTime(tick);
+}
+
+/**
  * The HUD's time controls (ADR 0011 §13, plan F2.3b): the sim time the player sees (the latest
- * snapshot's tick, never the bus world's), the requested speed as one native radio group that runs
+ * snapshot's tick, never the bus world's), the sim time of the last solve (`None` without islands,
+ * F2.6), the requested speed as one native radio group that runs
  * `sim.setSpeed` through the registry, the achieved speed while running, "Catching up" with progress,
  * and a polite live region that announces only transitions (falling behind, catching up, crashed,
  * paused, suspended), once each. The clock and the numbers are never in a live region. Keys, the
@@ -37,6 +53,10 @@ export function formatSpeed(speed: number): string {
       <p class="clock">
         <span class="label">Sim time</span>
         <span class="value" data-testid="sim-time">{{ time() }}</span>
+      </p>
+      <p class="solve">
+        <span class="label">Last solve</span>
+        <span class="value" data-testid="sim-last-solve">{{ lastSolveText() }}</span>
       </p>
       <fieldset class="speeds" [attr.aria-disabled]="enabled() ? null : 'true'">
         <legend class="label">Speed</legend>
@@ -121,6 +141,9 @@ export class SimControls {
   protected readonly speeds = SIM_SPEEDS.map((value) => ({ value, label: SPEED_LABELS[value] }));
 
   protected readonly time = computed(() => formatSimTime(this.sim.simTick()));
+  /** From snapshots at the panel rate (ADR 0011 §9.3); `null` (no solution) until one holds islands. */
+  private readonly lastSolve = this.sim.select(lastSolveOf, { initial: null, destroyRef: inject(DestroyRef) });
+  protected readonly lastSolveText = computed(() => formatLastSolve(this.lastSolve()));
   protected readonly effective = computed(() => formatSpeed(this.sim.effectiveSpeed()));
   protected readonly requested = computed(() => `${this.sim.speed()}×`);
   protected readonly enabled = computed(() => this.session.isEnabled('sim.setSpeed'));
