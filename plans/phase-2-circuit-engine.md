@@ -461,11 +461,14 @@ Two libs and a host:
 
 Acceptance:
 
-- [ ] The layout and protocol match ADR 0011. The worker checks `SIM_PROTOCOL_VERSION` when it starts and refuses a mismatch.
-- [ ] **Codec property tests:**
+- [x] The layout and protocol match ADR 0011. The worker checks `SIM_PROTOCOL_VERSION` when it starts and refuses a mismatch. _(Part 1: `runner.spec.ts`; the version is read before anything else is parsed.)_
+- [x] **Codec property tests:**
   - a snapshot round-trips;
   - a torn read is detected and retried (with a simulated concurrent writer);
   - the `postMessage` fallback gives identical bytes.
+
+  _Part 1: `sim-protocol` `transport.spec.ts` (a simulated writer that laps the reader mid-copy, and a real writer thread), and `sim-worker` `runner.spec.ts` (the worker's bytes equal the headless game's after random sessions, both transports)._
+
 - [ ] **`SimHost`:**
   - starts one worker per game and forwards each committed world command with its tick;
   - paces with integer targets capped by the worker's progress, so 60× degrades to the achievable speed with an indicator;
@@ -478,7 +481,7 @@ Acceptance:
   - `desktop-e2e` shows the worker running under `app://`, with `crossOriginIsolated === true` inside it and no `securitypolicyviolation`.
 - [ ] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page.
 - [ ] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
-- [ ] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
+- [x] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
 - [ ] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
 - [ ] **`Session.hash` is deleted, not adapted** (ADR 0011 §9.4); nothing in F2.3b is built on `Session.world().tick` or `Session.hash`: read `SimHost.simTick` and `SimHost.hashAt()`.
 

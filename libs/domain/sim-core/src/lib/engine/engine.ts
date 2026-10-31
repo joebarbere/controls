@@ -2,11 +2,13 @@ import { BUILTIN_CATALOG, type Catalog, regionProfile } from '@controls/catalog'
 import type { ReplayEntry, World } from '@controls/save-format';
 import {
   compareSimEvents,
+  type DeviceOutputSchema,
   encodeSnapshot,
   ISLAND_KIND_AC,
   ISLAND_KIND_DC,
   ISLAND_KIND_EMPTY,
   ISLAND_KIND_MIXED,
+  islandStatus,
   type SimEvent,
   type SimEventKind,
   type SimStateExport,
@@ -14,6 +16,7 @@ import {
   snapshotHashedBytes,
   snapshotSlotBytes,
   type SnapshotSource,
+  type TopologyDescriptor,
 } from '@controls/sim-protocol';
 import { deriveStream, entityStreamKey } from '@controls/world-model';
 import {
@@ -35,6 +38,7 @@ import type { IslandKind, Netlist, NetlistIsland, StateBag, TerminalRef } from '
 export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from '../devices';
+import { buildTopologyDescriptor } from './descriptor';
 import {
   type LayerContext,
   type SimIslandStatus,
@@ -275,7 +279,14 @@ export class SimEngine {
   private islandBands = new Uint8Array(0);
   private readonly nodeOf = new Map<string, number>();
   // Device records in the snapshot: per record, its bank, device index and byte offset.
-  private records: { readonly bank: SimDeviceBank; readonly index: number; readonly offset: number }[] = [];
+  private records: {
+    readonly bank: SimDeviceBank;
+    readonly index: number;
+    readonly offset: number;
+    readonly entity: number;
+    readonly output: DeviceOutputSchema;
+  }[] = [];
+  private descriptorCache: TopologyDescriptor | null = null;
   private deviceDataBytes = 0;
   private slot = new Uint8Array(0);
   private events: SimEvent[] = [];
@@ -420,6 +431,29 @@ export class SimEngine {
   /** SHA-256 of the snapshot's hashed bytes (`snapshotHash`), lower-case hex. */
   snapshotHash(): string {
     return snapshotHash(this.encode());
+  }
+
+  /**
+   * Encodes the snapshot at this tick into `slot` (the sim worker's shared or pooled slot), with
+   * `slotSeq` in its unhashed seqlock word, and returns the bytes used. The hashed region is
+   * {@link snapshot}'s: the transports differ only in where the bytes go (ADR 0011 §11).
+   */
+  encodeInto(slot: Uint8Array, slotSeq: number): number {
+    return encodeSnapshot(this.snapshotSource(), slot, slotSeq);
+  }
+
+  /** The bytes one slot for the current topology needs (the worker sizes its buffer from it). */
+  snapshotBytes(): number {
+    return snapshotSlotBytes(this.snapshotSource());
+  }
+
+  /**
+   * The current generation's topology descriptor (ADR 0011 §7): a new object for each generation and
+   * each engine, cached until the topology changes, so readers can key their caches on identity.
+   */
+  topologyDescriptor(): TopologyDescriptor {
+    this.descriptorCache ??= buildTopologyDescriptor(this.current, this.generation, this.records);
+    return this.descriptorCache;
   }
 
   /** Events since the last call, in delivery order (tick, entity, kind). Never in any hash. */
@@ -728,14 +762,8 @@ export class SimEngine {
    * a DC island that wasn't solved (0 iterations) had an element no model could value.
    */
   private status(island: number): SimIslandStatus {
-    const kind = this.current.islands[island].kind;
-    if (kind === 'mixed') return 'mixed';
     const result = this.solution.islands[island];
-    if (result.iterations === 0) return 'unmodelled';
-    const flags = result.flags;
-    if ((flags & ISLAND_FLAG_SINGULAR) !== 0) return 'singular';
-    if ((flags & ISLAND_FLAG_NON_CONVERGED) !== 0) return 'nonConverged';
-    return 'solved';
+    return islandStatus(KIND_CODES[this.current.islands[island].kind], result.flags, result.iterations);
   }
 
   private emit(
@@ -871,22 +899,30 @@ export class SimEngine {
     for (const node of netlist.nodes)
       for (const member of node.members) this.nodeOf.set(terminalKey(member), node.index);
 
-    const records: { bank: SimDeviceBank; index: number; offset: number }[] = [];
+    const records: {
+      bank: SimDeviceBank;
+      index: number;
+      offset: number;
+      entity: number;
+      output: DeviceOutputSchema;
+    }[] = [];
     let offset = 0;
     for (const device of netlist.devices) {
       const slot = devices.get(device.entity);
       if (slot === undefined || slot.bank === null || slot.bank.model.output === null) continue;
-      records.push({ bank: slot.bank.bank, index: slot.index, offset });
-      offset += slot.bank.model.output.recordBytes;
+      const output = slot.bank.model.output;
+      records.push({ bank: slot.bank.bank, index: slot.index, offset, entity: device.entity, output });
+      offset += output.recordBytes;
     }
     this.records = records;
     this.deviceDataBytes = offset;
+    this.descriptorCache = null;
   }
 
   // --- the snapshot ---------------------------------------------------------------------------
 
-  /** Encodes the snapshot at this tick into the reusable slot and returns a view of its hashed bytes. */
-  private encode(): Uint8Array {
+  /** The engine's state as a snapshot source at this tick: preallocated arrays, no solve. */
+  private snapshotSource(): SnapshotSource {
     const netlist = this.current;
     const s = this.solution;
     // An empty netlist has no islands, so every island here has been solved or adopted.
@@ -899,7 +935,7 @@ export class SimEngine {
       this.islandReferences[i] = solved ? islandReferenceNode(netlist, island) : -1;
       this.islandUnknowns[i] = result.unknowns;
     }
-    const source: SnapshotSource = {
+    return {
       topologyGeneration: this.generation,
       tick: this.tickNow,
       // Only an exported solution's tick: with none (an empty netlist), 0, as a loaded engine has.
@@ -926,6 +962,11 @@ export class SimEngine {
         for (const record of this.records) record.bank.writeRecord?.(record.index, view, base + record.offset, ctx);
       },
     };
+  }
+
+  /** Encodes the snapshot at this tick into the reusable slot and returns a view of its hashed bytes. */
+  private encode(): Uint8Array {
+    const source = this.snapshotSource();
     const bytes = snapshotSlotBytes(source);
     if (this.slot.byteLength < bytes) this.slot = new Uint8Array(bytes);
     encodeSnapshot(source, this.slot);
