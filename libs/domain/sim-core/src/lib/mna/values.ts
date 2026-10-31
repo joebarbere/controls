@@ -156,7 +156,8 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  *   The engine's battery model (F2.4) always sets the EMF from the live state of charge instead. The
  *   nominal voltage is never an EMF: a lead-acid battery resting at its nominal 12.0 V is only about a
  *   quarter charged (plan F2.4, #46 review);
- * - `resistor` and `heater` (F2.5): their fixed `resistanceOhm` (the heater's V_r² / P_r).
+ * - `resistor` and `heater` (F2.5): their fixed `resistanceOhm` (the heater's V_r² / P_r);
+ * - `fuse` and `breaker.thermalMagnetic` (F2.5 part 2): a closed link's or pole's `resistanceOhm`.
  *
  * Kinds whose value is sim-owned state with no placeholder (the lamp's filament R(T), F2.5) have no
  * default: the engine's hook must set them.
@@ -165,6 +166,8 @@ export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Objec
   lead: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   resistor: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   heater: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  fuse: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  'breaker.thermalMagnetic': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   battery: (branch, values) =>
     values.vsource(branch.index, branch.values['openCircuitVoltageFullV'], branch.values['internalResistanceOhm']),
 });

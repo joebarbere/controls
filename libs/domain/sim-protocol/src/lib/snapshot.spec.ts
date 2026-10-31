@@ -308,6 +308,8 @@ describe('device output schemas and nominal bands', () => {
   it('every built-in schema is well formed, keyed by its kind, and band 0 is none', () => {
     expect(Object.keys(DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual([
       'battery',
+      'breaker.thermalMagnetic',
+      'fuse',
       'heater',
       'lamp.incandescent',
       'resistor',

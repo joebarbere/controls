@@ -1,0 +1,25 @@
+# F2.5 part 2: protection state in a save. Three batteries on the workshop bench:
+# - one through a 1 A fuse into the 12 V 50 W heater (4.3 A): the fuse blows within 50 ms;
+# - one through a second fuse into the 10 Ω resistor (1.29 A): after 2.5 s it is part-melted (it would
+#   melt after about 16.5 s);
+# - one shorted through the 15 A breaker (about 7.5 × its rating): it trips thermally after about 1.7 s.
+#   pnpm sim run apps/sim-cli/scenarios/protection.console --world content/levels/workshop.json
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 700 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id fuse.emberlyn-5x20-fa-1a --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id heater.hearthvale-12v-50w --ref.version 1 --positionMm.x 1000 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 3 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal b --b.entity 1 --b.terminal neg
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 700 --positionMm.y -300 --positionMm.z 400
+entity.place --ref.id fuse.emberlyn-5x20-fa-1a --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 400
+entity.place --ref.id resistor.orrinwood-10r-10w --ref.version 1 --positionMm.x 1000 --positionMm.y -300 --positionMm.z 400
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 4 --a.terminal pos --b.entity 5 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 5 --a.terminal b --b.entity 6 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 6 --a.terminal b --b.entity 4 --b.terminal neg
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 700 --positionMm.y -300 --positionMm.z 600
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 600
+device.operate 8 on true
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 7 --a.terminal pos --b.entity 8 --b.terminal line
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 8 --a.terminal load --b.entity 7 --b.terminal neg
+sim.step 2500
+world.hash

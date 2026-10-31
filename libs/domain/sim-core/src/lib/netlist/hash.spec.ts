@@ -22,6 +22,7 @@ import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing
 import { ENGINE_TEST_CATALOG, GENERATOR } from '../../testing/engine';
 import { MODEL_KINDS } from '@controls/catalog';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
+import { BREAKER, FUSE_1A } from '../../testing/protection';
 
 /**
  * Golden topology hashes of the bench lamp. They are persisted in every save's `WorldV2.sim` and in
@@ -46,6 +47,9 @@ const MODEL_KIND_TOPOLOGY = {
   generatorPortable: '8eeb8201e5e992fc957fc1ff99113d658ec03878366c38ec97a4c71b6dd5fe48',
   resistor: '1009461cfdcc929226b38a50b75915dcbb86fea43ee19dd6f19b14a21a1f5d11',
   heater: '4a85e1ec73b28157987099d92067df6693f37104397ffb0fb46091caad369dec',
+  fuse: '9975e3f8e468d687727f59704b75a1cfa902b355e65d44854f60e0c817c28c50',
+  breakerOff: '5b7e7d973bfcf376679cee1f29d5d298fc67ae0b5c0f5b3949f9d0df5ec5708e',
+  breakerOn: 'ba3697d37256b7b5a65e4a8670c99ff69d36a30b6c3945d61c403707730efab7',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -62,6 +66,9 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   generatorPortable: 'generator.portable',
   resistor: 'resistor',
   heater: 'heater',
+  fuse: 'fuse',
+  breakerOff: 'breaker.thermalMagnetic',
+  breakerOn: 'breaker.thermalMagnetic',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -189,6 +196,14 @@ describe('topologyHash', () => {
       generatorPortable: one(GENERATOR, undefined, ENGINE_TEST_CATALOG),
       resistor: one(RESISTOR_10R),
       heater: one(HEATER),
+      fuse: one(FUSE_1A),
+      breakerOff: one(BREAKER),
+      breakerOn: (() => {
+        const bus = benchBus();
+        run(bus, 'entity.place', { ref: BREAKER, positionMm: origin });
+        run(bus, 'device.operate', { id: 1, control: 'on', value: true });
+        return compileNetlist(bus.state, BUILTIN_CATALOG).topologyHash;
+      })(),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 
