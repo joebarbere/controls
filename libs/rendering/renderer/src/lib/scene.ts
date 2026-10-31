@@ -66,6 +66,8 @@ export interface SceneGraphNode {
   rotationMdeg?: [number, number, number];
   visible: boolean;
   selectable?: string;
+  /** A device's label (`userData.label`: its fictional brand and model). */
+  label?: string;
   boundsMm?: [number, number, number, number, number, number];
   drawn?: false;
   children?: SceneGraphNode[];
@@ -87,6 +89,8 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
   if (r.x !== 0 || r.y !== 0 || r.z !== 0) node.rotationMdeg = [mdeg(r.x), mdeg(r.y), mdeg(r.z)];
   const sel = object.userData['selectable'] as { id: string; kind: string } | undefined;
   if (sel) node.selectable = `${sel.kind}:${sel.id}`;
+  const label = object.userData['label'];
+  if (typeof label === 'string') node.label = label;
   if (object instanceof Mesh) {
     const geometry = object.geometry as BufferGeometry;
     if ((geometry.getAttribute('position')?.count ?? 0) > 0) {

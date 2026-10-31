@@ -488,7 +488,7 @@ Acceptance:
 
 Acceptance:
 
-- [ ] **Battery:**
+- [x] **Battery:**
   - EMF as a function of state of charge, from a sourced chemistry, under a fictional brand;
   - internal resistance;
   - state of charge, coulomb-counted, kept in the entity's sim-owned `sim` bag (ADR 0011 §1, ADR 0013).
@@ -497,14 +497,14 @@ Acceptance:
   - terminal voltage = EMF − I·R within 0.5 %;
   - over one hour of sim time (headless `advance`), state of charge falls by ∫I dt ÷ capacity within 0.5 %.
 
-- [ ] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
-- [ ] **Bench DC supply:**
+- [x] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
+- [x] **Bench DC supply:**
   - a non-zero output resistance (sourced, typical), so supplies paralleled in CV mode are never an ideal-source loop (`singular`) and settle through the CV/CC loop (`electrical-realism-reviewer`, #46);
   - `device.operate` controls for the voltage setpoint, the current limit and output on/off;
   - constant-voltage/constant-current crossover at R = V/I within 0.5 %, and a property test that it never exceeds either setpoint beyond its tolerance;
   - its mode is published in the device record, with no mode chatter at the crossover (tested), including a CV/CC-crossover hysteresis test with a lamp load (#49 review);
   - a supply or island the outer loop flags `nonConverged` is shown as unsettled, never as a steady reading, in the device record and every readout (#49 review; P5's meters carry it on).
-- [ ] **DIN 24 VDC PSU:**
+- [x] **DIN 24 VDC PSU:**
   - current limit with hiccup mode: overload for t_detect, off for t_off, then retry, with tick-exact timing;
   - a short circuit gives a periodic hiccup at the documented period ±1 tick;
   - values come from typical published behaviour, attributed to a fictional model.
@@ -517,7 +517,17 @@ Acceptance:
 
 - [ ] **Three-phase 208Y/120 and 480Y/277.** Golden fixtures: line-to-line = √3 × line-to-neutral (via `sqrt`), and a balanced load's neutral current is about 0. **Headless only**; gameplay is P6.
 - [ ] **Portable generator (stub):** a registered model with nameplate EMF and source impedance, and no engine dynamics. Not placeable, and documented as a stub; generators and transfer switches are in the backlog.
-- [ ] The battery, bench supply and DIN PSU can be placed on the bench, with procedural recipes and scene-graph snapshots. Their labels use fictional brands.
+- [x] The battery, bench supply and DIN PSU can be placed on the bench, with procedural recipes and scene-graph snapshots. Their labels use fictional brands.
+
+_Part 1 (battery, bench supply, DIN PSU, recipes) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#power-sources-f24), [simulation caveats](../docs/caveats/simulation.md#power-sources-f24)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Part 2 (utility, three-phase, generator stub, the C84.1 bands) is the next PR in the stack. Notes:_
+
+- _**Battery:** E(s) linear between the catalogue's empty and full open-circuit voltages (11.8 V and 12.9 V), behind the constant internal resistance; `stateOfCharge` coulomb-counted in the continuous layer, solved islands only. Its keys are unchanged, so no `schemaVersion` bump. The one-hour golden is in `apps/sim-cli/src/battery-hour.spec.ts` (sim-core's coverage instrumentation makes an hour 6× slower, past Vitest's default timeout on a slow runner); sim-core keeps a one-minute version._
+- _**The placeholder:** `DC_DEFAULT_VALUES.battery` is now the full-charge EMF (a new battery) for solver callers with no engine model (the bench's re-solve cases); the battery's netlist values carry `openCircuitVoltageFullV` in place of `nominalVoltageV`. The DC goldens set their 12 V test EMF through their hook, so no solver pin moved._
+- _**CV/CC:** the mode is decided in the outer loop from the iterate and the branch's stamp, with a 0.1 % hysteresis band (`CV_CC_HYSTERESIS`, numerical); the crossover is at R = V/I − R_out. A new engine hook, `afterSolve`, commits the mode into the bank after each solve (the `sim` bag `mode`). Output resistance: 1 mΩ (bench supply), 48 mΩ (DIN PSU), from the classes' load-regulation figures._
+- _**Hiccup:** a second engine hook: a layer returning `true` re-solves within the step even for a value-only change, so the off and the retry are tick-exact; a short's period is exactly 1100 ticks._
+- _**The validity rule (for F2.5):** every record ends in `u8 status` [`unsolved`, `solved`, `unsettled`, `singular`]; solved quantities are written only on a solved island, the device's own state always (ADR 0011 §5.4, amended). The schemas are `BUILTIN_DEVICE_OUTPUTS` in sim-core; registering them in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` with the `SIM_PROTOCOL_VERSION` bump, and the sources' nominal bands, are left to F2.3b, which owns the protocol tables._
+- _**`SIM_ENGINE_VERSION` 4:** `SIM_STEP_HASH` and `SIM_STEP_SNAPSHOT_HASH` re-pinned (Node and Chromium), a new `sim-step-engine-4.ctrl` fixture; `BENCH_LEADS_HASH` didn't move._
+- _**Placing:** the recipes draw from the catalogue entry; the mouse can't place catalogue devices yet (`propFootprint` covers built-in props only), so they are placed with `entity.place` and an orientation._
 
 ### F2.5 First loads and switching
 
@@ -670,7 +680,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
-| F2.4    | Power sources                                     | ⬜ Not started                                |
+| F2.4    | Power sources                                     | 🟡 Part 1 done (part 2: utility, three-phase) |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
 | F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |

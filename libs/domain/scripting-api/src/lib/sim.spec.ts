@@ -80,7 +80,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 3, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 4, catalogVersion: 1 });
   });
 });
 
@@ -150,8 +150,9 @@ describe('game.probe: ideal and non-loading', () => {
     const reading = game.probe('1:pos', '1:neg');
     expect(reading).toMatchObject({ kind: 'dc', tick: 0, solvedAt: 0 });
     const volts = reading.kind === 'dc' ? reading.volts : Number.NaN;
-    expect(volts).toBeGreaterThan(11);
-    expect(volts).toBeLessThan(12);
+    // A new battery's 12.9 V EMF (F2.4) less the drop across its 23 mΩ at about 5 A.
+    expect(volts).toBeGreaterThan(12);
+    expect(volts).toBeLessThan(12.9);
     const reversed = game.probe('1:neg', '1:pos');
     expect(reversed.kind === 'dc' && reversed.volts).toBe(-volts);
     // Non-loading: probing changes nothing.

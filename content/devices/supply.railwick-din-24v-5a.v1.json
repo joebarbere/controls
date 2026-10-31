@@ -1,0 +1,57 @@
+{
+  "id": "supply.railwick-din-24v-5a",
+  "version": 1,
+  "title": "24 V 5 A DIN-rail power supply",
+  "brand": "Railwick",
+  "modelName": "RW-24-5",
+  "category": "source",
+  "sizeMm": { "widthMm": 40, "heightMm": 125, "depthMm": 114 },
+  "terminals": [
+    { "id": "neg", "label": "V−", "positionMm": { "x": 12, "y": 112, "z": 114 } },
+    { "id": "pos", "label": "V+", "positionMm": { "x": 28, "y": 112, "z": 114 } }
+  ],
+  "model": {
+    "kind": "supply.dinPsu",
+    "params": {
+      "ratedVoltageV": 24,
+      "ratedCurrentA": 5,
+      "currentLimitA": 6,
+      "outputResistanceOhm": 0.048,
+      "hiccupDetectMs": 100,
+      "hiccupOffMs": 1000
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "din-psu-120w-class",
+      "kind": "real-world",
+      "citation": "The slim 24 V 5 A (120 W) DIN-rail switch-mode supply, a common control-panel class. Typical published figures, paraphrased (not one vendor's): 24 V DC output, 5 A continuous; load regulation within about ±1 % from no load to full load (0.24 V over 5 A, an output resistance of about 48 mΩ); body about 40 mm wide, 125 mm tall and 114 mm deep from the rail.",
+      "covers": [
+        "model.params.ratedVoltageV",
+        "model.params.ratedCurrentA",
+        "model.params.outputResistanceOhm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "din-psu-overload-protection",
+      "kind": "real-world",
+      "citation": "Overload protection of the class: a current limit that typically engages between about 105 % and 150 % of the rated current, recovering automatically (hiccup mode) once the fault is removed. 120 % (6 A) is taken, inside that band. Paraphrased from manufacturers' datasheets for the class.",
+      "covers": ["model.params.currentLimitA"]
+    },
+    {
+      "id": "hiccup-timing",
+      "kind": "game-design",
+      "citation": "game-design: 100 ms in current limit before the output shuts down, then 1 s off before each restart attempt, a hiccup period of 1.1 s. Datasheets for the class describe hiccup recovery but rarely give its timing; these are chosen to look like it (a short burst, then about a second off).",
+      "covers": ["model.params.hiccupDetectMs", "model.params.hiccupOffMs"]
+    },
+    {
+      "id": "terminal-layout",
+      "kind": "game-design",
+      "citation": "game-design: the V− and V+ output screw terminals sit on the front face near the top, 16 mm apart; not modelled on a product.",
+      "covers": ["terminals"]
+    }
+  ],
+  "extensions": {}
+}

@@ -6,7 +6,14 @@ const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
   it('lists the P2 kinds, keyed by their own name', () => {
-    expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual(['battery', 'lamp.incandescent', 'lead', 'switch.spst']);
+    expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
+      'battery',
+      'lamp.incandescent',
+      'lead',
+      'supply.bench',
+      'supply.dinPsu',
+      'switch.spst',
+    ]);
     for (const [name, kind] of Object.entries(MODEL_KINDS)) expect(kind.kind).toBe(name);
     expect(Object.isFrozen(MODEL_KINDS)).toBe(true);
   });
@@ -22,6 +29,13 @@ describe('MODEL_KINDS', () => {
       battery: { stateOfCharge: 'sim number 1' },
       'lamp.incandescent': { filamentTempK: 'sim number null' },
       lead: {},
+      'supply.bench': {
+        currentLimitA: 'commanded number 1',
+        mode: 'sim enum cv',
+        outputOn: 'commanded boolean false',
+        setpointV: 'commanded number 12',
+      },
+      'supply.dinPsu': { mode: 'sim enum ok', phaseTicks: 'sim number 0' },
       'switch.spst': { closed: 'commanded boolean false' },
     });
   });

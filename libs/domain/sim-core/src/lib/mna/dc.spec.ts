@@ -53,12 +53,13 @@ describe('DcBranchValues', () => {
 });
 
 describe('dcBranchValues', () => {
-  it('defaults leads to their resistance and batteries to nominal EMF behind internal R', () => {
+  it('defaults leads to their resistance and batteries to their full-charge EMF behind internal R (never the nominal)', () => {
     const netlist = compileNetlist(benchLamp(true), BUILTIN_CATALOG);
     const values = dcBranchValues(netlist, lampHook(28.8));
     const cell = branchOf(netlist, 1, 'cell');
     expect(values.stamp(cell)).toBe('vsource');
-    expect(values.emfV[cell]).toBe(12);
+    // A new battery (state of charge 1): the catalogue's 12.9 V open-circuit EMF, never the nominal 12 V.
+    expect(values.emfV[cell]).toBe(12.9);
     expect(values.ohms[cell]).toBe(0.023);
     const lead = branchOf(netlist, 1);
     expect(values.ohms[lead]).toBe(netlist.branches[lead].values['resistanceOhm']);
@@ -111,7 +112,7 @@ describe('DcSolver', () => {
       const netlist = compileNetlist(benchLamp(closed), BUILTIN_CATALOG);
       const solution = solveDc(netlist, dcBranchValues(netlist, lampHook(28.8)));
       const lamp = current(solution, branchOf(netlist, 3, 'filament'));
-      if (closed) expect(lamp).toBeCloseTo(12 / (0.023 + 28.8 + 3 * 0.040948155), 8);
+      if (closed) expect(lamp).toBeCloseTo(12.9 / (0.023 + 28.8 + 3 * 0.040948155), 8);
       else expect(Math.abs(lamp)).toBeLessThan(1e-10);
       expect(solution.topologyHash).toBe(netlist.topologyHash);
       expect(solution.islands[0]).toMatchObject({
@@ -343,12 +344,13 @@ describe('DcSolver', () => {
     for (let i = 1; i < solution.nodes.length; i += 2) expect(solution.nodes[i]).toBe(0);
   });
 
-  it('solves a supply set by a hook beside a battery, as F2.4 will', () => {
+  it('solves a supply set by a hook beside a battery at its default (full-charge) EMF', () => {
     const bus = benchBus(TEST_CATALOG);
     run(bus, 'entity.place', { ref: SUPPLY, positionMm: origin });
     run(bus, 'entity.place', { ref: BATTERY, positionMm: origin });
     run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'pos') });
     run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'neg'), b: end(2, 'neg') });
+    run(bus, 'device.operate', { id: 1, control: 'setpointV', value: 12.9 });
     const netlist = compileNetlist(bus.state, TEST_CATALOG, { models: TEST_MODELS });
     const values = dcBranchValues(netlist, (branch, v) => {
       if (branch.model !== 'test.supply') return false;
@@ -357,7 +359,7 @@ describe('DcSolver', () => {
     });
     const solution = solveDc(netlist, values);
     const RL = netlist.branches[branchOf(netlist, 1)].values['resistanceOhm'];
-    // An ideal 12 V supply against a 12 V battery: no current flows.
+    // An ideal supply at the battery's full-charge EMF (12.9 V) against it: no current flows.
     expect(Math.abs(current(solution, branchOf(netlist, 2, 'cell')))).toBeLessThan(1e-9);
     expect(RL).toBeGreaterThan(0);
   });

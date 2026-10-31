@@ -187,8 +187,8 @@ describe('SimEngine: electrical results', () => {
     expect(sw).toBe(0); // a closed switch is one node
     const loopCurrent = host.engine.exportState().solution?.branches[0] as number; // the battery's cell
     expect(Math.abs(loopCurrent)).toBeGreaterThan(4);
-    // Terminal voltage = EMF − I·R (the placeholder EMF until F2.4), within rounding.
-    expect(battery).toBeCloseTo(12 - Math.abs(loopCurrent) * 0.023, 9);
+    // Terminal voltage = EMF − I·R, the EMF a new battery's (12.9 V at a state of charge of 1), within rounding.
+    expect(battery).toBeCloseTo(12.9 - Math.abs(loopCurrent) * 0.023, 9);
     expect(load + fuse).toBeLessThan(battery);
     expect(fuse).toBeCloseTo(Math.abs(loopCurrent) * 0.01, 9);
   });
@@ -216,7 +216,7 @@ describe('SimEngine: electrical results', () => {
   });
 
   it('never presents an unmodelled island as a reading: the real lamp has no filament model until F2.5', () => {
-    expect(BUILTIN_DEVICE_MODELS).toStrictEqual({});
+    expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual(['battery', 'supply.bench', 'supply.dinPsu']);
     const engine = SimEngine.start(benchLamp(true));
     const [island] = engine.islands();
     expect(island).toMatchObject({ kind: 'dc', status: 'unmodelled', iterations: 0, entities: [1, 2, 3] });
@@ -508,13 +508,14 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
     host.advanceTo(80); // before the fuse melts
     const world = host.materialised();
     expect(world.entities.map((e) => [e.id, e.sim])).toStrictEqual([
-      [1, { stateOfCharge: 1 }], // no engine model for the battery until F2.4: its bag as placed
+      [1, { stateOfCharge: expect.any(Number) }], // discharging since the switch closed (F2.4)
       [2, {}],
       [3, { tempK: expect.any(Number) }],
       [4, { blown: false, heatA2s: expect.any(Number) }],
       [5, { filamentTempK: null }], // no lamp model until F2.5
     ]);
     expect(world.entities[2].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
+    expect(world.entities[0].sim['stateOfCharge']).toBeLessThan(1);
     expect(checkWorldDevices(world, ENGINE_TEST_CATALOG)).toStrictEqual([]);
     expect(World.safeParse(world).success).toBe(true);
     expect(world.sim?.lastSolveTick).toBe(70);
@@ -634,18 +635,21 @@ describe('SimEngine: the snapshot', () => {
       tick: 100,
       lastSolveTick: 90,
       topologyHash: host.engine.netlist.topologyHash,
-      deviceCount: 2,
+      deviceCount: 3,
     });
     expect([...snapshot.nodes]).toStrictEqual(exported.solution?.nodes);
     expect([...snapshot.branches]).toStrictEqual(exported.solution?.branches);
     expect(snapshot.islands).toStrictEqual([
       { kind: 'dc', flags: 0, iterations: 1, referenceNode: 0, unknowns: expect.any(Number), band: 0 },
     ]);
-    // Records in entity order: the load (3) then the fuse (4), 16 bytes each.
+    // Records in entity order: the battery (1, 40 bytes), the load (3) then the fuse (4), 16 bytes each.
     const view = new DataView(snapshot.devices.buffer);
-    expect(view.getFloat64(8, true)).toBe(host.materialised().entities[2].sim['tempK']);
-    expect(view.getFloat64(16, true)).toBeGreaterThan(0); // the fuse's melt fraction
-    expect(view.getUint8(24)).toBe(0); // intact
+    const world = host.materialised();
+    expect(view.getFloat64(24, true)).toBe(world.entities[0].sim['stateOfCharge']); // the battery's
+    expect(view.getUint8(32)).toBe(1); // solved
+    expect(view.getFloat64(40 + 8, true)).toBe(world.entities[2].sim['tempK']);
+    expect(view.getFloat64(56, true)).toBeGreaterThan(0); // the fuse's melt fraction
+    expect(view.getUint8(64)).toBe(0); // intact
     expect(host.engine.snapshotHash()).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -772,7 +776,7 @@ describe('SimEngine: the warm start, readability and revisions', () => {
 });
 
 describe('SimEngine with the built-in models', () => {
-  it('runs a world bus on the built-in catalogue, the battery at its placeholder EMF', () => {
+  it('runs a world bus on the built-in catalogue, the battery at its EMF against state of charge', () => {
     const bus = createWorldBus(createWorld({ seed: 3 }), createWorldRegistry());
     const host = new Host(bus, {});
     host.run([
@@ -781,9 +785,9 @@ describe('SimEngine with the built-in models', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    // Open: only gmin's 1e-12 S per node draws current, so the EMF less ~5e-13 V.
-    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeCloseTo(12, 9);
+    // Open: only gmin's 1e-12 S per node draws current, so a new battery's 12.9 V EMF less ~5e-13 V.
+    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeCloseTo(12.9, 9);
     host.exec('device.operate', { id: 2, control: 'closed', value: true });
-    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeLessThan(12);
+    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeLessThan(12.9);
   });
 });

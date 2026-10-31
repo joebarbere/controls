@@ -31,10 +31,13 @@ import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/v
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
 import type { IslandKind, Netlist, NetlistIsland, StateBag, TerminalRef } from '../netlist/types';
+
+export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
+import { BUILTIN_DEVICE_MODELS } from '../devices';
 import {
-  BUILTIN_DEVICE_MODELS,
   type LayerContext,
+  type SimIslandStatus,
   type SimDevice,
   type SimDeviceBank,
   type SimDeviceModel,
@@ -109,17 +112,6 @@ export class SimProbeError extends Error {
     this.name = 'SimProbeError';
   }
 }
-
-/**
- * Why an island's values are or aren't a reading:
- *
- * - `solved`: a reading;
- * - `singular`: a loop of ideal sources (ADR 0011 §5.3): its zeros are not 0 V;
- * - `nonConverged`: the outer loop hit its cap: values that look real but aren't settled;
- * - `unmodelled`: an element no device model can value yet (the lamp until F2.5): not solved;
- * - `mixed`: DC and AC sources in one island (P2 has no converters): not solved.
- */
-export type SimIslandStatus = 'solved' | 'singular' | 'nonConverged' | 'unmodelled' | 'mixed';
 
 /** One island of the current netlist, for scripts, the console and the inspector (F2.6). */
 export interface SimIslandInfo {
@@ -245,6 +237,7 @@ export class SimEngine {
   private discreteBanks: SimDeviceBank[] = [];
   private continuousBanks: SimDeviceBank[] = [];
   private protectionBanks: SimDeviceBank[] = [];
+  private afterSolveBanks: SimDeviceBank[] = [];
   private devices = new Map<number, DeviceSlot>();
   private readonly tombstones = new Map<number, StateBag>();
   // Per branch: the bank and device index that values it, and the kind's default.
@@ -274,6 +267,7 @@ export class SimEngine {
     netlist: Netlist;
     solution: DcSolution;
     islandReadable(island: number): boolean;
+    islandStatus(island: number): SimIslandStatus;
     emit: LayerContext['emit'];
   };
   private readonly hook: DcIterationHook;
@@ -310,6 +304,7 @@ export class SimEngine {
       netlist: this.current,
       solution: this.solution,
       islandReadable: (island) => this.readable(island),
+      islandStatus: (island) => this.status(island),
       emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
     };
     this.rebuild();
@@ -480,7 +475,12 @@ export class SimEngine {
       if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) topologyChanged = true;
     }
     this.tickNow = t + 1;
-    if (topologyChanged && this.recompile()) this.solve(t + 1, 'layer');
+    // A layer changed the topology or a value the solve reads (a PSU switching off, F2.4): recompile if
+    // the topology moved, and re-solve at t + 1 either way, so the change is tick-exact.
+    if (topologyChanged) {
+      this.recompile();
+      this.solve(t + 1, 'layer');
+    }
   }
 
   /** Recompiles the commanded world with the live sim state; true if the netlist changed. */
@@ -607,6 +607,16 @@ export class SimEngine {
     else if (why === 'command') this.stats.commandSolves++;
     else if (why === 'layer') this.stats.layerSolves++;
     else this.stats.startSolves++;
+    // Sim state the solve decided (a supply's CV/CC mode) is committed before anything reads it.
+    const after = this.afterSolveBanks;
+    if (after.length > 0) {
+      const ctx = this.ctx;
+      ctx.tick = tick;
+      ctx.netlist = netlist;
+      ctx.solution = next;
+      for (let i = 0; i < after.length; i++)
+        (after[i].afterSolve as (c: LayerContext, v: DcBranchValues) => void)(ctx, this.values);
+    }
     // Island events on the rising edge of their flags (ADR 0011 §4).
     for (let k = 0; k < islands.length; k++) {
       const island = islands[k];
@@ -788,6 +798,7 @@ export class SimEngine {
     this.discreteBanks = banks.filter((b) => b.bank.discrete !== undefined).map((b) => b.bank);
     this.continuousBanks = banks.filter((b) => b.bank.continuous !== undefined).map((b) => b.bank);
     this.protectionBanks = banks.filter((b) => b.bank.protection !== undefined).map((b) => b.bank);
+    this.afterSolveBanks = banks.filter((b) => b.bank.afterSolve !== undefined).map((b) => b.bank);
 
     const branchCount = netlist.branches.length;
     this.branchBank = new Array<SimDeviceBank | null>(branchCount).fill(null);

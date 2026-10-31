@@ -104,10 +104,11 @@ export class WorldSync {
     const recipe = this.recipes.acquire(entity.ref);
     const object = new Mesh(recipe.geometry, recipe.material);
     object.name = entitySelectableId(entity.id);
+    if (recipe.label !== null) object.userData['label'] = recipe.label;
     applyTransform(object, entity);
     markSelectable(object, {
       id: entitySelectableId(entity.id),
-      kind: 'prop',
+      kind: recipe.label !== null ? 'device' : 'prop',
       label: `${recipe.spec.title} #${entity.id}`,
       entityId: entity.id,
     });

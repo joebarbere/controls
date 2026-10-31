@@ -1,6 +1,7 @@
 import type { BatteryParams, LampIncandescentParams, LeadParams } from '@controls/catalog';
 import { leadResistanceOhm } from '@controls/catalog';
 import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
+import { benchSupplyNetlistModel, dinPsuNetlistModel } from '../devices/sources/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -68,7 +69,11 @@ export interface ConnectionNetlistModel {
 
 const NO_JOINS: readonly (readonly string[])[] = [];
 
-/** A battery: one cell, a DC source from `neg` to `pos` behind its internal resistance (F2.4). */
+/**
+ * A battery: one cell, a DC source from `neg` to `pos` behind its internal resistance. Its EMF follows
+ * the state of charge at solve time (F2.4's engine model); the values carry the full-charge EMF for
+ * `DC_DEFAULT_VALUES`, the value of a new battery when no engine model runs.
+ */
 const battery: DeviceNetlistModel = {
   kind: 'battery',
   simTopologyKeys: [],
@@ -83,7 +88,10 @@ const battery: DeviceNetlistModel = {
           source: 'dc',
           a: 'neg',
           b: 'pos',
-          values: { internalResistanceOhm: p.internalResistanceOhm, nominalVoltageV: p.nominalVoltageV },
+          values: {
+            internalResistanceOhm: p.internalResistanceOhm,
+            openCircuitVoltageFullV: p.openCircuitVoltageFullV,
+          },
         },
       ],
     };
@@ -141,6 +149,8 @@ const lead: ConnectionNetlistModel = {
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
   'lamp.incandescent': lampIncandescent,
+  'supply.bench': benchSupplyNetlistModel,
+  'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,
 });
 

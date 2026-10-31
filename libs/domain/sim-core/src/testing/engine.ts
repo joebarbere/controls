@@ -3,6 +3,7 @@ import type { CommandBus } from '@controls/commands';
 import { createWorld, FiniteNumber, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '@controls/world-model';
 import { z } from 'zod';
+import { BUILTIN_DEVICE_MODELS } from '../lib/devices';
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../lib/engine/device-model';
 import type { SimEngineOptions } from '../lib/engine/engine';
 import type { DeviceNetlistModel, NetlistModels } from '../lib/netlist/models';
@@ -33,7 +34,12 @@ import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TES
  *   zero-ohm sources (a singular AC island);
  * - `test.acSource` (from `bench.ts`): a 120 V RMS phasor source at 0° behind 0.1 Ω (AC islands);
  * - `test.twinSupply`: two ideal sources (12 V and 13 V) between the same terminals, a loop of zero-ohm
- *   sources (the singular island).
+ *   sources (the singular island);
+ * - `test.resistor`: a fixed resistance of `ohms` (F2.4's source goldens: a load that doesn't move);
+ * - `test.rheostat`: a resistance the test sets with `device.operate {control: 'ohms'}` (commanded, a
+ *   value change), for sweeping a supply's load through its CV/CC crossover.
+ *
+ * The built-in engine models (F2.4's battery and supplies) run beside them in `engineTestOptions`.
  */
 
 export const THERMAL_LOAD = { id: 'load.test-thermal', version: 1 };
@@ -46,6 +52,11 @@ export const DROOP = { id: 'load.test-droop', version: 1 };
 export const REACTOR = { id: 'load.test-reactor', version: 1 };
 export const AC_TWIN = { id: 'source.test-ac-twin', version: 1 };
 export const LEAKY = { id: 'load.test-leaky', version: 1 };
+/** Fixed test resistors (`test.resistor`), by resistance. */
+export const RESISTOR_2_4 = { id: 'load.test-resistor-2r4', version: 1 };
+export const RESISTOR_12 = { id: 'load.test-resistor-12r', version: 1 };
+export const RESISTOR_100 = { id: 'load.test-resistor-100r', version: 1 };
+export const RHEOSTAT = { id: 'load.test-rheostat', version: 1 };
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
 const twoTerminals = ['a', 'b'];
@@ -126,6 +137,30 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
     params: z.strictObject({ henries: FiniteNumber.positive(), dcOhm: FiniteNumber.positive() }),
     keys: {},
     description: 'A test inductor (AC) with a small DC resistance.',
+  },
+  'test.resistor': {
+    kind: 'test.resistor',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({ ohms: FiniteNumber.positive() }),
+    keys: {},
+    description: 'A fixed test resistance.',
+  },
+  'test.rheostat': {
+    kind: 'test.rheostat',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({}),
+    keys: {
+      ohms: key({
+        owner: 'commanded',
+        type: 'number',
+        schema: FiniteNumber.positive(),
+        initial: 10,
+        description: 'Resistance (test), set with device.operate',
+      }),
+    },
+    description: 'A test resistance set by a command.',
   },
   'test.leaky': {
     kind: 'test.leaky',
@@ -223,6 +258,13 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(TWIN_SUPPLY, 'Test twin supply', 'test.twinSupply', {}, ['neg', 'pos']),
   entry(DROOP, 'Test droop load', 'test.droop', { coldOhm: 2, perAmp: 0.1 }),
   entry(LEAKY, 'Test leaky load', 'test.leaky', {}),
+  entry(RESISTOR_2_4, 'Test 2.4 Ω resistor', 'test.resistor', { ohms: 2.4 }),
+  entry(RESISTOR_12, 'Test 12 Ω resistor', 'test.resistor', { ohms: 12 }),
+  entry(RESISTOR_100, 'Test 100 Ω resistor', 'test.resistor', { ohms: 100 }),
+  {
+    ...entry(RHEOSTAT, 'Test rheostat', 'test.rheostat', {}),
+    controls: [{ id: 'ohms', label: 'Resistance', type: 'setpoint', unit: 'Ω', min: 1e-4, max: 1e7, step: 0.001 }],
+  },
   entry(REACTOR, 'Test reactor', 'test.reactor', { henries: 0.05, dcOhm: 0.5 }),
   entry(AC_TWIN, 'Test AC twin source', 'test.acTwin', {}, ['n', 'l']),
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
@@ -256,6 +298,24 @@ export const ENGINE_TEST_MODELS: NetlistModels = {
     'test.flip': { kind: 'test.flip', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.droop': { kind: 'test.droop', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.leaky': { kind: 'test.leaky', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.resistor': { kind: 'test.resistor', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.rheostat': {
+      kind: 'test.rheostat',
+      simTopologyKeys: [],
+      topology: ({ state }) => ({
+        joins: [],
+        elements: [
+          {
+            part: 'element',
+            kind: 'resistor',
+            source: null,
+            a: 'a',
+            b: 'b',
+            values: { ohms: state['ohms'] as number },
+          },
+        ],
+      }),
+    },
     'test.reactor': { kind: 'test.reactor', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.acTwin': {
       kind: 'test.acTwin',
@@ -479,6 +539,37 @@ const reactor: SimDeviceModel = {
   },
 };
 
+const resistor: SimDeviceModel = {
+  kind: 'test.resistor',
+  output: null,
+  bank(devices) {
+    const ohms = devices.map((d) => d.params['ohms']);
+    return {
+      bag: () => ({}),
+      dcValue: (i, b, values) => {
+        values.resistor(b.index, ohms[i]);
+        return true;
+      },
+      acValue: (i, b, values) => {
+        values.resistor(b.index, ohms[i]);
+        return true;
+      },
+    };
+  },
+};
+
+const rheostat: SimDeviceModel = {
+  kind: 'test.rheostat',
+  output: null,
+  bank: () => ({
+    bag: () => ({}),
+    dcValue: (_i, b, values) => {
+      values.resistor(b.index, b.values['ohms']);
+      return true;
+    },
+  }),
+};
+
 /** Deliberately wrong: `steps` lives only in the bank, so a rebuild or a load forgets it. */
 const leaky: SimDeviceModel = {
   kind: 'test.leaky',
@@ -559,6 +650,9 @@ export function engineTestOptions(journal: string[] = []): Required<SimEngineOpt
     catalog: ENGINE_TEST_CATALOG,
     netlistModels: ENGINE_TEST_MODELS,
     deviceModels: {
+      ...BUILTIN_DEVICE_MODELS,
+      'test.resistor': resistor,
+      'test.rheostat': rheostat,
       'test.thermalLoad': thermalLoad,
       'test.i2tFuse': i2tFuse,
       'test.flip': flip,

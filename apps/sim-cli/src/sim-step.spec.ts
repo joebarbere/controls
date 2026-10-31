@@ -14,10 +14,14 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * Its two hashes are pinned here **and** in `apps/game-e2e/src/sim-engine.spec.ts`, which runs the
  * same commands with the engine in the page (Chromium's V8): the D6 Node-vs-Chromium golden (plan
  * F2.3a). Change them together, with the scripting caveats; a numeric change also bumps
- * `SIM_ENGINE_VERSION` (D8).
+ * `SIM_ENGINE_VERSION` (D8). F2.4 re-pinned both (engine 4: the battery's EMF follows its state of
+ * charge, 12.9 V full, and it discharges into the short; its record is in the snapshot).
  */
-export const SIM_STEP_HASH = '5ecdc7c40f39240e7dbc4e34103f47c37ab8427faa5f95aa5413da08f036cdf8';
-export const SIM_STEP_SNAPSHOT_HASH = 'bf82c4b81567f1b1f0e3a4973a677b54829eba304c0be3e2760d6050c166c956';
+
+/** What engine 3 (F2.3a, the battery at its nominal-EMF placeholder) wrote for the same session. */
+const ENGINE_3_HASH = '5ecdc7c40f39240e7dbc4e34103f47c37ab8427faa5f95aa5413da08f036cdf8';
+export const SIM_STEP_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
+export const SIM_STEP_SNAPSHOT_HASH = 'eb20079b8a1efe00ac453b628550c8e650fe03a1cb85aef66651ae6e847c16ff';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sim-step.console');
@@ -71,7 +75,8 @@ describe('the sim-step scenario', () => {
     const battery = game.probe('1:pos', '1:neg');
     const leads = game.probe('2:a', '1:pos');
     if (battery.kind !== 'dc' || leads.kind !== 'dc') throw new Error('expected readings');
-    // Two 1 m leads (about 41 mΩ each) and 23 mΩ inside: the terminal voltage is the leads' share of 12 V.
+    // Two 1 m leads (about 41 mΩ each) and 23 mΩ inside: the terminal voltage is the leads' share of the
+    // EMF (12.9 V full, a little less after 1.234 s at about 123 A).
     expect(battery.volts).toBeGreaterThan(9);
     expect(battery.volts).toBeLessThan(11);
     expect(game.probe('3:a', '3:b')).toMatchObject({ kind: 'unsolved', reason: 'unmodelled' });
@@ -94,12 +99,12 @@ describe('the sim-step scenario', () => {
     });
   });
 
-  it('its checked-in save (engine 3, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-3.ctrl');
+  it('its checked-in save (engine 4, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-4.ctrl');
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(3);
+    expect(loaded.manifest.simEngineVersion).toBe(4);
     expect(loaded.game.tick()).toBe(1234);
     expect(loaded.game.hash()).toBe(SIM_STEP_HASH);
     const record = loaded.game.materialisedWorld().sim;
@@ -107,6 +112,16 @@ describe('the sim-step scenario', () => {
     expect(record?.islands.map((i) => i.iterations)).toContain(1); // the short is solved
     expect(record?.islands.map((i) => i.iterations)).toContain(0); // the lamp's island isn't
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SIM_STEP_HASH] });
+  });
+
+  it("engine 3's save of the same session loads as engine-changed (D8): world.json as saved, never refused", () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-3.ctrl');
+    const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.manifest.simEngineVersion).toBe(3);
+    expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+    expect(loaded.game.hash()).toBe(ENGINE_3_HASH);
+    expect(sim('replay', fixture)).toMatchObject({ status: 1 });
   });
 
   it('gives byte-identical snapshots over 10 s of sim time, across two runs and a replay', async () => {

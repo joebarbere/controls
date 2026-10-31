@@ -91,8 +91,8 @@ export class DcBranchValues {
 }
 
 /**
- * Supplies a branch's value when the netlist alone can't: F2.4's battery EMF against state of charge,
- * F2.5's filament R(T). It writes the value into `values` (by `branch.index`) and returns `true`, or
+ * Supplies a branch's value when the netlist alone can't (a battery's EMF at a state of charge,
+ * F2.5's filament R(T)). It writes the value into `values` (by `branch.index`) and returns `true`, or
  * returns `false` to fall back to the model kind's default. It must be pure in its inputs.
  */
 export type DcValueHook = (branch: NetlistBranch, values: DcBranchValues) => boolean;
@@ -104,8 +104,11 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  * Defaults by model kind, for branches no hook sets:
  *
  * - `lead`: its `resistanceOhm` (resistivity × length ÷ area, F2.1);
- * - `battery`: EMF = `nominalVoltageV` behind `internalResistanceOhm`, a placeholder until F2.4 makes
- *   the EMF a function of state of charge.
+ * - `battery`: its full-charge open-circuit EMF (`openCircuitVoltageFullV`) behind `internalResistanceOhm`:
+ *   a new battery (state of charge 1, its kind's initial value) for callers that run no engine model.
+ *   The engine's battery model (F2.4) always sets the EMF from the live state of charge instead. The
+ *   nominal voltage is never an EMF: a lead-acid battery resting at its nominal 12.0 V is only about a
+ *   quarter charged (plan F2.4, #46 review).
  *
  * Kinds whose value is sim-owned state with no placeholder (the lamp's filament R(T), F2.5) have no
  * default: the engine's hook must set them.
@@ -113,7 +116,7 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
 export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Object.freeze({
   lead: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   battery: (branch, values) =>
-    values.vsource(branch.index, branch.values['nominalVoltageV'], branch.values['internalResistanceOhm']),
+    values.vsource(branch.index, branch.values['openCircuitVoltageFullV'], branch.values['internalResistanceOhm']),
 });
 
 /**

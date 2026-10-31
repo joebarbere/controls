@@ -11,8 +11,8 @@ import { startSandbox } from './support/sandbox';
  * together, never one alone: a difference here is cross-runtime float drift (ADR 0014), not a golden
  * to re-pin.
  */
-const SIM_STEP_HASH = '5ecdc7c40f39240e7dbc4e34103f47c37ab8427faa5f95aa5413da08f036cdf8';
-const SIM_STEP_SNAPSHOT_HASH = 'bf82c4b81567f1b1f0e3a4973a677b54829eba304c0be3e2760d6050c166c956';
+const SIM_STEP_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
+const SIM_STEP_SNAPSHOT_HASH = 'eb20079b8a1efe00ac453b628550c8e650fe03a1cb85aef66651ae6e847c16ff';
 
 type Hooks = {
   __controlsSession?: {
