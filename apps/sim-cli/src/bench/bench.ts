@@ -20,7 +20,16 @@
  * plain `median(t) ≤ budgetMs × median(c) / referenceMs` (which this reports as `scale`) spread 3.2×
  * over 32 loaded runs, the paired median 1.7× (docs/caveats/simulation.md). A regression in the case
  * moves every tᵢ and no cᵢ, so it still fails the gate on any machine, and nothing is skipped per OS.
+ *
+ * A smoke run (`sim bench --smoke`) proves the cases run, not how fast: every case does
+ * {@link SMOKE_RUNS} timed runs and no warm-up, its invariant runs in its smoke form, and budgets are
+ * reported but never fail it (a cold, three-run median is not a measurement). Determinism and the
+ * invariants still gate. The bench-from-the-bundle spec uses it so it doesn't re-measure what the
+ * Nx `bench` target, which never smokes, already measures.
  */
+
+/** Timed runs per case in a smoke run: odd (a real median) and more than one (a determinism check). */
+export const SMOKE_RUNS = 3;
 
 /** A fixed workload and its median on the reference machine, for scaling a case's budget. */
 export interface BenchCalibration {
@@ -52,9 +61,10 @@ export interface BenchCase {
   run(): string;
   /**
    * A deterministic check run once after the timed runs (an allocation gate): `null` when it holds,
-   * else why not, which fails the case. Its value is reported either way.
+   * else why not, which fails the case. Its value is reported either way. `smoke`: a smoke run, so a
+   * shorter form of the same check will do.
    */
-  invariant?(): { readonly value: number; readonly failure: string | null };
+  invariant?(smoke: boolean): { readonly value: number; readonly failure: string | null };
   /**
    * Untimed, right after each run: more of the result's checksum, joined to `run`'s (a digest of
    * state that would cost time to form inside the timed run, so idle work can't pass as real work).
@@ -114,6 +124,8 @@ export interface PendingBenchCase {
 }
 
 export interface BenchReport {
+  /** A smoke run: timings are not a measurement and budgets didn't gate (see the file comment). */
+  readonly smoke: boolean;
   readonly cases: readonly BenchCaseResult[];
   /** Cases waiting for the code they measure; they never affect `ok`. */
   readonly pending: readonly PendingBenchCase[];
@@ -136,7 +148,7 @@ export function median(values: readonly number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCaseResult {
+export function runBenchCase(benchCase: BenchCase, now: () => number, smoke = false): BenchCaseResult {
   if (!Number.isInteger(benchCase.runs) || benchCase.runs < 1) {
     throw new RangeError(`bench case "${benchCase.name}": runs must be a positive integer`);
   }
@@ -150,14 +162,16 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
   const checksums = new Set<string>();
   const calibrationChecksums = new Set<string>();
   const full = (checksum: string) => (benchCase.checksum ? `${checksum}|${benchCase.checksum()}` : checksum);
-  for (let i = 0; i < benchCase.warmup; i++) {
+  const warmup = smoke ? 0 : benchCase.warmup;
+  const runs = smoke ? SMOKE_RUNS : benchCase.runs;
+  for (let i = 0; i < warmup; i++) {
     benchCase.prepare?.();
     checksums.add(full(benchCase.run()));
     if (calibration) calibrationChecksums.add(calibration.run());
   }
   const durations: number[] = [];
   const calibrationDurations: number[] = [];
-  for (let i = 0; i < benchCase.runs; i++) {
+  for (let i = 0; i < runs; i++) {
     benchCase.prepare?.();
     const start = now();
     const checksum = benchCase.run();
@@ -188,10 +202,10 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
   }
   const deterministic = checksums.size === 1 && (calibration === undefined || calibrationChecksums.size === 1);
   const marginMs = budgetMs === null ? null : budgetMs - gatedMs;
-  const invariant = benchCase.invariant?.() ?? null;
+  const invariant = benchCase.invariant?.(smoke) ?? null;
   return {
     name: benchCase.name,
-    runs: benchCase.runs,
+    runs,
     medianMs,
     p90Ms: percentile(durations, 90),
     p99Ms: percentile(durations, 99),
@@ -203,7 +217,10 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     ratio: budgetMs === null ? null : gatedMs / budgetMs,
     checksum: checksums.size === 1 ? [...checksums][0] : null,
     deterministic,
-    ok: deterministic && (marginMs === null || marginMs >= 0) && (invariant === null || invariant.failure === null),
+    ok:
+      deterministic &&
+      (smoke || marginMs === null || marginMs >= 0) &&
+      (invariant === null || invariant.failure === null),
   };
 }
 
@@ -211,7 +228,8 @@ export function runBench(
   cases: readonly BenchCase[],
   now: () => number,
   pending: readonly PendingBenchCase[] = [],
+  smoke = false,
 ): BenchReport {
-  const results = cases.map((benchCase) => runBenchCase(benchCase, now));
-  return { cases: results, pending, ok: results.every((result) => result.ok) };
+  const results = cases.map((benchCase) => runBenchCase(benchCase, now, smoke));
+  return { smoke, cases: results, pending, ok: results.every((result) => result.ok) };
 }
