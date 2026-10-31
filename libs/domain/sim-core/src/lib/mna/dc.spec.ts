@@ -248,7 +248,73 @@ describe('DcSolver', () => {
       expect(voltage(solution, 1)).toBeCloseTo(amps / (2 * GMIN_S.value), 0);
       expect(voltage(solution, 2)).toBeCloseTo(amps / (2 * GMIN_S.value), 0);
       expect(current(solution, 0)).toBe(amps);
+      // Node 2's gmin current (amps / 2) arrives through the two equal resistors, amps / 4 each,
+      // whatever the 5e8 V common mode: internal currents come from u, not c + u.
+      expect(Math.abs(current(solution, 1) - amps / 4)).toBeLessThanOrEqual(1e-15);
+      expect(Math.abs(current(solution, 2) + amps / 4)).toBeLessThanOrEqual(1e-15);
     }
+  });
+
+  it('a vsource element in current limit feeds a floating cluster through the sum row', () => {
+    // F2.4's supply in current limit into a lamp with one end dangling: a vsource element 0 → 1 at
+    // 1 mA (its current unknown's column must reach the cluster's sum row), then 0.1 mΩ from 1 to 2.
+    // Σ gmin V = 1 mA over nodes 1 and 2, so each sits at 5e8 V, and the resistor carries node 2's
+    // gmin current, 5e-4 A.
+    const netlist = syntheticNetlist(3, [
+      { a: 0, b: 1, kind: 'vsource' },
+      { a: 1, b: 2, kind: 'resistor' },
+    ]);
+    const values = new DcBranchValues(2);
+    values.isource(0, 1e-3);
+    values.resistor(1, 1e-4);
+    const solution = solveDc(netlist, values);
+    expect(solution.islands[0]).toMatchObject({ flags: 0, referenceNode: 0 });
+    const sum = voltage(solution, 1) + voltage(solution, 2);
+    expect(Math.abs(GMIN_S.value * sum - 1e-3)).toBeLessThanOrEqual(1e-15 * 1e-3);
+    expect(voltage(solution, 1)).toBeCloseTo(5e8, 0);
+    expect(current(solution, 0)).toBe(1e-3);
+    expect(Math.abs(current(solution, 1) - GMIN_S.value * voltage(solution, 2))).toBeLessThanOrEqual(1e-15);
+  });
+
+  it('pins a floating cluster that holds a voltage source, against another source as the reference', () => {
+    // Island reference: branch 0, a 5 V source behind 1 Ω from node 0 to node 3, loaded by 10 Ω.
+    // A 1 mA current source from 3 feeds node 1 of a floating cluster {1, 2, 4}: a 2 V source behind
+    // 0.5 Ω from 1 to 2, then 0.1 mΩ from 2 to 4 and 100 Ω from 4 back to 1, a loop of ≈ 0.0199 A.
+    // The cluster sits at ≈ 3.3e8 V, set by gmin · (V1 + V2 + V4) = 1 mA.
+    const netlist = syntheticNetlist(5, [
+      { a: 0, b: 3, kind: 'vsource' },
+      { a: 3, b: 0, kind: 'resistor' },
+      { a: 3, b: 1, kind: 'resistor' },
+      { a: 1, b: 2, kind: 'vsource' },
+      { a: 2, b: 4, kind: 'resistor' },
+      { a: 4, b: 1, kind: 'resistor' },
+    ]);
+    const values = new DcBranchValues(6);
+    values.vsource(0, 5, 1);
+    values.resistor(1, 10);
+    values.isource(2, 1e-3);
+    values.vsource(3, 2, 0.5);
+    values.resistor(4, 1e-4);
+    values.resistor(5, 100);
+    const solution = solveDc(netlist, values);
+    expect(solution.islands[0]).toMatchObject({ flags: 0, referenceNode: 0 });
+    const gmin = GMIN_S.value;
+    const [v1, v2, v4] = [voltage(solution, 1), voltage(solution, 2), voltage(solution, 4)];
+    // The common mode, exactly.
+    expect(Math.abs(gmin * (v1 + v2 + v4) - 1e-3)).toBeLessThanOrEqual(1e-15 * 1e-3);
+    // KCL inside the cluster: node 2 passes the source current on less its gmin leak, and so does
+    // node 4. The bound is the 0.1 mΩ branch's own rounding measured relative to the cluster,
+    // 16 ε g (|u2| + |u4|) ≈ 1.4e-10 A with u ≈ 2 V; computing currents from c + u instead would be
+    // off by g · ulp(3.3e8 V) ≈ 6e-4 A.
+    const [is, i24, i41] = [current(solution, 3), current(solution, 4), current(solution, 5)];
+    const relative = 16 * Number.EPSILON * 1e4 * (Math.abs(v2 - v1) + Math.abs(v4 - v1));
+    expect(relative).toBeLessThan(1e-9);
+    expect(Math.abs(i24 - (is - gmin * v2))).toBeLessThanOrEqual(relative);
+    expect(Math.abs(i41 - (i24 - gmin * v4))).toBeLessThanOrEqual(relative);
+    // The cluster's source row: V2 − V1 = 2 − 0.5 · I_s, to the ulps of the 3.3e8 V voltages.
+    expect(Math.abs(v2 - v1 - (2 - 0.5 * is))).toBeLessThanOrEqual(8 * Number.EPSILON * Math.abs(v1));
+    // The rest of the island is unaffected: 5 V behind 1 Ω into 10 Ω, less the 1 mA fed away.
+    expect(voltage(solution, 3)).toBeCloseTo((5 / 1 - 1e-3) / (1 / 1 + 1 / 10), 9);
   });
 
   it('normalises −0 sources to +0 everywhere', () => {

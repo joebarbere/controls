@@ -314,6 +314,10 @@ _Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md),
 
   The last two fail because GEPP's backward error is |L||U|, not |A|, and the measured A⁻¹ itself carries cond·ε error. The same applies to dense-against-sparse in part 3 and to the oracle comparison in F2.7: compare residuals, or use well-conditioned cases.
 
+- **Floating clusters:** there the KCL floor is dominated by the common mode (5e8 V × 1e4 S ≈ 3e-2 A of rounding term), so it can't see an error in the cluster's internal currents or in its common mode. The checks there are exact value checks instead:
+  - gmin · Σ V over the fed component equals the feed current (1e-13 relative in the property, 1e-15 in the unit cases);
+  - each internal current matches its analytic value or its node's KCL, within that branch's rounding measured relative to the cluster (16 ε g (|u_a| + |u_b|));
+  - the feed is either a current source on a resistor element or a `vsource` element in current limit, into a random member.
 - **Generators** keep resistances down to 1e-4 Ω (busbar scale).
 
 Acceptance, **part 1: dense DC**:
@@ -350,7 +354,12 @@ Acceptance, **part 2: complex phasor** (needs F2.7):
 Acceptance, **part 3: sparse, cache and nonlinear loop**:
 
 - [ ] Gilbert–Peierls sparse LU in CSC with AMD ordering, reimplemented from the published papers. MIT spice-ts or brownout code may be adapted only with a `THIRD_PARTY_NOTICES.md` row and an origin comment.
-- [ ] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test).
+- [ ] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test). How, per the F2.2 floor policy (#46 review):
+  - compare **residuals on all circuits**: each solver's solution passes KCL and the source rows;
+  - compare **values on a well-conditioned subset** (resistance minimums, no near-ideal source loops), so that a self-consistent but wrong sparse result fails.
+
+  Value comparisons on ill-conditioned circuits measure forward error, which is unbounded.
+
 - [ ] **Factorisation cache** keyed by `topologyHash`:
   - the symbolic factorisation is reused when only values change;
   - a fixed-size LRU evicts deterministically and never changes results;
@@ -502,7 +511,7 @@ Acceptance:
 - [ ] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
 - [ ] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
 - [ ] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
-- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound.
+- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. Values are compared on the **well-conditioned corpus only**, with sim-core's own residual checks (KCL and source rows, F2.2 floor policy) alongside on every circuit (#46 review). On ill-conditioned circuits two correct solvers can differ by more than any tolerance.
 - [ ] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
 - [ ] **`pnpm sim bench`,** also run as the Nx `bench` target in `verify`:
   - it covers a seeded synthetic 2,000-node plant (mostly radial, with some loops) and a per-tick mix of devices;

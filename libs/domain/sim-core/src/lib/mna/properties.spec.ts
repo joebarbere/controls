@@ -16,8 +16,10 @@ import {
 } from '../../testing/bench';
 import { sha256 } from '@controls/world-model';
 import { kcl, linearResidual, power, sourceRows, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { GMIN_S } from '../constants';
 import { compileNetlist } from '../netlist/compile';
 import type { Netlist } from '../netlist/types';
+import { UnionFind } from '../netlist/union-find';
 import { createDcSolution, DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR, solveDc } from './dc';
 import { DC_STAMP_ISOURCE, DC_STAMP_VSOURCE, dcBranchValues, DcBranchValues } from './values';
 
@@ -295,6 +297,10 @@ function buildBench(draw: BenchDraw): Circuit & { world: World } {
 const floatingArb = fc.record({
   cluster: fc.array(fc.tuple(fc.nat({ max: 5 }), fc.nat({ max: 5 }), elementArb), { minLength: 1, maxLength: 8 }),
   amps: fc.integer({ min: -500, max: 500 }),
+  /** The feed: a current source on a resistor element, or a `vsource` element in current limit. */
+  feedKind: fc.constantFrom('resistor' as const, 'vsource' as const),
+  /** The cluster member (1–6) the feed enters. */
+  feedInto: fc.nat({ max: 5 }),
 });
 
 /**
@@ -536,18 +542,29 @@ describe('DC MNA properties (synthetic circuits)', () => {
 
   it('a current source into a floating cluster is held by gmin: never singular, KCL and power hold', () => {
     fc.assert(
-      fc.property(floatingArb, ({ cluster, amps }) => {
-        // Node 0 feeds node 1 through a current source; nodes 1–6 are a resistor cluster (down to
-        // 0.1 mΩ, so up to 1e4 S per branch, stiffer than gmin / ε) with no other way back.
-        const edges: SyntheticBranch[] = [{ a: 0, b: 1, kind: 'resistor' }];
+      fc.property(floatingArb, ({ cluster, amps, feedKind, feedInto }) => {
+        // Node 0 feeds a member of the cluster through a current source (on a resistor element, or
+        // a vsource element in current limit: F2.4's supply in current limit into a lamp with one end
+        // dangling); nodes 1–6 are a resistor cluster (down to 0.1 mΩ, so up to 1e4 S per branch,
+        // stiffer than gmin / ε) with no other way back.
+        const target = 1 + feedInto;
+        const edges: SyntheticBranch[] = [{ a: 0, b: target, kind: feedKind }];
         for (const [x, y] of cluster) edges.push({ a: 1 + x, b: 1 + y, kind: 'resistor' });
         const netlist = syntheticNetlist(7, edges);
         const values = new DcBranchValues(edges.length);
-        values.isource(0, amps / 1000);
+        const feed = amps / 1000;
+        values.isource(0, feed);
         cluster.forEach(([, , e], i) => values.resistor(i + 1, ohmsOf(e)));
         const solution = solveDc(netlist, values);
         expect(solution.islands.every((i) => (i.flags & ISLAND_FLAG_SINGULAR) === 0)).toBe(true);
         checkPhysics({ netlist, values }, solution);
+        // On a floating cluster the KCL floor is dominated by the common mode (5e8 V × 1e4 S ≈ 3e-2 A),
+        // so check the value it sets exactly: gmin · Σ V over the fed component is the feed current.
+        const sets = new UnionFind(7);
+        for (const [x, y] of cluster) sets.union(1 + x, 1 + y);
+        let sum = 0;
+        for (let n = 1; n < 7; n++) if (sets.find(n) === sets.find(target)) sum += solution.nodes[2 * n];
+        expect(Math.abs(GMIN_S.value * sum - feed)).toBeLessThanOrEqual(1e-13 * Math.abs(feed));
       }),
       { numRuns: 100 },
     );
