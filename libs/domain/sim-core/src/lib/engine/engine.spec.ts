@@ -763,8 +763,10 @@ describe('SimEngine: the warm start, readability and revisions', () => {
   // 40 without), and a planted 64-byte per-step allocation fails both.
 
   it('the DC per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
-    // Measured 21.18-21.19 B/step with coverage, 20.88-21.53 without: about 200 B per cadence solve, 32 B
-    // of it inside DcSolver.solveNonlinear, plus a few in the synthetic thermal layer.
+    // Measured 21.18-21.19 B/step with coverage, 20.88-21.53 without (F2.3a): about 200 B per cadence
+    // solve, 32 B of it inside DcSolver.solveNonlinear, plus a few in the synthetic thermal layer. F2.4
+    // (the battery's model, a 12.9 V EMF): 19.73 with coverage, 8.1-21.23 without. A non-integer EMF
+    // passed to a call is boxed into a heap number, so the dense stamp sets it in place (dc.ts).
     expect(allocatedPerStep(BATTERY, 'pos', 'neg')).toBeLessThan(24);
   });
 

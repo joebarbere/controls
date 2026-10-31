@@ -870,7 +870,10 @@ export class DcSolver {
             if (ca >= 0) this.add(k, ca, -1, VALUE_MINUS_ONE, index);
           }
           this.add(k, k, values.ohms[index], VALUE_OHMS, index);
-          this.rhsOp(k, values.emfV[index], RHS_SET_EMF, index);
+          // The dense path sets the entry in place: passing a non-integer EMF to `rhsOp` boxed it into a
+          // heap number on every solve (F2.4's 12.9 V battery; the engine's allocation gate).
+          if (this.mode === MODE_RECORD) this.rhsOp(k, values.emfV[index], RHS_SET_EMF, index);
+          else this.rhs[k] = values.emfV[index];
         } else {
           // Current limit: I = amps.
           this.add(k, k, 1, VALUE_ONE, index);
