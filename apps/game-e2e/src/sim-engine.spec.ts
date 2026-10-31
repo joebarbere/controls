@@ -62,3 +62,34 @@ test('a console file steps sim time in the game, and the hashes match sim-cli in
   expect(await hook(page, (h) => h.hash())).toBe(SIM_STEP_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(SIM_STEP_SNAPSHOT_HASH);
 });
+
+/**
+ * F2.4: the power sources' state across runtimes. `apps/sim-cli/scenarios/sources.console` (a DIN PSU
+ * hiccuping into a short for two cycles, a bench supply in its current limit, a battery discharging)
+ * must reach the hashes `apps/sim-cli/src/sources.spec.ts` pins under Node: the CV/CC mode, the hiccup
+ * ticks and the coulomb counting, byte for byte.
+ */
+const SOURCES_HASH = 'df6f7c64ec79a1d3109dcb6e66373db929cae4da711af4810d2e6079261c29b1';
+const SOURCES_SNAPSHOT_HASH = '153b26d1a977fda513661e938672c4d53502ffc583078c4bb28d7f8f856b7a24';
+
+test('the sources scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  await page.keyboard.press('Backquote');
+  await expect(page.getByRole('textbox', { name: 'Console input' })).toBeFocused();
+
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.type('run');
+  await page.keyboard.press('Enter');
+  const text = readFileSync(join(__dirname, '../../sim-cli/scenarios/sources.console'));
+  await (await chooser).setFiles({ name: 'sources.console', mimeType: 'text/plain', buffer: text });
+  await expect(page.getByTestId('console-output').locator('.entry').last()).toHaveText(
+    'Ran 10 commands from sources.console.',
+  );
+
+  expect(await hook(page, (h) => h.world().tick)).toBe(2345);
+  expect(await hook(page, (h) => h.hash())).toBe(SOURCES_HASH);
+  expect(await hook(page, (h) => h.snapshotHash())).toBe(SOURCES_SNAPSHOT_HASH);
+});

@@ -38,12 +38,14 @@ import {
   AC_SOURCE_OHMS,
   AC_TWIN,
   REACTOR,
+  RESISTOR_12,
 } from '../../testing/engine';
 import { ISLAND_FLAG_NON_CONVERGED as SOLVER_NON_CONVERGED, ISLAND_FLAG_SINGULAR as SOLVER_SINGULAR } from '../mna/dc';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from './device-model';
 import type { AcBranchValues } from '../mna/ac-values';
 import type { NetlistBranch } from '../netlist/types';
+import { DIN_PSU } from '../../testing/sources';
 import { SimDesyncError, SimEngine, type SimEngineOptions, SimProbeError, SimStartError } from './engine';
 
 /** A minimal headless host: a world bus and an engine that follows it (what the scripting API does). */
@@ -732,13 +734,26 @@ describe('SimEngine: the warm start, readability and revisions', () => {
    * - The smallest window, not the median: code not yet optimized allocates more (100-200 B/step at
    *   first), and a per-step allocation raises every window while a late tier-up raises only some.
    */
-  function allocatedPerStep(source: typeof BATTERY, pos: string, neg: string): number {
-    const host = Host.fresh().run([
-      ['entity.place', { ref: source, positionMm: origin }],
-      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
-      ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
-      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
-    ]);
+  function allocatedPerStep(
+    source: typeof BATTERY,
+    pos: string,
+    neg: string,
+    load: typeof BATTERY | null = THERMAL_LOAD,
+  ): number {
+    // The source into `load` through two leads, or shorted by one lead (`load` null).
+    const host = Host.fresh().run(
+      load === null
+        ? [
+            ['entity.place', { ref: source, positionMm: origin }],
+            ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(1, neg) }],
+          ]
+        : [
+            ['entity.place', { ref: source, positionMm: origin }],
+            ['entity.place', { ref: load, positionMm: origin }],
+            ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
+            ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
+          ],
+    );
     host.engine.advanceTo(40_000); // warm: every buffer grown
     setFlagsFromString('--expose-gc');
     const collect = runInNewContext('gc') as () => void;
@@ -768,6 +783,19 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     // (the battery's model, a 12.9 V EMF): 19.73 with coverage, 8.1-21.23 without. A non-integer EMF
     // passed to a call is boxed into a heap number, so the dense stamp sets it in place (dc.ts).
     expect(allocatedPerStep(BATTERY, 'pos', 'neg')).toBeLessThan(24);
+  });
+
+  // F2.4's supplies (test review): the DIN PSU regulating (CV into 12 Ω) and shorted (in its current limit,
+  // hiccuping: off phases are a floating isource(0) island), each with its own baseline. Worst of 80
+  // runs (40 with coverage, 40 without): 21.21 B/step in CV (19.72 with coverage), 19.04 shorted (17.6
+  // to 18.2 without coverage, 9.2-19.0 with). Gates about 13 % over the worst.
+
+  it('the DIN PSU per-tick path stays under 24 bytes per step regulating (CV)', () => {
+    expect(allocatedPerStep(DIN_PSU, 'pos', 'neg', RESISTOR_12)).toBeLessThan(24);
+  });
+
+  it('the DIN PSU per-tick path stays under 21.5 bytes per step shorted (limit and hiccup)', () => {
+    expect(allocatedPerStep(DIN_PSU, 'pos', 'neg', null)).toBeLessThan(21.5);
   });
 
   it('the AC per-tick path stays under 36 bytes allocated per step (its own baseline, not yet zero)', () => {

@@ -63,6 +63,13 @@ describe('regulate: the CV/CC decision with hysteresis', () => {
     // CC: the knee is 12 − 2 × 0.001 = 11.998 V; CV only past 11.998 + 0.012001 V.
     expect(regulate(REG_CC, 2, 12.0, 12, 2, R_OUT)).toBe(REG_CC);
     expect(regulate(REG_CC, 2, 12.0101, 12, 2, R_OUT)).toBe(REG_CV);
+    // Exactly on either edge of the band the mode stays (strictly past it, it changes).
+    const iEdge = 2 + currentBand(2);
+    expect(regulate(REG_CV, iEdge, 11.99, 12, 2, R_OUT)).toBe(REG_CV);
+    expect(regulate(REG_CV, iEdge + 1e-12, 11.99, 12, 2, R_OUT)).toBe(REG_CC);
+    const vEdge = 12 - 2 * R_OUT + voltageBand(12);
+    expect(regulate(REG_CC, 2, vEdge, 12, 2, R_OUT)).toBe(REG_CC);
+    expect(regulate(REG_CC, 2, vEdge + 1e-12, 12, 2, R_OUT)).toBe(REG_CV);
   });
 });
 
@@ -164,6 +171,21 @@ describe('the bench supply (golden)', () => {
 });
 
 describe('the bench supply: no chatter at the crossover', () => {
+  it.each(['cc', 'cv'])('a save inside the hysteresis band, arrived at in %s, reloads into the same mode', (from) => {
+    // Inside the band both modes are self-consistent, so only the saved `mode` decides the reload.
+    const crossover = 12 / 1 - R_OUT - 2 * R_LEAD;
+    const straight = rheostatLoop(12, 1, crossover * (from === 'cc' ? 0.9 : 1.1));
+    straight.operate(2, 'ohms', crossover * (1 + h / 4));
+    expect(mode(straight)).toBe(from);
+    straight.advance(13);
+    const loaded = straight.reload();
+    expect(loaded.sim(1)).toStrictEqual({ mode: from });
+    straight.advance(500);
+    loaded.advance(500);
+    expect(mode(loaded)).toBe(from);
+    expect(loaded.engine.snapshotHash()).toBe(straight.engine.snapshotHash());
+  });
+
   it('a load held exactly at the crossover keeps its mode over 100 cadence solves, each warm in 1 iteration', () => {
     for (const start of [0.9, 1.1]) {
       // Arrive from CC (below) or CV (above), then sit exactly at the crossover.

@@ -1,6 +1,7 @@
 import { BUILTIN_CATALOG, type DinPsuParams } from '@controls/catalog';
 import { deviceOutputSchemaProblems } from '@controls/sim-protocol';
-import { RESISTOR_12, RHEOSTAT } from '../../../testing/engine';
+import { worldHash } from '@controls/world-model';
+import { FLIP, RESISTOR_12, RHEOSTAT } from '../../../testing/engine';
 import { DIN_PSU, SourceHost } from '../../../testing/sources';
 import { DIN_PSU_OUTPUT } from './din-psu';
 
@@ -77,9 +78,6 @@ describe('the DIN PSU (golden)', () => {
       [T0 + 3 * D + 2 * F, 'off'],
       [T0 + 3 * (D + F), 'retry'],
     ]);
-    // The documented period, D + F = 1100 ticks, within ±1 tick (here exactly).
-    const offs = events.filter(([, phase]) => phase === 'off').map(([tick]) => tick);
-    for (let k = 1; k < offs.length; k++) expect(Math.abs(offs[k] - offs[k - 1] - (D + F))).toBeLessThanOrEqual(1);
     expect(host.record(1)['mode']).toBe('limit'); // retried into the short again
   });
 
@@ -102,11 +100,51 @@ describe('the DIN PSU (golden)', () => {
     expect(hiccups(host)).toStrictEqual([[start + D, 'off']]);
   });
 
-  it('a save mid-hiccup resumes the same period: its mode and phase are in the sim bag', () => {
+  it('when the off lands on a cadence tick (T0 + D ≡ 0 mod 10) it is solved once, by the layer', () => {
+    const host = shorted(0);
+    host.advanceTo(D - 1);
+    const { cadenceSolves, layerSolves } = host.engine.stats;
+    host.advanceTo(D + 1);
+    expect(host.engine.lastSolveTick).toBe(D);
+    expect(host.engine.stats.layerSolves).toBe(layerSolves + 1);
+    expect(host.engine.stats.cadenceSolves).toBe(cadenceSolves); // tick D's cadence finds it solved
+    expect(hiccups(host)).toStrictEqual([[D, 'off']]);
+  });
+
+  it.each([
+    ['in limit, half way to the trip (D / 2)', D / 2, { mode: 'limit', phaseTicks: D / 2 }],
+    ['off, 400 ticks into the off period (D + 400)', D + 400, { mode: 'hiccupOff', phaseTicks: 400 }],
+  ])('a save %s reloads and keeps the same hiccup ticks', (_, cut, bag) => {
+    const straight = shorted();
+    straight.advanceTo(cut);
+    expect(straight.sim(1)).toStrictEqual(bag);
+    const loaded = straight.reload();
+    expect(loaded.sim(1)).toStrictEqual(bag);
+    const from = straight.events.length;
+    straight.advanceTo(cut + 2 * (D + F) + 1);
+    loaded.advanceTo(cut + 2 * (D + F) + 1);
+    expect(hiccups(loaded)).toStrictEqual(hiccups(straight).slice(hiccups(straight).length - hiccups(loaded).length));
+    expect(straight.events.slice(from).filter((e) => e.kind === 'hiccup')).toStrictEqual(
+      loaded.events.filter((e) => e.kind === 'hiccup'),
+    );
+    expect(hiccups(loaded).length).toBeGreaterThanOrEqual(3);
+    expect(loaded.engine.snapshotHash()).toBe(straight.engine.snapshotHash());
+    expect(worldHash(loaded.materialised())).toBe(worldHash(straight.materialised()));
+  });
+
+  it('a limit on an unsettled island is no overload: no hiccup, and the phase stays frozen', () => {
+    // The PSU shorted by a lead (so it holds its 6 A limit), and across the same terminals a load that
+    // jumps with its own current (`test.flip`: 0.1 Ω under 1 A, 100 Ω over), which never settles: the
+    // island is unsettled, so its limit is not a reading and the protection layer doesn't count it.
     const host = shorted();
-    host.advanceTo(D + 400); // 400 ticks into the off period
-    expect(host.sim(1)).toStrictEqual({ mode: 'hiccupOff', phaseTicks: 400 });
-    expect(host.materialised().entities[0].sim).toStrictEqual({ mode: 'hiccupOff', phaseTicks: 400 });
+    host.place(FLIP);
+    host.lead(1, 'pos', 2, 'a').lead(2, 'b', 1, 'neg');
+    expect(host.engine.islands()[0].status).toBe('nonConverged');
+    expect(host.sim(1)).toStrictEqual({ mode: 'limit', phaseTicks: 0 });
+    host.advance(2 * D);
+    expect(hiccups(host)).toStrictEqual([]);
+    expect(host.sim(1)).toStrictEqual({ mode: 'limit', phaseTicks: 0 });
+    expect(host.record(1)).toMatchObject({ status: 'unsettled', outputA: 0 });
   });
 
   it('a moderate overload holds the limit and then hiccups too (6 A into 3 Ω)', () => {

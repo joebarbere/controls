@@ -211,7 +211,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "version": 1,
   "title": "0–30 V 0–5 A bench DC power supply",
   "brand": "Brindlecore",
-  "modelName": "BC-3005",
+  "modelName": "BX-217",
   "category": "source",
   "sizeMm": {
     "widthMm": 130,
@@ -275,7 +275,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "linear-bench-supply-class",
       "kind": "real-world",
-      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep.",
+      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep. The size is the footprint on the bench (130 × 270 mm: width, then front to back) and the height above it (160 mm), the bench axes every bench device uses.",
       "covers": [
         "model.params.maxVoltageV",
         "model.params.maxCurrentA",
@@ -342,7 +342,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "din-psu-120w-class",
       "kind": "real-world",
-      "citation": "The slim 24 V 5 A (120 W) DIN-rail switch-mode supply, a common control-panel class. Typical published figures, paraphrased (not one vendor's): 24 V DC output, 5 A continuous; load regulation within about ±1 % from no load to full load (0.24 V over 5 A, an output resistance of about 48 mΩ); body about 40 mm wide, 125 mm tall and 114 mm deep from the rail.",
+      "citation": "The slim 24 V 5 A (120 W) DIN-rail switch-mode supply, a common control-panel class. Typical published figures, paraphrased (not one vendor's): 24 V DC output, 5 A continuous; load regulation within about ±1 % from no load to full load. The output resistance is the worst-case slope of that band (0.24 V over 5 A, 48 mΩ): the band is a tolerance, and real units typically droop less; body about 40 mm wide, 125 mm tall and 114 mm deep from the rail.",
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedCurrentA",

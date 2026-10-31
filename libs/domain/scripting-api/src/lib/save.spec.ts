@@ -41,13 +41,12 @@ describe('the .ctrl fixtures', () => {
         // F2.3a's engine 3): never verified, never refused.
         expect(result.manifest.simEngineVersion).toBeLessThan(SIM_ENGINE_VERSION);
         expect(result.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
-        // world.json loads as saved. Engine 1 never ran, so its worlds hold no solution and the engine
-        // solves at the start: only the solution record differs. A later engine's record is adopted as
-        // saved (the topology is the same), so nothing differs until time passes.
+        // world.json loads as saved, its devices' sim bags included, but never its solution record: another
+        // engine's models computed it, so the engine solves again at the save's tick (`sim: null` at the
+        // start, F2.4 save-format review). Engine 1 never ran, so its worlds hold no record anyway.
         const saved = readCtrlOrThrow(join(fixturesRoot, path)).world;
-        expect(result.game.world()).toStrictEqual(saved);
-        if (saved.sim === null) expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual(saved);
-        else expect(result.game.materialisedWorld()).toStrictEqual(saved);
+        expect(result.game.world()).toStrictEqual({ ...saved, sim: null });
+        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual({ ...saved, sim: null });
       } else {
         expect(result.replay.status).toBe('continued');
       }

@@ -25,7 +25,8 @@ import { iterateRegulated, REG_CC, REG_CV, stampedMode, stampRegulated } from '.
  * - **Output resistance:** the catalogue's `outputResistanceOhm` (1 mΩ, from the class's CV load
  *   regulation), never 0: two supplies paralleled in CV are a resistive loop that the CV/CC loop
  *   settles, never an ideal-source loop (`singular`).
- * - **CC:** an ideal current source (no CC load regulation): its compliance is the setpoint, through
+ * - **CC:** an ideal current source: no CC load regulation (an infinite output resistance in CC). Its
+ *   compliance is the setpoint, through
  *   the CC → CV test.
  */
 
@@ -61,7 +62,10 @@ export const BENCH_SUPPLY_MODEL: SimDeviceModel = {
     const branch = new Int32Array(n);
     const ohms = new Float64Array(n);
     devices.forEach((d, i) => {
-      mode[i] = d.bag['mode'] === 'cc' ? REG_CC : REG_CV;
+      const m = d.bag['mode'];
+      // The load check (`checkBags`) only lets `cv` and `cc` in: anything else is a programming error.
+      if (m !== 'cv' && m !== 'cc') throw new Error(`supply.bench ${d.entity}: unknown mode ${String(m)}`);
+      mode[i] = m === 'cc' ? REG_CC : REG_CV;
       branch[i] = d.branches[0];
       ohms[i] = (d.params as BenchSupplyParams).outputResistanceOhm;
     });
@@ -86,6 +90,8 @@ export const BENCH_SUPPLY_MODEL: SimDeviceModel = {
             continue;
           }
           // Commit only what a solve decided: an unsolved or singular island's stamps decided nothing.
+          // Defensive today: there the stamps are still the bank's own mode (from `dcValue`), so
+          // committing them would change nothing; it guards a future solver that leaves other stamps.
           const status = branchReading(ctx, b);
           if (status === READING_UNSOLVED || status === READING_SINGULAR) continue;
           mode[i] = stampedMode(values, b);

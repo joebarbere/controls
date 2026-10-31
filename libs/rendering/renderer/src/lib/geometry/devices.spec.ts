@@ -32,7 +32,7 @@ describe('device recipes (F2.4)', () => {
   it('carry their fictional brand and model as the label', () => {
     expect(DEVICES.map((ref) => deviceLabel(def(ref)))).toStrictEqual([
       'Ferrovane FV12-7',
-      'Brindlecore BC-3005',
+      'Brindlecore BX-217',
       'Railwick RW-24-5',
     ]);
   });
@@ -68,7 +68,7 @@ describe('device recipes (F2.4)', () => {
     const recipes = new PropRecipes();
     const a = recipes.acquire(BENCH_SUPPLY);
     expect(recipes.acquire(BENCH_SUPPLY)).toBe(a);
-    expect(a.label).toBe('Brindlecore BC-3005');
+    expect(a.label).toBe('Brindlecore BX-217');
     expect(a.spec).toMatchObject({ title: '0–30 V 0–5 A bench DC power supply', sizeMm: def(BENCH_SUPPLY).sizeMm });
     const materials = a.material as Material[];
     const spies = [a.geometry, ...materials].map((r) => vi.spyOn(r, 'dispose'));
@@ -127,7 +127,7 @@ describe('device recipes in the scene (scene-graph snapshot)', () => {
     expect(graph).toMatchSnapshot('bench devices');
     expect(graph.children?.map((c) => [c.label, c.selectable])).toStrictEqual([
       ['Ferrovane FV12-7', 'device:entity-1'],
-      ['Brindlecore BC-3005', 'device:entity-2'],
+      ['Brindlecore BX-217', 'device:entity-2'],
       ['Railwick RW-24-5', 'device:entity-3'],
     ]);
     expect(sync.recipes.size).toBe(3);

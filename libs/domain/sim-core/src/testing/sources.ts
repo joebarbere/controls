@@ -1,9 +1,10 @@
 import type { CommandBus } from '@controls/commands';
-import type { World } from '@controls/save-format';
+import { migrateWorld, type World } from '@controls/save-format';
+import { createWorldBus, createWorldRegistry } from '@controls/world-model';
 import { decodeSnapshot, materialiseWorld, type SimEvent } from '@controls/sim-protocol';
 import { SimEngine, type SimEngineOptions } from '../lib/engine/engine';
-import { end } from './bench';
-import { engineBus, engineTestOptions } from './engine';
+import { BATTERY, end } from './bench';
+import { engineBus, engineTestOptions, RESISTOR_2_4, RHEOSTAT } from './engine';
 
 /*
  * Helpers for F2.4's source specs: the refs of the built-in sources (the battery is `BATTERY` in
@@ -14,6 +15,19 @@ import { engineBus, engineTestOptions } from './engine';
 export const BENCH_SUPPLY = { id: 'supply.brindlecore-bench-30v-5a', version: 1 };
 export const DIN_PSU = { id: 'supply.railwick-din-24v-5a', version: 1 };
 
+/**
+ * The engine models the source sessions (`devices/sources/properties.spec.ts`) put through the
+ * save-and-load and replay properties, by model kind; the engine's parity guard checks that every
+ * model is in these or in the engine sessions' own list.
+ */
+export const SOURCE_SESSION_REFS = Object.freeze({
+  battery: BATTERY,
+  'supply.bench': BENCH_SUPPLY,
+  'supply.dinPsu': DIN_PSU,
+  'test.resistor': RESISTOR_2_4,
+  'test.rheostat': RHEOSTAT,
+});
+
 /** A world bus and an engine that follows it, on the engine test catalogue and models. */
 export class SourceHost {
   readonly engine: SimEngine;
@@ -23,6 +37,30 @@ export class SourceHost {
     readonly options: Required<SimEngineOptions> = engineTestOptions(),
   ) {
     this.engine = SimEngine.start(bus.state, options);
+  }
+
+  /**
+   * A new host on this host's commanded world with entity `id`'s sim bag replaced by `sim` (a battery
+   * at half charge): what a save holding that bag would start with.
+   */
+  withSim(id: number, sim: World['entities'][number]['sim']): SourceHost {
+    const world = this.bus.state;
+    const entities = world.entities.map((e) => (e.id === id ? { ...e, sim } : e));
+    return new SourceHost(engineBus(world.seed, { ...world, entities }), this.options);
+  }
+
+  /**
+   * Saves and loads, as a game does: materialise, through JSON and `migrateWorld`, then a fresh bus
+   * (continuing the seqs) and a fresh engine started from the saved world.
+   */
+  reload(): SourceHost {
+    const saved = materialiseWorld(this.bus.state, this.engine.exportState());
+    const loaded = migrateWorld(JSON.parse(JSON.stringify(saved)));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    const bus = createWorldBus(loaded.value, createWorldRegistry({ catalog: this.options.catalog }), {
+      firstSeq: this.bus.nextSeq(),
+    });
+    return new SourceHost(bus, this.options);
   }
 
   exec(id: string, args: object = {}): this {

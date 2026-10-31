@@ -1,4 +1,4 @@
-import { BUILTIN_CATALOG, type Catalog, checkBags } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog, checkBags, checkControlValue } from '@controls/catalog';
 import { isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
 import { findEntity } from './entity-commands';
 import type { Entity, World } from './types';
@@ -10,7 +10,8 @@ import type { Entity, World } from './types';
  * loaded save (`loadGame`), a level (`loadLevel`) and `createGame({ world })`.
  *
  * - An entity whose ref resolves to a catalogue device has exactly its model kind's keys in each bag,
- *   each valid for its key (`checkBags`).
+ *   each valid for its key (`checkBags`), and each control's value inside the entry's control range
+ *   (`checkControlValue`, the check `device.operate` applies).
  * - A built-in prop (`prop.*` at version 1) has no device state: both bags are empty.
  * - A ref the catalogue doesn't know (a mod's device, a later catalogue's) is left alone: its bags
  *   round-trip untouched like `extensions`, and the netlist compiler treats it as absent.
@@ -43,6 +44,16 @@ export function checkWorldDevices(world: World, catalog: Catalog = BUILTIN_CATAL
     }
     for (const issue of checkBags(kind, entity.state, entity.sim)) {
       issues.push({ path: `${at}.${issue.path}`, message: issue.message });
+    }
+    // Each control's commanded value must be one `device.operate` could have set: a key's schema is
+    // per kind (a setpoint ≥ 0), the control's range per entry (0–30 V), so a crafted save could
+    // otherwise load a 1e9 V setpoint (F2.4 save-format review). Keys `checkBags` refused are skipped.
+    const device = catalog.device(entity.ref);
+    for (const control of device?.controls ?? []) {
+      const value = entity.state[control.id];
+      if (value === undefined || !kind.keys[control.id]?.schema.safeParse(value).success) continue;
+      const check = checkControlValue(control, kind, value);
+      if (!check.ok) issues.push({ path: `${at}.state.${control.id}`, message: check.message });
     }
   });
   world.connections.forEach((connection, index) => {

@@ -1,5 +1,6 @@
 import type { BatteryParams } from '@controls/catalog';
 import type { DeviceOutputSchema } from '@controls/sim-protocol';
+import type { SourcedConstant } from '../../constants';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
 import { branchReading, f64Field, READING_SOLVED, statusField } from '../readings';
 
@@ -12,40 +13,111 @@ import { branchReading, f64Field, READING_SOLVED, statusField } from '../reading
  * **EMF against state of charge.** A rested lead-acid cell's open-circuit voltage is close to linear
  * in its state of charge: it is about the electrolyte's specific gravity plus 0.84 V, and the specific
  * gravity falls about linearly as the acid is used (Linden's Handbook of Batteries, lead-acid
- * chapters; the catalogue entry's `lead-acid-open-circuit-voltage` source). So
+ * chapters; the catalogue entry's `lead-acid-open-circuit-voltage` source). So, above the last
+ * `BATTERY_COLLAPSE_SOC` of charge,
  *
- *   E(s) = E_empty + (E_full − E_empty) · s,   s ∈ [0, 1],
+ *   E(s) = E_empty + (E_full − E_empty) · s,
  *
  * 12.9 V full and 11.8 V empty for the catalogue's VRLA monobloc. A battery resting at 12.0 V is about
  * 18 % charged on this line (published state-of-charge charts put it nearer 25 %: the real curve sags
  * towards empty), so the nominal 12 V is a name, never an EMF.
+ *
+ * **A flat battery collapses** (`electrical-realism-reviewer`, F2.4 review): below s_c =
+ * `BATTERY_COLLAPSE_SOC` the EMF falls linearly from E(s_c) to 0 V at s = 0, so a discharge slows as
+ * the battery empties and stops at empty: it never delivers charge it doesn't have. Shorted through two
+ * test leads, the last 2 % drains with a time constant of about 5 s.
+ *
+ * **A full battery stops accepting charge.** A charging lead-acid cell's voltage rises above its rest
+ * voltage towards gassing (about 2.4 V per cell, 14.4 V for six) as it fills, so a charger at a fixed
+ * voltage sees the current taper. Modelled as a charge EMF E_c(s) = E(s) up to s_a =
+ * `BATTERY_ABSORPTION_SOC`, then rising linearly to the gassing voltage at s = 1. The cell is then a
+ * piecewise-linear element, monotone in its terminal voltage V:
+ *
+ * - V ≤ E(s): discharging (or at rest), EMF E(s) behind R;
+ * - V ≥ E_c(s): charging, EMF E_c(s) behind R;
+ * - in between (only above s_a): no current, the charger's voltage is below what the battery needs.
+ *
+ * The outer loop picks the segment from its iterate's V (the `iterate` hook), so a full battery on a
+ * 13.8 V float supply settles at no current, and only a source above 14.4 V keeps pushing charge in
+ * (the state of charge then clamps at 1: overcharge and gassing losses aren't modelled). The segment is
+ * a function of the iterate alone, so nothing about it needs to be in the `sim` bag.
  *
  * **Coulomb counting.** Each step, with I the cell's current (a → b, positive while discharging, from
  * the last solution) and Q the capacity in A·h,
  *
  *   s ← s − I · Δt / (3600 · Q),   clamped to [0, 1].
  *
- * Only a solved island counts (an unsolved island's zeros are not a current).
+ * Only a solved island counts (an unsolved or unsettled island's values are not a current).
  *
  * **Abstractions** (recorded in the simulation caveats, for `electrical-realism-reviewer`):
  *
  * - the internal resistance is the full-charge figure at every state of charge (it rises as a real
  *   battery empties) and a 1 kHz tester's figure used as a DC resistance (the catalogue says so);
- * - capacity doesn't depend on the discharge rate (Peukert's effect is ignored), nor on temperature;
- * - charging is counted at 100 % coulombic efficiency, with no gassing or absorption stage, and stops
- *   at full;
- * - below empty (s = 0) the EMF stays at E_empty: deep discharge, sulphation and the voltage collapse
- *   of a flat battery are not modelled (a later fault and wear feature);
- * - the EMF follows s at once: the surface charge and the recovery of a rested cell are ignored.
+ * - capacity doesn't depend on the discharge rate (Peukert's effect): above about C/5 the model's
+ *   capacity is optimistic by roughly 30–40 % (at 0.7C a real 7 Ah VRLA is near its cutoff within the
+ *   hour, where this one has used 71 %); nor on temperature;
+ * - charging is counted at 100 % coulombic efficiency, and the charge EMF is a straight line to
+ *   gassing, not a measured charge curve;
+ * - the EMF follows s at once: the surface charge and the recovery of a rested cell are ignored;
+ *   sulphation and wear are a later fault and wear feature.
  */
 
 /** Seconds per hour: A·h to coulombs. */
 const SECONDS_PER_HOUR = 3600;
 
-/** The open-circuit EMF (V) of a battery with `params` at state of charge `soc` (clamped to [0, 1]). */
+/** Below this state of charge a flat battery's EMF collapses linearly to 0 V at empty. */
+export const BATTERY_COLLAPSE_SOC: SourcedConstant = {
+  value: 0.02,
+  unit: '1',
+  kind: 'game-design',
+  source:
+    "game-design: the last 2 % of capacity, over which a flat cell's voltage falls away (a lead-acid cell past its end-of-discharge voltage collapses steeply as the acid at the plates runs out; Linden's Handbook of Batteries, lead-acid discharge curves, paraphrased). Its job is that a flat battery stops delivering charge; the shape of the knee is not modelled.",
+};
+
+/** Above this state of charge a charging battery's EMF rises towards the gassing voltage. */
+export const BATTERY_ABSORPTION_SOC: SourcedConstant = {
+  value: 0.8,
+  unit: '1',
+  kind: 'game-design',
+  source:
+    "game-design inside published behaviour: lead-acid charging moves from the bulk (constant-current) stage to the absorption (constant-voltage) stage at roughly 80 % charge, where the charge voltage approaches gassing and the current tapers (VRLA manufacturers' charging guides, paraphrased). The rise is modelled as a straight line to the gassing voltage at full.",
+};
+
+/** A lead-acid cell's gassing voltage, per 2 V nominal cell. */
+export const LEAD_ACID_GASSING_V_PER_CELL: SourcedConstant = {
+  value: 2.4,
+  unit: 'V',
+  kind: 'real-world',
+  source:
+    "About 2.4 V per cell at 25 °C, where a lead-acid cell begins to gas: the usual absorption-charge limit for VRLA batteries (14.4 V for a 12 V, six-cell monobloc). VRLA manufacturers' charging guides and Linden's Handbook of Batteries, paraphrased.",
+};
+
+/**
+ * The open-circuit EMF (V) of a battery with `params` at state of charge `soc` (clamped to [0, 1]):
+ * linear above `BATTERY_COLLAPSE_SOC`, collapsing linearly to 0 V at empty below it.
+ */
 export function batteryEmfV(params: BatteryParams, soc: number): number {
   const s = soc < 0 ? 0 : soc > 1 ? 1 : soc;
-  return params.openCircuitVoltageEmptyV + (params.openCircuitVoltageFullV - params.openCircuitVoltageEmptyV) * s;
+  const c = BATTERY_COLLAPSE_SOC.value;
+  const span = params.openCircuitVoltageFullV - params.openCircuitVoltageEmptyV;
+  if (s >= c) return params.openCircuitVoltageEmptyV + span * s;
+  return ((params.openCircuitVoltageEmptyV + span * c) * s) / c;
+}
+
+/** The gassing voltage (V) of a lead-acid battery: 2.4 V per 2 V nominal cell. */
+export function batteryGassingV(params: BatteryParams): number {
+  return (params.nominalVoltageV / 2) * LEAD_ACID_GASSING_V_PER_CELL.value;
+}
+
+/**
+ * The EMF (V) a charging battery presents at state of charge `soc`: E(s) up to
+ * `BATTERY_ABSORPTION_SOC`, then rising linearly to the gassing voltage at full.
+ */
+export function batteryChargeEmfV(params: BatteryParams, soc: number): number {
+  const s = soc < 0 ? 0 : soc > 1 ? 1 : soc;
+  const a = BATTERY_ABSORPTION_SOC.value;
+  if (s <= a) return batteryEmfV(params, s);
+  return batteryEmfV(params, s) + ((batteryGassingV(params) - params.openCircuitVoltageFullV) * (s - a)) / (1 - a);
 }
 
 /**
@@ -75,6 +147,9 @@ export const BATTERY_MODEL: SimDeviceModel = {
     const ohms = new Float64Array(n);
     // Coulombs per unit of state of charge, Q · 3600.
     const coulombs = new Float64Array(n);
+    // Each solve's discharge and charge EMFs, E(s) and E_c(s), set in `dcValue` and read by `iterate`.
+    const emf = new Float64Array(n);
+    const chargeEmf = new Float64Array(n);
     const params = devices.map((d) => d.params as BatteryParams);
     devices.forEach((d, i) => {
       // A loaded world's bag is validated (a number in [0, 1]); a hand-built one may lack the key (the
@@ -88,8 +163,19 @@ export const BATTERY_MODEL: SimDeviceModel = {
     return {
       bag: (i) => ({ stateOfCharge: soc[i] }),
       dcValue: (i, b, values) => {
-        values.vsource(b.index, batteryEmfV(params[i], soc[i]), ohms[i]);
+        emf[i] = batteryEmfV(params[i], soc[i]);
+        chargeEmf[i] = batteryChargeEmfV(params[i], soc[i]);
+        values.vsource(b.index, emf[i], ohms[i]);
         return true;
+      },
+      // The cell's segment from the iterate's terminal voltage (see the header): discharge (E behind R),
+      // charge (E_c behind R) or, between the two, no current. A cold start begins on discharge.
+      iterate: (i, b, iterate, values) => {
+        const k = b.index;
+        const v = iterate === null ? emf[i] : iterate.nodes[2 * b.b] - iterate.nodes[2 * b.a];
+        if (v <= emf[i]) values.vsource(k, emf[i], ohms[i]);
+        else if (v >= chargeEmf[i]) values.vsource(k, chargeEmf[i], ohms[i]);
+        else values.isource(k, 0);
       },
       continuous: (ctx) => {
         const branches = ctx.solution.branches;

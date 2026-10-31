@@ -114,13 +114,16 @@ describe('the sim-step scenario', () => {
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SIM_STEP_HASH] });
   });
 
-  it("engine 3's save of the same session loads as engine-changed (D8): world.json as saved, never refused", () => {
+  it("engine 3's save of the same session loads as engine-changed (D8): its devices as saved, solved again, never refused", () => {
     const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-3.ctrl');
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.manifest.simEngineVersion).toBe(3);
     expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
-    expect(loaded.game.hash()).toBe(ENGINE_3_HASH);
+    // Its devices' state loads as saved, but never engine 3's solution record (12 V placeholder EMF):
+    // engine 4 solves again at the save's tick (F2.4 save-format review), so the hash moves.
+    expect(loaded.game.hash()).not.toBe(ENGINE_3_HASH);
+    expect(loaded.game.materialisedWorld().sim?.lastSolveTick).toBe(1234);
     expect(sim('replay', fixture)).toMatchObject({ status: 1 });
   });
 

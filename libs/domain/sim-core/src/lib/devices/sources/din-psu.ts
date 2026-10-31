@@ -72,7 +72,9 @@ export const DIN_PSU_MODEL: SimDeviceModel = {
     const params = devices.map((d) => d.params as DinPsuParams);
     devices.forEach((d, i) => {
       const m = DIN_PSU_MODES.indexOf(d.bag['mode'] as (typeof DIN_PSU_MODES)[number]);
-      mode[i] = m < 0 ? MODE_OK : m;
+      // The load check (`checkBags`) only lets the three modes in: anything else is a programming error.
+      if (m < 0) throw new Error(`supply.dinPsu ${d.entity}: unknown mode ${String(d.bag['mode'])}`);
+      mode[i] = m;
       phase[i] = d.bag['phaseTicks'] as number;
       branch[i] = d.branches[0];
       entity[i] = d.entity;
@@ -96,6 +98,7 @@ export const DIN_PSU_MODEL: SimDeviceModel = {
         for (let i = 0; i < n; i++) {
           if (mode[i] === MODE_OFF) continue;
           const status = branchReading(ctx, branch[i]);
+          // Defensive, as the bench supply's: an unsolved or singular island's stamps are the bank's own.
           if (status === READING_UNSOLVED || status === READING_SINGULAR) continue;
           mode[i] = stampedMode(values, branch[i]) === REG_CC ? MODE_LIMIT : MODE_OK;
         }

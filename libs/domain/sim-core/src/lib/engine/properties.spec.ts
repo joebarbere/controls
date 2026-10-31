@@ -4,7 +4,7 @@ import { materialiseWorld } from '@controls/sim-protocol';
 import { createWorldBus, createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
-import { BENCH_SUPPLY, DIN_PSU } from '../../testing/sources';
+import { SOURCE_SESSION_REFS } from '../../testing/sources';
 import {
   AC_TWIN,
   DROOP,
@@ -19,8 +19,6 @@ import {
   ORDER_A,
   ORDER_B,
   REACTOR,
-  RESISTOR_2_4,
-  RHEOSTAT,
   THERMAL_LOAD,
   TWIN_SUPPLY,
 } from '../../testing/engine';
@@ -37,11 +35,9 @@ import { SimEngine, type SimEngineOptions } from './engine';
  *   and events.
  *
  * Sessions start from the engine bench (a battery, a switch, a thermal load and an I²t fuse in a
- * loop), then edit it at random while time passes: the load heats, the fuse blows, the battery
- * discharges, devices of **every engine model** are placed and wired across the battery (singular twin
- * sources, a flip load that never settles, a droop load the warm start settles), supplies run loops of
- * their own (CV, CC, a short that hiccups) and are operated, and devices are deleted and restored by
- * undo.
+ * loop), then edit it at random while time passes: the load heats, the fuse blows, devices of
+ * **every engine model** are placed and wired across the battery (singular twin sources, a flip load
+ * that never settles, a droop load the warm start settles), deleted and restored by undo.
  */
 
 /**
@@ -60,11 +56,6 @@ const PARITY_REFS: Readonly<Record<string, CatalogRef>> = {
   'test.acSource': AC_SOURCE,
   'test.reactor': REACTOR,
   'test.acTwin': AC_TWIN,
-  'test.resistor': RESISTOR_2_4,
-  'test.rheostat': RHEOSTAT,
-  battery: BATTERY,
-  'supply.bench': BENCH_SUPPLY,
-  'supply.dinPsu': DIN_PSU,
 };
 
 type Op =
@@ -81,37 +72,15 @@ type Op =
   /** Delete an entity, then undo: the engine restores its tombstone. */
   | { kind: 'deleteUndo'; pick: number }
   /** An AC source in a loop of its own with a load: an AC island, solved by the phasor solver. */
-  | { kind: 'acLoop'; ref: number }
-  /** A supply in a loop of its own with a load (or a lead alone: a short), a bench supply switched on. */
-  | { kind: 'supplyLoop'; din: boolean; load: number; setpoint: number; limit: number }
-  /** Operates a control of some entity (a supply's setpoint, limit or output; refused elsewhere). */
-  | { kind: 'supplyOperate'; pick: number; control: number; value: number };
+  | { kind: 'acLoop'; ref: number };
 
 const REFS: readonly CatalogRef[] = [...Object.values(PARITY_REFS), BATTERY, SPST, LAMP];
 const refArb = fc.nat({ max: REFS.length - 1 });
 /** The electrical models, for `wire`: what makes islands singular, unsettled, settled warm or tripped. */
-const WIRED: readonly CatalogRef[] = [
-  TWIN_SUPPLY,
-  FLIP,
-  DROOP,
-  THERMAL_LOAD,
-  I2T_FUSE,
-  LAMP,
-  AC_TWIN,
-  BATTERY,
-  RESISTOR_2_4,
-  BENCH_SUPPLY,
-  DIN_PSU,
-];
+const WIRED: readonly CatalogRef[] = [TWIN_SUPPLY, FLIP, DROOP, THERMAL_LOAD, I2T_FUSE, LAMP, AC_TWIN];
 const wiredArb = fc.nat({ max: WIRED.length - 1 });
 /** Loads with an AC value, for `acLoop`. */
 const AC_LOADS: readonly CatalogRef[] = [THERMAL_LOAD, I2T_FUSE, REACTOR, AC_TWIN];
-/** A supply loop's loads: a resistor, a heating load, a load that never settles, or none (a short). */
-const SUPPLY_LOADS: readonly (CatalogRef | null)[] = [RESISTOR_2_4, THERMAL_LOAD, FLIP, null];
-/** Bench-supply settings: setpoints (V) and limits (A), a limit of 0 included. */
-const SETPOINTS = [0, 5, 12, 30] as const;
-const LIMITS = [0, 0.5, 2, 5] as const;
-const SUPPLY_CONTROLS = ['setpointV', 'currentLimitA', 'outputOn'] as const;
 const pick = fc.nat({ max: 9 });
 const terminalPick = fc.tuple(pick, fc.nat({ max: 1 }));
 const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -125,25 +94,6 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
     weight: 2,
     arbitrary: fc.record({ kind: fc.constant('acLoop' as const), ref: fc.nat({ max: AC_LOADS.length - 1 }) }),
-  },
-  {
-    weight: 2,
-    arbitrary: fc.record({
-      kind: fc.constant('supplyLoop' as const),
-      din: fc.boolean(),
-      load: fc.nat({ max: SUPPLY_LOADS.length - 1 }),
-      setpoint: fc.nat({ max: SETPOINTS.length - 1 }),
-      limit: fc.nat({ max: LIMITS.length - 1 }),
-    }),
-  },
-  {
-    weight: 1,
-    arbitrary: fc.record({
-      kind: fc.constant('supplyOperate' as const),
-      pick,
-      control: fc.nat({ max: SUPPLY_CONTROLS.length - 1 }),
-      value: fc.nat({ max: 3 }),
-    }),
   },
   { weight: 1, arbitrary: fc.constant({ kind: 'undo' as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'redo' as const }) },
@@ -221,30 +171,6 @@ function apply(host: Host, op: Op): void {
       exec(host, 'lead.connect', { ref: LEAD, a: end(load, 'b'), b: end(source, 'n') });
       return;
     }
-    case 'supplyLoop': {
-      if (!exec(host, 'entity.place', { ref: op.din ? DIN_PSU : BENCH_SUPPLY, positionMm: origin })) return;
-      const supply = host.bus.state.nextEntityId - 1;
-      const load = SUPPLY_LOADS[op.load];
-      if (load === null) {
-        exec(host, 'lead.connect', { ref: LEAD, a: end(supply, 'pos'), b: end(supply, 'neg') });
-      } else {
-        if (!exec(host, 'entity.place', { ref: load, positionMm: origin })) return;
-        exec(host, 'lead.connect', { ref: LEAD, a: end(supply, 'pos'), b: end(supply + 1, 'a') });
-        exec(host, 'lead.connect', { ref: LEAD, a: end(supply + 1, 'b'), b: end(supply, 'neg') });
-      }
-      if (op.din) return;
-      exec(host, 'device.operate', { id: supply, control: 'setpointV', value: SETPOINTS[op.setpoint] });
-      exec(host, 'device.operate', { id: supply, control: 'currentLimitA', value: LIMITS[op.limit] });
-      exec(host, 'device.operate', { id: supply, control: 'outputOn', value: true });
-      return;
-    }
-    case 'supplyOperate': {
-      const control = SUPPLY_CONTROLS[op.control];
-      const value =
-        control === 'outputOn' ? op.value % 2 === 1 : control === 'setpointV' ? SETPOINTS[op.value] : LIMITS[op.value];
-      exec(host, 'device.operate', { id: entityAt(op.pick), control, value });
-      return;
-    }
     case 'deleteUndo':
       if (exec(host, 'entity.delete', { id: entityAt(op.pick) })) exec(host, 'edit.undo');
       return;
@@ -305,13 +231,19 @@ function checkParity(before: readonly Op[], after: readonly Op[], options: SimEn
   expect(fingerprint(loaded)).toStrictEqual(fingerprint(straight));
 }
 
+/** The generator-health sessions (a fixed seed), shared by the at-cut and after-cut tests. */
+const HEALTH_SAMPLES = fc.sample(sessionArb, { seed: 20261031, numRuns: 60 });
+
 describe('engine determinism properties', () => {
   it('every engine device model has a parity case (a model without one fails here)', () => {
     const kinds = [...Object.keys(BUILTIN_DEVICE_MODELS), ...Object.keys(engineTestOptions().deviceModels)];
     expect(kinds.length).toBeGreaterThanOrEqual(7);
+    // Over both session arbitraries: this file's (F2.3a's mix) and the sources' (`devices/sources/
+    // properties.spec.ts`, F2.4), so a model is covered by one save-and-load property or the other.
+    const covered: Readonly<Record<string, CatalogRef>> = { ...PARITY_REFS, ...SOURCE_SESSION_REFS };
     for (const kind of kinds) {
-      expect(PARITY_REFS[kind], kind).toBeDefined();
-      expect(ENGINE_TEST_CATALOG.kindOf(PARITY_REFS[kind])?.kind).toBe(kind);
+      expect(covered[kind], kind).toBeDefined();
+      expect(ENGINE_TEST_CATALOG.kindOf(covered[kind])?.kind).toBe(kind);
     }
   });
 
@@ -361,39 +293,37 @@ describe('engine determinism properties', () => {
     );
   });
 
-  it('the sessions cut mid-interval, with heat, a blown fuse, singular and unsettled islands, discharge, current limit, hiccups and restored tombstones (generator health)', () => {
-    const samples = fc.sample(sessionArb, { seed: 20261031, numRuns: 60 });
-    const counts = {
-      midInterval: 0,
-      blown: 0,
-      heated: 0,
-      singular: 0,
-      nonConverged: 0,
-      topologyAfter: 0,
-      eventsAfter: 0,
-      tombstones: 0,
-      ac: 0,
-      acSingular: 0,
-      discharged: 0,
-      cc: 0,
-      hiccupOff: 0,
-    };
-    for (const { before, after } of samples) {
+  it('the sessions cut mid-interval, with heat, a blown fuse, singular and unsettled islands (generator health, at the cut)', () => {
+    const counts = { midInterval: 0, blown: 0, heated: 0, singular: 0, nonConverged: 0, ac: 0, acSingular: 0 };
+    for (const { before } of HEALTH_SAMPLES) {
       const host = benchHost();
       before.forEach((op) => apply(host, op));
       if (host.engine.tick % 10 !== 0) counts.midInterval++;
       const world = materialiseWorld(host.bus.state, host.engine.exportState());
       if (world.entities.some((e) => e.sim['blown'] === true)) counts.blown++;
       if (world.entities.some((e) => typeof e.sim['tempK'] === 'number' && e.sim['tempK'] > 294)) counts.heated++;
-      if (world.entities.some((e) => typeof e.sim['stateOfCharge'] === 'number' && e.sim['stateOfCharge'] < 1))
-        counts.discharged++;
-      if (world.entities.some((e) => e.sim['mode'] === 'cc' || e.sim['mode'] === 'limit')) counts.cc++;
-      if (world.entities.some((e) => e.sim['mode'] === 'hiccupOff')) counts.hiccupOff++;
       const statuses = host.engine.islands().map((i) => i.status);
       if (statuses.includes('singular')) counts.singular++;
       if (statuses.includes('nonConverged')) counts.nonConverged++;
       if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'solved')) counts.ac++;
       if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'singular')) counts.acSingular++;
+    }
+    // Measured on this seed, of 60 (unchanged by F2.4's battery model): 39 mid-interval, 5 blown, 20
+    // heated, 17 singular (12 of them AC), 4 unsettled and 23 solved AC islands at the cut.
+    expect(counts.midInterval).toBeGreaterThan(30);
+    expect(counts.blown).toBeGreaterThan(2);
+    expect(counts.heated).toBeGreaterThan(14);
+    expect(counts.singular).toBeGreaterThan(11);
+    expect(counts.acSingular).toBeGreaterThan(7);
+    expect(counts.nonConverged).toBeGreaterThan(1);
+    expect(counts.ac).toBeGreaterThan(16);
+  });
+
+  it('after the cut the sessions change topology, raise events and restore tombstones (generator health)', () => {
+    const counts = { topologyAfter: 0, eventsAfter: 0, tombstones: 0 };
+    for (const { before, after } of HEALTH_SAMPLES) {
+      const host = benchHost();
+      before.forEach((op) => apply(host, op));
       host.engine.takeEvents();
       const generation = host.engine.topologyGeneration;
       let restored = false;
@@ -410,22 +340,9 @@ describe('engine determinism properties', () => {
       if (host.engine.takeEvents().length > 0) counts.eventsAfter++;
       if (host.engine.topologyGeneration > generation) counts.topologyAfter++;
     }
-    // Measured on this seed, of 60 (since F2.4's supply ops): 29 mid-interval, 8 blown, 27 heated, 14
-    // singular (10 of them AC), 6 unsettled and 23 solved AC islands, 23 discharged batteries, 21
-    // supplies in current limit and 5 DIN PSUs off mid-hiccup at the cut; 56 topology changes, 32 with
-    // events and 18 restored tombstones after it.
-    expect(counts.midInterval).toBeGreaterThan(22);
-    expect(counts.blown).toBeGreaterThan(3);
-    expect(counts.heated).toBeGreaterThan(18);
-    expect(counts.singular).toBeGreaterThan(8);
-    expect(counts.acSingular).toBeGreaterThan(5);
-    expect(counts.nonConverged).toBeGreaterThan(2);
-    expect(counts.ac).toBeGreaterThan(16);
-    expect(counts.discharged).toBeGreaterThan(16);
-    expect(counts.cc).toBeGreaterThan(14);
-    expect(counts.hiccupOff).toBeGreaterThan(2);
-    expect(counts.topologyAfter).toBeGreaterThan(48);
-    expect(counts.eventsAfter).toBeGreaterThan(24);
-    expect(counts.tombstones).toBeGreaterThan(12);
+    // Measured on this seed, of 60: 59 topology changes, 30 with events and 15 restored tombstones.
+    expect(counts.topologyAfter).toBeGreaterThan(50);
+    expect(counts.eventsAfter).toBeGreaterThan(22);
+    expect(counts.tombstones).toBeGreaterThan(10);
   });
 });

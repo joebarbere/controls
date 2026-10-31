@@ -3,7 +3,7 @@
   "version": 1,
   "title": "0–30 V 0–5 A bench DC power supply",
   "brand": "Brindlecore",
-  "modelName": "BC-3005",
+  "modelName": "BX-217",
   "category": "source",
   "sizeMm": { "widthMm": 130, "heightMm": 270, "depthMm": 160 },
   "terminals": [
@@ -31,7 +31,7 @@
     {
       "id": "linear-bench-supply-class",
       "kind": "real-world",
-      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep.",
+      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep. The size is the footprint on the bench (130 × 270 mm: width, then front to back) and the height above it (160 mm), the bench axes every bench device uses.",
       "covers": ["model.params.maxVoltageV", "model.params.maxCurrentA", "model.params.outputResistanceOhm", "sizeMm"]
     },
     {
