@@ -68,6 +68,9 @@ function createWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // The sim worker (F2.3b, ADR 0011 §10) and any frame get no Node either; explicit, not default.
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
       webSecurity: true,
       spellcheck: false,
     },

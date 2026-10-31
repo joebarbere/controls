@@ -18,7 +18,7 @@ export const MAX_LEAD_WALL_MS = 25;
 /** Numerical choice: the worker yields to its message queue at least this often. */
 export const WORK_SLICE_MS = 8;
 
-/** Numerical choice: the throttle on the worker's cadence publishes (F2.3b kept 4; 8 was tried, see the caveats). */
+/** Numerical choice: the throttle on the worker's cadence publishes (ADR 0011 kept 4; 8 is untried). */
 export const PUBLISH_MIN_WALL_MS = 4;
 
 /** Numerical choice: seqlock attempts per slot before a read counts as a miss (ADR 0011 §6.2). */

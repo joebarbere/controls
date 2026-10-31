@@ -18,7 +18,7 @@ import {
   SnapshotWriter,
   isSharedArrayBuffer,
 } from './buffer';
-import type { TopologyDescriptor } from './descriptor';
+import { DescriptorIndex, type FieldRef, type TopologyDescriptor } from './descriptor';
 import {
   ISLAND_KIND_AC,
   ISLAND_KIND_DC,
@@ -138,6 +138,32 @@ const sourceArb = fc
   })
   .map((r) => source(r));
 
+/** Device records of every field type: f64 at 0, u32 at 8, i32 at 12, u8 (an enum) at 16. */
+const MIXED_SCHEMA = {
+  kind: 'test.mixed',
+  recordBytes: 24,
+  fields: [
+    { name: 'real', type: 'f64' as const, offset: 0, unit: null, values: null },
+    { name: 'count', type: 'u32' as const, offset: 8, unit: null, values: null },
+    { name: 'signed', type: 'i32' as const, offset: 12, unit: null, values: null },
+    { name: 'mode', type: 'u8' as const, offset: 16, unit: null, values: ['off', 'on', 'tripped'] },
+  ],
+};
+const mixedRecordArb = fc.record({
+  real: finite,
+  count: fc.nat({ max: 0xffff_ffff }),
+  signed: fc.integer({ min: -0x8000_0000, max: 0x7fff_ffff }),
+  mode: fc.integer({ min: 0, max: 255 }),
+});
+const mixedArb = fc.record({
+  records: fc.array(mixedRecordArb, { minLength: 1, maxLength: 12 }),
+  // Which fields to read, in any order and with repeats, as a renderer's list would.
+  picks: fc.array(fc.tuple(fc.nat(), fc.constantFrom('real', 'count', 'signed', 'mode')), {
+    minLength: 1,
+    maxLength: 40,
+  }),
+});
+
 describe('the snapshot buffer', () => {
   it('writes the header of ADR 0011 §5.1, and reads it back', () => {
     const buffer = createSnapshotBuffer(MIN_SLOT_BYTES, true);
@@ -224,6 +250,49 @@ describe('the snapshot buffer', () => {
     expect(new DataView(buffer).getFloat64(DIAG_OFFSETS.solveCount, true)).toBe(42);
     new Int32Array(buffer)[BUFFER_OFFSETS.diagSeq / 4] = 3; // a writer stuck mid-write
     expect(readDiagnostics(buffer)).toBeNull();
+  });
+});
+
+describe('readAll (#60 review 2)', () => {
+  it('reads exactly what read does, field for field, over mixed f64/u32/i32/u8 records', () => {
+    fc.assert(
+      fc.property(mixedArb, ({ records, picks }) => {
+        const s: SnapshotSource = {
+          ...source({}),
+          deviceCount: records.length,
+          deviceDataBytes: 24 * records.length,
+          writeDevices(view, offset) {
+            records.forEach((r, i) => {
+              const at = offset + 24 * i;
+              view.setFloat64(at, r.real, true);
+              view.setUint32(at + 8, r.count, true);
+              view.setInt32(at + 12, r.signed, true);
+              view.setUint8(at + 16, r.mode);
+            });
+          },
+        };
+        const d: TopologyDescriptor = {
+          ...descriptor(s.topologyGeneration),
+          devices: records.map((_, i) => ({ entity: i + 1, kind: MIXED_SCHEMA.kind, recordOffset: 24 * i })),
+          schemas: { [MIXED_SCHEMA.kind]: MIXED_SCHEMA },
+        };
+        const { writer, reader } = rig(s, d);
+        writer.publish(writeWith(s));
+        const view = reader.latest();
+        if (view === null) throw new Error('no view');
+        const index = DescriptorIndex.of(d);
+        const chosen = picks.map(([device, name]) => ({ device: device % records.length, name }));
+        const refs = chosen.map(({ device, name }) => index.field(device + 1, name) as FieldRef);
+        const out = new Float64Array(refs.length).fill(Number.NaN);
+        view.readAll(refs, out);
+        refs.forEach((ref, i) => {
+          expect(Object.is(out[i], view.read(ref))).toBe(true);
+          const { device, name } = chosen[i];
+          expect(Object.is(out[i], records[device][name as keyof (typeof records)[number]])).toBe(true);
+        });
+      }),
+      { numRuns: 60 },
+    );
   });
 });
 

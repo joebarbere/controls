@@ -17,6 +17,13 @@ import { createWorldRegistry } from '@controls/world-model';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
+import {
+  bytesPerRead,
+  READ_ALLOCATION_GATE_BYTES,
+  READ_PLANT,
+  snapshotReadRig,
+  type SnapshotReadRig,
+} from './snapshot-read';
 
 /*
  * The cases `sim bench` runs (plan F2.7). Add a case here with a `budgetMs` and the gate enforces it.
@@ -138,6 +145,40 @@ function tickMixWorld(): World {
   return tickMix;
 }
 
+let readRig: SnapshotReadRig | null = null;
+/** The read rig, built on first use (every `sim` command imports the cases). */
+function rig(): SnapshotReadRig {
+  readRig ??= snapshotReadRig();
+  return readRig;
+}
+
+/**
+ * ADR 0011 §9.2's per-frame read (plan F2.3b): reported, not time-gated (the budget is 0.1 ms at p99
+ * and measured at a seventh of it; a raw-ms gate would need the calibrated headroom first). Gated on
+ * allocation: a read must allocate nothing.
+ */
+export const SNAPSHOT_READ_CASE: BenchCase = {
+  name: 'snapshot-read-500-devices',
+  warmup: 2_000,
+  runs: 5_000,
+  budgetMs: null,
+  prepare: () => rig().announce(),
+  run: () => {
+    rig().read();
+    return String(rig().sum());
+  },
+  invariant: () => {
+    const bytes = bytesPerRead(rig());
+    return {
+      value: bytes,
+      failure:
+        bytes < READ_ALLOCATION_GATE_BYTES
+          ? null
+          : `a read of ${READ_PLANT.devices} devices allocated ${bytes.toFixed(1)} B (the gate: under ${READ_ALLOCATION_GATE_BYTES} B)`,
+    };
+  },
+};
+
 export const BENCH_CASES: readonly BenchCase[] = [
   {
     // A from-scratch compile, as on a load or a session start: a new compiler, no cached fragments.
@@ -233,6 +274,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
       return `${engine.stats.cadenceSolves % 100}:${engine.netlist.topologyHash}`;
     },
   },
+  SNAPSHOT_READ_CASE,
 ];
 
 let plantEngine: SimEngine | null = null;

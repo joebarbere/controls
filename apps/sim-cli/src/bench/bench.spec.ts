@@ -59,6 +59,26 @@ describe('percentile', () => {
 });
 
 describe('runBenchCase', () => {
+  it('runs an invariant once after the timed runs: its failure fails the case, its value is reported', () => {
+    let checks = 0;
+    const holds = runBenchCase(
+      fixedCase({ invariant: () => (checks++, { value: 0, failure: null }) }),
+      steppingClock([1, 1, 1]),
+    );
+    expect(checks).toBe(1);
+    expect(holds).toMatchObject({ ok: true, invariant: { value: 0, failure: null } });
+    const fails = runBenchCase(
+      fixedCase({ invariant: () => ({ value: 16, failure: 'allocated 16 B' }) }),
+      steppingClock([1, 1, 1]),
+    );
+    expect(fails).toMatchObject({
+      ok: false,
+      deterministic: true,
+      invariant: { value: 16, failure: 'allocated 16 B' },
+    });
+    expect(runBenchCase(fixedCase(), steppingClock([1, 1, 1])).invariant).toBeNull();
+  });
+
   it('reports the median of the timed runs, not the warm-up', () => {
     let calls = 0;
     const run = () => {
@@ -334,7 +354,9 @@ describe('sim bench', () => {
           runs: 3,
           medianMs: 1,
           p90Ms: 1,
+          p99Ms: 1,
           budgetMs: null,
+          invariant: null,
           calibration: null,
           gatedMs: 1,
           marginMs: null,
@@ -423,5 +445,9 @@ describe('sim bench', () => {
     expect(resolve?.ratio).toBeGreaterThan(0);
     // The spec §4.5 budgets that wait for the solver and the engine stay visible.
     expect(report.pending).toStrictEqual(PENDING_BENCH_CASES);
+    // The per-frame snapshot read: reported with p50 and p99, gated on allocating nothing.
+    const read = report.cases.find((c) => c.name === 'snapshot-read-500-devices');
+    expect(read).toMatchObject({ budgetMs: null, ok: true, invariant: { failure: null } });
+    expect(read?.p99Ms).toBeGreaterThanOrEqual(read?.medianMs ?? Infinity);
   });
 });

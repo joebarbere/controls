@@ -51,6 +51,11 @@ export interface BenchCase {
   /** The workload. Returns a checksum of its result, which must be the same on every run. */
   run(): string;
   /**
+   * A deterministic check run once after the timed runs (an allocation gate): `null` when it holds,
+   * else why not, which fails the case. Its value is reported either way.
+   */
+  invariant?(): { readonly value: number; readonly failure: string | null };
+  /**
    * Untimed, right after each run: more of the result's checksum, joined to `run`'s (a digest of
    * state that would cost time to form inside the timed run, so idle work can't pass as real work).
    */
@@ -76,7 +81,11 @@ export interface BenchCaseResult {
   readonly medianMs: number;
   /** The 90th percentile of the timed runs (nearest rank): how wide the spread is. Never gated. */
   readonly p90Ms: number;
+  /** The 99th percentile (nearest rank). Never gated. */
+  readonly p99Ms: number;
   readonly budgetMs: number | null;
+  /** The case's invariant, if it has one: its measured value and why it failed (`null`: it held). */
+  readonly invariant: { readonly value: number; readonly failure: string | null } | null;
   /** The calibration, or null for a case gated (or reported) in raw ms. */
   readonly calibration: BenchCalibrationResult | null;
   /**
@@ -179,19 +188,22 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
   }
   const deterministic = checksums.size === 1 && (calibration === undefined || calibrationChecksums.size === 1);
   const marginMs = budgetMs === null ? null : budgetMs - gatedMs;
+  const invariant = benchCase.invariant?.() ?? null;
   return {
     name: benchCase.name,
     runs: benchCase.runs,
     medianMs,
     p90Ms: percentile(durations, 90),
+    p99Ms: percentile(durations, 99),
     budgetMs,
+    invariant,
     calibration: calibrationResult,
     gatedMs,
     marginMs,
     ratio: budgetMs === null ? null : gatedMs / budgetMs,
     checksum: checksums.size === 1 ? [...checksums][0] : null,
     deterministic,
-    ok: deterministic && (marginMs === null || marginMs >= 0),
+    ok: deterministic && (marginMs === null || marginMs >= 0) && (invariant === null || invariant.failure === null),
   };
 }
 
