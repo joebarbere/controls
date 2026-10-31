@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { TopologyWriter } from './encode';
 import { topologyBytes } from './hash';
 import type { NetlistBranch, NetlistNode } from './types';
@@ -27,8 +28,20 @@ const branch = (index: number, element: NetlistBranch['element'], a: number, b: 
   values: {},
 });
 
-const same = (writer: TopologyWriter, nodes: readonly NetlistNode[], branches: readonly NetlistBranch[]) =>
-  expect([...writer.encode(nodes, branches)]).toStrictEqual([...topologyBytes(nodes, branches)]);
+/** The index of the first byte where `a` and `b` differ (or the shorter length), or -1 if equal. */
+function firstMismatch(a: Uint8Array, b: Uint8Array): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i;
+  return a.length === b.length ? -1 : n;
+}
+
+// A byte loop, not `toStrictEqual` over spread arrays: that took seconds on a few hundred KB.
+const same = (writer: TopologyWriter, nodes: readonly NetlistNode[], branches: readonly NetlistBranch[]) => {
+  const reference = topologyBytes(nodes, branches);
+  const written = writer.encode(nodes, branches);
+  expect(written.length).toBe(reference.length);
+  expect(firstMismatch(written, reference)).toBe(-1);
+};
 
 describe('TopologyWriter', () => {
   it('writes topologyBytes exactly: large ids, long strings, every element and source kind', () => {
@@ -49,11 +62,48 @@ describe('TopologyWriter', () => {
   it('reuses and grows its buffer without leaking an earlier encoding into a later one', () => {
     const writer = new TopologyWriter();
     const small = [node(0, [[1, 'a']])];
-    const big = Array.from({ length: 3000 }, (_, i) => node(i, [[i + 1, 'x'.repeat(i % 256)]]));
+    // A few hundred long members are well past the writer's first size guess, so it must grow.
+    const big = Array.from({ length: 300 }, (_, i) => node(i, [[i + 1, 'x'.repeat(255 - (i % 7))]]));
     same(writer, small, []);
-    same(writer, big, [branch(0, { kind: 'connection', connection: 7 }, 0, 2999)]);
+    same(writer, big, [branch(0, { kind: 'connection', connection: 7 }, 0, 299)]);
     same(writer, small, []);
     same(writer, big, []);
+  });
+
+  it('matches topologyBytes on arbitrary nodes and branches (property)', () => {
+    const id = fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER });
+    const index = fc.integer({ min: 0, max: 2 ** 31 - 1 });
+    const ascii = fc.string({
+      unit: fc.integer({ min: 0, max: 0x7e }).map((c) => String.fromCharCode(c)),
+      maxLength: 255,
+    });
+    const nodeArb = fc.record({
+      index,
+      island: index,
+      members: fc.array(fc.record({ entity: id, terminal: ascii }), { maxLength: 4 }),
+    });
+    const branchArb = fc.record({
+      index,
+      element: fc.oneof(
+        fc.record({ kind: fc.constant('entity' as const), entity: id, part: ascii }),
+        fc.record({ kind: fc.constant('connection' as const), connection: id }),
+      ),
+      kind: fc.constantFrom('resistor' as const, 'vsource' as const),
+      model: ascii,
+      source: fc.constantFrom(null, 'dc' as const, 'ac' as const),
+      a: index,
+      b: index,
+      island: index,
+      values: fc.constant({}),
+    });
+    // One writer across all runs, so reuse after a larger encoding is exercised too.
+    const writer = new TopologyWriter();
+    fc.assert(
+      fc.property(fc.array(nodeArb, { maxLength: 12 }), fc.array(branchArb, { maxLength: 12 }), (nodes, branches) => {
+        same(writer, nodes, branches);
+      }),
+      { numRuns: 200 },
+    );
   });
 
   it('refuses what topologyBytes refuses, with its message', () => {

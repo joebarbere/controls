@@ -249,5 +249,4 @@ function bagDigest(engine: SimEngine): string {
 }
 
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
-export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
-];
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [];

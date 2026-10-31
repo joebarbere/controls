@@ -190,6 +190,37 @@ function apply(bus: CommandBus<World>, sim: SimState, op: Op, tally: Tally): voi
   }
 }
 
+/**
+ * Where two plain-data values first differ (a path), or null if they are deeply equal: primitives by
+ * `Object.is` (so +0 and -0 differ, as in `toStrictEqual`), objects by prototype, own keys (an
+ * `undefined`-valued key counts) and values, arrays by length and elements. As strict as
+ * `toStrictEqual` for netlists, which are plain objects and arrays, at a fraction of its cost: the
+ * incremental property compares a netlist on most of its steps (#53 review: it was 40 % of the test).
+ */
+function firstDifference(x: unknown, y: unknown, path = '$'): string | null {
+  if (Object.is(x, y)) return null;
+  if (typeof x !== 'object' || typeof y !== 'object' || x === null || y === null) return path;
+  if (Object.getPrototypeOf(x) !== Object.getPrototypeOf(y)) return path;
+  if (Array.isArray(x)) {
+    const ys = y as unknown[];
+    if (x.length !== ys.length) return `${path}.length`;
+    for (let i = 0; i < x.length; i++) {
+      const d = firstDifference(x[i], ys[i], `${path}[${i}]`);
+      if (d !== null) return d;
+    }
+    return null;
+  }
+  const xk = Object.keys(x);
+  const yo = y as Record<string, unknown>;
+  if (xk.length !== Object.keys(yo).length) return `${path} (keys)`;
+  for (const key of xk) {
+    if (!Object.prototype.hasOwnProperty.call(yo, key)) return `${path}.${key}`;
+    const d = firstDifference((x as Record<string, unknown>)[key], yo[key], `${path}.${key}`);
+    if (d !== null) return d;
+  }
+  return null;
+}
+
 const fromScratch = (world: World, sim: SimState): Netlist =>
   compileNetlist(world, TEST_CATALOG, { models: TEST_MODELS, sim: (id) => sim.get(id) });
 
@@ -341,8 +372,10 @@ describe('netlist properties (plan F2.1)', () => {
           // Frozen inputs: the compiler must never mutate the world or the engine's state.
           const world = deepFreeze(bus.state);
           const incremental = compiler.compile(world, { sim: (id) => sim.get(id) });
-          expect(incremental).toStrictEqual(fromScratch(world, sim));
-          for (const branch of incremental.branches) expect(Object.isFrozen(branch.values)).toBe(true);
+          const expected = fromScratch(world, sim);
+          // `firstDifference` first (cheap), `toStrictEqual` only for its diff when they differ.
+          if (firstDifference(incremental, expected) !== null) expect(incremental).toStrictEqual(expected);
+          expect(incremental.branches.every((branch) => Object.isFrozen(branch.values))).toBe(true);
         }
       }),
       { numRuns: 60 },
@@ -434,6 +467,23 @@ describe('netlist properties (plan F2.1)', () => {
       }),
       { numRuns: 100 },
     );
+  });
+});
+
+describe('firstDifference (the incremental property’s comparison)', () => {
+  it('is as strict as toStrictEqual on plain data', () => {
+    const netlist = { nodes: [{ index: 0, members: [{ entity: 1, terminal: 'a' }] }], values: { r: 1 } };
+    expect(firstDifference(netlist, structuredClone(netlist))).toBeNull();
+    expect(firstDifference({ v: 0 }, { v: -0 })).toBe('$.v');
+    expect(firstDifference({ v: Number.NaN }, { v: Number.NaN })).toBeNull();
+    expect(firstDifference({ a: undefined }, { b: undefined })).toBe('$.a');
+    expect(firstDifference({ a: 1 }, { a: 1, b: undefined })).toBe('$ (keys)');
+    expect(firstDifference([1, 2], [1, 2, 3])).toBe('$.length');
+    expect(firstDifference([1, [2, 3]], [1, [2, 4]])).toBe('$[1][1]');
+    expect(firstDifference({ n: null }, { n: {} })).toBe('$.n');
+    expect(firstDifference([], {})).toBe('$');
+    expect(firstDifference(Object.create(null), {})).toBe('$');
+    expect(firstDifference({ s: 'x' }, { s: 'y' })).toBe('$.s');
   });
 });
 

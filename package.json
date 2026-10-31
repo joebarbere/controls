@@ -14,7 +14,7 @@
   },
   "packageManager": "pnpm@11.28.8",
   "scripts": {
-    "verify": "prettier --check . && nx run-many -t lint typecheck test build bench && node tools/check-version-sync.mjs",
+    "verify": "prettier --check . && nx run-many -t lint typecheck test build && nx run-many -t bench && node tools/check-version-sync.mjs",
     "format": "prettier --write .",
     "start": "nx run desktop:start",
     "start:web": "nx serve game",

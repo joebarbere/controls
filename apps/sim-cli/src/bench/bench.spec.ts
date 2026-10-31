@@ -396,26 +396,31 @@ describe('sim bench', () => {
   });
 
   it('runs from the built bundle (as the Nx bench target does) with the real cases and clock', () => {
+    // Shape and determinism only, never timing: this runs beside the suite's other workers, so only
+    // the Nx `bench` target (run on its own, after everything else in `pnpm verify`) gates (#53).
     const result = spawnSync(process.execPath, [join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs'), 'bench'], {
       cwd: WORKSPACE_ROOT,
       encoding: 'utf8',
       timeout: 30_000,
     });
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(EXIT_OK);
+    expect([EXIT_OK, EXIT_FAILURE]).toContain(result.status);
+    // The only thing it may say on stderr is that a case is over budget.
+    for (const line of result.stderr.split('\n').filter((l) => l !== '')) expect(line).toMatch(/ over budget: /);
     const report = JSON.parse(result.stdout) as BenchReport;
-    expect(report.ok).toBe(true);
     expect(report.cases.map((c) => c.name)).toEqual(BENCH_CASES.map((c) => c.name));
     for (const c of report.cases) {
+      expect(c.deterministic).toBe(true);
+      expect(c.checksum).not.toBeNull();
       expect(c.medianMs).toBeGreaterThanOrEqual(0);
       expect(c.p90Ms).toBeGreaterThanOrEqual(c.medianMs);
     }
     // The plant compiles to exactly 2,000 nodes in the bundle too.
     expect(report.cases[0].checksum).toMatch(/^2000:/);
-    // The re-solve gate ran calibrated, beside the case (it holds under this suite's parallel load).
+    // The re-solve case ran calibrated, beside its calibration loop, and reported its ratio.
     const resolve = report.cases.find((c) => c.name === 'plant-resolve-topology-change');
-    expect(resolve).toMatchObject({ budgetMs: 2, ok: true, calibration: { name: 'calibration-loop' } });
-    expect(resolve?.ratio).toBeLessThanOrEqual(1);
+    expect(resolve).toMatchObject({ budgetMs: 2, calibration: { name: 'calibration-loop' } });
+    expect(resolve?.calibration?.checksum).not.toBeNull();
+    expect(resolve?.ratio).toBeGreaterThan(0);
     // The spec §4.5 budgets that wait for the solver and the engine stay visible.
     expect(report.pending).toStrictEqual(PENDING_BENCH_CASES);
   });

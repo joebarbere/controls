@@ -451,7 +451,7 @@ flowchart LR
 | `plant-recompile-switch`        | One topology change: open a feeder's root switch (an untimed `prepare` closes it first)                                      | None of its own: part of the re-solve (reported)              |
 | `plant-resolve-topology-change` | The same change, then the values and the sparse solve of all 8 islands, with the factorisation cache warm (both states seen) | 2 ms (spec §4.5) on the reference machine, calibrated (below) |
 | `plant-resolve-new-topology`    | The same, with the cache cleared in `prepare`: every symbolic factorisation is rebuilt                                       | None in the spec (reported)                                   |
-| `tick-device-mix`               | One step's discrete, continuous and protection layers on 250 battery–fuse–load loops (750 devices), no solve (F2.3a)         | 0.3 ms (spec §4.5), gated                        |
+| `tick-device-mix`               | One step's discrete, continuous and protection layers on 250 battery–fuse–load loops (750 devices), no solve (F2.3a)         | 0.3 ms (spec §4.5), gated                                     |
 
 Each case reports its median and p90 in the JSON. Budgets gate on the median. Nx hides a passing task's output, so the `bench` target also writes the report to `dist/apps/sim-cli/bench-report.json` (`sim bench --report <file>`), and a CI step after `pnpm verify` prints it on every OS. That step only prints, so `verify` still equals CI.
 

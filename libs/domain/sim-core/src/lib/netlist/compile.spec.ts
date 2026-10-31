@@ -381,6 +381,27 @@ describe('NetlistCompiler (incremental)', () => {
     expect(second.branches[2]).toMatchObject({ element: { kind: 'connection', connection: 1 }, a: 0, b: 3 });
   });
 
+  it('a lead whose end entity is gone from the next world is absent, never resolved to the stale entry', () => {
+    // The compiler caches each connection end against the entity entry it resolved to, and trusts it
+    // only while that entry was seen by this compile. Here the entity leaves the world (its entry is
+    // still in the cache until the compile prunes it) while a lead to it stays: a dangling end.
+    const compiler = new NetlistCompiler(BUILTIN_CATALOG);
+    const bus = benchBus();
+    for (const ref of [BATTERY, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') });
+    expect(compiler.compile(bus.state).branches).toHaveLength(4);
+    const dangling: World = { ...bus.state, entities: bus.state.entities.filter((e) => e.id !== 2) };
+    const netlist = compiler.compile(dangling);
+    expect(netlist).toStrictEqual(compileNetlist(dangling, BUILTIN_CATALOG));
+    expect(netlist.diagnostics).toStrictEqual([
+      { code: 'absent-connection', connection: 1, reason: 'absent-end' },
+      { code: 'absent-connection', connection: 2, reason: 'absent-end' },
+    ]);
+    // And back: the entity returns (a new entry), the leads resolve to it again.
+    expect(compiler.compile(bus.state)).toStrictEqual(compileNetlist(bus.state, BUILTIN_CATALOG));
+  });
+
   it('a compile that throws part-way never leaves a half-written structure to match the next compile', () => {
     // The compiler overwrites its structure list in place (F2.2 part 3b). Here B rewrites switch 1's
     // entry, then throws on switch 2; C has B's switch 1 and A's switch 2, exactly the half-written
