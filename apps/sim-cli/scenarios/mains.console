@@ -1,7 +1,8 @@
 # F2.4 part 2: a split-phase utility service behind its transformer impedance (R + jωL), headless and in
 # the game (the D6 cross-runtime golden for the series-inductance phasors). Test leads from L1 to N and
-# from L1 to L2 load the service unevenly (P2 has no AC load model yet: a lead is a resistance at 60 Hz
-# too), so L1, L2 and the neutral carry different currents at different angles.
+# from L1 to L2 are near-bolted faults through test leads, not loads (P2 has no AC load model yet: a
+# lead is its own small resistance at 60 Hz), so L1, L2 and the neutral carry different fault currents
+# at different angles.
 #   pnpm sim run apps/sim-cli/scenarios/mains.console --world content/levels/workshop.json
 entity.place --ref.id utility.larkmoor-split-phase-25kva --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
 lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal l1 --b.entity 1 --b.terminal n

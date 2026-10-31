@@ -31,7 +31,10 @@ import { angularFrequency, type PhasorAngle } from '../../mna/phasor';
  *   and 0.3 X of the full winding in ohms). Z_n is then negative (about −0.125 R − j0.2 X), which a
  *   phasor MNA accepts because the network stays passive, and I_LN / I_LL ≈ 1.5 (8.2 kA against 5.2 kA
  *   here); mutual coupling between the halves would do too. P4's service entrance must adopt one, with
- *   an I_LN / I_LL ≈ 1.5 test (simulation caveats). The generator stub inherits the same abstraction.
+ *   an I_LN / I_LL ≈ 1.5 test (simulation caveats). Note for P4: the resistor stamp's validation
+ *   (`AcBranchValues.resistor`, R > 0) refuses the T-equivalent's negative neutral R, so either permit
+ *   a negative R on an AC island's internal source branch (the network stays passive) or use coupled
+ *   halves instead. The generator stub inherits the same abstraction.
  * - The EMF is the open-circuit (no-load) voltage: the source impedance alone gives the voltage drop
  *   under load. No tap changer, regulation or frequency dynamics.
  */

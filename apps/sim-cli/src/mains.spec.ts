@@ -5,8 +5,8 @@ import { WORKSPACE_ROOT } from './script-loader';
 import { workshopWorld } from './testing/workshop';
 
 /*
- * The mains scenario (F2.4 part 2): a split-phase utility service behind its R + jωL, loaded unevenly
- * by test leads. Its two hashes are pinned here **and** in `apps/game-e2e/src/sim-engine.spec.ts`,
+ * The mains scenario (F2.4 part 2): a split-phase utility service behind its R + jωL, with
+ * near-bolted faults through test leads (L1–N and L1–L2), not loads. Its two hashes are pinned here **and** in `apps/game-e2e/src/sim-engine.spec.ts`,
  * which runs the same console file with the engine in the page: D6's cross-runtime check of the series
  * inductance's phasors (Node's V8 against Chromium's).
  */
