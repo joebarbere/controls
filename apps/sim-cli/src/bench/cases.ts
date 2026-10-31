@@ -161,6 +161,13 @@ function rig(): SnapshotReadRig {
   return readRig;
 }
 
+let overlayRig: SnapshotReadRig | null = null;
+/** The read rig with the netlist readout (F2.6), built on first use. */
+function netlistRig(): SnapshotReadRig {
+  overlayRig ??= snapshotReadRig(READ_PLANT, { netlist: true });
+  return overlayRig;
+}
+
 /**
  * ADR 0011 §9.2's per-frame read (plan F2.3b): reported, not time-gated (the budget is 0.1 ms at p99
  * and measured at a seventh of it; a raw-ms gate would need the calibrated headroom first). Gated on
@@ -192,6 +199,35 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
         bytes < READ_ALLOCATION_GATE_BYTES
           ? null
           : `a read of ${READ_PLANT.devices} devices allocated ${bytes.toFixed(1)} B (the gate: under ${READ_ALLOCATION_GATE_BYTES} B)`,
+    };
+  },
+};
+
+/**
+ * F2.6: the overlays' per-snapshot read, the snapshot read above plus `NetlistReadout.read` over the
+ * whole netlist (1,000 node voltages against their references, 1,500 branch currents, 50 islands).
+ * Reported, not time-gated, like the read it extends; gated on allocating nothing.
+ */
+export const OVERLAY_READ_CASE: BenchCase = {
+  name: 'overlay-read-500-devices',
+  warmup: 2_000,
+  runs: 5_000,
+  budgetMs: null,
+  prepare: () => netlistRig().announce(),
+  run: () => {
+    netlistRig().read();
+    return String(netlistRig().sum());
+  },
+  invariant: () => {
+    // Smaller windows than the plain read's (a readout costs about twice the copy): 4,000 reads at
+    // 12 B or more each is still 48 kB a window, far above the gate, and the case stays a few seconds.
+    const bytes = bytesPerRead(netlistRig(), 4_000, 6, 10_000);
+    return {
+      value: bytes,
+      failure:
+        bytes < READ_ALLOCATION_GATE_BYTES
+          ? null
+          : `a netlist readout of ${READ_PLANT.nodes} nodes and ${READ_PLANT.branches} branches allocated ${bytes.toFixed(1)} B (the gate: under ${READ_ALLOCATION_GATE_BYTES} B)`,
     };
   },
 };
@@ -294,6 +330,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
     },
   },
   SNAPSHOT_READ_CASE,
+  OVERLAY_READ_CASE,
 ];
 
 let plantEngine: SimEngine | null = null;

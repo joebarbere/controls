@@ -1,6 +1,6 @@
 # Rendering and interaction
 
-> **Status (P1, F1.7 and F1.9 done):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. Since F1.9 the scene is the **workshop level**: its floor, stud wall, backboard, backplate, DIN rails and bench are the world's **fixtures**, drawn by procedural recipes, and walls and benches are focus and snap targets. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
+> **Status (P1, F1.7 and F1.9 done; P2: device recipes in F2.4, the debug overlays in F2.6):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. Since F1.9 the scene is the **workshop level**: its floor, stud wall, backboard, backplate, DIN rails and bench are the world's **fixtures**, drawn by procedural recipes, and walls and benches are focus and snap targets. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
 
 `@controls/renderer` (`type:rendering`) is framework-free imperative Three.js r186. It **draws the world model and never owns it**: the world arrives as read-only snapshots, and everything the renderer keeps (camera pose, mode, hover, selection, the ghost, overlays) is view state. Gestures leave it as **intents**, which `feature-workspace` executes as Commands.
 
@@ -25,11 +25,13 @@ flowchart TB
         GH["overlays/ghost<br/>placement preview"]
         PK["picking/picker ×2<br/>all selectables · snap surfaces"]
         HL["overlays/highlight"]
+        SO["overlays/sim-overlays<br/>voltage · current · terminal highlight (F2.6)"]
         subgraph pure["Pure modules (lint-fenced: no three, DOM or clock)"]
             CM["cameras/camera-math"]
             IA["input/input-actions"]
             SEL["picking/selection"]
             FT["stats/frame-timer"]
+            OS["sim/overlay-scale · sim/overlay-steps"]
         end
     end
 
@@ -45,7 +47,8 @@ flowchart TB
     VR --> VC & RL
     VC -.->|"onInvalidate → requestRender"| RL
     RL -->|"update(dt) → draw"| VC
-    VC --> FS & WS & GH & PK & HL & CM & IA & SEL
+    VC --> FS & WS & GH & PK & HL & CM & IA & SEL & SO
+    SO --> OS
     FS --> FR
     FS -->|"fixtureSnapTarget()"| WM
     WS --> PR
@@ -270,6 +273,53 @@ Removing every entity (without disposing the viewport) also returns to baseline:
 The budget target (60 fps on a 2020-era integrated GPU) still needs measuring on such a GPU; props are one draw call each, and instancing repeated props is the obvious next step if that budget is missed.
 
 **F1.9:** the workshop adds 9 drawn meshes (the 13 studs and 3 plates are one merged mesh; the snap plane is never drawn) and 8 geometry BVHs (the rails share one). The headless dev HUD showed 16 draw calls for the workshop with six props at 1280 × 720 on SwiftShader WebGL2; as above, headless frame times are not a GPU figure.
+
+## Debug overlays (F2.6)
+
+`view.overlay {name: 'voltage' | 'current', on}` is a view command (logged, no world change, `when: console.available`). The workspace applies it through `Session.onCommand`; the overlays are renderer-local view state in `SimOverlays` (`overlays/sim-overlays.ts`), which the controller owns, syncs with the world and updates each frame. Gotchas: [rendering caveats](../caveats/rendering.md).
+
+```mermaid
+flowchart LR
+    subgraph app["feature-workspace"]
+        VPO["connectViewportOverlays<br/>view.overlay → setOverlay<br/>reduced motion (settings + media query)"]
+        LEG["ctl-overlay-legend<br/>text ticks per scale"]
+    end
+    HOST["SimHost<br/>subscribe(view) · running"]
+    subgraph renderer["@controls/renderer"]
+        SO["SimOverlays<br/>instanced leads, terminals, arrows, highlight"]
+        ST["sim/overlay-steps<br/>join + display steps (pure)"]
+        SC["sim/overlay-scale<br/>scales per band, bins, hysteresis,<br/>colours, legend (pure)"]
+    end
+    subgraph protocol["@controls/sim-protocol"]
+        RO["NetlistReadout<br/>|V − V(ref)|, |I|, DC direction,<br/>island status and band"]
+    end
+    CAT["@controls/catalog<br/>NEC_REGION nominal systems,<br/>device terminals"]
+    VPO -->|"attachSnapshots(SimHost)"| SO
+    HOST -->|"listener (never inside update)"| SO
+    SO -->|"once per descriptor"| RO
+    SO --> ST --> SC
+    SC --> CAT
+    SO -->|"legend state"| LEG
+    SO -->|"invalidate() only when a step changed"| VC2["ViewportController"]
+```
+
+- **What is drawn.** No scene mesh draws leads yet (wire routing is P3), so the overlays draw their own: a straight segment per world connection, in two halves (one per end, so a voltage drop shows), and a marker per catalogue terminal of every device, at the terminal's `positionMm` turned by the entity's transform. Six `InstancedMesh`es (lead halves, terminal spheres, unknown-terminal diamonds, DC arrows, AC markers, highlight rings): one draw each whatever the plant size, `frustumCulled = false`, a no-op `raycast`, never among the picker's roots. The group `overlay:sim` is in the scene only while an overlay or a highlight is shown, so with everything off the scene graph is exactly what it was.
+- **Reading.** Every snapshot is read (also while the overlays are off, so switching one on draws the latest values at once): `NetlistReadout.of(descriptor)` is built once per descriptor and reads the view into a `NetlistReading` without allocating; the join of drawn items to nodes and branches is rebuilt per descriptor or world change. `updateOverlaySteps` turns the reading into display steps with half-step hysteresis; only a changed step rewrites instance colours and matrices and calls `invalidate()`.
+- **Scales.** Voltage: a fixed linear scale per nominal band, 0 V to 4/3 of the band's highest nominal voltage (the nominal sits at bin 24 of 32), from the region profile for AC (`120/240`, `208Y/120`, `480Y/277`, line to line) and the catalogue's 12 V and 24 V DC classes; band 0 (`none`) and any band without a row are _no scale_. Current: one logarithmic scale for every band, bin 0 below 1 mA, bins 1–31 up to 100 A, then over range. Islands that aren't solved, items missing from the generation and a source reset are _unknown_: a dark, thinner lead and diamond markers, never a 0 V or 0 A colour.
+- **Current animation.** DC arrows travel along the current's direction (positive from the connection's end `a` to end `b`) at 20 to 200 mm/s by bin; AC markers sway in place (magnitude only). `update()` animates only while `SimHost.running`, the current overlay is on, reduced motion is off and some lead's bin is above 0, and returns `true` then; otherwise the arrows return to their evenly spaced rest positions. Reduced motion is the setting `display.reducedMotion`, or `prefers-reduced-motion` while it is `system`.
+- **The legend** (`ctl-overlay-legend`) lists, for each overlay on, its scale as a decorative colour bar with text ticks (the nominal marked) and an over-range label, then the _no scale_ and _no reading_ styles in words. The host carries `data-overlays` (`current voltage`).
+- **Terminal highlight** for the netlist inspector: `ViewportRenderer.highlightTerminals(refs)` rings the given `{entity, terminal}`s (view state, whatever the overlays show) and returns how many are drawn; `null` or `[]` clears it, and it survives world changes for the terminals that still exist.
+- **Frame time (F2.6, headless).** Measured 2026-10-31 with `apps/game-e2e/src/overlay-frame-time.spec.ts` (a manual tool, skipped unless `CONTROLS_MEASURE_OVERLAYS=1`): 250 battery-and-switch pairs on the bench, each switch closed across its battery through two test leads (500 devices, 500 leads, every lead over range), the sim running at 1×, Chromium's software WebGL2 (SwiftShader, `?renderer=webgl2`), DPR 1, on a machine under load (load average 5–14 on 12 threads), wall time per frame over back-to-back frames:
+
+  | Viewport    | Overlays off | Voltage and current on | Draw calls (off / on) |
+  | ----------- | ------------ | ---------------------- | --------------------- |
+  | 1280 × 720  | 81–91 ms     | 115–245 ms             | 1 760 / 1 763         |
+  | 1920 × 1080 | 194–210 ms   | 247–267 ms             | 1 760 / 1 763         |
+
+  Two runs each; the spread is the machine's load, not the overlays. The main-thread cost the HUD reports (update plus draw submission) stayed at 5–12 ms with the overlays on: the rest is SwiftShader rasterising on the CPU. The overlays add 3 draw calls here (lead halves, terminal markers, DC arrows; empty layers draw nothing), and their instance layers are packed, so only shown instances are drawn. As with the props (above), **these are not GPU figures**: the 1 760 draw calls are the devices' material groups.
+
+- **Real-GPU frame time is a manual step** (plan F2.6 TODO): on a desktop with the GPU in question, run `CONTROLS_MEASURE_OVERLAYS=1 pnpm nx run game-e2e:e2e -- overlay-frame-time.spec.ts --headed` (it starts or reuses the dev server on port 4200; headed Chromium uses the real GPU; add `CONTROLS_MEASURE_RENDERER=webgpu` to measure WebGPU instead of the pinned WebGL2), and record both sizes' JSON lines here. The plan's budget is 60 fps at 1080p on a 2020-era integrated GPU.
+- **Tests:** `sim/overlay-scale.spec.ts` and `sim/overlay-steps.spec.ts` (scales, band 0, unknown islands, hysteresis, legend text, arrows), `overlays/sim-overlays.spec.ts` (fake snapshots from the codec: the overlay graph snapshot, invalidation only on change, animation and reduced motion, the highlight, growth, disposal), `sim-protocol`'s `netlist-readout.spec.ts`, `sim bench`'s `overlay-read-500-devices` (0 B per read), and `apps/game-e2e/src/overlays.spec.ts` (console and palette, with the real worker), and the disposal pattern of the controller spec.
 
 ## Reading the sim snapshot (F2.3b measurements)
 

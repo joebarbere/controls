@@ -608,14 +608,14 @@ _Part 2 (fuse, thermal-magnetic breaker) done 2026-10-31 ([simulation architectu
 
 Acceptance:
 
-- [ ] `view.overlay {name: 'voltage' | 'current', on}` is a view command: logged, with no world change, and `when: console.available` (sandbox and dev builds) until F5.3 adds difficulty gating.
-- [ ] **Voltage overlay:** leads and terminals coloured by |V| against the island reference, on a fixed scale for each nominal band, with a legend.
-- [ ] **Current overlay:** current animated along leads from |I|, showing direction for DC. AC shows magnitude only, which is a documented abstraction. With `prefers-reduced-motion`, the arrows are static.
+- [x] `view.overlay {name: 'voltage' | 'current', on}` is a view command: logged, with no world change, and `when: console.available` (sandbox and dev builds) until F5.3 adds difficulty gating.
+- [x] **Voltage overlay:** leads and terminals coloured by |V| against the island reference, on a fixed scale for each nominal band, with a legend.
+- [x] **Current overlay:** current animated along leads from |I|, showing direction for DC. AC shows magnitude only, which is a documented abstraction. With `prefers-reduced-motion`, the arrows are static.
 - [ ] Frame time with both overlays on is measured on SwiftShader and on a real GPU, and recorded. Overlay resources pass the disposal test.
 - [ ] **Netlist inspector:** a docked panel listing islands, nodes (with their member terminals) and branches, with live V and I at up to 10 Hz. It is keyboard-navigable, and selecting a node highlights its terminals in 3D (view state only).
 - [x] **`netlist.dump`:** a read-only console command, like `world.hash`. It prints `formatNetlist` plus the island diagnostics, gives the same text headless and in the game, and is golden-tested on the bench demo.
 - [ ] **E2E:** the inspector's lamp-branch current equals the value derived from `game.probe`, within display rounding.
-- [ ] **Band 0 means "no scale"**, not the first bin of some scale: an island in band 0 (`none`, every island until F2.4's sources choose one) gets no overlay colour (#52 review).
+- [x] **Band 0 means "no scale"**, not the first bin of some scale: an island in band 0 (`none`, every island until F2.4's sources choose one) gets no overlay colour (#52 review).
 - [x] **The HUD's "last solve" keys off `islandCount > 0`**: with no islands the snapshot holds no solution and writes `lastSolveTick` 0, which is not a solve at tick 0 (#52 review).
 
 _`netlist.dump` and the HUD's last solve done 2026-10-31 (sim-engine half; [simulation architecture](../docs/architecture/simulation.md#netlistdump-f26)); `test-engineer` review pending. Notes:_
@@ -623,6 +623,14 @@ _`netlist.dump` and the HUD's last solve done 2026-10-31 (sim-engine half; [simu
 - _`netlist.dump` is a console query beside `world.hash`, not a registered command (as `world.hash` is), and a pure function of the materialised world: in the game it reuses the `state` query, so no worker message and no `SIM_PROTOCOL_VERSION` bump. Goldens on `bench-leads`, `sim-step`, `sources` and `mains` in `apps/sim-cli/src/goldens/netlist-dump/`, asserted byte for byte from Chromium by `apps/game-e2e/src/netlist-dump.spec.ts`._
 - _**F2.5's `bench-lamp` golden** is added when F2.5's scenario lands (PRs #62/#63)._
 - _**Nominal band selection is pending**: `NOMINAL_BANDS` still holds only `none`, so every dump prints `band none`. Appending bands bumps `SIM_PROTOCOL_VERSION` (§12) and moves the pinned snapshot hashes of every scenario with a source; its numbers are sequenced after F2.5 (which claims protocol 4 and engine 5)._
+
+_Overlays done 2026-10-31 (`renderer-engineer`; [rendering architecture](../docs/architecture/rendering.md#debug-overlays-f26), [rendering caveats](../docs/caveats/rendering.md)); `test-engineer` review pending, and `electrical-realism-reviewer` for the scales' nominal values and sources. Notes:_
+
+- _The overlays draw their own lead segments and terminal markers (nothing drew leads before P3), read through `NetlistReadout` in `sim-protocol` (shared with the inspector to come; `sim bench` `overlay-read-500-devices`: 0 B per read, p50 about 21 µs, p99 40–50 µs on a loaded machine)._
+- _Voltage scales are keyed by band name (`dc12`, `dc24`, `ac120-240`, `ac208y120`, `ac480y277`): the band-selection work in sim-core must use these names (a renderer spec fails otherwise). Until then every island is band 0, so only the current overlay shows a scale._
+- _Frame time with both overlays on, SwiftShader WebGL2, 500 devices and 500 leads: 115–245 ms per frame at 1280 × 720 (81–91 ms off) and 247–267 ms at 1920 × 1080 (194–210 ms off), on a loaded machine; the HUD's main-thread cost stayed at 5–12 ms. Disposal: the overlay layers pass the controller's disposal pattern (`sim-overlays.spec.ts`)._
+- _The netlist inspector (with its 3D terminal highlight, already exposed as `ViewportRenderer.highlightTerminals`), `netlist.dump`, the inspector-vs-probe E2E and the HUD fix are separate PRs._
+- [ ] **TODO (manual, the user): measure the frame time with both overlays on a real GPU** (ideally a 2020-era integrated one, at 1080p, WebGL2 and WebGPU) with the procedure in the [rendering architecture](../docs/architecture/rendering.md#debug-overlays-f26), and record it there; then tick the frame-time item above.
 
 ### F2.7 Oracle harness and performance gate
 

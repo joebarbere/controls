@@ -41,6 +41,7 @@ What exists today (Phases 0 and 1, and Phase 2 so far):
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). The viewport draws only when something changes (idle behind the menu); a frame-time HUD shows in dev builds.
 - Procedural 3D models of the bench battery, the bench supply and the DIN-rail supply, sized from their catalogue entries and labelled with their fictional brands.
 - The lamp glows with its solved light output; a lamp whose circuit isn't solved is shown as unknown, never as an off lamp.
+- Debug overlays (sandbox and dev builds): `view.overlay voltage|current` colours leads and terminals by voltage on a fixed scale per nominal system, or animates current along the leads (direction for DC, magnitude for AC), with a text legend; unsolved circuits show "no reading", never 0 V, and reduced motion keeps the arrows still.
 - Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
 
 ### Simulation

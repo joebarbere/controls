@@ -24,6 +24,21 @@ describe('the snapshot read rig', () => {
     expect(bytesPerRead(snapshotReadRig(), 1_000, 2)).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
   });
 
+  it('with the netlist readout (F2.6): reads every node and branch, still allocating nothing', () => {
+    const rig = snapshotReadRig(READ_PLANT, { netlist: true });
+    rig.announce();
+    rig.read();
+    const plain = snapshotReadRig();
+    plain.announce();
+    plain.read();
+    // Every node is at (1.5, 1.5) V like its reference node: 0 V. Every branch carries (0.25, 0.25) A,
+    // |I| = 0.25 √2, from a to b (the rig's islands are DC).
+    expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25), 9);
+    expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000, 2)).toBeLessThan(
+      READ_ALLOCATION_GATE_BYTES,
+    );
+  });
+
   it('the measure catches a read that allocates', () => {
     const rig = snapshotReadRig();
     const kept: number[][] = [];

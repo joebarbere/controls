@@ -11,3 +11,5 @@ export * from './lib/reader';
 export * from './lib/messages';
 export * from './lib/pacer';
 export * from './lib/worker-like';
+export * from './lib/netlist-readout';
+export * from './lib/fake-snapshot';
