@@ -1,4 +1,6 @@
 import fc from 'fast-check';
+import { buildSync } from 'esbuild';
+import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import {
   BUFFER_OFFSETS,
@@ -9,7 +11,6 @@ import {
   PUBLISH_SEQ_INDEX,
   readBufferHeader,
   readDiagnostics,
-  SLOT_COUNT,
   slotCapacityFor,
   slotOffset,
   SnapshotBufferError,
@@ -305,6 +306,75 @@ describe('the seqlock reader (ADR 0011 §6.2)', () => {
     expect(view.read(ref(12, 'u8'))).toBe(0xf9);
   });
 
+  it('keeps the seqlock word odd for the whole encode of a publish (ADR 0011 §6.1)', () => {
+    const s = { ...source({ devices: [1, 2] }) };
+    const { buffer, writer } = rig(s);
+    writer.publish(writeWith(s)); // slot 0; the next publish writes slot 1
+    const i32 = new Int32Array(buffer);
+    const seqIndex = (slotOffset(1, writer.slotBytes) + SLOT_OFFSETS.slotSeq) / 4;
+    const seen: number[] = [];
+    writer.publish((slot, seq) => {
+      // Watch the word at every step of the encode: around the fill, and from inside the device writer.
+      const fill = slot.fill.bind(slot);
+      slot.fill = ((value: number, start?: number, end?: number) => {
+        seen.push(Atomics.load(i32, seqIndex));
+        const out = fill(value, start, end);
+        seen.push(Atomics.load(i32, seqIndex));
+        return out;
+      }) as typeof slot.fill;
+      encodeSnapshot(
+        {
+          ...s,
+          writeDevices: (view, offset) => {
+            seen.push(Atomics.load(i32, seqIndex));
+            s.writeDevices(view, offset);
+          },
+        },
+        slot,
+        seq,
+      );
+      seen.push(Atomics.load(i32, seqIndex));
+    });
+    expect(seen.length).toBeGreaterThanOrEqual(4);
+    expect(seen.every((word) => (word & 1) === 1)).toBe(true);
+    expect(Atomics.load(i32, seqIndex) & 1).toBe(0); // complete afterwards
+  });
+
+  it('publishes in order: the word odd, the slot, the word even, latestSlot, then publishSeq', () => {
+    const s = source({});
+    const { buffer, writer } = rig(s);
+    const realStore = Atomics.store as (a: Int32Array, i: number, v: number) => number;
+    const realAdd = Atomics.add as (a: Int32Array, i: number, v: number) => number;
+    const steps: string[] = [];
+    const seqIndex = (slotOffset(0, writer.slotBytes) + SLOT_OFFSETS.slotSeq) / 4;
+    const name = (index: number) =>
+      index === seqIndex
+        ? 'slotSeq'
+        : index === LATEST_SLOT_INDEX
+          ? 'latestSlot'
+          : index === PUBLISH_SEQ_INDEX
+            ? 'publishSeq'
+            : `${index}`;
+    const store = vi.spyOn(Atomics, 'store').mockImplementation(((a: Int32Array, i: number, v: number) => {
+      if (a.buffer === buffer) steps.push(`store ${name(i)}${i === seqIndex ? (v & 1 ? ' odd' : ' even') : ''}`);
+      return realStore(a, i, v);
+    }) as unknown as typeof Atomics.store);
+    const add = vi.spyOn(Atomics, 'add').mockImplementation(((a: Int32Array, i: number, v: number) => {
+      if (a.buffer === buffer) steps.push(`add ${name(i)}`);
+      return realAdd(a, i, v);
+    }) as unknown as typeof Atomics.add);
+    try {
+      writer.publish((slot, seq) => {
+        steps.push('encode');
+        encodeSnapshot(s, slot, seq);
+      });
+    } finally {
+      store.mockRestore();
+      add.mockRestore();
+    }
+    expect(steps).toEqual(['store slotSeq odd', 'encode', 'store slotSeq even', 'store latestSlot', 'add publishSeq']);
+  });
+
   it('retries a torn read: a publish that lands during the copy is discarded (simulated concurrent writer)', () => {
     const first = source({ tick: 100, nodes: [1, 1, 1, 1] });
     const { buffer, writer, reader } = rig(first);
@@ -436,73 +506,85 @@ describe('the seqlock reader (ADR 0011 §6.2)', () => {
     expect(() => snapshotViewFromBytes(new Uint8Array(4), descriptor(0))).toThrow(RangeError);
   });
 
-  it('never accepts a torn snapshot from a real concurrent writer thread', async () => {
-    // A writer thread publishing as fast as it can: each publish fills every node value with its own
-    // publish number. A torn copy would mix two numbers; the seqlock must discard every such read.
-    const nodes = 100_000;
+  it('never accepts a torn or stale snapshot from the real writer on another thread', async () => {
+    // The real `SnapshotWriter` and `encodeSnapshot`, bundled from these sources, publishing as fast as
+    // they can on a worker thread. Publish n writes tick n and every node value n. A torn copy would
+    // mix two numbers; a reader that loaded publishSeq p must never accept a tick below p (the writer
+    // stores latestSlot before it increments publishSeq).
+    const nodes = 20_000;
     const s = source({ nodes: new Array(2 * nodes).fill(0) });
     const slotBytes = slotCapacityFor(snapshotSlotBytes(s)) as number;
     const buffer = createSnapshotBuffer(slotBytes, true);
-    const writer = new SnapshotWriter(buffer);
-    writer.publish(writeWith(s)); // a valid header in both slots' shape
-    writer.publish(writeWith(s));
     const reader = new SnapshotReader(1);
     reader.attach(buffer);
     reader.setDescriptor(descriptor(0));
-    const thread = new Worker(WRITER_THREAD, {
-      eval: true,
-      workerData: { buffer, slotBytes, slotsOffset: SLOTS_OFFSET, count: SLOT_COUNT, header: SLOT_HEADER_BYTES, nodes },
-    });
-    let accepted = 0;
+    const thread = new Worker(writerThread(), { eval: true, workerData: { buffer, nodes } });
+    const i32 = new Int32Array(buffer);
     try {
       // Wait on conditions, not a clock: the thread is up, then it is publishing.
       const failed = new Promise<never>((_, reject) => thread.once('error', reject));
       await Promise.race([new Promise<void>((resolve) => thread.once('online', () => resolve())), failed]);
-      const i32 = new Int32Array(buffer);
-      while (Atomics.load(i32, PUBLISH_SEQ_INDEX) < 10) {
+      while (Atomics.load(i32, PUBLISH_SEQ_INDEX) < 3) {
         await Promise.race([new Promise((resolve) => setImmediate(resolve)), failed]);
       }
-      for (let i = 0; i < 20_000 && accepted < 200; i++) {
+      for (let i = 0; i < 200_000 && reader.stats.reads < 40; i++) {
+        const before = reader.stats.reads;
+        const published = Atomics.load(i32, PUBLISH_SEQ_INDEX);
         const view = reader.latest();
-        if (view === null || view.tick === 10) continue;
-        const first = view.voltage(0, 0);
-        expect(view.voltage(nodes - 1, 1)).toBe(first); // the last value is from the same publish
-        expect(view.voltage(nodes >> 1, 0)).toBe(first);
-        expect(view.tick).toBe(first);
-        accepted++;
-        await new Promise((resolve) => setImmediate(resolve));
+        if (view !== null && reader.stats.reads > before) {
+          // Only fresh reads count: a miss returns the previous view again.
+          const first = view.voltage(0, 0);
+          expect(view.voltage(nodes - 1, 1)).toBe(first); // the last value is from the same publish
+          expect(view.voltage(nodes >> 1, 0)).toBe(first);
+          expect(view.tick).toBe(first);
+          expect(view.tick).toBeGreaterThanOrEqual(published);
+        }
+        await Promise.race([new Promise((resolve) => setImmediate(resolve)), failed]);
       }
     } finally {
       await thread.terminate();
     }
-    expect(accepted).toBeGreaterThan(5);
+    expect(reader.stats.reads).toBeGreaterThanOrEqual(20);
   });
 });
 
 /**
- * The concurrent writer thread: the seqlock writer's protocol (ADR 0011 §6.1) by hand, in plain
- * JavaScript (a worker thread can't load the TypeScript sources). Each publish writes `tick` and
- * every node value as its publish number, with plain stores between the odd and even sequence words.
+ * The writer thread's code: `SnapshotWriter` and `encodeSnapshot` from this lib's sources, bundled by
+ * esbuild for a `worker_threads` eval worker (which can't load TypeScript), so the thread runs the
+ * code under test, not a copy of it.
  */
-const WRITER_THREAD = `
-const { workerData } = require('node:worker_threads');
-const { buffer, slotBytes, slotsOffset, count, header, nodes } = workerData;
-const i32 = new Int32Array(buffer);
-const PUBLISH = ${PUBLISH_SEQ_INDEX}, LATEST = ${LATEST_SLOT_INDEX};
-let n = 100;
-for (;;) {
-  const latest = Atomics.load(i32, LATEST);
-  const w = latest === 0 ? 1 : 0;
-  const start = slotsOffset + w * slotBytes;
-  const seq = start / 4;
-  const s = Atomics.load(i32, seq);
-  Atomics.store(i32, seq, s + 1);
-  new DataView(buffer, start, slotBytes).setFloat64(${SLOT_OFFSETS.tick}, n, true);
-  new Float64Array(buffer, start + header, 2 * nodes).fill(n);
-  Atomics.store(i32, seq, s + 2);
-  Atomics.store(i32, LATEST, w);
-  Atomics.add(i32, PUBLISH, 1);
-  n++;
-  if (count < 0) break;
+function writerThread(): string {
+  const entry = `
+    import { workerData } from 'node:worker_threads';
+    import { SnapshotWriter } from './buffer';
+    import { encodeSnapshot } from './snapshot';
+    const { buffer, nodes } = workerData;
+    const writer = new SnapshotWriter(buffer);
+    const values = new Float64Array(2 * nodes);
+    const none = new Float64Array(0);
+    const one = (v) => new Float64Array([v]);
+    for (;;) {
+      const n = writer.publishSeq + 1; // this publish's number
+      values.fill(n);
+      writer.publish((slot, seq) => {
+        encodeSnapshot({
+          topologyGeneration: 0, tick: n, lastSolveTick: n, topologyHash: 'cd'.repeat(32),
+          nodeCount: nodes, branchCount: 0, nodes: values, branches: none,
+          islandCount: 1, islandKinds: one(1), islandFlags: one(0), islandIterations: one(1),
+          islandReferences: one(0), islandUnknowns: one(3), islandBands: one(0),
+          deviceCount: 0, deviceDataBytes: 0, writeDevices: () => undefined,
+        }, slot, seq);
+      });
+    }
+  `;
+  const built = buildSync({
+    stdin: { contents: entry, resolveDir: import.meta.dirname, sourcefile: 'writer-thread.ts', loader: 'ts' },
+    bundle: true,
+    write: false,
+    platform: 'node',
+    format: 'cjs',
+    tsconfig: join(import.meta.dirname, '../../../../../tsconfig.base.json'),
+    logLevel: 'silent',
+  });
+  return built.outputFiles[0].text;
 }
-`;

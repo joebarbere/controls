@@ -4,6 +4,7 @@ import { ENGINE_BENCH, ENGINE_TEST_CATALOG, engineTestOptions } from '@controls/
 import {
   MIN_SLOT_BYTES,
   PUBLISH_MIN_WALL_MS,
+  PUBLISH_SEQ_INDEX,
   readDiagnostics,
   SIM_PROTOCOL_VERSION,
   WORK_SLICE_MS,
@@ -270,9 +271,10 @@ describe('publishing (ADR 0011 §7)', () => {
     for (const entry of benchEntries()) fast.send({ type: 'command', entry });
     fast.send({ type: 'advance', tick: 500 });
     fast.drain();
-    const writer = fast.reader;
-    // The clock never moved: one throttle window, so only the forced publishes went out.
-    expect(writer.stats.reads).toBeLessThanOrEqual(3);
+    // The clock never moved, so every cadence publish fell in one throttle window: only the forced
+    // ones went out (one per topology generation, after its descriptor, plus the idle one at the end).
+    const shared = fast.of('ready')[0].buffer as SharedArrayBuffer;
+    expect(Atomics.load(new Int32Array(shared), PUBLISH_SEQ_INDEX)).toBe(fast.of('topology').length + 1);
     const slow = harness();
     slow.msPerRead = PUBLISH_MIN_WALL_MS; // every chunk is a new window
     slow.init({ kind: 'world', world: game0(), firstSeq: 0 }, 'message');
@@ -399,8 +401,15 @@ describe('the worker matches the headless game (property)', () => {
         expect(h.of('error')).toEqual([]);
         expect(h.view()?.tick).toBe(game.tick());
         expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
+        // A replay start of the same session (load verification, the crash restart) reaches the same bytes.
+        const replay = harness();
+        replay.msPerRead = slice;
+        replay.init({ kind: 'replay', log: game.replayLog() }, transport);
+        replay.drain();
+        expect(replay.of('error')).toEqual([]);
+        expect(replay.view()?.hashedBytes()).toEqual(game.snapshot());
       }),
-      { numRuns: 25 },
+      { numRuns: 20 },
     );
   });
 });
