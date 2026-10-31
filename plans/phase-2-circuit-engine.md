@@ -353,19 +353,28 @@ Acceptance, **part 2: complex phasor** (needs F2.7):
 
 Acceptance, **part 3: sparse, cache and nonlinear loop**:
 
-- [ ] Gilbert–Peierls sparse LU in CSC with AMD ordering, reimplemented from the published papers. MIT spice-ts or brownout code may be adapted only with a `THIRD_PARTY_NOTICES.md` row and an origin comment.
-- [ ] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test). How, per the F2.2 floor policy (#46 review):
+- [x] Gilbert–Peierls sparse LU in CSC with AMD ordering, reimplemented from the published papers. MIT spice-ts or brownout code may be adapted only with a `THIRD_PARTY_NOTICES.md` row and an origin comment.
+- [x] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test). How, per the F2.2 floor policy (#46 review):
   - compare **residuals on all circuits**: each solver's solution passes KCL and the source rows;
   - compare **values on a well-conditioned subset** (resistance minimums, no near-ideal source loops), so that a self-consistent but wrong sparse result fails.
 
   Value comparisons on ill-conditioned circuits measure forward error, which is unbounded.
 
-- [ ] **Factorisation cache** keyed by `topologyHash`:
+- [x] **Factorisation cache** keyed by `topologyHash`:
   - the symbolic factorisation is reused when only values change;
   - a fixed-size LRU evicts deterministically and never changes results;
   - a counter proves that returning to a previous switch state hits the cache.
-- [ ] **Outer loop for nonlinear loads** (lamp R(T), CV/CC supply). It is warm-started, has an iteration cap and damping, and raises the island's `nonConverged` flag when it doesn't converge. A property test bounds the iterations on random bench circuits.
-- [ ] The 2,000-node re-solve case of `sim-cli bench` passes inside `pnpm verify`.
+- [x] **Outer loop for nonlinear loads** (lamp R(T), CV/CC supply). It is warm-started, has an iteration cap and damping, and raises the island's `nonConverged` flag when it doesn't converge. A property test bounds the iterations on random bench circuits.
+- [ ] The 2,000-node re-solve case of `sim-cli bench` passes inside `pnpm verify`. **Pending the user's decision:** the case runs and reports (median and p90; a CI step prints `dist/apps/sim-cli/bench-report.json` on every OS), but its 2 ms gate stays in `PENDING_BENCH_CASES` (below).
+
+_Part 3 done 2026-10-30, except the re-solve gate; `test-engineer` review pending ([simulation architecture](../docs/architecture/simulation.md#sparse-lu-and-the-factorisation-cache-f22-part-3), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+
+- _**The crossover is 64 unknowns, not §4.5's 300.** Measured on the built bundle: sparse with a warm cache beats dense from about 30 unknowns (16× at 290), and with a cold cache from about 130. 64 sits above every circuit of the pinned 300-solve hash (at most 40 unknowns), so small circuits keep their dense bits: the pin didn't move, and `SIM_ENGINE_VERSION` stays 1._
+- _**The cache keeps what is a function of topology and stamp modes:** the pattern, the slot map, the AMD order, a recorded stamp program and the conductive components, keyed by `topologyHash`, island and stamp-mode signature (a supply in current limit changes the pattern without changing the hash). The island's last numeric factors are replayed when the pivot rule picks the same rows at every column, else refactored afresh, so warm and cold results are bit-identical by construction._
+- _**Dense against sparse** compares residuals on every circuit and values (1e-9 of the island's largest, plus the ε·G·V current floor) on the well-conditioned subset (1 Ω–10 kΩ, sources behind ≥ 0.1 Ω): worst 5 % of the bound over 1,500 fresh circuits. The DC oracle passes on both paths._
+- _**The outer loop's current tolerance includes the solve's own rounding** (the floor policy's island term); without it a fresh-seed circuit ran to `nonConverged` on 6e-13 A of noise. Damping halves on oscillation and doubles back; iterations are bounded at 40 on the random bench and large-circuit properties (measured from a cold start: median 16, most seen 32)._
+- _**The re-solve budget (2 ms, compile and solve).** On an AMD Ryzen 5 5600X under Node 24, the built bundle measured 1.45–1.49 ms with a warm cache (p90 2.5 ms), after making SHA-256 about twice as fast (byte-identical) and the sparse solve about 0.25 ms for the 8 islands. A topology never seen measures 4.5–4.6 ms. Beside `pnpm verify`'s parallel test workers the warm case measured 2.3–2.6 ms, and CI runners are slower. Per the risk table this goes to the user: the case reports without a gate until the three CI OSes' numbers are in. Options, laid out in the PR: (A) run `bench` as its own step after the parallel targets, with the bundle test in `bench.spec.ts` no longer asserting the budget under load; (B) the same, with that test moved into the `bench` target; or another gate, or a spec change._
+- _**Review notes for later features:** F2.4's CV/CC supply and F2.5's lamp plug into `DcIterationHook`; F2.3a passes the last solution record as `warmStart`. A strongly nonlinear law should give a good initial guess rather than rely on a cold start._
 
 ### F2.3a Sim clock and engine loop (headless)
 
@@ -598,21 +607,21 @@ Numbers are assigned in the order the ADRs land.
 
 ## Status
 
-| Feature | Description                                       | Status         |
-| ------- | ------------------------------------------------- | -------------- |
-| —       | Kickoff: agents, decisions, boundary PR, audit    | ✅ Done        |
-| —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted    |
-| —       | World document v2 + leads + catalogue v1          | ✅ Done        |
-| F2.1    | Netlist compiler                                  | ✅ Done        |
-| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Part 1 done |
-| F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started |
-| F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started |
-| F2.4    | Power sources                                     | ⬜ Not started |
-| F2.5    | First loads and switching (bench demo)            | ⬜ Not started |
-| F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started |
-| F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress |
-| —       | Phase-acceptance E2E                              | ⬜ Not started |
-| —       | v0.3.0 release                                    | ⬜ Not started |
+| Feature | Description                                       | Status                                        |
+| ------- | ------------------------------------------------- | --------------------------------------------- |
+| —       | Kickoff: agents, decisions, boundary PR, audit    | ✅ Done                                       |
+| —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted                                   |
+| —       | World document v2 + leads + catalogue v1          | ✅ Done                                       |
+| F2.1    | Netlist compiler                                  | ✅ Done                                       |
+| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1 and 3 done (re-solve gate pending) |
+| F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started                                |
+| F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
+| F2.4    | Power sources                                     | ⬜ Not started                                |
+| F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
+| F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
+| F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |
+| —       | Phase-acceptance E2E                              | ⬜ Not started                                |
+| —       | v0.3.0 release                                    | ⬜ Not started                                |
 
 ## Open follow-ups
 

@@ -1,8 +1,10 @@
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type CliIo, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../cli';
 import { WORKSPACE_ROOT } from '../script-loader';
-import { type BenchCase, type BenchReport, median, runBench, runBenchCase } from './bench';
+import { type BenchCase, type BenchReport, median, percentile, runBench, runBenchCase } from './bench';
 import { BENCH_CASES, PENDING_BENCH_CASES } from './cases';
 
 /** A fake clock: each run of a case takes the next duration from the list (ms). */
@@ -30,6 +32,19 @@ describe('median', () => {
 
   it('refuses an empty list', () => {
     expect(() => median([])).toThrow(RangeError);
+  });
+});
+
+describe('percentile', () => {
+  it('takes the nearest rank', () => {
+    expect(percentile([5, 1, 9, 3, 7, 2, 8, 4, 6, 10], 90)).toBe(9);
+    expect(percentile([3, 1, 2], 90)).toBe(3);
+    expect(percentile([7], 90)).toBe(7);
+    expect(percentile([4, 2], 0)).toBe(2);
+  });
+
+  it('refuses an empty list', () => {
+    expect(() => percentile([], 90)).toThrow(RangeError);
   });
 });
 
@@ -151,6 +166,7 @@ describe('sim bench', () => {
           name: 'fixed',
           runs: 3,
           medianMs: 1,
+          p90Ms: 1,
           budgetMs: null,
           marginMs: null,
           checksum: 'same',
@@ -179,6 +195,18 @@ describe('sim bench', () => {
     expect(run.stderr).toEqual(['sim: bench case "flaky" returned different checksums across runs']);
   });
 
+  it('writes the report to --report too', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sim-bench-'));
+    try {
+      const file = join(dir, 'report.json');
+      const run = await sim({ benchCases: [fixedCase()], now: steppingClock([1, 1, 1]) }, 'bench', '--report', file);
+      expect(run.code).toBe(EXIT_OK);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(JSON.parse(run.stdout.join('\n')));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('takes no arguments', async () => {
     expect((await sim({}, 'bench', 'x')).code).toBe(EXIT_USAGE);
     expect((await sim({}, 'bench', '--seed', '1')).code).toBe(EXIT_USAGE);
@@ -195,7 +223,10 @@ describe('sim bench', () => {
     const report = JSON.parse(result.stdout) as BenchReport;
     expect(report.ok).toBe(true);
     expect(report.cases.map((c) => c.name)).toEqual(BENCH_CASES.map((c) => c.name));
-    for (const c of report.cases) expect(c.medianMs).toBeGreaterThanOrEqual(0);
+    for (const c of report.cases) {
+      expect(c.medianMs).toBeGreaterThanOrEqual(0);
+      expect(c.p90Ms).toBeGreaterThanOrEqual(c.medianMs);
+    }
     // The plant compiles to exactly 2,000 nodes in the bundle too.
     expect(report.cases[0].checksum).toMatch(/^2000:/);
     // The spec §4.5 budgets that wait for the solver and the engine stay visible.

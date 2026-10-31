@@ -26,6 +26,8 @@ export interface BenchCaseResult {
   readonly name: string;
   readonly runs: number;
   readonly medianMs: number;
+  /** The 90th percentile of the timed runs (nearest rank): how wide the spread is. Never gated. */
+  readonly p90Ms: number;
   readonly budgetMs: number | null;
   /** budgetMs − medianMs: how much headroom is left (negative = over budget); null without a budget. */
   readonly marginMs: number | null;
@@ -49,6 +51,14 @@ export interface BenchReport {
   /** Cases waiting for the code they measure; they never affect `ok`. */
   readonly pending: readonly PendingBenchCase[];
   readonly ok: boolean;
+}
+
+/** The nearest-rank percentile `p` (0–100) of a non-empty list. */
+export function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) throw new RangeError('percentile of an empty list');
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.max(1, Math.ceil((p / 100) * sorted.length));
+  return sorted[rank - 1];
 }
 
 /** The median of a non-empty list (the mean of the two middle values for an even count). */
@@ -84,6 +94,7 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     name: benchCase.name,
     runs: benchCase.runs,
     medianMs,
+    p90Ms: percentile(durations, 90),
     budgetMs,
     marginMs,
     checksum: deterministic ? [...checksums][0] : null,

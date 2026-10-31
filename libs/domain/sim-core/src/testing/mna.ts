@@ -1,6 +1,7 @@
 import { GMIN_S } from '../lib/constants';
 import { type DcSolution, ISLAND_FLAG_SINGULAR } from '../lib/mna/dc';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_VSOURCE, type DcBranchValues } from '../lib/mna/values';
+import { computeTopologyHash } from '../lib/netlist/hash';
 import { UnionFind } from '../lib/netlist/union-find';
 import type { ElementKind, IslandKind, Netlist, NetlistBranch, NetlistIsland, NetlistNode } from '../lib/netlist/types';
 
@@ -61,7 +62,10 @@ export function syntheticNetlist(nodeCount: number, branches: readonly Synthetic
       branches: islandBranches.map((b) => b.index),
     };
   });
-  return { nodes, branches: netBranches, islands, devices: [], topologyHash: 'synthetic', diagnostics: [] };
+  // A real hash of the structure: the factorisation cache keys on it, so two different synthetic
+  // netlists must never share one.
+  const topologyHash = computeTopologyHash(nodes, netBranches);
+  return { nodes, branches: netBranches, islands, devices: [], topologyHash, diagnostics: [] };
 }
 
 /** The node holding `entity:terminal`. */
