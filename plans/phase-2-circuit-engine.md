@@ -561,12 +561,12 @@ Acceptance:
   - the cold-start inrush emerges from the model, with its peak ratio inside a sourced band;
   - `lightOutputRel` follows a sourced, published relation between light output and voltage or power.
 - [x] **SPST switch:** `device.operate {control: 'closed'}`. Closed merges its terminals; open drops the branch. It can be operated from the selected entity with the keyboard or a mouse click, the palette, the console and a script, each logging one command.
-- [ ] **Fuse:**
+- [x] **Fuse:**
   - blows when ∫I²dt reaches the melting I²t, from a sourced, fictional datasheet;
   - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in the fuse's sim-owned `sim` bag (ADR 0011 §1, ADR 0013);
   - melt time at k × rating falls inside the sourced band;
   - replacing a fuse in P2 means deleting it and placing a new one.
-- [ ] **Basic thermal-magnetic breaker** (single-pole, standalone, no panel):
+- [x] **Basic thermal-magnetic breaker** (single-pole, standalone, no panel):
   - thermal state `dθ/dt = ((I/In)² − θ)/τ`, plus a magnetic band seeded per entity id so it is reproducible;
   - trip times at multiples of In fall inside the cited band, from NEC-region manufacturer-style data, not IEC 60898 figures;
   - after a trip, the handle must go off and then on again.
@@ -577,7 +577,7 @@ Acceptance:
 - [x] **Lamp rendering:** emissive intensity follows `lightOutputRel` through the documented display curve. The scene-graph snapshot records it, and a change calls `invalidate()`. _`lampDisplayCurve` (`1 − e^(−ln5·L)`, 255 levels, dark below 1/255; game-design), fed by the viewport from each worker snapshot (`LampSnapshotFeed`: field offsets resolved per topology generation, one `readAll` per snapshot; a reset is every lamp unknown); the renderer's two ADR 0011 §9 deviations (no half-step hysteresis, an absent lamp is unknown) are in the rendering caveats for the ADR owners to confirm._
 - [x] **A lamp on an unsolved island is not "dark = 0 W"** (#52 review): when its island isn't `solved` (0 iterations: unmodelled, AC pending, mixed; or singular, or non-converged), the record's values are no reading, and the renderer and inspector show the lamp as unknown or unsettled by a written validity rule, never as an off lamp drawing 0 W. _The renderer follows it (`lampDrawStatus`: unsolved and singular draw as unknown, unsettled with its own tint; rendering caveats). The inspector arrives with F2.6 and must read the same `status` field._
 
-_Part 1 (resistor, heater, incandescent lamp, operating the switch, the bench demo) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#first-loads-f25), [simulation caveats](../docs/caveats/simulation.md#first-loads-f25)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Lamp rendering and the unsolved-lamp rule's renderer side are with `renderer-engineer` in the same PR, not ticked here. Part 2 (fuse, breaker) is the next PR in the stack. Notes:_
+_Part 1 (resistor, heater, incandescent lamp, operating the switch, the bench demo) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#first-loads-f25), [simulation caveats](../docs/caveats/simulation.md#first-loads-f25)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Lamp rendering and the unsolved-lamp rule's renderer side were done by `renderer-engineer` in the same PR (ticked above). Part 2 (fuse, breaker) is the next PR in the stack (done below). Notes:_
 
 - _**The lamp:** R(T) = R_r · ρ(T) / ρ(T_r), R_r = V_r² / P_r, with tungsten's resistivity piecewise linear between Jones and Langmuir's (1927) points (a loop-free bucket lookup). The thermal ODE C dT/dt = I²R(T) − k(T⁴ − T_a⁴) takes k from the rated point and C = 4kT_r³τ from the catalogue's thermal time constant, integrated by explicit Euler at the 1 ms tick. The catalogue entry gained `filamentRatedTempK` (2700 K) and `thermalTimeConstantMs` (50 ms); catalogue v1 is still provisional, so no `catalogVersion` bump, and no state key changed, so no `schemaVersion` bump._
 - _**Inrush emerges:** the cold filament is about 1/15 of its hot resistance, and the bench lamp's first solve draws 14.3× its settled current (the sourced band is 10–15×), falling as it heats._
@@ -590,6 +590,16 @@ _Part 1 (resistor, heater, incandescent lamp, operating the switch, the bench de
 - _**`SIM_ENGINE_VERSION` 5:** `SIM_STEP_HASH`, `SIM_STEP_SNAPSHOT_HASH` and `BENCH_LEADS_HASH` re-pinned (the lamp's islands are now solved); `SOURCES_*` and `MAINS_*` didn't move. New fixtures `sim-step-engine-5.ctrl`, `sources-engine-5.ctrl` and `bench-lamp-engine-5.ctrl`; the engine-4 ones now load as `engine-changed`._
 - _**Allocation:** a lit lamp's per-tick path is gated at 1 B/step in its own file, `engine/allocation-loads.spec.ts`, run uncovered beside F2.4's gates (`vitest.allocation.mts`; worst median of 100 uncovered runs 0.70). Two traps found on the way, and why the file is separate, are in the simulation caveats._
 - _**No `dmath` yet:** the lamp needed no transcendental (x^(17/8) = x² · ⁸√x with `Math.sqrt`, tungsten piecewise linear, Euler), against this plan's expectation that it would be `dmath`'s first use. ADR 0014 stays deferred to the first real transcendental._
+
+_Part 2 (fuse, thermal-magnetic breaker) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#protection-f25-part-2), [simulation caveats](../docs/caveats/simulation.md#protection-f25-part-2)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Notes:_
+
+- _**The fuse:** a first-order lag dθ/dt = ((I/I_min)² − θ)/τ, τ = I²t / I_min², melting at θ ≥ 1, so ∫I²dt reaches the melting I²t at large currents and it never melts below I_min; melt time −τ ln(1 − (I_min/I)²) (0.756 s at 135 %, 0.217 s at 200 %, 7.06 ms at 10× for `fuse.emberlyn-5x20-fa-1a`: 1 A, 0.7 A²s, I_min 1.2 A, 0.1 Ω). Blowing sets `blown`, raises `blown` and re-solves in the same tick (`simTopologyKeys: ['blown']`); a bolted short blows in the first tick; `blown` persists across a save, a reload and an undone delete (tombstone)._
+- _**The breaker:** dθ/dt = ((I/I_n)² − θ)/τ, tripping at θ ≥ k_u² (116.8 s at 135 %, 29.8 s at 200 %, 3.87 s at 500 %; never at or below 125 %), and a magnetic pickup drawn once per bank build from the entity's seeded stream in [8, 12] × I_n. `tripped` events carry `{cause: 'thermal' | 'magnetic'}`. It conducts iff the handle is on and it hasn't tripped (`simTopologyKeys: ['tripped']`); the sim never writes `on`. `breaker.saltmere-1p-15a`: 15 A, τ 60 s, k_u 1.25, 8–12×, 4 mΩ. NEC-region manufacturer-style band, not IEC 60898; the UL 489 / UL 248-14 envelopes are paraphrased in the citations, for `electrical-realism-reviewer` to confirm._
+- _**Off, then on:** a new engine hook, `SimDeviceBank.commanded(index, state)`, called by `SimEngine.applied` for each netlisted device whose commanded state bag the command replaced, before the recompile, clears `tripped` when the handle goes off (`SimDevice.state` added for bank builds). `device.operate` still never reads sim state. Undoing a handle-off after a reset leaves the breaker reset (the sim resolved the off)._
+- _**Versions:** new kinds `fuse` and `breaker.thermalMagnetic` and the `protection` category (no `schemaVersion` bump; catalogue v1 still provisional). No pinned hash moved, so `SIM_ENGINE_VERSION` stays 5; `topologyHash` pins added for the fuse and the breaker off and on._
+- _**Tests:** goldens with hand calculations (`protection.spec.ts`), protection sessions with save-and-load parity and replay (`properties.spec.ts`; the engine parity guard covers them through `PROTECTION_SESSION_REFS`), and the 135 % trip in `apps/sim-cli/src/breaker-curve.spec.ts` (117,000 ticks, too slow under coverage)._
+- _**Allocation (for `test-engineer`):** a fuse carrying a lit lamp and a closed breaker are gated at 9 B/step each in `allocation-loads.spec.ts` (worst medians of 140 runs 7.83 and 7.67); their share is in F2.4's `solveNonlinear` > `iterateIsland`, none in the layers._
+- _**Not yet:** the renderer has no fuse or breaker recipe (they draw as unknown objects); `FUSE_OUTPUT` and `BREAKER_OUTPUT` reach `sim-protocol` with F2.3b's protocol tables._
 
 ### F2.6 Debug tools
 
@@ -720,7 +730,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | 🔍 In review (four-PR stack)                  |
 | F2.4    | Power sources                                     | ✅ Done (reviews pending)                     |
-| F2.5    | First loads and switching (bench demo)            | 🚧 Part 1 done (reviews pending)              |
+| F2.5    | First loads and switching (bench demo)            | ✅ Done (reviews pending)                     |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
 | F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |
 | —       | Phase-acceptance E2E                              | ⬜ Not started                                |

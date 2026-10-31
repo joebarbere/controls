@@ -1,0 +1,51 @@
+{
+  "id": "breaker.saltmere-1p-15a",
+  "version": 1,
+  "title": "15 A single-pole thermal-magnetic circuit breaker on a base",
+  "brand": "Saltmere",
+  "modelName": "SB-115",
+  "category": "protection",
+  "sizeMm": { "widthMm": 40, "heightMm": 90, "depthMm": 70 },
+  "terminals": [
+    { "id": "line", "label": "LINE", "positionMm": { "x": 20, "y": 80, "z": 20 } },
+    { "id": "load", "label": "LOAD", "positionMm": { "x": 20, "y": 10, "z": 20 } }
+  ],
+  "model": {
+    "kind": "breaker.thermalMagnetic",
+    "params": {
+      "ratedCurrentA": 15,
+      "thermalTimeConstantS": 60,
+      "ultimateTripRatio": 1.25,
+      "magneticTripMinRatio": 8,
+      "magneticTripMaxRatio": 12,
+      "contactResistanceOhm": 0.004
+    }
+  },
+  "controls": [{ "id": "on", "label": "Handle on", "type": "toggle" }],
+  "sources": [
+    {
+      "id": "molded-case-15a-class",
+      "kind": "real-world",
+      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: such a breaker carries its rating continuously and must trip within an hour at 135 % and within two minutes at 200 % of it. Its pole drops a few tens of millivolts at its rating (manufacturers' watts-loss figures), so a contact resistance of 4 mΩ is taken. For electrical-realism-reviewer to confirm.",
+      "covers": ["model.params.ratedCurrentA", "model.params.contactResistanceOhm"]
+    },
+    {
+      "id": "trip-curve-band",
+      "kind": "game-design",
+      "citation": "game-design inside manufacturer-style curves for NEC-region residential thermal-magnetic breakers (not IEC 60898): inverse-time thermal trips from a little above the rating (ultimate trip 1.25 ×; a 60 s time constant gives about 30 s at 200 %), and an instantaneous magnetic pickup published as a band near ten times the rating (8 to 12 ×, drawn per breaker). The fictional datasheet's band, tested: 135 %: 30 s to 1 h; 200 %: 10 s to 2 min; 500 %: 1 to 15 s; 13 × and above: within 1 ms.",
+      "covers": [
+        "model.params.thermalTimeConstantS",
+        "model.params.ultimateTripRatio",
+        "model.params.magneticTripMinRatio",
+        "model.params.magneticTripMaxRatio"
+      ]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: a single-pole breaker on a 40 × 90 mm base, 70 mm tall, with the line terminal at the top and the load terminal at the bottom; standalone (no panel until P4); not modelled on a product.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

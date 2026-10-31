@@ -23,12 +23,32 @@ describe('netlist models', () => {
     }
   });
 
-  it('read only commanded state and their declared sim topology keys (none for the P2 bench kinds)', () => {
+  it('read only commanded state and their declared sim topology keys (the fuse and the breaker only)', () => {
+    const declared: Record<string, readonly string[]> = {};
     for (const model of Object.values(DEVICE_NETLIST_MODELS)) {
       const kind = MODEL_KINDS[model.kind];
       for (const key of model.simTopologyKeys) expect(kind.keys[key]?.owner).toBe('sim');
-      expect(model.simTopologyKeys).toStrictEqual([]);
+      if (model.simTopologyKeys.length > 0) declared[model.kind] = model.simTopologyKeys;
     }
+    expect(declared).toStrictEqual({ 'breaker.thermalMagnetic': ['tripped'], fuse: ['blown'] });
+  });
+
+  it('the fuse is a link until it blows; the breaker a pole while its handle is on and it has not tripped', () => {
+    const fuse = (blown: boolean) =>
+      DEVICE_NETLIST_MODELS['fuse'].topology({ params: { resistanceOhm: 0.1 }, state: {}, sim: { blown } });
+    expect(fuse(false).elements.map((e) => [e.part, e.kind, e.a, e.b, e.values])).toStrictEqual([
+      ['link', 'resistor', 'a', 'b', { resistanceOhm: 0.1 }],
+    ]);
+    expect(fuse(true)).toStrictEqual({ joins: [], elements: [] });
+    const breaker = (on: boolean, tripped: boolean) =>
+      DEVICE_NETLIST_MODELS['breaker.thermalMagnetic'].topology({
+        params: { contactResistanceOhm: 0.004 },
+        state: { on },
+        sim: { tripped },
+      }).elements.length;
+    expect([breaker(true, false), breaker(true, true), breaker(false, false), breaker(false, true)]).toStrictEqual([
+      1, 0, 0, 0,
+    ]);
   });
 
   it('the SPST switch joins its terminals only when closed', () => {

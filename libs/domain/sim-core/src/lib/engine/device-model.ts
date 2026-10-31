@@ -37,6 +37,8 @@ export interface SimDevice {
   readonly params: Readonly<Record<string, number>>;
   /** Where its state starts: its whole sim bag (every sim key of its kind). */
   readonly bag: StateBag;
+  /** Its commanded state bag in the world the bank is built for (a breaker's handle). Read-only. */
+  readonly state: StateBag;
   /** Its branches in this topology, in part order (an element per branch). */
   readonly branches: readonly number[];
   /** The region's supply frequency (Hz): the AC islands' analysis frequency (F2.4's source reactance). */
@@ -109,6 +111,13 @@ export interface SimDeviceBank {
    * its inputs; it must not emit events (F2.4).
    */
   afterSolve?(ctx: LayerContext, values: DcBranchValues): void;
+  /**
+   * A logged command changed device `index`'s commanded `state` (the new bag): called at the command's
+   * tick, before the engine recompiles, so sim state that the commanded state resolves (a tripped
+   * breaker reset by its handle turned off, F2.5) is settled before the compiler reads it. Commands
+   * never read sim state; this is the sim resolving their effect. Not called for a bank build.
+   */
+  commanded?(index: number, state: StateBag): void;
   /**
    * The discrete layer (relays, P6). Returns whether it changed what the electrical layer sees: the
    * topology, or a value a model's `dcValue` reads from its bank. Either way the engine re-solves at

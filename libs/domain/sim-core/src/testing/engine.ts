@@ -628,6 +628,11 @@ const rheostat: SimDeviceModel = {
       values.resistor(b.index, b.values['ohms']);
       return true;
     },
+    // The same resistance at 60 Hz (F2.5 part 2: a breaker's load on a utility service).
+    acValue: (_i, b, values) => {
+      values.resistor(b.index, b.values['ohms']);
+      return true;
+    },
   }),
 };
 
