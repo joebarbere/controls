@@ -125,7 +125,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "ultimateTripRatio": 1.25,
       "magneticTripMinRatio": 8,
       "magneticTripMaxRatio": 12,
-      "contactResistanceOhm": 0.004
+      "contactResistanceOhm": 0.01
     }
   },
   "controls": [
@@ -139,7 +139,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "molded-case-15a-class",
       "kind": "real-world",
-      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: such a breaker carries its rating continuously and must trip within an hour at 135 % and within two minutes at 200 % of it. Its pole drops a few tens of millivolts at its rating (manufacturers' watts-loss figures), so a contact resistance of 4 mΩ is taken. For electrical-realism-reviewer to confirm.",
+      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: it carries its rating continuously, and must trip within an hour at 135 % (for ratings up to 50 A) and within two minutes at 200 % (up to 30 A). Manufacturers' watts-loss figures put a pole at about 2 W at its rating, about 150 mV, so a contact resistance of 10 mΩ is taken (2.25 W at 15 A).",
       "covers": [
         "model.params.ratedCurrentA",
         "model.params.contactResistanceOhm"
@@ -206,6 +206,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "ratedCurrentA": 1,
       "meltingI2tA2s": 0.7,
       "minimumFusingRatio": 1.2,
+      "elementFraction": 0.3,
+      "bodyTimeConstantS": 10,
       "resistanceOhm": 0.1
     }
   },
@@ -214,7 +216,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "fast-acting-5x20-class",
       "kind": "real-world",
-      "citation": "The 1 A fast-acting 5 × 20 mm glass cartridge fuse, a common supplemental-protection class listed to UL 248-14. Typical published figures for the class, paraphrased (not one vendor's): a cold resistance of about 0.1 Ω and a nominal melting I²t of a few tenths of an A²·s (0.7 A²·s is taken). For electrical-realism-reviewer to confirm against the class's datasheets.",
+      "citation": "The 1 A fast-acting 5 × 20 mm glass cartridge fuse, a common supplemental-protection class listed to UL 248-14. Typical published figures for the class, paraphrased (not one vendor's): a cold resistance of about 0.1 Ω and a nominal melting I²t of roughly 0.5 to 1 A²·s (0.7 A²·s is taken).",
       "covers": [
         "model.params.ratedCurrentA",
         "model.params.meltingI2tA2s",
@@ -224,9 +226,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "opening-time-band",
       "kind": "game-design",
-      "citation": "game-design inside the published opening-time envelope of UL 248-14 supplemental fuses (paraphrased, not reproduced): the fuse carries its rating, opens within an hour at 135 % and within two minutes at 200 % of it. The fictional datasheet's own band, which the model is tested against: never at 100 %; within 1 h at 135 %; within 5 s at 200 %; between 1 ms and 20 ms at 1000 %. A minimum fusing current of 1.2 × the rating (between 1 and 1.35, as that envelope requires) is taken.",
+      "citation": "game-design inside UL 248-14's envelope for supplemental fuses (paraphrased): carries its rating, opens within an hour at 135 % and two minutes at 200 %. The fictional datasheet's band, tested: carries 110 %; 135 %: 1 s to 1 h; 200 %: 0.1 to 5 s; 1000 %: 1 to 20 ms. I_min of 1.2 × the rating, between 1 and 1.35 as the envelope requires.",
       "covers": [
         "model.params.minimumFusingRatio"
+      ]
+    },
+    {
+      "id": "two-body-melt",
+      "kind": "game-design",
+      "citation": "game-design: a fast element taking 30 % of the steady temperature rise inside a slow body (end caps and holder) of 10 s time constant, the element's own time constant (0.151 s) following from the melting I²t (electrical-realism-reviewer's worked example). It gives about 12 s at 135 %, 0.9 s at 200 % and 7 ms at 1000 %, near published fast-acting curves.",
+      "covers": [
+        "model.params.elementFraction",
+        "model.params.bodyTimeConstantS"
       ]
     },
     {

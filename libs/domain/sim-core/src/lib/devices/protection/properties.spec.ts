@@ -3,6 +3,7 @@ import type { CatalogRef } from '@controls/save-format';
 import { worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { BATTERY, LAMP } from '../../../testing/bench';
+import { RHEOSTAT } from '../../../testing/engine';
 import { HEATER, RESISTOR_10R } from '../../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../../testing/protection';
 import { SourceHost } from '../../../testing/sources';
@@ -10,9 +11,9 @@ import { SourceHost } from '../../../testing/sources';
 /*
  * Determinism properties of F2.5 part 2's protection (plan F2.5): saving at T, loading and running on
  * equals the uninterrupted run, and a replay of the log reaches the same bytes, for sessions built
- * around melt and trip state. The bench: a battery (1) through the fuse (2) into the 10 Ω resistor (3:
- * 1.29 A, it melts after about 1.4 s), and a battery (4) shorted through the breaker (5, handle on:
- * about 7.8 × its rating, a thermal trip after about 1.6 s). Random edits turn the last breaker's handle
+ * around melt and trip state. The bench: a battery (1) through the fuse (2) into a rheostat (3) at 6.7 Ω
+ * (1.85 A: the two-body fuse melts after about 1.5 s), and a battery (4) shorted through the breaker (5, handle on:
+ * about 7.5 × its rating, a thermal trip after about 1.7 s). Random edits turn the last breaker's handle
  * off and on (a reset), add more protected loops (a lamp, the resistor, the heater or a short behind a
  * fuse or a breaker), remove leads and undo deletes, with time in steps long enough to melt and trip,
  * so cuts land part-melted, warm, blown and tripped. Kept apart from the load sessions so each stays
@@ -128,7 +129,8 @@ function apply(host: SourceHost, op: Op): void {
 
 function protectionBench(): SourceHost {
   const host = new SourceHost();
-  protectedLoop(host, false, RESISTOR_10R);
+  protectedLoop(host, false, RHEOSTAT);
+  exec(host, 'device.operate', { id: 3, control: 'ohms', value: 6.7 });
   protectedLoop(host, true, null);
   return host;
 }
@@ -193,7 +195,9 @@ describe('protection determinism properties (F2.5 part 2)', () => {
       const warm = (v: unknown) => typeof v === 'number' && v > 0.05;
       if (
         sims.some(
-          (s) => (s['blown'] === false && warm(s['meltFraction'])) || (s['tripped'] === false && warm(s['thermal'])),
+          (s) =>
+            (s['blown'] === false && warm((s['elementHeat'] as number) + (s['bodyHeat'] as number))) ||
+            (s['tripped'] === false && warm(s['thermal'])),
         )
       )
         counts.heating++;
@@ -203,11 +207,12 @@ describe('protection determinism properties (F2.5 part 2)', () => {
       after.forEach((op) => apply(loaded, op));
       if (loaded.events.some((e) => e.kind === 'blown' || e.kind === 'tripped')) counts.eventsAfterReload++;
     }
-    // Measured on this seed, of 24: 18 cut mid-interval, 6 with a fuse or breaker part-heated, 9 with a
-    // blown fuse, 6 with a tripped breaker, 4 that blow or trip after the reload.
+    // Measured on this seed, of 24 (two-body fuse, F2.5 review): 18 cut mid-interval, 11 with a fuse or
+    // breaker part-heated, 6 with a blown fuse, 6 with a tripped breaker, 4 that blow or trip after the
+    // reload.
     expect(counts.midInterval).toBeGreaterThan(12);
-    expect(counts.heating).toBeGreaterThan(3);
-    expect(counts.blown).toBeGreaterThan(5);
+    expect(counts.heating).toBeGreaterThan(6);
+    expect(counts.blown).toBeGreaterThan(3);
     expect(counts.tripped).toBeGreaterThan(3);
     expect(counts.eventsAfterReload).toBeGreaterThan(1);
   });

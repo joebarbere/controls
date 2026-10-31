@@ -301,6 +301,18 @@ Switches publish no record: the renderer draws the handle from the world's comma
 - `supply.dinPsu`'s `mode` drops `off`: P2's DIN PSU has no AC input to lose, so it is always powered. An input (P4) adds a value, which is a protocol bump.
 - The schemas live with their models in `sim-core` (`BUILTIN_DEVICE_OUTPUTS`, each checked by `deviceOutputSchemaProblems`) and are registered in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` (protocol 3, F2.3b; 4, F2.5), the protocol's own copy; a sim-core spec requires the two to be equal, so a model changing its record fails until the table and `SIM_PROTOCOL_VERSION` follow. The `status` values are `RECORD_STATUS_VALUES`.
 
+**Amended in F2.5 (the load and protection records are final; `sim-engine-engineer`; `renderer-engineer` and `angular-ui-engineer` to confirm):** every record follows the validity rule above (solved quantities only on a solved island; the device's own state always; an open fuse link or breaker pole reads `solved` at exactly 0 A).
+
+| Kind                      | Fields (offset: type name)                                                                                                                                               | Bytes |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----: |
+| `lamp.incandescent`       | 0: f64 `powerW` · 8: f64 `currentA` · 16: f64 `voltageV` (solved) · 24: f64 `resistanceOhm` · 32: f64 `filamentTempK` · 40: f64 `lightOutputRel` (own) · 48: u8 `status` |    56 |
+| `fuse`                    | 0: f64 `currentA` (solved) · 8: f64 `meltFraction` (θ_e + θ_b, own) · 16: u8 `state` [`intact`, `blown`] · 17: u8 `status`                                               |    24 |
+| `breaker.thermalMagnetic` | 0: f64 `currentA` (solved) · 8: f64 `thermalFraction` · 16: f64 `magneticPickupA` (own) · 24: u8 `state` [`off`, `on`, `tripped`] · 25: u8 `status`                      |    32 |
+| `resistor`                | 0: f64 `voltageV` · 8: f64 `currentA` · 16: f64 `powerW` · 24: u8 `overRated` [`no`, `yes`] (all solved) · 25: u8 `status`                                               |    32 |
+| `heater`                  | 0: f64 `voltageV` · 8: f64 `currentA` · 16: f64 `powerW` (solved) · 24: u8 `status`                                                                                      |    32 |
+
+On an AC island the voltages and currents are RMS magnitudes. The breaker kind is `breaker.thermalMagnetic` (the table above abbreviated it), and its states are the handle's and the trip's: `off`, `on`, `tripped`. Registering these in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` (with the `SIM_PROTOCOL_VERSION` bump) is F2.3b's, as for F2.4's.
+
 #### 5.5 Hashed and unhashed
 
 - **Hashed:** the slot's hashed region (§5.2). It is a pure function of (seed, log, tick), the same in every runtime and through either transport. `encodeSnapshot` at T is a pure function of (the compiled netlist, the sim-owned state, the solution record), so everything hashed in a slot is derivable from the export (§9.6).

@@ -5,10 +5,30 @@
   "brand": "Saltmere",
   "modelName": "SB-115",
   "category": "protection",
-  "sizeMm": { "widthMm": 40, "heightMm": 90, "depthMm": 70 },
+  "sizeMm": {
+    "widthMm": 40,
+    "heightMm": 90,
+    "depthMm": 70
+  },
   "terminals": [
-    { "id": "line", "label": "LINE", "positionMm": { "x": 20, "y": 80, "z": 20 } },
-    { "id": "load", "label": "LOAD", "positionMm": { "x": 20, "y": 10, "z": 20 } }
+    {
+      "id": "line",
+      "label": "LINE",
+      "positionMm": {
+        "x": 20,
+        "y": 80,
+        "z": 20
+      }
+    },
+    {
+      "id": "load",
+      "label": "LOAD",
+      "positionMm": {
+        "x": 20,
+        "y": 10,
+        "z": 20
+      }
+    }
   ],
   "model": {
     "kind": "breaker.thermalMagnetic",
@@ -18,15 +38,21 @@
       "ultimateTripRatio": 1.25,
       "magneticTripMinRatio": 8,
       "magneticTripMaxRatio": 12,
-      "contactResistanceOhm": 0.004
+      "contactResistanceOhm": 0.01
     }
   },
-  "controls": [{ "id": "on", "label": "Handle on", "type": "toggle" }],
+  "controls": [
+    {
+      "id": "on",
+      "label": "Handle on",
+      "type": "toggle"
+    }
+  ],
   "sources": [
     {
       "id": "molded-case-15a-class",
       "kind": "real-world",
-      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: such a breaker carries its rating continuously and must trip within an hour at 135 % and within two minutes at 200 % of it. Its pole drops a few tens of millivolts at its rating (manufacturers' watts-loss figures), so a contact resistance of 4 mΩ is taken. For electrical-realism-reviewer to confirm.",
+      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: it carries its rating continuously, and must trip within an hour at 135 % (for ratings up to 50 A) and within two minutes at 200 % (up to 30 A). Manufacturers' watts-loss figures put a pole at about 2 W at its rating, about 150 mV, so a contact resistance of 10 mΩ is taken (2.25 W at 15 A).",
       "covers": ["model.params.ratedCurrentA", "model.params.contactResistanceOhm"]
     },
     {
