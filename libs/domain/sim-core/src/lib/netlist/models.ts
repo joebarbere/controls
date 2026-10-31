@@ -8,6 +8,7 @@ import {
   utilitySplitPhaseNetlistModel,
   utilityThreePhaseNetlistModel,
 } from '../devices/sources/netlist-models';
+import { heaterNetlistModel, resistorNetlistModel } from '../devices/loads/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -104,7 +105,10 @@ const battery: DeviceNetlistModel = {
   },
 };
 
-/** An incandescent lamp: its filament, a resistance between `a` and `b` whose value F2.5's R(T) gives. */
+/**
+ * An incandescent lamp: its filament, a resistance between `a` and `b` whose value the lamp's engine
+ * model gives from the filament temperature (F2.5's R(T)); it has no default value.
+ */
 const lampIncandescent: DeviceNetlistModel = {
   kind: 'lamp.incandescent',
   simTopologyKeys: [],
@@ -155,7 +159,9 @@ const lead: ConnectionNetlistModel = {
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
   'generator.portable': generatorPortableNetlistModel,
+  heater: heaterNetlistModel,
   'lamp.incandescent': lampIncandescent,
+  resistor: resistorNetlistModel,
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,

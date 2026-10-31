@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { KEY_PLATFORM, KeybindingService, Session, ToolBelt } from '@controls/feature-session';
-import type { ViewportIntent } from '@controls/renderer';
+import { KEY_PLATFORM, KeybindingService, Session, SimHost, ToolBelt } from '@controls/feature-session';
+import { type LampOutputs, type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
+import type { SnapshotView } from '@controls/sim-protocol';
+import { fakeView, lampDescriptor, writeLamp } from './lamp-feed.fakes';
 import { Viewport } from './viewport';
 
 /** The component's gesture handler (private: the renderer calls it, and jsdom has no renderer). */
@@ -28,7 +30,8 @@ describe('Viewport', () => {
     expect(canvas.getAttribute('aria-label')).toBe(
       '3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, W A S D walk. ' +
         'Number keys pick a prop; click or Enter places it at the pointer or the centre. ' +
-        'Drag an object, or M then Enter, to move it; Delete deletes it; Escape cancels.',
+        'Drag an object, or M then Enter, to move it; E or a double-click operates a selected switch; ' +
+        'Delete deletes it; Escape cancels.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
@@ -103,6 +106,86 @@ describe('Viewport', () => {
     fixture.destroy();
     expect(session.contextKeys()['viewport.focused']).toBeUndefined();
     document.body.replaceChildren();
+  });
+
+  it('E and a double-click operate the selected switch: its toggle in the context keys, one command each (F2.5)', async () => {
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    const session = TestBed.inject(Session);
+    session.newSandbox({ seed: 0 });
+    const at = { x: 0, y: 0, z: 0 };
+    expect(
+      session.exec('entity.place', { ref: { id: 'switch.tessaline-spst-toggle', version: 1 }, positionMm: at }).ok,
+    ).toBe(true);
+    const id = session.world().entities.at(-1)?.id as number;
+    const viewport = fixture.componentInstance;
+    // jsdom has no renderer: select the switch through the view state the renderer would publish.
+    const info = { id: `entity-${id}`, kind: 'device', entityId: id };
+    viewport.state.set({ selected: info, hovered: null } as unknown as ViewportState);
+    // jsdom has no layout or GPU: give the canvas a size and stand in for the pick under the pointer.
+    const pick = vi.spyOn(ViewportRenderer.prototype, 'pickAt').mockReturnValue(info as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 100));
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleControl']).toBe('closed');
+    expect(session.contextKeys()['selection.toggleValue']).toBe(true);
+    const canvas = (fixture.nativeElement as HTMLElement).querySelector('canvas') as HTMLCanvasElement;
+    const logged = session.entries().length;
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(
+      session
+        .entries()
+        .slice(logged)
+        .map((e) => [e.id, e.args]),
+    ).toEqual([['device.operate', { id, control: 'closed', value: true }]]);
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleValue']).toBe(false); // the next flip opens it
+    expect(pick).toHaveBeenCalled(); // picked at the pointer
+    // With the pointer off the switch (over empty space), a double-click operates nothing.
+    pick.mockReturnValue(null);
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 100, clientY: 50 }));
+    expect(session.entries().length).toBe(logged + 1);
+    // A selection without a toggle publishes none, and a double-click does nothing.
+    viewport.state.set({ selected: null } as unknown as ViewportState);
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleControl']).toBeUndefined();
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(session.entries().length).toBe(logged + 1);
+  });
+
+  it('draws each lamp from every sim snapshot, not per command, and every lamp unknown on a reset (F2.5)', async () => {
+    const listeners: ((view: SnapshotView | null) => void)[] = [];
+    const off = vi.fn();
+    vi.spyOn(SimHost.prototype, 'subscribe').mockImplementation((listener) => {
+      listeners.push(listener);
+      return off;
+    });
+    const drawn: (readonly [number | undefined, string | undefined, number])[] = [];
+    vi.spyOn(ViewportRenderer.prototype, 'setLampOutputs').mockImplementation((outputs: LampOutputs) => {
+      const lamp = outputs.get(4);
+      drawn.push([lamp?.lightOutputRel, lamp?.status, outputs.size]);
+    });
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    expect(listeners).toHaveLength(1);
+    const session = TestBed.inject(Session);
+    const logged = session.entries().length;
+    const descriptor = lampDescriptor([{ entity: 4, kind: 'lamp.incandescent', recordOffset: 0 }]);
+    const section = new DataView(new ArrayBuffer(56));
+    // A filament warming over three snapshots, with no command in between, then a reset.
+    for (const light of [0.02, 0.4, 1]) {
+      writeLamp(section, 0, light, 1);
+      listeners[0](fakeView(descriptor, section));
+    }
+    listeners[0](null);
+    expect(session.entries().length).toBe(logged);
+    expect(drawn).toStrictEqual([
+      [0.02, 'solved', 1],
+      [0.4, 'solved', 1],
+      [1, 'solved', 1],
+      [undefined, undefined, 0],
+    ]);
+    fixture.destroy();
+    expect(off).toHaveBeenCalledOnce();
   });
 
   it('does not expose the E2E hook without ?e2e=1', async () => {

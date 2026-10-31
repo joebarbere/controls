@@ -8,20 +8,25 @@ import {
   UTILITY_SPLIT_PHASE_MODEL,
   UTILITY_THREE_PHASE_MODEL,
 } from './sources';
+import { HEATER_MODEL, LAMP_MODEL, RESISTOR_MODEL } from './loads';
 
+export * from './loads';
 export * from './readings';
 export * from './sources';
 
 /*
  * The engine models of the built-in device kinds (plan F2.4, F2.5), by catalogue model kind. F2.4: the
  * battery (state of charge), the bench supply and the DIN PSU (CV/CC, hiccup), the utility services
- * (split-phase and three-phase) and the portable generator stub. The lamp has no filament
- * model yet (F2.5), so an island holding one is unmodelled. A kind without an engine model keeps its
- * bag as loaded.
+ * (split-phase and three-phase) and the portable generator stub. F2.5: the incandescent lamp (its
+ * filament's R(T) and temperature), the resistor and the heater. A kind without an engine model keeps
+ * its bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
   battery: BATTERY_MODEL,
   'generator.portable': GENERATOR_PORTABLE_MODEL,
+  heater: HEATER_MODEL,
+  'lamp.incandescent': LAMP_MODEL,
+  resistor: RESISTOR_MODEL,
   'supply.bench': BENCH_SUPPLY_MODEL,
   'supply.dinPsu': DIN_PSU_MODEL,
   'utility.splitPhase': UTILITY_SPLIT_PHASE_MODEL,
@@ -30,7 +35,7 @@ export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = O
 
 /**
  * The output record schemas of the built-in models, by kind (ADR 0011 §5.4, as amended in F2.4).
- * `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` is the protocol's registry of them (protocol 3, F2.3b):
+ * `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` is the protocol's registry of them (protocol 4, F2.5):
  * this must equal it exactly (`outputs.spec.ts`), so a model PR that adds or changes a record also
  * registers it there and bumps `SIM_PROTOCOL_VERSION`.
  */

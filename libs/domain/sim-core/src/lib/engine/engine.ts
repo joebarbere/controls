@@ -12,6 +12,7 @@ import {
   type SimEvent,
   type SimEventKind,
   type SimStateExport,
+  decodeDeviceRecord,
   snapshotHash,
   snapshotHashedBytes,
   snapshotSlotBytes,
@@ -192,6 +193,15 @@ export type ProbeReading =
       readonly reason: 'unmodelled' | 'mixed';
     };
 
+/** One device's output record, decoded ({@link SimEngine.deviceRecord}). */
+export interface SimDeviceRecord {
+  /** The model kind, whose output schema laid the record out. */
+  readonly kind: string;
+  readonly entity: number;
+  /** Every field by name: a number, or an enum field's value name (`status: 'solved'`). */
+  readonly values: Readonly<Record<string, number | string>>;
+}
+
 export interface SimEngineOptions {
   /** The device catalogue (default the built-in one). The world registry must use the same one. */
   readonly catalog?: Catalog;
@@ -209,6 +219,8 @@ export interface SimEngineStats {
   commandSolves: number;
   /** Solves after a layer changed the topology (a trip), in the same step. */
   layerSolves: number;
+  /** Solves after a continuous layer's value went stale (a heating filament, F2.5), in the same step. */
+  continuousSolves: number;
   /** The start's solve (a world with `sim: null`). */
   startSolves: number;
   /** Banks built (each topology change rebuilds them). */
@@ -240,6 +252,7 @@ export class SimEngine {
     cadenceSolves: 0,
     commandSolves: 0,
     layerSolves: 0,
+    continuousSolves: 0,
     startSolves: 0,
     bankBuilds: 0,
   };
@@ -538,6 +551,26 @@ export class SimEngine {
   }
 
   /**
+   * Device `entity`'s output record at this tick, decoded by its kind's schema (ADR 0011 §5.4): what
+   * the snapshot holds for it, field by field (an enum field by name). `null` for an entity with no
+   * record (not netlisted, or a kind that publishes none). Decoded by `sim-protocol`'s
+   * `decodeDeviceRecord`, the one record decoder. Headless only (scripts, `sim-cli`, tests): the game
+   * reads records from the worker's snapshot through `DescriptorIndex`. Allocates (never per tick).
+   */
+  deviceRecord(entity: number): SimDeviceRecord | null {
+    const slot = this.devices.get(entity);
+    if (slot === undefined || slot.bank === null || slot.bank.model.output === null) return null;
+    const schema = slot.bank.model.output;
+    const view = new DataView(new ArrayBuffer(schema.recordBytes));
+    const ctx = this.ctx;
+    ctx.tick = this.tickNow;
+    ctx.netlist = this.current;
+    ctx.solution = this.solution;
+    slot.bank.bank.writeRecord?.(slot.index, view, 0, ctx);
+    return { kind: schema.kind, entity, values: decodeDeviceRecord(schema, view, 0) };
+  }
+
+  /**
    * An ideal, non-loading probe from terminal `a` to `b` (see {@link ProbeReading}). Throws a
    * {@link SimProbeError} for an end that isn't a terminal of a netlisted device.
    */
@@ -587,8 +620,11 @@ export class SimEngine {
         else valuesChanged = true;
       }
     }
+    let stale = false;
     const continuous = this.continuousBanks;
-    for (let i = 0; i < continuous.length; i++) (continuous[i].continuous as (c: LayerContext) => void)(ctx);
+    for (let i = 0; i < continuous.length; i++) {
+      if ((continuous[i].continuous as (c: LayerContext) => boolean | void)(ctx) === true) stale = true;
+    }
     const protection = this.protectionBanks;
     for (let i = 0; i < protection.length; i++) {
       if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) {
@@ -601,8 +637,10 @@ export class SimEngine {
     // recompile only if it may have moved the topology (a kind with sim topology keys), and re-solve at
     // t + 1 either way, so the change is tick-exact. A value-only change never compiles: the compile
     // walks the whole world, allocating (an F2.4 gate: 12 B/step for two hiccuping PSUs in 15 devices).
+    // A continuous layer's stale value (a heating filament, F2.5) re-solves without a recompile.
     if (topologyChanged) this.recompile();
     if (topologyChanged || valuesChanged) this.solve(t + 1, 'layer');
+    else if (stale) this.solve(t + 1, 'continuous');
   }
 
   /** Recompiles the commanded world with the live sim state; true if the netlist changed. */
@@ -688,7 +726,7 @@ export class SimEngine {
     return island.nodes.length - 1 + sources;
   }
 
-  private solve(tick: number, why: 'cadence' | 'command' | 'layer' | 'start'): void {
+  private solve(tick: number, why: 'cadence' | 'command' | 'layer' | 'continuous' | 'start'): void {
     const netlist = this.current;
     if (isEmptyNetlist(netlist)) {
       this.solved = false;
@@ -728,6 +766,7 @@ export class SimEngine {
     if (why === 'cadence') this.stats.cadenceSolves++;
     else if (why === 'command') this.stats.commandSolves++;
     else if (why === 'layer') this.stats.layerSolves++;
+    else if (why === 'continuous') this.stats.continuousSolves++;
     else this.stats.startSolves++;
     // Sim state the solve decided (a supply's CV/CC mode) is committed before anything reads it.
     const after = this.afterSolveBanks;

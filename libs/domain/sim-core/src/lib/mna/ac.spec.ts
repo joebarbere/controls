@@ -124,7 +124,7 @@ describe('acBranchValues', () => {
     const lead = netlist.branches.find((b) => b.model === 'lead');
     expect(lead).toBeDefined();
     expect(values.ohms[lead?.index ?? -1]).toBe(lead?.values['resistanceOhm']);
-    expect(Object.keys(AC_DEFAULT_VALUES)).toStrictEqual(['lead']);
+    expect(Object.keys(AC_DEFAULT_VALUES)).toStrictEqual(['lead', 'resistor', 'heater']);
     expect(acBranchValues(netlist, hook, values)).toBe(values);
     expect(acBranchValues(netlist, hook, new AcBranchValues(1))).not.toBe(values);
     const solution = solveAc(netlist, values, 60);

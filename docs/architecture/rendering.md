@@ -116,7 +116,29 @@ sequenceDiagram
 - Snapshots are immutable, so an unchanged entity is skipped by identity. The renderer never writes to a world.
 - Each entity is a `Mesh` named `entity-<id>`, selectable as `{ id: 'entity-<id>', kind: 'prop', entityId }`. Its transform is the world's integer mm and millidegrees, converted at draw time (`mm()`, `mdegToRadians()`, Euler order `YXZ` = ADR 0007's intrinsic yaw, pitch, roll).
 - **Prop recipes** are procedural (plan §4.9): a box, or a cylinder along the prop's depth, sized from the built-in prop table in `world-model`. One geometry and one material per prop ref, reference-counted, so removing the last entity of a prop disposes them. Unknown refs draw as a 100 mm placeholder cube.
-- The scene-graph JSON snapshot (`describeSceneGraph`: name, type, integer-mm position, rotation in millidegrees, selectable, and for meshes their geometry bounds in integer mm and `drawn: false` for snap proxies) covers add, update and remove, and the whole workshop level.
+- **Device recipes** (`geometry/devices.ts`, F2.4 and F2.5) draw catalogue devices from their entry's size and terminals: the battery, the bench supply, the DIN PSU, the SPST switch, the lamp, the resistor and the heater. One merged geometry with a group per material slot (`DEVICE_SLOTS`), labelled with the fictional brand and model.
+- **Per-entity device state (F2.5).** A switch has a child mesh `lever` (shared lever geometry), turned ±25° by the entity's commanded `state.closed` on every sync of a new snapshot. A lamp draws its `bulb` slot with its own clone of the recipe's material, so each lamp glows by its own sim output.
+- The scene-graph JSON snapshot (`describeSceneGraph`: name, type, integer-mm position, rotation in millidegrees, selectable, label, and for meshes their geometry bounds in integer mm and `drawn: false` for snap proxies; `lamp: { level, status }` for lamps and `switch: { closed }` for switches) covers add, update and remove, and the whole workshop level.
+
+## Lamp brightness from sim output (F2.5)
+
+The host (`feature-workspace`'s `LampSnapshotFeed`, subscribed to `SimHost.subscribe`) reads each lamp's `lightOutputRel` and `status` from every snapshot the sim worker publishes, through field offsets resolved once per topology generation, and calls `ViewportRenderer.setLampOutputs(map)` (by entity id, the same map updated in place). A warming filament is therefore drawn as time runs, not only after a command; a source reset (`null`) gives an empty map, every lamp unknown. The renderer computes no electrical quantity; it maps and draws:
+
+```mermaid
+flowchart LR
+    REC["lamp record<br/>lightOutputRel, status"] -->|host decodes| MAP["setLampOutputs(Map&lt;EntityId, LampOutput&gt;)"]
+    MAP --> RULE["sim/lamp-display<br/>validity rule"]
+    RULE -->|"solved / unsettled"| CURVE["sim/display-curve<br/>level = round(255 × (1 − e^(−ln5·L))), 0 below L = 1/255"]
+    RULE -->|"unsolved / singular / no entry"| UNK["unknown: level 0, blue-grey bulb"]
+    CURVE --> CMP{"level or status<br/>changed?"}
+    UNK --> CMP
+    CMP -->|yes| DRAW["bulb tint + emissiveIntensity (uniforms)<br/>userData.lamp, invalidate()"]
+    CMP -->|no| IDLE["nothing drawn"]
+```
+
+- **The display curve** (`sim/display-curve.ts`, pure, lint-fenced, game-design source): `glow = 1 − e^(−ln5·L)`, 0 below `L = 1/255`, quantised to `level = round(255 × glow)`. Rated light (`L = 1`) draws at level 204; over-voltage is brighter and saturates toward 255 without clipping.
+- **The validity rule** (`sim/lamp-display.ts`): `solved` draws its level (level 0 is a real "off", clear glass); `unsettled` draws its level with a violet-grey tint; `unsolved`, `singular` or no entry is **unknown**: no glow and a blue-grey tint, never an off lamp.
+- `invalidate()` is called only when some lamp's drawn level or status changed (ADR 0011 §9.2). A step writes only uniforms (colour, `emissiveIntensity`).
 
 ## The workshop level (F1.9)
 

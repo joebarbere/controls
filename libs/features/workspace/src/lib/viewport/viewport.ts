@@ -35,7 +35,15 @@ import {
   type ViewportState,
   type ViewportStats,
 } from '@controls/renderer';
-import { ENTITY_DELETE_SELECTION_BINDING, type CatalogRef } from '@controls/world-model';
+import {
+  DEVICE_OPERATE_SELECTION_BINDING,
+  ENTITY_DELETE_SELECTION_BINDING,
+  type CatalogRef,
+  SELECTION_TOGGLE_CONTROL_KEY,
+  SELECTION_TOGGLE_VALUE_KEY,
+  selectionToggle,
+} from '@controls/world-model';
+import { LampSnapshotFeed } from './lamp-feed';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -56,7 +64,11 @@ const TEST_HOOK = '__controlsViewport';
  * gesture intents become exactly one Command each, through `Session.exec`: a click or Enter on a
  * snapped spot is `entity.place`, dropping a dragged (or `M`-picked) entity is `entity.move`, and
  * Escape while placing puts the tool away without a command. Delete is the `entity.delete.selection`
- * binding (the keybinding service runs it, not this component).
+ * binding (the keybinding service runs it, not this component). **Operating a device** (F2.5): E is
+ * the `device.operate.selection` binding, and a double-click on a device runs the same command here,
+ * `device.operate {id, control, value}` on the selection's first toggle (a switch's `closed`), set to
+ * its other position: one logged command either way. The toggle is published as the context keys
+ * `selection.toggleControl` and `selection.toggleValue` from the commanded state (`selectionToggle`).
  *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
@@ -77,6 +89,7 @@ const TEST_HOOK = '__controlsViewport';
       [attr.aria-label]="label()"
       (focus)="session.setContext(viewportFocusedKey, true)"
       (blur)="session.setContext(viewportFocusedKey, null)"
+      (dblclick)="operateSelection($event)"
     ></canvas>
     @if (state()?.mode === 'walk' || state()?.placement?.source === 'reticle') {
       <div class="crosshair" aria-hidden="true"></div>
@@ -199,17 +212,25 @@ export class Viewport {
       `${binding(VIEW_FOCUS_SELECTION_BINDING)} focuses it, ${binding(VIEW_MODE_WALK_BINDING)} toggles walk and work mode, ${walk} walk. ` +
       `Number keys pick a prop; click or ${key('commitPlacement')} places it at the pointer or the centre. ` +
       `Drag an object, or ${key('moveSelection')} then ${key('commitPlacement')}, to move it; ` +
+      `${binding(DEVICE_OPERATE_SELECTION_BINDING)} or a double-click operates a selected switch; ` +
       `${binding(ENTITY_DELETE_SELECTION_BINDING)} deletes it; Escape cancels.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */
   private readonly published = new Map<string, ContextValue>();
+  /** The selected device's toggle and the value that flips it (F2.5), from its commanded state. */
+  private readonly selectedToggle = computed(() => {
+    const id = this.state()?.selected?.entityId;
+    return id === undefined || id === null ? null : selectionToggle(this.session.world(), id);
+  });
 
   constructor() {
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => {
       this.session.setContext(VIEWPORT_FOCUSED_KEY, null);
       this.publishContext(undefined);
+      this.publish(SELECTION_TOGGLE_CONTROL_KEY, null);
+      this.publish(SELECTION_TOGGLE_VALUE_KEY, null);
     });
     const offMode = this.session.onCommand('view.mode', (e) =>
       this.renderer.setMode((e.command.args as ViewModeArgs).mode),
@@ -234,6 +255,19 @@ export class Viewport {
       this.renderer.resetView();
     });
     effect(() => this.renderer.setPlacement(this.activeProp()));
+    // Lamps glow with their solved light output (F2.5): read from every snapshot the sim worker
+    // publishes, so a warming filament is drawn as it warms, not only after a command. The fields are
+    // resolved once per topology generation; a reset (`null`) leaves every lamp unknown. The renderer
+    // redraws only when a drawn level or status moved.
+    const lamps = new LampSnapshotFeed();
+    const offLamps = this.session.sim.subscribe((view) => this.renderer.setLampOutputs(lamps.update(view)));
+    destroyRef.onDestroy(offLamps);
+    // The operate key's context: republished when the selection or its commanded state changes.
+    effect(() => {
+      const toggle = this.selectedToggle();
+      this.publish(SELECTION_TOGGLE_CONTROL_KEY, toggle?.control ?? null);
+      this.publish(SELECTION_TOGGLE_VALUE_KEY, toggle?.value ?? null);
+    });
     const offIntent = this.renderer.onIntent((intent) => this.onIntent(intent));
     destroyRef.onDestroy(offIntent);
     afterNextRender(() => {
@@ -301,6 +335,25 @@ export class Viewport {
     }
   }
 
+  /**
+   * A double-click on a device: `device.operate` on its toggle, as E does (one logged command). The
+   * first click of the pair has selected it. Only the device under the pointer is operated: a
+   * double-click elsewhere, with a switch still selected, does nothing. Nothing happens for a
+   * selection without a toggle.
+   */
+  protected operateSelection(event: MouseEvent): void {
+    const id = this.state()?.selected?.entityId;
+    const toggle = this.selectedToggle();
+    if (id === undefined || id === null || toggle === null) return;
+    // Picked at the double-click itself, not from the hover state (which a frame updates later).
+    const rect = this.canvas().nativeElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const ndcX = (2 * (event.clientX - rect.left)) / rect.width - 1;
+    const ndcY = 1 - (2 * (event.clientY - rect.top)) / rect.height;
+    if (this.renderer.pickAt(ndcX, ndcY)?.entityId !== id) return;
+    this.report(this.session.exec('device.operate', { id, control: toggle.control, value: toggle.value }));
+  }
+
   /** A refused gesture command is a bug (the renderer only commits valid snaps): say so in the console. */
   private report(result: { readonly ok: boolean }): void {
     if (!result.ok) console.warn('viewport gesture command failed', result);
@@ -316,11 +369,14 @@ export class Viewport {
       [SELECTION_FOCUSABLE_KEY, selected?.focusNormal ? true : null],
       [SELECTION_ENTITY_ID_KEY, selected?.entityId ?? null],
     ];
-    for (const [key, value] of next) {
-      if ((this.published.get(key) ?? null) === value) continue;
-      this.published.set(key, value);
-      this.session.setContext(key, value);
-    }
+    for (const [key, value] of next) this.publish(key, value);
+  }
+
+  /** Sets a context key unless it already holds `value`. */
+  private publish(key: string, value: ContextValue): void {
+    if ((this.published.get(key) ?? null) === value) return;
+    this.published.set(key, value);
+    this.session.setContext(key, value);
   }
 
   private resize(): void {

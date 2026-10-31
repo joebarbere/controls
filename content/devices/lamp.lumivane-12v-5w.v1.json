@@ -34,7 +34,9 @@
     "kind": "lamp.incandescent",
     "params": {
       "ratedVoltageV": 12,
-      "ratedPowerW": 5
+      "ratedPowerW": 5,
+      "filamentRatedTempK": 2700,
+      "thermalTimeConstantMs": 50
     }
   },
   "controls": [],
@@ -44,6 +46,24 @@
       "kind": "real-world",
       "citation": "UN ECE Regulation No. 37 (filament lamps for power-driven vehicles), category W5W: a 12 V wedge-base signal lamp whose 5 W is defined at R37's 13.5 V test voltage. Taking 5 W at 12 V (ratedPowerW at ratedVoltageV) is a game-design simplification. Only the rated values are used; the regulation's text and data sheets are not reproduced.",
       "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
+    },
+    {
+      "id": "filament-temperature",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour: small low-voltage vacuum signal lamps run their tungsten filaments at roughly 2500 to 2900 K (lamp makers' miniature-lamp catalogues give colour temperatures in that range; a household 100 W lamp runs nearer 2850 K). 2700 K is taken. With tungsten's resistivity (Jones and Langmuir, 1927) it gives the lamp a cold resistance of about 1/15 of its hot one, which is where the cold-start inrush comes from.",
+      "covers": ["model.params.filamentRatedTempK"]
+    },
+    {
+      "id": "filament-time-constant",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds, its inrush decaying over a few tens of milliseconds. 50 ms is taken as the small-signal thermal time constant at the rated point; with the 5 W rating it implies about 0.4 mJ/K of heat capacity, a filament of a couple of milligrams of tungsten.",
+      "covers": ["model.params.thermalTimeConstantMs"]
+    },
+    {
+      "id": "inrush-band",
+      "kind": "real-world",
+      "citation": "Physics from H. A. Jones and I. Langmuir, General Electric Review 30 (1927): a filament's cold-to-hot resistance ratio is ρ(T_r)/ρ(T_a), 13.5 to 16.1 for rated temperatures of 2500 to 2900 K at a 293 K ambient. The source and lead resistance in series lower the current ratio, so the tested inrush band is 10 to 15 times the settled current.",
+      "covers": ["model.params.filamentRatedTempK"]
     },
     {
       "id": "holder-layout",

@@ -11,8 +11,8 @@ import {
   SnapshotWriter,
   TopologyDescriptorSchema,
 } from '@controls/sim-protocol';
-import { LAMP, origin } from '../../testing/bench';
-import { ENGINE_BENCH, engineBus, engineTestOptions, TWIN_SUPPLY } from '../../testing/engine';
+import { origin } from '../../testing/bench';
+import { ENGINE_BENCH, engineBus, engineTestOptions, OPAQUE, TWIN_SUPPLY } from '../../testing/engine';
 import { SimEngine } from './engine';
 
 /*
@@ -105,7 +105,7 @@ describe('islandStatus agrees with islands()', () => {
   it('for solved, singular and unmodelled islands, read from the snapshot', () => {
     const twin: (readonly [string, object])[] = [
       ['entity.place', { ref: TWIN_SUPPLY, positionMm: origin }], // a singular island of its own
-      ['entity.place', { ref: LAMP, positionMm: origin }], // unwired: an unmodelled island
+      ['entity.place', { ref: OPAQUE, positionMm: origin }], // no model values it: an unmodelled island (a lamp is modelled since F2.5)
     ];
     const { engine } = bench(twin, 40);
     const decoded = decodeSnapshot(engine.snapshot());

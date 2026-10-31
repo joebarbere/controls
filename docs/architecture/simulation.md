@@ -37,12 +37,13 @@ flowchart LR
 
 Each placed entity contributes a **fragment**: its sorted terminals, the groups of terminals it joins ideally, and its elements. A fragment comes from the model kind's `DeviceNetlistModel.topology({ params, state, sim })` in `DEVICE_NETLIST_MODELS`; a test checks every placed kind in `MODEL_KINDS` has one. The model says only what the netlist needs: which terminals are joined, which elements sit between which terminals, and when. Stamps and electrical behaviour belong to the device models of F2.4 and F2.5.
 
-| Model kind          | Topology                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------- |
-| `battery`           | One `vsource` element `cell`, `neg` → `pos`, a DC source                                 |
-| `lamp.incandescent` | One `resistor` element `filament`, `a` → `b`; its value is R(T), computed by F2.5        |
-| `switch.spst`       | Closed: an ideal join of `a` and `b`, no element. Open: nothing                          |
-| `lead` (connection) | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K) |
+| Model kind           | Topology                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `battery`            | One `vsource` element `cell`, `neg` → `pos`, a DC source                                 |
+| `lamp.incandescent`  | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank    |
+| `resistor`, `heater` | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                       |
+| `switch.spst`        | Closed: an ideal join of `a` and `b`, no element. Open: nothing                          |
+| `lead` (connection)  | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K) |
 
 A model that changes topology on a sim-owned event lists those keys in `simTopologyKeys` (F2.5's fuse lists `blown`). It is shown only those keys, never the rest of the engine's state. The P2 bench kinds list none.
 
@@ -121,7 +122,7 @@ Values are kept apart from the netlist, because they change on every solve and t
 | `vsource`  | `vsource`             | EMF `emfV` from `a` (negative) to `b` (positive) behind a series `ohms` ≥ 0: Vb − Va = E − R·I, with I positive a → b inside |
 | `isource`  | `resistor`, `vsource` | Exactly `amps` from a to b through the element, whatever the voltage (a supply in current limit)                             |
 
-`dcBranchValues(netlist, hook?)` fills them. A `DcValueHook` gets the first say on each branch: it is where F2.4's battery EMF against state of charge and F2.5's filament R(T) will plug in. Otherwise the model kind's default in `DC_DEFAULT_VALUES` applies. A `lead` defaults to its `resistanceOhm`; a `battery` defaults to its `nominalVoltageV` behind its `internalResistanceOhm`, a placeholder until F2.4. A branch with neither (a lamp, until F2.5) throws, since that is a programming error in a device model.
+`dcBranchValues(netlist, hook?)` fills them. A `DcValueHook` gets the first say on each branch: it is where F2.4's battery EMF against state of charge and F2.5's filament R(T) plug in (through the engine's banks). Otherwise the model kind's default in `DC_DEFAULT_VALUES` applies. A `lead` defaults to its `resistanceOhm`; a `battery` defaults to its `nominalVoltageV` behind its `internalResistanceOhm`, a placeholder until F2.4. A branch with neither (a lamp, until F2.5) throws, since that is a programming error in a device model.
 
 ### The system per island
 
@@ -405,7 +406,7 @@ flowchart TB
 
 **Commands and time.** `CommandBus.advanceTo(tick)` moves the bus's state without logging, taking a `seq` or touching the history (ADR 0011 §3). `replayEntries(bus, entries, { time, endTick })` advances the time host and the bus to each entry's tick, runs it, calls `time.applied(entry, state)`, and finally advances to `endTick`; an earlier tick is still `tick-mismatch`. In the scripting API, `Game.exec` hands every logged entry to the engine and carries out `sim.step` by advancing once it is logged; on replay a step moves nothing, and the next entry's tick (or `endTick`) carries its effect. `sim.setSpeed` and `sim.resume` are no-ops headless (pacing is F2.3b's).
 
-**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. Since F2.4 the battery and the supplies have banks (below); the lamp has no filament model until F2.5, so a branch nothing can value leaves its island **unmodelled**: solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations. Two hooks came with F2.4: `afterSolve(ctx, values)`, called after every solve with exactly the values it was solved with, commits state the solve decided (a supply's CV/CC mode) before anything reads it; and a layer that returns `true` gets a re-solve within the step even when only a value changed (a PSU switching its output off), not only on a topology change. `LayerContext.islandStatus` gives a record its island's status.
+**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. Since F2.4 the battery and the supplies have banks, and since F2.5 the lamp, resistor and heater (below). A branch nothing can value leaves its island **unmodelled** (engines 3 and 4 did this to every lamp): solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations. Two hooks came with F2.4: `afterSolve(ctx, values)`, called after every solve with exactly the values it was solved with, commits state the solve decided (a supply's CV/CC mode) before anything reads it; and a layer that returns `true` gets a re-solve within the step even when only a value changed (a PSU switching its output off), not only on a topology change. `LayerContext.islandStatus` gives a record its island's status.
 
 **Honest results.** `islands()` gives each island's status: `solved`, `singular`, `nonConverged`, `unmodelled` or `mixed`; only `solved` values are readings, and the status follows from the netlist and the solution record alone, so a loaded engine says the same. `probe(a, b)` (ideal, non-loading) returns DC volts V(a) − V(b) on a solved DC island, and on an AC island the phasor V(a) − V(b) with its RMS magnitude (`rmsVolts`, what a meter shows by default) at the region frequency, `floating` for terminals on different islands (never a difference of two references), and `singular`, `unsettled` or `unsolved` otherwise. Island flags raise `singular` and `nonConverged` sim events on their rising edge; across a topology change a flag rises only if none of the island's entities was in an island with it before. Layer events (`blown`, …) are stamped at the end of their step.
 
@@ -415,7 +416,7 @@ flowchart TB
 
 **The snapshot** (`sim-protocol`, ADR 0011 §5): `encodeSnapshot` writes one slot from the engine's preallocated arrays with little-endian `DataView` stores, every reserved byte zero; the hashed region is bytes 8 onwards (the tick, the counts, the flags, the raw topology hash, then nodes, branches, islands and device records). `game.snapshot()` returns those bytes, `snapshotHash` their SHA-256. An unsolved island's entry has 0 iterations, 0 unknowns and no reference node. Device records are written from the bags and the solution, never from per-step caches, so a snapshot is a pure function of the export. The seqlock transport, the descriptor and `SnapshotView` are in [the sim worker](#the-sim-worker-and-snapshot-transport-f23b) below.
 
-**Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` became 3 when this feature materialised the solution record (2 was #51's sparse pivoting), and is 4 since F2.4's sources.
+**Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` became 3 when this feature materialised the solution record (2 was #51's sparse pivoting), 4 with F2.4's sources, and is 5 since F2.5's lamp.
 
 **Measured** (built bundle, AMD Ryzen 5 5600X, Node 24): one step of the layers on 750 synthetic devices (`tick-device-mix`, gated at §4.5's 0.3 ms) takes about 0.015 ms median.
 
@@ -533,6 +534,41 @@ stateDiagram-v2
 - **Loads** (`Session.prepareLoad`) start a candidate worker that isn't the game's until `adopt` promotes it: a replay start to verify, or a world start from `world.json`, and the materialised hash it answers is the dirty model's baseline.
 - **Crashes** terminate the worker, stop pacing, reset readers and raise `onCrash` (the app's toast with **Restart simulation**, which runs `sim.restart`: a replay start of the session's log to the current tick, resuming paused). The world and the log are untouched; saves are refused until then.
 
+## First loads (F2.5)
+
+`sim-core` `devices/loads/` holds the incandescent lamp (`lamp.ts`, with tungsten's resistivity in `tungsten.ts`), the resistor and the heater (`resistive.ts`). Their netlist models are one `resistor` element each; catalogue entries are `lamp.lumivane-12v-5w`, `resistor.orrinwood-10r-10w` and `heater.hearthvale-12v-50w`.
+
+```mermaid
+flowchart LR
+    T["filamentTempK (sim bag)"] --> R["R(T) = R_r · ρ(T) / ρ(T_r)<br/>ρ piecewise linear (Jones and Langmuir)"]
+    R --> V["dcValue / acValue: resistor(R)"]
+    V --> S["solve"]
+    S --> I["solved current I<br/>(solved islands only)"]
+    I --> ODE["continuous: T += Δt (I²R − k(T⁴ − T_a⁴)) / C<br/>clamped to [T_a, 3600 K]"]
+    ODE --> T
+    ODE -->|"R moved more than 1 % since the last solve"| RS["re-solve at t + 1, no recompile"]
+    RS --> S
+    T --> L["lightOutputRel = x^(17/8)<br/>x = (T⁴ − T_a⁴) / (T_r⁴ − T_a⁴)"]
+```
+
+**The lamp.** The filament's resistance is its rated (hot) resistance, R_r = V_r² / P_r, scaled by tungsten's resistivity at its temperature over the resistivity at the rated temperature, so the rated point is exact and the cold resistance follows from the material (28.8 Ω hot and 1.95 Ω at 20 °C for the bench lamp, 14.8:1). The resistivity table is a subset of Jones and Langmuir's 1927 measurements, linear between points and looked up by bucket, without a loop. The temperature, the lamp's only sim key (`filamentTempK`), follows C dT/dt = I²R(T) − k(T⁴ − T_a⁴): k from the rated point (so T_r is the steady state at rated power) and C = 4kT_r³τ from the catalogue's thermal time constant (`thermalTimeConstantMs`, 50 ms; `filamentRatedTempK` 2700 K). Explicit Euler at the 1 ms tick is stable here (Δt / τ = 0.02). **Inrush emerges**: the first solve after the switch closes draws 14.3× the settled current on the bench, inside the sourced 10–15× band, and the current halves within 2 ms and settles within about 200 ms.
+
+**Light output.** `lightOutputRel` = x^(17/8), where x is the power the filament radiates over the rated radiated power, a function of its temperature alone; the exponent comes from Fink and Beaty's L ∝ V^3.4 and P ∝ V^1.6. It is 1 at the rated point and 0 at ambient, and computed as x² · ⁸√x with three `Math.sqrt`s (D6). So the light is dark during the cold inrush and fades as the filament cools.
+
+**Re-solving within the step.** Between the 10-tick cadence solves the layers integrate against the last solution, which goes stale while a cold filament heats. A continuous layer may now return `true` (`SimDeviceBank.continuous`): the engine then re-solves at t + 1, within the step and without a recompile, and counts it in `stats.continuousSolves`. The lamp returns `true` when R(T) has moved more than 1 % (`LAMP_RESOLVE_RELTOL`) from the resistance the last solve saw, read back from the solution as |ΔV| / |I|, never cached, so a loaded engine re-solves at the same ticks; a lamp carrying under 1 µA (`LAMP_RESOLVE_MIN_A`) never asks. A bench lamp's warm-up takes about 270 such solves, then none.
+
+**Validity.** The filament moves only on a solved island; on any other it is frozen, and its record says so. `LAMP_OUTPUT` holds `powerW`, `currentA` and `voltageV` (solved, RMS magnitudes on an AC island), then `resistanceOhm`, `filamentTempK` and `lightOutputRel` (its own state, always written) and `status`. A reader shows a lamp that isn't `solved` as unknown or unsettled, never as a dark lamp drawing 0 W.
+
+**The resistor and heater** have no sim state; their banks only publish records. The resistor (`resistanceOhm`, `powerRatingW`) publishes `overRated`, a solved flag for I²R above the rating, with no damage model. The heater is R = V_r² / P_r, constant (a nickel-chromium element's resistance moves only a few percent from cold to hot). Both have `DC_DEFAULT_VALUES` and `AC_DEFAULT_VALUES` entries, so a solver run with no engine model gives the same answer.
+
+**Reading a record.** The records are in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` (protocol 4), so the worker's descriptor carries them. The game reads them from each snapshot: the viewport's `LampSnapshotFeed` resolves every lamp's `lightOutputRel` and `status` once per topology generation (`DescriptorIndex.of(view.descriptor).field(id, name, 'lamp.incandescent')`) and reads them with one `readAll` per snapshot, allocating nothing; a `null` view (a source reset) leaves every lamp unknown. Headless, `SimEngine.deviceRecord(entity)` decodes one device's whole record with `sim-protocol`'s `decodeDeviceRecord` (enums by name), the one record decoder; the scripting API exposes it as `game.device(id)`. It allocates, so it is for scripts and tests, never the per-tick path.
+
+**Operating a switch.** `device.operate` gained a binding, `device.operate.selection` (E by default, when the viewport is focused and the selection has a toggle). Its id, control and value are context arguments from `selection.entityId`, `selection.toggleControl` and `selection.toggleValue`, which the viewport publishes from `selectionToggle(world, id)`: the selected device's first toggle control and its opposite, from the **commanded** state only. A double-click on the canvas runs the same command. Either way the log holds one concrete `device.operate {id, control, value}`, as the palette, the console and a script do.
+
+**The bench demo** (`apps/sim-cli/scenarios/bench-lamp.{console,ts}`): a battery, a switch and a lamp joined by three leads; closing the switch for 1.5 s lights the lamp (about 2770 K, `lightOutputRel` about 1.25, since the full battery is above the lamp's 12 V rating, within 4 % of (V / 12)^3.4), and opening it for 0.5 s leaves its light under one display step. Its hashes are the Node-vs-Chromium golden (D6), and `fixtures/v2/ctrl/bench-lamp-engine-5.ctrl` is its save.
+
+**Abstractions** (for `electrical-realism-reviewer`; detail in the caveats): constant emissivity and heat capacity, no conduction loss to the supports, no burnout (clamped at 3600 K), and a constant-resistance heater. No transcendental was needed, so `dmath` and ADR 0014 wait for the first real one.
+
 ## The oracle corpus (F2.7)
 
 The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
@@ -627,8 +663,7 @@ flowchart LR
 
 ## Not yet
 
-- **AC loads** (F2.5): AC loads reach the phasor solver through `AcValueHook` (F2.4's services do); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
-- **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
-- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b).
-- **Bench-lamp `netlist.dump` golden** (F2.5): added with F2.5's `bench-lamp` scenario.
+- **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
+- **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
+- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b), and the loads' (protocol 4, F2.5).
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

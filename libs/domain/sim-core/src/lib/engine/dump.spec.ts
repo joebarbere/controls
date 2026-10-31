@@ -1,7 +1,7 @@
 import { createWorld, migrateWorld, type World } from '@controls/save-format';
 import { materialiseWorld, NOMINAL_BANDS } from '@controls/sim-protocol';
 import { AC_SOURCE, BATTERY, benchLamp, end, LAMP, LEAD, origin } from '../../testing/bench';
-import { ENGINE_BENCH, engineBus, engineTestOptions, FLIP, TWIN_SUPPLY } from '../../testing/engine';
+import { ENGINE_BENCH, engineBus, engineTestOptions, FLIP, OPAQUE, TWIN_SUPPLY } from '../../testing/engine';
 import { formatNetlist } from '../netlist/format';
 import { formatEngineDump, formatIslandDiagnostic, formatIslandFlags, netlistDump } from './dump';
 import { SimEngine, type SimEngineOptions, type SimIslandDiagnostic } from './engine';
@@ -77,11 +77,26 @@ describe('netlist.dump', () => {
     expect(text.endsWith('band none\n')).toBe(true);
   });
 
-  it('says which branch no model can value (the lamp until F2.5): unmodelled, never a reading', () => {
+  it('says which branch no model can value: unmodelled, never a reading', () => {
+    // A battery into the opaque test load, which no device model values (the lamp did until F2.5).
+    const { world } = session([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: OPAQUE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+    ]);
+    expect(solveLines(netlistDump(world(), engineTestOptions()))).toEqual([
+      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1',
+    ]);
+  });
+
+  it('solves the bench lamp since F2.5, at the world tick on the way in', () => {
     const text = netlistDump(benchLamp(true));
     expect(text).toContain('branch 1 e3.filament resistor lamp.incandescent 3 -> 4 island 0');
     expect(solveLines(text)).toEqual([
-      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1',
+      expect.stringMatching(
+        /^solve island 0 solved flags none iterations [1-9]\d* reference 0 unknowns \d+ band none$/,
+      ),
     ]);
     // Solved at the world's tick on the way in (the world was never materialised).
     expect(text).toContain('\nsolution tick 0\n');
@@ -121,8 +136,9 @@ describe('netlist.dump', () => {
   });
 
   it('a loaded engine says what the straight run says, and taking a dump changes nothing', () => {
-    // The bench plus an unwired lamp: its own island, unmodelled (the loaded engine must say why too).
-    const bench: Commands = [...ENGINE_BENCH, ['entity.place', { ref: LAMP, positionMm: origin }]];
+    // The bench plus an unwired opaque load: its own island, unmodelled (the loaded engine must say why
+    // too; a lamp is modelled since F2.5).
+    const bench: Commands = [...ENGINE_BENCH, ['entity.place', { ref: OPAQUE, positionMm: origin }]];
     const live = session(bench, 123);
     const control = session(bench, 123);
     const text = formatEngineDump(live.engine);

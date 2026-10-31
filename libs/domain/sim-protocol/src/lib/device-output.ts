@@ -77,7 +77,7 @@ const status = (offset: number): DeviceOutputField => u8Enum('status', offset, R
  * Each device-model PR registers its kind's schema here and bumps `SIM_PROTOCOL_VERSION`; sim-core's
  * `BUILTIN_DEVICE_OUTPUTS` (what the models write) must equal it exactly, which a sim-core spec
  * checks. F2.4 (protocol 3): the battery, the bench supply and the DIN PSU. The AC services publish
- * no record.
+ * no record. F2.5 (protocol 4): the incandescent lamp, the resistor and the heater.
  */
 export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
   battery: Object.freeze({
@@ -111,7 +111,68 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
       status(17),
     ]),
   }),
+  'lamp.incandescent': Object.freeze({
+    kind: 'lamp.incandescent',
+    recordBytes: 56,
+    fields: Object.freeze([
+      f64('powerW', 0, 'W'),
+      f64('currentA', 8, 'A'),
+      f64('voltageV', 16, 'V'),
+      f64('resistanceOhm', 24, 'Ω'),
+      f64('filamentTempK', 32, 'K'),
+      f64('lightOutputRel', 40, null),
+      status(48),
+    ]),
+  }),
+  resistor: Object.freeze({
+    kind: 'resistor',
+    recordBytes: 32,
+    fields: Object.freeze([
+      f64('voltageV', 0, 'V'),
+      f64('currentA', 8, 'A'),
+      f64('powerW', 16, 'W'),
+      u8Enum('overRated', 24, ['no', 'yes']),
+      status(25),
+    ]),
+  }),
+  heater: Object.freeze({
+    kind: 'heater',
+    recordBytes: 32,
+    fields: Object.freeze([f64('voltageV', 0, 'V'), f64('currentA', 8, 'A'), f64('powerW', 16, 'W'), status(24)]),
+  }),
 });
+
+/** One device record's fields by name: a number, or an enum field's value name (`status: 'solved'`). */
+export type DecodedDeviceRecord = Readonly<Record<string, number | string>>;
+
+/**
+ * Decodes the record laid out by `schema` at byte `offset` of `data`: every field by name, enums by
+ * their value names (a code past the table stays a number). The one record decoder: the headless
+ * `SimEngine.deviceRecord` (and so `game.device`) uses it, and a panel decoding a whole record from a
+ * snapshot would too. Allocates; per-frame readers resolve `FieldRef`s instead (`DescriptorIndex`).
+ */
+export function decodeDeviceRecord(schema: DeviceOutputSchema, data: DataView, offset: number): DecodedDeviceRecord {
+  const values: Record<string, number | string> = {};
+  for (const field of schema.fields) {
+    const at = offset + field.offset;
+    switch (field.type) {
+      case 'f64':
+        values[field.name] = data.getFloat64(at, true);
+        break;
+      case 'u32':
+        values[field.name] = data.getUint32(at, true);
+        break;
+      case 'i32':
+        values[field.name] = data.getInt32(at, true);
+        break;
+      default: {
+        const code = data.getUint8(at);
+        values[field.name] = field.values === null ? code : (field.values[code] ?? code);
+      }
+    }
+  }
+  return values;
+}
 
 /**
  * The nominal voltage bands an island can be in (ADR 0011 §5.3), by index, for the overlays' scales.

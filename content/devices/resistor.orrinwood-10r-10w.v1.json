@@ -1,0 +1,30 @@
+{
+  "id": "resistor.orrinwood-10r-10w",
+  "version": 1,
+  "title": "10 Ω 10 W power resistor on a base",
+  "brand": "Orrinwood",
+  "modelName": "OW-10R-10",
+  "category": "load",
+  "sizeMm": { "widthMm": 70, "heightMm": 40, "depthMm": 30 },
+  "terminals": [
+    { "id": "a", "label": "1", "positionMm": { "x": 8, "y": 20, "z": 12 } },
+    { "id": "b", "label": "2", "positionMm": { "x": 62, "y": 20, "z": 12 } }
+  ],
+  "model": { "kind": "resistor", "params": { "resistanceOhm": 10, "powerRatingW": 10 } },
+  "controls": [],
+  "sources": [
+    {
+      "id": "power-resistor-class",
+      "kind": "real-world",
+      "citation": "The aluminium-housed wirewound power resistor, a common bench and panel class: 10 Ω in the E-series of preferred values, rated 10 W when mounted on a heat sink (typical published figures for the class, paraphrased, not one vendor's). Its resistance is taken as exact and constant; P2 has no tolerance, temperature coefficient or damage model.",
+      "covers": ["model.params.resistanceOhm", "model.params.powerRatingW"]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: the resistor on a 70 × 40 mm base, 30 mm tall, with a screw terminal at each end; not modelled on a product.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

@@ -1,4 +1,5 @@
 import { createGame, type Game, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -15,13 +16,17 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * same commands with the engine in the page (Chromium's V8): the D6 Node-vs-Chromium golden (plan
  * F2.3a). Change them together, with the scripting caveats; a numeric change also bumps
  * `SIM_ENGINE_VERSION` (D8). F2.4 re-pinned both (engine 4: the battery's EMF follows its state of
- * charge, 12.9 V full, and it discharges into the short; its record is in the snapshot).
+ * charge, 12.9 V full, and it discharges into the short; its record is in the snapshot), and F2.5
+ * again (engine 5: the unwired lamp has a filament model, so its island is solved, and its record is
+ * in the snapshot). The D6 golden with a lamp lit is the bench-lamp scenario's (`bench-lamp.spec.ts`).
  */
 
 /** What engine 3 (F2.3a, the battery at its nominal-EMF placeholder) wrote for the same session. */
 const ENGINE_3_HASH = '5ecdc7c40f39240e7dbc4e34103f47c37ab8427faa5f95aa5413da08f036cdf8';
-export const SIM_STEP_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
-export const SIM_STEP_SNAPSHOT_HASH = 'eb20079b8a1efe00ac453b628550c8e650fe03a1cb85aef66651ae6e847c16ff';
+/** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session. */
+const ENGINE_4_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
+export const SIM_STEP_HASH = 'e065dd0a3e81636b487a7c49514f4276a7ae70fe146cdf33d1f5cdecb0c74648';
+export const SIM_STEP_SNAPSHOT_HASH = '59e3d2fce15102087368c376180b33c96507877ed367a650303f39ba657ef789';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sim-step.console');
@@ -70,7 +75,7 @@ describe('the sim-step scenario', () => {
     expect(game.materialisedWorld().sim?.lastSolveTick).toBe(1230);
   });
 
-  it('reads the short honestly: the battery behind its internal resistance, the unwired lamp unsolved', async () => {
+  it('reads the short honestly: the battery behind its internal resistance, the unwired lamp solved and cold', async () => {
     const game = await scenarioGame();
     const battery = game.probe('1:pos', '1:neg');
     const leads = game.probe('2:a', '1:pos');
@@ -79,7 +84,9 @@ describe('the sim-step scenario', () => {
     // EMF (12.9 V full, a little less after 1.234 s at about 123 A).
     expect(battery.volts).toBeGreaterThan(9);
     expect(battery.volts).toBeLessThan(11);
-    expect(game.probe('3:a', '3:b')).toMatchObject({ kind: 'unsolved', reason: 'unmodelled' });
+    // Engine 5 (F2.5): the lamp has a filament model, so its island (no source) is solved at 0 V.
+    expect(game.probe('3:a', '3:b')).toMatchObject({ kind: 'dc', volts: 0 });
+    expect(game.device(3)?.values).toMatchObject({ status: 'solved', powerW: 0, filamentTempK: 293.15 });
     expect(game.probe('1:pos', '3:a')).toMatchObject({ kind: 'floating' });
   });
 
@@ -99,19 +106,33 @@ describe('the sim-step scenario', () => {
     });
   });
 
-  it('its checked-in save (engine 4, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-4.ctrl');
+  it('its checked-in save (engine 5, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
+    const fixture = join(
+      WORKSPACE_ROOT,
+      `libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-${SIM_ENGINE_VERSION}.ctrl`,
+    );
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(4);
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
     expect(loaded.game.tick()).toBe(1234);
     expect(loaded.game.hash()).toBe(SIM_STEP_HASH);
     const record = loaded.game.materialisedWorld().sim;
     expect(record?.lastSolveTick).toBe(1230);
-    expect(record?.islands.map((i) => i.iterations)).toContain(1); // the short is solved
-    expect(record?.islands.map((i) => i.iterations)).toContain(0); // the lamp's island isn't
+    // Both islands are solved: the short, and since engine 5 the unwired lamp's.
+    expect(record?.islands.map((i) => i.iterations > 0)).toStrictEqual([true, true]);
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SIM_STEP_HASH] });
+  });
+
+  it("engine 4's save of the same session loads as engine-changed: the lamp's island solved again (F2.5)", () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-4.ctrl');
+    const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.manifest.simEngineVersion).toBe(4);
+    expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+    expect(loaded.game.hash()).not.toBe(ENGINE_4_HASH);
+    expect(loaded.game.materialisedWorld().sim?.islands.map((i) => i.iterations > 0)).toStrictEqual([true, true]);
+    expect(sim('replay', fixture)).toMatchObject({ status: 1 });
   });
 
   it("engine 3's save of the same session loads as engine-changed (D8): its devices as saved, solved again, never refused", () => {
@@ -121,7 +142,7 @@ describe('the sim-step scenario', () => {
     expect(loaded.manifest.simEngineVersion).toBe(3);
     expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
     // Its devices' state loads as saved, but never engine 3's solution record (12 V placeholder EMF):
-    // engine 4 solves again at the save's tick (F2.4 save-format review), so the hash moves.
+    // this engine solves again at the save's tick (F2.4 save-format review), so the hash moves.
     expect(loaded.game.hash()).not.toBe(ENGINE_3_HASH);
     expect(loaded.game.materialisedWorld().sim?.lastSolveTick).toBe(1234);
     expect(sim('replay', fixture)).toMatchObject({ status: 1 });

@@ -64,6 +64,15 @@ export interface ModelKindDef {
 const positive = FiniteNumber.positive();
 
 /**
+ * The filament temperatures a save may hold (K). Below the resistivity table's first point (300 K) the
+ * lamp model extends its first segment, which reaches 0 Ω at about 65.6 K, so a save at 1 K would
+ * give a negative resistance (`sim-core`'s tungsten table). 200 K is game-design: below any bench a
+ * player can build (−73 °C), far above that zero. 3600 K is the table's top, where the model clamps.
+ */
+export const LAMP_FILAMENT_MIN_K = 200;
+export const LAMP_FILAMENT_MAX_K = 3600;
+
+/**
  * Battery parameters (F2.4). The EMF is the rested open-circuit voltage, linear in the state of charge
  * between `openCircuitVoltageEmptyV` (0) and `openCircuitVoltageFullV` (1), behind a constant
  * `internalResistanceOhm`; `capacityAh` is what coulomb counting divides by (`sim-core`'s battery model).
@@ -150,7 +159,11 @@ export type AcSourceParams = z.infer<typeof AcSourceParams>;
 export const SwitchSpstParams = z.strictObject({});
 export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
 
-/** Incandescent lamp parameters (provisional; F2.5 adds the filament model). */
+/**
+ * Incandescent lamp parameters (F2.5): the rated point and the filament's thermal behaviour. The
+ * filament's resistance is R(T) = (V_r² / P_r) · ρ(T) / ρ(T_r) from tungsten's resistivity
+ * (`sim-core`'s lamp model), so the cold resistance and the inrush follow from the material.
+ */
 export const LampIncandescentParams = z.strictObject({
   /** Rated (design) voltage (V). */
   ratedVoltageV: positive,
@@ -159,8 +172,30 @@ export const LampIncandescentParams = z.strictObject({
    * voltage (UNECE R37's W5W: 13.5 V); taking it at the rated voltage is a game-design simplification.
    */
   ratedPowerW: positive,
+  /** Filament temperature at the rated voltage and power (K), inside tungsten's tabulated 300–3600 K. */
+  filamentRatedTempK: FiniteNumber.min(1000).max(3600),
+  /** The filament's thermal time constant at its rated point (ms): how fast it heats and cools there. */
+  thermalTimeConstantMs: positive,
 });
 export type LampIncandescentParams = z.infer<typeof LampIncandescentParams>;
+
+/** Resistor parameters (F2.5): a fixed resistance and the power it is rated to dissipate. */
+export const ResistorParams = z.strictObject({
+  /** Resistance (Ω). */
+  resistanceOhm: positive,
+  /** Rated dissipation (W): above it the record says `overRated` (no damage model in P2). */
+  powerRatingW: positive,
+});
+export type ResistorParams = z.infer<typeof ResistorParams>;
+
+/** Heater parameters (F2.5): rated watts at rated volts, a fixed resistance R = V_r² / P_r. */
+export const HeaterParams = z.strictObject({
+  /** Rated voltage (V). */
+  ratedVoltageV: positive,
+  /** Rated power at the rated voltage (W). */
+  ratedPowerW: positive,
+});
+export type HeaterParams = z.infer<typeof HeaterParams>;
 
 /**
  * Test lead parameters. The conductor's resistance is derived, never tabulated (plan P2, ADR 0003:
@@ -203,9 +238,9 @@ function enumKey<const V extends readonly [string, ...string[]]>(
 
 /**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
- * (the bench demo), the test lead, and F2.4's bench supply, DIN-rail supply, utility services
- * (split-phase and three-phase, headless in P2) and portable generator stub. The fuse, breaker,
- * resistor and heater arrive with F2.5; adding a kind needs no `schemaVersion` bump.
+ * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
+ * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
+ * heater. The fuse and breaker arrive with F2.5 part 2; adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -233,6 +268,14 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     description:
       'A portable generator (a stub): a 120/240 V split-phase EMF behind its nameplate source impedance, with no engine dynamics.',
   },
+  heater: {
+    kind: 'heater',
+    placement: 'entity',
+    terminals: ['a', 'b'],
+    params: HeaterParams,
+    keys: {},
+    description: 'A resistance heater: its rated watts at its rated volts, a fixed resistance.',
+  },
   'lamp.incandescent': {
     kind: 'lamp.incandescent',
     placement: 'entity',
@@ -242,9 +285,9 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       filamentTempK: key(
         'sim',
         'number',
-        FiniteNumber.positive().nullable(),
+        FiniteNumber.min(LAMP_FILAMENT_MIN_K).max(LAMP_FILAMENT_MAX_K).nullable(),
         null,
-        'Filament temperature (K). null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
+        'Filament temperature (K), 200 to 3600. null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
       ),
     },
     description: 'An incandescent lamp: a tungsten filament whose resistance rises with its temperature.',
@@ -256,6 +299,14 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     params: LeadParams,
     keys: {},
     description: 'A test lead: a resistive connection between two terminals, made with lead.connect.',
+  },
+  resistor: {
+    kind: 'resistor',
+    placement: 'entity',
+    terminals: ['a', 'b'],
+    params: ResistorParams,
+    keys: {},
+    description: 'A fixed resistor with a power rating; its record says when it is over-rated (no damage model in P2).',
   },
   'supply.bench': {
     kind: 'supply.bench',

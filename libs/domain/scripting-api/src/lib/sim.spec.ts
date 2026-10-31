@@ -13,6 +13,7 @@ import {
   I2T_FUSE,
   THERMAL_LOAD,
 } from '@controls/sim-core/testing';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { decodeSnapshot } from '@controls/sim-protocol';
 import { createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
@@ -80,7 +81,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 4, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: SIM_ENGINE_VERSION, catalogVersion: 1 });
   });
 });
 
@@ -162,10 +163,13 @@ describe('game.probe: ideal and non-loading', () => {
 
   it('reports floating across islands, and unsolved on an unmodelled island', () => {
     const game = bench();
-    game.execOrThrow('entity.place', {
-      ref: { id: 'lamp.lumivane-12v-5w', version: 1 },
-      positionMm: { x: 0, y: 0, z: 0 },
-    });
+    // A load no model can value, across a second battery (what the lamp was before F2.5's filament model).
+    const at = { x: 0, y: 0, z: 0 };
+    game.execOrThrow('entity.place', { ref: { id: 'load.test-opaque', version: 1 }, positionMm: at });
+    game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
+    const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 6, terminal: 'pos' }, b: { entity: 5, terminal: 'a' } });
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 5, terminal: 'b' }, b: { entity: 6, terminal: 'neg' } });
     expect(game.probe('1:pos', '5:a')).toStrictEqual({ kind: 'floating', tick: 0 });
     expect(game.probe('5:a', '5:b')).toMatchObject({ kind: 'unsolved', reason: 'unmodelled' });
     expect(game.islands().map((i) => i.status)).toStrictEqual(['solved', 'unmodelled']);

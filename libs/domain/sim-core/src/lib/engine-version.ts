@@ -13,5 +13,8 @@
  *   world with a non-empty netlist hashes differently from what engine 1 or 2 wrote for the same log.
  * - 4: F2.4, the power sources. The battery's EMF follows its state of charge (12.9 V when full, never
  *   the nominal 12 V placeholder) and it discharges; the battery and supplies publish device records.
+ * - 5: F2.5, the first loads. The lamp has a filament model (tungsten R(T), heated and cooled), so an
+ *   island holding one is solved where engine 4 left it unmodelled; the lamp, resistor and heater
+ *   publish device records, and a heating filament re-solves within the step.
  */
-export const SIM_ENGINE_VERSION = 4;
+export const SIM_ENGINE_VERSION = 5;

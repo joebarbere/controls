@@ -33,6 +33,7 @@ import {
   netlistDump,
   SimEngine,
   type SimEngineOptions,
+  type SimDeviceRecord,
   type SimIslandInfo,
   SimProbeError,
   SimStartError,
@@ -265,6 +266,13 @@ export interface Game {
   probe(a: string, b: string): GameProbeReading;
   /** The islands of the current netlist and whether each one's values are a reading. */
   islands(): SimIslandInfo[];
+  /**
+   * Device `id`'s output record at this tick, decoded (F2.5): what the snapshot holds for it, field by
+   * field, enums by name (`game.device(3).values.lightOutputRel`). Its `status` says whether the solved
+   * fields are a reading (`solved`), never to be shown as one otherwise. `null` for an entity with no
+   * record (not netlisted, or a kind that publishes none). A script and test query.
+   */
+  device(id: number): SimDeviceRecord | null;
   /** The snapshot at this tick: the hashed bytes of its slot (ADR 0011 §5, §11), a fresh copy. */
   snapshot(): Uint8Array;
   /** SHA-256 of {@link snapshot}'s bytes, lower-case hex (`snapshotHash`, ADR 0011 §5.2). */
@@ -455,6 +463,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
       }
     },
     islands: () => needEngine('islands').islands(),
+    device: (id) => needEngine('device').deviceRecord(id),
     snapshot: () => needEngine('snapshot').snapshot(),
     snapshotHash: () => needEngine('snapshotHash').snapshotHash(),
     entries: () => bus.entries,

@@ -26,6 +26,8 @@ import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TES
  * - `test.orderA` and `test.orderB`: no elements; each layer call is journalled (the layer order);
  * - `test.droop`: a resistance that rises with its own current, R = R0 (1 + k |I|): a contraction the
  *   outer loop settles by its tolerance stop (the warm start from the solution record);
+ * - `test.opaque`: a resistance with no engine model and no default value, so an island holding it is
+ *   `unmodelled` (what the lamp was before F2.5's filament model);
  * - `test.leaky`: **deliberately wrong**, a step counter kept only in its bank and not in its bag, so
  *   the save-and-load property must fail on it (never in `engineTestOptions`, only `leakyTestOptions`);
  * - `test.reactor`: an inductor of `henries` on AC (a lagging current, so phasors with a phase), a
@@ -52,6 +54,10 @@ export const DROOP = { id: 'load.test-droop', version: 1 };
 export const REACTOR = { id: 'load.test-reactor', version: 1 };
 export const AC_TWIN = { id: 'source.test-ac-twin', version: 1 };
 export const LEAKY = { id: 'load.test-leaky', version: 1 };
+/** A 120 V 60 W incandescent lamp (the real lamp model on a test entry): the lamp on an AC island. */
+export const LAMP_120V = { id: 'lamp.test-120v-60w', version: 1 };
+/** A resistance no model can value (no engine model, no default): an island holding it is unmodelled. */
+export const OPAQUE = { id: 'load.test-opaque', version: 1 };
 /** Fixed test resistors (`test.resistor`), by resistance. */
 export const RESISTOR_2_4 = { id: 'load.test-resistor-2r4', version: 1 };
 export const RESISTOR_12 = { id: 'load.test-resistor-12r', version: 1 };
@@ -173,6 +179,14 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
     params: z.strictObject({}),
     keys: {},
     description: 'A deliberately wrong test model: state kept outside its bag.',
+  },
+  'test.opaque': {
+    kind: 'test.opaque',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({}),
+    keys: {},
+    description: 'A test resistance nothing can value: its island is unmodelled.',
   },
   'test.twinSupply': {
     kind: 'test.twinSupply',
@@ -297,6 +311,13 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(TWIN_SUPPLY, 'Test twin supply', 'test.twinSupply', {}, ['neg', 'pos']),
   entry(DROOP, 'Test droop load', 'test.droop', { coldOhm: 2, perAmp: 0.1 }),
   entry(LEAKY, 'Test leaky load', 'test.leaky', {}),
+  entry(OPAQUE, 'Test opaque load', 'test.opaque', {}),
+  entry(LAMP_120V, 'Test 120 V 60 W lamp', 'lamp.incandescent', {
+    ratedVoltageV: 120,
+    ratedPowerW: 60,
+    filamentRatedTempK: 2850,
+    thermalTimeConstantMs: 100,
+  }),
   entry(RESISTOR_2_4, 'Test 2.4 Ω resistor', 'test.resistor', { ohms: 2.4 }),
   entry(RESISTOR_12, 'Test 12 Ω resistor', 'test.resistor', { ohms: 12 }),
   entry(RESISTOR_100, 'Test 100 Ω resistor', 'test.resistor', { ohms: 100 }),
@@ -337,6 +358,7 @@ export const ENGINE_TEST_MODELS: NetlistModels = {
     'test.flip': { kind: 'test.flip', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.droop': { kind: 'test.droop', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.leaky': { kind: 'test.leaky', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.opaque': { kind: 'test.opaque', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.resistor': { kind: 'test.resistor', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.rheostat': {
       kind: 'test.rheostat',

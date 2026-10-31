@@ -50,11 +50,13 @@ describe('the built-in catalogue (content/devices)', () => {
     expect(files).toStrictEqual(BUILTIN_CATALOG.devices.map((d) => `${d.id}.v${d.version}.json`));
   });
 
-  it('holds the P2 bench devices, the F2.4 supplies and one test lead (plan P2)', () => {
+  it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and one test lead (plan P2)', () => {
     expect(BUILTIN_CATALOG.devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
       ['battery.ferrovane-12v-7ah', 'battery'],
+      ['heater.hearthvale-12v-50w', 'heater'],
       ['lamp.lumivane-12v-5w', 'lamp.incandescent'],
       ['lead.quillfern-test-1m', 'lead'],
+      ['resistor.orrinwood-10r-10w', 'resistor'],
       ['supply.brindlecore-bench-30v-5a', 'supply.bench'],
       ['supply.railwick-din-24v-5a', 'supply.dinPsu'],
       ['switch.tessaline-spst-toggle', 'switch.spst'],
@@ -68,8 +70,10 @@ describe('the built-in catalogue (content/devices)', () => {
     const brands = BUILTIN_CATALOG.devices.map((d) => d.brand);
     expect(brands).toStrictEqual([
       'Ferrovane',
+      'Hearthvale',
       'Lumivane',
       'Quillfern',
+      'Orrinwood',
       'Brindlecore',
       'Railwick',
       'Tessaline',
