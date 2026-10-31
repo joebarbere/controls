@@ -172,6 +172,15 @@ export class Session {
     return this.game.snapshotHash();
   }
 
+  /**
+   * Device `id`'s sim output record at this tick (`Game.device`, F2.5): the lamp's light output and
+   * reading status for the viewport. Until F2.3b moves the engine to the sim worker, the game's engine
+   * runs in-process, so this is synchronous; F2.3b replaces it with the snapshot reader.
+   */
+  deviceRecord(id: number): ReturnType<Game['device']> {
+    return this.game.device(id);
+  }
+
   /** Whether the palette and keybindings should offer the command in the current context. */
   isEnabled(id: string): boolean {
     return this.registry.isEnabled(id, this.contextKeys());

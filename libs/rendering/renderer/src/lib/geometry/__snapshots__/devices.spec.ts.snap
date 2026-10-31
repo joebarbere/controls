@@ -1,5 +1,299 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`F2.5 device recipes > match the geometry snapshot (bounds, vertices and slots per kind) > F2.5 recipes 1`] = `
+[
+  {
+    "boundsMm": [
+      0,
+      -0.5,
+      0,
+      60,
+      40,
+      31,
+    ],
+    "id": "switch.tessaline-spst-toggle",
+    "lever": {
+      "boundsMm": [
+        -3.5,
+        -3.5,
+        0,
+        3.5,
+        3.5,
+        16,
+      ],
+      "pivotMm": {
+        "x": 30,
+        "y": 20,
+        "z": 29,
+      },
+    },
+    "slots": [
+      [
+        "body",
+        36,
+      ],
+      [
+        "panel",
+        36,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        864,
+      ],
+    ],
+    "vertices": 516,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.5,
+      0,
+      50,
+      50,
+      60,
+    ],
+    "id": "lamp.lumivane-12v-5w",
+    "lever": null,
+    "slots": [
+      [
+        "body",
+        36,
+      ],
+      [
+        "panel",
+        288,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        864,
+      ],
+      [
+        "bulb",
+        2160,
+      ],
+    ],
+    "vertices": 1065,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.5,
+      0,
+      70,
+      40,
+      30,
+    ],
+    "id": "resistor.orrinwood-10r-10w",
+    "lever": null,
+    "slots": [
+      [
+        "body",
+        36,
+      ],
+      [
+        "panel",
+        144,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        576,
+      ],
+    ],
+    "vertices": 440,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.5,
+      0,
+      90,
+      50,
+      40,
+    ],
+    "id": "heater.hearthvale-12v-50w",
+    "lever": null,
+    "slots": [
+      [
+        "body",
+        36,
+      ],
+      [
+        "panel",
+        288,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        828,
+      ],
+    ],
+    "vertices": 660,
+  },
+]
+`;
+
+exports[`F2.5 devices in the scene > draw the four devices; lamps start unknown, the switch open (scene-graph snapshot) > F2.5 devices 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        -1,
+        0,
+        60,
+        40,
+        31,
+      ],
+      "children": [
+        {
+          "boundsMm": [
+            -4,
+            -4,
+            0,
+            4,
+            4,
+            16,
+          ],
+          "name": "lever",
+          "positionMm": [
+            30,
+            20,
+            29,
+          ],
+          "rotationMdeg": [
+            25000,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": true,
+        },
+      ],
+      "label": "Tessaline TS-101",
+      "name": "entity-1",
+      "positionMm": [
+        100,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "switch": {
+        "closed": false,
+      },
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        -1,
+        0,
+        50,
+        50,
+        60,
+      ],
+      "label": "Lumivane LV-12-5",
+      "lamp": {
+        "level": 0,
+        "status": "unknown",
+      },
+      "name": "entity-2",
+      "positionMm": [
+        200,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        -1,
+        0,
+        70,
+        40,
+        30,
+      ],
+      "label": "Orrinwood OW-10R-10",
+      "name": "entity-3",
+      "positionMm": [
+        300,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-3",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        -1,
+        0,
+        90,
+        50,
+        40,
+      ],
+      "label": "Hearthvale HV-1250",
+      "name": "entity-4",
+      "positionMm": [
+        400,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-4",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
 exports[`device recipes in the scene (scene-graph snapshot) > draws each placed device with its recipe, label and device selectable > bench devices 1`] = `
 {
   "children": [

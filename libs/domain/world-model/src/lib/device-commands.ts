@@ -1,5 +1,13 @@
 import { BUILTIN_CATALOG, type Catalog, checkControlValue } from '@controls/catalog';
-import { type AnyCommandDef, defineCommand, entityRefMeta, fail, succeed } from '@controls/commands';
+import {
+  type AnyCommandDef,
+  defineCommand,
+  entityRefMeta,
+  fail,
+  SELECTION_ENTITY_ID_KEY,
+  succeed,
+  VIEWPORT_FOCUSED_KEY,
+} from '@controls/commands';
 import { DeviceStateKey, FiniteNumber, Int, MAX_DEVICE_STATE_STRING, SafeString } from '@controls/save-format';
 import { z } from 'zod';
 import { findEntity } from './entity-commands';
@@ -36,6 +44,17 @@ export const DeviceOperateArgs = z.strictObject({
 export type DeviceOperateArgs = z.infer<typeof DeviceOperateArgs>;
 
 /**
+ * UI context key: the selected device's first toggle control (`closed` on a switch), absent when the
+ * selection has none. The viewport publishes it with {@link SELECTION_TOGGLE_VALUE_KEY} from the
+ * selected entity's catalogue entry and commanded state (F2.5).
+ */
+export const SELECTION_TOGGLE_CONTROL_KEY = 'selection.toggleControl';
+/** UI context key: the value that toggle would take, the opposite of its commanded state now. */
+export const SELECTION_TOGGLE_VALUE_KEY = 'selection.toggleValue';
+/** Binding id of the operate key: `device.operate` on the selection's toggle, to its other position. */
+export const DEVICE_OPERATE_SELECTION_BINDING = 'device.operate.selection';
+
+/**
  * `device.operate {id, control, value}`: sets a device's control. Undo restores the previous value.
  * Refused: a missing entity (`not-found`), an entity that isn't a catalogue device (`not-a-device`), a
  * control the device doesn't have (`unknown-control`), and a value the control doesn't take
@@ -49,6 +68,27 @@ export function deviceOperateCommand(catalog: Catalog = BUILTIN_CATALOG) {
     category: 'Device',
     args: DeviceOperateArgs,
     undoable: true,
+    // E in the viewport flips the selected device's toggle (a switch's contacts, F2.5): all three
+    // arguments come from the context, so the log holds the concrete id, control and value.
+    bindings: [
+      {
+        id: DEVICE_OPERATE_SELECTION_BINDING,
+        title: 'Operate the selected device (flip its switch)',
+        category: 'Device',
+        target: {
+          kind: 'command',
+          command: 'device.operate',
+          args: {},
+          contextArgs: {
+            id: SELECTION_ENTITY_ID_KEY,
+            control: SELECTION_TOGGLE_CONTROL_KEY,
+            value: SELECTION_TOGGLE_VALUE_KEY,
+          },
+        },
+        defaults: ['E'],
+        when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_TOGGLE_CONTROL_KEY}`,
+      },
+    ],
     run: ({ state }, { id, control, value }) => {
       const entity = findEntity(state, id);
       if (!entity) return fail('not-found', `No entity with id ${id}`);
@@ -72,6 +112,25 @@ export function deviceOperateCommand(catalog: Catalog = BUILTIN_CATALOG) {
       return succeed({ apply: setState(after), invert: setState(before) });
     },
   });
+}
+
+/**
+ * What the operate key would do to entity `id` (F2.5): its first toggle control and the value that
+ * flips it, from the catalogue entry and the entity's **commanded** state only (never its `sim` bag:
+ * a tripped breaker's handle is still where the player left it). `null` when the entity doesn't exist,
+ * isn't a catalogue device, or has no toggle. The viewport publishes it as the
+ * {@link SELECTION_TOGGLE_CONTROL_KEY} and {@link SELECTION_TOGGLE_VALUE_KEY} context keys.
+ */
+export function selectionToggle(
+  world: World,
+  id: number,
+  catalog: Catalog = BUILTIN_CATALOG,
+): { readonly control: string; readonly value: boolean } | null {
+  const entity = findEntity(world, id);
+  if (!entity) return null;
+  const toggle = catalog.device(entity.ref)?.controls.find((c) => c.type === 'toggle');
+  if (toggle === undefined) return null;
+  return { control: toggle.id, value: entity.state[toggle.id] !== true };
 }
 
 /** The device commands, in a fixed order, resolving refs against `catalog`. */

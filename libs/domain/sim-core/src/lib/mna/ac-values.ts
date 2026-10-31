@@ -171,6 +171,8 @@ export type AcDefaultValue = (branch: NetlistBranch, values: AcBranchValues) => 
  */
 export const AC_DEFAULT_VALUES: Readonly<Record<string, AcDefaultValue>> = Object.freeze({
   lead: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  resistor: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  heater: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
 });
 
 /**

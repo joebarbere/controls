@@ -62,6 +62,17 @@ describe('checkWorldDevices (the invalid-device-state load check)', () => {
     ]);
   });
 
+  it('refuses a lamp filament temperature outside 200–3600 K (a 1 K save would give a negative R, F2.5 review)', () => {
+    const LAMP = { id: 'lamp.lumivane-12v-5w', version: 1 };
+    const lamp = (filamentTempK: number | null) => checkWorldDevices(world([entity(1, LAMP, {}, { filamentTempK })]));
+    for (const ok of [null, 200, 293.15, 3600]) expect(lamp(ok)).toStrictEqual([]);
+    for (const bad of [1, 65, 199.9, 3600.1]) {
+      expect(lamp(bad)).toStrictEqual([
+        { path: 'entities[0].sim.filamentTempK', message: 'Not a valid lamp.incandescent filamentTempK value' },
+      ]);
+    }
+  });
+
   it("checks each control's value against the entry's control range (a crafted 1e9 V setpoint)", () => {
     const SUPPLY = { id: 'supply.brindlecore-bench-30v-5a', version: 1 };
     const state = { currentLimitA: 1, outputOn: false, setpointV: 12 };

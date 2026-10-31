@@ -440,14 +440,14 @@ Acceptance:
 
 _Done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#the-engine-loop-f23a), [simulation caveats](../docs/caveats/simulation.md)); `save-format-guardian` and `test-engineer` reviews pending. Notes:_
 
-- _**Device models plug in as banks** (`SimDeviceModel`, `engine/device-model.ts`): struct-of-arrays per model kind, rebuilt from each device's sim bag at every topology change, with optional DC value, outer-loop, layer and record hooks. No built-in kind has one yet, so the hooks are proven with synthetic test models (`@controls/sim-core/testing`: a self-heating load, an I²t fuse, a resistance that never settles, an ideal twin source, layer-order probes). The battery keeps its placeholder EMF (F2.4); **the lamp has no filament model, so an island holding one is `unmodelled`**: not solved, recorded with 0 iterations and zeros, never a reading (F2.5)._
+- _**Device models plug in as banks** (`SimDeviceModel`, `engine/device-model.ts`): struct-of-arrays per model kind, rebuilt from each device's sim bag at every topology change, with optional DC value, outer-loop, layer and record hooks. No built-in kind has one yet, so the hooks are proven with synthetic test models (`@controls/sim-core/testing`: a self-heating load, an I²t fuse, a resistance that never settles, an ideal twin source, layer-order probes). The battery keeps its placeholder EMF (F2.4); **the lamp has no filament model, so an island holding one is `unmodelled`**: not solved, recorded with 0 iterations and zeros, never a reading (until F2.5 part 1 gave it one)._
 - _**The bench demo for the determinism criteria** is the synthetic engine bench (battery, switch, self-heating load, I²t fuse: the load heats and the fuse blows within 10 s) and, with the real catalogue, `apps/sim-cli/scenarios/sim-step.console` (a battery shorted through two leads by a switch, an unwired lamp, `sim.step 1234`). `bench-lamp.console` comes with F2.5's lamp._
 - _**`SIM_ENGINE_VERSION` is 3** (D8; 2 is #51's sparse pivoting): saves and `world.hash` now hold the materialised solution record, so engine-1 and engine-2 saves load as `engine-changed`. Only goldens of worlds with a netlist moved (`BENCH_LEADS_HASH`); props-only worlds export `sim: null` and kept theirs._
 - _**The game runs the engine in-process until F2.3b** (ADR 0011, "Implementation notes"), so the in-game console's `sim.step` works and the D6 golden runs in the page through the console's `run`._
 - _The per-tick bench case (`tick-device-mix`: 750 devices, layers only) is gated at §4.5's 0.3 ms: 0.015 ms median on an AMD Ryzen 5 5600X._
 - _**Load verification is bounded** (#52 review): a save's log is replayed to verify it only if it spans at most `MAX_VERIFY_TICKS` (10 000 ticks, 10 s of sim time; deterministic, never the wall clock). Past it the log restarts as `too-long-to-verify` (never refused, an info toast). The bound comes from `sim bench`'s `plant-advance-1000-ticks` (45 ms per 1,000 ticks of the 2,000-node plant locally, about 0.15 ms per tick on the slowest CI runner), for verification under about 2 s. So in practice only short sessions are verified for now._
 - _**Open user decision (#52 review): should long logs be rebased or checkpointed so verification stays bounded?** For example a materialised checkpoint world every N ticks (ADR 0013's rebase caveat), verifying only the tail; or a bound in work (ticks × netlist size) rather than ticks. **Default until decided:** skip verification and restart the log past `MAX_VERIFY_TICKS`._
-- _**The D6 golden moves to the bench lamp at F2.5:** `sim-step.console` is a stand-in with no device model; F2.5 re-pins the Node-vs-Chromium snapshot golden on `bench-lamp.console`, whose lamp runs `dmath` (the first transcendental, where V8 builds could differ)._
+- _**The D6 golden moves to the bench lamp at F2.5** (done in F2.5 part 1): `sim-step.console` was a stand-in with no device model; `bench-lamp.console` is now the Node-vs-Chromium golden (`apps/game-e2e/src/bench-lamp.spec.ts`). Its lamp turned out not to need `dmath` (no transcendental), so ADR 0014 is still deferred._
 
 ### F2.3b Sim worker, snapshot transport and time control
 
@@ -545,13 +545,13 @@ _Part 2 (utility, three-phase, generator stub, the C84.1 bands) done 2026-10-31,
 
 Acceptance:
 
-- [ ] **Resistor:** R and a power rating. It publishes `overRated`, with no damage model in P2.
-- [ ] **Heater:** rated watts at rated volts.
-- [ ] **Incandescent lamp:**
+- [x] **Resistor:** R and a power rating. It publishes `overRated`, with no damage model in P2.
+- [x] **Heater:** rated watts at rated volts.
+- [x] **Incandescent lamp:**
   - filament R(T) with a thermal ODE: sourced tungsten resistivity against temperature, and a thermal time constant;
   - the cold-start inrush emerges from the model, with its peak ratio inside a sourced band;
   - `lightOutputRel` follows a sourced, published relation between light output and voltage or power.
-- [ ] **SPST switch:** `device.operate {control: 'closed'}`. Closed merges its terminals; open drops the branch. It can be operated from the selected entity with the keyboard or a mouse click, the palette, the console and a script, each logging one command.
+- [x] **SPST switch:** `device.operate {control: 'closed'}`. Closed merges its terminals; open drops the branch. It can be operated from the selected entity with the keyboard or a mouse click, the palette, the console and a script, each logging one command.
 - [ ] **Fuse:**
   - blows when ∫I²dt reaches the melting I²t, from a sourced, fictional datasheet;
   - blowing changes the topology and re-solves in the same tick, raises a `blown` event and is persisted in the fuse's sim-owned `sim` bag (ADR 0011 §1, ADR 0013);
@@ -561,12 +561,26 @@ Acceptance:
   - thermal state `dθ/dt = ((I/In)² − θ)/τ`, plus a magnetic band seeded per entity id so it is reproducible;
   - trip times at multiples of In fall inside the cited band, from NEC-region manufacturer-style data, not IEC 60898 figures;
   - after a trip, the handle must go off and then on again.
-- [ ] **Bench demo** (`apps/sim-cli/scenarios/bench-lamp.console` and `.ts`, starting from the workshop):
+- [x] **Bench demo** (`apps/sim-cli/scenarios/bench-lamp.console` and `.ts`, starting from the workshop):
   - place the battery, switch and lamp, connect three leads, close the switch and advance;
   - `lightOutputRel` lies inside its band, and opening the switch takes it to 0;
   - the snapshot and world hashes are pinned in the spec, the game-e2e driver and the scripting caveats, together.
-- [ ] **Lamp rendering:** emissive intensity follows `lightOutputRel` through the documented display curve. The scene-graph snapshot records it, and a change calls `invalidate()`.
-- [ ] **A lamp on an unsolved island is not "dark = 0 W"** (#52 review): when its island isn't `solved` (0 iterations: unmodelled, AC pending, mixed; or singular, or non-converged), the record's values are no reading, and the renderer and inspector show the lamp as unknown or unsettled by a written validity rule, never as an off lamp drawing 0 W.
+- [x] **Lamp rendering:** emissive intensity follows `lightOutputRel` through the documented display curve. The scene-graph snapshot records it, and a change calls `invalidate()`. _`lampDisplayCurve` (`1 − e^(−ln5·L)`, 255 levels, dark below 1/255; game-design), fed by the viewport from `Session.deviceRecord` until F2.3b's snapshot reader; the renderer's two ADR 0011 §9 deviations (no half-step hysteresis, an absent lamp is unknown) are in the rendering caveats for the ADR owners to confirm._
+- [x] **A lamp on an unsolved island is not "dark = 0 W"** (#52 review): when its island isn't `solved` (0 iterations: unmodelled, AC pending, mixed; or singular, or non-converged), the record's values are no reading, and the renderer and inspector show the lamp as unknown or unsettled by a written validity rule, never as an off lamp drawing 0 W. _The renderer follows it (`lampDrawStatus`: unsolved and singular draw as unknown, unsettled with its own tint; rendering caveats). The inspector arrives with F2.6 and must read the same `status` field._
+
+_Part 1 (resistor, heater, incandescent lamp, operating the switch, the bench demo) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#first-loads-f25), [simulation caveats](../docs/caveats/simulation.md#first-loads-f25)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Lamp rendering and the unsolved-lamp rule's renderer side are with `renderer-engineer` in the same PR, not ticked here. Part 2 (fuse, breaker) is the next PR in the stack. Notes:_
+
+- _**The lamp:** R(T) = R_r · ρ(T) / ρ(T_r), R_r = V_r² / P_r, with tungsten's resistivity piecewise linear between Jones and Langmuir's (1927) points (a loop-free bucket lookup). The thermal ODE C dT/dt = I²R(T) − k(T⁴ − T_a⁴) takes k from the rated point and C = 4kT_r³τ from the catalogue's thermal time constant, integrated by explicit Euler at the 1 ms tick. The catalogue entry gained `filamentRatedTempK` (2700 K) and `thermalTimeConstantMs` (50 ms); catalogue v1 is still provisional, so no `catalogVersion` bump, and no state key changed, so no `schemaVersion` bump._
+- _**Inrush emerges:** the cold filament is about 1/15 of its hot resistance, and the bench lamp's first solve draws 14.3× its settled current (the sourced band is 10–15×), falling as it heats._
+- _**Light output:** `lightOutputRel` = x^(17/8), x the radiated power over rated, from Fink and Beaty's L ∝ V^3.4 and P ∝ V^1.6. The bench demo checks it within 4 % of (V/12)^3.4 across the lamp. "Opening the switch takes it to 0" is checked as below one display step (1/255) after 0.5 s: radiation alone cools the filament slowly._
+- _**A re-solve within the step:** a continuous layer may now return `true` (a value went stale), and the engine re-solves at t + 1 without a recompile (`stats.continuousSolves`). The lamp asks when R(T) has moved more than 1 % from the resistance the last solve saw, read back from the solution as |ΔV| / |I| (never cached, so a loaded engine re-solves at the same ticks), and never below 1 µA. The lamp sets R(T) once per solve (`dcValue`, `acValue`), with no outer-loop hook: its temperature can't move within a solve, so F2.2 part 3's note to re-measure the outer loop's iterations with the real R(T) has nothing to measure for the lamp._
+- _**Validity rule:** on an island that isn't solved the filament is frozen (neither heated nor cooled), and the record's `status` says so. The record (`LAMP_OUTPUT`): `powerW`, `currentA`, `voltageV` (solved), `resistanceOhm`, `filamentTempK`, `lightOutputRel` (its own state), `status`._
+- _**Resistor and heater:** the resistor's record has `overRated` (solved; no damage model); the heater is R = V² / P, constant. Both have DC and AC defaults. New kinds `resistor` and `heater`, entries `resistor.orrinwood-10r-10w` and `heater.hearthvale-12v-50w`._
+- _**Operating a switch:** the `device.operate.selection` binding (E, when the viewport is focused and the selection has a toggle) takes its id, control and value from the context keys `selection.entityId`, `selection.toggleControl` and `selection.toggleValue`, which the viewport publishes from the commanded state (`selectionToggle`); a double-click on the canvas runs the same command. Each logs one `device.operate`._
+- _**Reading a device:** `SimEngine.deviceRecord(entity)`, `game.device(id)` and `Session.deviceRecord(id)` (in-process until F2.3b) decode a record by its schema._
+- _**`SIM_ENGINE_VERSION` 5:** `SIM_STEP_HASH`, `SIM_STEP_SNAPSHOT_HASH` and `BENCH_LEADS_HASH` re-pinned (the lamp's islands are now solved); `SOURCES_*` and `MAINS_*` didn't move. New fixtures `sim-step-engine-5.ctrl`, `sources-engine-5.ctrl` and `bench-lamp-engine-5.ctrl`; the engine-4 ones now load as `engine-changed`._
+- _**Allocation:** a lit lamp's per-tick path is gated at 1 B/step in its own file, `engine/allocation-loads.spec.ts`, run uncovered beside F2.4's gates (`vitest.allocation.mts`; worst median of 100 uncovered runs 0.70). Two traps found on the way, and why the file is separate, are in the simulation caveats._
+- _**No `dmath` yet:** the lamp needed no transcendental (x^(17/8) = x² · ⁸√x with `Math.sqrt`, tungsten piecewise linear, Euler), against this plan's expectation that it would be `dmath`'s first use. ADR 0014 stays deferred to the first real transcendental._
 
 ### F2.6 Debug tools
 
@@ -691,7 +705,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
 | F2.4    | Power sources                                     | ✅ Done (reviews pending)                     |
-| F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
+| F2.5    | First loads and switching (bench demo)            | 🚧 Part 1 done (reviews pending)              |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
 | F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |
 | —       | Phase-acceptance E2E                              | ⬜ Not started                                |

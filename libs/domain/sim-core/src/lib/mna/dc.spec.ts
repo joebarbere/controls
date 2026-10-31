@@ -96,7 +96,7 @@ describe('dcBranchValues', () => {
     const lead = branchOf(netlist, 1);
     expect(values.ohms[lead]).toBe(netlist.branches[lead].values['resistanceOhm']);
     expect(values.ohms[branchOf(netlist, 3, 'filament')]).toBe(28.8);
-    expect(Object.keys(DC_DEFAULT_VALUES)).toStrictEqual(['lead', 'battery']);
+    expect(Object.keys(DC_DEFAULT_VALUES)).toStrictEqual(['lead', 'resistor', 'heater', 'battery']);
   });
 
   it('refuses a branch without a value, and a hook that claims one it did not set', () => {

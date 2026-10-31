@@ -5,6 +5,7 @@ import { createWorldBus, createWorldRegistry, worldHash } from '@controls/world-
 import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import { SOURCE_SESSION_REFS } from '../../testing/sources';
+import { LOAD_SESSION_REFS } from '../../testing/loads';
 import {
   AC_TWIN,
   DROOP,
@@ -238,9 +239,14 @@ describe('engine determinism properties', () => {
   it('every engine device model has a parity case (a model without one fails here)', () => {
     const kinds = [...Object.keys(BUILTIN_DEVICE_MODELS), ...Object.keys(engineTestOptions().deviceModels)];
     expect(kinds.length).toBeGreaterThanOrEqual(7);
-    // Over both session arbitraries: this file's (F2.3a's mix) and the sources' (`devices/sources/
-    // properties.spec.ts`, F2.4), so a model is covered by one save-and-load property or the other.
-    const covered: Readonly<Record<string, CatalogRef>> = { ...PARITY_REFS, ...SOURCE_SESSION_REFS };
+    // Over the session arbitraries: this file's (F2.3a's mix), the sources' (`devices/sources/
+    // properties.spec.ts`, F2.4) and the loads' (`devices/loads/properties.spec.ts`, F2.5), so a model is
+    // covered by one save-and-load property or another.
+    const covered: Readonly<Record<string, CatalogRef>> = {
+      ...PARITY_REFS,
+      ...SOURCE_SESSION_REFS,
+      ...LOAD_SESSION_REFS,
+    };
     for (const kind of kinds) {
       expect(covered[kind], kind).toBeDefined();
       expect(ENGINE_TEST_CATALOG.kindOf(covered[kind])?.kind).toBe(kind);

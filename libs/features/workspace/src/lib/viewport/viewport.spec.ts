@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_PLATFORM, KeybindingService, Session, ToolBelt } from '@controls/feature-session';
-import type { ViewportIntent } from '@controls/renderer';
+import { type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
 import { Viewport } from './viewport';
 
 /** The component's gesture handler (private: the renderer calls it, and jsdom has no renderer). */
@@ -28,7 +28,8 @@ describe('Viewport', () => {
     expect(canvas.getAttribute('aria-label')).toBe(
       '3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, W A S D walk. ' +
         'Number keys pick a prop; click or Enter places it at the pointer or the centre. ' +
-        'Drag an object, or M then Enter, to move it; Delete deletes it; Escape cancels.',
+        'Drag an object, or M then Enter, to move it; E or a double-click operates a selected switch; ' +
+        'Delete deletes it; Escape cancels.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
@@ -103,6 +104,50 @@ describe('Viewport', () => {
     fixture.destroy();
     expect(session.contextKeys()['viewport.focused']).toBeUndefined();
     document.body.replaceChildren();
+  });
+
+  it('E and a double-click operate the selected switch: its toggle in the context keys, one command each (F2.5)', async () => {
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    const session = TestBed.inject(Session);
+    session.newSandbox({ seed: 0 });
+    const at = { x: 0, y: 0, z: 0 };
+    expect(
+      session.exec('entity.place', { ref: { id: 'switch.tessaline-spst-toggle', version: 1 }, positionMm: at }).ok,
+    ).toBe(true);
+    const id = session.world().entities.at(-1)?.id as number;
+    const viewport = fixture.componentInstance;
+    // jsdom has no renderer: select the switch through the view state the renderer would publish.
+    const info = { id: `entity-${id}`, kind: 'device', entityId: id };
+    viewport.state.set({ selected: info, hovered: null } as unknown as ViewportState);
+    // jsdom has no layout or GPU: give the canvas a size and stand in for the pick under the pointer.
+    const pick = vi.spyOn(ViewportRenderer.prototype, 'pickAt').mockReturnValue(info as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 100));
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleControl']).toBe('closed');
+    expect(session.contextKeys()['selection.toggleValue']).toBe(true);
+    const canvas = (fixture.nativeElement as HTMLElement).querySelector('canvas') as HTMLCanvasElement;
+    const logged = session.entries().length;
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(
+      session
+        .entries()
+        .slice(logged)
+        .map((e) => [e.id, e.args]),
+    ).toEqual([['device.operate', { id, control: 'closed', value: true }]]);
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleValue']).toBe(false); // the next flip opens it
+    expect(pick).toHaveBeenCalled(); // picked at the pointer
+    // With the pointer off the switch (over empty space), a double-click operates nothing.
+    pick.mockReturnValue(null);
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 100, clientY: 50 }));
+    expect(session.entries().length).toBe(logged + 1);
+    // A selection without a toggle publishes none, and a double-click does nothing.
+    viewport.state.set({ selected: null } as unknown as ViewportState);
+    await fixture.whenStable();
+    expect(session.contextKeys()['selection.toggleControl']).toBeUndefined();
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(session.entries().length).toBe(logged + 1);
   });
 
   it('does not expose the E2E hook without ?e2e=1', async () => {

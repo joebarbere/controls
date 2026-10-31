@@ -1,0 +1,19 @@
+# F2.5: the bench demo. A battery, an SPST switch and an incandescent lamp on the workshop bench,
+# joined by three test leads (battery + to the switch, the switch to the lamp, the lamp back to
+# battery -). Closing the switch lights the lamp: the cold filament draws about 14 times its settled
+# current, then heats to about 2770 K in a couple of hundred milliseconds. After 1.5 s it is lit
+# (lightOutputRel about 1.25: the full battery's 12.9 V is above the lamp's 12 V rating). Opening the
+# switch puts it out: half a second later its light is under a display step. Same as bench-lamp.ts.
+#   pnpm sim run apps/sim-cli/scenarios/bench-lamp.console --world content/levels/workshop.json
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id switch.tessaline-spst-toggle --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 3 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal b --b.entity 1 --b.terminal neg
+device.operate 2 closed true    # close the switch: the lamp lights
+sim.step 1500
+world.hash                      # lit
+device.operate 2 closed false   # open it: the lamp goes out
+sim.step 500
+world.hash                      # dark

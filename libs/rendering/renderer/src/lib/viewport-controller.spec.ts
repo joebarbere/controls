@@ -448,6 +448,87 @@ describe('ViewportController world sync', () => {
   });
 });
 
+// --- F2.5: lamps glow by sim output, switches show their lever --------------------------------
+
+describe('ViewportController lamps and switches (F2.5)', () => {
+  const LAMP = { id: 'lamp.lumivane-12v-5w', version: 1 };
+  const SWITCH = { id: 'switch.tessaline-spst-toggle', version: 1 };
+  const solved = (lightOutputRel: number) => ({ lightOutputRel, status: 'solved' as const });
+
+  it('setLampOutputs invalidates only when a drawn level or status changes', () => {
+    const { controller } = setup();
+    controller.syncWorld(worldWith(entity(1, LAMP, -200, 100), entity(2, LAMP, 0, 100)));
+    const invalidate = vi.spyOn(controller, 'invalidate');
+    const lamps = (a: number, b?: number) =>
+      new Map(
+        b === undefined
+          ? [[1, solved(a)]]
+          : [
+              [1, solved(a)],
+              [2, solved(b)],
+            ],
+      );
+
+    controller.setLampOutputs(lamps(1));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(controller.lampOf(1)).toStrictEqual({ level: 204, status: 'solved' });
+    controller.setLampOutputs(lamps(1)); // same values
+    controller.setLampOutputs(lamps(1.0001)); // under one display step
+    controller.setLampOutputs(new Map(lamps(1))); // a new map, same values
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    controller.setLampOutputs(lamps(1, 0)); // lamp 2: unknown → solved and dark, a status change
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(controller.lampOf(2)).toStrictEqual({ level: 0, status: 'solved' });
+    controller.setLampOutputs(new Map([[1, { lightOutputRel: 1, status: 'unsettled' as const }]]));
+    expect(invalidate).toHaveBeenCalledTimes(3);
+    expect(controller.lampOf(2)).toStrictEqual({ level: 0, status: 'unknown' }); // no entry: unknown, not off
+    // The scene graph records the drawn level and status.
+    const world = controller.sceneGraph().children?.find((c) => c.name === 'world');
+    expect(world?.children?.map((c) => c.lamp)).toStrictEqual([
+      { level: 204, status: 'unsettled' },
+      { level: 0, status: 'unknown' },
+    ]);
+    controller.dispose();
+  });
+
+  it("a switch's lever follows its commanded state through world sync, and the change draws", () => {
+    const { controller } = setup();
+    const sw = (closed: boolean): Entity => ({ ...entity(1, SWITCH, -200, 100), state: { closed } });
+    controller.syncWorld(worldWith(sw(false)));
+    const invalidate = vi.spyOn(controller, 'invalidate');
+    const drawn = () => controller.sceneGraph().children?.find((c) => c.name === 'world')?.children?.[0];
+    expect(drawn()?.switch).toStrictEqual({ closed: false });
+    controller.syncWorld(worldWith(sw(true)));
+    expect(invalidate).toHaveBeenCalled();
+    expect(drawn()?.switch).toStrictEqual({ closed: true });
+    expect(drawn()?.children?.[0]).toMatchObject({ name: 'lever', rotationMdeg: [-25_000, 0, 0] });
+    // The lever is part of the switch's pick: a click on the switch selects the device.
+    expect(controller.selection.get('entity-1')?.kind).toBe('device');
+    controller.dispose();
+  });
+
+  it('disposal with lamps and a switch disposes every geometry and material exactly once', () => {
+    const { controller } = setup();
+    controller.syncWorld(worldWith(entity(1, LAMP, -200, 100), entity(2, LAMP, 0, 100), entity(3, SWITCH, 100, -200)));
+    controller.setLampOutputs(new Map([[1, solved(1)]]));
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh || o instanceof Box3Helper) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(0);
+  });
+});
+
 describe('ViewportController placement', () => {
   const targets = worldSnapTargets(PANEL);
 

@@ -86,6 +86,68 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "heater.hearthvale-12v-50w",
+  "version": 1,
+  "title": "12 V 50 W heater element on a base",
+  "brand": "Hearthvale",
+  "modelName": "HV-1250",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 90,
+    "heightMm": 50,
+    "depthMm": 40
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 10,
+        "y": 25,
+        "z": 12
+      }
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 80,
+        "y": 25,
+        "z": 12
+      }
+    }
+  ],
+  "model": {
+    "kind": "heater",
+    "params": {
+      "ratedVoltageV": 12,
+      "ratedPowerW": 50
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "low-voltage-heater-class",
+      "kind": "real-world",
+      "citation": "The 12 V resistance heating element (vehicle and bench heaters, de-icing pads), commonly rated in watts at 12 V; 50 W is a usual rating of the class (typical published figures, paraphrased, not one vendor's). Its resistance is V² / P = 2.88 Ω. A nickel-chromium element's resistance rises only a few percent from cold to hot (a temperature coefficient of about 1e-4 per kelvin), so it is taken as constant at the rated (hot) value.",
+      "covers": [
+        "model.params.ratedVoltageV",
+        "model.params.ratedPowerW"
+      ]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: the element in a guard on a 90 × 50 mm base, 40 mm tall, with a screw terminal at each end; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "lamp.lumivane-12v-5w",
   "version": 1,
   "title": "12 V 5 W incandescent lamp on a base",
@@ -121,7 +183,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     "kind": "lamp.incandescent",
     "params": {
       "ratedVoltageV": 12,
-      "ratedPowerW": 5
+      "ratedPowerW": 5,
+      "filamentRatedTempK": 2700,
+      "thermalTimeConstantMs": 50
     }
   },
   "controls": [],
@@ -133,6 +197,30 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedPowerW"
+      ]
+    },
+    {
+      "id": "filament-temperature",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour: small low-voltage vacuum signal lamps run their tungsten filaments at roughly 2500 to 2900 K (lamp makers' miniature-lamp catalogues give colour temperatures in that range; a household 100 W lamp runs nearer 2850 K). 2700 K is taken. With tungsten's resistivity (Jones and Langmuir, 1927) it gives the lamp a cold resistance of about 1/15 of its hot one, which is where the cold-start inrush comes from.",
+      "covers": [
+        "model.params.filamentRatedTempK"
+      ]
+    },
+    {
+      "id": "filament-time-constant",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds, its inrush decaying over a few tens of milliseconds. 50 ms is taken as the small-signal thermal time constant at the rated point; with the 5 W rating it implies about 0.4 mJ/K of heat capacity, a filament of a couple of milligrams of tungsten.",
+      "covers": [
+        "model.params.thermalTimeConstantMs"
+      ]
+    },
+    {
+      "id": "inrush-band",
+      "kind": "real-world",
+      "citation": "Physics from H. A. Jones and I. Langmuir, General Electric Review 30 (1927): a filament's cold-to-hot resistance ratio is ρ(T_r)/ρ(T_a), 13.5 to 16.1 for rated temperatures of 2500 to 2900 K at a 293 K ambient. The source and lead resistance in series lower the current ratio, so the tested inrush band is 10 to 15 times the settled current.",
+      "covers": [
+        "model.params.filamentRatedTempK"
       ]
     },
     {
@@ -201,6 +289,68 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
       "covers": [
         "model.params.contactResistanceOhm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "resistor.orrinwood-10r-10w",
+  "version": 1,
+  "title": "10 Ω 10 W power resistor on a base",
+  "brand": "Orrinwood",
+  "modelName": "OW-10R-10",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 70,
+    "heightMm": 40,
+    "depthMm": 30
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 8,
+        "y": 20,
+        "z": 12
+      }
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 62,
+        "y": 20,
+        "z": 12
+      }
+    }
+  ],
+  "model": {
+    "kind": "resistor",
+    "params": {
+      "resistanceOhm": 10,
+      "powerRatingW": 10
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "power-resistor-class",
+      "kind": "real-world",
+      "citation": "The aluminium-housed wirewound power resistor, a common bench and panel class: 10 Ω in the E-series of preferred values, rated 10 W when mounted on a heat sink (typical published figures for the class, paraphrased, not one vendor's). Its resistance is taken as exact and constant; P2 has no tolerance, temperature coefficient or damage model.",
+      "covers": [
+        "model.params.resistanceOhm",
+        "model.params.powerRatingW"
+      ]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: the resistor on a 70 × 40 mm base, 30 mm tall, with a screw terminal at each end; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals"
       ]
     }
   ],

@@ -116,8 +116,15 @@ export interface SimDeviceBank {
    * compile reads a bag through those keys alone, so no other kind's change can move the netlist).
    */
   discrete?(ctx: LayerContext): boolean;
-  /** The continuous layer (filament temperature, state of charge): integrates over the step. */
-  continuous?(ctx: LayerContext): void;
+  /**
+   * The continuous layer (filament temperature, state of charge): integrates over the step. Returns
+   * `true` when a value its `dcValue` or `acValue` reads has moved enough that the last solution is
+   * stale (a heating filament's resistance, F2.5): the engine then re-solves at `tick + 1`, within the
+   * step, without a recompile (a continuous layer never changes the topology). The decision must
+   * follow from the bank and the solution alone, never from something cached at the last solve, so a
+   * loaded engine re-solves at the same ticks. Returning nothing is `false`.
+   */
+  continuous?(ctx: LayerContext): boolean | void;
   /**
    * The protection layer (fuse I²t, breaker, PSU hiccup). Returns whether it changed what the
    * electrical layer sees (a blown fuse's topology, a PSU switching its output off): the engine then
