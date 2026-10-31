@@ -11,7 +11,7 @@ import {
 import type { PendingWritesFlush, Platform } from '@controls/platform-api';
 import { defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
 import { createGame, loadGame } from '@controls/scripting-api';
-import { screen, waitFor } from '@testing-library/dom';
+import { screen, waitFor, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
 import { provideLifecycleFromPlatform, provideSaveIoFromPlatform, provideSettingsFromPlatform } from './app.config';
@@ -72,7 +72,24 @@ describe('App', () => {
     }).compileComponents();
   });
 
-  afterEach(() => (document.body.innerHTML = ''));
+  afterEach(() => {
+    document.body.innerHTML = '';
+    // CodeMirror (style-mod) keeps one <style> in <head> for the document, about 80 rules, and never
+    // removes it. Left there, every later test's getComputedStyle scans those rules too (ui caveats).
+    // Detached, it goes back in when the next editor mounts.
+    for (const key of Object.getOwnPropertySymbols(document)) {
+      if (key.description !== 'styleSet') continue;
+      const set = (document as unknown as Record<symbol, { styleTag?: HTMLStyleElement } | undefined>)[key];
+      set?.styleTag?.remove();
+    }
+  });
+
+  /**
+   * The main menu's items. Scoped to the menu so a query names its eight buttons, not every button in
+   * the page: name matching runs before the hidden filter, so an unscoped query also computes the names
+   * of the closed dialogs' buttons, each a jsdom `getComputedStyle` walk (ui caveats).
+   */
+  const mainMenu = () => within(screen.getByRole('navigation', { name: 'Controls' }));
 
   async function setup() {
     const fixture = TestBed.createComponent(App);
@@ -85,7 +102,7 @@ describe('App', () => {
     const { fixture } = await setup();
     const el = fixture.nativeElement as HTMLElement;
     expect(screen.getByRole('heading', { level: 1, name: 'Controls' })).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New sandbox' }));
+    expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'New sandbox' }));
     expect(el.querySelector('ctl-viewport')).toBeTruthy();
     expect(el.querySelector('ctl-workspace')?.hasAttribute('inert')).toBe(true);
     expect(el.querySelector('[data-testid="about-version"]')?.textContent).toBe('9.8.7');
@@ -105,16 +122,18 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Status' }).textContent).toContain('Work');
     expect(screen.getByRole('region', { name: 'Inspector' })).toBeTruthy();
 
-    screen.getByRole('button', { name: 'Menu' }).focus();
+    const menuButton = screen.getByRole('button', { name: 'Menu' }); // the same element each time the toolbar shows
+    menuButton.focus();
     await user.keyboard('{Escape}');
     await fixture.whenStable();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Resume' }));
+    expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'Resume' }));
 
     await user.keyboard('{Escape}');
     await fixture.whenStable();
     expect(document.activeElement).toBe(canvas());
 
-    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(menuButton.isConnected).toBe(true); // reused, not a stale node from before the menu
+    await user.click(menuButton);
     await fixture.whenStable();
     await user.keyboard('{Enter}'); // Resume
     await fixture.whenStable();
@@ -152,7 +171,7 @@ describe('App', () => {
     await user.keyboard('{Escape}');
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New sandbox' }));
+    expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'New sandbox' }));
     expect(session.world()).toBe(before); // no new game started
   });
 
@@ -227,7 +246,7 @@ describe('App', () => {
 
   it('opens settings and about from the menu, and Escape closes the dialog only', async () => {
     const { fixture, user } = await setup();
-    const settingsButton = screen.getByRole('button', { name: 'Settings' });
+    const settingsButton = mainMenu().getByRole('button', { name: 'Settings' });
     await user.click(settingsButton);
     await fixture.whenStable();
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
@@ -237,16 +256,18 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Controls' })).toBeTruthy();
     expect(document.activeElement).toBe(settingsButton);
 
-    await user.click(screen.getByRole('button', { name: 'About' }));
+    await user.click(mainMenu().getByRole('button', { name: 'About' }));
     await fixture.whenStable();
     expect(screen.getByRole('dialog', { name: 'About Controls' })).toBeTruthy();
   });
 
   it('persists a layout change in settings and confirms Reset layout with a notification', async () => {
     const { fixture, user } = await setup();
-    await user.click(screen.getByRole('button', { name: 'New sandbox' }));
+    await user.click(mainMenu().getByRole('button', { name: 'New sandbox' }));
     await fixture.whenStable();
-    await user.click(screen.getByRole('button', { name: 'Start' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'New sandbox' })).getByRole('button', { name: 'Start' }),
+    );
     await fixture.whenStable();
     screen.getByRole('separator', { name: 'Resize inspector' }).focus();
     await user.keyboard('{ArrowLeft}');
@@ -276,9 +297,11 @@ describe('App', () => {
     settings = new MemorySettingsService({ ...defaultSettings(), workspace: { layout } });
     const { fixture, user } = await setup();
     await TestBed.inject(SettingsStore).loaded;
-    await user.click(screen.getByRole('button', { name: 'New sandbox' }));
+    await user.click(mainMenu().getByRole('button', { name: 'New sandbox' }));
     await fixture.whenStable();
-    await user.click(screen.getByRole('button', { name: 'Start' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'New sandbox' })).getByRole('button', { name: 'Start' }),
+    );
     await fixture.whenStable();
     expect(screen.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow')).toBe('480');
     expect(screen.queryByRole('region', { name: 'Console' })).toBeNull(); // collapsed
@@ -290,7 +313,7 @@ describe('App', () => {
 
   it('quits through the platform', async () => {
     const { user } = await setup();
-    await user.click(screen.getByRole('button', { name: 'Quit' }));
+    await user.click(mainMenu().getByRole('button', { name: 'Quit' }));
     expect(quit).toHaveBeenCalledOnce();
   });
 
@@ -318,7 +341,8 @@ describe('App', () => {
       const { fixture, user } = await setup();
       const session = TestBed.inject(Session);
       await startPlaying(fixture, user);
-      screen.getByRole('button', { name: 'Menu' }).focus();
+      const menuButton = screen.getByRole('button', { name: 'Menu' }); // the same element each time the toolbar shows
+      menuButton.focus();
       await user.keyboard('{Escape}'); // an untouched new sandbox: no autosave
       await fixture.whenStable();
       expect(io.calls).not.toContain('write');
@@ -326,12 +350,13 @@ describe('App', () => {
       await fixture.whenStable();
 
       session.exec('entity.place', PLACE);
-      screen.getByRole('button', { name: 'Menu' }).focus();
+      menuButton.focus();
+      expect(document.activeElement).toBe(menuButton); // reused, not a stale node from before the menu
       await user.keyboard('{Escape}');
       await fixture.whenStable();
       await waitFor(() => expect(io.names()).toEqual(['Autosave 1']));
 
-      const saveButton = screen.getByRole('button', { name: 'Save game' });
+      const saveButton = mainMenu().getByRole('button', { name: 'Save game' });
       await user.click(saveButton);
       await fixture.whenStable();
       const field = screen.getByRole('textbox', { name: 'Save name' });
@@ -351,7 +376,7 @@ describe('App', () => {
       const { fixture, user } = await setup();
       await TestBed.inject(SaveGames).ready;
       await fixture.whenStable();
-      const continueButton = screen.getByRole('button', { name: 'Continue' });
+      const continueButton = mainMenu().getByRole('button', { name: 'Continue' });
       expect(continueButton.hasAttribute('aria-disabled')).toBe(false);
       await user.click(continueButton);
       await waitFor(async () => expect(await TestBed.inject(Session).hashAt()).toBe(game.hash()));
@@ -363,7 +388,7 @@ describe('App', () => {
 
     it('Load opens the save list from the menu; Escape returns focus to Load', async () => {
       const { fixture, user } = await setup();
-      const load = screen.getByRole('button', { name: 'Load' });
+      const load = mainMenu().getByRole('button', { name: 'Load' });
       await user.click(load);
       await waitFor(() => expect(screen.getByRole('dialog', { name: 'Load game' })).toBeTruthy());
       await fixture.whenStable();
@@ -397,7 +422,8 @@ describe('App', () => {
       await waitFor(() => expect(session.sim.status()).toBe('crashed'));
       await fixture.whenStable();
       expect(workers[0].terminated).toBe(true);
-      const restart = await screen.findByRole('button', { name: 'Restart simulation' });
+      const toasts = within(screen.getByRole('region', { name: 'Notifications' }));
+      const restart = await toasts.findByRole('button', { name: 'Restart simulation' });
       expect(screen.getByRole('alert').textContent).toContain('The simulation stopped (engine-threw)');
       expect(session.world().entities).toHaveLength(1); // the world is intact
       await user.click(restart);
