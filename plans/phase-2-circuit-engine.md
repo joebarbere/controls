@@ -319,7 +319,7 @@ Acceptance, **part 1: dense DC**:
 
 _Part 1 done 2026-10-30; reviewed by `test-engineer` (changes made) and `electrical-realism-reviewer` (approved with notes, below and in F2.3a and F2.4) ([simulation architecture](../docs/architecture/simulation.md#the-dc-solver-f22-part-1), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
 
-- _"Ground" is each island's own reference node (F2.1's review note): the negative end of its first `vsource` element, else its smallest node. `gmin` is `GMIN_S`, 1e-12 S, from every node to that reference; F2.7's decks match it with ngspice's `rshunt`._
+- _"Ground" is each island's own reference node (F2.1's review note): the negative end of its first `vsource` element, else its smallest node. `gmin` is `GMIN_S`, 1e-12 S, from every node to that reference; F2.7's decks match it with an explicit 1e12 Ω shunt resistor from each circuit node to the reference (not ngspice's `rshunt`, which also shunts sense-source and internal nodes)._
 - _A current source is a stamp mode (`isource`), not a new netlist element kind: no P2 device is one, and a supply in current limit (part 3) is a `vsource` element stamped as one. The element kinds, the unknowns and so the matrix layout stay a function of `topologyHash`._
 - _Singular is decided structurally (a loop of zero-ohm sources), with a numerical backstop. A planted fault showed the numerical check alone misses about 3 in 4 such loops inside resistive meshes._
 - _The properties use the floor policy above, with resistances from 1e-4 Ω. A SHA-256 over the bits of 300 seeded solves is pinned in `mna/properties.spec.ts`: a deliberate numeric change re-pins it with the other numeric goldens and bumps `SIM_ENGINE_VERSION` (D8)._
