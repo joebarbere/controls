@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { loadGame } from '@controls/scripting-api';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FakeSimWorker } from '../testing/fake-sim-worker';
 import { Session } from './session';
@@ -13,7 +13,11 @@ import { SIM_TRANSPORT, SIM_WORKER_FACTORY } from './sim-host';
  */
 
 const FIXTURES = join(process.cwd(), 'libs/domain/save-format/fixtures');
-const saves = ['v1', 'v2'].flatMap((version) =>
+// Every frozen version's fixtures (v1, v2, …): a new schema version's directory is picked up as it lands.
+const versions = readdirSync(FIXTURES).filter(
+  (name) => /^v\d+$/.test(name) && existsSync(join(FIXTURES, name, 'ctrl')),
+);
+const saves = versions.flatMap((version) =>
   readdirSync(join(FIXTURES, version, 'ctrl'))
     .filter((name) => name.endsWith('.ctrl'))
     .map((name) => ({
@@ -26,6 +30,7 @@ describe('the game load matches the headless load on every frozen save', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('finds the fixtures (generator health)', () => {
+    expect(versions).toEqual(expect.arrayContaining(['v1', 'v2']));
     expect(saves.length).toBeGreaterThanOrEqual(8);
   });
 

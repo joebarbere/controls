@@ -4,7 +4,7 @@ import { BUILD_ENGINE_VERSIONS, createGame, MAX_VERIFY_TICKS } from '@controls/s
 import { worldHash } from '@controls/world-model';
 import { STATE_QUERY_TIMEOUT_MS } from '@controls/sim-protocol';
 import { FakeSimWorker, type FakeSimWorkerOptions } from '../testing/fake-sim-worker';
-import { verifyDeadlineMs } from './load';
+import { START_RETRY_MS, verifyDeadlineMs } from './load';
 import { Session } from './session';
 import { SIM_CLOCK, SIM_TRANSPORT, SIM_WORKER_FACTORY } from './sim-host';
 import type { SimClock } from './sim-link';
@@ -202,12 +202,12 @@ describe('prepareLoad', () => {
   });
 
   describe('a load never depends on the worker being well or fast (#58 review)', () => {
-    it('a verifying worker that crashes after ready restarts the log from world.json (replay-failed), never refuses', async () => {
+    it('a verifying worker that crashes after ready restarts the log from world.json (verify-unavailable), never refuses', async () => {
       const { session, fakes } = setup(true, (i) => (i === 0 ? { onQuery: 'engine-threw' } : {}));
       const save = circuitSave();
       const result = await session.prepareLoad(save.bytes);
       if (!result.ok) throw new Error(`refused: ${result.error.kind}`);
-      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'verify-unavailable' });
       expect(starts(fakes)).toEqual(['replay', 'world']);
       expect(fakes.workers[0].terminated).toBe(true);
       expect(result.prepared.hash).toBe(save.hash); // world.json as saved
@@ -225,9 +225,23 @@ describe('prepareLoad', () => {
       await microtasks();
       const result = await pending;
       if (!result.ok) throw new Error(`refused: ${result.error.kind}`);
-      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'verify-unavailable' });
       expect(starts(fakes)).toEqual(['replay', 'world']);
       expect(fakes.workers[0].terminated).toBe(true);
+    });
+
+    it('the verify deadline at MAX_VERIFY_TICKS is at least 5x the slowest runner seen', () => {
+      // MAX_VERIFY_TICKS' source: about 0.15 ms per tick on the slowest CI runner.
+      const slowestMsPerTick = 0.15;
+      expect(String(MAX_VERIFY_TICKS.source)).toContain('0.15 ms per tick on the slowest');
+      const ticks = MAX_VERIFY_TICKS.value;
+      expect(verifyDeadlineMs({ endTick: ticks, initialWorld: { tick: 0 } })).toBeGreaterThanOrEqual(
+        5 * slowestMsPerTick * ticks,
+      );
+      // And per tick, without the fixed part: any log length gets the margin.
+      expect(
+        verifyDeadlineMs({ endTick: 1_000, initialWorld: { tick: 0 } }) - STATE_QUERY_TIMEOUT_MS,
+      ).toBeGreaterThanOrEqual(5 * slowestMsPerTick * 1_000);
     });
 
     it('a worker that never becomes ready is disposed after the deadline, and the load goes on', async () => {
@@ -237,17 +251,47 @@ describe('prepareLoad', () => {
       await microtasks();
       expect(clock.fire(STATE_QUERY_TIMEOUT_MS)).toBe(1);
       const result = await pending;
-      expect(result.ok && result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(result.ok && result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'verify-unavailable' });
       expect(fakes.workers[0].terminated).toBe(true);
       expect(session.sim.workerCount).toBe(1); // only the one that carries on
+    });
+
+    it('a world.json start whose worker is slow to load is retried once with longer deadlines, and loads', async () => {
+      const clock = new ManualClock();
+      const { session, fakes } = setup(true, (i) => (i === 0 ? { silent: true } : {}), clock);
+      const noLog = rewrite(circuitSave().bytes, (c) => ({ ...c, replayLog: null }));
+      const pending = session.prepareLoad(noLog);
+      await microtasks();
+      expect([...clock.timers.values()].map((t) => t.ms)).toEqual([STATE_QUERY_TIMEOUT_MS]);
+      expect(clock.fire(STATE_QUERY_TIMEOUT_MS)).toBe(1);
+      const result = await pending;
+      if (!result.ok) throw new Error(`refused: ${result.error.kind}`);
+      expect(starts(fakes)).toEqual(['world', 'world']);
+      expect(fakes.workers[0].terminated).toBe(true);
+      expect(START_RETRY_MS).toBeGreaterThan(STATE_QUERY_TIMEOUT_MS);
+    });
+
+    it('sim-failed only after the retry with longer deadlines has failed too', async () => {
+      const clock = new ManualClock();
+      const { session, fakes } = setup(true, { silent: true }, clock);
+      const noLog = rewrite(circuitSave().bytes, (c) => ({ ...c, replayLog: null }));
+      const pending = session.prepareLoad(noLog);
+      await microtasks();
+      expect(clock.fire(STATE_QUERY_TIMEOUT_MS)).toBe(1);
+      await microtasks();
+      expect([...clock.timers.values()].map((t) => t.ms)).toEqual([START_RETRY_MS]); // the retry's own deadline
+      expect(clock.fire(START_RETRY_MS)).toBe(1);
+      expect(await pending).toMatchObject({ ok: false, error: { kind: 'sim-failed' } });
+      expect(fakes.workers.map((w) => w.terminated)).toEqual([true, true]);
     });
 
     it('a worker failure starting world.json is the simulator failing (sim-failed), not a damaged save', async () => {
       for (const failInit of ['capacity', 'engine-threw'] as const) {
         TestBed.resetTestingModule();
-        const { session } = setup(true, { failInit });
+        const { session, fakes } = setup(true, { failInit });
         const noLog = rewrite(circuitSave().bytes, (c) => ({ ...c, replayLog: null }));
         expect(await session.prepareLoad(noLog)).toMatchObject({ ok: false, error: { kind: 'sim-failed' } });
+        expect(fakes.workers).toHaveLength(2); // retried once
       }
     });
 

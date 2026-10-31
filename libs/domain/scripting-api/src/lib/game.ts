@@ -623,11 +623,13 @@ export type SaveReplayStatus =
    * failing entry, if any). `engine-changed` (D8): the save is from another sim engine or catalogue,
    * so its log wasn't (or, for a migrated P1 save, couldn't be) verified; never refused.
    * `too-long-to-verify`: the log spans more than {@link MAX_VERIFY_TICKS}, so verifying it would block
-   * the load; never refused.
+   * the load; never refused. `verify-unavailable` (the game only): the simulator checking the log
+   * crashed or missed its deadline, so the log wasn't checked: the checker's fault, never refused.
    */
   | {
       readonly status: 'restarted';
-      readonly reason: 'replay-failed' | 'hash-mismatch' | 'engine-changed' | 'too-long-to-verify';
+      readonly reason:
+        'replay-failed' | 'hash-mismatch' | 'engine-changed' | 'too-long-to-verify' | 'verify-unavailable';
       readonly message: string;
     };
 
@@ -695,6 +697,10 @@ export const ENGINE_CHANGED_MESSAGE =
 export const TOO_LONG_TO_VERIFY_MESSAGE =
   'The save’s replay log covers too much sim time to check while loading, so a new log started from the loaded game. The game itself loaded normally.';
 
+/** Why a save's log restarted as `verify-unavailable`: the checker failed, not the log. */
+export const VERIFY_UNAVAILABLE_MESSAGE =
+  'The simulator couldn’t check the save’s replay log, so a new log started from the loaded game. The game itself loaded normally.';
+
 /**
  * The most sim time, in ticks, a load verifies by replaying a save's log (`endTick` − the initial
  * world's tick). Deterministic, never the wall clock: a save past it isn't replayed and restarts its
@@ -750,15 +756,21 @@ export function planLoad(contents: Pick<CtrlContents, 'replayLog' | 'manifest'>)
 }
 
 /**
- * Why a verified log was dropped: the replay failed, or reached another hash. A migrated P1 save
+ * Why a verified log was dropped: the replay failed, reached another hash, or couldn't be checked. A migrated P1 save
  * (`verify-v0`) never says so: its log restarts as `engine-changed` (D8).
  */
 export function verifyFailure(
   compatibility: Exclude<EngineCompatibility, 'engine-changed'>,
-  failure: { readonly kind: 'hash-mismatch' } | { readonly kind: 'replay-failed'; readonly message: string },
+  failure:
+    | { readonly kind: 'hash-mismatch' }
+    | { readonly kind: 'replay-failed'; readonly message: string }
+    | { readonly kind: 'verify-unavailable' },
 ): SaveReplayStatus {
   if (compatibility === 'verify-v0') {
     return { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
+  }
+  if (failure.kind === 'verify-unavailable') {
+    return { status: 'restarted', reason: 'verify-unavailable', message: VERIFY_UNAVAILABLE_MESSAGE };
   }
   if (failure.kind === 'hash-mismatch') {
     return {

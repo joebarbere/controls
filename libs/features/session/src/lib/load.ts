@@ -17,6 +17,13 @@ import {
   STATE_QUERY_TIMEOUT_MS,
   VERIFY_QUERY_MS_PER_TICK,
 } from '@controls/sim-protocol';
+
+/**
+ * The deadlines of the one retry of a `world.json` start whose worker failed (#58 review 2): a slow
+ * machine waits longer rather than seeing `sim-failed`, so the outcome depends on the simulator, not
+ * on wall time. Six times the usual deadline (30 s).
+ */
+export const START_RETRY_MS = 6 * STATE_QUERY_TIMEOUT_MS;
 import { checkWorldDevices, worldHash } from '@controls/world-model';
 import type { SimCandidate, SimFailure, SimHost } from './sim-host';
 
@@ -84,14 +91,20 @@ const isFailure = (error: unknown): error is SimFailure =>
   typeof error === 'object' && error !== null && 'code' in error && 'beforeReady' in error;
 
 /**
- * Starts a candidate and waits for `ready` (at most `STATE_QUERY_TIMEOUT_MS`) and its state at the
- * world's tick (at most `stateMs`). The candidate is disposed on any failure.
+ * Starts a candidate and waits for `ready` (at most `readyMs`) and its state at the world's tick (at
+ * most `stateMs`). The candidate is disposed on any failure.
  */
-async function started(host: SimHost, start: SimStart, busWorld: World, stateMs: number): Promise<Started> {
+async function started(
+  host: SimHost,
+  start: SimStart,
+  busWorld: World,
+  stateMs: number,
+  readyMs = STATE_QUERY_TIMEOUT_MS,
+): Promise<Started> {
   const candidate = host.prepare(start);
   if (candidate === null) return { ok: false, why: 'unavailable' };
   try {
-    await candidate.whenReady(STATE_QUERY_TIMEOUT_MS);
+    await candidate.whenReady(readyMs);
     const reply = await candidate.state(busWorld.tick, stateMs);
     return { ok: true, candidate, hash: worldHash(materialiseWorld(busWorld, reply.export)) };
   } catch (error) {
@@ -181,13 +194,11 @@ export async function prepareLoad(
         return done(resumed.game, { status: 'continued' }, verified.candidate, verified.hash);
       }
       if (verified.ok) verified.candidate.dispose();
-      // A mismatch, or a verifying worker that crashed or passed its deadline: the log isn't kept,
-      // the save is (D8: never refused for its log).
+      // A mismatch, or a verifying worker that crashed or passed its deadline (the checker's fault:
+      // `verify-unavailable`, never refused): the log isn't kept, the save is (D8).
       replay = verifyFailure(
         plan.compatibility,
-        verified.ok
-          ? { kind: 'hash-mismatch' }
-          : { kind: 'replay-failed', message: 'The simulator couldn’t replay the save’s log.' },
+        verified.ok ? { kind: 'hash-mismatch' } : { kind: 'verify-unavailable' },
       );
     }
   }
@@ -195,18 +206,24 @@ export async function prepareLoad(
   // A new log from world.json, numbered on from the saved log.
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
   let start = world;
-  let fresh = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
+  const startFresh = async (): Promise<Started> => {
+    const first = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
+    if (first.ok || first.why !== 'failed') return first;
+    // The simulator failed (a crash, a deadline): once more, with longer deadlines.
+    return started(host, { kind: 'world', world: start, firstSeq }, start, START_RETRY_MS, START_RETRY_MS);
+  };
+  let fresh = await startFresh();
   if (!fresh.ok && fresh.why === 'start-failed' && plan.compatibility !== 'verify') {
     // D8: another engine's solution record may not fit this build's netlist: drop it and solve anew.
     start = { ...world, sim: null };
-    fresh = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
+    fresh = await startFresh();
     if (replay.status === 'restarted' && replay.reason !== 'engine-changed') {
       replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
     }
   }
   if (!fresh.ok) {
     if (fresh.why === 'unavailable') return { ok: false, error: UNAVAILABLE };
-    if (fresh.why === 'failed') return { ok: false, error: SIM_FAILED };
+    if (fresh.why === 'failed') return { ok: false, error: SIM_FAILED }; // twice, the second time with longer deadlines
     // A same-engine save whose solution record doesn't fit its circuit: damaged.
     return {
       ok: false,

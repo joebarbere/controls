@@ -9,7 +9,7 @@ import {
   SettingsStore,
 } from '@controls/feature-settings';
 import type { PendingWritesFlush, Platform } from '@controls/platform-api';
-import { defaultSettings } from '@controls/save-format';
+import { defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
 import { createGame, loadGame } from '@controls/scripting-api';
 import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -436,6 +436,27 @@ describe('App', () => {
       session.adopt(prepared.prepared);
       expect(await session.hashAt()).toBe(game.hash());
       expect(workers.at(-1)?.terminated).toBe(false); // the worker that verified it carries on
+
+      // Tampered: world.json moved a device, so the log no longer reproduces it.
+      const read = readCtrl(bytes);
+      if (!read.ok) throw new Error('unreadable');
+      const { manifest, world, replayLog, thumbnail } = read.value;
+      const moved = world.entities.map((e, i) =>
+        i === 0
+          ? {
+              ...e,
+              transform: { ...e.transform, positionMm: { ...e.transform.positionMm, x: e.transform.positionMm.x + 5 } },
+            }
+          : e,
+      );
+      const tampered = writeCtrl({ manifest, world: { ...world, entities: moved }, replayLog, thumbnail });
+      const headlessTampered = loadGame(tampered);
+      const preparedTampered = await session.prepareLoad(tampered);
+      if (!preparedTampered.ok || !headlessTampered.ok) throw new Error('refused');
+      expect(preparedTampered.prepared.replay).toEqual(headlessTampered.replay);
+      expect(preparedTampered.prepared.replay).toMatchObject({ status: 'restarted', reason: 'hash-mismatch' });
+      expect(preparedTampered.prepared.hash).toBe(headlessTampered.game.hash());
+      preparedTampered.prepared.dispose();
     });
   });
 });

@@ -10,9 +10,10 @@ import { REPLAY_MISMATCH_POLICY, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from
 
 /**
  * Restart reasons that mean the log wasn't checked, not that it failed: never refused, an info toast
- * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`).
+ * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`,
+ * `VERIFY_UNAVAILABLE_MESSAGE`: the checking worker crashed or missed its deadline).
  */
-const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify']);
+const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify', 'verify-unavailable']);
 
 /** The name offered for a game that hasn't been saved under one yet (always a valid `SaveName`). */
 export function suggestedSaveName(seed: number): SaveName {

@@ -12,6 +12,7 @@ import {
   loadGame,
   MAX_VERIFY_TICKS,
   TOO_LONG_TO_VERIFY_MESSAGE,
+  VERIFY_UNAVAILABLE_MESSAGE,
 } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
@@ -40,12 +41,18 @@ function otherSave(): { bytes: Uint8Array; hash: string } {
 }
 
 function setup(
-  options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo; settings?: MemorySettingsService; level?: unknown } = {},
+  options: {
+    policy?: ReplayMismatchPolicy;
+    io?: MemorySaveIo;
+    settings?: MemorySettingsService;
+    level?: unknown;
+    workers?: Parameters<typeof FakeSimWorker.factory>[0];
+  } = {},
 ) {
   const io = options.io ?? new MemorySaveIo();
   const settingsService = options.settings ?? new MemorySettingsService();
   const flushes = new Set<PendingWritesFlush>();
-  const fakes = FakeSimWorker.factory();
+  const fakes = FakeSimWorker.factory(options.workers);
   TestBed.configureTestingModule({
     providers: [
       { provide: SETTINGS_SERVICE, useValue: settingsService },
@@ -224,6 +231,16 @@ describe('SaveGames', () => {
     expect(await refuse.saves.load(entry)).toBe(true);
     expect(refuse.session.world().seed).toBe(8);
     expect(refuse.toasts()).toEqual(['success: Loaded “Old engine”.', `info: ${ENGINE_CHANGED_MESSAGE}`]);
+  });
+
+  it('loads a save whose checker crashed with a notice, never refusing it, even by policy (verify-unavailable)', async () => {
+    const save = otherSave();
+    const refuse = setup({ policy: 'refuse', workers: (i) => (i === 0 ? { onQuery: 'engine-threw' } : {}) });
+    const entry = refuse.io.seed({ kind: 'manual', name: 'Checked' }, save.bytes);
+    expect(await refuse.saves.load(entry)).toBe(true);
+    expect(await refuse.session.hashAt()).toBe(save.hash);
+    // Not "the log doesn't match": the log was never checked.
+    expect(refuse.toasts()).toEqual(['success: Loaded “Checked”.', `info: ${VERIFY_UNAVAILABLE_MESSAGE}`]);
   });
 
   it('loads a save too long to verify with a notice, never refusing it, even by policy', async () => {
