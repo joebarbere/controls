@@ -1,0 +1,14 @@
+# F2.3a: sim time in a console file. A battery with a switch across it through two test leads, and a
+# lamp on the bench that isn't wired. Closing the switch puts a short through the two leads (only the
+# leads and the battery's internal resistance limit it: there is no fuse until F2.5, and the battery
+# keeps its placeholder EMF until F2.4). The lamp's island is unsolved: no filament model until F2.5.
+# sim.step then lets 1.234 s of sim time pass, so world.hash covers a solve after time passed.
+#   pnpm sim run apps/sim-cli/scenarios/sim-step.console --world content/levels/workshop.json
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id switch.tessaline-spst-toggle --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 1 --b.terminal neg
+device.operate 2 closed true
+sim.step 1234
+world.hash

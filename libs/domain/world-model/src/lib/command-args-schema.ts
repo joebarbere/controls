@@ -1,4 +1,3 @@
-import { SIM_COMMAND_ARGS } from '@controls/commands';
 import { z } from 'zod';
 import { createWorldRegistry } from './session';
 
@@ -11,8 +10,8 @@ import { createWorldRegistry } from './session';
  * descriptions, `x-controls-ref`) changed.
  *
  * The schemas are the **output** side (what parsing produces and the log stores): defaults are filled
- * in, so a defaulted key is required. Every logged command of `createWorldRegistry()` is here, plus
- * the sim time commands, whose argument schemas are declared before the commands (F2.3a).
+ * in, so a defaulted key is required. Every logged command of `createWorldRegistry()` is here, the
+ * sim time commands included (registered since F2.3a; their schemas were frozen at the P2 kickoff).
  */
 export function commandArgJsonSchemas(): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
@@ -25,6 +24,5 @@ export function commandArgJsonSchemas(): Record<string, Record<string, unknown>>
   for (const def of createWorldRegistry().list()) {
     if (def.logged !== false) add(def.id, def.args);
   }
-  for (const [id, schema] of Object.entries(SIM_COMMAND_ARGS)) add(id, schema);
   return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
 }

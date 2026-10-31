@@ -18,6 +18,9 @@ describe('paletteItems', () => {
       'entity.rotate',
       'lead.connect', // Lead, by title: Connect a test lead, Disconnect a test lead
       'lead.disconnect',
+      'sim.resume', // Sim, by title: Resume the sim, Set sim speed, Step sim time
+      'sim.setSpeed',
+      'sim.step',
       'toolbelt.select',
       'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',

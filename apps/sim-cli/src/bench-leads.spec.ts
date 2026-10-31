@@ -1,5 +1,6 @@
 import { createGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,8 +14,14 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * (`scenarios/bench-leads.console`), the TypeScript script (`scenarios/bench-leads.ts`), a replay of
  * the script's log and a save all reach BENCH_LEADS_HASH. `apps/game-e2e/src/console.spec.ts` runs
  * the console file in the game and asserts the same literal: change them together.
+ *
+ * Since F2.3a the hash covers the materialised solution record: the lamp has no filament model until
+ * F2.5, so its island is recorded unsolved (0 iterations, zeros), never as a reading.
  */
-export const BENCH_LEADS_HASH = '1825e8bac7eeddaeedd7adeca6a69db204ec65c7dac0d6ab22df5a693c92cead';
+export const BENCH_LEADS_HASH = 'b212424590e020f911d20c71041d7f78f66dc2596a7cb7167f77b4e8cd4e6b45';
+
+/** What engine 1 (the world v2 kickoff, before the engine ran) wrote for the same world: `sim: null`. */
+const ENGINE_1_HASH = '1825e8bac7eeddaeedd7adeca6a69db204ec65c7dac0d6ab22df5a693c92cead';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -84,10 +91,25 @@ describe('the bench-leads scenario', () => {
     }
   });
 
-  it('the checked-in v2 fixture of this scenario replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-leads.ctrl');
+  it('the engine-2 fixture of this scenario replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-leads-engine-2.ctrl');
     const replay = sim('replay', fixture);
     expect(replay.stderr).toBe('');
     expect(replay.stdout).toEqual([BENCH_LEADS_HASH]);
+  });
+
+  it('the engine-1 fixture (written before the engine ran) is not reproduced, and loads as engine-changed (D8)', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-leads.ctrl');
+    expect(sim('hash', fixture).stdout).toEqual([ENGINE_1_HASH]);
+    const replay = sim('replay', fixture);
+    expect(replay.status).toBe(1);
+    expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_1_HASH}`);
+    expect(replay.stderr).toContain('written by sim engine 1, catalogue 1; this build is engine 2, catalogue 1');
+    // Loaded as the game loads it: world.json as saved, a new log, and the engine solves at the start.
+    const empty = join(dir, 'empty.console');
+    writeFileSync(empty, '');
+    const run = sim('run', empty, '--world', fixture);
+    expect(run.stderr).toContain('written by another version of the simulator');
+    expect(run.stdout).toEqual([BENCH_LEADS_HASH]);
   });
 });

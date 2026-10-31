@@ -67,10 +67,10 @@ describe('type:worker lint boundary', () => {
   it('lets the worker import the sim domain libs', async () => {
     const source = [
       "import { SIM_ENGINE_VERSION } from '@controls/sim-core';",
-      "import { SIM_PROTOCOL_PACKAGE } from '@controls/sim-protocol';",
+      "import { SIM_PROTOCOL_VERSION } from '@controls/sim-protocol';",
       "import { CATALOG_VERSION } from '@controls/catalog';",
       "import { worldHash } from '@controls/world-model';",
-      'export const probe = [SIM_ENGINE_VERSION, SIM_PROTOCOL_PACKAGE, CATALOG_VERSION, worldHash];',
+      'export const probe = [SIM_ENGINE_VERSION, SIM_PROTOCOL_VERSION, CATALOG_VERSION, worldHash];',
     ].join('\n');
     expect(await boundaryErrors(source, workerProbe)).toEqual([]);
   });
@@ -109,6 +109,6 @@ describe('type:worker lint boundary', () => {
     ['type:feature', 'libs/features/session/src/lib/boundary-probe.ts'],
     ['type:rendering', 'libs/rendering/renderer/src/lib/boundary-probe.ts'],
   ])('lets %s read snapshot types from @controls/sim-protocol', async (_tag, file) => {
-    expect(await boundaryErrors("export { SIM_PROTOCOL_PACKAGE } from '@controls/sim-protocol';", file)).toEqual([]);
+    expect(await boundaryErrors("export { SIM_PROTOCOL_VERSION } from '@controls/sim-protocol';", file)).toEqual([]);
   });
 });

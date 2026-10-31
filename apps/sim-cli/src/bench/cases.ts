@@ -1,5 +1,6 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import type { World } from '@controls/save-format';
+import { createGame } from '@controls/scripting-api';
 import {
   compileNetlist,
   type DcBranchValues,
@@ -9,7 +10,10 @@ import {
   type Netlist,
   type NetlistBranch,
   NetlistCompiler,
+  SimEngine,
 } from '@controls/sim-core';
+import { ENGINE_TEST_CATALOG, engineTestOptions, I2T_FUSE, THERMAL_LOAD } from '@controls/sim-core/testing';
+import { createWorldRegistry } from '@controls/world-model';
 import type { BenchCase, PendingBenchCase } from './bench';
 import { buildPlant, type Plant } from './plant';
 
@@ -21,7 +25,7 @@ import { buildPlant, type Plant } from './plant';
  * The netlist cases have no budget of their own. Compiling is only a part of §4.5's re-solve after a
  * topology change (2 ms for a 2,000-node plant, compile and solve together), so its budget belongs to
  * the re-solve case (F2.2 part 3), which runs and reports its timing while its gate is pending (see
- * the case). The per-tick case waits for F2.3a. Both are listed as pending, with their budgets.
+ * the case), which is listed as pending with its budget. The per-tick case (F2.3a) is gated.
  */
 
 let plant: { readonly plant: Plant; readonly closed: World; readonly open: World } | null = null;
@@ -86,6 +90,43 @@ function resolve(resolver: Resolver, world: World): string {
   return solutionChecksum(netlist, resolver.solver.solve(netlist, resolver.values));
 }
 
+/** Loops in the per-tick case's plant: a battery, an I²t fuse and a thermal load each, wired in series. */
+export const TICK_MIX_LOOPS = 250;
+
+let tickMix: World | null = null;
+let tickEngine: SimEngine | null = null;
+
+/**
+ * The per-tick case's plant, built once: {@link TICK_MIX_LOOPS} loops of a battery, a fuse and a load
+ * (750 devices, 1,000 nodes), materialised at tick 1. The fuse and the load are the engine's synthetic
+ * test models (`@controls/sim-core/testing`: an I²t protection layer and a thermal continuous layer)
+ * until F2.4 and F2.5 bring the real ones; the battery has no layer work yet.
+ */
+function tickMixWorld(): World {
+  if (tickMix === null) {
+    const game = createGame({
+      seed: 1,
+      registry: createWorldRegistry({ catalog: ENGINE_TEST_CATALOG }),
+      engine: engineTestOptions(),
+    });
+    const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+    const at = { x: 0, y: 0, z: 0 };
+    for (let k = 0; k < TICK_MIX_LOOPS; k++) {
+      const battery = 3 * k + 1;
+      game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: I2T_FUSE, positionMm: at });
+      game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: at });
+      const end = (offset: number, terminal: string) => ({ entity: battery + offset, terminal });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(0, 'pos'), b: end(1, 'a') });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(1, 'b'), b: end(2, 'a') });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(2, 'b'), b: end(0, 'neg') });
+    }
+    game.advance(1);
+    tickMix = game.materialisedWorld() as World;
+  }
+  return tickMix;
+}
+
 export const BENCH_CASES: readonly BenchCase[] = [
   {
     // A from-scratch compile, as on a load or a session start: a new compiler, no cached fragments.
@@ -144,6 +185,23 @@ export const BENCH_CASES: readonly BenchCase[] = [
     },
     run: () => resolve(coldResolver as Resolver, plantWorlds().open),
   },
+  {
+    // Spec §4.5's per-tick budget: one step's discrete, continuous and protection layers, no solve.
+    // `prepare` (untimed) starts an engine on the plant at tick 1, so the timed run is step 1, which
+    // isn't a cadence tick: layers only. Every run starts from the same state, so the checksum holds.
+    name: 'tick-device-mix',
+    warmup: 20,
+    runs: 101,
+    budgetMs: 0.3,
+    prepare: () => {
+      tickEngine = SimEngine.start(tickMixWorld(), engineTestOptions());
+    },
+    run: () => {
+      const engine = tickEngine as SimEngine;
+      engine.advanceTo(2);
+      return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.netlist.devices.length}`;
+    },
+  },
 ];
 
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
@@ -154,5 +212,4 @@ export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
     budgetMs: 2,
     enabledBy: 'F2.2 part 3b (recompile optimisation, calibrated gate)',
   },
-  { name: 'plant-tick', budgetMs: 0.3, enabledBy: 'F2.3a' },
 ];

@@ -9,6 +9,13 @@ import { worldHash } from '@controls/world-model';
 import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
 import { REPLAY_MISMATCH_POLICY, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
 
+/**
+ * Shown when a save from another version of the simulator loaded (D8): its world loads as saved and a
+ * new replay log starts, because the old log can't be checked against this engine.
+ */
+export const ENGINE_CHANGED_MESSAGE =
+  'The save was made with another version of the simulator, so a new replay log started from the loaded game. The game itself loaded normally.';
+
 /** The name offered for a game that hasn't been saved under one yet (always a valid `SaveName`). */
 export function suggestedSaveName(seed: number): SaveName {
   return `Sandbox ${seed >>> 0}`;
@@ -387,7 +394,12 @@ export class SaveGames {
     }
     const loaded = loadGame(bytes, { registry: this.session.registry });
     if (!loaded.ok) return { ok: false, reason: loadErrorReason(loaded.error) };
-    if (loaded.replay.status === 'restarted' && this.replayPolicy === 'refuse') {
+    // A save from another engine version is never refused (D8): its log simply isn't verified.
+    if (
+      loaded.replay.status === 'restarted' &&
+      loaded.replay.reason !== 'engine-changed' &&
+      this.replayPolicy === 'refuse'
+    ) {
       return { ok: false, reason: 'Its replay log doesn’t match its world.' };
     }
     return { ok: true, loaded };
@@ -407,7 +419,10 @@ export class SaveGames {
     this.setLastPlayed(lastPlayedOf(entry));
     this.notifications.notify(`Loaded ${quoted(entry.name)}.`, { level: 'success' });
     if (loaded.replay.status === 'restarted') {
-      this.notifications.notify(REPLAY_RESTARTED_MESSAGE, { level: 'warning' });
+      const engineChanged = loaded.replay.reason === 'engine-changed';
+      this.notifications.notify(engineChanged ? ENGINE_CHANGED_MESSAGE : REPLAY_RESTARTED_MESSAGE, {
+        level: engineChanged ? 'info' : 'warning',
+      });
     }
     for (const listener of [...this.loadedListeners]) listener();
     return true;

@@ -44,6 +44,7 @@ describe('save and load messages', () => {
       { kind: 'invalid-thumbnail', message: HOSTILE },
       { kind: 'end-tick-mismatch', worldTick: 1, endTick: 2, message: HOSTILE },
       { kind: 'invalid-device-state', issues: [{ path: HOSTILE, message: HOSTILE }], message: HOSTILE },
+      { kind: 'start-failed', reason: 'topology-mismatch', message: HOSTILE },
     ];
     for (const error of errors) {
       const reason = loadErrorReason(error);

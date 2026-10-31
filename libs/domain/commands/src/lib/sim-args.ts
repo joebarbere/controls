@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { NoArgs } from './builtin';
+import { type AnyCommandDef, defineCommand, succeed } from './command';
 
 /*
- * Argument schemas of the sim time commands (ADR 0011 §13), declared ahead of the commands
- * themselves: F2.3a registers `sim.setSpeed`, `sim.resume` and `sim.step` (headless) and F2.3b binds
- * them to keys and the HUD. Their ids and these shapes are save format from the moment they are
- * logged (ADR 0011 §12): raising `MAX_STEP_TICKS` or adding a speed needs no bump, lowering or
- * removing one is never allowed. Their JSON Schema is frozen in `world-model`'s
- * `json-schema/command-args/` export, with a staleness check.
+ * The sim time commands (ADR 0011 §13) and their argument schemas. F2.3a declares `sim.setSpeed`,
+ * `sim.resume` and `sim.step` here, in domain code, so every registry (headless, the game, the sim
+ * worker's mirror bus) knows them; F2.3b binds them to keys and the HUD. Their ids and these shapes
+ * are save format from the moment they are logged (ADR 0011 §12): raising `MAX_STEP_TICKS` or adding
+ * a speed needs no bump, lowering or removing one is never allowed. Their JSON Schema is frozen in
+ * `world-model`'s `json-schema/command-args/` export, with a staleness check.
  *
  * There is no `sim.pause`: pausing is `sim.setSpeed {speed: 0}` (ADR 0011, R2).
  */
@@ -50,3 +51,42 @@ export const SIM_COMMAND_ARGS: Readonly<Record<'sim.setSpeed' | 'sim.resume' | '
   'sim.resume': SimResumeArgs,
   'sim.step': SimStepArgs,
 };
+
+/** The id of `sim.step`, which a time host carries out by advancing (`Game.exec`, ADR 0011 §3). */
+export const SIM_STEP_COMMAND = 'sim.step';
+
+/**
+ * The sim time commands. Each is logged and never changes the world: its `run` succeeds with no
+ * change, so it leaves the undo and redo stacks alone (time passing is not a change, ADR 0011 §3).
+ * The effect is the time host's: a headless game advances by `sim.step`'s ticks right after the
+ * command is logged (so the next line is stamped at the new tick), and `sim.setSpeed` and
+ * `sim.resume` are no-ops headless (pacing is the game's, F2.3b). On replay none of them moves time:
+ * the next entry's tick, or the log's `endTick`, carries a step's effect.
+ */
+export function simCommands<S>(): AnyCommandDef<S>[] {
+  const setSpeed = defineCommand<SimSetSpeedArgs, S>({
+    id: 'sim.setSpeed',
+    title: 'Set sim speed',
+    category: 'Sim',
+    args: SimSetSpeedArgs,
+    undoable: false,
+    run: () => succeed<S>(),
+  });
+  const resume = defineCommand<SimResumeArgs, S>({
+    id: 'sim.resume',
+    title: 'Resume the sim',
+    category: 'Sim',
+    args: SimResumeArgs,
+    undoable: false,
+    run: () => succeed<S>(),
+  });
+  const step = defineCommand<SimStepArgs, S>({
+    id: SIM_STEP_COMMAND,
+    title: 'Step sim time',
+    category: 'Sim',
+    args: SimStepArgs,
+    undoable: false,
+    run: () => succeed<S>(),
+  });
+  return [setSpeed, resume, step];
+}

@@ -740,6 +740,17 @@ sequenceDiagram
 - **Refusing saves from another engine version.** Every numeric re-pin would orphan the player's saves; they load with a restarted log instead (U2).
 - **Saving only at solve ticks**, to avoid persisting the solution record. A save would have to move time (U3).
 
+## Implementation notes (F2.3a)
+
+F2.3a implemented the slot codec, the export, `materialiseWorld`, the events and the headless engine (`sim-core` `engine/`, `sim-protocol`). Where the text above left a point open, or the implementation had to pin one down, it did so as follows. No reader of the layout exists yet, so `SIM_PROTOCOL_VERSION` stays 1; **sign-off is pending** from `renderer-engineer` and `angular-ui-engineer` (the readers of §5–§7) and `save-format-guardian` (§4's export, §9.6).
+
+- **An island's `iterations` of 0 means it was not solved** (§5.3, §9.6): an AC island until F2.2 part 2, a mixed island, or an island holding an element no device model can value yet (the lamp until F2.5: `unmodelled`). Its node and branch values are zeros, its `unknowns` 0, its `referenceNode` `0xFFFFFFFF`. No reader may present them as a reading. The solution record stores the same (`{ flags: 0, iterations: 0 }`), so a loaded engine reports the same status.
+- **`SimStateExport.solution` is nullable** (§4): an empty netlist exports `null` (ADR 0013's empty-netlist rule), and so does the materialised `WorldV2.sim`. A snapshot holding no solution writes `lastSolveTick` 0.
+- **Device records are a function of the export** (§5.4, §5.5): a model writes its record from its bag and the current solution (a power from the bag's temperature and the solved current), never from a value cached by the last step, so a loaded engine writes the same bytes.
+- **`NOMINAL_BANDS` holds only `none`** (index 0) in F2.3a: the band follows from source nameplates and setpoints, which F2.4's source models provide. F2.4 appends the sourced bands and bumps the protocol. **`DEVICE_OUTPUT_SCHEMAS` is empty in code**: no built-in device model publishes a record yet, and §5.4's table stays provisional until F2.4 and F2.5.
+- **Island events' rising edge across a topology change** (§4): a flag rises only if no island the new island's entities were in before the change already had it, so merging or splitting a singular island raises nothing new, while removing the loop and bringing it back (a delete and its undo) does. Island events sort by their smallest entity.
+- **The game runs the engine in-process until F2.3b** (§1, §9.4): the session's `Game` has the same in-process engine as `sim-cli`, so `world.hash` and saves materialise synchronously and a `.console` file's `sim.step` steps time in the game too. No pacing runs (time moves only by `sim.step`). F2.3b moves the engine to the worker and makes `game.hash()` and `game.save()` throw `NotAvailableError` in the game, as §9.4 says.
+
 ## Resolved in review
 
 The proposal's open questions, by number:

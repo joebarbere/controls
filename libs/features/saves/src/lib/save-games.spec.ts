@@ -7,7 +7,14 @@ import { createWorld, defaultSettings, readCtrl, writeCtrl } from '@controls/sav
 import { createGame, createSaveManifest, loadGame } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
-import { findLastPlayed, lastPlayedOf, REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
+import {
+  ENGINE_CHANGED_MESSAGE,
+  findLastPlayed,
+  lastPlayedOf,
+  REPLAY_RESTARTED_MESSAGE,
+  SaveGames,
+  suggestedSaveName,
+} from './save-games';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -20 } });
@@ -183,6 +190,18 @@ describe('SaveGames', () => {
     expect(await refuse.saves.load(again)).toBe(false);
     expect(refuse.session.active()).toBe(false);
     expect(refuse.toasts()).toEqual(['error: Couldn’t load “Odd”. Its replay log doesn’t match its world.']);
+  });
+
+  it('loads a save from another sim engine with a notice, never refusing it, even by policy (D8)', async () => {
+    const world = { ...createWorld({ seed: 8 }) };
+    const otherLog = createGame({ seed: 9 }).replayLog(); // it wouldn't verify, and isn't checked
+    const manifest = { ...createSaveManifest(), simEngineVersion: 1 };
+    const older = writeCtrl({ manifest, world, replayLog: otherLog, thumbnail: null });
+    const refuse = setup({ policy: 'refuse' });
+    const entry = refuse.io.seed({ kind: 'manual', name: 'Old engine' }, older);
+    expect(await refuse.saves.load(entry)).toBe(true);
+    expect(refuse.session.world().seed).toBe(8);
+    expect(refuse.toasts()).toEqual(['success: Loaded “Old engine”.', `info: ${ENGINE_CHANGED_MESSAGE}`]);
   });
 
   it('Continue loads the newest save that loads, skipping damaged ones with one warning', async () => {

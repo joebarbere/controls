@@ -38,6 +38,8 @@ export function loadErrorReason(error: LoadGameError): string {
       return DAMAGED;
     case 'invalid-device-state':
       return 'The save holds devices this version of Controls doesn’t recognise in that state, or it is damaged.';
+    case 'start-failed':
+      return 'The save’s simulation state doesn’t match its circuit, so it may be damaged.';
   }
 }
 

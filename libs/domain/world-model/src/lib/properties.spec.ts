@@ -89,6 +89,12 @@ function pickEnd(bus: CommandBus<World>, [entityIndex, terminalIndex]: [number, 
 }
 
 const opsArb = fc.array(opArb, { maxLength: 25 });
+/** Each op after time has passed (often none, so several commands share a tick), as in a running game. */
+const timedOpsArb = fc.array(fc.tuple(opArb, fc.oneof(fc.constant(0), fc.nat({ max: 5_000 }))), {
+  minLength: 1,
+  maxLength: 25,
+  size: 'medium',
+});
 /**
  * Which entity the delete property deletes: biased to one with leads (`withLeads`), else any entity
  * or, past the end, a missing id.
@@ -247,6 +253,62 @@ describe('world command properties', () => {
         expect(result.change.apply(result.change.invert(applied))).toEqual(applied);
       }),
     );
+  });
+
+  it('with time passing between commands, every apply and invert keeps the tick, and undoing everything restores the commanded world (F2.3a)', () => {
+    const undoable = new Map(
+      createWorldRegistry()
+        .list()
+        .filter((def) => def.undoable)
+        .map((def) => [def.id, def]),
+    );
+    fc.assert(
+      fc.property(worldArb, timedOpsArb, (initial, steps) => {
+        const bus = createWorldBus(deepFreeze(initial));
+        for (const [op, dt] of steps) {
+          bus.advanceTo(bus.currentTick() + dt);
+          const before = bus.state;
+          const logged = bus.entries.length;
+          run(bus, op);
+          expect(bus.state.tick).toBe(before.tick);
+          const entry = bus.entries[logged];
+          const def = entry && undoable.get(entry.id);
+          if (!def) continue;
+          // The change itself, against the world it ran on, at the tick time had reached.
+          const ctx = { state: before, seq: entry.seq, tick: entry.tick, canUndo: false, canRedo: false };
+          const result = def.run(ctx, entry.args);
+          if (!result.ok || !('change' in result) || !result.change) throw new Error('expected a change');
+          const applied = result.change.apply(before);
+          expect(applied.tick).toBe(before.tick);
+          expect(result.change.invert(applied).tick).toBe(before.tick);
+        }
+        const end = bus.currentTick();
+        while (bus.exec('edit.undo').ok);
+        // Time never rewinds; what was commanded returns (ADR 0011 §3, "undo everything" restated).
+        expect(bus.state.tick).toBe(end);
+        expect({ ...bus.state, tick: initial.tick }).toEqual(initial);
+      }),
+    );
+  });
+
+  it('the timed sessions reach later ticks and run undoable changes there (generator health)', () => {
+    const samples = fc.sample(fc.tuple(worldArb, timedOpsArb), { seed: 20261031, numRuns: 150 });
+    let advancedChanges = 0;
+    for (const [initial, steps] of samples) {
+      const bus = createWorldBus(initial);
+      let changed = false;
+      for (const [op, dt] of steps) {
+        bus.advanceTo(bus.currentTick() + dt);
+        const logged = bus.entries.length;
+        run(bus, op);
+        const entry = bus.entries[logged];
+        if (entry && entry.tick > initial.tick && op.kind !== 'undo' && op.kind !== 'redo' && op.kind !== 'view') {
+          changed = true;
+        }
+      }
+      if (changed) advancedChanges++;
+    }
+    expect(advancedChanges).toBeGreaterThan(75);
   });
 
   it('every change keeps the tick, the solution record and each surviving entity’s sim bag (ADR 0011 §1, §3)', () => {

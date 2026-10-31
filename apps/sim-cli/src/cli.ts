@@ -1,6 +1,8 @@
 import { CtrlWriteError, migrateWorld, readCtrl, type World } from '@controls/save-format';
 import {
+  BUILD_ENGINE_VERSIONS,
   createGame,
+  engineCompatible,
   formatConsoleScriptError,
   type Game,
   gameFromSave,
@@ -328,7 +330,13 @@ function replaySave(bytes: Uint8Array, label: string): string {
   const replayed = result.game.hash();
   const saved = worldHash(read.value.world);
   if (replayed !== saved) {
-    throw new Failure(`${label}: replay.log replays to ${replayed}, but world.json hashes to ${saved}`);
+    // A save from another sim engine or catalogue isn't expected to reproduce its world (D8): say so.
+    const { manifest } = read.value;
+    const other =
+      engineCompatible(manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed'
+        ? ` (written by sim engine ${manifest.simEngineVersion}, catalogue ${manifest.catalogVersion}; this build is engine ${BUILD_ENGINE_VERSIONS.simEngineVersion}, catalogue ${BUILD_ENGINE_VERSIONS.catalogVersion})`
+        : '';
+    throw new Failure(`${label}: replay.log replays to ${replayed}, but world.json hashes to ${saved}${other}`);
   }
   return replayed;
 }

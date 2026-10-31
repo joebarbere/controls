@@ -40,7 +40,7 @@ Any failure returns a typed `ExecError` (`unknown-command`, `invalid-args`, `rej
 ### Undo and redo
 
 - **An undoable change** is pushed on the undo stack and clears the redo stack ("a new mutation clears redo").
-- **A non-undoable change** (none in P1; a future `sim.step` is the example) clears both stacks, because history can't be undone across it.
+- **A non-undoable change** (none in P1) clears both stacks, because history can't be undone across it. _Amended in F2.3a:_ `sim.step` is not one. Time passing is not a change ([ADR 0011](0011-sim-worker-contract.md) §3): the sim time commands' `run` returns no change, so they leave both stacks alone, and the time host carries out a step.
 - **No change** (view commands, refusals) leaves both stacks alone.
 - `edit.undo` inverts the top of the undo stack and moves it to redo; `edit.redo` does the reverse. Both are registered commands (`Mod+Z`, `Mod+Shift+Z`, `when: history.canUndo` / `history.canRedo`). **With an empty stack they fail** (`nothing-to-undo` / `nothing-to-redo`).
 - The stacks are unbounded in P1. A cap would change which undos succeed, so any future cap must be a fixed constant applied identically in replay.
@@ -175,6 +175,8 @@ A successful `cheat` command sets the world's `assisted` flag through the bus's 
 ### Ticks
 
 Each entry records the state's `tick` when it ran (always 0 in P1), and replay refuses an entry whose recorded tick differs from the replayed one.
+
+_Amended in F2.3a ([ADR 0011](0011-sim-worker-contract.md) §3):_ time moves with `CommandBus.advanceTo(tick)` (unlogged, no `seq`, no history change, no `executed` event; a bus needs the `withTick` option). Replay no longer refuses an entry at a **later** tick: `replayEntries(bus, entries, { time, endTick })` advances the time host and the bus to it, runs it, tells the host (`time.applied`), and at the end advances to `endTick`. An entry at an **earlier** tick than the bus's is still `tick-mismatch`, and so is a later one on a bus that can't advance. P1 logs, all at tick 0, replay exactly as before.
 
 ## Consequences
 

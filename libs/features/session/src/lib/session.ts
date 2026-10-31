@@ -18,7 +18,6 @@ import {
   newGameWorld,
   type NewGameOptions,
   type World,
-  worldHash,
 } from '@controls/world-model';
 
 export type CommandHandler = (event: ExecutedEvent<World>) => void;
@@ -78,8 +77,15 @@ export class Session {
 
   /** The current world document. Read-only: change it with {@link exec}. */
   readonly world = this.worldState.asReadonly();
-  /** `world.hash` of the current world (computed on demand). */
-  readonly hash = computed(() => worldHash(this.world()));
+  /**
+   * `world.hash` of the current world, with the sim state materialised (`Game.hash`, ADR 0011 §1),
+   * computed on demand. Until F2.3b moves the engine to the sim worker, the game's engine runs
+   * in-process, so this stays synchronous; time moves only with commands (`sim.step`) until then.
+   */
+  readonly hash = computed(() => {
+    this.world();
+    return this.game.hash();
+  });
   /** The replay entries of this session. */
   readonly entries = this.log.asReadonly();
   readonly canUndo = computed(() => this.history()['history.canUndo']);
@@ -161,6 +167,11 @@ export class Session {
     return this.game.exec(id, args);
   }
 
+  /** The sim snapshot's hash at the current tick (`Game.snapshotHash`, ADR 0011 §5.2). */
+  snapshotHash(): string {
+    return this.game.snapshotHash();
+  }
+
   /** Whether the palette and keybindings should offer the command in the current context. */
   isEnabled(id: string): boolean {
     return this.registry.isEnabled(id, this.contextKeys());
@@ -210,8 +221,9 @@ export class Session {
   }
 
   /**
-   * `?e2e=1` only: exposes exec, the hash and a pure hash-of-JSON function on `window`, so
-   * Playwright can drive commands and prove the hash matches the Node golden values in Chromium.
+   * `?e2e=1` only: exposes exec, the world and snapshot hashes and a pure hash-of-JSON function on
+   * `window`, so Playwright can drive commands and prove the hashes match the Node golden values in
+   * Chromium (the world hash since F1.2; the engine's snapshot, D6, since F2.3a).
    */
   private exposeTestHook(): void {
     const view = inject(DOCUMENT).defaultView;
@@ -220,6 +232,7 @@ export class Session {
     target[TEST_HOOK] = {
       exec: (id: string, args?: unknown) => this.exec(id, args),
       hash: () => this.hash(),
+      snapshotHash: () => this.snapshotHash(),
       world: () => this.world(),
       entries: () => this.entries(),
       hashWorld: (json: unknown) => {
