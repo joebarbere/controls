@@ -6,6 +6,7 @@ import {
   parseHostMessage,
   SIM_PROTOCOL_VERSION,
   type SimErrorCode,
+  type SimEvent,
   type SimWorkerFactory,
   type SimWorkerHandlers,
   type SimWorkerLike,
@@ -50,6 +51,8 @@ export class FakeSimWorker implements SimWorkerLike {
   private engine: SimEngine | null = null;
   private bus: CommandBus<World> | null = null;
   private generation = -1;
+  /** As the runner: sorted batches cut at each command, posted with the next publish. */
+  private pendingEvents: SimEvent[] = [];
   private hung = false;
   private held: (() => void)[] | null = null;
   private writer: SnapshotWriter | null = null;
@@ -246,6 +249,7 @@ export class FakeSimWorker implements SimWorkerLike {
       case 'command': {
         const engine = this.engine as SimEngine;
         if (message.entry.tick > engine.tick) engine.advanceTo(message.entry.tick);
+        this.pendingEvents.push(...engine.takeEvents()); // time's events up to the command: their own batch
         const result = replayEntries(this.bus as CommandBus<World>, [message.entry], { time: engine });
         if (!result.ok) {
           this.post({
@@ -312,7 +316,8 @@ export class FakeSimWorker implements SimWorkerLike {
   private publish(): void {
     const engine = this.engine;
     if (engine === null) return;
-    const events = engine.takeEvents();
+    const events = [...this.pendingEvents, ...engine.takeEvents()];
+    this.pendingEvents = [];
     if (events.length > 0) this.post({ type: 'events', events });
     if (engine.topologyGeneration !== this.generation) {
       this.generation = engine.topologyGeneration;
