@@ -498,10 +498,26 @@ function selfConsistent(
 }
 
 /**
- * The properties' iteration bound, set from a measurement: over 1,500 fresh large circuits (about
- * 2,200 islands) no island failed to converge, the median took 16 iterations, the 99th percentile
- * about 21 and the most 26; a fresh seed in the flake runs took 32 (kept as an example). 40 leaves
- * room under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
+ * The properties' iteration bound. Where it comes from:
+ *
+ * - **Contraction.** A self-heating law R = R0 + k|I| gives the undamped iteration a Jacobian whose
+ *   eigenvalues λ lie in (−1, 0] (each element's slope is −k I / (R_th + R0 + k I)). The damping
+ *   schedule settles into alternating α = 1 and α = 1/2 (the traces show it), whose iteration matrices
+ *   have eigenvalues λ and (1 + λ) / 2: per pair, |λ (1 + λ) / 2| ≤ 1/8 on [−1, 0]. So the error
+ *   falls at least 8× every two iterations. From a cold start a heated current is off by up to the
+ *   hot ratio (15×), and the loop stops at 1e-6 relative, a 1.5e7 reduction: 2 ⌈log₈ 1.5e7⌉ = 16
+ *   iterations, plus the cold solve and the schedule's first undamped pair: about 19.
+ * - **What the proof doesn't cover.** The schedule decides from one max-norm and one dot product over
+ *   all voltages and currents together, so it can lose the alternation for a few steps (two α = 1 in a
+ *   row, or a halving to 1/4 near the end): each such excursion costs at most about 4 iterations
+ *   (1/16 ← 1 is four halvings). The loop also can't converge below each current's resolution: it
+ *   stalls if a solve's noise exceeds that (#51: threshold pivoting's multipliers did, fixed by
+ *   `PIVOT_THRESHOLD` 1).
+ * - **Measured** (partial pivoting): over 2,197 islands the median is 16, the 99th percentile 21 and
+ *   the most 24, and over 310 fresh-seed runs of this spec the most any fresh draw took was 27; the
+ *   earlier 32 is kept as an example.
+ *
+ * 40 is the derived 19 plus five excursions, under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
  */
 const ITERATION_BOUND = 40;
 
@@ -594,6 +610,10 @@ describe('outer-loop properties', () => {
           [{ nodes: 177, islands: 1, seed: 11, meshPercent: 3, wellConditioned: true }, 2, 13],
           // Took 32 iterations: the tail of the distribution (see ITERATION_BOUND).
           [{ nodes: 62, islands: 2, seed: 867437101, meshPercent: 7, wellConditioned: true }, 2, 4],
+          // Took 41 (F2.3a's fresh-seed runs, #51): with PIVOT_THRESHOLD 0.1 the sparse LU's multipliers up
+          // to 10 put ~3,000 ulps of noise on a node, so a 3.5e-7 A source current behind 1.85 Ω moved by
+          // 5e-12 A between solves, above its tolerance, from iteration 25 on. Partial pivoting: 18.
+          [{ nodes: 149, islands: 2, seed: 1770462711, meshPercent: 24, wellConditioned: true }, 3, 8],
         ],
       },
     );

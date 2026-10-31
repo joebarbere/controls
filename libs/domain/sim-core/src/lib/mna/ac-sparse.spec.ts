@@ -290,6 +290,8 @@ describe('AcSolver sparse path', () => {
     const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
     // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
     // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was 21f6f74e….
-    expect(hex).toBe('5d5a025759ade42c87062141ca0c27eee2dc87412a7dffceff99705086cefe06');
+    // Re-pinned again in #51 for PIVOT_THRESHOLD 0.1 → 1 (plain partial pivoting): a numeric change,
+    // so SIM_ENGINE_VERSION went to 2. Was 5d5a0257….
+    expect(hex).toBe('15b7eafce4b03f09631e4c026d36b735ae95ec81ee029ca4f064c6be7e70a0cb');
   });
 });

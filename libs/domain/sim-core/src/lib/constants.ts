@@ -57,15 +57,16 @@ export const SPARSE_MIN_UNKNOWNS: SourcedConstant = {
 
 /**
  * Threshold partial pivoting's diagonal preference in sparse LU: the diagonal entry is kept as the
- * pivot while |a_kk| ≥ u · max_i |a_ik|. Numerical: it trades fill-in (AMD orders for diagonal
- * pivots) against element growth, which is bounded by a factor (1 + 1/u) per step.
+ * pivot while |a_kk| ≥ u · max_i |a_ik|, so every multiplier is at most 1 / u. Numerical: it trades
+ * fill-in (AMD orders for diagonal pivots) against element growth, bounded by a factor (1 + 1/u) per
+ * step. u = 1 is plain partial pivoting, the dense LU's rule, with the diagonal winning ties.
  */
 export const PIVOT_THRESHOLD: SourcedConstant = {
-  value: 0.1,
+  value: 1,
   unit: '1',
   kind: 'numerical',
   source:
-    'numerical: u = 0.1, the threshold I. S. Duff, A. M. Erisman and J. K. Reid recommend for sparse LU ("Direct Methods for Sparse Matrices", Oxford, 1986, §7.8): close to partial pivoting\'s stability while keeping most of the ordering\'s sparsity.',
+    'numerical: u = 1, plain partial pivoting (multipliers at most 1), so the sparse LU is as backward stable as the dense one, which the floor policy and the outer loop\'s per-branch current resolution assume. It was u = 0.1, the threshold I. S. Duff, A. M. Erisman and J. K. Reid recommend for general sparse LU ("Direct Methods for Sparse Matrices", Oxford, 1986, §7.8). On these AMD-ordered MNA systems u = 1 costs 0.33 % more L + U entries (56 887 against 56 699 over 8 seeded 2,000-node plants) and fell back from replay less often (19 against 227 fallbacks over 2,197 nonlinear islands), while u = 0.1 let multipliers up to 10 put about 3,000 ulps of noise on a node voltage: a source carrying 3.5e-7 A behind 1.85 Ω then moved by 5e-12 A between solves, above its 1.5e-12 A tolerance, and its island took 41 outer-loop iterations where the dense path took 18 (F2.2 part 2 review, #51).',
 };
 
 /**
