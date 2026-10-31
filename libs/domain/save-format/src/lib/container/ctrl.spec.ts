@@ -1,6 +1,6 @@
 import { APP_VERSION } from '@controls/units';
 import fc from 'fast-check';
-import { deflateSync, unzipSync, zipSync } from 'fflate';
+import { Deflate, deflateSync, inflateSync, unzipSync, zipSync } from 'fflate';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,6 +39,32 @@ const fixturesRoot = join(import.meta.dirname, '../../../fixtures');
 const fixture = (path: string): unknown => JSON.parse(readFileSync(join(fixturesRoot, path), 'utf8'));
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const MiB = 1024 * 1024;
+
+/**
+ * `mib` MiB of spaces as a raw DEFLATE stream, about 1 KiB per MiB. One 1 MiB block is compressed
+ * once, ending on a sync flush (so it is byte-aligned and self-contained: a literal then copies at
+ * distance 1), then repeated and closed by an empty final block. Compressing the whole bomb instead
+ * takes about a second, too slow for the Windows runner.
+ */
+function spaceBomb(mib: number): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  const deflate = new Deflate((chunk) => chunks.push(chunk));
+  deflate.push(new Uint8Array(MiB).fill(0x20));
+  deflate.flush(true);
+  const block = concatBytes(chunks);
+  const finalBlock = new Uint8Array([0x03, 0x00]); // BFINAL, fixed Huffman, end-of-block
+  return concatBytes([...Array.from({ length: mib }, () => block), finalBlock]);
+}
+
+function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
 /** A manifest for this build (the catalogue and engine versions don't matter to the container). */
 const createManifest = () => createManifestWith({ catalogVersion: 1, simEngineVersion: 1 });
 
@@ -389,12 +415,18 @@ describe('readCtrl', () => {
     });
 
     it('refuses a zip bomb while inflating it: the output is checked as it grows, not just the header', () => {
-      const bomb = new Uint8Array(20 * MiB).fill(0x20); // ~20 KiB compressed
-      const bytes = container({ 'world.json': { data: bomb, uncompressedSize: 1000 } });
+      // 20 MiB of spaces in about 20 KiB. The CRC is never reached: inflation stops at the declared size.
+      const bytes = container({ 'world.json': { rawBody: spaceBomb(20), crc: 0, uncompressedSize: 1000 } });
       expect(bytes.length).toBeLessThan(100_000);
       const error = readError(bytes);
       expect(error).toMatchObject({ kind: 'corrupt-entry', entry: 'world.json' });
       expect(error.message).toContain('more than its declared size');
+    });
+
+    it('builds the zip bomb fixture as a valid DEFLATE stream of the stated size', () => {
+      const inflated = inflateSync(spaceBomb(2));
+      expect(inflated.length).toBe(2 * MiB);
+      expect(inflated.every((byte) => byte === 0x20)).toBe(true);
     });
   });
 
