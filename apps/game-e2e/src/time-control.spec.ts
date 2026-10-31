@@ -14,7 +14,8 @@ type Hooks = {
     simStatus(): string;
     simPacing(): boolean;
     waitForTick(tick: number): Promise<void>;
-    busWorld(): { tick: number };
+    busWorld(): { tick: number; entities: readonly unknown[] };
+    exec(id: string, args?: unknown): { ok: boolean };
   };
 };
 const hook = <T>(page: Page, read: (h: NonNullable<Hooks['__controlsSession']>) => T) =>
@@ -131,4 +132,29 @@ test('a hidden window suspends the sim and a shown one resumes it (U1)', async (
   const shown = await hook(page, (h) => h.busWorld().tick);
   expect(await hook(page, (h) => h.simPacing())).toBe(true);
   await expect.poll(() => hook(page, (h) => h.busWorld().tick)).toBeGreaterThan(shown);
+});
+
+test('a burst of 1,250 commands while running never trips the watchdog (a busy worker is not a hung one)', async ({
+  page,
+}) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+  await page.locator('ctl-viewport canvas').focus();
+  await page.keyboard.press('Shift+Digit2'); // 10×: the target runs ahead of the worker while it drains
+  await expect.poll(() => hook(page, (h) => h.simStatus())).toBe('running');
+  const placed = await hook(page, (h) => {
+    let ok = 0;
+    for (let i = 0; i < 1_250; i++)
+      if (h.exec('entity.place', { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: i, y: 0, z: -20 } }).ok)
+        ok++;
+    return ok;
+  });
+  expect(placed).toBe(1_250);
+  const after = await hook(page, (h) => h.busWorld().tick);
+  // Past a whole watchdog period of sim time at 10× (3 s of wall time): the worker kept up, never crashed.
+  await expect.poll(() => hook(page, (h) => h.simTick()), { timeout: 30_000 }).toBeGreaterThan(after + 30_000);
+  expect(await hook(page, (h) => h.simStatus())).toBe('running');
+  await expect(page.getByRole('alert').filter({ hasText: 'The simulation stopped' })).toHaveCount(0);
+  expect(await hook(page, (h) => h.busWorld().entities.length)).toBeGreaterThanOrEqual(1_250);
 });

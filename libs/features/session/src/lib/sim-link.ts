@@ -86,8 +86,11 @@ export class SimLink {
   startTick = 0;
   /** The last `advance` posted (advances are strictly increasing). */
   lastAdvance: number;
-  /** Host wall time of the last accepted snapshot (the watchdog's input). */
-  lastPublishWall: number;
+  /**
+   * Host wall time the worker was last heard from: any message, or an accepted snapshot (a shared
+   * buffer publish is no message). The watchdog's input: liveness, not snapshot cadence.
+   */
+  lastHeardWall: number;
   /** The worker's progress: the latest accepted snapshot's tick. */
   progress: number;
   readonly ready: Promise<void>;
@@ -112,7 +115,7 @@ export class SimLink {
   ) {
     this.lastAdvance = start.kind === 'world' ? start.world.tick : start.log.endTick;
     this.progress = start.kind === 'world' ? start.world.tick : start.log.initialWorld.tick;
-    this.lastPublishWall = clock.now();
+    this.lastHeardWall = clock.now();
     this.ready = new Promise<void>((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -258,6 +261,7 @@ export class SimLink {
 
   private receive(data: unknown): void {
     if (!this.alive) return; // a late message from a terminated worker
+    this.lastHeardWall = this.clock.now(); // the worker is alive, whatever it said
     const message = parseWorkerMessage(data);
     if (message === null) {
       this.fail({
@@ -310,7 +314,7 @@ export class SimLink {
 
   private accepted(view: SnapshotView): void {
     this.progress = view.tick;
-    this.lastPublishWall = this.clock.now();
+    this.lastHeardWall = this.clock.now();
     if (this.retired === null) this.events.snapshot(this, view);
   }
 

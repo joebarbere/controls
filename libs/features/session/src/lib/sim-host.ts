@@ -654,7 +654,7 @@ export class SimHost {
     const binding = this.binding;
     if (link === null || binding === null || !this.shouldPace()) return;
     const now = this.clock.now();
-    if (link.lastAdvance > link.progress && now - link.lastPublishWall >= WATCHDOG_MS) {
+    if (link.lastAdvance > link.progress && now - link.lastHeardWall >= WATCHDOG_MS) {
       link.fail({ code: 'watchdog', message: 'The sim worker stopped responding.', tick: link.progress, reason: null });
       return;
     }
