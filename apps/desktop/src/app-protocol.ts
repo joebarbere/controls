@@ -7,8 +7,10 @@ export const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
 export const APP_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 
 /**
- * Content Security Policy for every response. `wasm-unsafe-eval` is for future WASM solvers;
- * `blob:` workers are for the sim/PLC workers. Angular component styles need inline styles.
+ * Content Security Policy for every response. `wasm-unsafe-eval` is for future WASM solvers. Workers
+ * load from 'self': the sim worker is a bundled `app://game/worker-*.js` (F2.3b, ADR 0011), never a
+ * blob, and desktop-e2e asserts its URL. `blob:` stays in `worker-src` because the spec's CSP (plan
+ * §4) lists it; nothing uses it today. Angular component styles need inline styles.
  */
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",

@@ -32,15 +32,24 @@ test.describe.serial('the sim worker under app://', () => {
     return window.workers().at(-1) as Worker;
   };
 
-  /** Waits for the crash toast, checks its code, and restarts the sim from it. */
+  /** The worker's URL: bundled, served from 'self', never blob:. */
+  const WORKER_URL = /^app:\/\/game\/worker-[A-Z0-9]+\.js$/;
+
+  /**
+   * Waits for the crash toast, checks its code, restarts the sim from it, and checks the new worker
+   * is the bundled one, cross-origin isolated (the listener is registered before the click, so the
+   * restart's worker can't be missed).
+   */
   async function crashedAndRestarted(window: Page, code: RegExp): Promise<void> {
     const toast = window.getByRole('alert').filter({ hasText: 'The simulation stopped' });
     await expect(toast).toBeVisible({ timeout: 15_000 });
     await expect(toast).toContainText(code);
-    const before = window.workers().length;
+    const restarted = window.waitForEvent('worker');
     await toast.getByRole('button', { name: 'Restart simulation' }).click();
+    const worker = await restarted;
+    expect(worker.url()).toMatch(WORKER_URL);
+    expect(await worker.evaluate(() => self.crossOriginIsolated)).toBe(true);
     await expect(window.getByTestId('sim-controls')).toHaveAttribute('data-status', 'paused', { timeout: 15_000 });
-    await expect.poll(() => window.workers().length).toBeGreaterThanOrEqual(before);
   }
 
   test('a New sandbox starts a module worker that is cross-origin isolated in its own scope, with no Node', async () => {
@@ -50,7 +59,7 @@ test.describe.serial('the sim worker under app://', () => {
     const started = window.waitForEvent('worker');
     await newSandbox(window, 0);
     const worker = await started;
-    expect(worker.url()).toMatch(/^app:\/\/game\/worker-[A-Z0-9]+\.js$/); // bundled, served from 'self', never blob:
+    expect(worker.url()).toMatch(WORKER_URL);
     expect(
       await worker.evaluate(() => ({
         isolated: self.crossOriginIsolated,
@@ -79,9 +88,25 @@ test.describe.serial('the sim worker under app://', () => {
     const { window } = running();
     const worker = await latestWorker(window);
     // `connect-src 'self'` blocks another origin before any request is made, in the worker's own scope.
-    // (An eval can't be the probe: DevTools evaluation is exempt from the CSP's eval check.)
     await worker.evaluate(() => {
       void fetch('https://example.invalid/').catch(() => undefined);
+    });
+    await crashedAndRestarted(window, /csp-violation/);
+  });
+
+  test('an eval in the worker is refused by its CSP (no unsafe-eval) and stops the sim', async () => {
+    const { window } = running();
+    const worker = await latestWorker(window);
+    // DevTools evaluation is exempt from the eval check only for the duration of the call, so the
+    // eval runs later, in a task of the worker's own; caught, so only the violation reports it.
+    await worker.evaluate(() => {
+      setTimeout(() => {
+        try {
+          (0, eval)('1');
+        } catch {
+          // EvalError: refused, as it should be
+        }
+      });
     });
     await crashedAndRestarted(window, /csp-violation/);
   });
@@ -125,8 +150,15 @@ test.describe.serial('the sim worker under app://', () => {
     await evaluateMain(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
     // Whether a minimised window reports `hidden` depends on the window system (xvfb and headless
     // ozone may not); the visibility state the page sees is what the host follows.
-    const hidden = await window.evaluate(() => document.visibilityState === 'hidden');
-    if (hidden) await expect(window.getByTestId('sim-controls')).toHaveAttribute('data-status', 'suspended');
+    const hidden = await window
+      .waitForFunction(() => document.visibilityState === 'hidden', undefined, { timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!hidden) {
+      await evaluateMain(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore());
+      test.skip(true, 'this window system does not report a minimised window as hidden (suspension: game-e2e)');
+    }
+    await expect(window.getByTestId('sim-controls')).toHaveAttribute('data-status', 'suspended');
     await evaluateMain(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.restore());
     await expect(window.getByTestId('sim-controls')).toHaveAttribute('data-status', 'running', { timeout: 15_000 });
   });

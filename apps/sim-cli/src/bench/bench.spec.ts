@@ -334,7 +334,9 @@ describe('sim bench', () => {
           runs: 3,
           medianMs: 1,
           p90Ms: 1,
+          p99Ms: 1,
           budgetMs: null,
+          invariant: null,
           calibration: null,
           gatedMs: 1,
           marginMs: null,
@@ -423,5 +425,9 @@ describe('sim bench', () => {
     expect(resolve?.ratio).toBeGreaterThan(0);
     // The spec §4.5 budgets that wait for the solver and the engine stay visible.
     expect(report.pending).toStrictEqual(PENDING_BENCH_CASES);
+    // The per-frame snapshot read: reported with p50 and p99, gated on allocating nothing.
+    const read = report.cases.find((c) => c.name === 'snapshot-read-500-devices');
+    expect(read).toMatchObject({ budgetMs: null, ok: true, invariant: { failure: null } });
+    expect(read?.p99Ms).toBeGreaterThanOrEqual(read?.medianMs ?? Infinity);
   });
 });

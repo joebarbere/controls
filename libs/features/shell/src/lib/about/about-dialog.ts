@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
 import type { AppInfo } from '@controls/ipc-contract';
+import type { SimTransport } from '@controls/sim-protocol';
 import { Button, Dialog } from '@controls/ui';
 
 /**
@@ -57,7 +58,7 @@ export class AboutDialog {
    * How the sim worker publishes snapshots (`ready.transport`, ADR 0011 §8): `sab` (the shared
    * buffer) or `message` (the fallback), or `null` without a game.
    */
-  readonly simTransport = input<string | null>(null);
+  readonly simTransport = input<SimTransport | null>(null);
 
   protected readonly platformLabel = computed(() => {
     const info = this.info();

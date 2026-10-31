@@ -196,6 +196,8 @@ async function bench(parsed: Parsed, io: CliIo): Promise<number> {
   if (reportFile !== undefined) await writeFile(resolve(io.cwd, reportFile), `${json}\n`);
   for (const result of report.cases) {
     if (!result.deterministic) io.stderr(`sim: bench case "${result.name}" returned different checksums across runs`);
+    else if (result.invariant?.failure)
+      io.stderr(`sim: bench case "${result.name}" failed: ${result.invariant.failure}`);
     else if (!result.ok && result.calibration !== null) {
       const { calibration } = result;
       io.stderr(

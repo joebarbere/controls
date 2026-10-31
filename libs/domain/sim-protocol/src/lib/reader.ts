@@ -44,6 +44,12 @@ export interface SnapshotView {
   islandBand(island: number): number;
   /** A device field; u8 enums return the code (the descriptor's schemas give the names). */
   read(field: FieldRef): number;
+  /**
+   * Every field of `fields` into `out` (same index), in one call: the per-frame path for a renderer
+   * reading many devices, guaranteed allocation-free (a `read` per field may return a boxed double
+   * where the engine doesn't inline it).
+   */
+  readAll(fields: readonly FieldRef[], out: Float64Array): void;
   /** The slot's hashed bytes (tests and `snapshot.hash` only): a view, no copy. */
   hashedBytes(): Uint8Array;
 }
@@ -160,17 +166,26 @@ class CopiedSnapshot implements SnapshotView {
   }
 
   read(field: FieldRef): number {
-    const at = this.devicesAt + field.offset;
-    switch (field.type) {
-      case 'f64':
-        return this.data.getFloat64(at, true);
-      case 'u32':
-        return this.data.getUint32(at, true);
-      case 'i32':
-        return this.data.getInt32(at, true);
-      case 'u8':
-        return this.data.getUint8(at);
+    // f64 first and alone, so the common read stays small enough for V8 to inline (a call it can't
+    // inline returns its double boxed: 16 bytes per field per frame).
+    if (field.type === 'f64') return this.data.getFloat64(this.devicesAt + field.offset, true);
+    return this.readInteger(field);
+  }
+
+  readAll(fields: readonly FieldRef[], out: Float64Array): void {
+    const data = this.data;
+    const base = this.devicesAt;
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      out[i] = field.type === 'f64' ? data.getFloat64(base + field.offset, true) : this.readInteger(field);
     }
+  }
+
+  private readInteger(field: FieldRef): number {
+    const at = this.devicesAt + field.offset;
+    if (field.type === 'u32') return this.data.getUint32(at, true);
+    if (field.type === 'i32') return this.data.getInt32(at, true);
+    return this.data.getUint8(at);
   }
 
   hashedBytes(): Uint8Array {
@@ -200,6 +215,8 @@ export class SnapshotReader {
   private copy: CopiedSnapshot | null = null;
   /** Per slot: a view of the used length, rebuilt only when the length changes (once per generation). */
   private readonly sources: (Uint8Array | null)[] = [null, null];
+  /** Per slot: a view of its header in the shared buffer, made on attach (a read allocates nothing). */
+  private headers: DataView[] = [];
   private readonly seqIndex: number[] = [0, 0];
   private lastSeen: number | null = null;
   private currentDescriptor: TopologyDescriptor | null = null;
@@ -232,6 +249,7 @@ export class SnapshotReader {
     this.i32 = new Int32Array(buffer);
     this.slotBytes = slotBytes;
     this.sources[0] = this.sources[1] = null;
+    this.headers = [0, 1].map((slot) => new DataView(buffer, slotOffset(slot, slotBytes), SLOT_HEADER_BYTES));
     for (let i = 0; i < SLOT_COUNT; i++) this.seqIndex[i] = (slotOffset(i, slotBytes) + SLOT_OFFSETS.slotSeq) / 4;
     this.ensureCopy(slotBytes);
     this.lastSeen = null;
@@ -318,8 +336,7 @@ export class SnapshotReader {
   private usedView(slot: number): Uint8Array | null {
     const start = slotOffset(slot, this.slotBytes);
     const buffer = this.buffer as ArrayBufferLike;
-    const header = new DataView(buffer, start, SLOT_HEADER_BYTES);
-    const payload = header.getUint32(SLOT_OFFSETS.payloadBytes, true);
+    const payload = this.headers[slot].getUint32(SLOT_OFFSETS.payloadBytes, true);
     const used = SLOT_HEADER_BYTES + payload;
     if (used > this.slotBytes) return null;
     let source = this.sources[slot];
