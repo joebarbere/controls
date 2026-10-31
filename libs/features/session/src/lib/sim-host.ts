@@ -375,6 +375,11 @@ export class SimHost {
     return [...this.links].filter((l) => l.alive).length;
   }
 
+  /** Whether the pacing loop is scheduled (the e2e hook's `simPacing`: false while suspended or held). */
+  get pacingScheduled(): boolean {
+    return this.pacingTimer !== null;
+  }
+
   /** Whether any timer of the host is pending, for the disposal spec. */
   get timersPending(): boolean {
     return this.pacingTimer !== null || this.sampleTimer !== null;

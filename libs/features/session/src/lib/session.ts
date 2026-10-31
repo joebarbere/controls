@@ -323,6 +323,7 @@ export class Session {
       simTick: () => this.sim.simTick(),
       waitForTick: (tick: number) => this.sim.waitForTick(tick),
       simStatus: () => this.sim.status(),
+      simPacing: () => this.sim.pacingScheduled,
       simStats: () => this.sim.stats(),
       entries: () => this.entries(),
       hashWorld: (json: unknown) => {

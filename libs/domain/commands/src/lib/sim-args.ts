@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { NoArgs } from './builtin';
 import { type AnyCommandDef, defineCommand, succeed } from './command';
+import { SESSION_ACTIVE_KEY } from './file';
+import type { BindingDecl } from './keybindings/keymap';
+import { SIM_PAUSED_KEY, SIM_STATUS_KEY } from './sim-host';
 
 /*
  * The sim time commands (ADR 0011 §13) and their argument schemas. F2.3a declares `sim.setSpeed`,
@@ -56,6 +59,35 @@ export const SIM_COMMAND_ARGS: Readonly<Record<'sim.setSpeed' | 'sim.resume' | '
 export const SIM_STEP_COMMAND = 'sim.step';
 
 /**
+ * The time keys' `when` (ADR 0011 §13): a game is in progress and its sim hasn't crashed. Headless
+ * runs are unaffected (`exec` never evaluates `when`).
+ */
+export const SIM_TIME_WHEN = `${SESSION_ACTIVE_KEY} && ${SIM_STATUS_KEY} != 'crashed'`;
+
+/** Binding ids of the time keys (settings `controls.keybindings` keys; stable, like command ids). */
+export const SIM_PAUSE_BINDING = 'sim.setSpeed.pause';
+export const SIM_SPEED_1_BINDING = 'sim.setSpeed.x1';
+export const SIM_SPEED_10_BINDING = 'sim.setSpeed.x10';
+export const SIM_SPEED_60_BINDING = 'sim.setSpeed.x60';
+export const SIM_STEP_SHORT_BINDING = 'sim.step.short';
+export const SIM_STEP_LONG_BINDING = 'sim.step.long';
+
+/** `sim.step`'s short and long keyed steps, in ticks (game-design choices: 10 ms, one solve; 1 s). */
+export const SIM_STEP_SHORT_TICKS = 10;
+export const SIM_STEP_LONG_TICKS = 1_000;
+
+function speedBinding(id: string, title: string, speed: SimSpeed, chord: string, when = SIM_TIME_WHEN): BindingDecl {
+  return {
+    id,
+    title,
+    category: 'Sim',
+    target: { kind: 'command', command: 'sim.setSpeed', args: { speed } },
+    defaults: [chord],
+    when,
+  };
+}
+
+/**
  * The sim time commands. Each is logged and never changes the world: its `run` succeeds with no
  * change, so it leaves the undo and redo stacks alone (time passing is not a change, ADR 0011 §3).
  * The effect is the time host's: a headless game advances by `sim.step`'s ticks right after the
@@ -64,12 +96,21 @@ export const SIM_STEP_COMMAND = 'sim.step';
  * the next entry's tick, or the log's `endTick`, carries a step's effect.
  */
 export function simCommands<S>(): AnyCommandDef<S>[] {
+  // `P` toggles: pause while running, resume while paused (two bindings on disjoint `when`s, so the
+  // log always says which, ADR 0011 R2). Space is avoided: it would hijack focused buttons.
   const setSpeed = defineCommand<SimSetSpeedArgs, S>({
     id: 'sim.setSpeed',
     title: 'Set sim speed',
     category: 'Sim',
     args: SimSetSpeedArgs,
     undoable: false,
+    when: SIM_TIME_WHEN,
+    bindings: [
+      speedBinding(SIM_PAUSE_BINDING, 'Pause the sim (toggle)', 0, 'P', `${SIM_TIME_WHEN} && !${SIM_PAUSED_KEY}`),
+      speedBinding(SIM_SPEED_1_BINDING, 'Sim speed 1×', 1, 'Shift+1'),
+      speedBinding(SIM_SPEED_10_BINDING, 'Sim speed 10×', 10, 'Shift+2'),
+      speedBinding(SIM_SPEED_60_BINDING, 'Sim speed 60×', 60, 'Shift+3'),
+    ],
     run: () => succeed<S>(),
   });
   const resume = defineCommand<SimResumeArgs, S>({
@@ -78,6 +119,8 @@ export function simCommands<S>(): AnyCommandDef<S>[] {
     category: 'Sim',
     args: SimResumeArgs,
     undoable: false,
+    when: `${SIM_TIME_WHEN} && ${SIM_PAUSED_KEY}`,
+    keybinding: 'P',
     run: () => succeed<S>(),
   });
   const step = defineCommand<SimStepArgs, S>({
@@ -86,6 +129,25 @@ export function simCommands<S>(): AnyCommandDef<S>[] {
     category: 'Sim',
     args: SimStepArgs,
     undoable: false,
+    when: SIM_TIME_WHEN,
+    bindings: [
+      {
+        id: SIM_STEP_SHORT_BINDING,
+        title: 'Step 10 ms',
+        category: 'Sim',
+        target: { kind: 'command', command: SIM_STEP_COMMAND, args: { ticks: SIM_STEP_SHORT_TICKS } },
+        defaults: ['Period'],
+        when: SIM_TIME_WHEN,
+      },
+      {
+        id: SIM_STEP_LONG_BINDING,
+        title: 'Step 1 s',
+        category: 'Sim',
+        target: { kind: 'command', command: SIM_STEP_COMMAND, args: { ticks: SIM_STEP_LONG_TICKS } },
+        defaults: ['Shift+Period'],
+        when: SIM_TIME_WHEN,
+      },
+    ],
     run: () => succeed<S>(),
   });
   return [setSpeed, resume, step];
