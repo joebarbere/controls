@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { sha256 } from '@controls/world-model';
 import { AC_SOURCE, BATTERY, benchBus, end, LAMP, LEAD, origin, TEST_CATALOG, TEST_MODELS } from '../../testing/bench';
 import {
+  acFloorShares,
   acLinearResidual,
   type AcCircuit,
   type AcCombined,
@@ -10,12 +11,13 @@ import {
   type Phasor,
 } from '../../testing/ac';
 import { type AcCircuitDraw, type AcElementDraw, buildAcCircuit } from '../../testing/ac-circuits';
+import { quantile } from '../../testing/mna';
 import { expectSameBits } from '../../testing/solver-checks';
 import { compileNetlist } from '../netlist/compile';
 import type { Netlist } from '../netlist/types';
 import { AcSolver, solveAc } from './ac';
 import { AC_STAMP_CAPACITOR, AC_STAMP_INDUCTOR, AC_STAMP_VSOURCE, acBranchValues, AcBranchValues } from './ac-values';
-import { createDcSolution, DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR } from './dc';
+import { createDcSolution, DcSolver, type DcSolution, ISLAND_FLAG_NON_CONVERGED, ISLAND_FLAG_SINGULAR } from './dc';
 import { SIN_120 } from './phasor';
 import { dcBranchValues } from './values';
 
@@ -250,18 +252,32 @@ describe('AC MNA properties (synthetic circuits)', () => {
         // Another circuit, and this one at another frequency, in between: nothing carries over.
         const otherCircuit = build(other);
         shared.solve(otherCircuit.netlist, otherCircuit.values, 60);
-        shared.solve(circuit.netlist, circuit.values, otherHz);
+        // The other frequency is solved warm and compared too: a stale ω on the dense path fails here.
+        expectSameBits(
+          shared.solve(circuit.netlist, circuit.values, otherHz),
+          new AcSolver().solve(circuit.netlist, circuit.values, otherHz),
+        );
         expectSameBits(shared.solve(circuit.netlist, circuit.values, 60), fresh);
         // Into an `out` full of sentinels: every AC entry and record is rewritten, the rest left alone.
         const out = dirtySolution(circuit.netlist);
-        const before = Array.from(out.nodes);
+        const sentinel = dirtySolution(circuit.netlist);
         expect(shared.solve(circuit.netlist, circuit.values, 60, out)).toBe(out);
         expect(acPart(circuit.netlist, out)).toStrictEqual(acPart(circuit.netlist, fresh));
         expect(out.topologyHash).toBe(circuit.netlist.topologyHash);
+        // Every non-AC island is exactly the sentinel: its whole record, and re and im of every node
+        // and branch (PR #51 review: only re and referenceNode were checked).
         for (const island of circuit.netlist.islands) {
           if (island.kind === 'ac') continue;
-          for (const n of island.nodes) expect(Object.is(out.nodes[2 * n], before[2 * n])).toBe(true);
-          expect(out.islands[island.index].referenceNode).toBe(99);
+          expect(out.islands[island.index]).toStrictEqual(sentinel.islands[island.index]);
+          for (const n of island.nodes) {
+            for (const k of [2 * n, 2 * n + 1])
+              expect(Object.is(out.nodes[k], sentinel.nodes[k]), `node ${k}`).toBe(true);
+          }
+          for (const b of island.branches) {
+            for (const k of [2 * b, 2 * b + 1]) {
+              expect(Object.is(out.branches[k], sentinel.branches[k]), `branch ${k}`).toBe(true);
+            }
+          }
         }
       }),
       { numRuns: 100 },
@@ -314,7 +330,9 @@ describe('AC MNA properties (synthetic circuits)', () => {
       offset += c.length;
     }
     const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
-    expect(hex).toBe('5ce7f4ef098dde26c6d746244a6110426468d36f27354e2dcd0fd438fbdf7661');
+    // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
+    // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was 5ce7f4ef….
+    expect(hex).toBe('68dfa97608a5318af6a36a9f3f98609e3e16a11f0742bd6db0388826f24e084b');
   });
 });
 
@@ -355,7 +373,20 @@ describe('AC islands beside DC and mixed ones (compiled bench worlds)', () => {
     const { netlist, dc, ac } = bench();
     expect(netlist.islands.map((i) => i.kind)).toStrictEqual(['ac', 'dc', 'mixed']);
     expect(netlist.diagnostics).toContainEqual({ code: 'mixed-island', island: 2 });
-    const out = new DcSolver().solve(netlist, dc);
+    // The DC island ends `nonConverged`: a filament law that flips between 2 Ω and 200 Ω around 0.6 A
+    // has no fixed point. The AC solve must keep that flag and iteration count (F2.3a writes DC, then
+    // AC, into one record).
+    const out = new DcSolver().solveNonlinear(netlist, dc, {
+      hook: (island, iterate, values) => {
+        for (const b of island.branches) {
+          if (netlist.branches[b].model !== 'lamp.incandescent') continue;
+          const amps = iterate === null ? 0 : Math.abs(iterate.branches[2 * b]);
+          values.resistor(b, amps < 0.6 ? 2 : 200);
+        }
+      },
+    });
+    expect(out.islands[1].flags & ISLAND_FLAG_NON_CONVERGED).toBe(ISLAND_FLAG_NON_CONVERGED);
+    expect(out.islands[1].iterations).toBeGreaterThan(1);
     const dcOnly = {
       nodes: Array.from(out.nodes),
       branches: Array.from(out.branches),
@@ -363,14 +394,21 @@ describe('AC islands beside DC and mixed ones (compiled bench worlds)', () => {
     };
     expect(new AcSolver().solve(netlist, ac, 60, out)).toBe(out);
     expect(out.islands.map((i) => i.solved)).toStrictEqual([true, true, false]);
-    // The DC island is exactly the DC solver's, the mixed one exactly zero and unsolved.
+    // The DC island is exactly the DC solver's, the mixed one exactly zero and unsolved: whole records,
+    // and re and im of every node and branch.
     for (const index of [1, 2]) {
       const island = netlist.islands[index];
-      for (const n of island.nodes) expect(out.nodes[2 * n]).toBe(dcOnly.nodes[2 * n]);
-      for (const b of island.branches) expect(out.branches[2 * b]).toBe(dcOnly.branches[2 * b]);
+      for (const n of island.nodes) {
+        for (const k of [2 * n, 2 * n + 1]) expect(Object.is(out.nodes[k], dcOnly.nodes[k]), `node ${k}`).toBe(true);
+      }
+      for (const b of island.branches) {
+        for (const k of [2 * b, 2 * b + 1]) {
+          expect(Object.is(out.branches[k], dcOnly.branches[k]), `branch ${k}`).toBe(true);
+        }
+      }
       expect(out.islands[index]).toStrictEqual(dcOnly.islands[index]);
     }
-    for (const n of netlist.islands[2].nodes) expect(out.nodes[2 * n]).toBe(0);
+    for (const n of netlist.islands[2].nodes) expect([out.nodes[2 * n], out.nodes[2 * n + 1]]).toStrictEqual([0, 0]);
     // The AC island: 120 V across 144 Ω and two 41 mΩ leads, in phase.
     const lampBranch = netlist.islands[0].branches.find((b) => netlist.branches[b].model === 'lamp.incandescent');
     const i = out.branches[2 * (lampBranch as number)];
@@ -400,9 +438,11 @@ describe('generator health (the AC properties above are not vacuous)', () => {
       current: 0,
       reactiveCurrent: 0,
     };
+    const shares: number[] = [];
     for (const draw of draws) {
       const { netlist, values } = build(draw);
       const solution = solveAc(netlist, values, 60);
+      shares.push(...acFloorShares({ netlist, values, frequencyHz: 60 }, solution));
       const stamps = netlist.branches.map((b) => values.stamps[b.index]);
       counts.nodes += netlist.nodes.length;
       if (netlist.branches.length > netlist.nodes.length - netlist.islands.length) counts.loop++;
@@ -457,5 +497,9 @@ describe('generator health (the AC properties above are not vacuous)', () => {
     expect(share(counts.singular)).toBeLessThanOrEqual(0.25);
     expect(share(counts.current)).toBeGreaterThanOrEqual(0.75);
     expect(share(counts.reactiveCurrent)).toBeGreaterThanOrEqual(0.55);
+    // The floor policy's ceiling (PR #51 review): on islands carrying real current, the KCL floor stays
+    // a small share of the largest current, so the floors check something. Measured on this seed:
+    // p99 2.1e-5 of max|I| (max 1.3e-3, 296 islands); with source R unclamped (down to 1 µΩ) it was 1.9e-4.
+    expect(quantile(shares, 0.99)).toBeLessThanOrEqual(1e-4);
   });
 });

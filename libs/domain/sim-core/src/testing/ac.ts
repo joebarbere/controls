@@ -139,7 +139,10 @@ export function acKclFloor(circuit: AcCircuit, solution: DcSolution, island: Net
   const gmin = GMIN_S.value;
   let maxI = 0;
   let rounding = 0;
-  const stiffness = new Map<number, number>(island.nodes.map((n) => [n, gmin]));
+  // Per-node Σ|y|, in a typed array indexed by node: this runs once per solve and part in the
+  // residual-space checks, so no Map or spread (PR #51 review: superposition at 761 ms under load).
+  const stiffness = new Float64Array(netlist.nodes.length);
+  for (const node of island.nodes) stiffness[node] = gmin;
   for (const node of island.nodes) {
     if (node === reference) continue;
     const v = cabs(phasorV(solution, node));
@@ -153,13 +156,16 @@ export function acKclFloor(circuit: AcCircuit, solution: DcSolution, island: Net
     const y = admittance(circuit, index);
     const { a, b } = netlist.branches[index];
     if (y !== null) {
-      stiffness.set(a, (stiffness.get(a) ?? 0) + cabs(y));
-      stiffness.set(b, (stiffness.get(b) ?? 0) + cabs(y));
+      const g = cabs(y);
+      stiffness[a] += g;
+      stiffness[b] += g;
     } else {
       sourceScale = Math.max(sourceScale, sourceRowTerm(circuit, solution, index));
     }
   }
-  rounding += 2 * 16 * EPS * sourceScale * Math.max(...stiffness.values());
+  let stiffest = 0;
+  for (const node of island.nodes) stiffest = Math.max(stiffest, stiffness[node]);
+  rounding += 2 * 16 * EPS * sourceScale * stiffest;
   return 1e-9 * maxI + 1e-12 + rounding;
 }
 
@@ -420,4 +426,16 @@ export function acLinearResidual(netlist: Netlist, frequencyHz: number, parts: r
     }
   }
   return worst;
+}
+
+/** As `floorShares` (DC): each live `ac` island's KCL floor as a share of its largest |I|. */
+export function acFloorShares(circuit: AcCircuit, solution: DcSolution): number[] {
+  const shares: number[] = [];
+  for (const island of circuit.netlist.islands) {
+    if (island.kind !== 'ac' || isAcSingular(solution, island.index)) continue;
+    const largest = island.branches.reduce((m, b) => Math.max(m, cabs(phasorI(solution, b))), 0);
+    if (!(largest > 1e-6)) continue;
+    shares.push(acKclFloor(circuit, solution, island) / largest);
+  }
+  return shares;
 }

@@ -28,6 +28,13 @@ const WELL_R_DECADES = [1, 10, 100, 1e3];
 const WELL_L_DECADES = [2.65e-3, 2.65e-2, 2.65e-1, 2.65];
 const WELL_C_DECADES = [2.65e-7, 2.65e-6, 2.65e-5, 2.65e-4];
 
+/**
+ * The smallest series resistance a non-ideal generated source gets: the plan's F2.2 rule that
+ * generators keep resistances down to 1e-4 Ω (busbar scale), and no lower. A 1 µΩ source made the
+ * floor policy's source term (16 ε t / R) dwarf every real current (PR #51 review).
+ */
+export const MIN_SOURCE_OHMS = 1e-4;
+
 export const AC_ANGLES: readonly PhasorAngle[] = [0, 180, 120, -120];
 
 /** One element drawn by integers: the kind and value come from `kind`, `mantissa` and `decade`. */
@@ -78,7 +85,7 @@ export function drawStamp(e: AcElementDraw, wellConditioned: boolean, tree: bool
     ? 0.1 + (e.mantissa % 1000) / 100
     : e.ideal % 6 === 0
       ? 0
-      : scaled(e.mantissa, R_DECADES, e.decade) / 100;
+      : Math.max(MIN_SOURCE_OHMS, scaled(e.mantissa, R_DECADES, e.decade) / 100);
   return { kind: 'v', re, im, ohms };
 }
 

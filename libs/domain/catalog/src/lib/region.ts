@@ -8,10 +8,12 @@ import type { RegionId } from '@controls/save-format';
  *
  * Every value carries a `source` (realism charter, plan §3), reviewed by `electrical-realism-reviewer`.
  * The voltages are **nominal** system voltages, the names systems go by, not what a meter reads: a
- * utility delivers a band around them, and the nameplate line-to-line value is a rounded √3 multiple of
- * the line-to-neutral one (208 for 120 × √3 = 207.85 V, 480 for 277 × √3 = 479.78 V). A source model
- * that builds its phases from the line-to-neutral magnitude and the exact ±120° angles gets the exact
- * √3 multiple, not the rounded name.
+ * utility delivers a band around them. In a nominal system designation both members of each pair are
+ * rounded: 208Y/120 names 120 × √3 = 207.85 V, and 480Y/277 names 480 / √3 = 277.13 V (or 277 × √3 =
+ * 479.78 V). Equipment nameplates carry utilization ratings instead (200, 230, 460 V), which are not
+ * these. A source model takes the **line-to-neutral value as the exact magnitude** and builds its phases
+ * with the exact ±120° angles, so its line-to-line voltage is the exact √3 multiple, never the rounded
+ * name.
  */
 
 /** A sourced numeric fact of a region. */
@@ -49,7 +51,7 @@ export interface RegionProfile {
 const ANSI_C84_1 =
   'ANSI C84.1-2020, "American National Standard for Electric Power Systems and Equipment — Voltage Ratings (60 Hertz)", which lists the standard nominal system voltages of US utility services';
 const IEEE_141 =
-  'IEEE Std 141-1993 ("Red Book", Recommended Practice for Electric Power Distribution for Industrial Plants), ch. 3, "Voltage considerations", on the nominal voltages of US low-voltage systems';
+  'IEEE Std 141-1993 ("Red Book", Recommended Practice for Electric Power Distribution for Industrial Plants), ch. 3, "Voltage considerations", on the nominal voltages of US low-voltage systems (withdrawn; superseded by the IEEE 3000 series, IEEE Std 3001.x and 3002.x)';
 
 const volts = (value: number, source: string): RegionValue => ({ value, unit: 'V', kind: 'real-world', source });
 
@@ -84,7 +86,7 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
     ),
     lineToLineV: volts(
       208,
-      `The same 208Y/120 V system between phases, which are 120° apart: the nominal name of 120 × √3 = 207.85 V. ${ANSI_C84_1}.`,
+      `The same 208Y/120 V system between phases, which are 120° apart: the nominal designation of 120 × √3 = 207.85 V. ${ANSI_C84_1}.`,
     ),
   },
   threePhaseIndustrial: {
@@ -96,7 +98,7 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
     ),
     lineToLineV: volts(
       480,
-      `The same 480Y/277 V system between phases: the nominal name of 277 × √3 = 479.78 V. ${ANSI_C84_1}.`,
+      `The same 480Y/277 V system between phases: the nominal designation of 277 × √3 = 479.78 V; both members are rounded, since 480 / √3 = 277.13 V. ${ANSI_C84_1}.`,
     ),
   },
 });

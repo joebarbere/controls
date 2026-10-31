@@ -26,7 +26,7 @@ describe('region profiles', () => {
     expect(split.lineToLineV.value).toBe(2 * split.lineToNeutralV.value);
     for (const system of [NEC_REGION.threePhaseCommercial, NEC_REGION.threePhaseIndustrial]) {
       const exact = system.lineToNeutralV.value * Math.sqrt(3);
-      // The nameplate rounds the exact value to the nearest volt.
+      // The nominal system designation rounds the exact value to the nearest volt.
       expect(Math.abs(system.lineToLineV.value - exact)).toBeLessThan(0.5);
     }
   });

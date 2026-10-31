@@ -1,7 +1,12 @@
 /*
  * Phasor constants for the AC solver (plan F2.2 part 2, decision D6). A phasor is an RMS magnitude
  * and an angle, V_rms∠θ, written as `re + j·im` = V_rms · (cos θ + j sin θ) (ADR 0011 §5.3: AC values
- * are RMS phasors at the region frequency).
+ * are RMS phasors at the region frequency). The waveform it stands for is
+ *
+ *   v(t) = √2 · Re(V · e^{jωt}) = √2 · V_rms · cos(ωt + θ),
+ *
+ * so a 120 V phasor peaks at 169.7 V. Every phasor in sim-core (EMFs, node voltages, branch currents)
+ * is RMS, never peak.
  *
  * sim-core may not call `Math.cos` or `Math.sin` (D6: they vary between JavaScript engines), so a
  * source's angle is restricted to the angles whose cosine and sine are exact constants: 0°, 180° and

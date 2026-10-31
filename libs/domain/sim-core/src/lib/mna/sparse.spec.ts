@@ -554,7 +554,9 @@ describe('DcSolver sparse path: pinned bits and warm reuse (#49 review)', () => 
     expect(
       solutions.filter((s) => s.islands.some((i) => i.unknowns >= SPARSE_MIN_UNKNOWNS.value)).length,
     ).toBeGreaterThanOrEqual(40);
-    expect(solutionHash(solutions)).toBe('dbe5832a580d85596923df4dbaf65395bfae29a130a5bd53a00722e84fd15a5b');
+    // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
+    // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was dbe5832a….
+    expect(solutionHash(solutions)).toBe('ce24cbcd24ce905ccff1f32b62142bd45f0c7d39d2d3bb7181fe0f9c99fe0c67');
   });
 
   it('is bit-identical warm and cold after value changes, ideal and non-ideal sources included', () => {

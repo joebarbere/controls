@@ -195,8 +195,12 @@ function splitPhase(): AcGolden {
  *    V_S = 0 and the neutral carries **no current**: I_N ≈ 0 (rounding only, checked absolutely
  *    against 1e-9 A, against 12 A phase currents).
  *
- *    I_A = 120 / (8 + j6) = 120 (8 − j6) / 100 = 9.6 − j7.2 A, |I| = 12 A; I_B = I_A · 1∠−120°,
- *    I_C = I_A · 1∠+120°. Line to line |V_A − V_B| = 120 √3 = 207.846097 V (the "208" of 208Y/120).
+ *    I_A = 120 / (8 + j6) = 120 (8 − j6) / 100 = 9.6 − j7.2 A, |I| = 12 A. ABC sequence: B lags A by
+ *    120° and C leads it by 120°, so
+ *    I_B = I_A · (−1/2 − j√3/2) = (−4.8 − 3.6√3) + j(3.6 − 4.8√3) = −11.035383 − j4.713844 A,
+ *    I_C = I_A · (−1/2 + j√3/2) = (−4.8 + 3.6√3) + j(3.6 + 4.8√3) = 1.435383 + j11.913844 A
+ *    (hand constants, not derived from the fixture's sources, so a B↔C swap fails). V_B lags V_A:
+ *    V_A · conj(V_B) = 14 400 ∠+120°, whose imaginary part is 14 400 · √3/2 = 12 470.77 > 0. Line to line |V_A − V_B| = 120 √3 = 207.846097 V (the "208" of 208Y/120).
  *    P = 3 |I|² · 8 = 3456 W, Q = 3 |I|² · 6 = 2592 var: S = 4320 VA at power factor 0.8.
  */
 function balancedWye(): AcGolden {
@@ -227,9 +231,10 @@ function balancedWye(): AcGolden {
   values.resistor(9, 0.05);
   const Z: Phasor = [8, OMEGA * L];
   const phase = (b: number): Phasor => [values.emfRe[b], values.emfIm[b]];
-  const IA = cdiv(phase(0), Z);
-  const IB = cdiv(phase(1), Z);
-  const IC = cdiv(phase(2), Z);
+  const IA: Phasor = [9.6, -7.2];
+  const R3 = Math.sqrt(3);
+  const IB: Phasor = [-4.8 - 3.6 * R3, 3.6 - 4.8 * R3];
+  const IC: Phasor = [-4.8 + 3.6 * R3, 3.6 + 4.8 * R3];
   const I2 = 3 * (IA[0] * IA[0] + IA[1] * IA[1]);
   const totalP = (s: DcSolution) =>
     [0, 1, 2].reduce((p, b) => p + cmul(phase(b), [phasorI(s, b)[0], -phasorI(s, b)[1]])[0], 0);
@@ -247,6 +252,11 @@ function balancedWye(): AcGolden {
       ...phasorChecks('I_A (9.6 − j7.2 A)', (s) => phasorI(s, 0), IA),
       ...phasorChecks('I_B', (s) => phasorI(s, 1), IB),
       ...phasorChecks('I_C', (s) => phasorI(s, 2), IC),
+      {
+        label: 'ABC sequence: Im(V_A · conj V_B) = 14 400 · √3/2 > 0 (V_B lags V_A by 120°)',
+        actual: (s) => cmul(phasorV(s, 1), [phasorV(s, 2)[0], -phasorV(s, 2)[1]])[1],
+        expected: (14400 * R3) / 2,
+      },
       ...phasorChecks('I_A through its load', (s) => phasorI(s, 3), IA),
       {
         label: '|V_A − V_B| = 120 √3 (≈ 207.846097 V)',

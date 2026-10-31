@@ -110,14 +110,21 @@ const EPS = Number.EPSILON;
 /**
  * A branch's rounding term in the floor policy (plan F2.2, decided in the #46 review):
  * 16 · ε · |y_b| · (|V_a| + |V_b|). A resistor's current is g · (Va − Vb) from node voltages known only
- * to an ulp, so it carries about g · ulp(V) of rounding however exact the solve. Sources stamp no
- * admittance between their ends (their current is an unknown or exact), so their term is 0.
+ * to an ulp, so it carries about g · ulp(V) of rounding however exact the solve. A voltage-mode source
+ * behind a series R > 0 is a branch of admittance 1 / R too (PR #51 review): its current is
+ * (E − Vb + Va) / R, which its row resolves only to 16 ε (|V_a| + |V_b| + |E|) / R, the slack the
+ * source-row bound already allows. Ideal sources (R = 0) and current sources have an exact or unknown
+ * current: 0.
  */
 export function branchRounding(netlist: Netlist, values: DcBranchValues, solution: DcSolution, branch: number): number {
-  if (values.stamps[branch] !== DC_STAMP_RESISTOR) return 0;
   const { a, b } = netlist.branches[branch];
-  const y = 1 / values.ohms[branch];
-  return 16 * EPS * y * (Math.abs(voltage(solution, a)) + Math.abs(voltage(solution, b)));
+  const volts = Math.abs(voltage(solution, a)) + Math.abs(voltage(solution, b));
+  const stamp = values.stamps[branch];
+  if (stamp === DC_STAMP_RESISTOR) return 16 * EPS * (1 / values.ohms[branch]) * volts;
+  if (stamp === DC_STAMP_VSOURCE && values.ohms[branch] > 0) {
+    return (16 * EPS * (volts + Math.abs(values.emfV[branch]))) / values.ohms[branch];
+  }
+  return 0;
 }
 
 /**
@@ -197,6 +204,31 @@ export function kcl(netlist: Netlist, values: DcBranchValues, solution: DcSoluti
   let worst = 0;
   for (const [node, value] of sum) worst = Math.max(worst, Math.abs(value) / (floors.get(node) ?? 1));
   return worst;
+}
+
+/**
+ * Each live island's KCL floor as a share of its largest current (non-singular islands carrying more
+ * than 1e-6 A): the generator-health ceiling on the floor policy (PR #51 review), so a generator can't
+ * drift into values (a 1 µΩ source) whose rounding terms swamp the currents being checked.
+ */
+export function floorShares(netlist: Netlist, values: DcBranchValues, solution: DcSolution): number[] {
+  const shares: number[] = [];
+  for (const island of netlist.islands) {
+    const record = solution.islands[island.index];
+    if (!record.solved || (record.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
+    const largest = island.branches.reduce((m, b) => Math.max(m, Math.abs(current(solution, b))), 0);
+    if (!(largest > 1e-6)) continue;
+    const floor = kclFloors(netlist, values, solution, island).get(island.nodes[0]) ?? 0;
+    shares.push(floor / largest);
+  }
+  return shares;
+}
+
+/** The q-quantile (nearest rank) of `values`; 0 for none. */
+export function quantile(values: readonly number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((x, y) => x - y);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
 }
 
 /**
