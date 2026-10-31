@@ -605,5 +605,5 @@ Each timed re-solve is put in the reference machine's milliseconds by the calibr
 
 - **AC loads** (F2.5): AC loads reach the phasor solver through `AcValueHook` (F2.4's services do); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
-- **The source records in `sim-protocol`** (F2.3b): `BUILTIN_DEVICE_OUTPUTS` registered in `DEVICE_OUTPUT_SCHEMAS` with a `SIM_PROTOCOL_VERSION` bump, and the nominal bands (`NOMINAL_BANDS`) the sources choose for overlays.
+- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b).
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

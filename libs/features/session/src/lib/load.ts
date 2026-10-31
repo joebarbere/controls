@@ -205,7 +205,9 @@ export async function prepareLoad(
 
   // A new log from world.json, numbered on from the saved log.
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
-  let start = world;
+  // D8, as headless (F2.4): another engine's save keeps its devices' state but never its solution
+  // record, which another engine's models computed: the worker solves again at the save's tick.
+  let start: World = plan.compatibility === 'engine-changed' ? { ...world, sim: null } : world;
   const startFresh = async (): Promise<Started> => {
     const first = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
     if (first.ok || first.why !== 'failed') return first;

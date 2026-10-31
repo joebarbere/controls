@@ -137,7 +137,7 @@ describe('prepareLoad', () => {
     expect(result.prepared.hash).toBe(save.hash); // world.json as saved
   });
 
-  it('loads a save from another engine without verifying it (engine-changed), dropping a misfit record', async () => {
+  it('loads a save from another engine without verifying it (engine-changed), never with its solution record', async () => {
     const { session, fakes } = setup();
     const save = circuitSave();
     const other = rewrite(save.bytes, (c) => ({
@@ -151,8 +151,10 @@ describe('prepareLoad', () => {
     const result = await session.prepareLoad(other);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
-    expect(starts(fakes)).toEqual(['world', 'world']); // the misfit record failed, then started without it
-    expect(fakes.workers[0].terminated).toBe(true);
+    // D8 as headless (F2.4): never another engine's solution record, so one start, without it.
+    expect(starts(fakes)).toEqual(['world']);
+    const sent = fakes.workers[0].received[0] as unknown as { start: { world: { sim: unknown } } };
+    expect(sent.start.world.sim).toBeNull();
   });
 
   it('refuses a same-engine save whose solution record does not fit its circuit (start-failed)', async () => {

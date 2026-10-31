@@ -1,5 +1,10 @@
 import fc from 'fast-check';
-import { DEVICE_OUTPUT_SCHEMAS, deviceOutputSchemaProblems, NOMINAL_BANDS } from './device-output';
+import {
+  DEVICE_OUTPUT_SCHEMAS,
+  deviceOutputSchemaProblems,
+  NOMINAL_BANDS,
+  RECORD_STATUS_VALUES,
+} from './device-output';
 import {
   align8,
   ISLAND_KIND_AC,
@@ -106,8 +111,8 @@ function encode(s: SnapshotSource, slotSeq = 0): Uint8Array {
 const hashed = (s: SnapshotSource) => snapshotHashedBytes(encode(s));
 
 describe('the snapshot layout (ADR 0011 §5)', () => {
-  it('is protocol version 1, with a 96-byte slot header whose hashed region starts at byte 8', () => {
-    expect(SIM_PROTOCOL_VERSION).toBe(2);
+  it('is protocol version 3, with a 96-byte slot header whose hashed region starts at byte 8', () => {
+    expect(SIM_PROTOCOL_VERSION).toBe(3);
     expect([SLOT_HEADER_BYTES, SLOT_HASHED_START]).toStrictEqual([96, 8]);
     expect(SLOT_OFFSETS).toMatchObject({ tick: 8, lastSolveTick: 16, flags: 44, topologyHash: 48, payloadBytes: 80 });
     expect(slotBytesFor(3, 4, 2, 24)).toBe(96 + 48 + 64 + 32 + 24);
@@ -299,9 +304,13 @@ describe('device output schemas and nominal bands', () => {
     ]);
   });
 
-  it('every built-in schema is well formed, and band 0 is none', () => {
-    for (const schema of Object.values(DEVICE_OUTPUT_SCHEMAS))
+  it('every built-in schema is well formed, keyed by its kind, and band 0 is none', () => {
+    expect(Object.keys(DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual(['battery', 'supply.bench', 'supply.dinPsu']);
+    for (const [kind, schema] of Object.entries(DEVICE_OUTPUT_SCHEMAS)) {
+      expect(schema.kind).toBe(kind);
       expect(deviceOutputSchemaProblems(schema)).toStrictEqual([]);
+      expect(schema.fields.at(-1)).toMatchObject({ name: 'status', type: 'u8', values: RECORD_STATUS_VALUES });
+    }
     expect(NOMINAL_BANDS[0]).toBe('none');
   });
 });

@@ -17,7 +17,7 @@ const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');
 
 async function scenarioGame(): Promise<Game> {
   const game = createGame({ world: workshopWorld() });
-  const result = runConsoleScript(game, await readFile(scenario, 'utf8'));
+  const result = await runConsoleScript(game, await readFile(scenario, 'utf8'));
   expect(result).toMatchObject({ ok: true, output: [MAINS_HASH] });
   return game;
 }

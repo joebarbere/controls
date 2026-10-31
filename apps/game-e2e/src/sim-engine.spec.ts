@@ -98,7 +98,7 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
     'Ran 10 commands from sources.console.',
   );
 
-  expect(await hook(page, (h) => h.world().tick)).toBe(2345);
+  expect(await hook(page, (h) => h.busWorld().tick)).toBe(2345);
   expect(await hook(page, (h) => h.hash())).toBe(SOURCES_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(SOURCES_SNAPSHOT_HASH);
 });
@@ -127,7 +127,7 @@ test('the mains scenario reaches the same hashes in the game as sim-cli in Node 
     'Ran 4 commands from mains.console.',
   );
 
-  expect(await hook(page, (h) => h.world().tick)).toBe(100);
+  expect(await hook(page, (h) => h.busWorld().tick)).toBe(100);
   expect(await hook(page, (h) => h.hash())).toBe(MAINS_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(MAINS_SNAPSHOT_HASH);
 });
