@@ -1,0 +1,35 @@
+controls oracle ac-0388
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 388 nodes 6 elements 8
+.options sparse gmin=1e-12 noopac
+RG1 1 0 1000000000000
+RG2 2 0 1000000000000
+RG3 3 0 1000000000000
+RG4 4 0 1000000000000
+RG5 5 0 1000000000000
+VS0 2 s0 0
+C0 s0 0 47e-6
+VS1 0 s1 0
+R1 s1 2 47e-2
+VS2 2 s2 0
+L2 s2 4 15e-2
+VS3 0 s3 0
+V3 e3 s3 DC 0 AC 27e0 0
+RI3 e3 3 22e-1
+VS4 0 s4 0
+C4 s4 5 82e-6
+VS5 4 s5 0
+V5 e5 s5 DC 0 AC 56e-1 120
+RI5 e5 5 18e-2
+VS6 0 s6 0
+V6 e6 s6 DC 0 AC 82e-1 0
+RI6 e6 5 18e-3
+VS7 1 s7 0
+V7 e7 s7 DC 0 AC 22e0 120
+RI7 e7 0 68e-1
+.control
+set numdgt=17
+ac lin 1 60 60
+print v(1) v(2) v(3) v(4) v(5)
+print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7)
+.endc
+.end

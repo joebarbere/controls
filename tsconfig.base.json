@@ -26,6 +26,7 @@
       "@controls/world-model": ["./libs/domain/world-model/src/index.ts"],
       "@controls/scripting-api": ["./libs/domain/scripting-api/src/index.ts"],
       "@controls/sim-core": ["./libs/domain/sim-core/src/index.ts"],
+      "@controls/sim-core/oracle": ["./libs/domain/sim-core/src/oracle/index.ts"],
       "@controls/sim-protocol": ["./libs/domain/sim-protocol/src/index.ts"],
       "@controls/catalog": ["./libs/domain/catalog/src/index.ts"],
       "@controls/sim-worker": ["./libs/sim-worker/src/index.ts"],

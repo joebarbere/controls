@@ -5,7 +5,7 @@ Everything written about the project is reachable from this page. Pick an entry 
 ```mermaid
 flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
-    HUB --> G["guides/<br/>new developer, releasing, scripting"]
+    HUB --> G["guides/<br/>new developer, releasing, scripting, oracle"]
     HUB --> A["architecture/<br/>overview"]
     HUB --> D["decisions/<br/>ADRs 0001-0013"]
     HUB --> C["caveats/<br/>per-area gotchas"]
@@ -24,6 +24,7 @@ flowchart TD
 | **Reviewer / architect**   | [The spec](../controls-development-plan.md) → [ADRs](decisions/) → [`CLAUDE.md`](../CLAUDE.md) (invariants, Definition of Done)            |
 | **Release manager**        | [Releasing guide](guides/releasing.md) → [release caveats](caveats/release.md)                                                             |
 | **Scenario / test author** | [Scripting guide](guides/scripting.md) → [scripting caveats](caveats/scripting.md)                                                         |
+| **Solver developer**       | [Simulation architecture](architecture/simulation.md) → [oracle guide](guides/oracle.md) → [simulation caveats](caveats/simulation.md)     |
 
 ## Architecture
 
@@ -42,20 +43,21 @@ Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds the
 
 ## Decisions (ADRs)
 
-| ADR                                                                       | Decision                                                                                                                                         |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                                                                |
-| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks                                                 |
-| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                                                                   |
-| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                                                                      |
-| [0005 Docking workspace](decisions/0005-docking-workspace.md)             | Custom keyboard-operable split panes, not dockview (revisit for tabbed editors)                                                                  |
-| [0006 Command system](decisions/0006-command-system.md)                   | Pure apply/invert commands, undo/redo logged and replayed, view commands, advisory `when` grammar                                                |
-| [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log                                              |
-| [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror 6 under the CSP (F1.5)                           |
-| [0009 Save I/O boundary](decisions/0009-save-io-boundary.md)              | Main-owned save directory, opaque handles, atomic writes, OPFS in the web harness, autosave rotation                                             |
-| [0010 Wire-routing spike](decisions/0010-wire-routing-spike.md)           | F1.10 findings: two-click auto-routed wires, instanced segments, screen-space terminal picking, deterministic bake (P3)                          |
-| [0011 Sim worker contract](decisions/0011-sim-worker-contract.md)         | P2: main-thread clock and bus, mirror bus in the worker, SAB snapshot layout and seqlock, descriptor, fallback, readers                          |
-| [0013 World document v2](decisions/0013-world-document-v2.md)             | P2: connections (test leads) and their id rule, commanded and sim state bags, `MODEL_KINDS`, solution record, `firstSeq`/`endTick`, catalogue v1 |
+| ADR                                                                       | Decision                                                                                                                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [0001 Stack](decisions/0001-stack.md)                                     | Electron + Angular 22 zoneless + imperative Three.js, Nx + pnpm, electron-builder                                                                 |
+| [0002 Simulation architecture](decisions/0002-simulation-architecture.md) | Quasi-static phasor MNA in a worker, layered discrete/continuous/protection, deterministic ticks                                                  |
+| [0003 Licence policy](decisions/0003-licence-policy.md)                   | MIT; permissive deps with attribution; GPL/AGPL reference-only                                                                                    |
+| [0004 Save format](decisions/0004-save-format.md)                         | `.ctrl` ZIP of JSON, Zod schemas, integer `schemaVersion` + migration chain                                                                       |
+| [0005 Docking workspace](decisions/0005-docking-workspace.md)             | Custom keyboard-operable split panes, not dockview (revisit for tabbed editors)                                                                   |
+| [0006 Command system](decisions/0006-command-system.md)                   | Pure apply/invert commands, undo/redo logged and replayed, view commands, advisory `when` grammar                                                 |
+| [0007 World document v1](decisions/0007-world-document-v1.md)             | World v1 shape, id allocation, orientation encoding, sfc32 PRNG, SHA-256 canonical hash, replay log                                               |
+| [0008 Console and scripts](decisions/0008-console-and-scripts.md)         | Console-line grammar, TS scripts only in `sim-cli` (esbuild), what replay/hash read; CodeMirror 6 under the CSP (F1.5)                            |
+| [0009 Save I/O boundary](decisions/0009-save-io-boundary.md)              | Main-owned save directory, opaque handles, atomic writes, OPFS in the web harness, autosave rotation                                              |
+| [0010 Wire-routing spike](decisions/0010-wire-routing-spike.md)           | F1.10 findings: two-click auto-routed wires, instanced segments, screen-space terminal picking, deterministic bake (P3)                           |
+| [0011 Sim worker contract](decisions/0011-sim-worker-contract.md)         | P2: main-thread clock and bus, mirror bus in the worker, SAB snapshot layout and seqlock, descriptor, fallback, readers                           |
+| [0012 Oracle corpus](decisions/0012-oracle-corpus.md)                     | P2 (Proposed): 500 DC + 500 AC ngspice decks and results checked in, staleness check, explicit gmin, 1e-6 relative tolerance to confirm with F2.2 |
+| [0013 World document v2](decisions/0013-world-document-v2.md)             | P2: connections (test leads) and their id rule, commanded and sim state bags, `MODEL_KINDS`, solution record, `firstSeq`/`endTick`, catalogue v1  |
 
 ## Reference
 

@@ -1,0 +1,22 @@
+controls oracle dc-0106
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. dc seed 20261030 index 106 nodes 3 elements 5
+.options sparse gmin=1e-12 noopac
+RG1 1 0 1000000000000
+RG2 2 0 1000000000000
+VS0 0 s0 0
+R0 s0 2 82e1
+VS1 0 s1 0
+I1 s1 1 DC 82e-4
+VS2 1 s2 0
+R2 s2 2 82e3
+VS3 2 s3 0
+R3 s3 1 68e1
+VS4 2 s4 0
+R4 s4 0 22e1
+.control
+set numdgt=17
+op
+print v(1) v(2)
+print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4)
+.endc
+.end

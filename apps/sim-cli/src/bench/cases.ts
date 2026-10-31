@@ -1,20 +1,74 @@
-import { createWorld } from '@controls/save-format';
-import { worldHash } from '@controls/world-model';
-import type { BenchCase } from './bench';
+import { BUILTIN_CATALOG } from '@controls/catalog';
+import type { World } from '@controls/save-format';
+import { compileNetlist, type Netlist, NetlistCompiler } from '@controls/sim-core';
+import type { BenchCase, PendingBenchCase } from './bench';
+import { buildPlant, type Plant } from './plant';
 
 /*
- * The cases `sim bench` runs. P2 kickoff ships one placeholder so the gate runs end to end; F2.7 adds
- * the 2,000-node plant, and the per-tick (F2.3a) and re-solve (F2.2 part 3) cases with their spec
- * §4.5 budgets. Add a case here with a `budgetMs` and the gate enforces it.
+ * The cases `sim bench` runs (plan F2.7). Add a case here with a `budgetMs` and the gate enforces it.
+ * Budgets come only from the spec (§4.5 and §4.9), never from a measurement: a case the spec gives no
+ * budget for reports its timing with `budgetMs: null`.
+ *
+ * The netlist cases have no budget of their own. Compiling is only a part of §4.5's re-solve after a
+ * topology change (2 ms for a 2,000-node plant, compile and solve together), so its budget belongs to
+ * the re-solve case, which switches on with F2.2 part 3, and the per-tick case with F2.3a. Until then
+ * they are listed in the report as pending, with their budgets.
  */
+
+let plant: { readonly plant: Plant; readonly closed: World; readonly open: World } | null = null;
+
+/** The 2,000-node plant and its toggle pair, built once on first use (not at import: every `sim` run imports this). */
+function plantWorlds() {
+  if (plant === null) {
+    const built = buildPlant();
+    const open: World = {
+      ...built.world,
+      entities: built.world.entities.map((entity) =>
+        entity.id === built.toggleSwitch ? { ...entity, state: { closed: false } } : entity,
+      ),
+    };
+    plant = { plant: built, closed: built.world, open };
+  }
+  return plant;
+}
+
+function checksum(netlist: Netlist): string {
+  return `${netlist.nodes.length}:${netlist.branches.length}:${netlist.islands.length}:${netlist.topologyHash}`;
+}
+
+let toggleCompiler: NetlistCompiler | null = null;
+
 export const BENCH_CASES: readonly BenchCase[] = [
   {
-    // Placeholder (P2 kickoff): hash the empty seed-0 world, a small deterministic workload. No
-    // budget: it only proves the bench runs from the built bundle and reports.
-    name: 'placeholder-world-hash',
-    warmup: 5,
-    runs: 21,
+    // A from-scratch compile, as on a load or a session start: a new compiler, no cached fragments.
+    name: 'plant-compile',
+    warmup: 10,
+    runs: 51,
     budgetMs: null,
-    run: () => worldHash(createWorld({ seed: 0 })),
+    run: () => checksum(compileNetlist(plantWorlds().closed, BUILTIN_CATALOG)),
   },
+  {
+    // A structural recompile, the netlist's share of the re-solve after a topology change: one run
+    // opens a feeder's root switch and closes it again, so it is two recompiles, each renumbering and
+    // rehashing the whole plant from cached fragments.
+    name: 'plant-recompile-toggle',
+    warmup: 10,
+    runs: 51,
+    budgetMs: null,
+    run: () => {
+      const { closed, open } = plantWorlds();
+      if (toggleCompiler === null) {
+        toggleCompiler = new NetlistCompiler(BUILTIN_CATALOG);
+        toggleCompiler.compile(closed);
+      }
+      const opened = toggleCompiler.compile(open);
+      return `${checksum(opened)}/${checksum(toggleCompiler.compile(closed))}`;
+    },
+  },
+];
+
+/** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
+  { name: 'plant-resolve-topology-change', budgetMs: 2, enabledBy: 'F2.2 part 3' },
+  { name: 'plant-tick', budgetMs: 0.3, enabledBy: 'F2.3a' },
 ];

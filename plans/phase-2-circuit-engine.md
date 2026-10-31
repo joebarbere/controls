@@ -508,17 +508,24 @@ Per decision D5. **Owners:** `test-engineer` and `sim-engine-engineer`.
 
 Acceptance:
 
-- [ ] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
-- [ ] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
-- [ ] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
-- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. Values are compared on the **well-conditioned corpus only**, with sim-core's own residual checks (KCL and source rows, F2.2 floor policy) alongside on every circuit (#46 review). On ill-conditioned circuits two correct solvers can differ by more than any tolerance.
-- [ ] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
+- [x] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
+- [x] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
+- [x] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
+- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound.
+- [x] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
 - [ ] **`pnpm sim bench`,** also run as the Nx `bench` target in `verify`:
   - it covers a seeded synthetic 2,000-node plant (mostly radial, with some loops) and a per-tick mix of devices;
   - it warms up, then takes the median of N runs;
   - it outputs JSON and exits non-zero over budget;
   - it runs the built bundle, never under coverage instrumentation;
   - the re-solve case switches on with F2.2 part 3, and the per-tick case is on from F2.3a.
+
+_Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Proposed; [oracle guide](../docs/guides/oracle.md)). Notes:_
+
+- _The corpus is 500 DC + 500 AC circuits, about 3.1 MB of text. Beyond the staleness test, `verify` checks ngspice's solution against every element equation and KCL in the sim-core netlist (worst residual 3e-9), which pins the deck ↔ netlist mapping before any solver exists._
+- _**Still open:** the comparison spec (`it.todo` for DC with F2.2 part 1 and AC with part 2), confirming ADR 0012's tolerance by measurement, the netlist adapter to the solver's input type, and switching the oracle's placeholder `gmin` to `GMIN_S.value` (`TODO(F2.2)`)._
+- _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: a structural recompile of the plant is 1.3 ms quiet (1.7–2.8 ms loaded), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
+- _`gmin` is stamped in the decks as explicit resistors on the circuit nodes, not `.options rshunt`, which would also shunt the decks' internal sense and source nodes (ADR 0012)._
 
 ## ADRs to write in P2
 
@@ -602,7 +609,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.4    | Power sources                                     | ⬜ Not started |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started |
-| F2.7    | Oracle harness and `sim-cli bench` gate           | ⬜ Not started |
+| F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress |
 | —       | Phase-acceptance E2E                              | ⬜ Not started |
 | —       | v0.3.0 release                                    | ⬜ Not started |
 

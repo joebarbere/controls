@@ -1,11 +1,9 @@
-import { createWorld } from '@controls/save-format';
-import { worldHash } from '@controls/world-model';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { type CliIo, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../cli';
 import { WORKSPACE_ROOT } from '../script-loader';
 import { type BenchCase, type BenchReport, median, runBench, runBenchCase } from './bench';
-import { BENCH_CASES } from './cases';
+import { BENCH_CASES, PENDING_BENCH_CASES } from './cases';
 
 /** A fake clock: each run of a case takes the next duration from the list (ms). */
 function steppingClock(durations: readonly number[]): () => number {
@@ -81,6 +79,11 @@ describe('runBenchCase', () => {
 });
 
 describe('runBench', () => {
+  it('lists pending cases without running them or letting them fail the report', () => {
+    const pending = [{ name: 'later', budgetMs: 1, enabledBy: 'F9.9' }];
+    expect(runBench([fixedCase()], steppingClock([1, 1, 1]), pending)).toMatchObject({ pending, ok: true });
+  });
+
   it('is ok only if every case is', () => {
     const over = fixedCase({ name: 'over', budgetMs: 1 });
     expect(runBench([fixedCase()], steppingClock([2, 2, 2])).ok).toBe(true);
@@ -135,6 +138,7 @@ describe('sim bench', () => {
           ok: true,
         },
       ],
+      pending: [],
       ok: true,
     });
   });
@@ -172,7 +176,9 @@ describe('sim bench', () => {
     expect(report.ok).toBe(true);
     expect(report.cases.map((c) => c.name)).toEqual(BENCH_CASES.map((c) => c.name));
     for (const c of report.cases) expect(c.medianMs).toBeGreaterThanOrEqual(0);
-    // The placeholder's workload is the empty seed-0 world's hash; the bundle and the source agree.
-    expect(report.cases[0].checksum).toBe(worldHash(createWorld({ seed: 0 })));
+    // The plant compiles to exactly 2,000 nodes in the bundle too.
+    expect(report.cases[0].checksum).toMatch(/^2000:/);
+    // The spec §4.5 budgets that wait for the solver and the engine stay visible.
+    expect(report.pending).toStrictEqual(PENDING_BENCH_CASES);
   });
 });

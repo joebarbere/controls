@@ -10,12 +10,19 @@ import {
 } from '@controls/scripting-api';
 import { hashWorldDocument, newGameWorld, worldHash } from '@controls/world-model';
 import { readFile, writeFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { type BenchCase, runBench } from './bench/bench';
-import { BENCH_CASES } from './bench/cases';
+import { BENCH_CASES, PENDING_BENCH_CASES } from './bench/cases';
 import { wallClockMs } from './bench/clock';
 import { readDocument } from './documents';
-import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
+import {
+  defaultNgspiceBinary,
+  type NgspiceRunner,
+  OracleRegenError,
+  regenerateOracle,
+  spawnNgspice,
+} from './oracle/regen';
+import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS, WORKSPACE_ROOT } from './script-loader';
 
 /*
  * `sim-cli`: runs the game headless in plain Node (plan §4.6, F1.6, ADR 0008).
@@ -24,6 +31,7 @@ import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS } from './script-loader';
  *   sim replay <save.ctrl | replay-log.json> [--expect <hash>]
  *   sim hash <save.ctrl | world.json> [--expect <hash>]
  *   sim bench
+ *   sim oracle regen [--ngspice <path>] [--out <dir>]
  *
  * stdout carries data only (hashes, a script's own output); diagnostics go to stderr. Exit codes:
  * 0 success, 1 failure (bad document, failing script, hash mismatch, bench over budget), 2 usage error.
@@ -38,6 +46,8 @@ export interface CliIo {
   readonly benchCases?: readonly BenchCase[];
   /** Test seam for `sim bench`: the clock, in ms (default the wall clock). */
   readonly now?: () => number;
+  /** Test seam for `sim oracle regen`: runs ngspice (default: spawn the `--ngspice` binary). */
+  readonly ngspice?: NgspiceRunner;
 }
 
 export const EXIT_OK = 0;
@@ -65,6 +75,12 @@ Commands:
   bench            Run the performance cases (warm-up, then the median of N runs)
                    and print a JSON report; fail if a case is over its budget or
                    not deterministic
+  oracle regen     Regenerate the ngspice oracle corpus (libs/domain/sim-core/oracle):
+                   rewrite every deck from the pinned seeds, run each through ngspice
+                   and write its results. Needs ngspice installed (docs/guides/oracle.md);
+                   never part of pnpm verify
+      --ngspice <path>    The ngspice binary (default ngspice; ngspice_con on Windows)
+      --out <dir>         The corpus directory (default libs/domain/sim-core/oracle)
   help             Show this help
 
 Common options:
@@ -75,6 +91,7 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   replay: ['expect'],
   hash: ['expect'],
   bench: [],
+  oracle: ['ngspice', 'out'],
 };
 
 class UsageError extends Error {}
@@ -110,6 +127,7 @@ function parseArgv(argv: readonly string[]): Parsed | 'help' {
     if (positionals.length !== 0) throw new UsageError('"bench" takes no arguments');
     return { command, file: '', options };
   }
+  if (command === 'oracle' && positionals.length !== 1) throw new UsageError('"oracle" takes one subcommand: regen');
   if (positionals.length !== 1) throw new UsageError(`"${command}" takes exactly one file`);
   return { command, file: positionals[0], options };
 }
@@ -130,6 +148,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
       return EXIT_OK;
     }
     if (parsed.command === 'bench') return bench(io);
+    if (parsed.command === 'oracle') return await oracle(parsed, io);
     const path = resolve(io.cwd, parsed.file);
     const hash =
       parsed.command === 'run'
@@ -157,7 +176,9 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
 
 /** `sim bench`: prints the report as JSON (stdout stays data only); exit 1 unless every case passed. */
 function bench(io: CliIo): number {
-  const report = runBench(io.benchCases ?? BENCH_CASES, io.now ?? wallClockMs);
+  const report = io.benchCases
+    ? runBench(io.benchCases, io.now ?? wallClockMs)
+    : runBench(BENCH_CASES, io.now ?? wallClockMs, PENDING_BENCH_CASES);
   io.stdout(JSON.stringify(report, null, 2));
   for (const result of report.cases) {
     if (!result.deterministic) io.stderr(`sim: bench case "${result.name}" returned different checksums across runs`);
@@ -166,6 +187,30 @@ function bench(io: CliIo): number {
     }
   }
   return report.ok ? EXIT_OK : EXIT_FAILURE;
+}
+
+/** The default corpus directory, in the workspace. */
+export const ORACLE_CORPUS_DIR = join(WORKSPACE_ROOT, 'libs/domain/sim-core/oracle');
+
+/** `sim oracle regen`: the only subcommand. Prints a one-line summary per domain on stdout. */
+async function oracle(parsed: Parsed, io: CliIo): Promise<number> {
+  if (parsed.file !== 'regen') throw new UsageError(`Unknown oracle subcommand "${parsed.file}" (expected "regen")`);
+  const binary = parsed.options['ngspice'] ?? defaultNgspiceBinary();
+  const out = parsed.options['out'];
+  try {
+    const summary = await regenerateOracle({
+      outDir: out === undefined ? ORACLE_CORPUS_DIR : resolve(io.cwd, out),
+      binary,
+      run: io.ngspice ?? spawnNgspice(binary),
+    });
+    for (const [domain, count] of Object.entries(summary.circuits)) {
+      io.stdout(`${domain} ${count} circuits, ${summary.ngspice}, ${summary.solver}`);
+    }
+    return EXIT_OK;
+  } catch (error) {
+    if (error instanceof OracleRegenError) throw new Failure(`oracle regen: ${error.message}`);
+    throw error;
+  }
 }
 
 function describe(error: unknown): string {

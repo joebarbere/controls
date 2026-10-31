@@ -1,0 +1,70 @@
+controls oracle dc-0467
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. dc seed 20261030 index 467 nodes 13 elements 21
+.options sparse gmin=1e-12 noopac
+RG1 1 0 1000000000000
+RG2 2 0 1000000000000
+RG3 3 0 1000000000000
+RG4 4 0 1000000000000
+RG5 5 0 1000000000000
+RG6 6 0 1000000000000
+RG7 7 0 1000000000000
+RG8 8 0 1000000000000
+RG9 9 0 1000000000000
+RG10 10 0 1000000000000
+RG11 11 0 1000000000000
+RG12 12 0 1000000000000
+VS0 0 s0 0
+R0 s0 9 39e2
+VS1 2 s1 0
+R1 s1 10 56e-2
+VS2 7 s2 0
+I2 s2 8 DC 15e-4
+VS3 9 s3 0
+R3 s3 4 33e3
+VS4 0 s4 0
+R4 s4 3 82e2
+VS5 1 s5 0
+R5 s5 10 68e2
+VS6 9 s6 0
+R6 s6 10 18e0
+VS7 1 s7 0
+I7 s7 11 DC 18e-3
+VS8 6 s8 0
+R8 s8 0 68e1
+VS9 0 s9 0
+R9 s9 12 18e1
+VS10 12 s10 0
+R10 s10 9 33e3
+VS11 0 s11 0
+V11 e11 s11 DC 68e0
+RI11 e11 11 27e-3
+VS12 10 s12 0
+V12 e12 s12 DC 39e-1
+RI12 e12 12 27e-1
+VS13 7 s13 0
+R13 s13 11 33e0
+VS14 2 s14 0
+I14 s14 0 DC 15e-3
+VS15 5 s15 0
+R15 s15 9 68e0
+VS16 9 s16 0
+V16 e16 s16 DC 47e1
+RI16 e16 8 56e-2
+VS17 8 s17 0
+R17 s17 7 39e-2
+VS18 7 s18 0
+I18 s18 5 DC 82e-4
+VS19 8 s19 0
+R19 s19 5 56e1
+VS20 9 s20 0
+I20 s20 8 DC 39e-3
+.control
+set numdgt=17
+op
+print v(1) v(2) v(3) v(4) v(5) v(6) v(7) v(8) v(9) v(10)
+print v(11) v(12)
+print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
+print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16) i(vs17) i(vs18) i(vs19)
+print i(vs20)
+.endc
+.end

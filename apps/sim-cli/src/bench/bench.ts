@@ -33,8 +33,19 @@ export interface BenchCaseResult {
   readonly ok: boolean;
 }
 
+/** A spec budget whose case can't run yet: listed in the report so the gap stays visible. */
+export interface PendingBenchCase {
+  readonly name: string;
+  /** The spec's budget for it (ms). */
+  readonly budgetMs: number;
+  /** The feature that switches it on (`F2.2 part 3`). */
+  readonly enabledBy: string;
+}
+
 export interface BenchReport {
   readonly cases: readonly BenchCaseResult[];
+  /** Cases waiting for the code they measure; they never affect `ok`. */
+  readonly pending: readonly PendingBenchCase[];
   readonly ok: boolean;
 }
 
@@ -75,7 +86,11 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
   };
 }
 
-export function runBench(cases: readonly BenchCase[], now: () => number): BenchReport {
+export function runBench(
+  cases: readonly BenchCase[],
+  now: () => number,
+  pending: readonly PendingBenchCase[] = [],
+): BenchReport {
   const results = cases.map((benchCase) => runBenchCase(benchCase, now));
-  return { cases: results, ok: results.every((result) => result.ok) };
+  return { cases: results, pending, ok: results.every((result) => result.ok) };
 }

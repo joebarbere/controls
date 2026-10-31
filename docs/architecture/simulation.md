@@ -82,7 +82,7 @@ A property test drives random bench circuits (each seeded with 3–8 devices) th
 | `topologyHash` alone, part of the structural figure | about 0.6 ms |
 | Recompile with nothing changed                      | about 0.2 ms |
 
-These are the netlist's share of F2.2 part 3's budget, which allows 2 ms to re-solve a 2,000-node plant after a topology change. F2.7's bench measures compile and solve together.
+These are the netlist's share of F2.2 part 3's budget, which allows 2 ms to re-solve a 2,000-node plant after a topology change. F2.7's bench measures them on a 2,000-node plant (below); F2.2 part 3 adds the solve.
 
 Netlists are read-only: fragments and their frozen `values` objects are shared between compiles.
 
@@ -171,6 +171,40 @@ F2.3a can copy this straight into `WorldV2.sim` and the snapshot payload ([ADR 0
   - a SHA-256 pin over the bits of 300 seeded solves (a deliberate numeric change re-pins it and bumps `SIM_ENGINE_VERSION`).
 
   They run over synthetic circuits (2–14 nodes, 1–3 islands, loops, self-loops, every stamp, resistances from 0.1 mΩ to 100 kΩ) and over compiled bench worlds, with generator-health floors.
+## The oracle corpus (F2.7)
+
+The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
+
+```mermaid
+flowchart LR
+    SEED["ORACLE_CORPUS<br/>seed + count per domain"] --> GEN["generateOracleCircuit<br/>sfc32 stream oracle:‹domain›:‹i›"]
+    GEN --> IR["OracleCircuit<br/>nodes · elements (E12 decimals)"]
+    IR --> DECK["oracleDeck<br/>.cir text"]
+    IR --> NET["oracleNetlist<br/>F2.1-style branches"]
+    DECK -->|"pnpm sim oracle regen<br/>(ngspice -b, developers only)"| RES["dc/ac.results.txt<br/>17-digit values + deck SHA-256"]
+    DECK -->|"staleness: byte for byte"| SPEC["corpus.spec.ts<br/>in pnpm verify"]
+    RES --> SPEC
+    NET -->|"consistency: element laws + KCL"| SPEC
+    NET -.->|"F2.2: solve, compareOracleSolution"| SPEC
+```
+
+- **Circuits:** 2–30 nodes, one island, node 0 the reference sim-core picks (the negative end of the first voltage source). DC: R, V with internal R, I. AC at 60 Hz: R, L, C, phasor V at 0°, 180°, ±120° from exact constants. Every circuit carries current beyond `gmin`.
+- **Decks:** `.options sparse`, explicit `gmin` resistors on the circuit nodes, a 0 V sense source per element (its current is the branch current), `noopac`, `set numdgt=17`.
+- **In `pnpm verify`:** the decks regenerate byte for byte; the results were solved from those decks; ngspice's solution satisfies every element equation and KCL in `oracleNetlist` (worst residual about 3e-9 of the circuit's scale). The sim-core comparison is `it.todo` until F2.2 parts 1 and 2.
+- `sim-cli`'s `oracle regen` does the file and process work; `sim-core` stays framework-free.
+
+## The bench (F2.7)
+
+`pnpm sim bench` (the Nx `bench` target, in `pnpm verify`, from the built bundle) builds a seeded synthetic plant of exactly 2,000 netlist nodes from P2's catalogue: 8 battery feeders, each a random recursive tree of units (an SPST switch and a lamp, with the return path mirroring the supply tree), about 1 unit in 50 adding a tie lead (a loop) and about 1 switch in 20 open. It times:
+
+| Case                     | What                                                     | Budget                                           |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------------------ |
+| `plant-compile`          | A from-scratch `compileNetlist`, as on a load            | None in the spec (reported)                      |
+| `plant-recompile-toggle` | Open a feeder's root switch and close it: two recompiles | None of its own: part of the re-solve (reported) |
+| re-solve (pending)       | Recompile and solve after a topology change              | 2 ms (spec §4.5), switched on by F2.2 part 3     |
+| per tick (pending)       | Discrete + continuous + protection layers                | 0.3 ms (spec §4.5), switched on by F2.3a         |
+
+Measured 2026-10-30 on an AMD Ryzen 5 5600X under Node 24: `plant-compile` 4.6 ms and `plant-recompile-toggle` 2.6 ms (1.3 ms per recompile) on a quiet machine; 8.5–11 ms and 3.4–5.6 ms with other jobs running. At 1.3 ms per structural recompile the netlist alone uses about two thirds of the 2 ms re-solve budget, so F2.2 part 3 must measure compile and solve together on this plant, on the slowest CI runner.
 
 ## Not yet
 
