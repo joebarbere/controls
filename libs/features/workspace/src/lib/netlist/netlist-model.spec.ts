@@ -108,11 +108,17 @@ describe('netlistSampler', () => {
 
   it('allocates its reading once per descriptor, and equal text compares equal', () => {
     const create = vi.spyOn(NetlistReadout.prototype, 'createReading');
+    const read = vi.spyOn(NetlistReadout.prototype, 'read');
     const sample = netlistSampler();
     const first = benchDescriptor(1);
     const a = sample(fakeSnapshotView({ descriptor: first, nodes: BENCH_NODES, tick: 1 }));
     const b = sample(fakeSnapshotView({ descriptor: first, nodes: BENCH_NODES, tick: 1 }));
     expect(create).toHaveBeenCalledTimes(1);
+    // One readout per descriptor: both samples read through the same instance, into the same reading.
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read.mock.contexts[1]).toBe(read.mock.contexts[0]);
+    expect(read.mock.contexts[0]).toBe(NetlistReadout.of(first));
+    expect(read.mock.calls[1][1]).toBe(read.mock.calls[0][1]);
     expect(sameNetlistValues(a, b)).toBe(true);
     const c = sample(
       fakeSnapshotView({
@@ -131,5 +137,6 @@ describe('netlistSampler', () => {
     expect(sameNetlistValues(null, null)).toBe(true);
     expect(sameNetlistValues(a, null)).toBe(false);
     create.mockRestore();
+    read.mockRestore();
   });
 });

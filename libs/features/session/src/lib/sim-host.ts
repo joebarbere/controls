@@ -495,7 +495,10 @@ export class SimHost {
     this.selections.add(dispose);
     options.destroyRef?.onDestroy(dispose);
     // A panel opened while time is paused gets no new snapshot: start from the latest one (F2.6).
-    const current = this.phaseState() === 'crashed' ? null : (this.link?.reader.current ?? null);
+    // Opened while crashed, it is frozen like every other selection then: `stale`, with the last
+    // snapshot if the reader still holds one, else `initial`.
+    if (this.phaseState() === 'crashed') stale.set(true);
+    const current = this.link?.reader.current ?? null;
     if (current !== null) {
       generation = current.descriptor;
       sample(current);

@@ -466,14 +466,40 @@ describe('SimHost: queries and disposal', () => {
   });
 
   it('select starts from the latest snapshot, so a panel opened while paused shows it (F2.6)', async () => {
-    const { host, start, game } = setup();
+    const { host, clock, start, game } = setup();
     start();
     await settle();
     game().execOrThrow('sim.step', { ticks: 5 });
     await settle();
     const ref = TestBed.inject(Injector).get(DestroyRef);
-    const tick = host.select((view) => view.tick, { initial: -1, destroyRef: ref });
+    let samples = 0;
+    const tick = host.select((view) => (samples++, view.tick), { initial: -1, hz: 10, destroyRef: ref });
     expect(tick()).toBe(5); // no new snapshot needed
+    expect(samples).toBe(1);
+    expect(tick.stale()).toBe(false);
+    // The start-up sample is this generation's: snapshots of it inside the 100 ms window (the
+    // worker's next publish at tick 5, then tick 10) aren't sampled until the trailing timer.
+    const views: number[] = [];
+    host.subscribe((v) => v !== null && views.push(v.tick));
+    game().execOrThrow('sim.step', { ticks: 5 });
+    await clock.advance(20);
+    expect(views).toContain(10);
+    expect(samples).toBe(1);
+    expect(tick()).toBe(5);
+    await clock.advance(100);
+    expect(tick()).toBe(10);
+    expect(samples).toBe(2);
+  });
+
+  it('select opened while crashed starts stale, like every frozen selection', async () => {
+    const { host, fakes, start } = setup();
+    start();
+    await settle();
+    fakes.workers[0].crash();
+    await settle();
+    const ref = TestBed.inject(Injector).get(DestroyRef);
+    const tick = host.select((view) => view.tick, { initial: -1, destroyRef: ref });
+    expect(tick.stale()).toBe(true);
   });
 
   it('rejects a waitForTick when the worker is replaced or crashes, so a wait fails fast', async () => {
