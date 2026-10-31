@@ -9,6 +9,7 @@ import {
   utilityThreePhaseNetlistModel,
 } from '../devices/sources/netlist-models';
 import { heaterNetlistModel, resistorNetlistModel } from '../devices/loads/netlist-models';
+import { breakerNetlistModel, fuseNetlistModel } from '../devices/protection/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -158,6 +159,8 @@ const lead: ConnectionNetlistModel = {
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
+  'breaker.thermalMagnetic': breakerNetlistModel,
+  fuse: fuseNetlistModel,
   'generator.portable': generatorPortableNetlistModel,
   heater: heaterNetlistModel,
   'lamp.incandescent': lampIncandescent,

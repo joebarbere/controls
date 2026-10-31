@@ -48,6 +48,7 @@ What exists today (Phases 0 and 1, and Phase 2 so far):
 - A bench DC supply (0–30 V, 0–5 A) with a voltage setpoint, a current limit and an output switch, and a clean constant-voltage/constant-current crossover; a 24 V DIN-rail supply whose overload protection hiccups (off for a second, then retry).
 - Mains supplies, from scripts for now: a 120/240 V split-phase utility service and 208Y/120 V and 480Y/277 V three-phase services, each behind its transformer's impedance (so a short draws its real fault current), and the ANSI C84.1 voltage ranges.
 - An incandescent lamp with a real tungsten filament: its resistance rises as it heats, so switching on a cold lamp draws a surge of about 14 times its running current, and its light follows the filament's temperature. A power resistor that says when it is over its rating, and a 12 V heater element.
+- Protection that behaves like the real thing: a 1 A fast-acting fuse that heats with the current and blows (in under a millisecond on a dead short, never below its minimum fusing current) and stays blown until replaced, and a 15 A thermal-magnetic breaker with a slow thermal trip on overload, an instantaneous magnetic trip on a short, and a handle that must go off and on again to reset it.
 - Honest readings: a device's record says whether its circuit was solved, and an unsettled solve is never shown as a steady value.
 
 ### Commands and world

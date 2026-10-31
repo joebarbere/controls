@@ -1,0 +1,39 @@
+{
+  "id": "fuse.emberlyn-5x20-fa-1a",
+  "version": 1,
+  "title": "1 A fast-acting 5 × 20 mm fuse in an inline holder on a base",
+  "brand": "Emberlyn",
+  "modelName": "EF-520-1A",
+  "category": "protection",
+  "sizeMm": { "widthMm": 70, "heightMm": 30, "depthMm": 30 },
+  "terminals": [
+    { "id": "a", "label": "1", "positionMm": { "x": 8, "y": 15, "z": 12 } },
+    { "id": "b", "label": "2", "positionMm": { "x": 62, "y": 15, "z": 12 } }
+  ],
+  "model": {
+    "kind": "fuse",
+    "params": { "ratedCurrentA": 1, "meltingI2tA2s": 0.7, "minimumFusingRatio": 1.2, "resistanceOhm": 0.1 }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "fast-acting-5x20-class",
+      "kind": "real-world",
+      "citation": "The 1 A fast-acting 5 × 20 mm glass cartridge fuse, a common supplemental-protection class listed to UL 248-14. Typical published figures for the class, paraphrased (not one vendor's): a cold resistance of about 0.1 Ω and a nominal melting I²t of a few tenths of an A²·s (0.7 A²·s is taken). For electrical-realism-reviewer to confirm against the class's datasheets.",
+      "covers": ["model.params.ratedCurrentA", "model.params.meltingI2tA2s", "model.params.resistanceOhm"]
+    },
+    {
+      "id": "opening-time-band",
+      "kind": "game-design",
+      "citation": "game-design inside the published opening-time envelope of UL 248-14 supplemental fuses (paraphrased, not reproduced): the fuse carries its rating, opens within an hour at 135 % and within two minutes at 200 % of it. The fictional datasheet's own band, which the model is tested against: never at 100 %; within 1 h at 135 %; within 5 s at 200 %; between 1 ms and 20 ms at 1000 %. A minimum fusing current of 1.2 × the rating (between 1 and 1.35, as that envelope requires) is taken.",
+      "covers": ["model.params.minimumFusingRatio"]
+    },
+    {
+      "id": "holder-layout",
+      "kind": "game-design",
+      "citation": "game-design: an inline fuse holder on a 70 × 30 mm base, 30 mm tall, with a screw terminal at each end; not modelled on a product. Replacing the fuse in P2 means deleting it and placing a new one.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

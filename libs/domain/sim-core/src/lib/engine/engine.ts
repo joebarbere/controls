@@ -258,6 +258,8 @@ export class SimEngine {
   private protectionTopology = new Uint8Array(0);
   private readonly netlistModels: NetlistModels;
   private afterSolveBanks: SimDeviceBank[] = [];
+  /** Whether any bank has a `commanded` hook (a breaker's handle). */
+  private commandedBanks = false;
   private devices = new Map<number, DeviceSlot>();
   private readonly tombstones = new Map<number, StateBag>();
   // Per branch: the bank and device index that values it, and the kind's default.
@@ -399,9 +401,25 @@ export class SimEngine {
       throw new SimDesyncError(`Entry ${entry.seq} is at tick ${entry.tick}; the engine is at tick ${this.tickNow}`);
     }
     if (world === this.world) return;
+    const previous = this.world;
     this.world = world;
     this.revisionCount++;
+    // Sim state the command resolves (a tripped breaker reset by its handle) before the compiler reads it.
+    if (this.commandedBanks) this.notifyCommanded(previous, world);
     if (this.recompile()) this.solve(this.tickNow, 'command');
+  }
+
+  /** Calls `commanded` on each netlisted device whose commanded `state` bag the command replaced. */
+  private notifyCommanded(previous: World, world: World): void {
+    const before = previous.entities;
+    let j = 0;
+    for (const entity of world.entities) {
+      while (j < before.length && before[j].id < entity.id) j++;
+      if (j < before.length && before[j].id === entity.id && before[j].state === entity.state) continue;
+      const slot = this.devices.get(entity.id);
+      if (slot === undefined || slot.bank === null) continue;
+      slot.bank.bank.commanded?.(slot.index, entity.state);
+    }
   }
 
   /** The sim-owned state to materialise into the world at this tick (ADR 0011 §4, §9.6). */
@@ -860,6 +878,7 @@ export class SimEngine {
         entity: id,
         params,
         bag,
+        state: entity.state,
         branches: branchesOf.get(id) ?? [],
         frequencyHz: this.frequencyHz,
         stream: () => deriveStream(seed, entityStreamKey(id)),
@@ -886,6 +905,7 @@ export class SimEngine {
     this.protectionBanks = protection.map((b) => b.bank);
     this.protectionTopology = Uint8Array.from(protection, topological);
     this.afterSolveBanks = banks.filter((b) => b.bank.afterSolve !== undefined).map((b) => b.bank);
+    this.commandedBanks = banks.some((b) => b.bank.commanded !== undefined);
 
     const branchCount = netlist.branches.length;
     this.branchBank = new Array<SimDeviceBank | null>(branchCount).fill(null);

@@ -6,6 +6,7 @@ import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import { SOURCE_SESSION_REFS } from '../../testing/sources';
 import { LOAD_SESSION_REFS } from '../../testing/loads';
+import { PROTECTION_SESSION_REFS } from '../../testing/protection';
 import {
   AC_TWIN,
   DROOP,
@@ -240,12 +241,14 @@ describe('engine determinism properties', () => {
     const kinds = [...Object.keys(BUILTIN_DEVICE_MODELS), ...Object.keys(engineTestOptions().deviceModels)];
     expect(kinds.length).toBeGreaterThanOrEqual(7);
     // Over the session arbitraries: this file's (F2.3a's mix), the sources' (`devices/sources/
-    // properties.spec.ts`, F2.4) and the loads' (`devices/loads/properties.spec.ts`, F2.5), so a model is
+    // properties.spec.ts`, F2.4) and the loads' (`devices/loads/properties.spec.ts`, F2.5) and the protection's (`devices/protection/
+    // properties.spec.ts`, F2.5 part 2), so a model is
     // covered by one save-and-load property or another.
     const covered: Readonly<Record<string, CatalogRef>> = {
       ...PARITY_REFS,
       ...SOURCE_SESSION_REFS,
       ...LOAD_SESSION_REFS,
+      ...PROTECTION_SESSION_REFS,
     };
     for (const kind of kinds) {
       expect(covered[kind], kind).toBeDefined();

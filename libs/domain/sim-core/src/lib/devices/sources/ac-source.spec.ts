@@ -98,7 +98,15 @@ describe('the region frequency reaches the bank (SimDevice.frequencyHz)', () => 
     const p = params(UTILITY_SPLIT);
     const { x } = ratedImpedance(p, 240);
     const bank = UTILITY_SPLIT_PHASE_MODEL.bank([
-      { entity: 1, params: p, bag: {}, branches: [0, 1], frequencyHz: 50, stream: () => deriveStream(0, 'x') },
+      {
+        entity: 1,
+        params: p,
+        bag: {},
+        state: {},
+        branches: [0, 1],
+        frequencyHz: 50,
+        stream: () => deriveStream(0, 'x'),
+      },
     ]);
     const values = new AcBranchValues(2);
     const branch = (index: number, part: string): NetlistBranch => ({

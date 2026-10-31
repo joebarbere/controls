@@ -188,6 +188,52 @@ export const ResistorParams = z.strictObject({
 });
 export type ResistorParams = z.infer<typeof ResistorParams>;
 
+/**
+ * Cartridge fuse parameters (F2.5 part 2): its rating and its two melting figures. The melt model
+ * (`sim-core`'s fuse) is a first-order lag with τ = I²t / I_min², I_min = `minimumFusingRatio` × the
+ * rating: it carries any current below I_min indefinitely and melts at large currents when ∫I²dt
+ * reaches `meltingI2tA2s`.
+ */
+export const FuseParams = z.strictObject({
+  /** Rated current (A): what it carries indefinitely. */
+  ratedCurrentA: positive,
+  /** Melting I²t (A²·s): the adiabatic melting integral, from the datasheet. */
+  meltingI2tA2s: positive,
+  /** The minimum fusing current over the rating: above 1 (it carries its rating), below 1.35. */
+  minimumFusingRatio: FiniteNumber.gt(1).lt(1.35),
+  /** Cold resistance of the link (Ω), from the datasheet. */
+  resistanceOhm: positive,
+});
+export type FuseParams = z.infer<typeof FuseParams>;
+
+/**
+ * Thermal-magnetic breaker parameters (F2.5 part 2): single pole. The thermal element is a lag of time
+ * constant `thermalTimeConstantS` towards (I / I_n)², tripping at `ultimateTripRatio`²; the magnetic
+ * element trips at once above a pickup drawn per breaker inside [`magneticTripMinRatio`,
+ * `magneticTripMaxRatio`] × I_n (`sim-core`'s breaker model).
+ */
+export const BreakerParams = z
+  .strictObject({
+    /** Rated current I_n (A). */
+    ratedCurrentA: positive,
+    /** The thermal element's time constant (s). */
+    thermalTimeConstantS: positive,
+    /** The smallest multiple of the rating that trips it thermally at all: above 1 (it carries I_n), at most 1.35. */
+    ultimateTripRatio: FiniteNumber.gt(1).max(1.35),
+    /** The magnetic pickup band, in multiples of the rating. */
+    magneticTripMinRatio: positive,
+    magneticTripMaxRatio: positive,
+    /** The closed pole's contact resistance (Ω). */
+    contactResistanceOhm: positive,
+  })
+  .refine((p) => p.magneticTripMaxRatio > p.magneticTripMinRatio, {
+    message: 'magneticTripMaxRatio must be above magneticTripMinRatio',
+  })
+  .refine((p) => p.magneticTripMinRatio > p.ultimateTripRatio, {
+    message: 'the magnetic band must lie above the ultimate trip ratio',
+  });
+export type BreakerParams = z.infer<typeof BreakerParams>;
+
 /** Heater parameters (F2.5): rated watts at rated volts, a fixed resistance R = V_r² / P_r. */
 export const HeaterParams = z.strictObject({
   /** Rated voltage (V). */
@@ -240,7 +286,7 @@ function enumKey<const V extends readonly [string, ...string[]]>(
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
- * heater. The fuse and breaker arrive with F2.5 part 2; adding a kind needs no `schemaVersion` bump.
+ * heater, and part 2's fuse and thermal-magnetic breaker; adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -258,6 +304,60 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       ),
     },
     description: 'A battery: an EMF that falls with the state of charge, behind an internal resistance.',
+  },
+  'breaker.thermalMagnetic': {
+    kind: 'breaker.thermalMagnetic',
+    placement: 'entity',
+    terminals: ['line', 'load'],
+    params: BreakerParams,
+    keys: {
+      on: key(
+        'commanded',
+        'boolean',
+        z.boolean(),
+        false,
+        'Whether the handle is on (device.operate). The sim never moves it: a tripped breaker keeps its handle where the player left it. A new breaker starts off.',
+      ),
+      thermal: key(
+        'sim',
+        'number',
+        FiniteNumber.min(0),
+        0,
+        "The thermal element's state, in units of its rated-current steady state ((I / I_n)² when settled); it trips at ultimateTripRatio².",
+      ),
+      tripped: key(
+        'sim',
+        'boolean',
+        z.boolean(),
+        false,
+        'Whether it has tripped (thermally or magnetically). Cleared when the handle is turned off; it closes when turned on again.',
+      ),
+    },
+    description:
+      'A single-pole thermal-magnetic circuit breaker: an inverse-time thermal trip and an instantaneous magnetic trip; after a trip the handle must go off, then on.',
+  },
+  fuse: {
+    kind: 'fuse',
+    placement: 'entity',
+    terminals: ['a', 'b'],
+    params: FuseParams,
+    keys: {
+      blown: key(
+        'sim',
+        'boolean',
+        z.boolean(),
+        false,
+        'Whether the link has melted. A blown fuse stays open; P2 replaces it by deleting it and placing a new one.',
+      ),
+      meltFraction: key(
+        'sim',
+        'number',
+        FiniteNumber.min(0).max(1),
+        0,
+        "The element's temperature rise as a fraction of the rise that melts it (1 melts it).",
+      ),
+    },
+    description: 'A cartridge fuse: a link that melts when I²t heats it faster than it cools; a blown fuse is open.',
   },
   'generator.portable': {
     kind: 'generator.portable',

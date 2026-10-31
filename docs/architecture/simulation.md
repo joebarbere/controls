@@ -37,15 +37,17 @@ flowchart LR
 
 Each placed entity contributes a **fragment**: its sorted terminals, the groups of terminals it joins ideally, and its elements. A fragment comes from the model kind's `DeviceNetlistModel.topology({ params, state, sim })` in `DEVICE_NETLIST_MODELS`; a test checks every placed kind in `MODEL_KINDS` has one. The model says only what the netlist needs: which terminals are joined, which elements sit between which terminals, and when. Stamps and electrical behaviour belong to the device models of F2.4 and F2.5.
 
-| Model kind           | Topology                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `battery`            | One `vsource` element `cell`, `neg` → `pos`, a DC source                                 |
-| `lamp.incandescent`  | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank    |
-| `resistor`, `heater` | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                       |
-| `switch.spst`        | Closed: an ideal join of `a` and `b`, no element. Open: nothing                          |
-| `lead` (connection)  | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K) |
+| Model kind                | Topology                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `battery`                 | One `vsource` element `cell`, `neg` → `pos`, a DC source                                                |
+| `lamp.incandescent`       | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank                   |
+| `resistor`, `heater`      | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                                      |
+| `switch.spst`             | Closed: an ideal join of `a` and `b`, no element. Open: nothing                                         |
+| `fuse`                    | Intact: one `resistor` element `link`, `a` → `b`. Blown (sim `blown`): nothing (F2.5)                   |
+| `breaker.thermalMagnetic` | Handle `on` and not `tripped`: one `resistor` element `pole`, `line` → `load`. Otherwise nothing (F2.5) |
+| `lead` (connection)       | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K)                |
 
-A model that changes topology on a sim-owned event lists those keys in `simTopologyKeys` (F2.5's fuse lists `blown`). It is shown only those keys, never the rest of the engine's state. The P2 bench kinds list none.
+A model that changes topology on a sim-owned event lists those keys in `simTopologyKeys` (the fuse lists `blown`, the breaker `tripped`). It is shown only those keys, never the rest of the engine's state. The other P2 kinds list none. A protective device compiles to a branch while closed, never to an ideal join, because its current is what heats it.
 
 Absent from the netlist, with a diagnostic where useful: props (silently), entities whose ref the catalogue doesn't know (`unknown-device`), kinds without a netlist model (`no-model`), and connections whose ref is unknown or not a connection kind, or that end on an absent entity or an unknown terminal (`absent-connection`, with a reason).
 
@@ -406,7 +408,7 @@ flowchart TB
 
 **Commands and time.** `CommandBus.advanceTo(tick)` moves the bus's state without logging, taking a `seq` or touching the history (ADR 0011 §3). `replayEntries(bus, entries, { time, endTick })` advances the time host and the bus to each entry's tick, runs it, calls `time.applied(entry, state)`, and finally advances to `endTick`; an earlier tick is still `tick-mismatch`. In the scripting API, `Game.exec` hands every logged entry to the engine and carries out `sim.step` by advancing once it is logged; on replay a step moves nothing, and the next entry's tick (or `endTick`) carries its effect. `sim.setSpeed` and `sim.resume` are no-ops headless (pacing is F2.3b's).
 
-**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. Since F2.4 the battery and the supplies have banks, and since F2.5 the lamp, resistor and heater (below). A branch nothing can value leaves its island **unmodelled** (engines 3 and 4 did this to every lamp): solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations. Two hooks came with F2.4: `afterSolve(ctx, values)`, called after every solve with exactly the values it was solved with, commits state the solve decided (a supply's CV/CC mode) before anything reads it; and a layer that returns `true` gets a re-solve within the step even when only a value changed (a PSU switching its output off), not only on a topology change. `LayerContext.islandStatus` gives a record its island's status.
+**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. Since F2.4 the battery and the supplies have banks, and since F2.5 the lamp, resistor and heater, the fuse and the breaker (below). A branch nothing can value leaves its island **unmodelled** (engines 3 and 4 did this to every lamp): solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations. Two hooks came with F2.4: `afterSolve(ctx, values)`, called after every solve with exactly the values it was solved with, commits state the solve decided (a supply's CV/CC mode) before anything reads it; and a layer that returns `true` gets a re-solve within the step even when only a value changed (a PSU switching its output off), not only on a topology change. `LayerContext.islandStatus` gives a record its island's status.
 
 **Honest results.** `islands()` gives each island's status: `solved`, `singular`, `nonConverged`, `unmodelled` or `mixed`; only `solved` values are readings, and the status follows from the netlist and the solution record alone, so a loaded engine says the same. `probe(a, b)` (ideal, non-loading) returns DC volts V(a) − V(b) on a solved DC island, and on an AC island the phasor V(a) − V(b) with its RMS magnitude (`rmsVolts`, what a meter shows by default) at the region frequency, `floating` for terminals on different islands (never a difference of two references), and `singular`, `unsettled` or `unsolved` otherwise. Island flags raise `singular` and `nonConverged` sim events on their rising edge; across a topology change a flag rises only if none of the island's entities was in an island with it before. Layer events (`blown`, …) are stamped at the end of their step.
 
@@ -498,6 +500,41 @@ flowchart LR
 
 **Abstractions** (for `electrical-realism-reviewer`; detail in the caveats): constant emissivity and heat capacity, no conduction loss to the supports, no burnout (clamped at 3600 K), and a constant-resistance heater. No transcendental was needed, so `dmath` and ADR 0014 wait for the first real one.
 
+## Protection (F2.5 part 2)
+
+`sim-core` `devices/protection/` holds the cartridge fuse (`fuse.ts`) and the single-pole thermal-magnetic breaker (`breaker.ts`), with their netlist models (`netlist-models.ts`). Closed, each is one `resistor` branch (the fuse's link resistance, the breaker's contact resistance; `DC_DEFAULT_VALUES` and `AC_DEFAULT_VALUES` value it); open, it has no element. Catalogue entries are `fuse.emberlyn-5x20-fa-1a` (1 A fast-acting 5 × 20 mm, melting I²t 0.7 A²s, I_min 1.2 A, 0.1 Ω) and `breaker.saltmere-1p-15a` (15 A, τ 60 s, k_u 1.25, magnetic 8–12 × I_n, 4 mΩ), in the new `protection` category.
+
+```mermaid
+flowchart TB
+    subgraph fuse["fuse (sim: blown, meltFraction)"]
+      FI["solved |I| (readable islands only)"] --> FT["protection: θ += Δt ((I / I_min)² − θ) / τ<br/>τ = I²t / I_min²"]
+      FT -->|"θ ≥ 1"| FB["blown ← true, event blown"]
+    end
+    subgraph breaker["breaker (commanded: on; sim: thermal, tripped)"]
+      BI["solved |I| (0 while open)"] --> BT["protection: θ += Δt ((I / I_n)² − θ) / τ"]
+      BI --> BM{"|I| ≥ pickup?<br/>(drawn per entity at bank build)"}
+      BT -->|"θ ≥ k_u²"| BX["tripped ← true, event tripped {cause: thermal}"]
+      BM -->|yes| BY["tripped ← true, event tripped {cause: magnetic}"]
+      CMD["device.operate {control: 'on', value: false}"] --> HOOK["engine.applied → bank.commanded(i, state)<br/>handle off clears tripped"]
+    end
+    FB --> RC["layer returns true → recompile<br/>(simTopologyKeys) → re-solve at t + 1, same step"]
+    BX --> RC
+    BY --> RC
+    HOOK --> RC2["recompile at the command's tick"]
+```
+
+**The fuse.** The element's temperature rise, as a fraction θ of the rise that melts it (`meltFraction`), follows a first-order lag towards a steady rise ∝ I²: dθ/dt = ((I / I_min)² − θ) / τ, with I_min = `minimumFusingRatio` × the rating (the minimum fusing current) and τ = I²t / I_min². It melts at θ ≥ 1. The two limits are the datasheet's two figures: at large currents the lag is negligible and the fuse melts when ∫I² dt reaches the melting I²t (adiabatic); at a constant current I > I_min it melts after −τ ln(1 − (I_min / I)²), and never below I_min. For the bench fuse: 0.756 s at 135 %, 0.217 s at 200 %, 7.06 ms at 10×. Explicit Euler at the 1 ms tick (Δt / τ = 0.0018); a current that takes θ past 1 in one tick (a bolted short) blows in that tick. Blowing sets `blown`, raises `blown` and returns `true`, so the engine recompiles (`simTopologyKeys: ['blown']`) and re-solves within the step. `blown` is in the `sim` bag, so a blown fuse stays blown across a save, a reload and an undone delete (the tombstone); replacing it means deleting it and placing a new one.
+
+**The breaker.** The handle is commanded (`on`, a toggle control; a new breaker starts off); `thermal` and `tripped` are sim-owned. It conducts only while the handle is on and it hasn't tripped (`simTopologyKeys: ['tripped']`), and the sim never writes `on`. The bimetal follows dθ/dt = ((I / I_n)² − θ) / τ and trips at θ ≥ k_u², k_u the ultimate trip ratio, so the thermal trip time at a constant overload is −τ ln(1 − (k_u I_n / I)²): 116.8 s at 135 %, 29.8 s at 200 %, 3.87 s at 500 %, never at 125 % or below. It cools while open. The magnetic element trips at once above a pickup drawn from the entity's seeded stream (`deriveStream(world.seed, entityStreamKey(id))`, one draw at every bank build) inside [8, 12] × I_n, so it is reproducible per entity and seed and the same after a load. A trip sets `tripped`, raises `tripped` with `{ cause: 'thermal' | 'magnetic' }` and re-solves within the step. The band is manufacturer-style for NEC-region breakers, not IEC 60898; the catalogue's citations paraphrase the UL 489 and UL 248-14 envelopes.
+
+**Resetting: the `commanded` hook.** A tripped breaker resets only when its handle is turned off, and closes when it is turned on again. Commands never read sim state (ADR 0011 §1), so the engine resolves this: `SimEngine.applied` calls `SimDeviceBank.commanded(index, state)` for each netlisted device whose commanded `state` bag the command replaced, before the recompile, so an off and an on at the same tick reset and close the breaker. `SimDevice.state` gives a bank build the commanded bag (the handle). The hook isn't called for a bank build.
+
+**Records.** `FUSE_OUTPUT`: `currentA` (solved), `meltFraction` and `state` (`intact`, `blown`; its own, always) and `status`. `BREAKER_OUTPUT`: `currentA` (solved), `thermalFraction` (θ / k_u²), `magneticPickupA` and `state` (`off`, `on`, `tripped`; its own) and `status`. An open fuse or pole reads `solved` with exactly 0 A, whatever its island. On an island that isn't `solved` (unmodelled, mixed, singular or non-converged: its current is unknown), the fuse's element and the closed breaker's bimetal are frozen, as the lamp's filament is.
+
+**Tests.** Goldens against hand calculations (`devices/protection/protection.spec.ts`); protection sessions with save-and-load parity and replay (`devices/protection/properties.spec.ts`, with generator-health floors), covered by the engine's parity guard through `PROTECTION_SESSION_REFS`; the breaker's 135 % trip (117,000 ticks) in `apps/sim-cli/src/breaker-curve.spec.ts`, outside coverage, like the battery hour; `topologyHash` pins for the fuse and the breaker off and on; allocation gates for a fuse carrying a lit lamp and a closed breaker (simulation caveats). No scenario holds either device, so no pinned hash moved and `SIM_ENGINE_VERSION` stays 5.
+
+**Abstractions** (for `electrical-realism-reviewer`; detail in the caveats): one time constant each, constant resistances, no arcing or clearing I²t, no interrupting or voltage rating, the same magnetic pickup on AC and DC, no ambient compensation.
+
 ## The oracle corpus (F2.7)
 
 The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
@@ -569,8 +606,8 @@ Each timed re-solve is put in the reference machine's milliseconds by the calibr
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
-- **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
-- **The load records in `sim-protocol`** (F2.3b): like the sources', `LAMP_OUTPUT`, `RESISTOR_OUTPUT` and `HEATER_OUTPUT` are sim-core's until F2.3b registers them; until then the game reads a lamp's record in-process (`Session.deviceRecord`).
+- **Fuse and breaker recipes** (renderer): the fuse and the breaker have engine models but no procedural recipe yet, so they draw as unknown objects.
+- **The load and protection records in `sim-protocol`** (F2.3b): like the sources', `LAMP_OUTPUT`, `RESISTOR_OUTPUT`, `HEATER_OUTPUT`, `FUSE_OUTPUT` and `BREAKER_OUTPUT` are sim-core's until F2.3b registers them; until then the game reads a lamp's record in-process (`Session.deviceRecord`).
 - **The source records in `sim-protocol`** (F2.3b): `BUILTIN_DEVICE_OUTPUTS` registered in `DEVICE_OUTPUT_SCHEMAS` with a `SIM_PROTOCOL_VERSION` bump, and the nominal bands (`NOMINAL_BANDS`) the sources choose for overlays.
 - **The sim worker** (F2.3b): the seqlock transport, the descriptor, pacing and `SimHost`; until then the game runs the engine in-process.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.
