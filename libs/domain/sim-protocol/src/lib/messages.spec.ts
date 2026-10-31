@@ -97,7 +97,8 @@ describe('the message protocol', () => {
       { type: 'trace', id: 1, samples: new Float64Array(4) },
       { type: 'state', id: 1, tick: 0, export: exported, snapshotHash: '0'.repeat(64) },
       { type: 'snapshotBytes', id: 2, tick: 0, bytes: new ArrayBuffer(88) },
-      { type: 'error', code: 'desync', message: 'x', seq: 3, tick: 10 },
+      { type: 'error', code: 'desync', message: 'x', seq: 3, tick: 10, reason: null },
+      { type: 'error', code: 'start-failed', message: 'x', seq: null, tick: null, reason: 'topology-mismatch' },
     ];
     for (const message of messages) expect(parseWorkerMessage(message)).not.toBeNull();
     expect(WorkerToHost.options.length).toBe(8);
@@ -107,8 +108,10 @@ describe('the message protocol', () => {
       { type: 'events', events: [{ tick: 3, kind: 'exploded', entity: 4, entities: [], detail: {} }] },
       { type: 'trace', id: 1, samples: [1, 2] },
       { type: 'state', id: 1, tick: 0, export: { ...exported, tick: -1 }, snapshotHash: '0'.repeat(64) },
-      { type: 'error', code: 'oops', message: 'x', seq: null, tick: null },
-      { type: 'error', code: 'desync', message: 'x'.repeat(501), seq: null, tick: null },
+      { type: 'error', code: 'oops', message: 'x', seq: null, tick: null, reason: null },
+      { type: 'error', code: 'desync', message: 'x'.repeat(501), seq: null, tick: null, reason: null },
+      { type: 'error', code: 'start-failed', message: 'x', seq: null, tick: null, reason: 'mystery' },
+      { type: 'error', code: 'desync', message: 'x', seq: null, tick: null },
     ]) {
       expect(parseWorkerMessage(bad)).toBeNull();
     }

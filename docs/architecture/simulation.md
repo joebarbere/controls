@@ -468,7 +468,7 @@ The engine runs in a module Web Worker (`@controls/sim-worker`, `type:worker`); 
 
 ```mermaid
 flowchart TB
-    subgraph main["Main thread (SimHost, F2.3b part 2)"]
+    subgraph main["Main thread (SimHost)"]
       POST["postMessage: init · advance · command · query · release · stop"]
       READ["SnapshotReader.latest()<br/>(woken by Atomics.waitAsync)"]
     end
@@ -503,6 +503,35 @@ flowchart TB
 - **The reader** (`SnapshotReader`) copies the latest complete slot into a private, double-buffered copy: a read is one `set()` and a few `Atomics.load`s, retried up to `MAX_READ_ATTEMPTS` per slot when the slot's sequence word is odd or changed, then the previous slot, else a counted miss. A slot whose generation has no descriptor yet is held back (`awaitingDescriptor`) until the `topology` message arrives; the view the listeners hold is never touched by a rejected copy. `latest()` returns the same `SnapshotView` every time.
 - **`islandStatus(kind, flags, iterations)`** (`sim-protocol`) is the one rule for whether an island's values are a reading (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`); `SimEngine.islands()` uses it, so a status read from a snapshot always agrees with the engine's.
 - **Tests:** `transport.spec.ts` (round trip, a torn read retried with a simulated writer that laps the reader mid-copy and with a real writer thread, the generation join, fallback bytes identical), `runner.spec.ts` (the protocol check, both starts, desync, ordered queries, slicing, throttled and forced publishes, buffer growth, the starved pool, and a property: the worker's snapshot bytes and materialised hash equal the headless `Game`'s after any session, either transport, any slicing).
+
+### `SimHost`: the main thread's side (F2.3b part 2)
+
+`SimHost` (`feature-session`) is the game's `TimeHost`: `Session` creates every game with `createGame({ world, time: simHost.time })`, so no engine runs on the main thread. It owns one `SimLink` per worker (its messages, its `SnapshotReader`, its pending queries and its `Atomics.waitAsync` waiter), the pacing loop and the panel-rate signals.
+
+```mermaid
+stateDiagram-v2
+    [*] --> none: menu backdrop (Session.start: no worker)
+    none --> starting: newSandbox → startWorld(world, 0)
+    none --> starting: adopt(prepared) (the worker that checked the save)
+    starting --> paused: ready (a new game starts paused)
+    starting --> unavailable: protocol-mismatch, or no SIM_WORKER_FACTORY
+    starting --> crashed: start-failed / onerror before ready
+    paused --> running: sim.setSpeed 1|10|60 / sim.resume
+    running --> paused: sim.setSpeed 0
+    running --> suspended: document hidden (pacing stops, speed kept)
+    suspended --> running: visible (re-anchored)
+    running --> crashed: error / onerror / onmessageerror / watchdog
+    paused --> crashed: error / onerror / onmessageerror / watchdog
+    crashed --> starting: sim.restart (replay start to the current tick)
+    running --> none: stop / replace (retired: pending queries settle ≤ SIM_SETTLE_MS)
+```
+
+- **Forwarding.** `time.applied(entry)` posts every logged entry (`sim.setSpeed` and `sim.resume` also set the requested speed); `time.advanceTo(tick)` posts an `advance` when the bus moves past the last one. Both come from `Game.exec`, `sim.step` and the host's own pacing, so the worker sees them in the order main produced them.
+- **Pacing** runs on a `SIM_CLOCK` timer every `PACE_INTERVAL_MS`: `Pacer.target(now, progress, busTick)` gives the integer tick, and `Session`'s binding advances the game to it (which posts the advance). An advance the host didn't make (a `sim.step`) re-anchors, so time doesn't jump when the worker catches up. `SpeedMeter` gives the effective speed and "falling behind". The loop also runs while the commanded tick is ahead of progress at speed 0, for the watchdog and the catch-up signals; it stops while hidden or held.
+- **Reading.** Shared mode wakes on `Atomics.waitAsync(publishSeq)` and re-arms after each read (not while a descriptor is awaited; the `topology` message triggers that read); the fallback reads on each `snapshot` message and sends the buffer back. Listeners get every accepted view, `null` on a reset; `select()` samples for panels at most `PANEL_SAMPLE_HZ` with a trailing sample, resets on a new generation and goes `stale` on a crash.
+- **Queries.** `capture()` takes the bus world at T and posts `state` at T in the same call; `hashAt()` and `Session.saver()` materialise the reply into that world. Queries time out after `STATE_QUERY_TIMEOUT_MS`; replacing a worker retires it, letting pending queries settle for up to `SIM_SETTLE_MS` before they are `superseded`.
+- **Loads** (`Session.prepareLoad`) start a candidate worker that isn't the game's until `adopt` promotes it: a replay start to verify, or a world start from `world.json`, and the materialised hash it answers is the dirty model's baseline.
+- **Crashes** terminate the worker, stop pacing, reset readers and raise `onCrash` (the app's toast with **Restart simulation**, which runs `sim.restart`: a replay start of the session's log to the current tick, resuming paused). The world and the log are untouched; saves are refused until then.
 
 ## The oracle corpus (F2.7)
 
@@ -576,6 +605,5 @@ Each timed re-solve is put in the reference machine's milliseconds by the calibr
 
 - **AC loads** (F2.5): AC loads reach the phasor solver through `AcValueHook` (F2.4's services do); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
-- **The source records in `sim-protocol`** (F2.3b): `BUILTIN_DEVICE_OUTPUTS` registered in `DEVICE_OUTPUT_SCHEMAS` with a `SIM_PROTOCOL_VERSION` bump, and the nominal bands (`NOMINAL_BANDS`) the sources choose for overlays.
-- **`SimHost` and pacing in the game** (F2.3b part 2): the worker and its transport exist (above); until `SimHost` drives them, the game runs the engine in-process.
+- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b).
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

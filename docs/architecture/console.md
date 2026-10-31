@@ -95,6 +95,7 @@ sequenceDiagram
 `run`, the Run file button or dropping a file on the console runs a console-line file:
 
 - the renderer can't open paths (save I/O arrives with F1.8b), so the player picks the file with a standard file input, or drops it. This works the same in the web harness and in Electron, whose sandboxed renderer shows the native file dialog for `<input type="file">`;
+- since F2.3b a file holds the sim's pacing (`SimHost.hold()`) while it runs, and the console is `aria-busy` and refuses input: `runConsoleScript` is asynchronous, and each `world.hash` line waits for the sim worker; an interactive `world.hash` prints `world.hash: computing…` and fills in the hash;
 - the text is read with `File.text()` (at most 1 MiB) and run with `runConsoleScript`: every line is parsed first, so a typo runs nothing; then it stops at the first failing command. The file is data: nothing is evaluated;
 - if the file holds a cheat and the world isn't assisted, the banner asks first.
 

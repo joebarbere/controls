@@ -8,7 +8,12 @@
   "targets": {
     "test": {
       "executor": "@angular/build:unit-test",
-      "inputs": ["default", "^production", "{workspaceRoot}/apps/game/project.json"],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/apps/game/project.json",
+        "{workspaceRoot}/libs/domain/save-format/fixtures/**/*"
+      ],
       "options": {
         "buildTarget": "game:build:development",
         "tsConfig": "libs/features/session/tsconfig.spec.json",

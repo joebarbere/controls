@@ -80,6 +80,13 @@ export const SimErrorCode = z.enum([
 ]);
 export type SimErrorCode = z.infer<typeof SimErrorCode>;
 
+/**
+ * Why a world can't start the engine (`SimStartError.reason` in sim-core, ADR 0011 §9.6), sent with a
+ * `start-failed` error so the host refuses a damaged save only for a real reason (protocol 2).
+ */
+export const SimStartReason = z.enum(['solution-on-empty-netlist', 'topology-mismatch', 'length-mismatch']);
+export type SimStartReason = z.infer<typeof SimStartReason>;
+
 /** Host-side rejections of a pending query (never on the wire). */
 export type SimQueryError = 'superseded' | 'timeout' | 'crashed' | 'unavailable';
 
@@ -132,6 +139,8 @@ export const WorkerToHost = z.discriminatedUnion('type', [
     message: z.string().max(500),
     seq: z.int().min(0).nullable(),
     tick: Tick.nullable(),
+    /** `start-failed` from a solution record that doesn't fit: why; `null` for every other error. */
+    reason: SimStartReason.nullable(),
   }),
 ]);
 export type WorkerToHost = z.infer<typeof WorkerToHost>;

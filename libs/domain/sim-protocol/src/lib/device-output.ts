@@ -60,12 +60,58 @@ export function deviceOutputSchemaProblems(schema: DeviceOutputSchema): string[]
 }
 
 /**
- * The output schemas of the built-in device models, by kind. Empty in F2.3a: no built-in device
- * model publishes a record yet. ADR 0011 §5.4's table is provisional; each device-model PR (F2.4's
- * battery and supplies, F2.5's lamp, fuse, breaker, resistor and heater) adds its kind's schema here,
- * finalised with `renderer-engineer` and `angular-ui-engineer`, and bumps `SIM_PROTOCOL_VERSION`.
+ * A record's `status` field values, by code (ADR 0011 §5.4, amended in F2.4): `unsolved` (0, so a
+ * zeroed record is never a reading), `solved` (a reading), `unsettled` (the outer loop hit its cap),
+ * `singular` (a loop of ideal sources). A record's solved quantities are a reading only when `solved`.
  */
-export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({});
+export const RECORD_STATUS_VALUES: readonly string[] = Object.freeze(['unsolved', 'solved', 'unsettled', 'singular']);
+
+const f64 = (name: string, offset: number, unit: string | null): DeviceOutputField =>
+  Object.freeze({ name, type: 'f64', offset, unit, values: null });
+const u8Enum = (name: string, offset: number, values: readonly string[]): DeviceOutputField =>
+  Object.freeze({ name, type: 'u8', offset, unit: null, values: Object.freeze([...values]) });
+const status = (offset: number): DeviceOutputField => u8Enum('status', offset, RECORD_STATUS_VALUES);
+
+/**
+ * The output schemas of the built-in device models, by kind: the protocol's table (ADR 0011 §5.4).
+ * Each device-model PR registers its kind's schema here and bumps `SIM_PROTOCOL_VERSION`; sim-core's
+ * `BUILTIN_DEVICE_OUTPUTS` (what the models write) must equal it exactly, which a sim-core spec
+ * checks. F2.4 (protocol 3): the battery, the bench supply and the DIN PSU. The AC services publish
+ * no record.
+ */
+export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
+  battery: Object.freeze({
+    kind: 'battery',
+    recordBytes: 40,
+    fields: Object.freeze([
+      f64('emfV', 0, 'V'),
+      f64('terminalV', 8, 'V'),
+      f64('currentA', 16, 'A'),
+      f64('stateOfCharge', 24, null),
+      status(32),
+    ]),
+  }),
+  'supply.bench': Object.freeze({
+    kind: 'supply.bench',
+    recordBytes: 24,
+    fields: Object.freeze([
+      f64('outputV', 0, 'V'),
+      f64('outputA', 8, 'A'),
+      u8Enum('mode', 16, ['off', 'cv', 'cc']),
+      status(17),
+    ]),
+  }),
+  'supply.dinPsu': Object.freeze({
+    kind: 'supply.dinPsu',
+    recordBytes: 24,
+    fields: Object.freeze([
+      f64('outputV', 0, 'V'),
+      f64('outputA', 8, 'A'),
+      u8Enum('mode', 16, ['ok', 'limit', 'hiccupOff']),
+      status(17),
+    ]),
+  }),
+});
 
 /**
  * The nominal voltage bands an island can be in (ADR 0011 §5.3), by index, for the overlays' scales.

@@ -46,7 +46,8 @@
       "@controls/feature-palette": ["./libs/features/palette/src/index.ts"],
       "@controls/feature-console": ["./libs/features/console/src/index.ts"],
       "@controls/feature-saves": ["./libs/features/saves/src/index.ts"],
-      "@controls/feature-saves/testing": ["./libs/features/saves/src/testing/memory-save-io.ts"]
+      "@controls/feature-saves/testing": ["./libs/features/saves/src/testing/memory-save-io.ts"],
+      "@controls/feature-session/testing": ["./libs/features/session/src/testing/fake-sim-worker.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

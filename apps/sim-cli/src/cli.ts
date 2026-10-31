@@ -291,7 +291,7 @@ async function run(path: string, parsed: Parsed, io: CliIo): Promise<string> {
     } catch (error) {
       throw new Failure(`${parsed.file}: ${(error as NodeJS.ErrnoException).code ?? 'unreadable'}`);
     }
-    const result = runConsoleScript(game, text);
+    const result = await runConsoleScript(game, text);
     for (const line of result.output) io.stdout(line);
     if (!result.ok) throw new Failure(`${parsed.file}: ${formatConsoleScriptError(result.error)}`);
   }

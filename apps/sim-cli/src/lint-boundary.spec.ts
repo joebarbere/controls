@@ -1,4 +1,5 @@
 import { ESLint } from 'eslint';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
 
@@ -113,6 +114,26 @@ describe('type:worker lint boundary', () => {
     );
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/^Circular dependency between "sim-core" and "sim-worker" detected/);
+  });
+
+  // The cycle error above is reported before the tag rule runs, so pin the constraint itself too: a
+  // domain lib may depend on domain libs only (adding 'type:worker' there would otherwise go unseen).
+  it('the resolved boundary options let type:domain depend on type:domain only', async () => {
+    const eslint = new ESLint({ cwd: WORKSPACE_ROOT });
+    const config = await eslint.calculateConfigForFile(join(WORKSPACE_ROOT, 'libs/domain/sim-core/src/lib/probe.ts'));
+    const rule = config.rules?.[BOUNDARY_RULE] as [
+      unknown,
+      { depConstraints: { sourceTag: string; onlyDependOnLibsWithTags?: string[] }[] },
+    ];
+    const domain = rule[1].depConstraints.filter((c) => c.sourceTag === 'type:domain');
+    expect(domain.map((c) => c.onlyDependOnLibsWithTags)).toEqual([['type:domain']]);
+  });
+
+  // ADR 0011 §10 / Consequences: the game bundles the worker without importing it, so the project graph
+  // must still know the game depends on it (Nx rebuilds the game when the worker changes).
+  it('apps/game declares sim-worker as an implicit dependency', () => {
+    const project = JSON.parse(readFileSync(join(WORKSPACE_ROOT, 'apps/game/project.json'), 'utf8'));
+    expect(project.implicitDependencies).toContain('sim-worker');
   });
 
   it.each([

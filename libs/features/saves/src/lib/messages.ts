@@ -1,5 +1,5 @@
 import { SaveIoError, type SaveIoErrorCode } from '@controls/platform-api';
-import type { LoadGameError } from '@controls/scripting-api';
+import type { GameLoadError } from '@controls/feature-session';
 
 /*
  * Player-facing messages for save and load failures (F1.8b). Written here, from the error's kind or
@@ -10,7 +10,7 @@ import type { LoadGameError } from '@controls/scripting-api';
 const DAMAGED = 'The save is damaged, or it isn’t a Controls save.';
 
 /** Why `loadGame` / `readCtrl` refused a save, for a notification. */
-export function loadErrorReason(error: LoadGameError): string {
+export function loadErrorReason(error: GameLoadError): string {
   switch (error.kind) {
     case 'too-large':
     case 'total-too-large':
@@ -40,6 +40,10 @@ export function loadErrorReason(error: LoadGameError): string {
       return 'The save holds devices this version of Controls doesn’t recognise in that state, or it is damaged.';
     case 'start-failed':
       return 'The save’s simulation state doesn’t match its circuit, so it may be damaged.';
+    case 'sim-unavailable':
+      return 'The simulator isn’t available, so the save can’t be checked.';
+    case 'sim-failed':
+      return 'The simulator failed while starting the save. Try again; the save itself may be fine.';
   }
 }
 

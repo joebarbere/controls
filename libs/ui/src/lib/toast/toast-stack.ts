@@ -18,6 +18,8 @@ export interface Toast {
   readonly id: number;
   readonly message: string;
   readonly level: ToastLevel;
+  /** An optional action button (the crash toast's Restart simulation): `act` emits the toast's id. */
+  readonly action?: { readonly label: string };
 }
 
 /**
@@ -54,6 +56,9 @@ export interface Toast {
     <ng-template #item let-toast>
       <div class="toast" [attr.data-level]="toast.level" [attr.data-toast-id]="toast.id">
         <span class="message">{{ toast.message }}</span>
+        @if (toast.action; as action) {
+          <button type="button" class="ctl-button action" (click)="act.emit(toast.id)">{{ action.label }}</button>
+        }
         <button
           type="button"
           class="ctl-button ctl-button--ghost dismiss"
@@ -116,6 +121,8 @@ export interface Toast {
 export class ToastStack {
   readonly toasts = input<readonly Toast[]>([]);
   readonly dismiss = output<number>();
+  /** A toast's action button was pressed (its id). */
+  readonly act = output<number>();
   /** True while the pointer or keyboard focus is inside the stack. */
   readonly held = output<boolean>();
 

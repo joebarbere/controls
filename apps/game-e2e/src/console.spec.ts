@@ -34,14 +34,14 @@ const PLACE =
 
 type Hooks = {
   __controlsSession?: {
-    hash(): string;
-    world(): { entities: readonly unknown[] };
+    hash(): Promise<string>;
+    busWorld(): { entities: readonly unknown[] };
     entries(): ReadonlyArray<{ id: string }>;
   };
 };
 const sessionHash = (page: Page) => page.evaluate(() => (window as unknown as Hooks).__controlsSession?.hash());
 const entityCount = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hooks).__controlsSession?.world().entities.length);
+  page.evaluate(() => (window as unknown as Hooks).__controlsSession?.busWorld().entities.length);
 const loggedIds = (page: Page) =>
   page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.entries() ?? []).map((e) => e.id));
 

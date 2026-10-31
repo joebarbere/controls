@@ -23,11 +23,12 @@ import {
 } from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
 import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
-import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
+import { KeybindingService, Session, type SimCrash, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
 import { PLATFORM } from './platform.token';
+import { SimEventToasts } from './sim-event-toasts';
 
 /**
  * Assembles the shell: the workspace (always mounted; behind the main menu it is the 3D backdrop),
@@ -105,6 +106,8 @@ import { PLATFORM } from './platform.token';
     />
     <ctl-command-palette />
     <ctl-notifications />
+    <!-- A load's sim check runs in the worker; say so while it does (ADR 0011 §10). -->
+    <p class="checking" role="status" data-testid="checking-save">{{ saves.loading() ? 'Checking save…' : '' }}</p>
   `,
   styleUrl: './app.scss',
 })
@@ -157,9 +160,24 @@ export class App {
     const offThumbnail = inject(SaveThumbnails).register(
       async () => (await this.workspace()?.captureThumbnail()) ?? null,
     );
+    // Toast actions run commands through the one registry (the crash toast's Restart simulation).
+    this.notifications.setActionRunner((commandId) => void this.session.exec(commandId));
+    const offCrash = this.session.sim.onCrash((crash) => this.crashed(crash));
+    inject(SimEventToasts); // trip and blow toasts, coalesced per device
     inject(DestroyRef).onDestroy(() => {
       offLoaded();
       offThumbnail();
+      offCrash();
+      this.notifications.setActionRunner(null);
+    });
+  }
+
+  /** The worker crashed (ADR 0011 §10): the sim is paused, the world untouched, and Restart offered. */
+  private crashed(crash: SimCrash): void {
+    const when = crash.tick === null ? '' : ` at ${(crash.tick / 1000).toFixed(3)} s`;
+    this.notifications.notify(`The simulation stopped (${crash.code})${when}. Your world is safe.`, {
+      level: 'error',
+      action: { label: 'Restart simulation', commandId: 'sim.restart' },
     });
   }
 

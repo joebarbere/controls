@@ -5,6 +5,7 @@
   "prefix": "ctl",
   "sourceRoot": "apps/game/src",
   "tags": ["type:app", "scope:game"],
+  "implicitDependencies": ["sim-worker"],
   "targets": {
     "build": {
       "executor": "@angular/build:application",

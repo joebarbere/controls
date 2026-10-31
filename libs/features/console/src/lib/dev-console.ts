@@ -43,7 +43,15 @@ const IDLE_HINT = 'Enter runs a line. ↑ and ↓ recall history, Tab completes,
   },
   template: `
     @if (available()) {
-      <div #log class="log" role="log" aria-label="Console output" tabindex="0" data-testid="console-output">
+      <div
+        #log
+        class="log"
+        role="log"
+        aria-label="Console output"
+        tabindex="0"
+        data-testid="console-output"
+        [attr.aria-busy]="console.busy() ? 'true' : null"
+      >
         @for (entry of console.entries(); track entry.id) {
           <div class="entry" [attr.data-kind]="entry.kind">
             @if (entry.kind === 'input') {
@@ -79,7 +87,14 @@ const IDLE_HINT = 'Enter runs a line. ↑ and ↓ recall history, Tab completes,
           [attr.data-editor]="editorReady() ? 'ready' : 'loading'"
           (focus)="focus()"
         ></div>
-        <button ctlButton="ghost" type="button" (click)="pickFile()">Run file…</button>
+        <button
+          ctlButton="ghost"
+          type="button"
+          [attr.aria-disabled]="console.busy() ? 'true' : null"
+          (click)="pickFile()"
+        >
+          Run file…
+        </button>
         <input
           #fileInput
           type="file"
@@ -263,6 +278,7 @@ export class DevConsoleComponent {
   }
 
   protected pickFile(): void {
+    if (this.console.busy()) return; // a script is running
     this.fileInput()?.nativeElement.click();
   }
 

@@ -25,9 +25,9 @@ world.hash
 `;
 
 describe('runConsoleScript', () => {
-  it('runs every line through exec and prints world.hash queries', () => {
+  it('runs every line through exec and prints world.hash queries', async () => {
     const game = createGame({ seed: 7 });
-    const result = runConsoleScript(game, SCRIPT);
+    const result = await runConsoleScript(game, SCRIPT);
     expect(result).toMatchObject({ ok: true, executed: 5 });
     expect(result.output).toHaveLength(2);
     expect(result.output[1]).toBe(game.hash());
@@ -53,9 +53,9 @@ describe('runConsoleScript', () => {
     expect(game.replayLog()).toEqual(direct.replayLog());
   });
 
-  it('checks the whole file before running anything', () => {
+  it('checks the whole file before running anything', async () => {
     const game = createGame({ seed: 7 });
-    const result = runConsoleScript(game, 'entity.delete 1\nview.resetLayout\nentity.move --nope 1\n');
+    const result = await runConsoleScript(game, 'entity.delete 1\nview.resetLayout\nentity.move --nope 1\n');
     expect(result).toEqual({
       ok: false,
       executed: 0,
@@ -63,20 +63,20 @@ describe('runConsoleScript', () => {
       error: { kind: 'parse', lineNumber: 3, column: 13, message: 'Unknown argument --nope' },
     });
     expect(game.entries()).toEqual([]);
-    expect(runConsoleScript(game, '\n  nope.nope\n')).toMatchObject({
+    expect(await runConsoleScript(game, '\n  nope.nope\n')).toMatchObject({
       ok: false,
       error: { kind: 'parse', lineNumber: 2, column: 3, message: 'Unknown command "nope.nope"' },
     });
-    expect(runConsoleScript(game, 'world.hash --verbose')).toMatchObject({
+    expect(await runConsoleScript(game, 'world.hash --verbose')).toMatchObject({
       ok: false,
       error: { kind: 'parse', column: 12, message: 'world.hash takes no arguments' },
     });
-    expect(runConsoleScript(game, 'world.hash now')).toMatchObject({ ok: false, error: { column: 12 } });
+    expect(await runConsoleScript(game, 'world.hash now')).toMatchObject({ ok: false, error: { column: 12 } });
   });
 
-  it('stops at the first failing command, keeping what ran before it', () => {
+  it('stops at the first failing command, keeping what ran before it', async () => {
     const game = createGame({ seed: 7 });
-    const result = runConsoleScript(game, 'view.resetLayout\nworld.hash\n  entity.delete 4\nview.resetLayout\n');
+    const result = await runConsoleScript(game, 'view.resetLayout\nworld.hash\n  entity.delete 4\nview.resetLayout\n');
     expect(result).toMatchObject({
       ok: false,
       executed: 1,
@@ -89,9 +89,9 @@ describe('runConsoleScript', () => {
     );
   });
 
-  it('describes invalid args with their first issues', () => {
+  it('describes invalid args with their first issues', async () => {
     const game = createGame({ seed: 7 });
-    const result = runConsoleScript(game, 'entity.place --ref.id prop.crate --ref.version 0');
+    const result = await runConsoleScript(game, 'entity.place --ref.id prop.crate --ref.version 0');
     if (result.ok) throw new Error('expected a failure');
     expect(result.error.message).toMatch(/^Invalid arguments for "entity.place": ref.version: .+; positionMm: /);
     expect(
@@ -100,26 +100,26 @@ describe('runConsoleScript', () => {
     expect(describeExecError({ kind: 'invalid-args', id: 'x.y', message: 'Bad', issues: [] })).toBe('Bad');
   });
 
-  it('caps the number of lines', () => {
+  it('caps the number of lines', async () => {
     const game = createGame({ seed: 7 });
-    expect(runConsoleScript(game, '\n'.repeat(MAX_CONSOLE_SCRIPT_LINES))).toMatchObject({
+    expect(await runConsoleScript(game, '\n'.repeat(MAX_CONSOLE_SCRIPT_LINES))).toMatchObject({
       ok: false,
       error: { lineNumber: MAX_CONSOLE_SCRIPT_LINES + 1 },
     });
-    expect(runConsoleScript(game, '\n'.repeat(MAX_CONSOLE_SCRIPT_LINES - 1))).toEqual({
+    expect(await runConsoleScript(game, '\n'.repeat(MAX_CONSOLE_SCRIPT_LINES - 1))).toEqual({
       ok: true,
       executed: 0,
       output: [],
     });
   });
 
-  it('defers to the registry if a host registers a command with a query id', () => {
+  it('defers to the registry if a host registers a command with a query id', async () => {
     expect(CONSOLE_QUERIES).toContain('world.hash');
     const registry = createWorldRegistry().register(
       defineViewCommand<NoArgs, World>({ id: 'world.hash', title: 'Shadow', category: 'View', args: NoArgs }),
     );
     const game = createGame({ seed: 7, registry });
-    expect(runConsoleScript(game, 'world.hash')).toEqual({ ok: true, executed: 1, output: [] });
+    expect(await runConsoleScript(game, 'world.hash')).toEqual({ ok: true, executed: 1, output: [] });
     expect(game.entries().map((e) => e.id)).toEqual(['world.hash']);
   });
 });
@@ -138,9 +138,9 @@ describe('toConsoleScript', () => {
     fc.constant({ kind: 'view' as const }),
   );
 
-  it('re-runs any recorded session as console lines to the same hash and log (property)', () => {
-    fc.assert(
-      fc.property(fc.nat({ max: 0xffff_ffff }), fc.array(opArb, { maxLength: 20 }), (seed, ops) => {
+  it('re-runs any recorded session as console lines to the same hash and log (property)', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.nat({ max: 0xffff_ffff }), fc.array(opArb, { maxLength: 20 }), async (seed, ops) => {
         const live = createGame({ seed });
         for (const op of ops) {
           const ids = live.world().entities.map((e) => e.id);
@@ -155,7 +155,7 @@ describe('toConsoleScript', () => {
         }
         const script = toConsoleScript(live.entries());
         const replayed = createGame({ world: createWorld({ seed }) });
-        expect(runConsoleScript(replayed, script)).toMatchObject({ ok: true, executed: live.entries().length });
+        expect(await runConsoleScript(replayed, script)).toMatchObject({ ok: true, executed: live.entries().length });
         expect(replayed.hash()).toBe(live.hash());
         expect(replayed.entries()).toEqual(live.entries());
       }),

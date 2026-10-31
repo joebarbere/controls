@@ -39,6 +39,13 @@ export const MAX_SLOT_BYTES = 64 * 1024 * 1024;
 /** Numerical choice: the deadline of a `state` or `snapshot` query. */
 export const STATE_QUERY_TIMEOUT_MS = 5_000;
 
+/**
+ * Numerical choice: the verification query's extra deadline per tick of the log being verified. `sim
+ * bench` measured about 0.045 ms per tick of the 2,000-node plant locally and about 0.15 ms on the
+ * slowest CI runner (`MAX_VERIFY_TICKS`' source), so 1 ms is several times the slowest seen.
+ */
+export const VERIFY_QUERY_MS_PER_TICK = 1;
+
 /** Numerical choice: the most the quit flush, a replace or a teardown waits for pending queries. */
 export const SIM_SETTLE_MS = 1_000;
 

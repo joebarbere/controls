@@ -38,7 +38,7 @@ function sim(...argv: string[]): { status: number | null; stdout: string[]; stde
 
 async function scenarioGame(): Promise<Game> {
   const game = createGame({ world: workshopWorld() });
-  const result = runConsoleScript(game, await readFile(scenario, 'utf8'));
+  const result = await runConsoleScript(game, await readFile(scenario, 'utf8'));
   expect(result).toMatchObject({ ok: true, output: [SIM_STEP_HASH] });
   return game;
 }

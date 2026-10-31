@@ -161,7 +161,8 @@ test('the new-game dialog: fresh seed, Escape backs out, an invalid seed is refu
   await expect(menu).toBeHidden();
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
   const world = await page.evaluate(
-    () => (window as unknown as { __controlsSession: { world(): { seed: number } } }).__controlsSession.world().seed,
+    () =>
+      (window as unknown as { __controlsSession: { busWorld(): { seed: number } } }).__controlsSession.busWorld().seed,
   );
   expect(world).toBe(12345);
 });

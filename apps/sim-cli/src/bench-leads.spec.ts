@@ -58,7 +58,7 @@ describe('the bench-leads scenario', () => {
     const script = createGame({ world: workshopWorld() });
     benchLeads(script);
     const consoleGame = createGame({ world: workshopWorld() });
-    const result = runConsoleScript(consoleGame, await readFile(join(scenarios, 'bench-leads.console'), 'utf8'));
+    const result = await runConsoleScript(consoleGame, await readFile(join(scenarios, 'bench-leads.console'), 'utf8'));
     expect(result).toMatchObject({ ok: true });
     expect(consoleGame.entries()).toStrictEqual(script.entries());
     expect(consoleGame.hash()).toBe(BENCH_LEADS_HASH);

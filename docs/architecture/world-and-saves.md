@@ -341,7 +341,7 @@ sequenceDiagram
 
 ## Saving and loading in the game (F1.8b part 3)
 
-`SaveGames` (`@controls/feature-saves`) joins the three layers above: `Session` (the running `Game`), `loadGame` / `Game.save` (bytes) and `Platform.files` / `.dialogs` (storage). The UI side (dialogs, menu, keys) is on the [UI shell](ui-shell.md#saving-and-loading-f18b) page.
+`SaveGames` (`@controls/feature-saves`) joins the three layers above: `Session` (the running `Game`, and since F2.3b its sim worker's `SimHost`), `Session.saver()` / `Session.prepareLoad` (bytes) and `Platform.files` / `.dialogs` (storage). The engine runs in the sim worker, never on the main thread ([ADR 0011](../decisions/0011-sim-worker-contract.md) §9.5, §10), so a save waits for the worker's state at its tick and a load is checked in a worker. The UI side (dialogs, menu, keys) is on the [UI shell](ui-shell.md#saving-and-loading-f18b) page.
 
 ```mermaid
 sequenceDiagram
@@ -352,28 +352,31 @@ sequenceDiagram
     participant IO as Platform.files
     P->>SES: exec('file.save') (Mod+S, palette, console; unlogged)
     SES->>SG: onCommand('file.save')
-    SG->>SES: saver() (bound to this game)
+    SG->>SES: saver(): captures the bus world, the log and endTick at T, posts query 'state' at T
     SG->>SG: thumbnail (viewport PNG, optional)
-    SG->>API: game.save({ thumbnail }) → .ctrl bytes
+    SES-->>SG: the worker's export at T → materialiseWorld → writeSave → .ctrl bytes
     SG->>IO: write({ kind: 'manual', name, overwrite }, bytes)
     IO-->>SG: SaveEntry (or SaveIoError → notification)
     P->>SG: Continue / Load / file.open
     SG->>IO: read(handle)
-    SG->>API: loadGame(bytes, { registry: session.registry })
-    alt CtrlError
+    SG->>SES: prepareLoad(bytes): readCtrl, device check, planLoad ("Checking save…")
+    SES->>SES: verify: commanded replay on main, replay start in a worker, compare the hash at endTick
+    alt CtrlError, invalid-device-state, start-failed
         SG-->>P: error notification (from the kind; nothing from the file)
-    else loaded
+    else prepared
         SG->>SG: autosave the current game if it has unsaved changes
-        SG->>SES: adopt(game): world, empty undo stack, log continued
+        SG->>SES: adopt(prepared): world, empty undo stack, log continued, its worker carries on
         SG-->>P: "Loaded …" (+ warning if replay.status is restarted)
     end
 ```
 
-- **Loading migrates, validates, then replaces.** Nothing about the session changes until `loadGame` has returned a game; a refused save leaves the current game, its undo stack and its log as they were. `Session.adopt` then swaps in the loaded game, whose undo history is empty and whose replay log continues the save's (or restarts, with a warning; `REPLAY_MISMATCH_POLICY` can make that a refusal instead).
-- **Unsaved changes** (`SaveGames.isDirty`) means the save directory doesn't hold the game as it is: the world's hash differs from the hash last saved to or loaded from the directory for this session (`Session.generation`), or from the starting world if it never was, or the game came from a file outside the directory (Open) and hasn't been autosaved yet. View commands, an undone change and an untouched New sandbox don't count. Save As doesn't clear it: Continue can only resume what the directory holds.
-- **Autosave** writes `write({ kind: 'autosave', slotCount })` (rotation stays in main or the web store) for a game with unsaved changes: every `autosave.intervalSeconds` while a game runs, on return to the menu, before a load replaces the game, and in the flush before quit (no thumbnail there: the flush has 2 s). A failed autosave warns and leaves the changes unsaved, so the next trigger tries again. The quit flush then flushes settings, so the pointer below is written too.
+- **A load's outcome never depends on wall time or on the worker being well** (#58 review): a verifying worker that crashes or misses its deadline (which grows with the log) restarts the log from `world.json` as `verify-unavailable` (the log wasn't checked: never refused by the `refuse` policy, an info notice); a `world.json` start whose worker fails is retried once with 30 s deadlines; only a real `start-failed` reason refuses a save as damaged, and a worker that fails twice is `sim-failed`.
+- **Loading migrates, validates, checks, then replaces** (F2.3b). `Session.prepareLoad` parses the save and checks its devices synchronously, then decides with the scripting API's `planLoad` (the same rule as the headless `gameFromSave`: D8 and `MAX_VERIFY_TICKS`) whether to verify the log. A verified log is replayed on the main thread for the commanded state only, and in a worker started with `{kind: 'replay', log}`; the materialised hash at `endTick` must equal `world.json`'s, and that worker carries on. Otherwise a worker starts from `world.json` with the log restarted (a same-engine save whose solution record doesn't fit is refused, `start-failed`; another engine's is dropped). Nothing about the session changes until then; `Session.adopt` swaps in the prepared game and its worker, with an empty undo history and the replay log continued (or restarted, with a warning; `REPLAY_MISMATCH_POLICY` can make that a refusal instead). The app shows "Checking save…" meanwhile.
+- **Unsaved changes** (`SaveGames.isDirty`, asynchronous since F2.3b) means the save directory doesn't hold the game as it is. A game opened from a file outside the directory (Open) is dirty until autosave copies it in, whatever happened since (checked first). Otherwise it is dirty when **this session** has logged a world command (since its start or adopt: commands carried over in a continued log don't count, so a verified and a restarted load of the same save behave alike) and the world's hash at the current tick, from the sim worker, differs from the hash last saved to or loaded from the directory for this session (`Session.generation`), or from **the game's own hash when it started or was adopted** (captured with each saver; never the level's, which differs once a level has a circuit). Time passing, `sim.*` and view commands alone never count, so an untouched running sandbox is never autosaved. Undoing a change counts as no change only at the same tick: once time has passed after a world command, the world differs from the baseline and stays dirty until stored. Save As doesn't clear it: Continue can only resume what the directory holds.
+- **Autosave** writes `write({ kind: 'autosave', slotCount })` (rotation stays in main or the web store) for a game with unsaved changes: every `autosave.intervalSeconds` while a game runs, on return to the menu, before a load replaces the game, and in the flush before quit (no thumbnail there: the flush has 2 s, and the sim gets at most `SIM_SETTLE_MS` of it). It is skipped while the sim has crashed, while the worker is more than `AUTOSAVE_MAX_BEHIND_MS` behind, and when the worker doesn't answer. A failed autosave warns and leaves the changes unsaved, so the next trigger tries again. The quit flush then flushes settings, so the pointer below is written too.
+- **Saving while the sim has crashed is refused** with "Restart simulation first." (ADR 0011 R1): the world and the log are intact, but the sim state at the save's tick isn't known.
 - **Continue** resumes the game the player was last in ([ADR 0009](../decisions/0009-save-io-boundary.md#continue-and-the-last-played-save)). `settings.saves.lastPlayed` names the save-directory entry that holds it (a manual save by name, an autosave by slot); Continue lists the directory and tries that entry first, then the rest newest first, manual or autosave alike. A last-played save that no longer loads or has gone, and any other save it skips, are named in one warning. With no saves, Continue is disabled with "No saved games yet."
-- **Writes are serialised**, and each is bound to the game that asked (`Session.saver()`), so a load or New sandbox that replaces the session while a thumbnail is being captured never saves the new game under the old one's name.
+- **Writes are serialised**, and each is bound to the game and the tick that asked (`Session.saver()` captures the bus world and posts the worker's `state` query in the same call), so a load or New sandbox that replaces the session while a thumbnail is being captured never saves the new game under the old one's name, and time passing during the capture doesn't move the save.
 - **Settings:** `autosave.enabled`, `autosave.slotCount` (1–10) and `autosave.intervalSeconds` (60–3600) were already in `SettingsV1` (F1.8a); Settings → Saves edits them. `saves.lastPlayed` is `settingsVersion` 2; nothing on the settings screen shows it, and Reset to defaults keeps it.
 
 ```mermaid

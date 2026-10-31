@@ -102,7 +102,7 @@ const SCENARIO: ReadonlyArray<readonly [string, object]> = [
 /** The slice of `Session` the hook exposes (e2e projects may not import workspace libs). */
 interface SessionHook {
   exec(id: string, args?: unknown): { ok: boolean };
-  hash(): string;
+  hash(): Promise<string>;
   entries(): ReadonlyArray<{ seq: number; id: string }>;
   hashWorld(json: unknown): string | null;
 }

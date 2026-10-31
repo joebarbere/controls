@@ -1,5 +1,5 @@
 /*
- * The snapshot layout (ADR 0011 §5, `SIM_PROTOCOL_VERSION` 1): byte offsets and codes. Shared by the
+ * The snapshot layout (ADR 0011 §5, `SIM_PROTOCOL_VERSION` 2): byte offsets and codes. Shared by the
  * engine's encoder (headless and, from F2.3b, the sim worker), the reader and the tests, so every
  * runtime writes and reads the same bytes. Every multi-byte value is little-endian.
  *
@@ -11,7 +11,7 @@
  * The protocol version (ADR 0011 §12). Any change to the layout, the island encoding, the nominal
  * bands, a device output schema, the message union or the descriptor bumps it, even an additive one.
  */
-export const SIM_PROTOCOL_VERSION = 1;
+export const SIM_PROTOCOL_VERSION = 3; // 2: `error.reason` (F2.3b review); 3: F2.4's device records registered. Nothing hashed changed
 
 /** The buffer header's magic: the bytes `CSIM` read as a little-endian `u32` (F2.3b writes it). */
 export const SNAPSHOT_MAGIC = 0x4d495343;

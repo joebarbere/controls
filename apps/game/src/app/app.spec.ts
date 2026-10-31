@@ -1,15 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { SaveGames } from '@controls/feature-saves';
 import { MemorySaveIo } from '@controls/feature-saves/testing';
-import { KeybindingService, Session } from '@controls/feature-session';
+import { KeybindingService, Session, SIM_TRANSPORT, SIM_WORKER_FACTORY } from '@controls/feature-session';
+import { createInProcessSimWorker } from '@controls/sim-worker';
 import {
   MemorySettingsService,
   provideKeybindingOverridesFromSettings,
   SettingsStore,
 } from '@controls/feature-settings';
 import type { PendingWritesFlush, Platform } from '@controls/platform-api';
-import { defaultSettings } from '@controls/save-format';
-import { createGame } from '@controls/scripting-api';
+import { defaultSettings, readCtrl, writeCtrl } from '@controls/save-format';
+import { createGame, loadGame } from '@controls/scripting-api';
 import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
@@ -22,6 +23,7 @@ describe('App', () => {
   let settings: MemorySettingsService;
   const flushes = new Set<PendingWritesFlush>();
   let io: MemorySaveIo;
+  let workers: ReturnType<typeof createInProcessSimWorker>[] = [];
   const fakePlatform: Platform = {
     kind: 'electron',
     getAppInfo: async () => ({
@@ -53,6 +55,7 @@ describe('App', () => {
     flushes.clear();
     settings = new MemorySettingsService();
     io = new MemorySaveIo();
+    workers = [];
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
@@ -62,6 +65,9 @@ describe('App', () => {
         provideSaveIoFromPlatform(),
         provideKeybindingOverridesFromSettings(),
         provideSandboxLevel(),
+        // The real sim worker runner, in-process, over a SharedArrayBuffer (jsdom has no module worker).
+        { provide: SIM_WORKER_FACTORY, useValue: () => workers[workers.push(createInProcessSimWorker()) - 1] },
+        { provide: SIM_TRANSPORT, useValue: 'sab' },
       ],
     }).compileComponents();
   });
@@ -348,7 +354,7 @@ describe('App', () => {
       const continueButton = screen.getByRole('button', { name: 'Continue' });
       expect(continueButton.hasAttribute('aria-disabled')).toBe(false);
       await user.click(continueButton);
-      await waitFor(() => expect(TestBed.inject(Session).hash()).toBe(game.hash()));
+      await waitFor(async () => expect(await TestBed.inject(Session).hashAt()).toBe(game.hash()));
       await fixture.whenStable();
       expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
       expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
@@ -365,6 +371,92 @@ describe('App', () => {
       await fixture.whenStable();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(document.activeElement).toBe(load);
+    });
+  });
+
+  describe('the sim worker (F2.3b)', () => {
+    it('runs one worker per game: none behind the menu, one for New sandbox, the old one terminated for the next', async () => {
+      await setup();
+      expect(workers).toEqual([]);
+      const session = TestBed.inject(Session);
+      session.newSandbox({ seed: 1 });
+      await waitFor(() => expect(session.sim.status()).toBe('paused'));
+      expect(session.sim.transport()).toBe('sab');
+      session.newSandbox({ seed: 2 });
+      await waitFor(() => expect(workers[0].terminated).toBe(true));
+      expect(workers).toHaveLength(2);
+    });
+
+    it('a crash pauses with a toast whose Restart simulation restarts the worker from the log', async () => {
+      const { fixture, user } = await setup();
+      const session = TestBed.inject(Session);
+      session.newSandbox({ seed: 1 });
+      await waitFor(() => expect(session.sim.status()).toBe('paused'));
+      session.exec('entity.place', { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 0, y: 0, z: 0 } });
+      workers[0].runner.fail('engine-threw', 'boom');
+      await waitFor(() => expect(session.sim.status()).toBe('crashed'));
+      await fixture.whenStable();
+      expect(workers[0].terminated).toBe(true);
+      const restart = await screen.findByRole('button', { name: 'Restart simulation' });
+      expect(screen.getByRole('alert').textContent).toContain('The simulation stopped (engine-threw)');
+      expect(session.world().entities).toHaveLength(1); // the world is intact
+      await user.click(restart);
+      await waitFor(() => expect(session.sim.status()).toBe('paused'));
+      expect(workers).toHaveLength(2);
+      expect(await session.hashAt()).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('loads a circuit save through the real runner exactly as headless does (continued, and tampered)', async () => {
+      await setup();
+      const session = TestBed.inject(Session);
+      const game = createGame({ seed: 4 });
+      const at = { x: 0, y: 0, z: 0 };
+      game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'switch.tessaline-spst-toggle', version: 1 }, positionMm: at });
+      const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 1, terminal: 'pos' },
+        b: { entity: 2, terminal: 'a' },
+      });
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 2, terminal: 'b' },
+        b: { entity: 1, terminal: 'neg' },
+      });
+      game.execOrThrow('device.operate', { id: 2, control: 'closed', value: true });
+      game.execOrThrow('sim.step', { ticks: 123 });
+      const bytes = game.save();
+      const headless = loadGame(bytes);
+      const prepared = await session.prepareLoad(bytes);
+      if (!prepared.ok || !headless.ok) throw new Error('refused');
+      expect(prepared.prepared.replay).toEqual(headless.replay);
+      expect(prepared.prepared.replay).toEqual({ status: 'continued' });
+      expect(prepared.prepared.hash).toBe(headless.game.hash());
+      session.adopt(prepared.prepared);
+      expect(await session.hashAt()).toBe(game.hash());
+      expect(workers.at(-1)?.terminated).toBe(false); // the worker that verified it carries on
+
+      // Tampered: world.json moved a device, so the log no longer reproduces it.
+      const read = readCtrl(bytes);
+      if (!read.ok) throw new Error('unreadable');
+      const { manifest, world, replayLog, thumbnail } = read.value;
+      const moved = world.entities.map((e, i) =>
+        i === 0
+          ? {
+              ...e,
+              transform: { ...e.transform, positionMm: { ...e.transform.positionMm, x: e.transform.positionMm.x + 5 } },
+            }
+          : e,
+      );
+      const tampered = writeCtrl({ manifest, world: { ...world, entities: moved }, replayLog, thumbnail });
+      const headlessTampered = loadGame(tampered);
+      const preparedTampered = await session.prepareLoad(tampered);
+      if (!preparedTampered.ok || !headlessTampered.ok) throw new Error('refused');
+      expect(preparedTampered.prepared.replay).toEqual(headlessTampered.replay);
+      expect(preparedTampered.prepared.replay).toMatchObject({ status: 'restarted', reason: 'hash-mismatch' });
+      expect(preparedTampered.prepared.hash).toBe(headlessTampered.game.hash());
+      preparedTampered.prepared.dispose();
     });
   });
 });

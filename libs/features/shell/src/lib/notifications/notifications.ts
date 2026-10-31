@@ -10,6 +10,7 @@ import { NotificationService } from './notification.service';
   template: `<ctl-toast-stack
     [toasts]="notifications.toasts()"
     (dismiss)="notifications.dismiss($event)"
+    (act)="notifications.act($event)"
     (held)="notifications.setHeld($event)"
   />`,
 })

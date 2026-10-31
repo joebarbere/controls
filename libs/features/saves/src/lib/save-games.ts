@@ -1,19 +1,19 @@
 import { computed, DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
-import { Session, type SessionSaver } from '@controls/feature-session';
+import { type PreparedLoad, Session, type SessionSaver, SimQueryRejection } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
 import { type SaveAsTarget, type SaveEntry, SaveIoError, type SaveName } from '@controls/platform-api';
 import { LastPlayedSave } from '@controls/save-format';
-import { type LoadedGame, loadGame } from '@controls/scripting-api';
-import { worldHash } from '@controls/world-model';
+import { AUTOSAVE_MAX_BEHIND_MS, SIM_SETTLE_MS } from '@controls/sim-protocol';
 import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
 import { REPLAY_MISMATCH_POLICY, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
 
 /**
  * Restart reasons that mean the log wasn't checked, not that it failed: never refused, an info toast
- * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`).
+ * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`,
+ * `VERIFY_UNAVAILABLE_MESSAGE`: the checking worker crashed or missed its deadline).
  */
-const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify']);
+const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify', 'verify-unavailable']);
 
 /** The name offered for a game that hasn't been saved under one yet (always a valid `SaveName`). */
 export function suggestedSaveName(seed: number): SaveName {
@@ -26,6 +26,12 @@ export const REPLAY_RESTARTED_MESSAGE =
 
 /** `Game.save` refused to write the game (over a `CTRL_LIMITS` cap even without a thumbnail). */
 const TOO_LARGE_TO_SAVE = 'The game is too large to save.';
+
+/** Saving while the sim has crashed is refused (ADR 0011 §9.5, R1): restart it first. */
+export const RESTART_FIRST = 'Restart simulation first.';
+
+/** The sim worker didn't answer in time, so the state at the save's tick isn't known. */
+const SIM_DID_NOT_ANSWER = 'The simulation didn’t answer in time.';
 
 export type SaveOutcome = 'saved' | 'exists' | 'failed';
 
@@ -68,18 +74,29 @@ interface Snapshot {
   readonly generation: number;
 }
 
-type Checked = { readonly ok: true; readonly loaded: LoadedGame } | { readonly ok: false; readonly reason: string };
+/** Why a snapshot couldn't be taken: over a cap, the sim crashed, or it didn't answer. */
+type SnapshotFailure = { readonly failed: string };
+
+type Checked = { readonly ok: true; readonly prepared: PreparedLoad } | { readonly ok: false; readonly reason: string };
+
+/** Why a saver's state didn't arrive, for a notification. */
+function simReason(error: unknown): string | null {
+  if (!(error instanceof SimQueryRejection)) return null;
+  return error.reason === 'crashed' || error.reason === 'unavailable' ? RESTART_FIRST : SIM_DID_NOT_ANSWER;
+}
 
 const quoted = (name: string) => `“${name}”`;
 
 /**
  * Saving and loading games (F1.8b part 3): the `file.*` commands, autosave and Continue, on top of
- * `Session` (the game), `loadGame` (bytes → game) and the platform's save I/O (ADR 0009).
+ * `Session` (the game), `Session.prepareLoad` (bytes → a checked game and its sim worker) and the
+ * platform's save I/O (ADR 0009).
  *
  * - **Commands.** `file.save`, `file.saveAs`, `file.open` and `file.load` are unlogged UI commands
  *   in the session's registry (ADR 0006); this service performs them when the session reports them,
  *   so the palette, keybindings, console and menu all reach the same code.
- * - **Loading** reads the bytes, then `loadGame` migrates and validates them before anything changes;
+ * - **Loading** reads the bytes, then `Session.prepareLoad` migrates and validates them and checks the
+ *   log in a sim worker (ADR 0011 §10) before anything changes;
  *   only a save that loads replaces the session (`Session.adopt`). The undo history is cleared and
  *   the replay log continues, or restarts with a notification (see {@link REPLAY_MISMATCH_POLICY}).
  * - **Autosave** writes the next of `settings.autosave.slotCount` slots (rotation is the platform's)
@@ -112,6 +129,8 @@ export class SaveGames {
   /**
    * The world hash the save directory holds for this session generation (`Session.generation`);
    * `hash: null` when the game came from a file outside the directory, so the directory has none.
+   * Without one for the current generation, the baseline is the game's own hash at its start or
+   * adopt (`Session.baselineHash`), never the level's (plan F2.3b).
    */
   private stored: { readonly generation: number; readonly hash: string | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
@@ -158,17 +177,32 @@ export class SaveGames {
   }
 
   /**
-   * Whether the save directory lacks the game as it is now, which is what autosave writes: its world
-   * differs from the one last saved to or loaded from the directory (or, for a game never saved
-   * there, from its starting world), or it came from a file outside the directory. Saving to a file
-   * (Save As) doesn't count: Continue can only resume what the directory holds.
+   * Whether the save directory lacks the game as it is now, which is what autosave writes (ADR 0011
+   * §9.5): the session has a logged world command (`sim.*` and view commands alone never make a game
+   * dirty, so an untouched running sandbox is never autosaved) and its `world.hash` at the current
+   * tick, from the sim worker, differs from the one last saved to or loaded from the directory (or,
+   * for a game never saved there, from its own hash when it started), or it came from a file outside
+   * the directory. Saving to a file (Save As) doesn't count: Continue can only resume what the
+   * directory holds. Resolves `true` when the hash can't be had (the sim crashed): nothing is lost by
+   * saying so, and autosave skips a crashed sim anyway.
    */
-  isDirty(): boolean {
+  isDirty(): Promise<boolean> {
+    if (!this.session.active()) return Promise.resolve(false);
+    return this.dirty(this.session.saver());
+  }
+
+  /** {@link isDirty} for a saver already taken (its tick and its state query). */
+  private async dirty(saver: SessionSaver): Promise<boolean> {
     if (!this.session.active()) return false;
-    const generation = this.session.generation();
-    const storedHash =
-      this.stored?.generation === generation ? this.stored.hash : worldHash(this.session.replayLog().initialWorld);
-    return this.session.hash() !== storedHash;
+    const stored = this.stored?.generation === saver.generation ? this.stored.hash : saver.baseline;
+    // A file opened from outside the directory isn't in it, whatever happened since: dirty first.
+    if (stored === null) return true;
+    if (!saver.changedWorld) return false;
+    try {
+      return (await saver.hash()) !== (await stored);
+    } catch {
+      return true;
+    }
   }
 
   /** Lists the save directory again. A failure leaves an empty list (and says so, unless there is no storage). */
@@ -204,11 +238,15 @@ export class SaveGames {
    * left alone and the outcome is `exists`. On success the game takes that name.
    */
   saveNamed(name: SaveName, overwrite: boolean): Promise<SaveOutcome> {
+    if (this.session.sim.status() === 'crashed') {
+      this.error(`Couldn’t save ${quoted(name)}. ${RESTART_FIRST}`);
+      return Promise.resolve('failed');
+    }
     const saver = this.session.saver();
     return this.serial(async () => {
       const snapshot = await this.snapshot(saver, true);
-      if (!snapshot) {
-        this.error(`Couldn’t save ${quoted(name)}. ${TOO_LARGE_TO_SAVE}`);
+      if ('failed' in snapshot) {
+        this.error(`Couldn’t save ${quoted(name)}. ${snapshot.failed}`);
         return 'failed';
       }
       let written: SaveEntry;
@@ -232,6 +270,10 @@ export class SaveGames {
    */
   async saveToFile(): Promise<SaveOutcome | null> {
     if (!this.requireGame()) return null;
+    if (this.session.sim.status() === 'crashed') {
+      this.error(`Couldn’t save the game. ${RESTART_FIRST}`);
+      return 'failed';
+    }
     const saver = this.session.saver();
     let target: SaveAsTarget | null;
     try {
@@ -247,8 +289,8 @@ export class SaveGames {
     const { handle, name } = target;
     return this.serial(async () => {
       const snapshot = await this.snapshot(saver, true);
-      if (!snapshot) {
-        this.error(`Couldn’t save the game. ${TOO_LARGE_TO_SAVE}`);
+      if ('failed' in snapshot) {
+        this.error(`Couldn’t save the game. ${snapshot.failed}`);
         return 'failed';
       }
       try {
@@ -265,20 +307,32 @@ export class SaveGames {
 
   /**
    * Writes the next autosave slot if autosave is on and the game has unsaved changes. Resolves `true`
-   * if it wrote one. Failures are reported as warnings and never throw.
+   * if it wrote one. Skipped (ADR 0011 §9.5) while the sim has crashed, while the worker is further
+   * behind than `AUTOSAVE_MAX_BEHIND_MS`, and when it doesn't answer in time. Failures are reported as
+   * warnings and never throw. `settleMs` shortens the wait for the worker (the quit flush).
    */
-  autosave(options: { readonly thumbnail?: boolean } = {}): Promise<boolean> {
+  autosave(options: { readonly thumbnail?: boolean; readonly settleMs?: number } = {}): Promise<boolean> {
     // Decided now, for the game running now: a game that a load replaces before the write runs still gets it.
     const { enabled, slotCount } = this.settings.settings().autosave;
-    if (!enabled || !this.isDirty()) return this.serial(async () => false);
-    const saver = this.session.saver();
+    const sim = this.session.sim;
+    if (
+      !enabled ||
+      !this.session.active() ||
+      sim.status() === 'crashed' ||
+      sim.behindWallMs() > AUTOSAVE_MAX_BEHIND_MS
+    ) {
+      return this.serial(async () => false);
+    }
+    const saver = this.session.saver(options.settleMs);
     return this.serial(async () => {
       // A save queued ahead of this one may have saved these changes already.
-      if (saver.generation === this.session.generation() && !this.isDirty()) return false;
+      if (!(await this.dirty(saver))) return false;
       const snapshot = await this.snapshot(saver, options.thumbnail ?? true);
-      if (!snapshot) {
-        this.notifications.notify(`Autosave failed. ${TOO_LARGE_TO_SAVE}`, { level: 'warning' });
-        return false;
+      if ('failed' in snapshot) {
+        if (snapshot.failed === TOO_LARGE_TO_SAVE) {
+          this.notifications.notify(`Autosave failed. ${TOO_LARGE_TO_SAVE}`, { level: 'warning' });
+        }
+        return false; // a crashed or silent sim: skipped, the previous autosave stands
       }
       let written: SaveEntry;
       try {
@@ -300,7 +354,8 @@ export class SaveGames {
    * store's own flush may already have run). Never rejects.
    */
   flush(): Promise<void> {
-    return this.autosave({ thumbnail: false })
+    // The sim gets at most SIM_SETTLE_MS of the host's flush timeout; the settings flush always runs.
+    return this.autosave({ thumbnail: false, settleMs: SIM_SETTLE_MS })
       .catch(() => undefined)
       .then(() => this.settings.flush())
       .then(
@@ -341,7 +396,7 @@ export class SaveGames {
         this.error(`Couldn’t load ${quoted(entry.name)}. ${checked.reason}`);
         return false;
       }
-      return await this.apply(entry, checked.loaded);
+      return await this.apply(entry, checked.prepared);
     } finally {
       this.loadingState.set(false);
     }
@@ -371,7 +426,7 @@ export class SaveGames {
           continue;
         }
         if (skipped.length > 0) this.notifications.notify(skippedMessage(skipped), { level: 'warning' });
-        return await this.apply(entry, checked.loaded);
+        return await this.apply(entry, checked.prepared);
       }
       if (skipped.length > 0) this.error(`None of your saves could be loaded. ${skippedMessage(skipped)}`);
       else this.notifications.notify('There are no saved games to continue.');
@@ -391,29 +446,38 @@ export class SaveGames {
       if (code === 'not-found' || code === 'unknown-handle') void this.refresh();
       return { ok: false, reason: saveIoReason(error, 'load') };
     }
-    const loaded = loadGame(bytes, { registry: this.session.registry });
-    if (!loaded.ok) return { ok: false, reason: loadErrorReason(loaded.error) };
+    // The sim check runs in a worker (ADR 0011 §10): the page stays responsive ("Checking save").
+    const result = await this.session.prepareLoad(bytes);
+    if (!result.ok) return { ok: false, reason: loadErrorReason(result.error) };
+    const prepared = result.prepared;
     // A save from another engine version, or one too long to verify, is never refused: its log simply
     // isn't verified (D8, `MAX_VERIFY_TICKS`).
     if (
-      loaded.replay.status === 'restarted' &&
-      !UNVERIFIED.has(loaded.replay.reason) &&
+      prepared.replay.status === 'restarted' &&
+      !UNVERIFIED.has(prepared.replay.reason) &&
       this.replayPolicy === 'refuse'
     ) {
+      prepared.dispose();
       return { ok: false, reason: 'Its replay log doesn’t match its world.' };
     }
-    return { ok: true, loaded };
+    return { ok: true, prepared };
   }
 
   /** Replaces the session with a checked save (after autosaving unsaved changes in the old one). */
-  private async apply(entry: SaveEntry, loaded: LoadedGame): Promise<boolean> {
+  private async apply(entry: SaveEntry, loaded: PreparedLoad): Promise<boolean> {
     // Writes the game being left if the directory lacks it (pointing Continue at that autosave), so
     // nothing is lost; then this load points Continue at the save it loaded.
     await this.autosave();
-    this.session.adopt(loaded.game);
+    try {
+      this.session.adopt(loaded);
+    } catch (error) {
+      loaded.dispose(); // never leave a checked save's worker running
+      throw error;
+    }
     const generation = this.session.generation();
     const external = entry.kind === 'external';
-    this.stored = { generation, hash: external ? null : loaded.game.hash() };
+    // The baseline is the game's own hash, from the worker that checked it (plan F2.3b).
+    this.stored = { generation, hash: external ? null : loaded.hash };
     this.named.set(entry.kind === 'manual' ? { generation, name: entry.name } : null);
     // A file from outside the directory has no pointer until autosave copies it in.
     this.setLastPlayed(lastPlayedOf(entry));
@@ -428,19 +492,21 @@ export class SaveGames {
     return true;
   }
 
-  /** The game as bytes, with a thumbnail if asked for and one can be captured; `null` if it can't be written. */
-  private async snapshot(saver: SessionSaver, withThumbnail: boolean): Promise<Snapshot | null> {
+  /** The game as bytes, with a thumbnail if asked for and one can be captured; why not, if it can't be written. */
+  private async snapshot(saver: SessionSaver, withThumbnail: boolean): Promise<Snapshot | SnapshotFailure> {
     const captured = withThumbnail ? await this.thumbnails.capture() : null;
     // The viewport shows the current session: no thumbnail is better than one of another game.
     const thumbnail = saver.generation === this.session.generation() ? captured : null;
     for (const png of thumbnail === null ? [null] : [thumbnail, null]) {
       try {
-        return { ...saver.save({ thumbnail: png }), generation: saver.generation };
-      } catch {
+        return { ...(await saver.save({ thumbnail: png })), generation: saver.generation };
+      } catch (error) {
+        const sim = simReason(error);
+        if (sim !== null) return { failed: sim };
         // Over a cap, or a thumbnail that isn't a PNG: try again without the thumbnail, if there was one.
       }
     }
-    return null;
+    return { failed: TOO_LARGE_TO_SAVE };
   }
 
   /**
