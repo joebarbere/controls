@@ -377,6 +377,31 @@ describe('DcSolver.solveNonlinear', () => {
     }
   });
 
+  it('does not stop where the hook gives the same numbers in another stamp mode (#51 review, N2)', () => {
+    // The setters write only their own fields, so a supply that has been in current limit before
+    // keeps `amps` = Ilim while in CV. Its cold CV solve into 6 Ω draws 2 A > Ilim; the hook then
+    // asks for CC with every number (ohms, emfV, amps) unchanged and only the mode different. The
+    // value-space stop must see the mode change and carry on to CC, not report CV at 2 A.
+    const vset = 12;
+    const rint = 0.01;
+    const ilim = 1;
+    for (const sparseMinUnknowns of [Number.MAX_SAFE_INTEGER, 1]) {
+      const circuit = loop(vset, rint);
+      circuit.values.resistor(1, 6);
+      circuit.values.isource(0, ilim);
+      circuit.values.vsource(0, vset, rint);
+      expect(circuit.values.amps[0]).toBe(ilim);
+      const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(circuit.netlist, circuit.values, {
+        hook: cvcc(0, vset, rint, ilim),
+      });
+      expect(solution.islands[0].flags).toBe(0);
+      expect(circuit.values.stamps[0]).toBe(DC_STAMP_ISOURCE);
+      expect(solution.branches[0]).toBe(ilim);
+      expect(solution.islands[0].iterations).toBeGreaterThan(1);
+      checkRows(circuit, solution);
+    }
+  });
+
   it('stops at a singular solve without flagging nonConverged, and leaves AC islands unsolved', () => {
     const shorted = syntheticNetlist(2, [
       { a: 0, b: 1, kind: 'vsource' },
@@ -523,6 +548,12 @@ function selfConsistent(
  * - **Measured** (value-space stop, partial pivoting): over 6,542 islands from 3 seeded samples,
  *   forced dense, the median is 16, the 99th percentile 19 and the most 20; forced sparse the most is
  *   26. The earlier 32 is kept as an example.
+ *
+ * - **Scope: laws with slope λ ≤ 0 only** (self-heating resistors, a lamp's PTC filament, a CV/CC
+ *   supply). A positive-feedback law (an NTC thermistor, λ → +1) contracts as slowly as 1 / (1 − λ)
+ *   per step, and the value-space stop's 1e-6 residual becomes an error of 1e-6 / (1 − λ) in the
+ *   solution: F2.5 (and any later NTC model) must budget for that in its tolerance or its cap, and
+ *   re-derive this bound for its law.
  *
  * 40 is the derived 19 plus five excursions, under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
  */
