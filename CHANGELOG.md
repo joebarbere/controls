@@ -70,6 +70,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- **The allocation gates wait for tier-up to finish** (F2.4 follow-up): a gate's windows now continue until the last four agree within 2 bytes a step (bounded), then it takes the median of the last eight, so a slow CI runner finishing a late tier-up inside the measured windows no longer fails the AC gate. A steady allocation settles at once, so the gates still catch one; no gate was raised.
 - **Sim events reach scripts in the same order as headless, whatever the timing** (F2.3b review): the worker cuts its event batches at every command, so an event raised by time and one raised by a command at the same tick no longer swap when publishing is throttled.
 - **The per-frame snapshot read allocated** (F2.3b review): a device field read could return its value boxed (about 7 kB a frame at 500 devices), and each copy made a header view; it now allocates nothing.
 - **desktop-e2e checks the eval half of the worker's CSP** with an eval deferred past DevTools' exemption, and checks every restarted worker's URL and isolation (F2.3b review).
