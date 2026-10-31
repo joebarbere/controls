@@ -59,7 +59,7 @@ describe('the P1 phase-acceptance scenario', () => {
     const fromScript = createGame({ world: workshopWorld() });
     phaseAcceptance(fromScript);
     const fromConsole = createGame({ world: workshopWorld() });
-    expect(runConsoleScript(fromConsole, await readFile(consoleFile, 'utf8')).ok).toBe(true);
+    expect((await runConsoleScript(fromConsole, await readFile(consoleFile, 'utf8'))).ok).toBe(true);
 
     expect(fromScript.entries()).toEqual(fromConsole.entries());
     expect(fromScript.entries().map((e) => e.id)).toEqual(LOGGED);

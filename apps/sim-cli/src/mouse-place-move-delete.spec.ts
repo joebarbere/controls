@@ -55,7 +55,7 @@ describe('the mouse place / move / delete scenario (F1.7)', () => {
 
   it('the console lines and the snapping script log identical entries', async () => {
     const fromConsole = createGame({ world: workshopWorld() });
-    const result = runConsoleScript(fromConsole, await readFile(consoleFile, 'utf8'));
+    const result = await runConsoleScript(fromConsole, await readFile(consoleFile, 'utf8'));
     expect(result.ok).toBe(true);
     const fromScript = createGame({ world: workshopWorld() });
     mousePlaceMoveDelete(fromScript);

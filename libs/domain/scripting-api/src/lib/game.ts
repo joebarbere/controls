@@ -37,7 +37,7 @@ import {
   SimStartError,
   type SimStartFailure,
 } from '@controls/sim-core';
-import { materialiseWorld, type SimEvent } from '@controls/sim-protocol';
+import { materialiseWorld, type SimEvent, type SimStateExport } from '@controls/sim-protocol';
 import {
   checkWorldDevices,
   createWorldBus,
@@ -47,7 +47,7 @@ import {
   type World,
   worldHash,
 } from '@controls/world-model';
-import { engineCompatible } from './engine-compat';
+import { type EngineCompatibility, engineCompatible } from './engine-compat';
 
 /*
  * The scripting API (plan §4.6 surface 4, F1.6; the sim in F2.3a): a typed facade over one world
@@ -58,9 +58,25 @@ import { engineCompatible } from './engine-compat';
  * **The engine is the game's time host (ADR 0011 §3, §11).** Headless, an in-process `SimEngine`
  * follows the bus: each logged command reaches it at its tick, `advance` moves both, and `sim.step`
  * advances right after it is logged, so the next command is stamped at the new tick. `hash()` and
- * `save()` materialise the engine's sim-owned state into the world (ADR 0011 §1). In the game, F2.3b
- * moves the engine to the sim worker behind a `SimHost`; until then the session runs it in-process.
+ * `save()` materialise the engine's sim-owned state into the world (ADR 0011 §1). In the game the
+ * engine runs in the sim worker: the session's game takes the worker's `SimHost` as its
+ * {@link TimeHost} instead, and `hash()`, `save()` and the sim queries throw {@link NotAvailableError}
+ * (the asynchronous `SimHost.hashAt()` and `Session.saver()` replace them, ADR 0011 §9.4).
  */
+
+/**
+ * What moves sim time for a game whose engine runs elsewhere (ADR 0011 §3): the game's `SimHost`,
+ * which forwards each logged entry and each advance to the sim worker. `exportState`, if given,
+ * materialises synchronously (tests); without it `hash()` and `save()` are not available.
+ */
+export interface TimeHost {
+  /** Time passes to `tick` (a `sim.step` or the host's own pacing); the bus follows. */
+  advanceTo(tick: number): void;
+  /** A logged entry ran at the bus's tick and produced `world`. */
+  applied(entry: ReplayEntry, world: World): void;
+  /** The sim-owned state at the bus's tick, synchronously, if the host can give it. */
+  exportState?(): SimStateExport;
+}
 
 /** A deeply read-only view of a value: what {@link Game.world} returns (it is also frozen at run time). */
 export type DeepReadonly<T> = T extends (infer E)[]
@@ -84,6 +100,12 @@ interface CommonOptions {
    * cheap replay).
    */
   readonly engine?: SimEngineOptions | false;
+  /**
+   * The time host of a game whose engine runs elsewhere (the game's sim worker). When given, no
+   * engine runs here (`engine` is ignored): a replay rebuilds the commanded state only, and every
+   * live entry and advance goes to `time`.
+   */
+  readonly time?: TimeHost;
 }
 
 /**
@@ -92,7 +114,15 @@ interface CommonOptions {
  */
 export type GameOptions =
   | (CommonOptions & { readonly seed: number; readonly world?: undefined })
-  | (CommonOptions & { readonly world: World; readonly seed?: number });
+  | (CommonOptions & {
+      readonly world: World;
+      readonly seed?: number;
+      /**
+       * The first `seq` of the new log (ADR 0011 §3): a game continuing a restarted log after a load
+       * keeps numbering from the loaded log's next `seq`, so seeded streams don't repeat. Default 0.
+       */
+      readonly firstSeq?: number;
+    });
 
 /** Events a script can subscribe to with {@link Game.on}. More arrive with PLCs (P10). */
 export interface GameEvents {
@@ -148,7 +178,9 @@ export class NotAvailableError extends Error {
     super(
       phase === 'engine'
         ? `game.${query}() needs the sim engine`
-        : `game.${query}() is reserved and not available until ${phase}`,
+        : phase === 'worker'
+          ? `game.${query}() isn't available while the engine runs in the sim worker; ask the SimHost`
+          : `game.${query}() is reserved and not available until ${phase}`,
     );
     this.name = 'NotAvailableError';
   }
@@ -288,16 +320,16 @@ function parseProbeEnd(text: string, end: 'a' | 'b'): { entity: number; terminal
   return { entity, terminal: match[2] };
 }
 
-/** Starts the engine for `world`, or returns `null` for `engine: false`. Throws `SimStartError`. */
+/** Starts the engine for `world`, or returns `null` for `engine: false` or a time host. Throws `SimStartError`. */
 function startEngine(world: World, options: CommonOptions): SimEngine | null {
-  return options.engine === false ? null : SimEngine.start(world, options.engine ?? {});
+  return options.engine === false || options.time !== undefined ? null : SimEngine.start(world, options.engine ?? {});
 }
 
 /**
  * Wraps an existing world bus and the engine following it (at the bus's tick). Neither may be driven
  * from anywhere else afterwards. Events the engine raised before (a replay's) are dropped.
  */
-function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | null): Game {
+function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | null, time?: TimeHost): Game {
   deepFreeze(initialWorld);
   deepFreeze(bus.state);
   const executedListeners = new Set<(event: ExecutedEvent<World>) => void>();
@@ -316,7 +348,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
   let materialised: { world: World; revision: number; result: World } | null = null;
 
   const needEngine = (query: string): SimEngine => {
-    if (engine === null) throw new NotAvailableError(query, 'engine');
+    if (engine === null) throw new NotAvailableError(query, time === undefined ? 'engine' : 'worker');
     return engine;
   };
   const deliverSimEvents = () => {
@@ -328,11 +360,16 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     if (tick < bus.currentTick())
       throw new RangeError(`advanceTo(${tick}) is before the current tick ${bus.currentTick()}`);
     engine?.advanceTo(tick);
+    time?.advanceTo(tick);
     bus.advanceTo(tick);
     deepFreeze(bus.state);
   };
   const revision = () => engine?.revision ?? 0;
   const materialisedWorld = (): World => {
+    if (time !== undefined) {
+      if (time.exportState === undefined) throw new NotAvailableError('materialisedWorld', 'worker');
+      return deepFreeze(materialiseWorld(bus.state, time.exportState()));
+    }
     if (engine === null) return bus.state;
     if (materialised?.world !== bus.state || materialised.revision !== engine.revision) {
       materialised = {
@@ -352,6 +389,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
       const event = takePending();
       if (result.ok && result.logged) {
         engine?.applied(result.entry, bus.state);
+        time?.applied(result.entry, bus.state);
         // `sim.step` is carried out by the time host, right after it is logged (ADR 0011 §3, §11).
         if (result.entry.id === SIM_STEP_COMMAND) moveTo(bus.currentTick() + (result.entry.args['ticks'] as number));
       }
@@ -371,6 +409,10 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     world: () => bus.state,
     materialisedWorld,
     hash() {
+      if (time !== undefined) {
+        if (time.exportState === undefined) throw new NotAvailableError('hash', 'worker');
+        return worldHash(materialisedWorld());
+      }
       if (hashed?.world !== bus.state || hashed.revision !== revision()) {
         hashed = { world: bus.state, revision: revision(), hash: worldHash(materialisedWorld()) };
       }
@@ -405,13 +447,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     snapshotHash: () => needEngine('snapshotHash').snapshotHash(),
     entries: () => bus.entries,
     replayLog: () => toReplayLog(initialWorld, bus),
-    save: (options = {}) =>
-      writeCtrl({
-        manifest: createSaveManifest(),
-        world: materialisedWorld(),
-        replayLog: toReplayLog(initialWorld, bus),
-        thumbnail: options.thumbnail ?? null,
-      }),
+    save: (options = {}) => writeSave(materialisedWorld(), toReplayLog(initialWorld, bus), options),
     canUndo: () => bus.canUndo,
     canRedo: () => bus.canRedo,
     contextKeys: () => bus.contextKeys(),
@@ -438,6 +474,15 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     },
   };
   return Object.freeze(game);
+}
+
+/**
+ * A save of this build: its manifest, `world` (materialised: the commanded world with the engine's
+ * export written in), the replay log and an optional thumbnail. What `Game.save` writes, and what the
+ * game's saver writes once the sim worker has answered (ADR 0011 §9.5).
+ */
+export function writeSave(world: World, replayLog: ReplayLog, options: SaveGameOptions = {}): Uint8Array {
+  return writeCtrl({ manifest: createSaveManifest(), world, replayLog, thumbnail: options.thumbnail ?? null });
 }
 
 function startFailedIssues(error: SimStartError): ValidationIssue[] {
@@ -490,7 +535,15 @@ export function createGame(options: GameOptions): Game {
     }
     throw error;
   }
-  return wrap(createWorldBus(world, options.registry ?? createWorldRegistry()), world, engine);
+  const firstSeq = options.world !== undefined ? (options.firstSeq ?? 0) : 0;
+  if (!Number.isSafeInteger(firstSeq) || firstSeq < 0)
+    throw new GameOptionsError('firstSeq must be a whole number ≥ 0');
+  return wrap(
+    createWorldBus(world, options.registry ?? createWorldRegistry(), { firstSeq }),
+    world,
+    engine,
+    options.time,
+  );
 }
 
 export type ReplayGameError =
@@ -538,7 +591,19 @@ function replayWithEngine(log: ReplayLog, options: CommonOptions): Replayed {
 export function replayLogGame(log: ReplayLog, options: CommonOptions = {}): ReplayGameResult {
   const replayed = replayWithEngine(log, options);
   if (!replayed.ok) return replayed;
-  return { ok: true, game: wrap(replayed.bus, log.initialWorld, replayed.engine) };
+  return { ok: true, game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time) };
+}
+
+/**
+ * A verified save's game, continuing its log (ADR 0011 §10 step 4): the log replayed from its
+ * initial world (commanded state only when `time` is given: the game's worker replays it to verify),
+ * with the undo history cleared, as `gameFromSave` does for a `continued` log. Never throws.
+ */
+export function resumeLogGame(log: ReplayLog, options: CommonOptions = {}): ReplayGameResult {
+  const replayed = replayWithEngine(log, options);
+  if (!replayed.ok) return replayed;
+  replayed.bus.clearHistory();
+  return { ok: true, game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time) };
 }
 
 /**
@@ -645,6 +710,67 @@ export const MAX_VERIFY_TICKS: SourcedConstant = {
 };
 
 /**
+ * What a load does with a save's replay log, decided before anything is replayed (D8 and
+ * {@link MAX_VERIFY_TICKS}): pure, and the one rule for the headless `gameFromSave` and the game's
+ * load through the sim worker, so both verify exactly the same saves.
+ *
+ * - `verify`: replay the log and compare the result with `world.json`'s hash (`compatibility` says
+ *   what a failure means: `verify` → `hash-mismatch` or `replay-failed`, `verify-v0` → `engine-changed`);
+ * - `restart`: don't verify; load `world.json` with a new log, for the reason given (`absent`,
+ *   `engine-changed`, `too-long-to-verify`).
+ */
+export type LoadPlan =
+  | {
+      readonly kind: 'verify';
+      readonly log: ReplayLog;
+      readonly compatibility: Exclude<EngineCompatibility, 'engine-changed'>;
+    }
+  | { readonly kind: 'restart'; readonly replay: SaveReplayStatus; readonly compatibility: EngineCompatibility };
+
+/** The {@link LoadPlan} for a save's contents. Pure. */
+export function planLoad(contents: Pick<CtrlContents, 'replayLog' | 'manifest'>): LoadPlan {
+  const { replayLog: log, manifest } = contents;
+  const compatibility = engineCompatible(manifest, BUILD_ENGINE_VERSIONS);
+  if (log === null) return { kind: 'restart', replay: { status: 'absent' }, compatibility };
+  if (compatibility === 'engine-changed') {
+    return {
+      kind: 'restart',
+      replay: { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE },
+      compatibility,
+    };
+  }
+  if (log.endTick - log.initialWorld.tick > MAX_VERIFY_TICKS.value) {
+    return {
+      kind: 'restart',
+      replay: { status: 'restarted', reason: 'too-long-to-verify', message: TOO_LONG_TO_VERIFY_MESSAGE },
+      compatibility,
+    };
+  }
+  return { kind: 'verify', log, compatibility };
+}
+
+/**
+ * Why a verified log was dropped: the replay failed, or reached another hash. A migrated P1 save
+ * (`verify-v0`) never says so: its log restarts as `engine-changed` (D8).
+ */
+export function verifyFailure(
+  compatibility: Exclude<EngineCompatibility, 'engine-changed'>,
+  failure: { readonly kind: 'hash-mismatch' } | { readonly kind: 'replay-failed'; readonly message: string },
+): SaveReplayStatus {
+  if (compatibility === 'verify-v0') {
+    return { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
+  }
+  if (failure.kind === 'hash-mismatch') {
+    return {
+      status: 'restarted',
+      reason: 'hash-mismatch',
+      message: "The save's replay log doesn't reproduce its world, so a new log starts from the loaded world.",
+    };
+  }
+  return { status: 'restarted', reason: 'replay-failed', message: failure.message };
+}
+
+/**
  * {@link loadGame} for contents already read with `readCtrl`. Never throws. A restarted log
  * continues the saved log's numbering (`firstSeq` = its next `seq`, ADR 0011 §10), so seeded
  * streams keyed by `seq` don't repeat.
@@ -666,7 +792,6 @@ export function gameFromSave(
       },
     };
   }
-  const compatibility = engineCompatible(manifest, BUILD_ENGINE_VERSIONS);
   const done = (game: Game, replay: SaveReplayStatus): LoadedGame => ({
     ok: true,
     game,
@@ -675,30 +800,21 @@ export function gameFromSave(
     fromVersion: contents.fromVersion,
     replay,
   });
+  const plan = planLoad(contents);
+  const compatibility = plan.compatibility;
   let replay: SaveReplayStatus;
-  if (log === null) {
-    replay = { status: 'absent' };
-  } else if (compatibility === 'engine-changed') {
-    replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
-  } else if (log.endTick - log.initialWorld.tick > MAX_VERIFY_TICKS.value) {
-    replay = { status: 'restarted', reason: 'too-long-to-verify', message: TOO_LONG_TO_VERIFY_MESSAGE };
+  if (plan.kind === 'restart') {
+    replay = plan.replay;
   } else {
-    const replayed = replayWithEngine(log, options);
+    const replayed = replayWithEngine(plan.log, options);
     if (replayed.ok && replayed.hash === worldHash(world)) {
       replayed.bus.clearHistory();
-      return done(wrap(replayed.bus, log.initialWorld, replayed.engine), { status: 'continued' });
+      return done(wrap(replayed.bus, plan.log.initialWorld, replayed.engine, options.time), { status: 'continued' });
     }
-    if (compatibility === 'verify-v0') {
-      replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
-    } else if (replayed.ok) {
-      replay = {
-        status: 'restarted',
-        reason: 'hash-mismatch',
-        message: "The save's replay log doesn't reproduce its world, so a new log starts from the loaded world.",
-      };
-    } else {
-      replay = { status: 'restarted', reason: 'replay-failed', message: replayed.error.message };
-    }
+    replay = verifyFailure(
+      plan.compatibility,
+      replayed.ok ? { kind: 'hash-mismatch' } : { kind: 'replay-failed', message: replayed.error.message },
+    );
   }
   const registry = options.registry ?? createWorldRegistry();
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
@@ -729,5 +845,5 @@ export function gameFromSave(
       replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
     }
   }
-  return done(wrap(createWorldBus(start, registry, { firstSeq }), start, engine), replay);
+  return done(wrap(createWorldBus(start, registry, { firstSeq }), start, engine, options.time), replay);
 }

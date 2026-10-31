@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Session } from '@controls/feature-session';
+import { Session, SIM_TRANSPORT, SIM_WORKER_FACTORY } from '@controls/feature-session';
+import { FakeSimWorker } from '@controls/feature-session/testing';
 import { createGame } from '@controls/scripting-api';
 import { screen, waitFor, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -37,6 +38,8 @@ async function setup(io = new MemorySaveIo()) {
     providers: [
       { provide: SAVE_FILES, useValue: io.files },
       { provide: SAVE_DIALOGS, useValue: io.dialogs },
+      { provide: SIM_WORKER_FACTORY, useValue: FakeSimWorker.factory().factory },
+      { provide: SIM_TRANSPORT, useValue: 'message' },
     ],
   });
   const saves = TestBed.inject(SaveGames);
@@ -91,7 +94,7 @@ describe('LoadGameDialog', () => {
     await user.keyboard('{Enter}');
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
-    await waitFor(() => expect(session.hash()).toBe(shop.hash));
+    await waitFor(async () => expect(await session.hashAt()).toBe(shop.hash));
   });
 
   it('says when there are no saves, and Open file… keeps the dialog open if the picker is cancelled', async () => {
@@ -110,7 +113,7 @@ describe('LoadGameDialog', () => {
     const shared = savedGame(11);
     io.nextOpen({ name: 'shared.ctrl', bytes: shared.bytes });
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(session.hash()).toBe(shared.hash));
+    await waitFor(async () => expect(await session.hashAt()).toBe(shared.hash));
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
   });

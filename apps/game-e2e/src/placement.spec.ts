@@ -31,7 +31,7 @@ interface Hooks {
     whenIdle(): Promise<void>;
   };
   __controlsSession?: {
-    hash(): string;
+    hash(): Promise<string>;
     entries(): ReadonlyArray<{ id: string; args: unknown }>;
   };
 }

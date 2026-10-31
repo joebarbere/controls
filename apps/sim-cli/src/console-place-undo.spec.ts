@@ -21,9 +21,9 @@ const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/console-place-undo
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 
 describe('the console place-then-undo scenario', () => {
-  it('runs in-process to the pinned hash, through the console-line runner', () => {
+  it('runs in-process to the pinned hash, through the console-line runner', async () => {
     const game = createGame({ world: workshopWorld() });
-    const result = runConsoleScript(game, readFileSync(scenario, 'utf8'));
+    const result = await runConsoleScript(game, readFileSync(scenario, 'utf8'));
     expect(result).toMatchObject({ ok: true, executed: 2 });
     expect(game.entries().map((e) => e.id)).toEqual(['entity.place', 'edit.undo']);
     expect(game.hash()).toBe(CONSOLE_PLACE_UNDO_HASH);

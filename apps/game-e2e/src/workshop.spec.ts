@@ -35,7 +35,7 @@ test.use({
 });
 
 interface Hooks {
-  __controlsSession?: { exec(id: string, args?: unknown): { ok: boolean }; hash(): string };
+  __controlsSession?: { exec(id: string, args?: unknown): { ok: boolean }; hash(): Promise<string> };
   __controlsViewport?: { focus(id: string): boolean; select(id: string | null): boolean; whenIdle(): Promise<void> };
 }
 

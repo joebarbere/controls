@@ -469,21 +469,24 @@ Acceptance:
 
   _Part 1: `sim-protocol` `transport.spec.ts` (a simulated writer that laps the reader mid-copy, and a real writer thread), and `sim-worker` `runner.spec.ts` (the worker's bytes equal the headless game's after random sessions, both transports)._
 
-- [ ] **`SimHost`:**
+- [x] **`SimHost`:**
   - starts one worker per game and forwards each committed world command with its tick;
   - paces with integer targets capped by the worker's progress, so 60× degrades to the achievable speed with an indicator;
   - terminates the worker on new game, load and teardown (disposal test);
   - on a worker crash, pauses with a notification and leaves the world intact.
+
+  _Part 2: `sim-host.spec.ts` (fake clock, the protocol-level fake worker on the real engine, shared and message transports), `app.spec.ts` (the real runner in-process, the crash toast's Restart)._
+
 - [ ] Time control works from keybindings, the palette and the console. The default chords are conflict-free (checked by the existing keymap specs). The HUD shows sim time and the requested and effective speeds, with an `aria-live` "falling behind" notice.
 - [ ] **E2E:**
   - the web harness runs `bench-lamp.console` and its snapshot hash equals `sim-cli`'s pinned golden;
   - with `?sab=0` (the fallback), the hash is the same;
   - `desktop-e2e` shows the worker running under `app://`, with `crossOriginIsolated === true` inside it and no `securitypolicyviolation`.
 - [ ] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page.
-- [ ] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
+- [x] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
 - [x] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
-- [ ] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
-- [ ] **`Session.hash` is deleted, not adapted** (ADR 0011 §9.4); nothing in F2.3b is built on `Session.world().tick` or `Session.hash`: read `SimHost.simTick` and `SimHost.hashAt()`.
+- [x] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
+- [x] **`Session.hash` is deleted, not adapted** (ADR 0011 §9.4); nothing in F2.3b is built on `Session.world().tick` or `Session.hash`: read `SimHost.simTick` and `SimHost.hashAt()`.
 
 ### F2.4 Power sources
 

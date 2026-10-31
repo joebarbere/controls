@@ -35,7 +35,7 @@ interface Hooks {
     projectMm(p: { x: number; y: number; z: number }): { x: number; y: number } | undefined;
   };
   __controlsSession?: {
-    hash(): string;
+    hash(): Promise<string>;
     entries(): ReadonlyArray<{ id: string }>;
   };
 }

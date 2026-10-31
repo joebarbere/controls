@@ -1,4 +1,5 @@
 import { ESLint } from 'eslint';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
 
@@ -113,6 +114,13 @@ describe('type:worker lint boundary', () => {
     );
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/^Circular dependency between "sim-core" and "sim-worker" detected/);
+  });
+
+  // ADR 0011 §10 / Consequences: the game bundles the worker without importing it, so the project graph
+  // must still know the game depends on it (Nx rebuilds the game when the worker changes).
+  it('apps/game declares sim-worker as an implicit dependency', () => {
+    const project = JSON.parse(readFileSync(join(WORKSPACE_ROOT, 'apps/game/project.json'), 'utf8'));
+    expect(project.implicitDependencies).toContain('sim-worker');
   });
 
   it.each([

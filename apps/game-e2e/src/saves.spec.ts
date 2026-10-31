@@ -19,8 +19,8 @@ interface Hooks {
   };
 }
 interface SessionHook {
-  hash(): string;
-  world(): unknown;
+  hash(): Promise<string>;
+  busWorld(): unknown;
   hashWorld(json: unknown): string | null;
 }
 type Scope = { __controlsPlatform: Hooks; __controlsSession: SessionHook };
@@ -34,9 +34,9 @@ test('a save written to OPFS survives a reload and reads back to the same world 
   await open(page);
   const written = await page.evaluate(async () => {
     const { __controlsPlatform: platform, __controlsSession: session } = globalThis as unknown as Scope;
-    const bytes = new TextEncoder().encode(JSON.stringify(session.world()));
+    const bytes = new TextEncoder().encode(JSON.stringify(session.busWorld()));
     const entry = await platform.files.write({ kind: 'manual', name: 'Workshop', overwrite: false }, bytes);
-    return { entry, hash: session.hash(), isolated: globalThis.crossOriginIsolated };
+    return { entry, hash: await session.hash(), isolated: globalThis.crossOriginIsolated };
   });
   expect(written.isolated).toBe(true);
   expect(written.entry).toMatchObject({ name: 'Workshop', kind: 'manual' });

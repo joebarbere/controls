@@ -8,3 +8,19 @@ ctl-workspace {
   position: absolute;
   inset: 0;
 }
+
+.checking {
+  position: fixed;
+  top: var(--ctl-space-3);
+  left: 50%;
+  z-index: 30;
+  margin: 0;
+  transform: translateX(-50%);
+  color: var(--ctl-fg);
+
+  &:not(:empty) {
+    padding: var(--ctl-space-1) var(--ctl-space-3);
+    border-radius: var(--ctl-radius);
+    background: var(--ctl-hud-bg);
+  }
+}

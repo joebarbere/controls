@@ -63,6 +63,7 @@ export class DevConsole {
   private readonly keybindings = inject(KeybindingService);
   private readonly output = signal<readonly ConsoleEntry[]>([]);
   private readonly pending = signal<PendingCheat | null>(null);
+  private readonly running = signal(false);
   private nextId = 1;
 
   readonly entries = this.output.asReadonly();
@@ -71,16 +72,22 @@ export class DevConsole {
   /** Submitted lines, oldest first (settings `console.history`). */
   readonly history = computed(() => this.settings.settings().console.history);
   readonly registry = this.session.registry;
+  /**
+   * A console-line file is running (ADR 0011 §9.4): pacing is held, the console is `aria-busy` and
+   * refuses input until it finishes, since a `world.hash` line waits for the sim worker.
+   */
+  readonly busy = this.running.asReadonly();
 
   /** The console target for console-line files: the same `exec` and `hash` the input uses. */
   private readonly target: ConsoleTarget = {
     registry: this.session.registry,
     exec: (id, args) => this.session.exec(id, args),
-    hash: () => this.session.hash(),
+    hash: () => this.session.hashAt(),
   };
 
   /** Runs one typed line. */
   submit(source: string): SubmitOutcome {
+    if (this.running()) return { clear: false, error: null, pickFile: false }; // busy: refused, kept in the input
     const pending = this.pending();
     if (pending?.kind === 'line' && pending.source === source) {
       this.confirmCheat();
@@ -110,9 +117,19 @@ export class DevConsole {
       case 'run':
         this.push({ kind: 'output', text: 'Pick a console-line file (.console), or drop one on the console.' });
         return done(true);
-      case 'query':
-        this.push({ kind: 'output', text: this.session.hash() });
+      case 'query': {
+        // A round trip to the sim worker: a placeholder now, the hash when it arrives.
+        const id = this.push({ kind: 'output', text: 'world.hash: computing…' });
+        this.session.hashAt().then(
+          (hash) => this.replace(id, { kind: 'output', text: hash }),
+          () =>
+            this.replace(id, {
+              kind: 'error',
+              text: 'world.hash: the simulation didn’t answer (restart it if it crashed).',
+            }),
+        );
         return done();
+      }
       case 'command':
         if (action.cheat && !this.session.world().assisted) {
           this.hold({ kind: 'line', source, id: action.id, args: action.args });
@@ -125,6 +142,7 @@ export class DevConsole {
 
   /** Runs a console-line file the player picked or dropped (data only: never evaluated as code). */
   async runFile(file: Pick<File, 'name' | 'size' | 'text'>): Promise<void> {
+    if (this.running()) return;
     this.cancelCheat();
     this.push({ kind: 'input', text: `run ${file.name}` });
     if (file.size > MAX_CONSOLE_FILE_BYTES) {
@@ -143,7 +161,7 @@ export class DevConsole {
       this.hold({ kind: 'file', name: file.name, text, ids });
       return;
     }
-    this.runText(file.name, text);
+    await this.runText(file.name, text);
   }
 
   /** Runs the pending cheat (the banner's Run button, or Enter on the same line). */
@@ -152,7 +170,7 @@ export class DevConsole {
     if (!pending) return;
     this.pending.set(null);
     if (pending.kind === 'line') this.exec(pending.source, pending.id, pending.args);
-    else this.runText(pending.name, pending.text);
+    else void this.runText(pending.name, pending.text);
   }
 
   /** Drops the pending cheat without running it. */
@@ -180,8 +198,22 @@ export class DevConsole {
     }
   }
 
-  private runText(name: string, text: string): void {
-    const result = runConsoleScript(this.target, text);
+  private async runText(name: string, text: string): Promise<void> {
+    this.running.set(true);
+    const release = this.session.sim.hold(); // no pacing while a script runs (ADR 0011 §9.4)
+    let result: Awaited<ReturnType<typeof runConsoleScript>>;
+    try {
+      result = await runConsoleScript(this.target, text);
+    } catch {
+      this.push({
+        kind: 'error',
+        text: `${name}: the simulation didn’t answer a world.hash line (restart it if it crashed).`,
+      });
+      return;
+    } finally {
+      release();
+      this.running.set(false);
+    }
     for (const line of result.output) this.push({ kind: 'output', text: line });
     const ran = `${result.executed} command${result.executed === 1 ? '' : 's'}`;
     if (result.ok) {
@@ -197,11 +229,18 @@ export class DevConsole {
     if (next !== history) this.settings.update('console', { history: [...next] });
   }
 
-  private push(entry: Omit<ConsoleEntry, 'id'>): void {
+  private push(entry: Omit<ConsoleEntry, 'id'>): number {
+    const id = this.nextId++;
     this.output.update((entries) => {
-      const next = [...entries, { ...entry, id: this.nextId++ }];
+      const next = [...entries, { ...entry, id }];
       return next.length > MAX_CONSOLE_OUTPUT ? next.slice(next.length - MAX_CONSOLE_OUTPUT) : next;
     });
+    return id;
+  }
+
+  /** Fills in an entry pushed earlier (a placeholder), if it is still shown. */
+  private replace(id: number, entry: Omit<ConsoleEntry, 'id'>): void {
+    this.output.update((entries) => entries.map((e) => (e.id === id ? { ...entry, id } : e)));
   }
 }
 

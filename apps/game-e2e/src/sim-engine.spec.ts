@@ -4,21 +4,25 @@ import { join } from 'node:path';
 import { startSandbox } from './support/sandbox';
 
 /**
- * F2.3a, decision D6: the sim engine gives byte-identical snapshots in Chromium's V8 and in Node's.
- * The game runs `apps/sim-cli/scenarios/sim-step.console` through the in-game console's `run`, with the
- * engine in the page (in-process until F2.3b moves it to the sim worker), and its world and snapshot
- * hashes must equal the literals `apps/sim-cli/src/sim-step.spec.ts` pins under Node. Change them
- * together, never one alone: a difference here is cross-runtime float drift (ADR 0014), not a golden
- * to re-pin.
+ * F2.3a decision D6 and F2.3b: the sim engine gives byte-identical snapshots in Chromium's V8 and in
+ * Node's, through the sim worker. The game runs `apps/sim-cli/scenarios/sim-step.console` through the
+ * in-game console's `run`; the engine runs in the module worker (never on the page's main thread), and
+ * the world and snapshot hashes it answers must equal the literals `apps/sim-cli/src/sim-step.spec.ts`
+ * pins under Node. Change them together, never one alone: a difference here is cross-runtime float
+ * drift (ADR 0014), not a golden to re-pin. The `?sab=0` fallback gives the same hashes (F2.3b part 4).
+ * F2.5 moves this golden to `bench-lamp.console` (plan F2.3b note).
  */
 const SIM_STEP_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
 const SIM_STEP_SNAPSHOT_HASH = 'eb20079b8a1efe00ac453b628550c8e650fe03a1cb85aef66651ae6e847c16ff';
 
 type Hooks = {
   __controlsSession?: {
-    hash(): string;
-    snapshotHash(): string;
-    world(): { tick: number };
+    hash(): Promise<string>;
+    snapshotHash(): Promise<string>;
+    busWorld(): { tick: number };
+    simStatus(): string;
+    simStats(): { misses: number; transport: string | null };
+    waitForTick(tick: number): Promise<void>;
     entries(): ReadonlyArray<{ id: string; tick: number }>;
   };
 };
@@ -49,7 +53,7 @@ test('a console file steps sim time in the game, and the hashes match sim-cli in
     'Ran 7 commands from sim-step.console.',
   );
 
-  expect(await hook(page, (h) => h.world().tick)).toBe(1234);
+  expect(await hook(page, (h) => h.busWorld().tick)).toBe(1234);
   expect(await hook(page, (h) => h.entries().map((e) => `${e.id}@${e.tick}`))).toEqual([
     'entity.place@0',
     'entity.place@0',
@@ -61,6 +65,11 @@ test('a console file steps sim time in the game, and the hashes match sim-cli in
   ]);
   expect(await hook(page, (h) => h.hash())).toBe(SIM_STEP_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(SIM_STEP_SNAPSHOT_HASH);
+  // The worker caught up and published the exact tick, over the shared buffer, with no torn reads.
+  await hook(page, (h) => h.waitForTick(1234));
+  expect(await hook(page, (h) => h.simStatus())).toBe('paused');
+  expect(await hook(page, (h) => h.simStats())).toMatchObject({ misses: 0, transport: 'sab' });
+  expect(page.workers().length).toBe(1);
 });
 
 /**

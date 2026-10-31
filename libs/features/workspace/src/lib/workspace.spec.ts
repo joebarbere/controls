@@ -98,7 +98,7 @@ describe('Workspace', () => {
   it('resets the layout through the view.resetLayout command and reports it', async () => {
     const { fixture, host, user } = await setup();
     const session = TestBed.inject(Session);
-    const hash = session.hash();
+    const hash = await session.hashAt();
     host.layout.set({ inspector: { size: 500, collapsed: true }, bottom: { size: 120, collapsed: true } });
     await fixture.whenStable();
     await user.click(screen.getByRole('button', { name: 'Reset layout' }));
@@ -106,7 +106,7 @@ describe('Workspace', () => {
     expect(host.resets).toBe(1);
     // A view command: logged, but the world (and its hash) is unchanged.
     expect(session.entries().map((e) => e.id)).toEqual(['view.resetLayout']);
-    expect(session.hash()).toBe(hash);
+    expect(await session.hashAt()).toBe(hash);
   });
 
   it('resets the layout when view.resetLayout runs from another surface', async () => {

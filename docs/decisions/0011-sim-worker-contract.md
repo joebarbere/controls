@@ -763,7 +763,7 @@ F2.3a implemented the slot codec, the export, `materialiseWorld`, the events and
 
 ## Implementation notes (F2.3b)
 
-F2.3b implemented the transport, the worker and `SimHost`. Where the text above left a point open, or the implementation pinned one down, it did so as follows. Nothing here changes a byte offset, a message shape or a hashed byte, so `SIM_PROTOCOL_VERSION` stays 1.
+F2.3b implemented the transport and the worker (part 1) and `SimHost` with the session and saves changes (part 2). Where the text above left a point open, or the implementation pinned one down, it did so as follows. Nothing here changes a byte offset, a message shape or a hashed byte, so `SIM_PROTOCOL_VERSION` stays 1.
 
 - **The host's view of a worker is `SimWorkerLike`** (`sim-protocol`, types only): `postMessage(message, transfer)`, `terminate()` and `listen({message, error, messageError})`. `apps/game`'s factory adapts the DOM `Worker` around the literal constructor; `@controls/sim-worker`'s `createInProcessSimWorker` runs the real runner on the calling thread for app specs; feature specs use a scripted fake.
 - **A replay start runs through the inbox** (§4, §10): the worker starts the engine on the log's initial world, then queues each entry as a `command` and a final `advance` to `endTick`, so a long crash-restart log is sliced and published like live play. Its sim events are dropped, as headless replays drop them. Main validates the log first (commanded state only), and decides the `MAX_VERIFY_TICKS` bound before it ever sends a replay start.
@@ -772,6 +772,14 @@ F2.3b implemented the transport, the worker and `SimHost`. Where the text above 
 - **Traces are F2.6's.** The worker records watches but sends no `trace` batches yet; the message schema is in place.
 - **The reader's private copy is double-buffered**, so a slot held back for its descriptor never disturbs the current view (§6.2 "return current"). A slot of a generation older than both held descriptors is ignored; one of the previous generation is still shown (the descriptor of a new generation arrives before its first slot, so the latest slot may still be the old generation's).
 - **Test-only sizing:** the worker's environment takes `maxSlotBytes` and `minSlotBytes` overrides, used by specs to provoke `capacity` and a buffer growth cheaply. The game uses the constants.
+- **`SimHost` binds the session's game** (`bind({ tick, advanceTo, world })`) rather than owning it: `Session` creates each game with `time: simHost.time` and binds it on every start or adopt. Pacing advances the game through that binding, so the bus and the worker move together.
+- **Load verification uses a candidate worker** (§10): `SimHost.prepare(start)` starts a worker that is not yet the game's, `Session.prepareLoad` verifies with it (or starts one from `world.json`), and `Session.adopt` promotes it. A refused or abandoned load disposes it. The prepared load's materialised hash is the dirty model's baseline (plan F2.3b: the game's own hash at adopt time, never the level's).
+- **The dirty model** (§9.5) is implemented as: dirty when the session has a logged world command (one whose definition is `undoable`, or `edit.undo`/`edit.redo`) **and** `hashAt()` differs from the stored hash (or, for a game never stored, the baseline hash taken at its start or adopt). This covers both halves of §9.5 (a commanded change, and time passing after one) with one hash comparison; time or `sim.*` and view commands alone never make a game dirty.
+- **The decision to verify is `planLoad`** (scripting-api), shared with the headless `gameFromSave`, so `MAX_VERIFY_TICKS` and D8 apply identically: a log the headless load wouldn't replay never reaches a replay start.
+- **`onerror` before `ready` is `start-failed`; any other worker failure keeps its code**, plus two host-side codes in `SimCrash`: `watchdog` and `worker-error` (`onerror` after ready). `invalid-message` covers `onmessageerror` and a message outside the protocol.
+- **The crash toast's action is a command id** (§13, "Toasts gain `action`"): `NotificationService.notify(…, { action: { label, commandId } })`, run through `Session.exec` by a runner the app sets. `sim.restart` is declared in `@controls/commands` (`simHostCommands()`) and registered by `Session` next to `file.*`, never by `createWorldRegistry()`.
+- **Event toasts** (`tripped`, `blown`) are coalesced per device over `EVENT_TOAST_COALESCE_MS` of **wall** time, so a burst at 60× is one toast.
+- **`autosave`'s behind test** is `(lastAdvance − progress) ÷ max(1, requested speed)` against `AUTOSAVE_MAX_BEHIND_MS`: the commanded lead in wall time at the requested speed.
 
 ## Resolved in review
 

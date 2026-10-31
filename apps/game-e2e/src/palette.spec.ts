@@ -21,14 +21,14 @@ const SCENARIO = join(workspaceRoot, 'apps/sim-cli/scenarios/palette-place-undo.
 // this file reads them through a local cast so the declarations don't clash.
 type Hooks = {
   __controlsSession?: {
-    hash(): string;
+    hash(): Promise<string>;
     entries(): ReadonlyArray<{ id: string }>;
-    world(): { entities: ReadonlyArray<{ ref: { id: string } }> };
+    busWorld(): { entities: ReadonlyArray<{ ref: { id: string } }> };
   };
 };
 
 const props = (page: Page) =>
-  page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.world().entities ?? []).map((e) => e.ref.id));
+  page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.busWorld().entities ?? []).map((e) => e.ref.id));
 const hash = (page: Page) => page.evaluate(() => (window as unknown as Hooks).__controlsSession?.hash() ?? '');
 const loggedIds = (page: Page) =>
   page.evaluate(() => ((window as unknown as Hooks).__controlsSession?.entries() ?? []).map((e) => e.id));

@@ -83,10 +83,10 @@ describe('Viewport', () => {
     const fixture = TestBed.createComponent(Viewport);
     await fixture.whenStable();
     const session = TestBed.inject(Session);
-    const before = session.hash();
+    const before = await session.hashAt();
     expect(session.exec('view.mode', { mode: 'walk' }).ok).toBe(true);
     expect(session.exec('view.focus', { target: 'backplate' }).ok).toBe(true);
-    expect(session.hash()).toBe(before);
+    expect(await session.hashAt()).toBe(before);
   });
 
   it('sets viewport.focused while the canvas has focus', async () => {

@@ -165,7 +165,9 @@ describe('DevConsoleComponent', () => {
     const input = await editor();
     input.set('world.hash');
     await user.keyboard('{Enter}');
-    expect(lastEntry()).toBe(session.hash());
+    // A round trip to the sim (ADR 0011 §9.4): a placeholder, then the hash fills in.
+    const hash = await session.hashAt();
+    await waitFor(() => expect(lastEntry()).toBe(hash));
     input.set('help');
     await user.keyboard('{Enter}');
     expect(output().textContent).toContain('entity.place');
@@ -212,8 +214,8 @@ describe('DevConsoleComponent', () => {
     );
     expect(session.entries()).toEqual([]);
     await user.click(screen.getByRole('button', { name: 'Run cheat' }));
+    await waitFor(() => expect(output().textContent).toContain('Ran 2 commands from demo.console.'));
     expect(session.entries().map((e) => e.id)).toEqual(['entity.place', 'cheat.test']);
-    expect(output().textContent).toContain('Ran 2 commands from demo.console.');
 
     const broken = new File(['edit.undo\nnope.cmd\n'], 'broken.console');
     await user.upload(field, broken);
@@ -235,5 +237,42 @@ describe('DevConsoleComponent', () => {
     session.onCommand('console.toggle', toggled);
     await user.keyboard('{Escape}');
     expect(toggled).toHaveBeenCalledOnce(); // through the command (whether it is logged is the command's business)
+  });
+
+  it('holds the sim and refuses input while a file runs, then lets go (ADR 0011 §9.4)', async () => {
+    const { fixture, session, user } = await setup();
+    const input = await editor();
+    const hold = vi.spyOn(session.sim, 'hold');
+    let finish!: (hash: string) => void;
+    vi.spyOn(session, 'hashAt').mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const run = TestBed.inject(DevConsole).runFile({
+      name: 'slow.console',
+      size: 20,
+      text: async () => 'world.hash\n',
+    });
+    await waitFor(() => expect(output().getAttribute('aria-busy')).toBe('true'));
+    expect(hold).toHaveBeenCalledOnce();
+    input.set(PLACE);
+    await user.keyboard('{Enter}');
+    expect(session.entries()).toEqual([]); // refused while busy
+    expect(input.text()).toBe(PLACE); // and kept in the input
+    finish('ab'.repeat(32));
+    await run;
+    await fixture.whenStable();
+    expect(output().getAttribute('aria-busy')).toBeNull();
+    expect(output().textContent).toContain('ab'.repeat(32));
+    expect(output().textContent).toContain('Ran 0 commands from slow.console.');
+  });
+
+  it('says so when the sim does not answer a world.hash', async () => {
+    const { fixture, session, user } = await setup();
+    const input = await editor();
+    vi.spyOn(session, 'hashAt').mockRejectedValue(new Error('crashed'));
+    input.set('world.hash');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(lastEntry()).toContain('the simulation didn’t answer'));
+    await TestBed.inject(DevConsole).runFile({ name: 'h.console', size: 11, text: async () => 'world.hash\n' });
+    await fixture.whenStable();
+    expect(lastEntry()).toContain('h.console: the simulation didn’t answer');
   });
 });

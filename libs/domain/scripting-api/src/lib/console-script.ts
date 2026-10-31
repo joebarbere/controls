@@ -16,11 +16,14 @@ import type { World } from '@controls/world-model';
  * CSP, so a console-line file is the one script format that runs on every surface.
  */
 
-/** What a console-line file runs against: a `Game`, or the UI's `Session` (same shape). */
+/**
+ * What a console-line file runs against: a headless `Game` (its `hash()` is synchronous), or the
+ * game's console, whose `world.hash` is a round trip to the sim worker (ADR 0011 §9.4).
+ */
 export interface ConsoleTarget {
   readonly registry: CommandRegistry<World>;
   exec(id: string, args?: unknown): ExecResult;
-  hash(): string;
+  hash(): string | Promise<string>;
 }
 
 /**
@@ -96,9 +99,10 @@ function firstColumn(source: string): number {
  * Runs a console-line file against `target`. Every line is parsed and mapped onto its command's
  * args **before** anything runs, so a typo on line 40 doesn't leave lines 1–39 applied. Execution
  * then stops at the first command that fails; commands before it stay applied (and logged), like
- * typing the same lines into the console.
+ * typing the same lines into the console. Asynchronous everywhere (ADR 0011 §9.4): a `world.hash`
+ * line waits for the target's hash before the next line runs, so it covers exactly the lines before it.
  */
-export function runConsoleScript(target: ConsoleTarget, text: string): ConsoleScriptResult {
+export async function runConsoleScript(target: ConsoleTarget, text: string): Promise<ConsoleScriptResult> {
   const lines = splitConsoleLines(text);
   if (lines.length > MAX_CONSOLE_SCRIPT_LINES) {
     const error: ConsoleScriptError = {
@@ -121,7 +125,7 @@ export function runConsoleScript(target: ConsoleTarget, text: string): ConsoleSc
   let executed = 0;
   for (const step of steps) {
     if (step.kind === 'query') {
-      output.push(target.hash());
+      output.push(await target.hash());
       continue;
     }
     const result = target.exec(step.id, step.args);

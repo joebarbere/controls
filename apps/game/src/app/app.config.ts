@@ -4,6 +4,7 @@ import { SAVE_DIALOGS, SAVE_FILES } from '@controls/feature-saves';
 import { APP_LIFECYCLE } from '@controls/feature-shell';
 import { provideSandboxLevel } from './levels';
 import { PLATFORM } from './platform.token';
+import { provideSimWorker } from './sim-worker';
 
 /** Settings persist through the host platform: a file in userData (Electron) or localStorage (web harness). */
 export const provideSettingsFromPlatform = (): Provider => ({
@@ -33,5 +34,7 @@ export const appConfig: ApplicationConfig = {
     provideKeybindingOverridesFromSettings(),
     // New sandbox loads content/levels/workshop.json (F1.9).
     provideSandboxLevel(),
+    // The sim runs in a module worker, one per game (F2.3b, ADR 0011).
+    provideSimWorker(),
   ],
 };

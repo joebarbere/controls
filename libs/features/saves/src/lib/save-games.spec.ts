@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { Session } from '@controls/feature-session';
+import { SANDBOX_LEVEL, Session, SIM_TRANSPORT, SIM_WORKER_FACTORY } from '@controls/feature-session';
+import { FakeSimWorker } from '@controls/feature-session/testing';
 import { MemorySettingsService, SETTINGS_SERVICE, SettingsStore } from '@controls/feature-settings';
 import { APP_LIFECYCLE, NotificationService, ShellState } from '@controls/feature-shell';
 import type { PendingWritesFlush, SaveEntry } from '@controls/platform-api';
@@ -14,7 +15,16 @@ import {
 } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
-import { findLastPlayed, lastPlayedOf, REPLAY_RESTARTED_MESSAGE, SaveGames, suggestedSaveName } from './save-games';
+import {
+  findLastPlayed,
+  lastPlayedOf,
+  REPLAY_RESTARTED_MESSAGE,
+  RESTART_FIRST,
+  SaveGames,
+  suggestedSaveName,
+} from './save-games';
+import { AUTOSAVE_MAX_BEHIND_MS, SIM_SETTLE_MS } from '@controls/sim-protocol';
+import { worldHash } from '@controls/world-model';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -20 } });
@@ -29,16 +39,23 @@ function otherSave(): { bytes: Uint8Array; hash: string } {
   return { bytes: game.save(), hash: game.hash() };
 }
 
-function setup(options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo; settings?: MemorySettingsService } = {}) {
+function setup(
+  options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo; settings?: MemorySettingsService; level?: unknown } = {},
+) {
   const io = options.io ?? new MemorySaveIo();
   const settingsService = options.settings ?? new MemorySettingsService();
   const flushes = new Set<PendingWritesFlush>();
+  const fakes = FakeSimWorker.factory();
   TestBed.configureTestingModule({
     providers: [
       { provide: SETTINGS_SERVICE, useValue: settingsService },
       { provide: SAVE_FILES, useValue: io.files },
       { provide: SAVE_DIALOGS, useValue: io.dialogs },
       { provide: REPLAY_MISMATCH_POLICY, useValue: options.policy ?? 'notify' },
+      // The sim worker: the protocol-level fake on the real engine (ADR 0011).
+      { provide: SIM_WORKER_FACTORY, useValue: fakes.factory },
+      { provide: SIM_TRANSPORT, useValue: 'message' },
+      ...(options.level === undefined ? [] : [{ provide: SANDBOX_LEVEL, useValue: options.level }]),
       {
         provide: APP_LIFECYCLE,
         useValue: { onBeforeQuit: (f: PendingWritesFlush) => (flushes.add(f), () => flushes.delete(f)) },
@@ -62,7 +79,7 @@ function setup(options: { policy?: ReplayMismatchPolicy; io?: MemorySaveIo; sett
   };
   /** The last-played pointer as stored (what the next launch reads). */
   const storedPointer = async () => (await settingsService.load()).settings.saves.lastPlayed;
-  return { io, saves, session, flushes, toasts, shell: TestBed.inject(ShellState), relaunch, storedPointer };
+  return { io, saves, session, flushes, toasts, shell: TestBed.inject(ShellState), relaunch, storedPointer, fakes };
 }
 
 /** A different game from {@link otherSave}: seed 7 with one crate. */
@@ -104,13 +121,13 @@ describe('SaveGames', () => {
     expect(await saves.saveNamed('Shop', false)).toBe('saved');
     expect(saves.saveName()).toBe('Shop');
     expect(toasts()).toContain('success: Saved “Shop”.');
-    expect(saves.isDirty()).toBe(false);
+    expect(await saves.isDirty()).toBe(false);
     expect(io.names()).toEqual(['Shop']);
 
     session.exec('entity.place', place(10));
     shell.closeDialog();
     expect(session.exec('file.save')).toMatchObject({ ok: true, logged: false });
-    await vi.waitFor(() => expect(saves.isDirty()).toBe(false));
+    await vi.waitFor(async () => expect(await saves.isDirty()).toBe(false));
     expect(shell.dialog()).toBeNull();
     expect(io.names()).toEqual(['Shop']); // overwritten, not a second save
     expect(session.entries().map((e) => e.id)).toEqual(['entity.place']); // file.save is never logged
@@ -145,16 +162,16 @@ describe('SaveGames', () => {
     const entered = vi.fn();
     saves.onLoaded(entered);
     expect(await saves.load(entry)).toBe(true);
-    expect(session.hash()).toBe(other.hash);
+    expect(await session.hashAt()).toBe(other.hash);
     expect(session.active()).toBe(true);
     expect(session.canUndo()).toBe(false);
     expect(session.entries().map((e) => e.seq)).toEqual([0, 1]);
     expect(saves.saveName()).toBe('Shop');
-    expect(saves.isDirty()).toBe(false);
+    expect(await saves.isDirty()).toBe(false);
     expect(entered).toHaveBeenCalledOnce();
     expect(toasts()).toEqual(['success: Loaded “Shop”.']);
     expect(session.exec('entity.delete', { id: 1 })).toMatchObject({ ok: true, entry: { seq: 2 } });
-    expect(saves.isDirty()).toBe(true);
+    expect(await saves.isDirty()).toBe(true);
   });
 
   it('leaves the session alone when a save does not load, and never echoes its content', async () => {
@@ -164,9 +181,9 @@ describe('SaveGames', () => {
     const { saves, session, toasts } = setup({ io });
     session.newSandbox({ seed: 3 });
     session.exec('entity.place', place(10));
-    const hash = session.hash();
+    const hash = await session.hashAt();
     expect(await saves.load(bad)).toBe(false);
-    expect(session.hash()).toBe(hash);
+    expect(await session.hashAt()).toBe(hash);
     expect(session.canUndo()).toBe(true);
     expect(toasts()).toEqual(['error: Couldn’t load “Broken”. The save is damaged, or it isn’t a Controls save.']);
     expect(toasts().join()).not.toContain('do-not-echo');
@@ -222,7 +239,7 @@ describe('SaveGames', () => {
     io.seed({ kind: 'autosave', name: 'Autosave 2', slot: 2 }, new Uint8Array([1, 2, 3]));
     const { saves, session, toasts } = setup({ io });
     expect(await saves.continueLatest()).toBe(true);
-    expect(session.hash()).toBe(good.hash);
+    expect(await session.hashAt()).toBe(good.hash);
     expect(saves.saveName()).toBeNull(); // an autosave gives the game no save name
     expect(toasts()).toEqual([
       'warning: Skipped “Autosave 2”: The save is damaged, or it isn’t a Controls save.',
@@ -273,7 +290,7 @@ describe('SaveGames', () => {
     expect(toasts()).toEqual([
       'warning: Autosave failed. Saving isn’t available here: this browser gives the game no storage.',
     ]);
-    expect(saves.isDirty()).toBe(true);
+    expect(await saves.isDirty()).toBe(true);
   });
 
   it('autosaves on the settings interval while a game is in progress', async () => {
@@ -299,7 +316,7 @@ describe('SaveGames', () => {
     expect(io.names()).toContain('Autosave 1');
 
     session.exec('entity.place', place(20));
-    const before = session.hash();
+    const before = await session.hashAt();
     expect(await saves.load(other)).toBe(true);
     expect(io.names()).toContain('Autosave 2');
     const slot = loadGame(io.bytesOf('Autosave 2') ?? new Uint8Array()); // the game the load replaced
@@ -320,7 +337,7 @@ describe('SaveGames', () => {
     const other = otherSave();
     io.nextOpen({ name: 'shared.ctrl', bytes: other.bytes });
     session.exec('file.open');
-    await vi.waitFor(() => expect(session.hash()).toBe(other.hash));
+    await vi.waitFor(async () => expect(await session.hashAt()).toBe(other.hash));
     expect(saves.saveName()).toBeNull(); // an opened file isn't in the save directory
     io.nextOpen(null);
     expect(await saves.openFile()).toBe(false);
@@ -375,7 +392,7 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     await first.saves.ready;
     first.session.newSandbox({ seed: 3 });
     first.session.exec('entity.place', place(10));
-    const a = first.session.hash();
+    const a = await first.session.hashAt();
 
     expect(await first.saves.load(entryNamed(first.saves, 'X'))).toBe(true);
     expect(hashOf(io.bytesOf('Autosave 1'))).toBe(a); // A was written before X replaced it
@@ -384,7 +401,7 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     const next = await first.relaunch(); // quit without changing X: nothing more is written
     expect(next.saves.saves().map((e) => e.name)).toEqual(['Autosave 1', 'X']); // A's autosave is newest
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(x.hash);
+    expect(await next.session.hashAt()).toBe(x.hash);
     expect(next.saves.saveName()).toBe('X');
     expect(next.toasts()).toEqual(['success: Loaded “X”.']);
   });
@@ -394,34 +411,34 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     const first = setup({ io });
     first.session.newSandbox({ seed: 3 });
     first.session.exec('entity.place', place(10));
-    const a = first.session.hash();
+    const a = await first.session.hashAt();
     const x = otherSave();
     io.nextOpen({ name: 'shared.ctrl', bytes: x.bytes });
     expect(await first.saves.openFile()).toBe(true);
     expect(hashOf(io.bytesOf('Autosave 1'))).toBe(a);
     expect(pointer()).toBeNull(); // an opened file's handle doesn't outlive the launch
-    expect(first.saves.isDirty()).toBe(true); // the directory doesn't hold X
+    expect(await first.saves.isDirty()).toBe(true); // the directory doesn't hold X
 
     const next = await first.relaunch(); // the quit flush autosaves X, then writes the pointer
     expect(hashOf(io.bytesOf('Autosave 2'))).toBe(x.hash);
     expect(await first.storedPointer()).toEqual({ kind: 'autosave', slot: 2 });
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(x.hash);
+    expect(await next.session.hashAt()).toBe(x.hash);
   });
 
   it('a game saved only to a file (Save As) is still autosaved into the directory for Continue', async () => {
     const first = setup();
     first.session.newSandbox({ seed: 3 });
     first.session.exec('entity.place', place(10));
-    const hash = first.session.hash();
+    const hash = await first.session.hashAt();
     first.io.nextSaveAs('mine.ctrl');
     expect(await first.saves.saveToFile()).toBe('saved');
-    expect(first.saves.isDirty()).toBe(true);
+    expect(await first.saves.isDirty()).toBe(true);
 
     const next = await first.relaunch();
     expect(hashOf(first.io.bytesOf('Autosave 1'))).toBe(hash);
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(hash);
+    expect(await next.session.hashAt()).toBe(hash);
   });
 
   it('a last-played save that no longer loads is skipped with the warning, and the newest that loads is used', async () => {
@@ -431,13 +448,13 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     await first.saves.ready;
     first.session.newSandbox({ seed: 3 });
     first.session.exec('entity.place', place(10));
-    const a = first.session.hash();
+    const a = await first.session.hashAt();
     expect(await first.saves.load(entryNamed(first.saves, 'X'))).toBe(true);
     io.corrupt('X', new Uint8Array([1, 2, 3]));
 
     const next = await first.relaunch();
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(a);
+    expect(await next.session.hashAt()).toBe(a);
     expect(next.toasts()).toEqual([
       'warning: Skipped “X”: The save is damaged, or it isn’t a Controls save.',
       'success: Loaded “Autosave 1”.',
@@ -454,7 +471,7 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     });
     const { saves, session, toasts } = setup({ io, settings });
     expect(await saves.continueLatest()).toBe(true);
-    expect(session.hash()).toBe(x.hash);
+    expect(await session.hashAt()).toBe(x.hash);
     expect(toasts()).toEqual([
       'warning: Skipped “Gone”: The save isn’t there any more.',
       'success: Loaded “Autosave 1”.',
@@ -480,12 +497,12 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     expect(await first.saves.autosave()).toBe(true); // Y → slot 2
     first.session.exec('entity.place', place(30));
     expect(await first.saves.autosave()).toBe(true); // Y → slot 1, X's autosave rotated out
-    const latest = first.session.hash();
+    const latest = await first.session.hashAt();
     expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
 
     const next = await first.relaunch();
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(latest);
+    expect(await next.session.hashAt()).toBe(latest);
   });
 
   it('a manual save followed by more play and an autosave: Continue resumes the autosave', async () => {
@@ -496,12 +513,12 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     expect(pointer()).toEqual({ kind: 'manual', name: 'Shop' });
     first.session.exec('entity.place', place(20));
     expect(await first.saves.autosave()).toBe(true);
-    const later = first.session.hash();
+    const later = await first.session.hashAt();
     expect(pointer()).toEqual({ kind: 'autosave', slot: 1 });
 
     const next = await first.relaunch();
     expect(await next.saves.continueLatest()).toBe(true);
-    expect(next.session.hash()).toBe(later);
+    expect(await next.session.hashAt()).toBe(later);
   });
 
   it('a write of a game that a New sandbox has since replaced does not move the pointer', async () => {
@@ -545,5 +562,96 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
     expect(findLastPlayed(list, { kind: 'manual', name: 'SHOP' })?.handle).toBe('a'); // then ignoring case
     expect(findLastPlayed(list, { kind: 'autosave', slot: 1 })?.handle).toBe('c');
     expect(findLastPlayed(list, { kind: 'autosave', slot: 2 })).toBeUndefined();
+  });
+
+  describe('with the sim worker (F2.3b, ADR 0011 §9.5)', () => {
+    /** A level with a circuit: the engine solves it at start, so its hash isn't the level document's. */
+    function circuitLevel() {
+      const game = createGame({ seed: 0 });
+      const at = { x: 0, y: 0, z: 0 };
+      game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'switch.tessaline-spst-toggle', version: 1 }, positionMm: at });
+      const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 1, terminal: 'pos' },
+        b: { entity: 2, terminal: 'a' },
+      });
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 2, terminal: 'b' },
+        b: { entity: 1, terminal: 'neg' },
+      });
+      return JSON.parse(JSON.stringify(game.world()));
+    }
+
+    it("measures unsaved changes against the game's own start hash, not the level's", async () => {
+      const level = circuitLevel();
+      const { saves, session } = setup({ level });
+      session.newSandbox({ seed: 0 });
+      expect(await session.hashAt()).not.toBe(worldHash(level)); // the engine materialised a solution
+      expect(await saves.isDirty()).toBe(false); // untouched
+      session.exec('entity.place', place(10));
+      expect(await saves.isDirty()).toBe(true);
+      session.exec('edit.undo');
+      expect(await saves.isDirty()).toBe(false); // back to the start: not dirty, with the level's own hash it would be
+      session.exec('sim.setSpeed', { speed: 0 });
+      session.exec('sim.step', { ticks: 100 });
+      expect(await saves.isDirty()).toBe(true); // time passed after a world command
+    });
+
+    it('never counts time alone as a change: an untouched running sandbox is never autosaved', async () => {
+      const { saves, session } = setup({ level: circuitLevel() });
+      session.newSandbox({ seed: 0 });
+      session.exec('sim.step', { ticks: 500 });
+      expect(await saves.isDirty()).toBe(false);
+      expect(await saves.autosave()).toBe(false);
+    });
+
+    it('refuses to save while the sim has crashed, and skips autosaves', async () => {
+      const { saves, session, fakes, toasts } = setup();
+      session.newSandbox({ seed: 3 });
+      session.exec('entity.place', place(10));
+      fakes.workers[0].crash();
+      await vi.waitFor(() => expect(session.sim.status()).toBe('crashed'));
+      expect(await saves.saveNamed('Shop', false)).toBe('failed');
+      expect(toasts()).toContain(`error: Couldn’t save “Shop”. ${RESTART_FIRST}`);
+      expect(await saves.saveToFile()).toBe('failed');
+      expect(await saves.autosave()).toBe(false);
+      // A crash after the save was taken: the snapshot fails the same way.
+      session.exec('sim.restart');
+      await vi.waitFor(() => expect(session.sim.status()).toBe('paused'));
+      fakes.workers[1].hold();
+      const pending = saves.saveNamed('Later', false);
+      fakes.workers[1].crash();
+      fakes.workers[1].release();
+      expect(await pending).toBe('failed');
+    });
+
+    it('skips an autosave while the worker is far behind', async () => {
+      const { saves, session } = setup();
+      session.newSandbox({ seed: 3 });
+      session.exec('entity.place', place(10));
+      const behind = vi.spyOn(session.sim, 'behindWallMs').mockReturnValue(AUTOSAVE_MAX_BEHIND_MS + 1);
+      expect(await saves.autosave()).toBe(false);
+      behind.mockRestore();
+      expect(await saves.autosave()).toBe(true);
+    });
+
+    it('the quit flush gives the sim at most SIM_SETTLE_MS, then the settings flush runs anyway', async () => {
+      const { saves, session, fakes } = setup();
+      session.newSandbox({ seed: 3 });
+      session.exec('entity.place', place(10));
+      await session.sim.waitForTick(0);
+      fakes.workers[0].hang();
+      const settings = TestBed.inject(SettingsStore);
+      const flushed = vi.spyOn(settings, 'flush');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const done = saves.flush();
+      await vi.advanceTimersByTimeAsync(SIM_SETTLE_MS + 1);
+      await done;
+      vi.useRealTimers();
+      expect(flushed).toHaveBeenCalled();
+    });
   });
 });

@@ -9,7 +9,7 @@ import { enterSeed, startSandbox } from './support/sandbox';
  */
 
 interface Hooks {
-  __controlsSession: { exec(id: string, args?: unknown): { ok: boolean }; hash(): string };
+  __controlsSession: { exec(id: string, args?: unknown): { ok: boolean }; hash(): Promise<string> };
   __controlsPlatform: {
     files: { list(): Promise<{ handle: string; name: string }[]>; read(h: string): Promise<Uint8Array> };
   };
