@@ -405,6 +405,7 @@ describe('script import boundary', () => {
       '@controls/save-format/testing',
       '@controls/scripting-api',
       '@controls/sim-core',
+      '@controls/sim-core/oracle',
       '@controls/sim-protocol',
       '@controls/units',
       '@controls/world-model',

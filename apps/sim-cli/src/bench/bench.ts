@@ -16,6 +16,8 @@ export interface BenchCase {
   readonly runs: number;
   /** The median wall time allowed, in ms (spec §4.5 / §4.9 budgets), or null to report only. */
   readonly budgetMs: number | null;
+  /** Untimed set-up before every run, warm-up included (putting a compiler back in a known state). */
+  prepare?(): void;
   /** The workload. Returns a checksum of its result, which must be the same on every run. */
   run(): string;
 }
@@ -33,8 +35,19 @@ export interface BenchCaseResult {
   readonly ok: boolean;
 }
 
+/** A spec budget whose case can't run yet: listed in the report so the gap stays visible. */
+export interface PendingBenchCase {
+  readonly name: string;
+  /** The spec's budget for it (ms). */
+  readonly budgetMs: number;
+  /** The feature that switches it on (`F2.2 part 3`). */
+  readonly enabledBy: string;
+}
+
 export interface BenchReport {
   readonly cases: readonly BenchCaseResult[];
+  /** Cases waiting for the code they measure; they never affect `ok`. */
+  readonly pending: readonly PendingBenchCase[];
   readonly ok: boolean;
 }
 
@@ -51,9 +64,13 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     throw new RangeError(`bench case "${benchCase.name}": runs must be a positive integer`);
   }
   const checksums = new Set<string>();
-  for (let i = 0; i < benchCase.warmup; i++) checksums.add(benchCase.run());
+  for (let i = 0; i < benchCase.warmup; i++) {
+    benchCase.prepare?.();
+    checksums.add(benchCase.run());
+  }
   const durations: number[] = [];
   for (let i = 0; i < benchCase.runs; i++) {
+    benchCase.prepare?.();
     const start = now();
     const checksum = benchCase.run();
     durations.push(now() - start);
@@ -75,7 +92,11 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
   };
 }
 
-export function runBench(cases: readonly BenchCase[], now: () => number): BenchReport {
+export function runBench(
+  cases: readonly BenchCase[],
+  now: () => number,
+  pending: readonly PendingBenchCase[] = [],
+): BenchReport {
   const results = cases.map((benchCase) => runBenchCase(benchCase, now));
-  return { cases: results, ok: results.every((result) => result.ok) };
+  return { cases: results, pending, ok: results.every((result) => result.ok) };
 }
