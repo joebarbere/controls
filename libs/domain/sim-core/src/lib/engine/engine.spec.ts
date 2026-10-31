@@ -524,7 +524,7 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     expect(host.engine.revision).toBeGreaterThan(revision);
   });
 
-  it('a million steps allocate nothing that needs a scavenge (the per-tick hot path)', () => {
+  it('the per-tick hot path allocates nothing: scavenges do not grow with the number of steps', () => {
     // A thermal load in a battery loop: continuous work every tick, a cadence solve every 10.
     const host = Host.fresh().run([
       ['entity.place', { ref: BATTERY, positionMm: origin }],
@@ -532,12 +532,19 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    host.engine.advanceTo(10_000); // warm: every buffer grown, the JIT settled
-    const profiler = new GCProfiler();
-    profiler.start();
-    host.engine.advanceTo(1_010_000);
-    const scavenges = (profiler.stop()?.statistics ?? []).filter((s) => s.gcType === 'Scavenge').length;
-    expect(scavenges).toBeLessThanOrEqual(1);
+    host.engine.advanceTo(50_000); // warm: every buffer grown, the JIT settled
+    const scavenges = (steps: number) => {
+      const profiler = new GCProfiler();
+      profiler.start();
+      host.engine.advanceTo(host.engine.tick + steps);
+      return (profiler.stop()?.statistics ?? []).filter((s) => s.gcType === 'Scavenge').length;
+    };
+    // A few scavenges happen whatever the length (the runtime's own, measured 2–4 at 1M and at 3M
+    // steps alike), so the gate is growth: 1M steps in all, and three times the steps may add at most
+    // one. A per-step allocation of 64 bytes or more adds about two per 500 000 steps.
+    const short = scavenges(250_000);
+    const long = scavenges(750_000);
+    expect(long).toBeLessThanOrEqual(short + 1);
   });
 });
 
