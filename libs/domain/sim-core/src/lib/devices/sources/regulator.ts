@@ -78,6 +78,10 @@ export function voltageBand(setpointV: number): number {
 /**
  * The next mode for an output solved in `mode` that carried `amps` (out of `pos`) at `volts`
  * (V(pos) − V(neg)), with setpoint `setpointV`, limit `limitA` and output resistance `ohms`.
+ *
+ * The CV/CC law's reference statement, used only by tests: the engine's path is `iterateRegulated`,
+ * which writes the same expressions out on a bank slot so no double crosses a call, and a property in
+ * `bench-supply.spec.ts` checks the two agree bit for bit.
  */
 export function regulate(
   mode: number,

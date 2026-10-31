@@ -12,6 +12,11 @@
       "options": {
         "command": "tsc -p libs/domain/sim-core/tsconfig.lib.json --noEmit && tsc -p libs/domain/sim-core/tsconfig.spec.json --noEmit"
       }
+    },
+    "test": {
+      "options": {
+        "command": "vitest && vitest run -c vitest.allocation.mts"
+      }
     }
   }
 }

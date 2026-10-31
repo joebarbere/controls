@@ -251,6 +251,16 @@ export class SimEngine {
   // Per branch: the bank and device index that values it, and the kind's default.
   private branchBank: (SimDeviceBank | null)[] = [];
   private branchDevice = new Int32Array(0);
+  /**
+   * Per branch: its bank's `dcValue`, `acValue` and `iterate` hooks, looked up once at a rebuild. Each
+   * kind's bank is an object of its own shape, so reading `bank.dcValue` per solve was a load across
+   * many maps: in a process running several kinds it deoptimized `fillValues` whenever a new kind's
+   * bank arrived, and the unoptimized code boxed values until it was optimized again (simulation
+   * caveats). An array of functions has one map. Called with the bank as `this`.
+   */
+  private branchDcValue: (SimDeviceBank['dcValue'] | null)[] = [];
+  private branchAcValue: (SimDeviceBank['acValue'] | null)[] = [];
+  private branchIterate: (SimDeviceBank['iterate'] | null)[] = [];
   private branchDefault: (DcDefaultValue | undefined)[] = [];
   private branchAcDefault: (AcDefaultValue | undefined)[] = [];
   // Per island: unmodelled, the entities, the flags of the last solve, and the snapshot's arrays.
@@ -301,9 +311,8 @@ export class SimEngine {
       const branches = island.branches;
       for (let i = 0; i < branches.length; i++) {
         const index = branches[i];
-        const bank = this.branchBank[index];
-        if (bank?.iterate !== undefined)
-          bank.iterate(this.branchDevice[index], netlist.branches[index], iterate, values);
+        const hook = this.branchIterate[index];
+        if (hook) hook.call(this.branchBank[index], this.branchDevice[index], netlist.branches[index], iterate, values);
       }
     };
     this.nonlinear = { hook: this.hook, warmStart: null };
@@ -663,8 +672,8 @@ export class SimEngine {
       for (let i = 0; i < branches.length; i++) {
         const index = branches[i];
         const branch = netlist.branches[index];
-        const bank = this.branchBank[index];
-        if (bank?.dcValue !== undefined && bank.dcValue(this.branchDevice[index], branch, values)) {
+        const dcValue = this.branchDcValue[index];
+        if (dcValue && dcValue.call(this.branchBank[index], this.branchDevice[index], branch, values)) {
           if (values.stamps[index] === 0)
             throw new Error(`A device model returned true for branch ${index} without a value`);
           continue;
@@ -691,8 +700,8 @@ export class SimEngine {
       const index = branches[i];
       const branch = netlist.branches[index];
       values.stamps[index] = AC_STAMP_UNSET;
-      const bank = this.branchBank[index];
-      if (bank?.acValue !== undefined && bank.acValue(this.branchDevice[index], branch, values)) {
+      const acValue = this.branchAcValue[index];
+      if (acValue && acValue.call(this.branchBank[index], this.branchDevice[index], branch, values)) {
         if (values.stamps[index] === AC_STAMP_UNSET) {
           throw new Error(`A device model returned true for AC branch ${index} without a value`);
         }
@@ -825,6 +834,9 @@ export class SimEngine {
     const branchCount = netlist.branches.length;
     this.branchBank = new Array<SimDeviceBank | null>(branchCount).fill(null);
     this.branchDevice = new Int32Array(branchCount);
+    this.branchDcValue = new Array<SimDeviceBank['dcValue'] | null>(branchCount).fill(null);
+    this.branchAcValue = new Array<SimDeviceBank['acValue'] | null>(branchCount).fill(null);
+    this.branchIterate = new Array<SimDeviceBank['iterate'] | null>(branchCount).fill(null);
     this.branchDefault = netlist.branches.map((branch) => ownModel(DC_DEFAULT_VALUES, branch.model));
     this.branchAcDefault = netlist.branches.map((branch) => ownModel(AC_DEFAULT_VALUES, branch.model));
     this.hasAc = netlist.islands.some((island) => island.kind === 'ac');
@@ -832,8 +844,12 @@ export class SimEngine {
       if (branch.element.kind !== 'entity') continue;
       const slot = devices.get(branch.element.entity);
       if (slot === undefined || slot.bank === null) continue;
-      this.branchBank[branch.index] = slot.bank.bank;
+      const bank = slot.bank.bank;
+      this.branchBank[branch.index] = bank;
       this.branchDevice[branch.index] = slot.index;
+      this.branchDcValue[branch.index] = bank.dcValue ?? null;
+      this.branchAcValue[branch.index] = bank.acValue ?? null;
+      this.branchIterate[branch.index] = bank.iterate ?? null;
     }
 
     const islandCount = netlist.islands.length;

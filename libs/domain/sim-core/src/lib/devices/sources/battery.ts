@@ -96,15 +96,43 @@ export const LEAD_ACID_GASSING_V_PER_CELL: SourcedConstant = {
 };
 
 /**
+ * Both EMFs of a battery with `params` at state of charge `soc[i]` (clamped to [0, 1]), into `emf[i]`
+ * (`batteryEmfV`) and `chargeEmf[i]` (`batteryChargeEmfV`): the one definition of both. By slot, so
+ * the bank's per-solve `dcValue` passes and returns no double (V8 boxes one that crosses a call it
+ * doesn't inline, which a process running many device kinds inlines less; simulation caveats).
+ */
+export function batteryEmfsInto(
+  params: BatteryParams,
+  soc: Float64Array,
+  i: number,
+  emf: Float64Array,
+  chargeEmf: Float64Array,
+): void {
+  const x = soc[i];
+  const s = x < 0 ? 0 : x > 1 ? 1 : x;
+  const c = BATTERY_COLLAPSE_SOC.value;
+  const span = params.openCircuitVoltageFullV - params.openCircuitVoltageEmptyV;
+  const e =
+    s >= c ? params.openCircuitVoltageEmptyV + span * s : ((params.openCircuitVoltageEmptyV + span * c) * s) / c;
+  emf[i] = e;
+  const a = BATTERY_ABSORPTION_SOC.value;
+  // The gassing voltage written out as `batteryGassingV` computes it.
+  const gassing = (params.nominalVoltageV / 2) * LEAD_ACID_GASSING_V_PER_CELL.value;
+  chargeEmf[i] = s <= a ? e : e + ((gassing - params.openCircuitVoltageFullV) * (s - a)) / (1 - a);
+}
+
+const SCRATCH_SOC = new Float64Array(1);
+const SCRATCH_EMF = new Float64Array(1);
+const SCRATCH_CHARGE_EMF = new Float64Array(1);
+
+/**
  * The open-circuit EMF (V) of a battery with `params` at state of charge `soc` (clamped to [0, 1]):
  * linear above `BATTERY_COLLAPSE_SOC`, collapsing linearly to 0 V at empty below it.
  */
 export function batteryEmfV(params: BatteryParams, soc: number): number {
-  const s = soc < 0 ? 0 : soc > 1 ? 1 : soc;
-  const c = BATTERY_COLLAPSE_SOC.value;
-  const span = params.openCircuitVoltageFullV - params.openCircuitVoltageEmptyV;
-  if (s >= c) return params.openCircuitVoltageEmptyV + span * s;
-  return ((params.openCircuitVoltageEmptyV + span * c) * s) / c;
+  SCRATCH_SOC[0] = soc;
+  batteryEmfsInto(params, SCRATCH_SOC, 0, SCRATCH_EMF, SCRATCH_CHARGE_EMF);
+  return SCRATCH_EMF[0];
 }
 
 /** The gassing voltage (V) of a lead-acid battery: 2.4 V per 2 V nominal cell. */
@@ -117,10 +145,9 @@ export function batteryGassingV(params: BatteryParams): number {
  * `BATTERY_ABSORPTION_SOC`, then rising linearly to the gassing voltage at full.
  */
 export function batteryChargeEmfV(params: BatteryParams, soc: number): number {
-  const s = soc < 0 ? 0 : soc > 1 ? 1 : soc;
-  const a = BATTERY_ABSORPTION_SOC.value;
-  if (s <= a) return batteryEmfV(params, s);
-  return batteryEmfV(params, s) + ((batteryGassingV(params) - params.openCircuitVoltageFullV) * (s - a)) / (1 - a);
+  SCRATCH_SOC[0] = soc;
+  batteryEmfsInto(params, SCRATCH_SOC, 0, SCRATCH_EMF, SCRATCH_CHARGE_EMF);
+  return SCRATCH_CHARGE_EMF[0];
 }
 
 /**
@@ -166,8 +193,7 @@ export const BATTERY_MODEL: SimDeviceModel = {
     return {
       bag: (i) => ({ stateOfCharge: soc[i] }),
       dcValue: (i, b, values) => {
-        emf[i] = batteryEmfV(params[i], soc[i]);
-        chargeEmf[i] = batteryChargeEmfV(params[i], soc[i]);
+        batteryEmfsInto(params[i], soc, i, emf, chargeEmf);
         values.vsourceAt(b.index, emf, ohms, i);
         return true;
       },

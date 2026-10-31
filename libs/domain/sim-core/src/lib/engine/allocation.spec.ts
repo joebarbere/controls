@@ -26,9 +26,14 @@ import { SimEngine, type SimEngineOptions } from './engine';
  * whole process sat on a plateau 5-20 B/step higher (2-3 % of runs under load, F2.4). The gates here
  * run in order and share one process, so each later gate's baseline includes the earlier ones'
  * feedback: add a gate at the end, and measure its baseline in place.
+ *
+ * It runs without coverage, in its own Vitest run (`vitest.allocation.mts`, the second half of
+ * sim-core's `test` target, so still in `pnpm verify`): coverage instrumentation changes what V8
+ * optimizes, and made the gates 4-5x slower, past Vitest's 5 s timeout on CI's runners. The baselines
+ * are uninstrumented, the engine the game runs.
  */
 
-/** Steps before measuring. Under coverage tier-up ends about 110 000: the median absorbs the first windows. */
+/** Steps before measuring (tier-up ended about 110 000 under coverage, which these gates now run without). */
 const WARM_UP_STEPS = 100_000;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
@@ -95,6 +100,7 @@ interface MeasureOptions {
   readonly options?: SimEngineOptions;
   readonly warmUpSteps?: number;
   readonly windowCount?: number;
+  readonly windowSteps?: number;
 }
 
 interface Allocation {
@@ -143,7 +149,12 @@ function loopCommands(id: number, source: CatalogRef, pos: string, neg: string, 
 /** As `allocatedPerStep`, for the world `commands` build. */
 function allocatedBy(
   commands: readonly Command[],
-  { options = engineTestOptions(), warmUpSteps = WARM_UP_STEPS, windowCount = WINDOWS }: MeasureOptions = {},
+  {
+    options = engineTestOptions(),
+    warmUpSteps = WARM_UP_STEPS,
+    windowCount = WINDOWS,
+    windowSteps = WINDOW_STEPS,
+  }: MeasureOptions = {},
 ): Allocation {
   const bus = engineBus(11);
   const engine = SimEngine.start(bus.state, options);
@@ -156,11 +167,11 @@ function allocatedBy(
   const windows: number[] = [];
   const sites = new Map<string, number>();
   for (let w = 0; w < windowCount; w++) {
-    const sample = sampledBytes(engine, WINDOW_STEPS);
-    windows.push(sample.bytes / WINDOW_STEPS);
+    const sample = sampledBytes(engine, windowSteps);
+    windows.push(sample.bytes / windowSteps);
     for (const [site, bytes] of sample.sites) sites.set(site, (sites.get(site) ?? 0) + bytes);
   }
-  const steps = windowCount * WINDOW_STEPS;
+  const steps = windowCount * windowSteps;
   const top = [...sites]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
@@ -198,29 +209,44 @@ function plantedOptions(): SimEngineOptions {
 }
 
 /**
- * Every source kind and a nonlinear load in one world, each its own island: the game's worker runs
- * every device kind in one process, so the solver's call sites see all of them (polymorphic feedback),
- * which per-source gates in a fresh process never do. A battery into a heating load (1, 2); a DIN PSU
- * regulating into 12 Ω (3, 4), hiccuping into a heating load (5, 6) and shorted (7); a bench supply in
- * current limit into a rheostat (8, 9); a battery into a load whose resistance rises with its current,
- * which the outer loop iterates (10, 11); the AC source into a reactor (12, 13) and into a heating load
- * (14, 15).
+ * Mixed worlds: several device kinds in one engine, each its own island. The game's worker runs every
+ * kind in one process, so the engine's and the solvers' call sites see all of them (polymorphic
+ * feedback), which a per-source gate's world never shows them. Two worlds rather than one, for the
+ * cost: V8 keeps type feedback per call site, shared by every engine in the process, so a DC world and
+ * an AC world measured in the same process see the same polymorphism as one world with both, at about
+ * half the steps' cost each (one world of every kind took 6-10 s under coverage on CI).
+ *
+ * DC: a battery into a load whose resistance rises with its current, which the outer loop iterates
+ * (entities 1, 2); a DIN PSU hiccuping into a heating load, limit, off and retry (3, 4); a bench supply
+ * in current limit into a rheostat (5, 6).
  */
-function mixedCommands(): Command[] {
+function mixedDcCommands(): Command[] {
   return [
-    ...loopCommands(1, BATTERY, 'pos', 'neg', THERMAL_LOAD),
-    ...loopCommands(3, DIN_PSU, 'pos', 'neg', RESISTOR_12),
-    ...loopCommands(5, DIN_PSU, 'pos', 'neg', THERMAL_LOAD),
-    ...loopCommands(7, DIN_PSU, 'pos', 'neg', null),
-    ...loopCommands(8, BENCH_SUPPLY, 'pos', 'neg', RHEOSTAT),
-    ['device.operate', { id: 8, control: 'setpointV', value: 12 }],
-    ['device.operate', { id: 8, control: 'currentLimitA', value: 1 }],
-    ['device.operate', { id: 8, control: 'outputOn', value: true }],
-    ...loopCommands(10, BATTERY, 'pos', 'neg', DROOP),
-    ...loopCommands(12, AC_SOURCE, 'l', 'n', REACTOR),
-    ...loopCommands(14, AC_SOURCE, 'l', 'n', THERMAL_LOAD),
+    ...loopCommands(1, BATTERY, 'pos', 'neg', DROOP),
+    ...loopCommands(3, DIN_PSU, 'pos', 'neg', THERMAL_LOAD),
+    ...loopCommands(5, BENCH_SUPPLY, 'pos', 'neg', RHEOSTAT),
+    ['device.operate', { id: 5, control: 'setpointV', value: 12 }],
+    ['device.operate', { id: 5, control: 'currentLimitA', value: 1 }],
+    ['device.operate', { id: 5, control: 'outputOn', value: true }],
   ];
 }
+
+/** AC: the phasor source into a reactor (1, 2) and into a heating load (3, 4). */
+function mixedAcCommands(): Command[] {
+  return [...loopCommands(1, AC_SOURCE, 'l', 'n', REACTOR), ...loopCommands(3, AC_SOURCE, 'l', 'n', THERMAL_LOAD)];
+}
+
+/**
+ * The mixed worlds' measurement (see `mixedDcCommands`): an 80 000-step warm-up and eight 2 000-step
+ * windows. Shorter than the per-source gates' because the gates before them have already tiered up
+ * every call site these worlds use, and measured in place: the windows from 80 000 read as the steady
+ * state (worst medians over 100 runs: 0.0 and 3.4 B/step), while 20 000 and 40 000 still caught tier-up.
+ */
+const MIXED_MEASURE: MeasureOptions = {
+  warmUpSteps: 80_000,
+  windowSteps: 2_000,
+  windowCount: 8,
+};
 
 describe('SimEngine per-tick allocation (regression gates, not yet zero)', () => {
   it('the DC path (a battery into a heating load) stays under 4 bytes per step', () => {
@@ -250,8 +276,13 @@ describe('SimEngine per-tick allocation (regression gates, not yet zero)', () =>
     expect(perStep, report).toBeLessThan(6);
   });
 
-  it('every source kind and a nonlinear load in one world (polymorphic call sites) stays under 6 bytes per step', () => {
-    const { perStep, report } = allocatedBy(mixedCommands());
+  it('a mixed DC world (battery, DIN PSU and bench supply, nonlinear loads) stays under 6 bytes per step', () => {
+    const { perStep, report } = allocatedBy(mixedDcCommands(), MIXED_MEASURE);
+    expect(perStep, report).toBeLessThan(6);
+  });
+
+  it('a mixed AC world (phasor sources into reactive and heating loads) stays under 6 bytes per step', () => {
+    const { perStep, report } = allocatedBy(mixedAcCommands(), MIXED_MEASURE);
     expect(perStep, report).toBeLessThan(6);
   });
 
