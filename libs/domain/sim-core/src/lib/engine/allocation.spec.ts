@@ -37,6 +37,16 @@ import { SimEngine, type SimEngineOptions } from './engine';
 const WARM_UP_STEPS = 100_000;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
+/**
+ * The measurement settles before it counts: windows continue until the last `SETTLED_WINDOWS` lie
+ * within `SETTLED_SPREAD` B/step of each other, then the gate takes the median of the last `WINDOWS`
+ * (never more than `MAX_WINDOWS` in all). A steady allocation settles at once and is measured in full;
+ * only a falling sequence (tier-up still finishing) keeps it going. CI's slowest runner finished a late
+ * tier-up inside the AC gate's windows: 11.97 9.65 10.28 10.04 2.70 0.50 0.51 0.00, median 6.18.
+ */
+const SETTLED_WINDOWS = 4;
+const SETTLED_SPREAD = 2;
+const MAX_WINDOWS_FACTOR = 3;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
 const SAMPLING_INTERVAL = 128;
 
@@ -164,12 +174,22 @@ function allocatedBy(
     if (result.logged) engine.applied(result.entry, bus.state);
   }
   engine.advanceTo(warmUpSteps);
-  const windows: number[] = [];
-  const sites = new Map<string, number>();
-  for (let w = 0; w < windowCount; w++) {
+  const all: number[] = [];
+  const perWindow: Map<string, number>[] = [];
+  const settledCount = Math.min(SETTLED_WINDOWS, windowCount);
+  const settled = () => {
+    const last = all.slice(-settledCount);
+    return Math.max(...last) - Math.min(...last) <= SETTLED_SPREAD;
+  };
+  while (all.length < windowCount || (!settled() && all.length < MAX_WINDOWS_FACTOR * windowCount)) {
     const sample = sampledBytes(engine, windowSteps);
-    windows.push(sample.bytes / windowSteps);
-    for (const [site, bytes] of sample.sites) sites.set(site, (sites.get(site) ?? 0) + bytes);
+    all.push(sample.bytes / windowSteps);
+    perWindow.push(sample.sites);
+  }
+  const windows = all.slice(-windowCount);
+  const sites = new Map<string, number>();
+  for (const sample of perWindow.slice(-windowCount)) {
+    for (const [site, bytes] of sample) sites.set(site, (sites.get(site) ?? 0) + bytes);
   }
   const steps = windowCount * windowSteps;
   const top = [...sites]
@@ -178,7 +198,7 @@ function allocatedBy(
     .map(([site, bytes]) => `  ${(bytes / steps).toFixed(2)} B/step  ${site}`);
   return {
     perStep: median(windows),
-    report: `windows (B/step): ${windows.map((w) => w.toFixed(2)).join(' ')}\ntop sites:\n${top.join('\n')}`,
+    report: `windows (B/step, the gate's last ${windowCount} of ${all.length}): ${all.map((w) => w.toFixed(2)).join(' ')}\ntop sites (those windows):\n${top.join('\n')}`,
   };
 }
 
