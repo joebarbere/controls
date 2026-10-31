@@ -39,7 +39,7 @@ describe('MODEL_KINDS', () => {
         thermal: 'sim number 0',
         tripped: 'sim boolean false',
       },
-      fuse: { blown: 'sim boolean false', meltFraction: 'sim number 0' },
+      fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       heater: {},
       'lamp.incandescent': { filamentTempK: 'sim number null' },

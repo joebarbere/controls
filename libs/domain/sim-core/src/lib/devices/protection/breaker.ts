@@ -72,8 +72,10 @@ export const BREAKER_MODEL: SimDeviceModel = {
     const pickup = new Float64Array(n);
     devices.forEach((d, i) => {
       const p = d.params as BreakerParams;
-      tripped[i] = d.bag['tripped'] === true ? 1 : 0;
       handleOn[i] = d.state['on'] === true ? 1 : 0;
+      // A trip survives only with the handle on: a save holding `tripped` with the handle off (which the
+      // engine never writes) starts reset, as turning the handle off would have left it.
+      tripped[i] = d.bag['tripped'] === true && handleOn[i] === 1 ? 1 : 0;
       const t = d.bag['thermal'];
       thermal[i] = typeof t === 'number' ? t : 0;
       branch[i] = d.branches.length > 0 ? d.branches[0] : -1;

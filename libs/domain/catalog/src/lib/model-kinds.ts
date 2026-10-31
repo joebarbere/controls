@@ -189,21 +189,34 @@ export const ResistorParams = z.strictObject({
 export type ResistorParams = z.infer<typeof ResistorParams>;
 
 /**
- * Cartridge fuse parameters (F2.5 part 2): its rating and its two melting figures. The melt model
- * (`sim-core`'s fuse) is a first-order lag with τ = I²t / I_min², I_min = `minimumFusingRatio` × the
- * rating: it carries any current below I_min indefinitely and melts at large currents when ∫I²dt
- * reaches `meltingI2tA2s`.
+ * Cartridge fuse parameters (F2.5 part 2): its rating, its two melting figures and its two thermal
+ * bodies. The melt model (`sim-core`'s fuse) is a fast element (a share `elementFraction` of the steady
+ * rise) inside a slow body (time constant `bodyTimeConstantS`); the element's own time constant
+ * follows from the melting I²t, so the fuse melts when ∫I²dt reaches `meltingI2tA2s` at large currents
+ * and carries anything below I_min = `minimumFusingRatio` × the rating indefinitely.
  */
-export const FuseParams = z.strictObject({
-  /** Rated current (A): what it carries indefinitely. */
-  ratedCurrentA: positive,
-  /** Melting I²t (A²·s): the adiabatic melting integral, from the datasheet. */
-  meltingI2tA2s: positive,
-  /** The minimum fusing current over the rating: above 1 (it carries its rating), below 1.35. */
-  minimumFusingRatio: FiniteNumber.gt(1).lt(1.35),
-  /** Cold resistance of the link (Ω), from the datasheet. */
-  resistanceOhm: positive,
-});
+export const FuseParams = z
+  .strictObject({
+    /** Rated current (A): what it carries indefinitely. */
+    ratedCurrentA: positive,
+    /** Melting I²t (A²·s): the adiabatic melting integral, from the datasheet. */
+    meltingI2tA2s: positive,
+    /** The minimum fusing current over the rating: above 1 (it carries its rating), below 1.35. */
+    minimumFusingRatio: FiniteNumber.gt(1).lt(1.35),
+    /** The fast element's share of the steady temperature rise (0 to 1, exclusive). */
+    elementFraction: FiniteNumber.gt(0).lt(1),
+    /** The slow body's (end caps, holder) thermal time constant (s). */
+    bodyTimeConstantS: positive,
+    /** Cold resistance of the link (Ω), from the datasheet. */
+    resistanceOhm: positive,
+  })
+  .refine(
+    (p) => {
+      const minimum = p.ratedCurrentA * p.minimumFusingRatio;
+      return (minimum * minimum) / p.meltingI2tA2s > (1 - p.elementFraction) / p.bodyTimeConstantS;
+    },
+    { message: 'the slow body alone may not reach the melting I²t: the element time constant would be negative' },
+  );
 export type FuseParams = z.infer<typeof FuseParams>;
 
 /**
@@ -349,15 +362,23 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
         false,
         'Whether the link has melted. A blown fuse stays open; P2 replaces it by deleting it and placing a new one.',
       ),
-      meltFraction: key(
+      bodyHeat: key(
         'sim',
         'number',
-        FiniteNumber.min(0).max(1),
+        FiniteNumber.min(0),
         0,
-        "The element's temperature rise as a fraction of the rise that melts it (1 melts it).",
+        "The slow body's temperature rise, as a fraction of the rise that melts the element (the element melts when elementHeat + bodyHeat reaches 1).",
+      ),
+      elementHeat: key(
+        'sim',
+        'number',
+        FiniteNumber.min(0),
+        0,
+        "The fast element's temperature rise, as a fraction of the rise that melts it (the element melts when elementHeat + bodyHeat reaches 1).",
       ),
     },
-    description: 'A cartridge fuse: a link that melts when I²t heats it faster than it cools; a blown fuse is open.',
+    description:
+      'A cartridge fuse: a link (a fast element in a slow body) that melts when I²t heats it faster than it cools; a blown fuse is open.',
   },
   'generator.portable': {
     kind: 'generator.portable',

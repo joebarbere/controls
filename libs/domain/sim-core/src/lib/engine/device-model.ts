@@ -24,8 +24,9 @@ import type { Netlist, NetlistBranch, StateBag } from '../netlist/types';
  * restarts the stream on every bank build, so the n-th draw after a load would otherwise repeat the
  * first. Draw only at bank build (a fixed tolerance), or store the count and skip ahead on build.
  *
- * **Inputs.** A model reads the catalogue parameters, its bag, the electrical solution and the
- * netlist (its branches' values carry commanded inputs such as a setpoint). Never the world's own
+ * **Inputs.** A model reads the catalogue parameters, its bag, the electrical solution, the netlist
+ * (its branches' values carry commanded inputs such as a setpoint) and its device's commanded `state`
+ * bag (`SimDevice.state` at a bank build, `commanded` after a command: a breaker's handle). Never the world's own
  * `sim` bags (inert, ADR 0011 §1), the wall clock or ambient randomness: per-device randomness comes
  * only from `stream()`, `deriveStream(world.seed, entityStreamKey(id))`.
  */
@@ -115,7 +116,10 @@ export interface SimDeviceBank {
    * A logged command changed device `index`'s commanded `state` (the new bag): called at the command's
    * tick, before the engine recompiles, so sim state that the commanded state resolves (a tripped
    * breaker reset by its handle turned off, F2.5) is settled before the compiler reads it. Commands
-   * never read sim state; this is the sim resolving their effect. Not called for a bank build.
+   * never read sim state; this is the sim resolving their effect. Not called for a bank build. It may
+   * be called with a bag equal to the last one it saw (a command that set a control to the value it
+   * already had, or one changing another key), so it **must be idempotent**: the same bag twice leaves
+   * the bank as once.
    */
   commanded?(index: number, state: StateBag): void;
   /**
