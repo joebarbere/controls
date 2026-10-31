@@ -7,9 +7,11 @@ import { startSandbox } from './support/sandbox';
  * F2.6 debug overlays with the real sim worker: `apps/sim-cli/scenarios/sim-step.console` builds the
  * bench (a battery shorted by a closed switch through two test leads, and an unwired lamp) and steps
  * 1.234 s. Then `view.overlay` from the console and from the palette switches the voltage and
- * current overlays. Every island is in band 0 until sources choose a nominal band, so the voltage
- * overlay shows "no scale" on the battery loop, never a 0 V colour. A second battery tied to a
- * utility service is a mixed island, which isn't solved, so it shows no reading. The current overlay shows the short's current on both
+ * current overlays. Since protocol 5 each island's sources choose a nominal band: the battery loop
+ * is `dc12` (16 V full scale, 0.5 V a bin), so the voltage overlay colours it from real volts, while
+ * the unwired lamp's island has no source and shows "no scale", never a 0 V colour. A second battery
+ * tied to a utility service is a mixed island, which isn't solved, so it shows no reading. Then a
+ * third battery lights the lamp: its 12 V terminal sits near bin 25 of the 12 V DC scale. The current overlay shows the short's current on both
  * leads, with its direction (DC). Waits are on the page's own state (`data-overlays`, the overlay
  * graph from the `?e2e=1` hook, the legend), never on time.
  */
@@ -98,9 +100,26 @@ test('voltage and current overlays from the console and the palette, on the real
     .toEqual([true, true, false]);
   const g = (await graph(page)) as Graph;
   expect(g).toMatchObject({ voltage: true, current: true, inScene: true });
-  // Band 0: the battery loop has no voltage scale. Never 0 V, never bin 0.
-  expect(g.terminals.filter((t) => t.entity <= 2).map((t) => t.volts)).toEqual(Array(4).fill('noScale'));
-  expect(g.leads.slice(0, 2).flatMap((l) => l.volts)).toEqual(Array(4).fill('noScale'));
+  // dc12 (16 V full scale, 32 bins of 0.5 V): the shorted battery loop gets real colours. Its − terminal
+  // is the island reference (0 V, bin 0); its + terminal is the EMF less the internal drop, 9–11 V
+  // (bins 18–22: the leads carry about 123 A against 23 mΩ inside); the switch, between two equal
+  // leads, sits near half of that.
+  const bin = (entity: number, terminal: string) =>
+    g.terminals.find((t) => t.entity === entity && t.terminal === terminal)?.volts;
+  expect(bin(1, 'neg')).toBe(0);
+  expect(bin(1, 'pos')).toEqual(expect.any(Number));
+  expect(bin(1, 'pos') as number).toBeGreaterThanOrEqual(18);
+  expect(bin(1, 'pos') as number).toBeLessThanOrEqual(22);
+  expect(bin(2, 'a')).toEqual(expect.any(Number));
+  expect(Math.abs((bin(2, 'a') as number) - (bin(1, 'pos') as number) / 2)).toBeLessThanOrEqual(1);
+  expect(
+    g.leads
+      .slice(0, 2)
+      .flatMap((l) => l.volts)
+      .every((v) => typeof v === 'number'),
+  ).toBe(true);
+  // The unwired lamp's island has no source: no scale, never 0 V.
+  expect(g.terminals.filter((t) => t.entity === 3).map((t) => t.volts)).toEqual(['noScale', 'noScale']);
   // The mixed island is not solved: no reading on its terminals or its lead, never 0 V or 0 A.
   expect(g.terminals.filter((t) => t.entity >= 4).every((t) => t.volts === 'unknown')).toBe(true);
   expect(g.leads[2]).toMatchObject({
@@ -115,10 +134,40 @@ test('voltage and current overlays from the console and the palette, on the real
   const legend = page.getByTestId('overlay-legend');
   await expect(legend).toBeVisible();
   await expect(legend.getByRole('heading', { name: 'Voltage overlay' })).toBeVisible();
+  await expect(legend.getByTestId('legend-voltage-scale')).toHaveCount(1);
+  await expect(legend.getByTestId('legend-voltage-scale')).toContainText('12 V DC');
   await expect(legend.getByTestId('legend-no-scale')).toHaveText(/No nominal band: no voltage scale/);
   await expect(legend.getByTestId('legend-unknown')).toHaveText(/No reading/);
   await expect(legend.getByTestId('legend-current-scale')).toContainText('100 mA');
   await expect(legend.getByTestId('legend-current-motion')).toContainText('Arrows travel with DC current');
+
+  // A third battery (entity 6) lights the lamp: the lamp's island is now dc12 too. The lamp's + end sits
+  // at the EMF (12.9 V full) less the drop in the leads and inside at about 0.4 A, so about 12.85 V:
+  // coordinate 25.7 on the 16 V scale, bin 25 (24–26 with the half-bin hysteresis and the battery
+  // discharging). Nothing drawn is without a scale any more, so the legend drops its no-scale line.
+  // The console is still open and focused (the legend checks above don't move focus).
+  await runConsoleLine(
+    page,
+    'entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 500',
+  );
+  await runConsoleLine(
+    page,
+    'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 6 --a.terminal pos --b.entity 3 --b.terminal a',
+  );
+  await runConsoleLine(
+    page,
+    'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal b --b.entity 6 --b.terminal neg',
+  );
+  await expect
+    .poll(async () => (await graph(page))?.terminals.find((t) => t.entity === 3 && t.terminal === 'a')?.volts)
+    .toEqual(expect.any(Number));
+  const lit = (await graph(page)) as Graph;
+  const lampPos = lit.terminals.find((t) => t.entity === 3 && t.terminal === 'a')?.volts as number;
+  expect(lampPos).toBeGreaterThanOrEqual(24);
+  expect(lampPos).toBeLessThanOrEqual(26);
+  expect(lit.terminals.find((t) => t.entity === 6 && t.terminal === 'neg')?.volts).toBe(0);
+  await expect(legend.getByTestId('legend-voltage-scale')).toContainText('12 V DC');
+  await expect(legend.getByTestId('legend-no-scale')).toBeHidden();
 
   // prefers-reduced-motion: the arrows stand still, and the legend says so.
   await page.emulateMedia({ reducedMotion: 'reduce' });
