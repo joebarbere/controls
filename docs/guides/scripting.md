@@ -147,11 +147,13 @@ command.id positional… --flag value --nested.flag value --boolean-flag
 - `netlist.dump` (F2.6) prints the compiled netlist and its island diagnostics, one output line per text line, and is never logged either. After the netlist (`netlist …`, `topology …`, `island …`, `node …`, `branch …`, `diagnostic …` lines) come `solution tick T` (the tick of the solve shown, or `solution none` without a circuit) and one line per island:
 
   ```text
-  solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band none
-  solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1
+  solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band dc12
+  solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none (no-source) unvalued 1
   ```
 
-  The status is `solved`, `singular`, `nonConverged`, `unmodelled` (followed by `unvalued` and the branches no model can value) or `mixed` (followed by `sources dc … ac …`). `band` is the island's nominal band (`none` = no overlay scale). The text is the same in `sim-cli` and in the game's console, byte for byte; from TypeScript, `game.netlistDump()` returns it.
+  The status is `solved`, `singular`, `nonConverged`, `unmodelled` (followed by `unvalued` and the branches no model can value) or `mixed` (followed by `sources dc … ac …`). `band` is the island's nominal band, the overlays' scale (protocol 5): `dc12`, `dc24`, `ac120-240`, `ac208y120` or `ac480y277`, from its sources' nameplates. `none` means no scale, followed by why: `(no-source)`, `(unrated-source)` (only sources without a fixed nominal, such as the bench supply), `(sources-disagree)` (say a 12 V battery wired to a 24 V supply) or `(mixed)`. The text is the same in `sim-cli` and in the game's console, byte for byte; from TypeScript, `game.netlistDump()` returns it.
+
+  In the game, the header's `netlist.dump tick T` is the **bus tick** (the tick commands are stamped at), as for `world.hash`. While the sim runs, the HUD's sim time is the latest snapshot's tick, so it can be a little behind T; the dump waits for the worker to reach T and describes the state there.
 
 The full grammar and its rationale are in [ADR 0008](../decisions/0008-console-and-scripts.md).
 

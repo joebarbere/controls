@@ -1,7 +1,8 @@
 import { createWorld, migrateWorld, type World } from '@controls/save-format';
 import { materialiseWorld, NOMINAL_BANDS } from '@controls/sim-protocol';
 import { AC_SOURCE, BATTERY, benchLamp, end, LAMP, LEAD, origin } from '../../testing/bench';
-import { ENGINE_BENCH, engineBus, engineTestOptions, FLIP, OPAQUE, TWIN_SUPPLY } from '../../testing/engine';
+import { ENGINE_BENCH, engineBus, engineTestOptions, FLIP, OPAQUE, RHEOSTAT, TWIN_SUPPLY } from '../../testing/engine';
+import type { SimDeviceModel } from './device-model';
 import { formatNetlist } from '../netlist/format';
 import { formatEngineDump, formatIslandDiagnostic, formatIslandFlags, netlistDump } from './dump';
 import { SimEngine, type SimEngineOptions, type SimIslandDiagnostic } from './engine';
@@ -49,6 +50,7 @@ describe('netlist.dump', () => {
       referenceNode: 7,
       unknowns: 5,
       band: NOMINAL_BANDS.length,
+      bandReason: null,
       unvalued: [],
       dcSources: [],
       acSources: [],
@@ -56,7 +58,10 @@ describe('netlist.dump', () => {
     expect(formatIslandDiagnostic(island)).toBe(
       `solve island 3 solved flags none iterations 2 reference 7 unknowns 5 band #${NOMINAL_BANDS.length}`,
     );
-    expect(formatIslandDiagnostic({ ...island, band: 0 })).toMatch(/ band none$/);
+    expect(formatIslandDiagnostic({ ...island, band: 1 })).toMatch(/ band dc12$/);
+    expect(formatIslandDiagnostic({ ...island, band: 0, bandReason: 'sources-disagree' })).toMatch(
+      / band none \(sources-disagree\)$/,
+    );
   });
 
   it('of an empty world: no islands and no solution', () => {
@@ -72,9 +77,9 @@ describe('netlist.dump', () => {
     // Seven nodes (the closed switch joins its two terminals), one reference, one source current.
     expect(engine.netlist.nodes).toHaveLength(7);
     expect(solveLines(text)).toEqual([
-      'solve island 0 solved flags none iterations 1 reference 0 unknowns 7 band none',
+      'solve island 0 solved flags none iterations 1 reference 0 unknowns 7 band dc12',
     ]);
-    expect(text.endsWith('band none\n')).toBe(true);
+    expect(text.endsWith('band dc12\n')).toBe(true);
   });
 
   it('says which branch no model can value: unmodelled, never a reading', () => {
@@ -86,7 +91,50 @@ describe('netlist.dump', () => {
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
     expect(solveLines(netlistDump(world(), engineTestOptions()))).toEqual([
-      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1',
+      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band dc12 unvalued 1',
+    ]);
+  });
+
+  it('forgets a branch that was unvalued once a later value pass values it (same netlist)', () => {
+    // A rheostat that declines to value itself above 1 MΩ (and has no default), so a values-only change
+    // (device.operate, no rebuild) moves which branch is unvalued on the same netlist.
+    const options = engineTestOptions();
+    const picky: SimDeviceModel = {
+      kind: 'test.rheostat',
+      output: null,
+      bank: () => ({
+        bag: () => ({}),
+        dcValue: (_i, b, values) => {
+          if (b.values['ohms'] > 1e6) return false;
+          values.resistor(b.index, b.values['ohms']);
+          return true;
+        },
+      }),
+    };
+    const withPicky = { ...options, deviceModels: { ...options.deviceModels, 'test.rheostat': picky } };
+    const operate = (id: number, ohms: number): readonly [string, object] => [
+      'device.operate',
+      { id, control: 'ohms', value: ohms },
+    ];
+    // Battery (branch 0) → rheostat 2 (branch 1) → rheostat 3 (branch 2) → battery.
+    const loop: Commands = [
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: RHEOSTAT, positionMm: origin }],
+      ['entity.place', { ref: RHEOSTAT, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(3, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') }],
+      operate(2, 1e7),
+    ];
+    const first = session(loop, 0, withPicky);
+    expect(solveLines(formatEngineDump(first.engine))).toEqual([
+      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band dc12 unvalued 1',
+    ]);
+    const generation = first.engine.topologyGeneration;
+    const second = session([...loop, operate(2, 10), operate(3, 1e7)], 0, withPicky);
+    expect(second.engine.topologyGeneration).toBe(generation); // values only: no rebuild
+    expect(solveLines(formatEngineDump(second.engine))).toEqual([
+      'solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band dc12 unvalued 2',
     ]);
   });
 
@@ -95,7 +143,7 @@ describe('netlist.dump', () => {
     expect(text).toContain('branch 1 e3.filament resistor lamp.incandescent 3 -> 4 island 0');
     expect(solveLines(text)).toEqual([
       expect.stringMatching(
-        /^solve island 0 solved flags none iterations [1-9]\d* reference 0 unknowns \d+ band none$/,
+        /^solve island 0 solved flags none iterations [1-9]\d* reference 0 unknowns \d+ band dc12$/,
       ),
     ]);
     // Solved at the world's tick on the way in (the world was never materialised).
@@ -112,7 +160,7 @@ describe('netlist.dump', () => {
     const text = netlistDump(world(), engineTestOptions());
     expect(text).toContain('diagnostic mixed-island island 0');
     expect(solveLines(text)).toEqual([
-      'solve island 0 mixed flags none iterations 0 reference none unknowns 0 band none sources dc 0 ac 1',
+      'solve island 0 mixed flags none iterations 0 reference none unknowns 0 band none (mixed) sources dc 0 ac 1',
     ]);
   });
 
@@ -128,7 +176,7 @@ describe('netlist.dump', () => {
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
     expect(solveLines(formatEngineDump(singular.engine))[0]).toMatch(
-      /^solve island 0 singular flags singular iterations [1-9]\d* reference \d+ unknowns \d+ band none$/,
+      /^solve island 0 singular flags singular iterations [1-9]\d* reference \d+ unknowns \d+ band none \(unrated-source\)$/,
     );
     expect(solveLines(formatEngineDump(unsettled.engine))).toEqual([
       expect.stringMatching(/^solve island 0 nonConverged flags nonConverged iterations [1-9]\d* reference 0 /),
@@ -143,7 +191,7 @@ describe('netlist.dump', () => {
     const control = session(bench, 123);
     const text = formatEngineDump(live.engine);
     expect(solveLines(text)[1]).toBe(
-      'solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 3',
+      'solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none (no-source) unvalued 3',
     );
     const saved = migrateWorld(JSON.parse(JSON.stringify(live.world())));
     if (!saved.ok) throw new Error(saved.error.message);

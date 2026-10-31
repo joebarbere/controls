@@ -316,6 +316,9 @@ export class SimHost {
   async netlistDumpAt(): Promise<{ readonly tick: number; readonly text: string }> {
     const captured = this.capture();
     const world = await captured.world;
+    // Default engine options (the built-in catalogue and models): what the game's sim worker runs
+    // (`entry.ts` builds the runner with no `engine` options), so the dump's engine
+    // compiles the same netlist and values as the one that exported the world.
     return { tick: captured.tick, text: netlistDump(world) };
   }
 

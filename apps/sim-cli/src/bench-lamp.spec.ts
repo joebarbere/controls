@@ -24,10 +24,10 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 /** `world.hash` with the lamp lit: 1.5 s after the switch closed. */
 export const BENCH_LAMP_LIT_HASH = 'ed42d957348f2c2f79aad6ed892228a20e59bb543ba3e348399595c37d7b3fbc';
-export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '475fa520421f1fce6af75b16062692fa94bd8fd1d94686908756314df31b0bb4';
+export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '52010da7436ce267029b58a73aadc43c6e3ddb4ca0db17f1c3a3bf695b9fd517';
 /** `world.hash` at the end: 0.5 s after the switch opened, the lamp out. */
 export const BENCH_LAMP_HASH = '0b533c942486866c3d8757b94dfdb6c2d891f66ae0401f97a96aac4d1ea6cb28';
-export const BENCH_LAMP_SNAPSHOT_HASH = '0e4bd06d4b3435e6664c5b26c7080e801381f91d8e563eccdae6d6c707ae103b';
+export const BENCH_LAMP_SNAPSHOT_HASH = 'd5bbbaaf731e59d67fd7a1e459504f9198a7d5d563d0ef0f1a52cb7e010ac11f';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

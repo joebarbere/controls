@@ -621,8 +621,8 @@ Acceptance:
 _`netlist.dump` and the HUD's last solve done 2026-10-31 (sim-engine half; [simulation architecture](../docs/architecture/simulation.md#netlistdump-f26)); `test-engineer` review pending. Notes:_
 
 - _`netlist.dump` is a console query beside `world.hash`, not a registered command (as `world.hash` is), and a pure function of the materialised world: in the game it reuses the `state` query, so no worker message and no `SIM_PROTOCOL_VERSION` bump. Goldens on `bench-leads`, `sim-step`, `sources` and `mains` in `apps/sim-cli/src/goldens/netlist-dump/`, asserted byte for byte from Chromium by `apps/game-e2e/src/netlist-dump.spec.ts`._
-- _**F2.5's `bench-lamp` golden** is added when F2.5's scenario lands (PRs #62/#63)._
-- _**Nominal band selection is pending**: `NOMINAL_BANDS` still holds only `none`, so every dump prints `band none`. Appending bands bumps `SIM_PROTOCOL_VERSION` (§12) and moves the pinned snapshot hashes of every scenario with a source; its numbers are sequenced after F2.5 (which claims protocol 4 and engine 5)._
+- _The `bench-lamp` dump golden landed with F2.5._
+- _**Nominal bands done 2026-10-31** (protocol 5, [simulation architecture](../docs/architecture/simulation.md#nominal-bands-f26)): `dc12`, `dc24`, `ac120-240`, `ac208y120` and `ac480y277` from the sources' nameplates, `none` with a reason otherwise. There is no engine bump (ADR 0011 "Protocol 5"): only snapshot and dump goldens moved. A per-version protocol fingerprint now guards the contract (F2.5 test review). `electrical-realism-reviewer` (band nominals, and #68's 4/3 full-scale constants) and `test-engineer` reviews pending._
 
 _Overlays done 2026-10-31 (`renderer-engineer`; [rendering architecture](../docs/architecture/rendering.md#debug-overlays-f26), [rendering caveats](../docs/caveats/rendering.md)); `test-engineer` review pending, and `electrical-realism-reviewer` for the scales' nominal values and sources. Notes:_
 

@@ -24,9 +24,9 @@ import { startSandbox } from './support/sandbox';
 test.use({ viewport: { width: 1280, height: 720 } });
 
 const BENCH_LAMP_LIT_HASH = 'ed42d957348f2c2f79aad6ed892228a20e59bb543ba3e348399595c37d7b3fbc';
-const BENCH_LAMP_LIT_SNAPSHOT_HASH = '475fa520421f1fce6af75b16062692fa94bd8fd1d94686908756314df31b0bb4';
+const BENCH_LAMP_LIT_SNAPSHOT_HASH = '52010da7436ce267029b58a73aadc43c6e3ddb4ca0db17f1c3a3bf695b9fd517';
 const BENCH_LAMP_HASH = '0b533c942486866c3d8757b94dfdb6c2d891f66ae0401f97a96aac4d1ea6cb28';
-const BENCH_LAMP_SNAPSHOT_HASH = '0e4bd06d4b3435e6664c5b26c7080e801381f91d8e563eccdae6d6c707ae103b';
+const BENCH_LAMP_SNAPSHOT_HASH = 'd5bbbaaf731e59d67fd7a1e459504f9198a7d5d563d0ef0f1a52cb7e010ac11f';
 
 type Hooks = {
   __controlsSession?: {

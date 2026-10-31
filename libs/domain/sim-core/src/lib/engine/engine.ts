@@ -1,4 +1,4 @@
-import { BUILTIN_CATALOG, type Catalog, regionProfile } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog, type RegionProfile, regionProfile } from '@controls/catalog';
 import type { ReplayEntry, World } from '@controls/save-format';
 import {
   compareSimEvents,
@@ -34,11 +34,12 @@ import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue 
 import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
-import type { IslandKind, Netlist, NetlistIsland, StateBag, TerminalRef } from '../netlist/types';
+import type { IslandKind, Netlist, NetlistBranch, NetlistIsland, StateBag, TerminalRef } from '../netlist/types';
 
 export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from '../devices';
+import { islandNominalBands, type NominalBandReason, SOURCE_BAND_RULES } from './bands';
 import { buildTopologyDescriptor } from './descriptor';
 import {
   type LayerContext,
@@ -149,6 +150,8 @@ export interface SimIslandDiagnostic {
   readonly unknowns: number;
   /** Its nominal band: an index into `NOMINAL_BANDS` (0 = `none`, no scale). */
   readonly band: number;
+  /** Why its band is `none` (`engine/bands.ts`); `null` for a band with a scale. */
+  readonly bandReason: NominalBandReason | null;
   /** `unmodelled`: the branches no device model or default could value, ascending. Else empty. */
   readonly unvalued: readonly number[];
   /** `mixed`: its DC and AC source branches, ascending (P2 has no converters). Else empty. */
@@ -275,6 +278,8 @@ export class SimEngine {
   private readonly acSolver = new AcSolver();
   /** The region's supply frequency (`RegionProfile.frequencyHz`, 60 Hz for NEC): the AC islands' analysis frequency. */
   private readonly frequencyHz: number;
+  /** The world's region profile: the AC bands' nominal systems (F2.6). */
+  private readonly region: RegionProfile;
   /** Whether the current netlist has an `ac` island (so a solve runs the phasor solver too). */
   private hasAc = false;
   private generation = 0;
@@ -323,6 +328,7 @@ export class SimEngine {
   private islandReferences = new Int32Array(0);
   private islandUnknowns = new Uint32Array(0);
   private islandBands = new Uint8Array(0);
+  private bandReasons: (NominalBandReason | null)[] = [];
   private readonly nodeOf = new Map<string, number>();
   // Device records in the snapshot: per record, its bank, device index and byte offset.
   private records: {
@@ -363,7 +369,8 @@ export class SimEngine {
     this.spare = createDcSolution(this.current);
     this.values = new DcBranchValues(this.current.branches.length);
     this.acValues = new AcBranchValues(this.current.branches.length);
-    this.frequencyHz = regionProfile(world.regionId).frequencyHz.value;
+    this.region = regionProfile(world.regionId);
+    this.frequencyHz = this.region.frequencyHz.value;
     this.hook = (island, iterate, values) => {
       const netlist = this.current;
       const branches = island.branches;
@@ -561,6 +568,7 @@ export class SimEngine {
         referenceNode: solved ? islandReferenceNode(netlist, island) : -1,
         unknowns: this.unknownsOf(island, solved),
         band: this.islandBands[island.index],
+        bandReason: this.bandReasons[island.index],
         unvalued: status === 'unmodelled' ? of((index) => this.unvalued[index] === 1) : [],
         dcSources: status === 'mixed' ? of(source('dc')) : [],
         acSources: status === 'mixed' ? of(source('ac')) : [],
@@ -908,6 +916,15 @@ export class SimEngine {
     return entity < this.world.nextEntityId ? this.tombstones.get(entity) : undefined;
   }
 
+  /** A source branch's nominal band (`SOURCE_BAND_RULES` by its model kind, from its entity's nameplate). */
+  private sourceBand(branch: NetlistBranch, entities: ReadonlyMap<number, World['entities'][number]>): number {
+    if (branch.element.kind !== 'entity') return 0;
+    const rule = ownModel(SOURCE_BAND_RULES, branch.model);
+    const entity = entities.get(branch.element.entity);
+    const device = entity === undefined ? undefined : this.catalog.device(entity.ref);
+    return rule === undefined || device === undefined ? 0 : rule(device.model.params, this.region);
+  }
+
   /**
    * Rebuilds the banks and the per-branch and per-island tables for the current netlist (at the start
    * and after every structural change), carrying each device's state through its bag:
@@ -1015,7 +1032,10 @@ export class SimEngine {
     this.islandIterations = new Uint16Array(islandCount);
     this.islandReferences = new Int32Array(islandCount);
     this.islandUnknowns = new Uint32Array(islandCount);
-    this.islandBands = new Uint8Array(islandCount);
+    // Nominal bands (F2.6): fixed for a topology, since a source's band depends only on its nameplate.
+    const bands = islandNominalBands(netlist, (branch) => this.sourceBand(branch, entities));
+    this.islandBands = Uint8Array.from(bands, (b) => b.band);
+    this.bandReasons = bands.map((b) => b.reason);
     this.islandEntities = netlist.islands.map((island) => {
       const members = new Set<number>();
       for (const node of island.nodes) for (const member of netlist.nodes[node].members) members.add(member.entity);
