@@ -7,6 +7,7 @@ Framework-free domain library (`type:domain`): the device catalogue (plan P2 dec
 - `parseCatalog` / `catalogOrThrow`: validate entries (kind, parameters, terminals, controls, source coverage) and build a `Catalog` that resolves `CatalogRef`s.
 - `BUILTIN_CATALOG` and `CATALOG_VERSION` (1): `content/devices`, mirrored into `src/lib/builtin-devices.generated.ts` (regenerate with `pnpm nx test catalog -u`).
 - `leadResistanceOhm`: a test lead's resistance from resistivity, length and area, with a temperature coefficient.
+- `RegionProfile` and `REGION_PROFILES` (F2.2 part 2): each region's supply frequency and nominal system voltages, sourced (NEC: 60 Hz, 120/240 V, 208Y/120 V, 480Y/277 V).
 - JSON Schema exports in `json-schema/` (`device.v1`, `device-state.<kind>`), staleness-checked.
 
 Must not depend on Angular, the DOM, Electron, Node built-ins or any non-`type:domain` lib, and must stay deterministic ([workspace caveats](../../../docs/caveats/workspace.md)). Gotchas: [save-format caveats](../../../docs/caveats/save-format.md#the-device-catalogue-p2-kickoff-catalogue-v1). Tests: `pnpm nx test catalog` (90 % coverage gate).

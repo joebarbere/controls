@@ -24,11 +24,15 @@ import type { CscPattern, SparseFactors } from '../lu/sparse-lu';
  * evicts the same entries in every runtime.
  */
 
-/** One island's symbolic factorisation in one set of stamp modes. */
-export interface IslandSymbolic {
+/**
+ * One island's symbolic factorisation in one set of stamp modes. `F` is the numeric factors' type:
+ * `SparseFactors` for the DC solver, `ComplexSparseFactors` for the phasor solver (F2.2 part 2), which
+ * keeps its own cache of the same shape.
+ */
+export interface IslandSymbolic<F = SparseFactors> {
   /** The order of the island's system. */
   readonly unknowns: number;
-  /** The island's branches' stamp codes (`DC_STAMP_*`), in island branch order. */
+  /** The island's branches' stamp codes (`DC_STAMP_*`, or the AC solver's pattern classes), in island branch order. */
   readonly signature: Uint8Array;
   /** The matrix pattern. */
   readonly pattern: CscPattern;
@@ -41,14 +45,14 @@ export interface IslandSymbolic {
    * patterns) when the pivot rule still picks the same rows, else redoes afresh (`sparse-lu.ts`).
    * Mutable working storage: it never changes a result bit.
    */
-  readonly factors: SparseFactors;
+  readonly factors: F;
   // The stamp program (`dc.ts`): per matrix call its value code and branch, then the right-hand side.
   readonly codes: Uint8Array;
   readonly branches: Int32Array;
   readonly rhsTargets: Int32Array;
   readonly rhsCodes: Uint8Array;
   readonly rhsBranches: Int32Array;
-  /** Each island node's conductive component (its smallest node), in island node order. */
+  /** Each island node's conductive component (its smallest node), in island node order (empty for AC). */
   readonly comp: Int32Array;
   /** A fingerprint of the island's branch ends, checked on every hit. */
   readonly ends: number;
@@ -66,10 +70,10 @@ export interface FactorisationCacheStats {
   readonly topologies: number;
 }
 
-interface TopologyEntry {
+interface TopologyEntry<F> {
   lastUse: number;
   /** Island index → its mode variants, most recently used first. */
-  readonly islands: Map<number, IslandSymbolic[]>;
+  readonly islands: Map<number, IslandSymbolic<F>[]>;
 }
 
 function sameSignature(signature: Uint8Array, stamps: Uint8Array, length: number): boolean {
@@ -79,10 +83,10 @@ function sameSignature(signature: Uint8Array, stamps: Uint8Array, length: number
 }
 
 /** A fixed-size LRU of symbolic factorisations, keyed by `topologyHash`, island and stamp modes. */
-export class FactorisationCache {
+export class FactorisationCache<F = SparseFactors> {
   readonly capacity: number;
   readonly modeVariants: number;
-  private readonly topologies = new Map<string, TopologyEntry>();
+  private readonly topologies = new Map<string, TopologyEntry<F>>();
   private clock = 0;
   private hitCount = 0;
   private missCount = 0;
@@ -117,7 +121,7 @@ export class FactorisationCache {
    * `length` codes of `stamps`, or `undefined` (counted as a miss: the caller builds and `store`s
    * it). A hit makes the topology and the variant the most recently used.
    */
-  find(topologyHash: string, island: number, stamps: Uint8Array, length: number): IslandSymbolic | undefined {
+  find(topologyHash: string, island: number, stamps: Uint8Array, length: number): IslandSymbolic<F> | undefined {
     const entry = this.topologies.get(topologyHash);
     if (entry !== undefined) {
       entry.lastUse = ++this.clock;
@@ -140,7 +144,7 @@ export class FactorisationCache {
   }
 
   /** Stores a symbolic factorisation built after a miss, evicting the least recently used as needed. */
-  store(topologyHash: string, island: number, symbolic: IslandSymbolic): void {
+  store(topologyHash: string, island: number, symbolic: IslandSymbolic<F>): void {
     let entry = this.topologies.get(topologyHash);
     if (entry === undefined) {
       if (this.topologies.size >= this.capacity) this.evictLeastRecent();

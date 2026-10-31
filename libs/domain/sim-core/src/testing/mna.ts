@@ -3,7 +3,15 @@ import { type DcSolution, ISLAND_FLAG_SINGULAR } from '../lib/mna/dc';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_VSOURCE, type DcBranchValues } from '../lib/mna/values';
 import { computeTopologyHash } from '../lib/netlist/hash';
 import { UnionFind } from '../lib/netlist/union-find';
-import type { ElementKind, IslandKind, Netlist, NetlistBranch, NetlistIsland, NetlistNode } from '../lib/netlist/types';
+import type {
+  ElementKind,
+  IslandKind,
+  Netlist,
+  NetlistBranch,
+  NetlistIsland,
+  NetlistNode,
+  SourceDomain,
+} from '../lib/netlist/types';
 
 /*
  * Helpers for the MNA specs (F2.2): synthetic netlists built straight from an edge list, and the
@@ -18,11 +26,16 @@ export interface SyntheticBranch {
 
 /**
  * A netlist of `nodeCount` nodes and the given branches, with islands computed as the compiler
- * would (connected components numbered by their smallest node) and classified `dc` when they hold a
- * `vsource` element, else `empty`. Node `i` has the single member `(i + 1, 't')`; branch `i` is
- * connection `i + 1` of model `test.element`.
+ * would (connected components numbered by their smallest node) and classified `dc` (or `ac`, with
+ * `domain` 'ac': every source is then an AC source) when they hold a `vsource` element, else `empty`.
+ * Node `i` has the single member `(i + 1, 't')`; branch `i` is connection `i + 1` of model
+ * `test.element`.
  */
-export function syntheticNetlist(nodeCount: number, branches: readonly SyntheticBranch[]): Netlist {
+export function syntheticNetlist(
+  nodeCount: number,
+  branches: readonly SyntheticBranch[],
+  domain: SourceDomain = 'dc',
+): Netlist {
   const sets = new UnionFind(nodeCount);
   for (const branch of branches) sets.union(branch.a, branch.b);
   const islandOfRoot = new Map<number, number>();
@@ -46,7 +59,7 @@ export function syntheticNetlist(nodeCount: number, branches: readonly Synthetic
     element: { kind: 'connection', connection: index + 1 },
     kind: branch.kind,
     model: 'test.element',
-    source: branch.kind === 'vsource' ? 'dc' : null,
+    source: branch.kind === 'vsource' ? domain : null,
     a: branch.a,
     b: branch.b,
     island: islandOfNode[branch.a],
@@ -54,7 +67,7 @@ export function syntheticNetlist(nodeCount: number, branches: readonly Synthetic
   }));
   const islands: NetlistIsland[] = [...islandOfRoot.values()].map((index) => {
     const islandBranches = netBranches.filter((b) => b.island === index);
-    const kind: IslandKind = islandBranches.some((b) => b.kind === 'vsource') ? 'dc' : 'empty';
+    const kind: IslandKind = islandBranches.some((b) => b.kind === 'vsource') ? domain : 'empty';
     return {
       index,
       kind,
@@ -263,7 +276,7 @@ function twoProduct(a: number, b: number): [number, number] {
 }
 
 /** A compensated accumulator (sum and running error). */
-class Accumulator {
+export class Accumulator {
   private hi = 0;
   private lo = 0;
   add(x: number): void {

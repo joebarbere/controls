@@ -1,6 +1,6 @@
 # ADR 0012: Oracle tolerance and corpus
 
-**Status:** **Accepted for DC** (2026-10-30, after F2.2 part 1, #46: the DC comparison runs in `pnpm verify`, margin measured below). **AC pending** F2.2 part 2, which confirms the same tolerance on the AC corpus. The corpus, its format and the regeneration rules stand for both.
+**Status:** **Accepted** for DC (2026-10-30, after F2.2 part 1, #46) and for AC (2026-10-31, after F2.2 part 2): both comparisons run in `pnpm verify`, with the margins measured below. The corpus, its format and the regeneration rules stand for both.
 **Date:** 2026-10-30 (Phase 2)
 **Owners:** `test-engineer` and `sim-engine-engineer`.
 **Review:** `test-engineer` approved (2026-10-30) with changes, applied in #47: biconnected circuits, the tolerance floor, `ngspice -n`, an atomic regeneration, and the solver-adapter decision below.
@@ -19,11 +19,11 @@
 - `oracleDeck(circuit)`: the SPICE deck text;
 - `oracleNetlist(circuit)`: the circuit in F2.1's netlist vocabulary (`NetlistBranch`-shaped branches with sorted `values`), the input the solvers are compared on. `resistor` and `vsource` are F2.1's element kinds; `isource` and `inductor`/`capacitor` are oracle kinds.
 
-**The solver adapter** (`oracleDcInput` in `netlist.ts`; AC with part 2). F2.1's `ElementKind` is **not widened**. The adapter maps the oracle netlist onto F2.2's real input, a `Netlist` plus its `DcBranchValues`:
+**The solver adapter** (`oracleDcInput` and `oracleAcInput` in `netlist.ts`). F2.1's `ElementKind` is **not widened**. The adapter maps the oracle netlist onto F2.2's real input, a `Netlist` plus its `DcBranchValues`:
 
 - `resistor` and `vsource` map to themselves;
 - an `isource` maps to a `resistor` element carrying the `DC_STAMP_ISOURCE` stamp, so `islandReferenceNode` (which looks at `vsource` ends) can never pick a current source's end as the reference;
-- `inductor` and `capacitor` follow F2.2 part 2's AC branch values.
+- in AC (`oracleAcInput`, F2.2 part 2), `inductor` and `capacitor` map to `resistor` elements carrying the `AC_STAMP_INDUCTOR` and `AC_STAMP_CAPACITOR` stamps (inductance and capacitance are AC stamp modes, not element kinds), and an AC `vsource` gets its phasor EMF from `phasorUnit`, the solver's exact angle constants.
 
 `dc-oracle.spec.ts` runs the element-equation and KCL residuals of ngspice's solution on the adapted `Netlist` and `DcBranchValues` (as well as on `oracleNetlist`), and asserts `islandReferenceNode(...) === 0`, and the solver's reported reference node 0, for every DC circuit.
 
@@ -66,9 +66,9 @@ Every value is a decimal `mantissa × 10^exponent` (an E12 mantissa), so the dec
 - **Staleness:** regenerating every deck from the pinned seeds reproduces the checked-in decks byte for byte, with no stray files; each result's deck hash matches its checked-in deck; the header matches the pinned seeds, counts, options and `gmin`.
 - **Consistency:** ngspice's solution satisfies every element's equation, with values taken from `oracleNetlist`, and KCL with `gmin` at every node. This proves the deck and the netlist describe the same circuit with the same sign conventions, and that the parser puts each value in the right slot, before any solver is compared. Residuals are normalised by the circuit's largest voltage (element equations) or current (KCL), with `gmin` taken from the netlist (`netlist.gminS`), so a wrong `gmin` in `oracleNetlist` fails. Measured worst on the first corpus: 2.9e-9 (DC), 1.2e-9 (AC), all rounding; the check allows 1e-7, while a wrong sign, slot or value is of order 1.
 - **Live branches:** at least 95 % of branches carry more than 1e-6 of their circuit's largest current.
-- **The DC comparison** (`dc-oracle.spec.ts`, on since F2.2 part 1): `DcSolver` solves every adapted DC circuit, and every node voltage and branch current must be within the tolerance below of ngspice's; on the same solution, sim-core's own KCL and source-row checks (`testing/mna.ts`) must hold, and the island must not be flagged. **The AC comparison** (`it.todo`) arrives with F2.2 part 2.
+- **The DC comparison** (`dc-oracle.spec.ts`, on since F2.2 part 1): `DcSolver` solves every adapted DC circuit, and every node voltage and branch current must be within the tolerance below of ngspice's; on the same solution, sim-core's own KCL and source-row checks (`testing/mna.ts`) must hold, and the island must not be flagged. **The AC comparison** (`ac-oracle.spec.ts`, on since F2.2 part 2) does the same with `AcSolver` at 60 Hz: complex magnitudes for the values, sim-core's own complex KCL and source rows (`testing/ac.ts`) on the same solution. Both comparisons run on the default solver (dense, for these 2–30-node circuits) and with every island forced onto sparse LU.
 
-### Tolerance (Accepted for DC; AC to be confirmed with F2.2 part 2)
+### Tolerance (Accepted for DC and AC)
 
 Each node voltage and branch current is a phasor `x` (DC has `im = 0`), compared with ngspice's `x_ref` by `compareOracleSolution`:
 
@@ -97,7 +97,9 @@ for volts and amps alike (each against the maximum of the same quantity: voltage
 - a 1e-5 relative error in the solver's resistor conductance: 6,622 value mismatches (sim-core's own residuals fail too, since the residual helpers use the true values);
 - a current source's sign flipped in the adapter: 16,472 value mismatches across all 369 circuits holding a current source, while sim-core's own KCL and source rows still hold (the solver is self-consistent on the wrong input). That is the error class only the oracle catches.
 
-With F2.2 part 2: run the AC comparison the same way, record its worst share here, and mark this ADR Accepted for AC.
+**Measured with the real solver (AC, 2026-10-31, F2.2 part 2's `AcSolver`):** over all 500 AC circuits the worst error is **1.8e-5 of the allowance for voltages** (`ac-0007`, node 16) and **5.0e-4 for currents** (`ac-0057`, branch 0) on the dense path, and 2.4e-5 and 5.0e-4 on the forced-sparse path: margins of about 54,000× and 2,000×, matching the emulated solver above. sim-core's own complex KCL and source rows hold on every circuit (worst 0.4 % of their floor, 1.4 % on the sparse path), and no island is flagged. The tolerance is confirmed for AC as it stands, and the spec asserts a margin of at least 10× (a worst share under 0.1) on both quantities and both paths.
+
+**The AC comparison bites** (12 mutants planted in copies, each restored from its copy; every one failed `ac-oracle.spec.ts` or the AC solver specs): an inductor's or a capacitor's admittance sign flipped, ω taken as f (off by 2π), the ±120° angles swapped, conjugated off-diagonal admittances (a Hermitian stamp instead of the transpose), a conjugated pivot reciprocal in the dense LU, the imaginary part dropped in the sparse forward solve, in the dense back substitution and in the sparse assembly, the pivot magnitude ignoring the imaginary part, a cached numeric factorisation reused without recomputation, and the solver keeping its first ω. The oracle itself killed ten of them; the other two (the cache and the stale ω) are caught by the warm-equals-cold properties, since the oracle solves each circuit once at one frequency.
 
 ### When to regenerate
 

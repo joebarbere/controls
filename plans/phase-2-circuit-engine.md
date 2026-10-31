@@ -343,13 +343,23 @@ _Part 1 done 2026-10-30; reviewed by `test-engineer` (changes made) and `electri
 
 Acceptance, **part 2: complex phasor** (needs F2.7):
 
-- [ ] Interleaved complex MNA for AC islands at the region frequency. P2 adds the `RegionProfile` type with its electrical fields (`frequencyHz` 60 and the nominal voltages), each with a `source`, and brings it to `electrical-realism-reviewer`. P1 never created the type: only `RegionId` exists (`save-format` `primitives.ts`), as the kickoff realism audit found.
-- [ ] Complex R, L and C impedance stamps, and phasor sources whose angles are exact constants: 0°, 180° and ±120° (from `cos = -0.5` and `sin = sqrt(3)/2`).
-- [ ] **Golden fixtures:**
+- [x] Interleaved complex MNA for AC islands at the region frequency. P2 adds the `RegionProfile` type with its electrical fields (`frequencyHz` 60 and the nominal voltages), each with a `source`, and brings it to `electrical-realism-reviewer`. P1 never created the type: only `RegionId` exists (`save-format` `primitives.ts`), as the kickoff realism audit found.
+- [x] Complex R, L and C impedance stamps, and phasor sources whose angles are exact constants: 0°, 180° and ±120° (from `cos = -0.5` and `sin = sqrt(3)/2`).
+- [x] **Golden fixtures:**
   - an unbalanced 120/240 split-phase load, where the neutral current is the phasor sum of the line currents;
   - a balanced wye load, where the neutral current is about 0;
   - a series RL circuit at 60 Hz.
-- [ ] The AC oracle corpus passes.
+- [x] The AC oracle corpus passes.
+
+_Part 2 done 2026-10-31; `test-engineer` and `electrical-realism-reviewer` reviews pending ([simulation architecture](../docs/architecture/simulation.md#the-phasor-solver-f22-part-2), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+
+- _**Complex LU, not the real 2n system.** `ComplexDenseLu` and `ComplexSparseLu` store every entry interleaved (`re, im`) and pivot by |re| + |im| (CABS1), with Smith's reciprocal once per pivot. The equivalent real system of order 2n would reuse the real LUs unchanged, but measured 4.1–6.1× slower dense (twice the flops and memory), and its pivoting can split a complex pair. The sparse kernels share the pattern work with DC: `sparseReach`, AMD, `buildSymbolic` (`mna/shared.ts`) and a generic `FactorisationCache<ComplexSparseFactors>`. The crossover has the same shape as DC (warm sparse wins from about 30 unknowns, cold from about 120), so `SPARSE_MIN_UNKNOWNS` (64) is shared._
+- _**Inductance and capacitance are AC stamp modes on `resistor` elements** (`AcBranchValues`), as a DC current source is: F2.1's `ElementKind` and `topologyHash` are unchanged, and the DC pins didn't move. There is no AC current source yet: it would need the floating-component pinning in complex form._
+- _**DC and AC share the solution record.** `AcSolver` writes only `ac` islands; the engine (F2.3a) runs `DcSolver.solve` then `AcSolver.solve` into one `DcSolution`. `mixed` islands are solved by neither._
+- _**`RegionProfile`** is in `@controls/catalog` (`region.ts`): NEC is 60 Hz, 120/240 V split-phase, 208Y/120 V and 480Y/277 V, each value with a source (ANSI C84.1 and IEEE Std 141); the line-to-line values are the nominal names of the exact √3 multiples. **`electrical-realism-reviewer` sign-off pending.**_
+- _**Floor policy with complex magnitudes** (`src/testing/ac.ts`): KCL, source rows and element laws; real power balance and reactive-power bookkeeping (Σ ωL|I|² − Σ |I|²/(ωC)), with each source's apparent power |E||I| as its term (a purely resistive island's Q is 0 only to ε |E||I|); linearity bit for bit for 0, ±2^m and ±j·2^m, in residual space for other complex k (the exact 120° rotation included) and for superposition; dense against sparse on residuals everywhere and on values over a well-conditioned subset with a resistive spanning tree (L–C resonance makes values elsewhere unbounded). Two new pins: a SHA-256 over 300 seeded dense AC solves and one over 40 large sparse AC solves; the DC pins are unchanged and `SIM_ENGINE_VERSION` stays 1._
+- _**The AC oracle** passes on both paths, worst 1.8e-5 of the allowance for volts and 5.0e-4 for amps (ADR 0012, now Accepted for AC). Twelve planted faults were all killed (listed in the PR)._
+- _**For F2.4:** the utility and three-phase sources reach the solver through an `AcValueHook`, building each phase from the line-to-neutral magnitude and the exact ±120° angles (never from the 208 V name). An AC load with a nonlinear law needs an AC outer loop, which doesn't exist yet._
 
 Acceptance, **part 3: sparse, cache and nonlinear loop**:
 
@@ -532,7 +542,7 @@ Acceptance:
 - [x] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
 - [x] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
 - [x] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
-- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. _DC done (worst 1.06e-3 of the allowance); AC with F2.2 part 2._
+- [x] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. _DC done (worst 1.06e-3 of the allowance); AC done with F2.2 part 2 (worst 1.8e-5 for volts, 5.0e-4 for amps)._
 - [x] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
 - [ ] **`pnpm sim bench`,** also run as the Nx `bench` target in `verify`:
   - it covers a seeded synthetic 2,000-node plant (mostly radial, with some loops) and a per-tick mix of devices;
@@ -541,11 +551,11 @@ Acceptance:
   - it runs the built bundle, never under coverage instrumentation;
   - the re-solve case switches on with F2.2 part 3, and the per-tick case is on from F2.3a.
 
-_Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Accepted for DC; [oracle guide](../docs/guides/oracle.md)). Notes:_
+_Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Accepted for DC, and for AC since F2.2 part 2; [oracle guide](../docs/guides/oracle.md)). Notes:_
 
 - _The corpus is 500 DC + 500 AC biconnected circuits, about 3.4 MB of text. Beyond the staleness test, `verify` checks ngspice's solution against every element equation and KCL in the sim-core netlist (worst residual 3e-9), which pins the deck ↔ netlist mapping before any solver exists, and that at least 95 % of branches carry real current (99 % do)._
 - _test-engineer review (approved): the tolerance floor is `max(1e-12, 1e-7·max|x_ref|)`, above ngspice's own 3e-9 noise; an emulated float64 MNA solver stays at 1.1e-3 of the allowance or less. The solver adapter maps `isource` to a `resistor` with `DC_STAMP_ISOURCE` rather than widening F2.1's `ElementKind` (ADR 0012)._
-- _**DC comparison on** (after #46): `oracleDcInput` adapts each circuit to a `Netlist` plus `DcBranchValues`; `DcSolver`'s values match ngspice's on all 500 DC circuits, worst 1.06e-3 of the allowance for volts (`dc-0170`) and 4.6e-4 for amps (`dc-0152`), with sim-core's own KCL and source rows holding; the reference node is 0 for every circuit; the decks' gmin is `GMIN_S.value`. A planted 1e-5 resistor-stamp error and a flipped isource sign both fail it. **Still open:** the AC adapter and comparison (F2.2 part 2)._
+- _**DC comparison on** (after #46): `oracleDcInput` adapts each circuit to a `Netlist` plus `DcBranchValues`; `DcSolver`'s values match ngspice's on all 500 DC circuits, worst 1.06e-3 of the allowance for volts (`dc-0170`) and 4.6e-4 for amps (`dc-0152`), with sim-core's own KCL and source rows holding; the reference node is 0 for every circuit; the decks' gmin is `GMIN_S.value`. A planted 1e-5 resistor-stamp error and a flipped isource sign both fail it. **AC comparison on** (F2.2 part 2): `oracleAcInput` adapts each AC circuit (R, L and C as `resistor` elements with their AC stamp); `AcSolver`'s values match ngspice's on all 500, worst 1.8e-5 of the allowance for volts (`ac-0007`) and 5.0e-4 for amps (`ac-0057`), with sim-core's own complex KCL and source rows holding, on both LU paths._
 - _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: one topology change (`plant-recompile-switch`) is 1.2–1.3 ms (1.7–2.8 ms under heavy load), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
 - _`gmin` is stamped in the decks as explicit resistors on the circuit nodes, not `.options rshunt`, which would also shunt the decks' internal sense and source nodes (ADR 0012)._
 
@@ -625,7 +635,7 @@ Numbers are assigned in the order the ADRs land.
 | —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted                                   |
 | —       | World document v2 + leads + catalogue v1          | ✅ Done                                       |
 | F2.1    | Netlist compiler                                  | ✅ Done                                       |
-| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1 and 3 done (re-solve gate pending) |
+| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
 | F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started                                |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
 | F2.4    | Power sources                                     | ⬜ Not started                                |

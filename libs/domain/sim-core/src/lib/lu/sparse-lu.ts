@@ -332,48 +332,9 @@ export class SparseLu {
     return REPLAY_OK;
   }
 
-  /**
-   * Depth-first search from `root` over the graph of L, pushing finished rows onto `xi` from `top`
-   * downwards (so `xi[top … n)` ends up in reverse postorder). Iterative, so a long chain (a radial
-   * feeder) can't overflow the call stack. Returns the new `top`.
-   */
+  /** The reach of `root` over the graph of L (`sparseReach`). Returns the new `top`. */
   private reach(f: SparseFactors, root: number, top: number, gen: number): number {
-    const stack = this.stack;
-    const cursor = this.cursor;
-    const visited = this.visited;
-    const pinv = f.pinv;
-    const lp = f.lp;
-    const li = f.li;
-    let depth = 0;
-    stack[0] = root;
-    visited[root] = gen;
-    const j0 = pinv[root];
-    cursor[0] = j0 >= 0 ? lp[j0] : 0;
-    while (depth >= 0) {
-      const i = stack[depth];
-      const j = pinv[i];
-      let descended = false;
-      if (j >= 0) {
-        const end = lp[j + 1];
-        for (let t = cursor[depth]; t < end; t++) {
-          const child = li[t];
-          if (visited[child] === gen) continue;
-          cursor[depth] = t + 1;
-          visited[child] = gen;
-          depth++;
-          stack[depth] = child;
-          const jc = pinv[child];
-          cursor[depth] = jc >= 0 ? lp[jc] : 0;
-          descended = true;
-          break;
-        }
-      }
-      if (!descended) {
-        this.xi[--top] = i;
-        depth--;
-      }
-    }
-    return top;
+    return sparseReach(this.stack, this.cursor, this.visited, this.xi, f.pinv, f.lp, f.li, root, top, gen);
   }
 
   /** Solves `A x = b` in place over `b[0 … n)` with valid `factors`. */
@@ -407,3 +368,54 @@ export class SparseLu {
 const REPLAY_OK = 0;
 const REPLAY_SINGULAR = 1;
 const REPLAY_MISMATCH = 2;
+
+/**
+ * Depth-first search from `root` over the graph of L (an edge from a pivotal row i to every row of
+ * L(:, pinv[i])), pushing finished rows onto `xi` from `top` downwards, so `xi[top … n)` ends up in
+ * reverse postorder: a topological order of the reach (Gilbert–Peierls). Rows already marked `gen`
+ * in `visited` are skipped. Iterative, so a long chain (a radial feeder) can't overflow the call
+ * stack. Shared by the real and complex sparse LUs (it is integer work only). Returns the new `top`.
+ */
+export function sparseReach(
+  stack: Int32Array,
+  cursor: Int32Array,
+  visited: Int32Array,
+  xi: Int32Array,
+  pinv: Int32Array,
+  lp: Int32Array,
+  li: Int32Array,
+  root: number,
+  top: number,
+  gen: number,
+): number {
+  let depth = 0;
+  stack[0] = root;
+  visited[root] = gen;
+  const j0 = pinv[root];
+  cursor[0] = j0 >= 0 ? lp[j0] : 0;
+  while (depth >= 0) {
+    const i = stack[depth];
+    const j = pinv[i];
+    let descended = false;
+    if (j >= 0) {
+      const end = lp[j + 1];
+      for (let t = cursor[depth]; t < end; t++) {
+        const child = li[t];
+        if (visited[child] === gen) continue;
+        cursor[depth] = t + 1;
+        visited[child] = gen;
+        depth++;
+        stack[depth] = child;
+        const jc = pinv[child];
+        cursor[depth] = jc >= 0 ? lp[jc] : 0;
+        descended = true;
+        break;
+      }
+    }
+    if (!descended) {
+      xi[--top] = i;
+      depth--;
+    }
+  }
+  return top;
+}

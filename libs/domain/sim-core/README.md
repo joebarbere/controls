@@ -5,6 +5,8 @@ Framework-free domain library (`type:domain`): the circuit engine (plan P2): net
 - `SIM_ENGINE_VERSION` (`src/lib/engine-version.ts`), the engine version every save's manifest records (decision D8, ADR 0013): bump it whenever snapshot or world goldens are re-pinned for numeric reasons;
 - sourced constants (`src/lib/constants.ts`), each with a `source`;
 - the netlist compiler (F2.1, `src/lib/netlist/`): `compileNetlist`, the incremental `NetlistCompiler`, the per-kind netlist models, `topologyHash` and `formatNetlist`. See the [simulation architecture](../../../docs/architecture/simulation.md) and [caveats](../../../docs/caveats/simulation.md).
+- the solvers (F2.2, `src/lib/mna/` and `src/lib/lu/`): `DcSolver` (dense and sparse LU, the factorisation cache, the nonlinear outer loop) and `AcSolver` (phasor MNA at the region frequency, with complex dense and sparse LU), and their branch values (`DcBranchValues`, `AcBranchValues`);
+- the ngspice oracle harness (F2.7, `src/oracle/`, entry point `@controls/sim-core/oracle`), compared with both solvers in `pnpm verify`.
 
 `src/testing/` holds spec-only benches (synthetic model kinds), excluded from the lib build.
 
