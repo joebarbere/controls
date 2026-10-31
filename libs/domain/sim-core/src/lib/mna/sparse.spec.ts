@@ -555,7 +555,7 @@ describe('DcSolver sparse path: pinned bits and warm reuse (#49 review)', () => 
       solutions.filter((s) => s.islands.some((i) => i.unknowns >= SPARSE_MIN_UNKNOWNS.value)).length,
     ).toBeGreaterThanOrEqual(40);
     // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
-    // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was dbe5832a….
+    // changed, not the solver (no solver source changed): that re-pin alone did not bump SIM_ENGINE_VERSION. Was dbe5832a….
     // Re-pinned again in #51 for PIVOT_THRESHOLD 0.1 → 1 (plain partial pivoting): a numeric change,
     // so SIM_ENGINE_VERSION went to 2. Was ce24cbcd….
     expect(solutionHash(solutions)).toBe('ccb7f4af2a2a69eb87c832e26cf1527a4d2f23cde2d7c1435036aba246df1ae1');

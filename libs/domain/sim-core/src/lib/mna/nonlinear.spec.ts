@@ -510,12 +510,19 @@ function selfConsistent(
  * - **What the proof doesn't cover.** The schedule decides from one max-norm and one dot product over
  *   all voltages and currents together, so it can lose the alternation for a few steps (two α = 1 in a
  *   row, or a halving to 1/4 near the end): each such excursion costs at most about 4 iterations
- *   (1/16 ← 1 is four halvings). The loop also can't converge below each current's resolution: it
- *   stalls if a solve's noise exceeds that (#51: threshold pivoting's multipliers did, fixed by
- *   `PIVOT_THRESHOLD` 1).
- * - **Measured** (partial pivoting): over 2,197 islands the median is 16, the 99th percentile 21 and
- *   the most 24, and over 310 fresh-seed runs of this spec the most any fresh draw took was 27; the
- *   earlier 32 is kept as an example.
+ *   (1/16 ← 1 is four halvings).
+ * - **Why the derivation failed twice (#51), and what fixed it.** The contraction argument bounds how
+ *   fast the iterate approaches the fixed point, but the loop used to stop only when every branch
+ *   current repeated between solves to 1e-6 relative + 1 pA. A current is only as repeatable as the
+ *   linear solve resolves it, cond · ε · V · g: on ill-conditioned islands (current sources driving
+ *   39–108 kV through 10 kΩ) small currents repeat only to 5e-5 relative, so the loop stalled at the
+ *   noise floor and drifted to 41, 42 and 50 (the cap) on both LU paths: no contraction bound can
+ *   cover that. The loop now also stops in value space, when the hook's values for the last solve
+ *   are the ones it was solved with to 1e-6 (the fixed point itself; see `solveNonlinear`), which the
+ *   contraction argument does bound.
+ * - **Measured** (value-space stop, partial pivoting): over 6,542 islands from 3 seeded samples,
+ *   forced dense, the median is 16, the 99th percentile 19 and the most 20; forced sparse the most is
+ *   26. The earlier 32 is kept as an example.
  *
  * 40 is the derived 19 plus five excursions, under the cap of 50 (`OUTER_LOOP_MAX_ITERATIONS`).
  */
@@ -590,21 +597,25 @@ describe('outer-loop properties', () => {
     );
   });
 
-  it('converges within a bounded number of iterations on large circuits (sparse path)', () => {
+  it('converges within a bounded number of iterations on large circuits, forced dense and forced sparse', () => {
     fc.assert(
       fc.property(largeArb, nonlinearShare, hotRatio, (spec, every, ratio) => {
         const { circuit, hook, copy } = heatedCircuit(spec, every, ratio);
-        const values = copy();
-        const solution = new DcSolver().solveNonlinear(circuit.netlist, values, { hook });
-        for (const island of solution.islands) {
-          if (!island.solved || (island.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
-          expect(island.flags & ISLAND_FLAG_NON_CONVERGED).toBe(0);
-          expect(island.iterations).toBeLessThanOrEqual(ITERATION_BOUND);
+        // Islands of these circuits fall either side of SPARSE_MIN_UNKNOWNS, so each path is forced.
+        for (const sparseMinUnknowns of [Number.MAX_SAFE_INTEGER, 1]) {
+          const values = copy();
+          const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(circuit.netlist, values, { hook });
+          for (const island of solution.islands) {
+            if (!island.solved || (island.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
+            expect(island.flags & ISLAND_FLAG_NON_CONVERGED).toBe(0);
+            expect(island.iterations).toBeLessThanOrEqual(ITERATION_BOUND);
+          }
+          checkRows({ netlist: circuit.netlist, values }, solution);
         }
-        checkRows({ netlist: circuit.netlist, values }, solution);
       }),
       {
-        numRuns: 12,
+        // Each run solves both paths, so half the draws of a one-path property keep the same work.
+        numRuns: 6,
         examples: [
           // Ran to nonConverged on rounding noise before the current tolerance took the solve's resolution.
           [{ nodes: 177, islands: 1, seed: 11, meshPercent: 3, wellConditioned: true }, 2, 13],
@@ -614,6 +625,13 @@ describe('outer-loop properties', () => {
           // to 10 put ~3,000 ulps of noise on a node, so a 3.5e-7 A source current behind 1.85 Ω moved by
           // 5e-12 A between solves, above its tolerance, from iteration 25 on. Partial pivoting: 18.
           [{ nodes: 149, islands: 2, seed: 1770462711, meshPercent: 24, wellConditioned: true }, 3, 8],
+          // Took 42 on the dense path (#51 re-verification): a 1.06e-6 A current through 67 Ω beside the
+          // reference, in an island reaching 39 kV, repeated only to 4.5e-12 A (the solve's normwise
+          // error), above its 2.1e-12 A current tolerance. Converged in value space now: 17.
+          [{ nodes: 85, islands: 2, seed: 1309828083, meshPercent: 19, wellConditioned: true }, 3, 9],
+          // Ran to nonConverged (50) forced dense: 2e-7 A currents between 108 kV nodes repeat only to
+          // about 5e-5 relative. Value space: 20.
+          [{ nodes: 154, islands: 2, seed: 850638045, meshPercent: 5, wellConditioned: true }, 3, 12],
         ],
       },
     );

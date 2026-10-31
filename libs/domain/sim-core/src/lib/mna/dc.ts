@@ -277,7 +277,11 @@ export class DcSolver {
    * 1. the iterate x starts at the warm start's island (if usable), else there is none;
    * 2. each iteration calls `hook(island, x, values)` (with `null` for no iterate), then solves the
    *    island linearly, giving x̃;
-   * 3. it has converged when every node voltage of x̃ is within `OUTER_LOOP_RELTOL` (relative) plus
+   * 3. it has converged when the hook, given x̃, returns the values x̃ was solved with, each within
+   *    `OUTER_LOOP_RELTOL` (plus `OUTER_LOOP_VNTOL` for an EMF, `OUTER_LOOP_ABSTOL` for amps) and in
+   *    the same stamp mode: the fixed point itself, tested where the law lives (#51: a current-space
+   *    test alone stalled on solve noise in ill-conditioned islands, to 42 and 50 iterations on the
+   *    dense path); or when every node voltage of x̃ is within `OUTER_LOOP_RELTOL` (relative) plus
    *    `OUTER_LOOP_VNTOL` of x, and every branch current within `OUTER_LOOP_RELTOL` plus
    *    `OUTER_LOOP_ABSTOL` plus that branch's own current resolution (`currentResolution`: the floor
    *    policy's 32 ε |y| (|Va| + |Vb|) term, per branch: no linear solve resolves a current better, so
@@ -362,6 +366,18 @@ export class DcSolver {
       this.solveIsland(netlist, island, values, solution);
       solves++;
       if ((result.flags & ISLAND_FLAG_SINGULAR) !== 0) {
+        converged = true;
+        break;
+      }
+      // Self-consistency, the fixed point itself: the values the hook gives for this solve are the
+      // ones it was solved with, to OUTER_LOOP_RELTOL. Tested in value space, not on the currents: a
+      // current is only as repeatable as the solve resolves it (cond · ε · V · g, 5e-5 relative for a
+      // 2e-7 A current between two 108 kV nodes, #51), while a law's value R(I) moves by at most its
+      // input's relative change times its slope. Then x̃ is the answer and `values` its values.
+      hook(island, solution, values);
+      const selfConsistent = this.valuesWithin(island, values);
+      this.restoreValues(island, values);
+      if (selfConsistent) {
         converged = true;
         break;
       }
@@ -527,6 +543,28 @@ export class DcSolver {
       this.savedEmf[index] = values.emfV[index];
       this.savedAmps[index] = values.amps[index];
     }
+  }
+
+  /**
+   * Whether every island branch's value is within `OUTER_LOOP_RELTOL` of the saved one (plus
+   * `OUTER_LOOP_VNTOL` for an EMF and `OUTER_LOOP_ABSTOL` for a current source's amps), in the same
+   * stamp mode: the hook's law is satisfied by the last solve to the loop's relative tolerance.
+   */
+  private valuesWithin(island: NetlistIsland, values: DcBranchValues): boolean {
+    const reltol = OUTER_LOOP_RELTOL.value;
+    const close = (was: number, now: number, floor: number) =>
+      Math.abs(now - was) <= reltol * Math.max(Math.abs(was), Math.abs(now)) + floor;
+    for (const index of island.branches) {
+      if (
+        this.savedStamps[index] !== values.stamps[index] ||
+        !close(this.savedOhms[index], values.ohms[index], 0) ||
+        !close(this.savedEmf[index], values.emfV[index], OUTER_LOOP_VNTOL.value) ||
+        !close(this.savedAmps[index], values.amps[index], OUTER_LOOP_ABSTOL.value)
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private valuesUnchanged(island: NetlistIsland, values: DcBranchValues): boolean {

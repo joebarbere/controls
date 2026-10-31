@@ -274,6 +274,35 @@ describe('ComplexSparseLu', () => {
     for (let i = 0; i < x.length; i++) expect(Math.abs(x[i] - d[i])).toBeLessThan(1e-14);
   });
 
+  it('keeps the diagonal on an exact CABS1 tie with a lower row (the diagonal wins ties)', () => {
+    // Column 1 is eliminated first. Its candidates are row 0, (3, 0), and its diagonal, row 1, (1, 2):
+    // |re| + |im| = 3 for both. The lowest row would be row 0; the threshold rule keeps the diagonal.
+    const rows: Rows = [
+      [
+        [2, 0],
+        [3, 0],
+      ],
+      [
+        [1, 1],
+        [1, 2],
+      ],
+    ];
+    const { pattern, values } = fromRows(rows);
+    for (const threshold of [1, PIVOT_THRESHOLD.value]) {
+      const lu = new ComplexSparseLu();
+      const factors = new ComplexSparseFactors();
+      expect(lu.factor(pattern, values, Int32Array.of(1, 0), threshold, factors)).toBe(true);
+      expect(factors.prow[0]).toBe(1);
+      const b: [number, number][] = [
+        [1, 0],
+        [0, 1],
+      ];
+      const x = Float64Array.from(b.flat());
+      lu.solve(factors, x);
+      expect(backwardError(rows, x, b)).toBeLessThan(1e-15);
+    }
+  });
+
   it('reports structurally and numerically singular matrices, and non-finite entries', () => {
     // An empty column: no candidate.
     expect(

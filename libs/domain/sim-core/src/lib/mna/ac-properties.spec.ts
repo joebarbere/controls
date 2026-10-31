@@ -331,7 +331,7 @@ describe('AC MNA properties (synthetic circuits)', () => {
     }
     const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
     // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
-    // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was 5ce7f4ef….
+    // changed, not the solver (no solver source changed): that re-pin alone did not bump SIM_ENGINE_VERSION. Was 5ce7f4ef….
     expect(hex).toBe('68dfa97608a5318af6a36a9f3f98609e3e16a11f0742bd6db0388826f24e084b');
   });
 });
@@ -501,5 +501,8 @@ describe('generator health (the AC properties above are not vacuous)', () => {
     // a small share of the largest current, so the floors check something. Measured on this seed:
     // p99 2.1e-5 of max|I| (max 1.3e-3, 296 islands); with source R unclamped (down to 1 µΩ) it was 1.9e-4.
     expect(quantile(shares, 0.99)).toBeLessThanOrEqual(1e-4);
+    // And the median (measured about 1e-9): catches a loosened relative term or resistor term, which
+    // moves every island, not just the tail.
+    expect(quantile(shares, 0.5)).toBeLessThanOrEqual(1e-8);
   });
 });

@@ -481,7 +481,7 @@ describe('DC MNA properties (synthetic circuits)', () => {
     }
     const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
     // Re-pinned in #51 when the generator's non-ideal sources were clamped to ≥ 1e-4 Ω: the circuits
-    // changed, not the solver (no solver source changed), so SIM_ENGINE_VERSION stays 1. Was 8144f9c4….
+    // changed, not the solver (no solver source changed): that re-pin alone did not bump SIM_ENGINE_VERSION. Was 8144f9c4….
     expect(hex).toBe('467fcc5190fb05ac31680077daa9afd6aa74dd730443bd3f25e18755f2af129b');
   });
 
@@ -578,6 +578,9 @@ describe('generator health (the properties above are not vacuous)', () => {
     // a small share of the largest current, so the floors check something. Measured on this seed:
     // p99 6.1e-6 of max|I| (max 3.6e-4, 233 islands).
     expect(quantile(shares, 0.99)).toBeLessThanOrEqual(3e-5);
+    // And the median (measured about 1e-9): catches a loosened relative term or resistor term, which
+    // moves every island, not just the tail.
+    expect(quantile(shares, 0.5)).toBeLessThanOrEqual(1e-8);
   });
 
   it('bench worlds hold powered circuits with current flowing', () => {

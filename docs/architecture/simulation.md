@@ -254,12 +254,16 @@ flowchart LR
     HK --> FP{"x is the last solve and<br/>values unchanged?"}
     FP -- yes --> DONE["converged"]
     FP -- no --> LS["linear solve → x̃"]
-    LS --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
+    LS --> SC{"hook(x̃) gives the values<br/>x̃ was solved with, to RELTOL?"}
+    SC -- yes --> DONE
+    SC -- no --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
     CV -- yes --> DONE
     CV -- "no, under the cap" --> DAMP["α halves on oscillation (to 1/16),<br/>doubles back when steps shrink;<br/>x ← x + α (x̃ − x)"]
     DAMP --> X
     CV -- "cap (50 solves)" --> NC["flags: nonConverged"]
 ```
+
+**Two stopping tests (#51).** After each solve the loop asks the hook for its values at x̃: if they are the values x̃ was solved with, to `OUTER_LOOP_RELTOL` and in the same stamp mode, x̃ is the fixed point and the loop stops. Otherwise the older step test on voltages and currents still applies. The value-space test was added because a current is only as repeatable as the solve resolves it (cond · ε · V · g): on ill-conditioned islands small currents repeated only to 5e-5 relative, and the step test alone stalled to 42 and 50 iterations on the dense path. With it, 6,542 seeded islands take at most 20 iterations forced dense and 26 forced sparse (median 16), within the bound of 40 that the damping schedule's contraction gives.
 
 The reported solution is always the last linear solve, never a damped blend, so every row holds for the values left in `values`. A linear island takes one solve, and a singular solve ends the loop.
 
