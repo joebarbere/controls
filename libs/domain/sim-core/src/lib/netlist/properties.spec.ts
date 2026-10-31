@@ -196,27 +196,35 @@ function apply(bus: CommandBus<World>, sim: SimState, op: Op, tally: Tally): voi
  * `undefined`-valued key counts) and values, arrays by length and elements. As strict as
  * `toStrictEqual` for netlists, which are plain objects and arrays, at a fraction of its cost: the
  * incremental property compares a netlist on most of its steps (#53 review: it was 40 % of the test).
+ * The path is built only once a difference is found, innermost segment first: building it for every
+ * value compared (a template string per element and key) cost a sixth of this function's time.
  */
-function firstDifference(x: unknown, y: unknown, path = '$'): string | null {
+function firstDifference(x: unknown, y: unknown): string | null {
+  const segments = differenceSegments(x, y);
+  return segments === null ? null : ['$', ...segments.reverse()].join('');
+}
+
+/** {@link firstDifference}'s walk: null when equal, else the path's segments, innermost first. */
+function differenceSegments(x: unknown, y: unknown): string[] | null {
   if (Object.is(x, y)) return null;
-  if (typeof x !== 'object' || typeof y !== 'object' || x === null || y === null) return path;
-  if (Object.getPrototypeOf(x) !== Object.getPrototypeOf(y)) return path;
+  if (typeof x !== 'object' || typeof y !== 'object' || x === null || y === null) return [];
+  if (Object.getPrototypeOf(x) !== Object.getPrototypeOf(y)) return [];
   if (Array.isArray(x)) {
     const ys = y as unknown[];
-    if (x.length !== ys.length) return `${path}.length`;
+    if (x.length !== ys.length) return ['.length'];
     for (let i = 0; i < x.length; i++) {
-      const d = firstDifference(x[i], ys[i], `${path}[${i}]`);
-      if (d !== null) return d;
+      const d = differenceSegments(x[i], ys[i]);
+      if (d !== null) return [...d, `[${i}]`];
     }
     return null;
   }
   const xk = Object.keys(x);
   const yo = y as Record<string, unknown>;
-  if (xk.length !== Object.keys(yo).length) return `${path} (keys)`;
+  if (xk.length !== Object.keys(yo).length) return [' (keys)'];
   for (const key of xk) {
-    if (!Object.prototype.hasOwnProperty.call(yo, key)) return `${path}.${key}`;
-    const d = firstDifference((x as Record<string, unknown>)[key], yo[key], `${path}.${key}`);
-    if (d !== null) return d;
+    if (!Object.prototype.hasOwnProperty.call(yo, key)) return [`.${key}`];
+    const d = differenceSegments((x as Record<string, unknown>)[key], yo[key]);
+    if (d !== null) return [...d, `.${key}`];
   }
   return null;
 }
@@ -366,13 +374,21 @@ describe('netlist properties (plan F2.1)', () => {
         const tally: Tally = { connects: 0, acceptedConnects: 0, effectiveBlows: 0, valueChanges: 0 };
         const compiler = new NetlistCompiler(TEST_CATALOG, { models: TEST_MODELS });
         compiler.compile(deepFreeze(bus.state));
+        // The last from-scratch netlist and its inputs: a refused or no-op edit leaves the world (the
+        // same object) and the sim state as they were, so the oracle's answer is the one already
+        // computed. The incremental compiler is still called, and compared, on every flagged step.
+        let last: { world: World; blows: number; netlist: Netlist } | null = null;
         for (const [op, compile] of run.steps) {
           apply(bus, sim, op, tally);
           if (!compile) continue;
           // Frozen inputs: the compiler must never mutate the world or the engine's state.
           const world = deepFreeze(bus.state);
           const incremental = compiler.compile(world, { sim: (id) => sim.get(id) });
-          const expected = fromScratch(world, sim);
+          const expected: Netlist =
+            last !== null && last.world === world && last.blows === tally.effectiveBlows
+              ? last.netlist
+              : fromScratch(world, sim);
+          last = { world, blows: tally.effectiveBlows, netlist: expected };
           // `firstDifference` first (cheap), `toStrictEqual` only for its diff when they differ.
           if (firstDifference(incremental, expected) !== null) expect(incremental).toStrictEqual(expected);
           expect(incremental.branches.every((branch) => Object.isFrozen(branch.values))).toBe(true);
