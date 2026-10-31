@@ -89,6 +89,10 @@ describe('AcBranchValues', () => {
       () => v.vsource(0, Infinity, 0, 0),
       () => v.vsource(0, 0, NaN, 0),
       () => v.vsource(0, 0, 0, -1),
+      () => v.vsource(0, 0, 0, 1, -1e-3),
+      () => v.vsource(0, 0, 0, 1, NaN),
+      // A series inductance needs a series resistance: "zero impedance" stays "zero ohm" (F2.4).
+      () => v.vsource(0, 0, 0, 0, 1e-3),
     ]) {
       expect(set).toThrow(RangeError);
     }
@@ -161,6 +165,21 @@ describe('AcSolver contract', () => {
       expect(Math.abs(s.branches[0] - i[0])).toBeLessThan(1e-11);
       expect([s.nodes[2], s.nodes[3]]).toStrictEqual([3, 4]);
       expect(s.islands[0]).toStrictEqual({ solved: true, referenceNode: 0, unknowns: 2, flags: 0, iterations: 1 });
+    }
+  });
+
+  it('solves a source behind R + jωL: I = E / (Z + Z_load), on the dense and the sparse path (F2.4)', () => {
+    // E = 120 V behind 0.3 Ω + j0.4 Ω (L = 0.4 / ω) into 4 Ω: Z_t = 4.3 + j0.4, so
+    // I = 120 / (4.3 + j0.4) = 120 (4.3 − j0.4) / 18.65 = 27.667560 − j2.573727 A.
+    const omega = angularFrequency(60);
+    const values = new AcBranchValues(2);
+    values.vsource(0, 120, 0, 0.3, 0.4 / omega);
+    values.resistor(1, 4);
+    for (const solver of [new AcSolver(), new AcSolver({ sparseMinUnknowns: 1 })]) {
+      const s = solver.solve(loop(), values, 60);
+      expect(s.branches[2]).toBeCloseTo((120 * 4.3) / 18.65, 9);
+      expect(s.branches[3]).toBeCloseTo((-120 * 0.4) / 18.65, 9);
+      expect((120 * 4.3) / 18.65).toBeCloseTo(27.66756, 5);
     }
   });
 

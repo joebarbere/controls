@@ -50,6 +50,11 @@ export const ORACLE_RANGES = {
   emfV: { minExponent: -1, maxExponent: 1 },
   /** 10 mΩ … 8.2 Ω behind each voltage source. */
   internalResistanceOhm: { minExponent: -3, maxExponent: -1 },
+  /**
+   * 1.0 µH … 0.82 mH behind half the AC voltage sources (F2.4: source reactance), about 0.4 mΩ … 0.31 Ω
+   * at 60 Hz, so X/R spans well below and above 1 against the internal resistance.
+   */
+  sourceInductanceH: { minExponent: -7, maxExponent: -5 },
   /** 1.0 mA … 8.2 A. */
   currentA: { minExponent: -4, maxExponent: -1 },
   /** 0.10 mH … 0.82 H: about 0.04 Ω … 310 Ω of reactance at 60 Hz. */
@@ -204,8 +209,8 @@ function drawElement(rng: Sfc32, domain: OracleDomain, kind: OracleElementKind, 
   switch (kind) {
     case 'resistor':
       return { kind, a, b, resistanceOhm: drawValue(rng, ORACLE_RANGES.resistanceOhm) };
-    case 'vsource':
-      return {
+    case 'vsource': {
+      const source = {
         kind,
         a,
         b,
@@ -213,6 +218,10 @@ function drawElement(rng: Sfc32, domain: OracleDomain, kind: OracleElementKind, 
         angleDeg: domain === 'ac' ? PHASOR_ANGLES[rng.nextInt(0, PHASOR_ANGLES.length - 1)] : 0,
         internalResistanceOhm: drawValue(rng, ORACLE_RANGES.internalResistanceOhm),
       };
+      // AC: half the sources get a series inductance (F2.4's source reactance).
+      if (domain !== 'ac' || rng.nextInt(0, 1) === 0) return source;
+      return { ...source, seriesInductanceH: drawValue(rng, ORACLE_RANGES.sourceInductanceH) };
+    }
     case 'isource':
       return { kind, a, b, currentA: drawValue(rng, ORACLE_RANGES.currentA) };
     case 'inductor':

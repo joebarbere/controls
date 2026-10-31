@@ -1,20 +1,31 @@
 import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import type { SimDeviceModel } from '../engine/device-model';
-import { BATTERY_MODEL, BENCH_SUPPLY_MODEL, DIN_PSU_MODEL } from './sources';
+import {
+  BATTERY_MODEL,
+  BENCH_SUPPLY_MODEL,
+  DIN_PSU_MODEL,
+  GENERATOR_PORTABLE_MODEL,
+  UTILITY_SPLIT_PHASE_MODEL,
+  UTILITY_THREE_PHASE_MODEL,
+} from './sources';
 
 export * from './readings';
 export * from './sources';
 
 /*
  * The engine models of the built-in device kinds (plan F2.4, F2.5), by catalogue model kind. F2.4: the
- * battery (state of charge), the bench supply and the DIN PSU (CV/CC, hiccup). The lamp has no filament
+ * battery (state of charge), the bench supply and the DIN PSU (CV/CC, hiccup), the utility services
+ * (split-phase and three-phase) and the portable generator stub. The lamp has no filament
  * model yet (F2.5), so an island holding one is unmodelled. A kind without an engine model keeps its
  * bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
   battery: BATTERY_MODEL,
+  'generator.portable': GENERATOR_PORTABLE_MODEL,
   'supply.bench': BENCH_SUPPLY_MODEL,
   'supply.dinPsu': DIN_PSU_MODEL,
+  'utility.splitPhase': UTILITY_SPLIT_PHASE_MODEL,
+  'utility.threePhase': UTILITY_THREE_PHASE_MODEL,
 });
 
 /**

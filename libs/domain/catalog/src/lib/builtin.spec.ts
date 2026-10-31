@@ -58,12 +58,25 @@ describe('the built-in catalogue (content/devices)', () => {
       ['supply.brindlecore-bench-30v-5a', 'supply.bench'],
       ['supply.railwick-din-24v-5a', 'supply.dinPsu'],
       ['switch.tessaline-spst-toggle', 'switch.spst'],
+      ['utility.larkmoor-208y120-150kva', 'utility.threePhase'],
+      ['utility.larkmoor-480y277-1000kva', 'utility.threePhase'],
+      ['utility.larkmoor-split-phase-25kva', 'utility.splitPhase'],
     ]);
   });
 
-  it('uses fictional brands only (realism charter), each once', () => {
+  it('uses fictional brands only (realism charter), one per maker (the utility serves three services)', () => {
     const brands = BUILTIN_CATALOG.devices.map((d) => d.brand);
-    expect(brands).toStrictEqual(['Ferrovane', 'Lumivane', 'Quillfern', 'Brindlecore', 'Railwick', 'Tessaline']);
+    expect(brands).toStrictEqual([
+      'Ferrovane',
+      'Lumivane',
+      'Quillfern',
+      'Brindlecore',
+      'Railwick',
+      'Tessaline',
+      'Larkmoor Power',
+      'Larkmoor Power',
+      'Larkmoor Power',
+    ]);
   });
 
   it('resolves refs to the entry and its model kind', () => {

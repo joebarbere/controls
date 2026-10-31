@@ -4,17 +4,17 @@ controls oracle ac-0009
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
 VS0 0 s0 0
-L0 s0 1 33e-2
+V0 e0 s0 DC 0 AC 15e1 -120
+RI0 e0 1 33e-3
 VS1 0 s1 0
-V1 e1 s1 DC 0 AC 10e0 0
-RI1 e1 2 39e-3
-VS2 0 s2 0
-L2 s2 1 82e-5
-VS3 2 s3 0
-L3 s3 1 47e-3
+C1 s1 2 15e-4
+VS2 1 s2 0
+C2 s2 2 12e-7
+VS3 1 s3 0
+V3 e3 s3 DC 0 AC 68e0 -120
+RI3 e3 2 47e-1
 VS4 1 s4 0
-V4 e4 s4 DC 0 AC 15e1 -120
-RI4 e4 0 33e-3
+L4 s4 2 22e-4
 .control
 set numdgt=17
 ac lin 1 60 60

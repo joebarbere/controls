@@ -3,7 +3,7 @@ import type { CommandBus } from '@controls/commands';
 import { createWorld, FiniteNumber, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '@controls/world-model';
 import { z } from 'zod';
-import { BUILTIN_DEVICE_MODELS } from '../lib/devices';
+import { BUILTIN_DEVICE_MODELS, GENERATOR_STUB_NAMEPLATE } from '../lib/devices';
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../lib/engine/device-model';
 import type { SimEngineOptions } from '../lib/engine/engine';
 import type { DeviceNetlistModel, NetlistModels } from '../lib/netlist/models';
@@ -57,6 +57,10 @@ export const RESISTOR_2_4 = { id: 'load.test-resistor-2r4', version: 1 };
 export const RESISTOR_12 = { id: 'load.test-resistor-12r', version: 1 };
 export const RESISTOR_100 = { id: 'load.test-resistor-100r', version: 1 };
 export const RHEOSTAT = { id: 'load.test-rheostat', version: 1 };
+/** The portable generator stub at its nameplate (`GENERATOR_STUB_NAMEPLATE`; not in the built-in catalogue). */
+export const GENERATOR = { id: 'generator.test-portable', version: 1 };
+/** A near-zero lead (1 mm of 1000 mm² copper, no contact resistance): a bolted connection for fault goldens. */
+export const BUSBAR = { id: 'lead.test-busbar', version: 1 };
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
 const twoTerminals = ['a', 'b'];
@@ -251,7 +255,42 @@ export const THERMAL_PARAMS = {
   ambientK: 293.15,
 };
 
+const nameplate = Object.fromEntries(
+  Object.entries(GENERATOR_STUB_NAMEPLATE).map(([name, constant]) => [name, constant.value]),
+);
+
 const ENGINE_DOCUMENTS: readonly unknown[] = [
+  {
+    ...entry(GENERATOR, 'Test portable generator (stub)', 'generator.portable', nameplate, ['l1', 'l2', 'n']),
+    category: 'source',
+  },
+  {
+    ...base,
+    ...BUSBAR,
+    title: 'Test busbar link',
+    category: 'lead',
+    sizeMm: null,
+    terminals: [],
+    model: {
+      kind: 'lead',
+      params: {
+        lengthMm: 1,
+        conductorAreaM2: 1e-3,
+        resistivityOhmM: 1.724137931034483e-8,
+        temperatureCoefficientPerK: 0.00393,
+        referenceTemperatureK: 293.15,
+        contactResistanceOhm: 0,
+      },
+    },
+    sources: sources([
+      'lengthMm',
+      'conductorAreaM2',
+      'resistivityOhmM',
+      'temperatureCoefficientPerK',
+      'referenceTemperatureK',
+      'contactResistanceOhm',
+    ]).map((s) => ({ ...s, covers: s.covers.filter((c) => c !== 'sizeMm' && c !== 'terminals') })),
+  },
   entry(THERMAL_LOAD, 'Test thermal load', 'test.thermalLoad', THERMAL_PARAMS),
   entry(I2T_FUSE, 'Test I²t fuse', 'test.i2tFuse', { resistanceOhm: 0.01, meltA2s: 4 }),
   entry(FLIP, 'Test flip load', 'test.flip', { lowOhm: 0.1, highOhm: 100, thresholdA: 1 }),

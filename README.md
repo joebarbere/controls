@@ -45,6 +45,7 @@ What exists today (Phases 0 and 1):
 
 - Batteries that run down: the EMF follows the state of charge (a new 12 V lead-acid battery rests at 12.9 V), behind its internal resistance, and the charge delivered is counted every millisecond and kept in saves.
 - A bench DC supply (0–30 V, 0–5 A) with a voltage setpoint, a current limit and an output switch, and a clean constant-voltage/constant-current crossover; a 24 V DIN-rail supply whose overload protection hiccups (off for a second, then retry).
+- Mains supplies, from scripts for now: a 120/240 V split-phase utility service and 208Y/120 V and 480Y/277 V three-phase services, each behind its transformer's impedance (so a short draws its real fault current), and the ANSI C84.1 voltage ranges.
 - Honest readings: a device's record says whether its circuit was solved, and an unsettled solve is never shown as a steady value.
 
 ### Commands and world

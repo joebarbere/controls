@@ -1,7 +1,13 @@
 import type { BatteryParams, LampIncandescentParams, LeadParams } from '@controls/catalog';
 import { leadResistanceOhm } from '@controls/catalog';
 import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
-import { benchSupplyNetlistModel, dinPsuNetlistModel } from '../devices/sources/netlist-models';
+import {
+  benchSupplyNetlistModel,
+  dinPsuNetlistModel,
+  generatorPortableNetlistModel,
+  utilitySplitPhaseNetlistModel,
+  utilityThreePhaseNetlistModel,
+} from '../devices/sources/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -148,10 +154,13 @@ const lead: ConnectionNetlistModel = {
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
+  'generator.portable': generatorPortableNetlistModel,
   'lamp.incandescent': lampIncandescent,
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,
+  'utility.splitPhase': utilitySplitPhaseNetlistModel,
+  'utility.threePhase': utilityThreePhaseNetlistModel,
 });
 
 /** The connection netlist models, by model kind. A test checks every connection kind in `MODEL_KINDS` has one. */

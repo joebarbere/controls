@@ -39,6 +39,8 @@ export interface SimDevice {
   readonly bag: StateBag;
   /** Its branches in this topology, in part order (an element per branch). */
   readonly branches: readonly number[];
+  /** The region's supply frequency (Hz): the AC islands' analysis frequency (F2.4's source reactance). */
+  readonly frequencyHz: number;
   /** Its seeded stream, fresh on every call: `deriveStream(world.seed, entityStreamKey(entity))`. */
   stream(): Sfc32;
 }

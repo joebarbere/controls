@@ -1,9 +1,9 @@
-import { type OracleCircuit, phasorUnit, valueNumber, valueText } from './circuit';
+import { type OracleCircuit, type OracleVoltageSource, phasorUnit, valueNumber, valueText } from './circuit';
 import { oracleDeckPath, oracleResultsPath } from './corpus';
 import { branchVectorNames, gminShuntText, nodeVectorNames, oracleDeck, oracleDeckOptions } from './deck';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_VSOURCE } from '../lib/mna/values';
 import { computeTopologyHash } from '../lib/netlist/hash';
-import { oracleDcInput, oracleNetlist } from './netlist';
+import { oracleAcInput, oracleDcInput, oracleNetlist } from './netlist';
 
 /*
  * The two emitters of one oracle circuit (F2.7): the SPICE deck and the sim-core netlist. A hand-built
@@ -94,6 +94,19 @@ describe('oracleDeck', () => {
     expect(lines).toContain('C3 s3 0 33e-6');
     expect(lines).toContain('ac lin 1 60 60');
     expect(lines).not.toContain('op');
+  });
+
+  it("puts a source's series inductance after its internal resistance, through a second internal node (F2.4)", () => {
+    const withL: OracleCircuit = {
+      ...AC,
+      elements: [{ ...(AC.elements[0] as OracleVoltageSource), seriesInductanceH: v(47, -6) }, ...AC.elements.slice(1)],
+    };
+    const lines = oracleDeck(withL).split('\n');
+    expect(lines).toContain('V0 e0 s0 DC 0 AC 12e1 -120');
+    expect(lines).toContain('RI0 e0 m0 10e-2');
+    expect(lines).toContain('LI0 m0 1 47e-6');
+    expect(oracleNetlist(withL).branches[0].values['seriesInductanceH']).toBe(47e-6);
+    expect(oracleAcInput(withL).values.seriesHenries[0]).toBe(47e-6);
   });
 
   it('prints at most ten vectors per line', () => {
@@ -193,6 +206,7 @@ describe('oracleNetlist', () => {
       emfIm: 120 * -(Math.sqrt(3) / 2),
       emfRe: -60,
       internalResistanceOhm: 0.1,
+      seriesInductanceH: 0,
     });
     expect(netlist.branches.slice(1).map((branch) => [branch.kind, branch.values])).toStrictEqual([
       ['resistor', { resistanceOhm: 5.6 }],

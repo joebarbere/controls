@@ -4,20 +4,19 @@ controls oracle ac-0085
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
 RG3 3 0 1000000000000
-VS0 1 s0 0
-R0 s0 2 56e1
-VS1 3 s1 0
-L1 s1 0 56e-2
+VS0 3 s0 0
+R0 s0 0 12e1
+VS1 2 s1 0
+R1 s1 1 15e-2
 VS2 0 s2 0
-V2 e2 s2 DC 0 AC 68e1 0
-RI2 e2 2 10e-3
-VS3 2 s3 0
-R3 s3 3 68e1
-VS4 3 s4 0
-R4 s4 1 10e2
+L2 s2 1 56e-2
+VS3 0 s3 0
+V3 e3 s3 DC 0 AC 33e-1 120
+RI3 e3 2 68e-1
+VS4 2 s4 0
+R4 s4 0 68e1
 VS5 3 s5 0
-V5 e5 s5 DC 0 AC 33e-1 120
-RI5 e5 2 68e-1
+R5 s5 2 56e1
 .control
 set numdgt=17
 ac lin 1 60 60

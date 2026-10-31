@@ -34,6 +34,29 @@ export interface NominalSystem {
   readonly lineToLineV: RegionValue;
 }
 
+/** A band of steady-state voltage, as fractions of the nominal system voltage (unit `1`). */
+export interface VoltageRange {
+  readonly min: RegionValue;
+  readonly max: RegionValue;
+}
+
+/**
+ * A region's supply-voltage tolerance bands (F2.4): what a utility delivers at the **service** point
+ * (the meter) and what equipment sees at its **utilization** point (after the building's wiring drop),
+ * in the normal range A and the occasional range B. As fractions of nominal, so they apply to every
+ * nominal system of the region (120 V, 240 V, 208 V, 480 V, …) at the low-voltage level.
+ */
+export interface VoltageRanges {
+  /** Range A at the service point: the voltage a utility should hold in normal operation. */
+  readonly serviceA: VoltageRange;
+  /** Range A at the utilization point: what equipment must operate satisfactorily within. */
+  readonly utilizationA: VoltageRange;
+  /** Range B at the service point: outside range A, infrequent and limited in time, corrected soon. */
+  readonly serviceB: VoltageRange;
+  /** Range B at the utilization point. */
+  readonly utilizationB: VoltageRange;
+}
+
 /** One region's electrical profile. */
 export interface RegionProfile {
   readonly id: RegionId;
@@ -46,6 +69,13 @@ export interface RegionProfile {
   readonly threePhaseCommercial: NominalSystem;
   /** Three-phase four-wire wye, the industrial service. */
   readonly threePhaseIndustrial: NominalSystem;
+  /** Steady-state voltage ranges (F2.4): service and utilization, ranges A and B. */
+  readonly voltageRanges: VoltageRanges;
+}
+
+/** `range` at `nominalV`: the band in volts, `[min, max]`. */
+export function voltageBand(range: VoltageRange, nominalV: number): readonly [number, number] {
+  return [range.min.value * nominalV, range.max.value * nominalV];
 }
 
 const ANSI_C84_1 =
@@ -54,6 +84,27 @@ const IEEE_141 =
   'IEEE Std 141-1993 ("Red Book", Recommended Practice for Electric Power Distribution for Industrial Plants), ch. 3, "Voltage considerations", on the nominal voltages of US low-voltage systems (withdrawn; superseded by the IEEE 3000 series, IEEE Std 3001.x and 3002.x)';
 
 const volts = (value: number, source: string): RegionValue => ({ value, unit: 'V', kind: 'real-world', source });
+
+/**
+ * ANSI C84.1's voltage ranges, as facts on a 120 V base (paraphrased; the standard's table is not
+ * reproduced). The standard defines two ranges for each nominal system: **Range A**, the band service
+ * voltage is held to in normal operation and equipment is designed to work well in, and **Range B**,
+ * wider, for conditions that should be infrequent, limited in time and corrected. Each has a service
+ * (point of delivery) and a utilization (point of use) band; utilization's lower limits allow for the
+ * voltage drop of the premises wiring. On a 120 V base the boundaries are: Range A service 114–126 V,
+ * utilization 108–125 V; Range B service 110–127 V, utilization 104–127 V. Here as fractions of
+ * nominal, which is how the standard scales its other low-voltage systems. Clause references for
+ * `electrical-realism-reviewer` to confirm against the 2020 edition: the definitions of the ranges
+ * and the table of standard nominal system voltages and voltage ranges (its Table 1).
+ */
+const C84_1_RANGES =
+  'ANSI C84.1-2020: Range A and Range B and their service and utilization limits for low-voltage nominal systems (the voltage-range definitions and the table of standard nominal system voltages and voltage ranges, Table 1), paraphrased on a 120 V base; the table is not reproduced';
+const fraction = (volts120: number, what: string): RegionValue => ({
+  value: volts120 / 120,
+  unit: '1',
+  kind: 'real-world',
+  source: `${what}: ${volts120} V on a 120 V base, as a fraction of nominal. ${C84_1_RANGES}.`,
+});
 
 /** The NEC region: the United States' 60 Hz supply and its usual low-voltage systems. */
 export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
@@ -100,6 +151,18 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
       480,
       `The same 480Y/277 V system between phases: the nominal designation of 277 × √3 = 479.78 V; both members are rounded, since 480 / √3 = 277.13 V. ${ANSI_C84_1}.`,
     ),
+  },
+  voltageRanges: {
+    serviceA: { min: fraction(114, 'Range A service minimum'), max: fraction(126, 'Range A service maximum') },
+    utilizationA: {
+      min: fraction(108, 'Range A utilization minimum'),
+      max: fraction(125, 'Range A utilization maximum'),
+    },
+    serviceB: { min: fraction(110, 'Range B service minimum'), max: fraction(127, 'Range B service maximum') },
+    utilizationB: {
+      min: fraction(104, 'Range B utilization minimum'),
+      max: fraction(127, 'Range B utilization maximum'),
+    },
   },
 });
 

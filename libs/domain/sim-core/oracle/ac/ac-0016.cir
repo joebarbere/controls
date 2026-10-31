@@ -4,12 +4,13 @@ controls oracle ac-0016
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
 VS0 0 s0 0
-L0 s0 1 12e-4
-VS1 1 s1 0
-C1 s1 2 10e-5
-VS2 0 s2 0
-V2 e2 s2 DC 0 AC 47e-1 0
-RI2 e2 2 56e-1
+V0 e0 s0 DC 0 AC 47e-1 0
+RI0 e0 m0 56e-1
+LI0 m0 2 68e-6
+VS1 0 s1 0
+L1 s1 1 12e-4
+VS2 1 s2 0
+C2 s2 2 10e-5
 .control
 set numdgt=17
 ac lin 1 60 60

@@ -1,28 +1,32 @@
 controls oracle ac-0344
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 344 nodes 4 elements 7
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 344 nodes 4 elements 6
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
 RG3 3 0 1000000000000
-VS0 1 s0 0
-L0 s0 2 12e-3
+VS0 0 s0 0
+V0 e0 s0 DC 0 AC 18e-1 180
+RI0 e0 m0 82e-2
+LI0 m0 2 47e-6
 VS1 3 s1 0
-L1 s1 1 47e-2
-VS2 3 s2 0
-C2 s2 2 68e-7
-VS3 0 s3 0
-V3 e3 s3 DC 0 AC 18e-1 180
-RI3 e3 2 82e-2
-VS4 2 s4 0
-R4 s4 3 56e1
-VS5 1 s5 0
-R5 s5 0 18e-1
-VS6 1 s6 0
-R6 s6 0 10e3
+C1 s1 1 68e-6
+VS2 0 s2 0
+C2 s2 3 82e-5
+VS3 1 s3 0
+V3 e3 s3 DC 0 AC 47e0 180
+RI3 e3 2 68e-3
+VS4 3 s4 0
+V4 e4 s4 DC 0 AC 33e-1 180
+RI4 e4 m4 56e-3
+LI4 m4 0 15e-7
+VS5 2 s5 0
+V5 e5 s5 DC 0 AC 56e-1 180
+RI5 e5 m5 39e-3
+LI5 m5 1 15e-6
 .control
 set numdgt=17
 ac lin 1 60 60
 print v(1) v(2) v(3)
-print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6)
+print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5)
 .endc
 .end

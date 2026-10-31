@@ -14,8 +14,11 @@ import { type PhasorAngle, phasorUnit } from './phasor';
  *   y = 1 / (jωL) = −j / (ωL);
  * - `capacitor` (on a `resistor` element): C, finite and > 0, impedance 1 / (jωC), admittance y = jωC;
  * - `vsource` (on a `vsource` element): a phasor EMF E = `emfRe` + j·`emfIm` (RMS) from `a`
- *   (negative) to `b` (positive) behind a series resistance R ≥ 0, so Vb − Va = E − R·I with I
- *   positive a → b through the source, as in DC.
+ *   (negative) to `b` (positive) behind a series impedance Z = R + jωL (R ≥ 0, L ≥ 0, and R > 0
+ *   whenever L > 0), so Vb − Va = E − Z·I with I positive a → b through the source, as in DC. The
+ *   series inductance (F2.4) is a utility transformer's or a generator's source reactance; requiring
+ *   R > 0 with it keeps "singular ⇔ a loop of zero-impedance sources" structural (`ac.ts`), and every
+ *   real source has some resistance.
  *
  * Passive elements are all F2.1 `resistor` elements: inductance and capacitance are stamp modes, as a
  * DC current source is, so F2.1's `ElementKind` and `topologyHash` are unchanged (ADR 0012's adapter
@@ -50,11 +53,14 @@ function notPositive(name: string, branch: number, value: number): never {
   throw new RangeError(`AC value ${name} of branch ${branch} must be > 0, got ${value}`);
 }
 
-function badVsource(branch: number, emfRe: number, emfIm: number, ohms: number): never {
+function badVsource(branch: number, emfRe: number, emfIm: number, ohms: number, henries: number): never {
   finite('emfRe', branch, emfRe);
   finite('emfIm', branch, emfIm);
   finite('ohms', branch, ohms);
-  throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
+  finite('henries', branch, henries);
+  if (!(ohms >= 0)) throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
+  if (!(henries >= 0)) throw new RangeError(`vsource branch ${branch} needs henries ≥ 0, got ${henries}`);
+  throw new RangeError(`vsource branch ${branch} with a series inductance needs ohms > 0, got ${ohms}`);
 }
 
 /** One phasor-solve value per branch, in the netlist's branch order. */
@@ -71,6 +77,8 @@ export class AcBranchValues {
   /** `vsource`: the EMF phasor's real and imaginary parts (RMS). */
   readonly emfRe: Float64Array;
   readonly emfIm: Float64Array;
+  /** `vsource`: the series inductance (H) behind the EMF, beside its series R (F2.4). */
+  readonly seriesHenries: Float64Array;
 
   constructor(count: number) {
     this.count = count;
@@ -80,6 +88,7 @@ export class AcBranchValues {
     this.farads = new Float64Array(count);
     this.emfRe = new Float64Array(count);
     this.emfIm = new Float64Array(count);
+    this.seriesHenries = new Float64Array(count);
   }
 
   /** Forgets every branch's value. */
@@ -110,25 +119,37 @@ export class AcBranchValues {
     this.farads[branch] = farads;
   }
 
-  /** A phasor EMF `emfRe` + j·`emfIm` (RMS) behind a series resistance `ohms` ≥ 0. */
-  vsource(branch: number, emfRe: number, emfIm: number, ohms: number): void {
-    if (!(Number.isFinite(emfRe) && Number.isFinite(emfIm) && Number.isFinite(ohms) && ohms >= 0)) {
-      badVsource(branch, emfRe, emfIm, ohms);
+  /**
+   * A phasor EMF `emfRe` + j·`emfIm` (RMS) behind a series resistance `ohms` ≥ 0 and a series
+   * inductance `henries` ≥ 0 (0 by default; > 0 only with `ohms` > 0).
+   */
+  vsource(branch: number, emfRe: number, emfIm: number, ohms: number, henries = 0): void {
+    if (!(
+      Number.isFinite(emfRe) &&
+      Number.isFinite(emfIm) &&
+      Number.isFinite(ohms) &&
+      Number.isFinite(henries) &&
+      ohms >= 0 &&
+      henries >= 0 &&
+      (henries === 0 || ohms > 0)
+    )) {
+      badVsource(branch, emfRe, emfIm, ohms, henries);
     }
     this.stamps[branch] = AC_STAMP_VSOURCE;
     // `+ 0` turns −0 into +0: one bit pattern per value, and a zero-ohm source is exactly 0.
     this.emfRe[branch] = emfRe + 0;
     this.emfIm[branch] = emfIm + 0;
     this.ohms[branch] = ohms + 0;
+    this.seriesHenries[branch] = henries + 0;
   }
 
   /**
-   * A phasor EMF `rmsV`∠`angle` behind `ohms`, from the exact angle constants (D6): `rmsV · cos θ`
-   * and `rmsV · sin θ` with cos and sin from `phasorUnit`.
+   * A phasor EMF `rmsV`∠`angle` behind `ohms` and `henries`, from the exact angle constants (D6):
+   * `rmsV · cos θ` and `rmsV · sin θ` with cos and sin from `phasorUnit`.
    */
-  vsourcePolar(branch: number, rmsV: number, angle: PhasorAngle, ohms: number): void {
+  vsourcePolar(branch: number, rmsV: number, angle: PhasorAngle, ohms: number, henries = 0): void {
     const unit = phasorUnit(angle);
-    this.vsource(branch, rmsV * unit.re, rmsV * unit.im, ohms);
+    this.vsource(branch, rmsV * unit.re, rmsV * unit.im, ohms, henries);
   }
 }
 

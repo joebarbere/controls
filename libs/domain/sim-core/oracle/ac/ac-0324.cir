@@ -6,15 +6,16 @@ RG2 2 0 1000000000000
 RG3 3 0 1000000000000
 VS0 3 s0 0
 R0 s0 0 68e-1
-VS1 3 s1 0
-R1 s1 1 47e0
+VS1 1 s1 0
+C1 s1 0 15e-6
 VS2 0 s2 0
 V2 e2 s2 DC 0 AC 33e-1 180
-RI2 e2 2 15e-3
+RI2 e2 m2 15e-3
+LI2 m2 2 22e-7
 VS3 3 s3 0
-L3 s3 2 47e-4
-VS4 1 s4 0
-C4 s4 0 15e-6
+R3 s3 1 47e0
+VS4 3 s4 0
+L4 s4 2 47e-4
 .control
 set numdgt=17
 ac lin 1 60 60

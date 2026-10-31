@@ -3,12 +3,12 @@ controls oracle ac-0474
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 VS0 0 s0 0
-V0 e0 s0 DC 0 AC 68e0 0
-RI0 e0 1 10e-1
+R0 s0 1 22e2
 VS1 0 s1 0
-R1 s1 1 22e2
+L1 s1 1 10e-4
 VS2 0 s2 0
-L2 s2 1 10e-4
+V2 e2 s2 DC 0 AC 68e0 0
+RI2 e2 1 10e-1
 VS3 0 s3 0
 L3 s3 1 68e-4
 .control

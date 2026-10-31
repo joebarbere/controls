@@ -53,8 +53,8 @@ export interface OracleResistor {
 /**
  * A voltage source from `a` (negative) to `b` (positive) behind a series internal resistance, the
  * F2.1 `vsource`: `V(b) − V(a) = emf − I · r`, with `I` positive from `a` to `b` through the source.
- * In the `ac` domain `emfV` is the phasor's magnitude (RMS) and `angleDeg` its angle; in `dc`,
- * `angleDeg` is 0 and the EMF is `emfV`.
+ * In the `ac` domain `emfV` is the phasor's magnitude (RMS) and `angleDeg` its angle, and the source may
+ * have a series inductance; in `dc`, `angleDeg` is 0 and the EMF is `emfV`.
  */
 export interface OracleVoltageSource {
   readonly kind: 'vsource';
@@ -63,6 +63,12 @@ export interface OracleVoltageSource {
   readonly emfV: OracleValue;
   readonly angleDeg: PhasorAngle;
   readonly internalResistanceOhm: OracleValue;
+  /**
+   * AC only (F2.4): a series inductance behind the internal resistance, a utility transformer's or a
+   * generator's source reactance, so `V(b) − V(a) = emf − I · (r + jωL)`. Absent for a purely
+   * resistive source.
+   */
+  readonly seriesInductanceH?: OracleValue;
 }
 
 /** An ideal current source pushing `currentA` from `a` to `b` through itself (DC only). */
