@@ -11,7 +11,8 @@ import { deriveStream } from '@controls/world-model';
  * switch's `a`, a lead from the switch's `b` to the lamp's `a`, and a lead from the lamp's `b` back to
  * the parent's lamp `b` (or the battery's `neg`), so the return path mirrors the supply tree. Mostly
  * radial: about 1 unit in 50 adds a tie lead between two switches of its feeder, which makes a loop.
- * About 1 switch in 20 is open, which islands its subtree, as a plant with circuits switched off.
+ * About 1 switch in 20 is open, as a plant with circuits switched off: its subtree's supply side is cut
+ * off, but the return leads keep the subtree in its feeder's island (so the plant is 8 islands).
  *
  * Node arithmetic: a battery is 2 nodes, a lamp 2, a closed switch 1 (its terminals are joined) and an
  * open one 2. The generator adds units while at least 3 nodes are left, then tops up with a lone lamp

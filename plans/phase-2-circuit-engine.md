@@ -522,9 +522,10 @@ Acceptance:
 
 _Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Proposed; [oracle guide](../docs/guides/oracle.md)). Notes:_
 
-- _The corpus is 500 DC + 500 AC circuits, about 3.1 MB of text. Beyond the staleness test, `verify` checks ngspice's solution against every element equation and KCL in the sim-core netlist (worst residual 3e-9), which pins the deck ↔ netlist mapping before any solver exists._
+- _The corpus is 500 DC + 500 AC biconnected circuits, about 3.4 MB of text. Beyond the staleness test, `verify` checks ngspice's solution against every element equation and KCL in the sim-core netlist (worst residual 3e-9), which pins the deck ↔ netlist mapping before any solver exists, and that at least 95 % of branches carry real current (99 % do)._
+- _test-engineer review (approved): the tolerance floor is `max(1e-12, 1e-7·max|x_ref|)`, above ngspice's own 3e-9 noise; an emulated float64 MNA solver stays at 1.1e-3 of the allowance or less. The solver adapter maps `isource` to a `resistor` with `DC_STAMP_ISOURCE` rather than widening F2.1's `ElementKind` (ADR 0012)._
 - _**Still open:** the comparison spec (`it.todo` for DC with F2.2 part 1 and AC with part 2), confirming ADR 0012's tolerance by measurement, the netlist adapter to the solver's input type, and switching the oracle's placeholder `gmin` to `GMIN_S.value` (`TODO(F2.2)`)._
-- _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: a structural recompile of the plant is 1.3 ms quiet (1.7–2.8 ms loaded), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
+- _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: one topology change (`plant-recompile-switch`) is 1.2–1.3 ms (1.7–2.8 ms under heavy load), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
 - _`gmin` is stamped in the decks as explicit resistors on the circuit nodes, not `.options rshunt`, which would also shunt the decks' internal sense and source nodes (ADR 0012)._
 
 ## ADRs to write in P2

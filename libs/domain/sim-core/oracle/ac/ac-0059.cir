@@ -1,5 +1,5 @@
 controls oracle ac-0059
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 59 nodes 19 elements 20
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 59 nodes 19 elements 26
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
@@ -19,48 +19,62 @@ RG15 15 0 1000000000000
 RG16 16 0 1000000000000
 RG17 17 0 1000000000000
 RG18 18 0 1000000000000
-VS0 7 s0 0
-R0 s0 9 22e-1
+VS0 13 s0 0
+C0 s0 7 27e-4
 VS1 0 s1 0
 L1 s1 16 18e-4
-VS2 0 s2 0
-V2 e2 s2 DC 0 AC 27e1 120
-RI2 e2 14 12e-1
-VS3 1 s3 0
-C3 s3 14 82e-5
-VS4 15 s4 0
-R4 s4 4 39e0
+VS2 11 s2 0
+C2 s2 15 47e-7
+VS3 0 s3 0
+V3 e3 s3 DC 0 AC 27e1 120
+RI3 e3 14 12e-1
+VS4 0 s4 0
+C4 s4 13 68e-6
 VS5 0 s5 0
-C5 s5 18 68e-6
-VS6 5 s6 0
-L6 s6 9 27e-5
-VS7 13 s7 0
-C7 s7 7 27e-4
+L5 s5 9 82e-2
+VS6 17 s6 0
+R6 s6 1 47e-2
+VS7 0 s7 0
+R7 s7 12 22e3
 VS8 15 s8 0
-L8 s8 12 15e-2
-VS9 0 s9 0
-R9 s9 12 22e3
-VS10 8 s10 0
-R10 s10 3 47e-1
-VS11 8 s11 0
-L11 s11 10 82e-5
-VS12 8 s12 0
-V12 e12 s12 DC 0 AC 33e-1 180
-RI12 e12 6 39e-2
-VS13 15 s13 0
-C13 s13 17 47e-7
-VS14 0 s14 0
-L14 s14 14 15e-4
-VS15 11 s15 0
-C15 s15 15 47e-7
-VS16 16 s16 0
-R16 s16 8 33e0
-VS17 0 s17 0
-L17 s17 9 82e-2
-VS18 5 s18 0
-L18 s18 2 39e-2
-VS19 9 s19 0
-L19 s19 15 47e-5
+C8 s8 17 47e-7
+VS9 6 s9 0
+R9 s9 1 18e2
+VS10 1 s10 0
+C10 s10 14 82e-5
+VS11 7 s11 0
+R11 s11 9 22e-1
+VS12 16 s12 0
+R12 s12 8 33e0
+VS13 14 s13 0
+C13 s13 11 15e-5
+VS14 18 s14 0
+V14 e14 s14 DC 0 AC 82e0 0
+RI14 e14 10 10e-1
+VS15 8 s15 0
+R15 s15 3 47e-1
+VS16 9 s16 0
+L16 s16 15 47e-5
+VS17 3 s17 0
+V17 e17 s17 DC 0 AC 15e1 120
+RI17 e17 4 68e-3
+VS18 12 s18 0
+R18 s18 2 33e3
+VS19 8 s19 0
+V19 e19 s19 DC 0 AC 33e-1 180
+RI19 e19 6 39e-2
+VS20 15 s20 0
+R20 s20 4 39e0
+VS21 5 s21 0
+L21 s21 2 39e-2
+VS22 0 s22 0
+C22 s22 18 68e-6
+VS23 5 s23 0
+L23 s23 9 27e-5
+VS24 15 s24 0
+L24 s24 12 15e-2
+VS25 8 s25 0
+L25 s25 10 82e-5
 .control
 set numdgt=17
 ac lin 1 60 60
@@ -68,5 +82,6 @@ print v(1) v(2) v(3) v(4) v(5) v(6) v(7) v(8) v(9) v(10)
 print v(11) v(12) v(13) v(14) v(15) v(16) v(17) v(18)
 print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
 print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16) i(vs17) i(vs18) i(vs19)
+print i(vs20) i(vs21) i(vs22) i(vs23) i(vs24) i(vs25)
 .endc
 .end

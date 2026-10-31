@@ -1,5 +1,5 @@
 controls oracle ac-0180
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 180 nodes 27 elements 48
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 180 nodes 27 elements 52
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
@@ -27,108 +27,117 @@ RG23 23 0 1000000000000
 RG24 24 0 1000000000000
 RG25 25 0 1000000000000
 RG26 26 0 1000000000000
-VS0 6 s0 0
-C0 s0 19 82e-6
-VS1 18 s1 0
-L1 s1 2 12e-2
-VS2 0 s2 0
-V2 e2 s2 DC 0 AC 39e0 -120
-RI2 e2 7 18e-1
-VS3 20 s3 0
-R3 s3 2 15e0
-VS4 26 s4 0
-C4 s4 6 33e-7
-VS5 15 s5 0
-C5 s5 0 15e-7
-VS6 2 s6 0
-C6 s6 22 18e-4
-VS7 10 s7 0
-V7 e7 s7 DC 0 AC 56e0 120
-RI7 e7 15 22e-2
-VS8 0 s8 0
-L8 s8 15 15e-2
-VS9 19 s9 0
-V9 e9 s9 DC 0 AC 10e0 -120
-RI9 e9 20 10e-1
-VS10 3 s10 0
-R10 s10 2 82e-2
-VS11 12 s11 0
-C11 s11 3 15e-4
-VS12 20 s12 0
-L12 s12 16 82e-5
-VS13 6 s13 0
-V13 e13 s13 DC 0 AC 22e-1 -120
-RI13 e13 13 82e-2
-VS14 14 s14 0
-R14 s14 9 15e1
-VS15 15 s15 0
-L15 s15 6 47e-5
-VS16 23 s16 0
-C16 s16 19 33e-5
-VS17 12 s17 0
-C17 s17 22 39e-6
-VS18 2 s18 0
-C18 s18 26 47e-5
-VS19 14 s19 0
-R19 s19 12 22e0
-VS20 24 s20 0
-R20 s20 4 82e3
-VS21 13 s21 0
-L21 s21 3 33e-2
-VS22 13 s22 0
-L22 s22 18 18e-5
-VS23 11 s23 0
-R23 s23 26 82e3
-VS24 12 s24 0
-C24 s24 4 47e-6
-VS25 22 s25 0
-C25 s25 6 68e-7
-VS26 9 s26 0
-V26 e26 s26 DC 0 AC 10e1 180
-RI26 e26 4 22e-1
-VS27 16 s27 0
-R27 s27 24 68e-2
+VS0 11 s0 0
+R0 s0 26 82e3
+VS1 21 s1 0
+L1 s1 20 47e-4
+VS2 18 s2 0
+L2 s2 2 12e-2
+VS3 0 s3 0
+V3 e3 s3 DC 0 AC 22e-1 -120
+RI3 e3 13 82e-2
+VS4 15 s4 0
+L4 s4 0 47e-5
+VS5 6 s5 0
+R5 s5 12 22e0
+VS6 10 s6 0
+R6 s6 9 47e0
+VS7 22 s7 0
+C7 s7 0 68e-7
+VS8 2 s8 0
+C8 s8 22 18e-4
+VS9 25 s9 0
+R9 s9 0 15e0
+VS10 15 s10 0
+C10 s10 12 15e-5
+VS11 15 s11 0
+C11 s11 8 18e-4
+VS12 12 s12 0
+C12 s12 4 47e-6
+VS13 3 s13 0
+L13 s13 5 10e-3
+VS14 23 s14 0
+L14 s14 16 47e-3
+VS15 13 s15 0
+L15 s15 18 18e-5
+VS16 16 s16 0
+L16 s16 2 33e-2
+VS17 7 s17 0
+R17 s17 1 27e0
+VS18 5 s18 0
+C18 s18 26 68e-7
+VS19 17 s19 0
+R19 s19 3 15e1
+VS20 14 s20 0
+V20 e20 s20 DC 0 AC 39e0 -120
+RI20 e20 7 18e-1
+VS21 24 s21 0
+L21 s21 11 82e-5
+VS22 26 s22 0
+C22 s22 0 33e-7
+VS23 20 s23 0
+L23 s23 16 82e-5
+VS24 8 s24 0
+L24 s24 7 56e-2
+VS25 10 s25 0
+V25 e25 s25 DC 0 AC 56e0 120
+RI25 e25 15 22e-2
+VS26 13 s26 0
+L26 s26 3 33e-2
+VS27 2 s27 0
+C27 s27 26 47e-5
 VS28 2 s28 0
 L28 s28 18 15e-4
-VS29 23 s29 0
-V29 e29 s29 DC 0 AC 33e0 120
-RI29 e29 14 18e-3
-VS30 3 s30 0
-L30 s30 5 10e-3
-VS31 23 s31 0
-R31 s31 11 33e2
+VS29 3 s29 0
+R29 s29 2 82e-2
+VS30 0 s30 0
+R30 s30 6 56e3
+VS31 12 s31 0
+C31 s31 13 33e-7
 VS32 21 s32 0
-R32 s32 0 10e-2
-VS33 8 s33 0
-L33 s33 7 56e-2
-VS34 6 s34 0
-C34 s34 16 68e-7
-VS35 6 s35 0
-R35 s35 14 56e3
+C32 s32 17 33e-5
+VS33 1 s33 0
+R33 s33 12 47e-2
+VS34 23 s34 0
+R34 s34 11 33e2
+VS35 23 s35 0
+C35 s35 19 33e-5
 VS36 15 s36 0
-C36 s36 12 15e-5
-VS37 23 s37 0
-L37 s37 16 47e-3
-VS38 24 s38 0
-L38 s38 11 82e-5
-VS39 16 s39 0
-L39 s39 2 33e-2
-VS40 17 s40 0
-R40 s40 3 15e1
-VS41 25 s41 0
-R41 s41 6 15e0
-VS42 15 s42 0
-C42 s42 8 18e-4
-VS43 10 s43 0
-R43 s43 11 10e-2
-VS44 10 s44 0
-R44 s44 9 47e0
-VS45 1 s45 0
-R45 s45 12 47e-2
-VS46 21 s46 0
-L46 s46 20 47e-4
-VS47 12 s47 0
-C47 s47 13 33e-7
+C36 s36 14 15e-7
+VS37 0 s37 0
+C37 s37 16 68e-7
+VS38 12 s38 0
+C38 s38 3 15e-4
+VS39 0 s39 0
+C39 s39 19 82e-6
+VS40 6 s40 0
+R40 s40 9 15e1
+VS41 14 s41 0
+L41 s41 15 15e-2
+VS42 10 s42 0
+R42 s42 11 10e-2
+VS43 12 s43 0
+C43 s43 22 39e-6
+VS44 25 s44 0
+V44 e44 s44 DC 0 AC 47e-1 0
+RI44 e44 21 15e-1
+VS45 9 s45 0
+V45 e45 s45 DC 0 AC 10e1 180
+RI45 e45 4 22e-1
+VS46 23 s46 0
+V46 e46 s46 DC 0 AC 33e0 120
+RI46 e46 6 18e-3
+VS47 21 s47 0
+R47 s47 14 10e-2
+VS48 20 s48 0
+R48 s48 2 15e0
+VS49 19 s49 0
+V49 e49 s49 DC 0 AC 10e0 -120
+RI49 e49 20 10e-1
+VS50 16 s50 0
+R50 s50 24 68e-2
+VS51 24 s51 0
+R51 s51 4 82e3
 .control
 set numdgt=17
 ac lin 1 60 60
@@ -139,6 +148,7 @@ print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
 print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16) i(vs17) i(vs18) i(vs19)
 print i(vs20) i(vs21) i(vs22) i(vs23) i(vs24) i(vs25) i(vs26) i(vs27) i(vs28) i(vs29)
 print i(vs30) i(vs31) i(vs32) i(vs33) i(vs34) i(vs35) i(vs36) i(vs37) i(vs38) i(vs39)
-print i(vs40) i(vs41) i(vs42) i(vs43) i(vs44) i(vs45) i(vs46) i(vs47)
+print i(vs40) i(vs41) i(vs42) i(vs43) i(vs44) i(vs45) i(vs46) i(vs47) i(vs48) i(vs49)
+print i(vs50) i(vs51)
 .endc
 .end

@@ -48,22 +48,19 @@ export const BENCH_CASES: readonly BenchCase[] = [
     run: () => checksum(compileNetlist(plantWorlds().closed, BUILTIN_CATALOG)),
   },
   {
-    // A structural recompile, the netlist's share of the re-solve after a topology change: one run
-    // opens a feeder's root switch and closes it again, so it is two recompiles, each renumbering and
-    // rehashing the whole plant from cached fragments.
-    name: 'plant-recompile-toggle',
+    // One topology change, the netlist's share of the re-solve after one: `prepare` (untimed) leaves
+    // the compiler on the closed plant, and the timed run opens a feeder's root switch, a structural
+    // recompile that renumbers and rehashes the whole plant from cached fragments. Per change, as the
+    // 2 ms re-solve budget is, so the re-solve case can extend it (F2.2 part 3).
+    name: 'plant-recompile-switch',
     warmup: 10,
     runs: 51,
     budgetMs: null,
-    run: () => {
-      const { closed, open } = plantWorlds();
-      if (toggleCompiler === null) {
-        toggleCompiler = new NetlistCompiler(BUILTIN_CATALOG);
-        toggleCompiler.compile(closed);
-      }
-      const opened = toggleCompiler.compile(open);
-      return `${checksum(opened)}/${checksum(toggleCompiler.compile(closed))}`;
+    prepare: () => {
+      toggleCompiler ??= new NetlistCompiler(BUILTIN_CATALOG);
+      toggleCompiler.compile(plantWorlds().closed);
     },
+    run: () => checksum((toggleCompiler as NetlistCompiler).compile(plantWorlds().open)),
   },
 ];
 

@@ -48,6 +48,8 @@ export interface CliIo {
   readonly now?: () => number;
   /** Test seam for `sim oracle regen`: runs ngspice (default: spawn the `--ngspice` binary). */
   readonly ngspice?: NgspiceRunner;
+  /** Test seam for `sim oracle regen`: circuits per domain (default the pinned corpus's counts). */
+  readonly oracleCounts?: Readonly<Record<'dc' | 'ac', number>>;
 }
 
 export const EXIT_OK = 0;
@@ -81,6 +83,7 @@ Commands:
                    never part of pnpm verify
       --ngspice <path>    The ngspice binary (default ngspice; ngspice_con on Windows)
       --out <dir>         The corpus directory (default libs/domain/sim-core/oracle)
+      --jobs <n>          Concurrent ngspice runs (default: the number of CPUs)
   help             Show this help
 
 Common options:
@@ -91,7 +94,7 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   replay: ['expect'],
   hash: ['expect'],
   bench: [],
-  oracle: ['ngspice', 'out'],
+  oracle: ['ngspice', 'out', 'jobs'],
 };
 
 class UsageError extends Error {}
@@ -197,11 +200,17 @@ async function oracle(parsed: Parsed, io: CliIo): Promise<number> {
   if (parsed.file !== 'regen') throw new UsageError(`Unknown oracle subcommand "${parsed.file}" (expected "regen")`);
   const binary = parsed.options['ngspice'] ?? defaultNgspiceBinary();
   const out = parsed.options['out'];
+  const jobsText = parsed.options['jobs'];
+  if (jobsText !== undefined && !/^[1-9][0-9]{0,3}$/.test(jobsText)) {
+    throw new UsageError('--jobs must be a whole number from 1 to 9999');
+  }
   try {
     const summary = await regenerateOracle({
       outDir: out === undefined ? ORACLE_CORPUS_DIR : resolve(io.cwd, out),
       binary,
       run: io.ngspice ?? spawnNgspice(binary),
+      ...(io.oracleCounts ? { counts: io.oracleCounts } : {}),
+      ...(jobsText === undefined ? {} : { jobs: Number(jobsText) }),
     });
     for (const [domain, count] of Object.entries(summary.circuits)) {
       io.stdout(`${domain} ${count} circuits, ${summary.ngspice}, ${summary.solver}`);

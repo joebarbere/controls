@@ -1,5 +1,6 @@
 import {
   formatOracleResults,
+  generateOracleCircuit,
   ORACLE_DOMAINS,
   ORACLE_GMIN_S,
   type OracleCircuit,
@@ -16,7 +17,7 @@ import {
 } from '@controls/sim-core/oracle';
 import { sha256Hex } from '@controls/world-model';
 import { spawn } from 'node:child_process';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,6 +36,8 @@ export interface NgspiceRun {
   readonly stdout: string;
   readonly stderr: string;
   readonly missing?: boolean;
+  /** Set when the run was killed for taking longer than its timeout. */
+  readonly timedOut?: boolean;
 }
 
 /** Runs ngspice with these arguments. sim-cli's test seam: specs pass a fake. */
@@ -45,11 +48,17 @@ export function defaultNgspiceBinary(platform: NodeJS.Platform = process.platfor
   return platform === 'win32' ? 'ngspice_con' : 'ngspice';
 }
 
-/** An {@link NgspiceRunner} that spawns `binary` (no shell). A binary that can't be started is `missing`. */
-export function spawnNgspice(binary: string): NgspiceRunner {
+/** The longest one ngspice run may take before it is killed (a deck solves in about 20 ms). */
+export const NGSPICE_TIMEOUT_MS = 60_000;
+
+/**
+ * An {@link NgspiceRunner} that spawns `binary` (no shell). A binary that can't be started is
+ * `missing`; a run still going after `timeoutMs` is killed and reported `timedOut`.
+ */
+export function spawnNgspice(binary: string, timeoutMs: number = NGSPICE_TIMEOUT_MS): NgspiceRunner {
   return (args) =>
     new Promise((resolve) => {
-      const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: timeoutMs });
       const out: Buffer[] = [];
       const err: Buffer[] = [];
       child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
@@ -57,8 +66,13 @@ export function spawnNgspice(binary: string): NgspiceRunner {
       child.on('error', (error: NodeJS.ErrnoException) =>
         resolve({ status: null, stdout: '', stderr: error.message, missing: error.code === 'ENOENT' }),
       );
-      child.on('close', (status) =>
-        resolve({ status, stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8') }),
+      child.on('close', (status, signal) =>
+        resolve({
+          status,
+          stdout: Buffer.concat(out).toString('utf8'),
+          stderr: Buffer.concat(err).toString('utf8'),
+          ...(status === null && signal !== null && child.killed ? { timedOut: true } : {}),
+        }),
       );
     });
 }
@@ -75,6 +89,8 @@ export interface RegenOptions {
   readonly run: NgspiceRunner;
   /** Concurrent ngspice processes (default: the machine's available parallelism). */
   readonly jobs?: number;
+  /** Test seam: circuits per domain (default `ORACLE_CORPUS`'s counts), so specs write a small corpus. */
+  readonly counts?: Readonly<Record<OracleDomain, number>>;
 }
 
 export interface RegenSummary {
@@ -100,17 +116,30 @@ async function ngspiceVersion(options: RegenOptions): Promise<string> {
   return version[0];
 }
 
-/** Runs `tasks` with at most `jobs` in flight; results in task order. */
+/**
+ * Runs `tasks` with at most `jobs` in flight; results in task order. The first failure stops every
+ * worker from starting another task; the pool waits for the runs already going, then rejects with
+ * that first failure.
+ */
 async function pool<T>(jobs: number, tasks: readonly (() => Promise<T>)[]): Promise<T[]> {
   const results = new Array<T>(tasks.length);
   let next = 0;
+  let aborted = false;
+  let firstFailure: unknown = null;
   const worker = async () => {
-    while (next < tasks.length) {
+    while (!aborted && next < tasks.length) {
       const i = next++;
-      results[i] = await tasks[i]();
+      try {
+        results[i] = await tasks[i]();
+      } catch (error) {
+        if (!aborted) firstFailure = error;
+        aborted = true;
+      }
     }
   };
+  // Wait for the runs already going before rejecting, so none still holds a staging file open.
   await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, tasks.length)) }, worker));
+  if (aborted) throw firstFailure;
   return results;
 }
 
@@ -120,8 +149,10 @@ async function solve(
   deck: string,
   path: string,
 ): Promise<OracleRawResult & { solver: string }> {
-  const result = await options.run(['-b', path]);
+  // -n: no .spiceinit (from the working directory or HOME), which could silently change the results.
+  const result = await options.run(['-n', '-b', path]);
   if (result.missing) throw new OracleRegenError(`ngspice not found ("${options.binary}"); ${INSTALL_HINT}`);
+  if (result.timedOut) throw new OracleRegenError(`${circuit.name}: ngspice timed out`);
   if (result.status !== 0) {
     throw new OracleRegenError(
       `${circuit.name}: ngspice exited ${result.status}: ${result.stderr.trim().slice(0, 500)}`,
@@ -136,59 +167,81 @@ async function solve(
   }
 }
 
-/** Writes a domain's decks, deleting any stray `.cir` left from a larger corpus. Returns their paths. */
-async function writeDecks(outDir: string, domain: OracleDomain, circuits: readonly OracleCircuit[]) {
-  const dir = join(outDir, domain);
-  await mkdir(dir, { recursive: true });
+/** The domain's circuits: `count` of them from the pinned seed (the corpus itself unless a spec shrinks it). */
+function circuitsOf(domain: OracleDomain, count: number): OracleCircuit[] {
+  return count === ORACLE_CORPUS[domain].count
+    ? oracleCorpus(domain)
+    : Array.from({ length: count }, (_, index) => generateOracleCircuit(domain, ORACLE_CORPUS[domain].seed, index));
+}
+
+/** Writes a domain's decks into `dir` (the staging directory). Returns each with its path. */
+async function writeDecks(dir: string, domain: OracleDomain, circuits: readonly OracleCircuit[]) {
+  await mkdir(join(dir, domain), { recursive: true });
   const decks = circuits.map((circuit) => ({
     circuit,
     deck: oracleDeck(circuit),
-    path: join(outDir, oracleDeckPath(circuit)),
+    path: join(dir, oracleDeckPath(circuit)),
   }));
-  const keep = new Set(decks.map(({ path }) => path));
-  for (const file of await readdir(dir)) {
-    if (file.endsWith('.cir') && !keep.has(join(dir, file))) await rm(join(dir, file));
-  }
   for (const { deck, path } of decks) await writeFile(path, deck);
   return decks;
 }
 
+/** The staging directory inside the output directory, so the final renames stay on one file system. */
+export const REGEN_STAGING_DIR = '.regen';
+
 /**
- * Regenerates the whole corpus. Throws {@link OracleRegenError} on any failure; the results files are
- * written only once every circuit of both domains has solved, so a failed run never leaves them half new.
+ * Regenerates the whole corpus. Throws {@link OracleRegenError} on any failure. Everything is written
+ * into a staging directory inside `outDir` first; only once every circuit of both domains has solved
+ * are `dc/`, `ac/` and both results files renamed into place (the old ones moved aside, then deleted).
+ * A failed run leaves the existing corpus untouched, and the first failure stops new ngspice runs.
  */
 export async function regenerateOracle(options: RegenOptions): Promise<RegenSummary> {
   const ngspice = await ngspiceVersion(options);
   const jobs = options.jobs ?? availableParallelism();
-  const solved: Record<OracleDomain, (OracleRawResult & { solver: string })[]> = { dc: [], ac: [] };
-  for (const domain of ORACLE_DOMAINS) {
-    const decks = await writeDecks(options.outDir, domain, oracleCorpus(domain));
-    solved[domain] = await pool(
-      jobs,
-      decks.map(
-        ({ circuit, deck, path }) =>
-          () =>
-            solve(options, circuit, deck, path),
-      ),
-    );
+  const counts = options.counts ?? { dc: ORACLE_CORPUS.dc.count, ac: ORACLE_CORPUS.ac.count };
+  const staging = join(options.outDir, REGEN_STAGING_DIR);
+  await rm(staging, { recursive: true, force: true });
+  try {
+    const solved: Record<OracleDomain, (OracleRawResult & { solver: string })[]> = { dc: [], ac: [] };
+    for (const domain of ORACLE_DOMAINS) {
+      const decks = await writeDecks(staging, domain, circuitsOf(domain, counts[domain]));
+      solved[domain] = await pool(
+        jobs,
+        decks.map(
+          ({ circuit, deck, path }) =>
+            () =>
+              solve(options, circuit, deck, path),
+        ),
+      );
+    }
+    const solvers = new Set([...solved.dc, ...solved.ac].map((result) => result.solver));
+    const [solver] = solvers;
+    // `.options sparse` must have taken effect in every run, so results don't depend on a KLU build.
+    if (solvers.size !== 1 || !solver.startsWith('SPARSE')) {
+      throw new OracleRegenError(`ngspice used ${[...solvers].join(', ')}, not Sparse: is ".options sparse" honoured?`);
+    }
+    for (const domain of ORACLE_DOMAINS) {
+      const header = {
+        domain,
+        ngspice,
+        solver,
+        options: oracleDeckOptions(),
+        gminS: ORACLE_GMIN_S,
+        seed: ORACLE_CORPUS[domain].seed,
+        count: counts[domain],
+      };
+      await writeFile(join(staging, oracleResultsPath(domain)), formatOracleResults(header, solved[domain]));
+    }
+    const entries = [...ORACLE_DOMAINS, ...ORACLE_DOMAINS.map(oracleResultsPath)];
+    await mkdir(join(staging, 'old'));
+    for (const entry of entries) {
+      await rename(join(options.outDir, entry), join(staging, 'old', entry)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      await rename(join(staging, entry), join(options.outDir, entry));
+    }
+    return { ngspice, solver, circuits: { dc: solved.dc.length, ac: solved.ac.length } };
+  } finally {
+    await rm(staging, { recursive: true, force: true });
   }
-  const solvers = new Set([...solved.dc, ...solved.ac].map((result) => result.solver));
-  const [solver] = solvers;
-  // `.options sparse` must have taken effect in every run, so results don't depend on a KLU build.
-  if (solvers.size !== 1 || !solver.startsWith('SPARSE')) {
-    throw new OracleRegenError(`ngspice used ${[...solvers].join(', ')}, not Sparse: is ".options sparse" honoured?`);
-  }
-  for (const domain of ORACLE_DOMAINS) {
-    const header = {
-      domain,
-      ngspice,
-      solver,
-      options: oracleDeckOptions(),
-      gminS: ORACLE_GMIN_S,
-      seed: ORACLE_CORPUS[domain].seed,
-      count: ORACLE_CORPUS[domain].count,
-    };
-    await writeFile(join(options.outDir, oracleResultsPath(domain)), formatOracleResults(header, solved[domain]));
-  }
-  return { ngspice, solver, circuits: { dc: solved.dc.length, ac: solved.ac.length } };
 }

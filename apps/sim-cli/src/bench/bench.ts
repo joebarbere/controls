@@ -16,6 +16,8 @@ export interface BenchCase {
   readonly runs: number;
   /** The median wall time allowed, in ms (spec §4.5 / §4.9 budgets), or null to report only. */
   readonly budgetMs: number | null;
+  /** Untimed set-up before every run, warm-up included (putting a compiler back in a known state). */
+  prepare?(): void;
   /** The workload. Returns a checksum of its result, which must be the same on every run. */
   run(): string;
 }
@@ -62,9 +64,13 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     throw new RangeError(`bench case "${benchCase.name}": runs must be a positive integer`);
   }
   const checksums = new Set<string>();
-  for (let i = 0; i < benchCase.warmup; i++) checksums.add(benchCase.run());
+  for (let i = 0; i < benchCase.warmup; i++) {
+    benchCase.prepare?.();
+    checksums.add(benchCase.run());
+  }
   const durations: number[] = [];
   for (let i = 0; i < benchCase.runs; i++) {
+    benchCase.prepare?.();
     const start = now();
     const checksum = benchCase.run();
     durations.push(now() - start);

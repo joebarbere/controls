@@ -5,8 +5,9 @@ RG1 1 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 22e1
 RI0 e0 1 27e-2
-VS1 1 s1 0
-R1 s1 0 47e-1
+VS1 0 s1 0
+V1 e1 s1 DC 12e0
+RI1 e1 1 27e-3
 .control
 set numdgt=17
 op

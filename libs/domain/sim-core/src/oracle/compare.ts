@@ -7,10 +7,14 @@ import type { OracleCircuitResult } from './results';
  *   |x − x_ref| ≤ relative · |x_ref| + floor
  *   floor = max(absolute floor, scale · max over the circuit of |x_ref| of the same quantity)
  *
- * The scale-aware floor keeps a value near zero (a node that cancels, a branch carrying only gmin
- * current) from failing on rounding at the circuit's own magnitude; the absolute floors bound it for
- * circuits whose quantities are all tiny. Every number here is to be confirmed by measurement when
- * F2.2 part 1 lands; whatever is chosen stays far inside the 0.5 % golden bound.
+ * The reference is itself noisy: ngspice's own results, against exact rational solutions of the
+ * same decks, are off by up to about 3e-9 of the circuit's largest value of the same quantity
+ * (test-engineer review of F2.7, 2026-10-30). So the floor is set by that noise, `scale` = 1e-7: about
+ * 30 times it. A float64 MNA solver emulated on the corpus stays at 0.03 of the allowance or less. This
+ * floor bounds disagreement with a noisy reference; it is not the floor policy that bounds sim-core's
+ * own KCL residuals in its property tests (F2.2 part 1, #46), which plays a different role.
+ * `relative` and `scale` are to be confirmed by measurement when F2.2 part 1 lands; whatever is
+ * chosen stays far inside the 0.5 % golden bound.
  */
 
 export interface OracleTolerance {
@@ -24,14 +28,15 @@ export interface OracleTolerance {
   readonly scale: number;
 }
 
-/** ADR 0012's proposed tolerance. Numerical test choices; to be confirmed by measurement (F2.2 part 1). */
+/**
+ * ADR 0012's proposed tolerance: `|x − x_ref| ≤ 1e-6·|x_ref| + max(1e-12, 1e-7·max|x_ref|)`, the same
+ * for volts and amps. Numerical test choices; to be confirmed by measurement (F2.2 part 1).
+ */
 export const ORACLE_TOLERANCE: OracleTolerance = {
   relative: 1e-6,
-  voltageFloorV: 1e-9,
-  // Not 1e-12 A: a branch current in doubles is only good to about ε · V_max · G_max, about 2e-11 A
-  // with the generator's 10 mΩ and 820 V extremes (F2.2 part 1 found 1.4e-11 A for 1 mΩ at 120 V).
-  currentFloorA: 1e-9,
-  scale: 1e-9,
+  voltageFloorV: 1e-12,
+  currentFloorA: 1e-12,
+  scale: 1e-7,
 };
 
 /** The golden-fixture bound (plan F2.2): the oracle tolerance must never be looser than this. */

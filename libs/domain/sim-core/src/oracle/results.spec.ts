@@ -167,7 +167,7 @@ describe('compareOracleSolution', () => {
     ]);
     expect(mismatches[0].expected).toStrictEqual([100, -50]);
     expect(mismatches[0].error).toBeCloseTo(0.01, 12);
-    expect(mismatches[0].allowed).toBeCloseTo(1e-6 * Math.hypot(100, 50) + 1e-9 * Math.hypot(100, 50), 15);
+    expect(mismatches[0].allowed).toBeCloseTo(1e-6 * Math.hypot(100, 50) + 1e-7 * Math.hypot(100, 50), 15);
   });
 
   it('refuses a solution of the wrong size', () => {

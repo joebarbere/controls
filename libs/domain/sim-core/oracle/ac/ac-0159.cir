@@ -1,5 +1,5 @@
 controls oracle ac-0159
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 159 nodes 8 elements 9
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 159 nodes 8 elements 12
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
@@ -8,32 +8,39 @@ RG4 4 0 1000000000000
 RG5 5 0 1000000000000
 RG6 6 0 1000000000000
 RG7 7 0 1000000000000
-VS0 5 s0 0
-R0 s0 1 68e1
+VS0 6 s0 0
+C0 s0 2 68e-5
 VS1 0 s1 0
-V1 e1 s1 DC 0 AC 18e-1 -120
-RI1 e1 6 18e-2
-VS2 7 s2 0
-R2 s2 3 56e-1
-VS3 6 s3 0
-R3 s3 7 33e3
-VS4 0 s4 0
-V4 e4 s4 DC 0 AC 33e1 120
-RI4 e4 2 27e-1
-VS5 3 s5 0
-V5 e5 s5 DC 0 AC 10e-1 180
-RI5 e5 1 82e-1
-VS6 0 s6 0
-L6 s6 4 15e-3
-VS7 4 s7 0
-V7 e7 s7 DC 0 AC 39e1 120
-RI7 e7 2 18e-3
-VS8 6 s8 0
-C8 s8 3 15e-7
+V1 e1 s1 DC 0 AC 39e1 120
+RI1 e1 2 18e-3
+VS2 6 s2 0
+C2 s2 3 15e-7
+VS3 1 s3 0
+V3 e3 s3 DC 0 AC 33e1 120
+RI3 e3 2 27e-1
+VS4 1 s4 0
+L4 s4 0 15e-3
+VS5 6 s5 0
+R5 s5 7 33e3
+VS6 5 s6 0
+R6 s6 4 68e1
+VS7 1 s7 0
+V7 e7 s7 DC 0 AC 18e-1 -120
+RI7 e7 6 18e-2
+VS8 7 s8 0
+R8 s8 3 56e-1
+VS9 7 s9 0
+L9 s9 1 12e-3
+VS10 3 s10 0
+V10 e10 s10 DC 0 AC 10e-1 180
+RI10 e10 4 82e-1
+VS11 5 s11 0
+L11 s11 7 56e-3
 .control
 set numdgt=17
 ac lin 1 60 60
 print v(1) v(2) v(3) v(4) v(5) v(6) v(7)
-print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8)
+print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
+print i(vs10) i(vs11)
 .endc
 .end

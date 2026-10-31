@@ -16,9 +16,15 @@ import {
  * `values`) and the canonical numbering: node 0 is the reference and the circuit's smallest node, so it
  * is the node F2.2 picks as the island's reference; branch k is deck element k.
  *
- * `resistor` and `vsource` are F2.1's `ElementKind`s; `isource` (F2.2 part 1) and `inductor` and
- * `capacitor` (part 2) are the stamps F2.2 adds. TODO(F2.2): when the solver's input type lands, add
- * the adapter from this netlist to it here (or emit it directly), and switch the comparison specs on.
+ * `resistor` and `vsource` are F2.1's `ElementKind`s; `isource`, `inductor` and `capacitor` are oracle
+ * kinds. F2.1's `ElementKind` is deliberately not widened (ADR 0012, test-engineer review).
+ *
+ * TODO(F2.2): after #46 lands, add the adapter from this netlist to the solver's input, a `Netlist`
+ * plus `DcBranchValues`: `resistor` and `vsource` map to themselves, and an `isource` maps to a
+ * `resistor` element with the `DC_STAMP_ISOURCE` stamp, so `islandReferenceNode` can never pick a
+ * current source's end. Then, in `corpus.spec.ts`: run the element-equation and KCL residuals on the
+ * adapted `Netlist` and `DcBranchValues`, assert `islandReferenceNode(...) === 0` for every circuit,
+ * and switch the DC comparison on (part 2 adds `inductor` and `capacitor` and the AC comparison).
  */
 
 export interface OracleNetlistBranch {

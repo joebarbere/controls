@@ -105,6 +105,20 @@ describe.each(ORACLE_DOMAINS)('the %s oracle corpus', (domain) => {
     // wrong sign, slot or value would be of order 1.
     expect(worst).toBeLessThan(1e-7);
   });
+
+  it('at least 95 % of branches carry real current, not just gmin (> 1e-6 of the circuit maximum)', () => {
+    let live = 0;
+    let total = 0;
+    for (const result of results.circuits) {
+      const magnitudes = [];
+      for (let k = 0; k < result.branches.length; k += 2)
+        magnitudes.push(Math.hypot(result.branches[k], result.branches[k + 1]));
+      const largest = Math.max(...magnitudes);
+      live += magnitudes.filter((m) => m > 1e-6 * largest).length;
+      total += magnitudes.length;
+    }
+    expect(live / total).toBeGreaterThanOrEqual(0.95);
+  });
 });
 
 describe('sim-core against the oracle corpus', () => {
@@ -126,7 +140,8 @@ function worstResidual(netlist: ReturnType<typeof oracleNetlist>, result: Oracle
   let iScale = 0;
   netlist.branches.forEach((_, k) => (iScale = Math.max(iScale, abs(i(k)))));
   let worst = 0;
-  const kcl = Array.from({ length: netlist.nodeCount }, (_, n) => [ORACLE_GMIN_S * v(n)[0], ORACLE_GMIN_S * v(n)[1]]);
+  // The netlist's own gmin, not the oracle constant: a wrong `gminS` in `oracleNetlist` must fail here.
+  const kcl = Array.from({ length: netlist.nodeCount }, (_, n) => [netlist.gminS * v(n)[0], netlist.gminS * v(n)[1]]);
   for (const branch of netlist.branches) {
     const [va, vb, ik] = [v(branch.a), v(branch.b), i(branch.index)];
     const drop: [number, number] = [va[0] - vb[0], va[1] - vb[1]];

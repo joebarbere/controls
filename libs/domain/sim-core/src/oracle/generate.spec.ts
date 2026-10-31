@@ -1,6 +1,7 @@
 import { ORACLE_DOMAINS, type OracleCircuit, type OracleElement, PHASOR_ANGLES, valueNumber } from './circuit';
 import { oracleCorpus } from './corpus';
 import {
+  articulation,
   generateOracleCircuit,
   isExcited,
   ORACLE_MAX_NODES,
@@ -92,6 +93,11 @@ describe('generateOracleCircuit', () => {
       }
     });
 
+    it('is biconnected, current sources ignored: every element lies on a loop with every other', () => {
+      const split = circuits.filter((circuit) => articulation(circuit.elements, circuit.nodeCount) !== null);
+      expect(split.map((circuit) => circuit.name)).toStrictEqual([]);
+    });
+
     it('node 0 is the reference sim-core picks: the negative end of the first voltage source', () => {
       for (const circuit of circuits) {
         const first = circuit.elements.find((element) => element.kind === 'vsource');
@@ -117,6 +123,33 @@ describe('generateOracleCircuit', () => {
       );
       expect([...angles].sort()).toStrictEqual(domain === 'ac' ? [...PHASOR_ANGLES].sort() : [0]);
     });
+  });
+});
+
+describe('articulation', () => {
+  const r = { mantissa: 10, exponent: 0 };
+  const R = (a: number, b: number): OracleElement => ({ kind: 'resistor', a, b, resistanceOhm: r });
+
+  it('finds a dead end: the node it hangs from separates it', () => {
+    expect(articulation([R(0, 1), R(1, 2), R(2, 0), R(2, 3)], 4)).toStrictEqual([[0, 1], [3]]);
+  });
+
+  it('finds a pendant loop hanging from one node, and a root that is a cut node', () => {
+    expect(articulation([R(0, 1), R(1, 2), R(2, 0), R(2, 3), R(3, 4), R(4, 2)], 5)).toStrictEqual([
+      [0, 1],
+      [3, 4],
+    ]);
+    expect(articulation([R(1, 0), R(0, 2)], 3)).toStrictEqual([[1], [2]]);
+  });
+
+  it('accepts a ring with a chord, and parallel elements between two nodes', () => {
+    expect(articulation([R(0, 1), R(1, 2), R(2, 3), R(3, 0), R(0, 2)], 4)).toBeNull();
+    expect(articulation([R(0, 1), R(1, 0)], 2)).toBeNull();
+  });
+
+  it('ignores current sources: an element in parallel only with a current source is a bridge', () => {
+    expect(articulation([R(0, 1), { kind: 'isource', a: 0, b: 1, currentA: r }], 2)).toStrictEqual([[0], [1]]);
+    expect(articulation([R(0, 1), R(1, 2), { kind: 'isource', a: 2, b: 0, currentA: r }, R(2, 0)], 3)).toBeNull();
   });
 });
 

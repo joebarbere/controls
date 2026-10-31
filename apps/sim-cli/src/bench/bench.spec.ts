@@ -64,6 +64,26 @@ describe('runBenchCase', () => {
     expect(result).toMatchObject({ deterministic: false, checksum: null, ok: false });
   });
 
+  it('runs prepare before every run, outside the timing', () => {
+    const order: string[] = [];
+    const reads: number[] = [];
+    let t = 0;
+    const clock = () => {
+      reads.push(order.length);
+      return (t += 1);
+    };
+    const benchCase = fixedCase({
+      warmup: 1,
+      runs: 2,
+      prepare: () => order.push('prepare'),
+      run: () => (order.push('run'), 'same'),
+    });
+    expect(runBenchCase(benchCase, clock).medianMs).toBe(1);
+    expect(order).toEqual(['prepare', 'run', 'prepare', 'run', 'prepare', 'run']);
+    // The clock is read after each prepare and before the next: prepare is never inside a timing.
+    expect(reads).toEqual([3, 4, 5, 6]);
+  });
+
   it('counts warm-up checksums too', () => {
     let i = 0;
     const result = runBenchCase(

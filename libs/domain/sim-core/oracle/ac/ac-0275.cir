@@ -1,5 +1,5 @@
 controls oracle ac-0275
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 275 nodes 15 elements 29
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 275 nodes 15 elements 30
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
@@ -15,71 +15,73 @@ RG11 11 0 1000000000000
 RG12 12 0 1000000000000
 RG13 13 0 1000000000000
 RG14 14 0 1000000000000
-VS0 1 s0 0
-L0 s0 12 22e-3
-VS1 14 s1 0
-C1 s1 2 56e-7
-VS2 14 s2 0
-R2 s2 10 68e1
-VS3 1 s3 0
-C3 s3 8 39e-7
-VS4 7 s4 0
-R4 s4 12 56e2
-VS5 13 s5 0
-R5 s5 14 27e2
-VS6 0 s6 0
-L6 s6 9 22e-3
-VS7 0 s7 0
-V7 e7 s7 DC 0 AC 33e-1 0
-RI7 e7 8 12e-1
-VS8 12 s8 0
-R8 s8 1 10e-1
-VS9 0 s9 0
-C9 s9 13 15e-6
-VS10 7 s10 0
-V10 e10 s10 DC 0 AC 27e0 180
-RI10 e10 5 56e-1
-VS11 0 s11 0
-R11 s11 3 10e-1
-VS12 13 s12 0
-V12 e12 s12 DC 0 AC 68e0 -120
-RI12 e12 3 56e-3
-VS13 12 s13 0
-L13 s13 10 15e-3
-VS14 7 s14 0
-R14 s14 1 33e3
-VS15 2 s15 0
-L15 s15 7 10e-3
+VS0 0 s0 0
+C0 s0 8 39e-7
+VS1 1 s1 0
+L1 s1 3 18e-4
+VS2 7 s2 0
+C2 s2 13 15e-6
+VS3 14 s3 0
+R3 s3 10 68e1
+VS4 5 s4 0
+L4 s4 9 18e-3
+VS5 0 s5 0
+V5 e5 s5 DC 0 AC 82e1 0
+RI5 e5 8 56e-2
+VS6 7 s6 0
+R6 s6 3 10e-1
+VS7 12 s7 0
+L7 s7 10 15e-3
+VS8 1 s8 0
+V8 e8 s8 DC 0 AC 27e0 180
+RI8 e8 5 56e-1
+VS9 10 s9 0
+R9 s9 6 18e0
+VS10 12 s10 0
+C10 s10 11 18e-5
+VS11 6 s11 0
+R11 s11 1 10e-2
+VS12 1 s12 0
+R12 s12 12 56e2
+VS13 0 s13 0
+L13 s13 12 22e-3
+VS14 2 s14 0
+L14 s14 1 10e-3
+VS15 1 s15 0
+R15 s15 0 33e3
 VS16 8 s16 0
 V16 e16 s16 DC 0 AC 56e0 120
 RI16 e16 11 15e-3
-VS17 8 s17 0
-L17 s17 4 47e-2
-VS18 6 s18 0
-R18 s18 7 10e-2
-VS19 1 s19 0
-V19 e19 s19 DC 0 AC 82e1 0
-RI19 e19 8 56e-2
-VS20 11 s20 0
-R20 s20 12 56e-2
-VS21 7 s21 0
-R21 s21 12 22e-1
-VS22 3 s22 0
-V22 e22 s22 DC 0 AC 33e-1 0
-RI22 e22 5 39e-2
-VS23 3 s23 0
-L23 s23 14 12e-5
-VS24 10 s24 0
-R24 s24 6 18e0
-VS25 7 s25 0
-L25 s25 3 18e-4
+VS17 13 s17 0
+V17 e17 s17 DC 0 AC 68e0 -120
+RI17 e17 3 56e-3
+VS18 3 s18 0
+V18 e18 s18 DC 0 AC 33e-1 0
+RI18 e18 5 39e-2
+VS19 13 s19 0
+R19 s19 14 27e2
+VS20 7 s20 0
+V20 e20 s20 DC 0 AC 33e-1 0
+RI20 e20 8 12e-1
+VS21 3 s21 0
+L21 s21 14 12e-5
+VS22 11 s22 0
+R22 s22 12 56e-2
+VS23 7 s23 0
+L23 s23 9 22e-3
+VS24 8 s24 0
+L24 s24 4 47e-2
+VS25 8 s25 0
+L25 s25 12 12e-2
 VS26 12 s26 0
-V26 e26 s26 DC 0 AC 33e-1 180
-RI26 e26 4 39e-3
+R26 s26 0 10e-1
 VS27 12 s27 0
-C27 s27 11 18e-5
-VS28 8 s28 0
-L28 s28 12 12e-2
+V27 e27 s27 DC 0 AC 33e-1 180
+RI27 e27 4 39e-3
+VS28 14 s28 0
+C28 s28 2 56e-7
+VS29 1 s29 0
+R29 s29 12 22e-1
 .control
 set numdgt=17
 ac lin 1 60 60
@@ -87,6 +89,6 @@ print v(1) v(2) v(3) v(4) v(5) v(6) v(7) v(8) v(9) v(10)
 print v(11) v(12) v(13) v(14)
 print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
 print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16) i(vs17) i(vs18) i(vs19)
-print i(vs20) i(vs21) i(vs22) i(vs23) i(vs24) i(vs25) i(vs26) i(vs27) i(vs28)
+print i(vs20) i(vs21) i(vs22) i(vs23) i(vs24) i(vs25) i(vs26) i(vs27) i(vs28) i(vs29)
 .endc
 .end

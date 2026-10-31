@@ -18,8 +18,15 @@ import {
  * Shape: 2–30 nodes (node 0 the reference). A random spanning tree first, so every node has a path to
  * the reference through finite impedances (resistors and sources' internal resistance in DC; any
  * element in AC), so no circuit is singular. Then up to `nodeCount` extra elements between random
- * node pairs, which make loops and parallel elements. Every circuit has at least one source. The
- * element order and the node labels are shuffled, so neither says which elements form the tree.
+ * node pairs, which make loops and parallel elements. Every circuit has at least one source.
+ *
+ * Then the circuit is made **biconnected**, current sources ignored: while some node is an
+ * articulation point, an element joins random nodes of two of the pieces it separates. In a
+ * biconnected circuit any two elements lie on a common loop, so every element shares a loop with a
+ * source and (for random values) carries real current. A spanning tree alone left about a fifth of
+ * the branches as dead ends carrying only gmin current, which tests nothing (ADR 0012).
+ *
+ * The element order and the node labels are shuffled, so neither says which elements form the tree.
  */
 
 /** E12 mantissas: decimal values with two significant digits, as component values are sold. */
@@ -97,15 +104,64 @@ function referencedToGround(elements: readonly OracleElement[]): OracleElement[]
   return elements.map((element) => ({ ...element, a: relabel(element.a), b: relabel(element.b) }));
 }
 
-/** Passive kinds, for closing a loop across a source. */
-const PASSIVE_WEIGHTS: Readonly<Record<OracleDomain, Weights>> = {
-  dc: [['resistor', 1]],
-  ac: [
-    ['resistor', 1],
-    ['inductor', 1],
-    ['capacitor', 1],
-  ],
-};
+/**
+ * Where a circuit (current sources ignored) is not biconnected: two node sets that some single node
+ * or single element separates, or `null` if every element lies on a loop with every other. Tarjan's
+ * lowpoint DFS, over a multigraph (parallel elements are distinct edges).
+ *
+ * - An articulation node `w`: two of the pieces `G − w` falls into (`w` excluded).
+ * - With two nodes there is no articulation node; a single element between them is a bridge: its
+ *   two ends.
+ */
+export function articulation(elements: readonly OracleElement[], nodeCount: number): [number[], number[]] | null {
+  const adjacent: [number, number][][] = Array.from({ length: nodeCount }, () => []);
+  elements.forEach((element, k) => {
+    if (element.kind === 'isource') return;
+    adjacent[element.a].push([element.b, k]);
+    adjacent[element.b].push([element.a, k]);
+  });
+  if (nodeCount === 2) return adjacent[0].length < 2 ? [[0], [1]] : null;
+  const order = new Array<number>(nodeCount).fill(-1);
+  const low = new Array<number>(nodeCount).fill(0);
+  let time = 0;
+  let cut = -1;
+  const visit = (u: number, viaEdge: number): void => {
+    order[u] = low[u] = time++;
+    let children = 0;
+    for (const [v, k] of adjacent[u]) {
+      if (k === viaEdge) continue;
+      if (order[v] >= 0) {
+        low[u] = Math.min(low[u], order[v]);
+        continue;
+      }
+      children++;
+      visit(v, k);
+      low[u] = Math.min(low[u], low[v]);
+      if (cut < 0 && viaEdge >= 0 && low[v] >= order[u]) cut = u;
+    }
+    if (cut < 0 && viaEdge < 0 && children > 1) cut = u;
+  };
+  visit(0, -1);
+  if (cut < 0) return null;
+  // The pieces of G − cut: flood from each unvisited neighbour, never entering `cut`.
+  const piece = new Array<number>(nodeCount).fill(-1);
+  const pieces: number[][] = [];
+  for (const [start] of adjacent[cut]) {
+    if (piece[start] >= 0) continue;
+    const nodes = [start];
+    piece[start] = pieces.length;
+    for (let i = 0; i < nodes.length; i++) {
+      for (const [v] of adjacent[nodes[i]]) {
+        if (v !== cut && piece[v] < 0) {
+          piece[v] = pieces.length;
+          nodes.push(v);
+        }
+      }
+    }
+    pieces.push(nodes.sort((x, y) => x - y));
+  }
+  return [pieces[0], pieces[1]];
+}
 
 /**
  * Whether current other than gmin's flows: a current source always drives its current, and a voltage
@@ -213,14 +269,13 @@ export function generateOracleCircuit(domain: OracleDomain, seed: number, index:
   for (let k = 1; k < nodeCount; k++) connect(pick(rng, TREE_WEIGHTS[domain]), label[rng.nextInt(0, k - 1)], label[k]);
   const extras = rng.nextInt(0, nodeCount);
   for (let e = 0; e < extras; e++) connect(pick(rng, EXTRA_WEIGHTS[domain]), ...pair());
-  // Every circuit is excited: a tree (or a source on no loop) carries only gmin current, which is
-  // rounding noise, not a test. Close a loop across a source with a passive element if none is.
   if (!elements.some((element) => element.kind === 'vsource' || element.kind === 'isource')) {
     connect('vsource', ...pair());
   }
-  if (!isExcited(elements, nodeCount)) {
-    const source = elements.find((element) => element.kind === 'vsource') as OracleElement;
-    connect(pick(rng, PASSIVE_WEIGHTS[domain]), source.a, source.b);
+  // Biconnect (current sources ignored): no dead ends, no pendant loops, every element on a loop.
+  for (let split = articulation(elements, nodeCount); split !== null; split = articulation(elements, nodeCount)) {
+    const [p, q] = split;
+    connect(pick(rng, TREE_WEIGHTS[domain]), p[rng.nextInt(0, p.length - 1)], q[rng.nextInt(0, q.length - 1)]);
   }
   shuffle(rng, elements);
   return {

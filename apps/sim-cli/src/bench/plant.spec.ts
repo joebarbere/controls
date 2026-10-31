@@ -39,11 +39,13 @@ describe('the bench plant', () => {
     expect(compileNetlist(buildPlant(1).world, BUILTIN_CATALOG).nodes).toHaveLength(PLANT_NODES);
   });
 
-  it("the toggle case's switch changes the topology and back", () => {
-    const toggle = BENCH_CASES.find((c) => c.name === 'plant-recompile-toggle');
-    const [opened, closed] = (toggle?.run() ?? '').split('/');
-    expect(closed).toBe(`${PLANT_NODES}:${netlist.branches.length}:${netlist.islands.length}:${netlist.topologyHash}`);
-    expect(opened).not.toBe(closed);
-    expect(toggle?.run()).toBe(`${opened}/${closed}`);
+  it('the switch case is one topology change: opening the switch adds a node', () => {
+    const switchCase = BENCH_CASES.find((c) => c.name === 'plant-recompile-switch');
+    switchCase?.prepare?.();
+    const opened = switchCase?.run();
+    expect(opened).toMatch(new RegExp(`^${PLANT_NODES + 1}:${netlist.branches.length}:`));
+    expect(opened).not.toContain(netlist.topologyHash);
+    switchCase?.prepare?.();
+    expect(switchCase?.run()).toBe(opened);
   });
 });
