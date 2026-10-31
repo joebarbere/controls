@@ -122,7 +122,7 @@ sequenceDiagram
 
 ## Lamp brightness from sim output (F2.5)
 
-The host decodes each lamp's device record into `{ lightOutputRel, status }` and calls `ViewportRenderer.setLampOutputs(map)` (by entity id) after each new snapshot or world change. The renderer computes no electrical quantity; it maps and draws:
+The host (`feature-workspace`'s `LampSnapshotFeed`, subscribed to `SimHost.subscribe`) reads each lamp's `lightOutputRel` and `status` from every snapshot the sim worker publishes, through field offsets resolved once per topology generation, and calls `ViewportRenderer.setLampOutputs(map)` (by entity id, the same map updated in place). A warming filament is therefore drawn as time runs, not only after a command; a source reset (`null`) gives an empty map, every lamp unknown. The renderer computes no electrical quantity; it maps and draws:
 
 ```mermaid
 flowchart LR

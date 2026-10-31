@@ -112,7 +112,7 @@ export interface SimCandidate {
   dispose(): void;
 }
 
-/** A snapshot listener: `null` is a source reset (lamps dark, no overlays). */
+/** A snapshot listener: `null` is a source reset (lamps unknown, no overlays). */
 export type SnapshotListener = (view: SnapshotView | null) => void;
 
 /** What `select` returns: the sampled value, and whether it is frozen because the sim crashed. */

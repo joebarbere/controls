@@ -35,7 +35,7 @@ export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = O
 
 /**
  * The output record schemas of the built-in models, by kind (ADR 0011 §5.4, as amended in F2.4).
- * `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` is the protocol's registry of them (protocol 3, F2.3b):
+ * `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` is the protocol's registry of them (protocol 4, F2.5):
  * this must equal it exactly (`outputs.spec.ts`), so a model PR that adds or changes a record also
  * registers it there and bumps `SIM_PROTOCOL_VERSION`.
  */

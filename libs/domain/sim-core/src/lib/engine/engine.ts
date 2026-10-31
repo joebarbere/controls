@@ -12,6 +12,7 @@ import {
   type SimEvent,
   type SimEventKind,
   type SimStateExport,
+  decodeDeviceRecord,
   snapshotHash,
   snapshotHashedBytes,
   snapshotSlotBytes,
@@ -552,8 +553,9 @@ export class SimEngine {
   /**
    * Device `entity`'s output record at this tick, decoded by its kind's schema (ADR 0011 §5.4): what
    * the snapshot holds for it, field by field (an enum field by name). `null` for an entity with no
-   * record (not netlisted, or a kind that publishes none). For scripts, tests and, until F2.3b's
-   * snapshot reader, the game's lamp rendering; allocates (never per tick).
+   * record (not netlisted, or a kind that publishes none). Decoded by `sim-protocol`'s
+   * `decodeDeviceRecord`, the one record decoder. Headless only (scripts, `sim-cli`, tests): the game
+   * reads records from the worker's snapshot through `DescriptorIndex`. Allocates (never per tick).
    */
   deviceRecord(entity: number): SimDeviceRecord | null {
     const slot = this.devices.get(entity);
@@ -565,25 +567,7 @@ export class SimEngine {
     ctx.netlist = this.current;
     ctx.solution = this.solution;
     slot.bank.bank.writeRecord?.(slot.index, view, 0, ctx);
-    const values: Record<string, number | string> = {};
-    for (const field of schema.fields) {
-      switch (field.type) {
-        case 'f64':
-          values[field.name] = view.getFloat64(field.offset, true);
-          break;
-        case 'u32':
-          values[field.name] = view.getUint32(field.offset, true);
-          break;
-        case 'i32':
-          values[field.name] = view.getInt32(field.offset, true);
-          break;
-        default: {
-          const code = view.getUint8(field.offset);
-          values[field.name] = field.values === null ? code : (field.values[code] ?? code);
-        }
-      }
-    }
-    return { kind: schema.kind, entity, values };
+    return { kind: schema.kind, entity, values: decodeDeviceRecord(schema, view, 0) };
   }
 
   /**

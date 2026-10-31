@@ -48,7 +48,7 @@ function sim(...argv: string[]): { status: number | null; stdout: string[]; stde
 
 async function consoleGame(): Promise<Game> {
   const game = createGame({ world: workshopWorld() });
-  const result = runConsoleScript(game, await readFile(join(scenarios, 'bench-lamp.console'), 'utf8'));
+  const result = await runConsoleScript(game, await readFile(join(scenarios, 'bench-lamp.console'), 'utf8'));
   expect(result).toMatchObject({ ok: true, output: [BENCH_LAMP_LIT_HASH, BENCH_LAMP_HASH] });
   return game;
 }
@@ -87,11 +87,11 @@ describe('the bench-lamp scenario (F2.5)', () => {
     expect(game.snapshotHash()).toBe(BENCH_LAMP_SNAPSHOT_HASH);
   });
 
-  it('lit, the light is inside the published band for the voltage across the lamp; out, it is under a display step', () => {
+  it('lit, the light is inside the published band for the voltage across the lamp; out, it is under a display step', async () => {
     const game = createGame({ world: workshopWorld() });
     const lines = readFileSync(join(scenarios, 'bench-lamp.console'), 'utf8').split('\n');
     const at = lines.findIndex((line) => line.startsWith('world.hash'));
-    expect(runConsoleScript(game, lines.slice(0, at + 1).join('\n'))).toMatchObject({
+    expect(await runConsoleScript(game, lines.slice(0, at + 1).join('\n'))).toMatchObject({
       ok: true,
       output: [BENCH_LAMP_LIT_HASH],
     });
@@ -104,16 +104,16 @@ describe('the bench-lamp scenario (F2.5)', () => {
     expect(Math.abs((lit['lightOutputRel'] as number) / Math.pow(across.volts / 12, 3.4) - 1)).toBeLessThan(0.04);
     expect(lit['lightOutputRel']).toBeGreaterThan(1.2); // 12.8 V on a 12 V lamp
     expect(lit['filamentTempK']).toBeGreaterThan(2700);
-    runConsoleScript(game, lines.slice(at + 1).join('\n'));
+    await runConsoleScript(game, lines.slice(at + 1).join('\n'));
     const out = lamp(game);
     expect(out).toMatchObject({ status: 'solved', powerW: 0, currentA: 0 });
     expect(out['lightOutputRel']).toBeLessThan(1 / 255);
   });
 
-  it('the current trace shows the cold-filament inrush: a peak 10 to 15 times the settled current, decaying', () => {
+  it('the current trace shows the cold-filament inrush: a peak 10 to 15 times the settled current, decaying', async () => {
     const game = createGame({ world: workshopWorld() });
     const lines = readFileSync(join(scenarios, 'bench-lamp.console'), 'utf8').split('\n');
-    runConsoleScript(
+    await runConsoleScript(
       game,
       lines
         .slice(

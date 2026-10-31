@@ -10,7 +10,7 @@ import { startSandbox } from './support/sandbox';
  * the world and snapshot hashes it answers must equal the literals `apps/sim-cli/src/sim-step.spec.ts`
  * pins under Node. Change them together, never one alone: a difference here is cross-runtime float
  * drift (ADR 0014), not a golden to re-pin. The `?sab=0` fallback gives the same hashes.
- * F2.5 moves this golden to `bench-lamp.console` (plan F2.3b note).
+ * Since F2.5 the D6 golden with a lit lamp is `bench-lamp.spec.ts` (`bench-lamp.console`, both transports).
  */
 const SIM_STEP_HASH = 'e065dd0a3e81636b487a7c49514f4276a7ae70fe146cdf33d1f5cdecb0c74648';
 const SIM_STEP_SNAPSHOT_HASH = '59e3d2fce15102087368c376180b33c96507877ed367a650303f39ba657ef789';

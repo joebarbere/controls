@@ -646,7 +646,7 @@ describe('SimEngine: the snapshot', () => {
     const host = Host.fresh().run(ENGINE_BENCH).advanceTo(100); // before the fuse melts
     const snapshot = decodeSnapshot(host.engine.snapshot());
     const exported = host.engine.exportState();
-    expect(SIM_PROTOCOL_VERSION).toBe(3);
+    expect(SIM_PROTOCOL_VERSION).toBe(4);
     expect(snapshot).toMatchObject({
       tick: 100,
       lastSolveTick: 90,

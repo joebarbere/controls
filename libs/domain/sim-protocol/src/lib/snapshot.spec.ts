@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import {
+  decodeDeviceRecord,
   DEVICE_OUTPUT_SCHEMAS,
   deviceOutputSchemaProblems,
   NOMINAL_BANDS,
@@ -111,8 +112,8 @@ function encode(s: SnapshotSource, slotSeq = 0): Uint8Array {
 const hashed = (s: SnapshotSource) => snapshotHashedBytes(encode(s));
 
 describe('the snapshot layout (ADR 0011 §5)', () => {
-  it('is protocol version 3, with a 96-byte slot header whose hashed region starts at byte 8', () => {
-    expect(SIM_PROTOCOL_VERSION).toBe(3);
+  it('is protocol version 4, with a 96-byte slot header whose hashed region starts at byte 8', () => {
+    expect(SIM_PROTOCOL_VERSION).toBe(4);
     expect([SLOT_HEADER_BYTES, SLOT_HASHED_START]).toStrictEqual([96, 8]);
     expect(SLOT_OFFSETS).toMatchObject({ tick: 8, lastSolveTick: 16, flags: 44, topologyHash: 48, payloadBytes: 80 });
     expect(slotBytesFor(3, 4, 2, 24)).toBe(96 + 48 + 64 + 32 + 24);
@@ -305,12 +306,49 @@ describe('device output schemas and nominal bands', () => {
   });
 
   it('every built-in schema is well formed, keyed by its kind, and band 0 is none', () => {
-    expect(Object.keys(DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual(['battery', 'supply.bench', 'supply.dinPsu']);
+    expect(Object.keys(DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual([
+      'battery',
+      'heater',
+      'lamp.incandescent',
+      'resistor',
+      'supply.bench',
+      'supply.dinPsu',
+    ]);
     for (const [kind, schema] of Object.entries(DEVICE_OUTPUT_SCHEMAS)) {
       expect(schema.kind).toBe(kind);
       expect(deviceOutputSchemaProblems(schema)).toStrictEqual([]);
       expect(schema.fields.at(-1)).toMatchObject({ name: 'status', type: 'u8', values: RECORD_STATUS_VALUES });
     }
     expect(NOMINAL_BANDS[0]).toBe('none');
+  });
+
+  it('decodes a record by its schema: numbers by type, enums by name, a code past the table as a number', () => {
+    const schema = {
+      kind: 'test',
+      recordBytes: 24,
+      fields: [
+        { name: 'volts', type: 'f64', offset: 0, unit: 'V', values: null },
+        { name: 'count', type: 'u32', offset: 8, unit: null, values: null },
+        { name: 'delta', type: 'i32', offset: 12, unit: null, values: null },
+        { name: 'raw', type: 'u8', offset: 16, unit: null, values: null },
+        { name: 'mode', type: 'u8', offset: 17, unit: null, values: ['off', 'on'] },
+        { name: 'status', type: 'u8', offset: 18, unit: null, values: RECORD_STATUS_VALUES },
+      ],
+    } as const;
+    const data = new DataView(new ArrayBuffer(32));
+    data.setFloat64(8, 12.5, true);
+    data.setUint32(16, 4_000_000_000, true);
+    data.setInt32(20, -7, true);
+    data.setUint8(24, 200);
+    data.setUint8(25, 1);
+    data.setUint8(26, 9);
+    expect(decodeDeviceRecord(schema, data, 8)).toStrictEqual({
+      volts: 12.5,
+      count: 4_000_000_000,
+      delta: -7,
+      raw: 200,
+      mode: 'on',
+      status: 9,
+    });
   });
 });

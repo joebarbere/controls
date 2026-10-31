@@ -27,12 +27,8 @@ import {
 } from '@controls/commands';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
-import { BUILTIN_CATALOG } from '@controls/catalog';
-import type { World } from '@controls/save-format';
 import {
   inputBindingsFrom,
-  type LampOutput,
-  type LampSolveStatus,
   ViewportRenderer,
   type RenderBackend,
   type ViewportIntent,
@@ -47,6 +43,7 @@ import {
   SELECTION_TOGGLE_VALUE_KEY,
   selectionToggle,
 } from '@controls/world-model';
+import { LampSnapshotFeed } from './lamp-feed';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -258,10 +255,13 @@ export class Viewport {
       this.renderer.resetView();
     });
     effect(() => this.renderer.setPlacement(this.activeProp()));
-    // Lamps glow with their solved light output (F2.5): after every world change (a command, or time
-    // stepped with sim.step), each lamp's record from the in-process engine. F2.3b replaces this with
-    // the snapshot reader. The renderer redraws only when a drawn level or status moved.
-    effect(() => this.renderer.setLampOutputs(this.lampOutputs(this.session.world())));
+    // Lamps glow with their solved light output (F2.5): read from every snapshot the sim worker
+    // publishes, so a warming filament is drawn as it warms, not only after a command. The fields are
+    // resolved once per topology generation; a reset (`null`) leaves every lamp unknown. The renderer
+    // redraws only when a drawn level or status moved.
+    const lamps = new LampSnapshotFeed();
+    const offLamps = this.session.sim.subscribe((view) => this.renderer.setLampOutputs(lamps.update(view)));
+    destroyRef.onDestroy(offLamps);
     // The operate key's context: republished when the selection or its commanded state changes.
     effect(() => {
       const toggle = this.selectedToggle();
@@ -352,23 +352,6 @@ export class Viewport {
     const ndcY = 1 - (2 * (event.clientY - rect.top)) / rect.height;
     if (this.renderer.pickAt(ndcX, ndcY)?.entityId !== id) return;
     this.report(this.session.exec('device.operate', { id, control: toggle.control, value: toggle.value }));
-  }
-
-  /** Each lamp's light output and reading status, from its sim record (absent: no record yet, unknown). */
-  private lampOutputs(world: World): Map<number, LampOutput> {
-    const outputs = new Map<number, LampOutput>();
-    if (!this.session.active()) return outputs;
-    for (const entity of world.entities) {
-      if (BUILTIN_CATALOG.kindOf(entity.ref)?.kind !== 'lamp.incandescent') continue;
-      const record = this.session.deviceRecord(entity.id);
-      if (record === null) continue;
-      const light = record.values['lightOutputRel'];
-      outputs.set(entity.id, {
-        lightOutputRel: typeof light === 'number' ? light : 0,
-        status: record.values['status'] as LampSolveStatus,
-      });
-    }
-    return outputs;
   }
 
   /** A refused gesture command is a bug (the renderer only commits valid snaps): say so in the console. */

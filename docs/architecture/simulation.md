@@ -533,6 +533,7 @@ stateDiagram-v2
 - **Queries.** `capture()` takes the bus world at T and posts `state` at T in the same call; `hashAt()` and `Session.saver()` materialise the reply into that world. Queries time out after `STATE_QUERY_TIMEOUT_MS`; replacing a worker retires it, letting pending queries settle for up to `SIM_SETTLE_MS` before they are `superseded`.
 - **Loads** (`Session.prepareLoad`) start a candidate worker that isn't the game's until `adopt` promotes it: a replay start to verify, or a world start from `world.json`, and the materialised hash it answers is the dirty model's baseline.
 - **Crashes** terminate the worker, stop pacing, reset readers and raise `onCrash` (the app's toast with **Restart simulation**, which runs `sim.restart`: a replay start of the session's log to the current tick, resuming paused). The world and the log are untouched; saves are refused until then.
+
 ## First loads (F2.5)
 
 `sim-core` `devices/loads/` holds the incandescent lamp (`lamp.ts`, with tungsten's resistivity in `tungsten.ts`), the resistor and the heater (`resistive.ts`). Their netlist models are one `resistor` element each; catalogue entries are `lamp.lumivane-12v-5w`, `resistor.orrinwood-10r-10w` and `heater.hearthvale-12v-50w`.
@@ -560,7 +561,7 @@ flowchart LR
 
 **The resistor and heater** have no sim state; their banks only publish records. The resistor (`resistanceOhm`, `powerRatingW`) publishes `overRated`, a solved flag for I²R above the rating, with no damage model. The heater is R = V_r² / P_r, constant (a nickel-chromium element's resistance moves only a few percent from cold to hot). Both have `DC_DEFAULT_VALUES` and `AC_DEFAULT_VALUES` entries, so a solver run with no engine model gives the same answer.
 
-**Reading a record.** `SimEngine.deviceRecord(entity)` decodes one device's record by its kind's schema (enums by name); the scripting API exposes it as `game.device(id)` and the game as `Session.deviceRecord(id)`, in-process until F2.3b's snapshot reader. It allocates, so it is for scripts, tests and the viewport, never the per-tick path.
+**Reading a record.** The records are in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` (protocol 4), so the worker's descriptor carries them. The game reads them from each snapshot: the viewport's `LampSnapshotFeed` resolves every lamp's `lightOutputRel` and `status` once per topology generation (`DescriptorIndex.of(view.descriptor).field(id, name, 'lamp.incandescent')`) and reads them with one `readAll` per snapshot, allocating nothing; a `null` view (a source reset) leaves every lamp unknown. Headless, `SimEngine.deviceRecord(entity)` decodes one device's whole record with `sim-protocol`'s `decodeDeviceRecord` (enums by name), the one record decoder; the scripting API exposes it as `game.device(id)`. It allocates, so it is for scripts and tests, never the per-tick path.
 
 **Operating a switch.** `device.operate` gained a binding, `device.operate.selection` (E by default, when the viewport is focused and the selection has a toggle). Its id, control and value are context arguments from `selection.entityId`, `selection.toggleControl` and `selection.toggleValue`, which the viewport publishes from `selectionToggle(world, id)`: the selected device's first toggle control and its opposite, from the **commanded** state only. A double-click on the canvas runs the same command. Either way the log holds one concrete `device.operate {id, control, value}`, as the palette, the console and a script do.
 
@@ -664,6 +665,5 @@ flowchart LR
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
-- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b).
-- **Bench-lamp `netlist.dump` golden** (F2.5): added with F2.5's `bench-lamp` scenario.
+- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b), and the loads' (protocol 4, F2.5).
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

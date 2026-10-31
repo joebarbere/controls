@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { KEY_PLATFORM, KeybindingService, Session, ToolBelt } from '@controls/feature-session';
-import { type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
+import { KEY_PLATFORM, KeybindingService, Session, SimHost, ToolBelt } from '@controls/feature-session';
+import { type LampOutputs, type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
+import type { SnapshotView } from '@controls/sim-protocol';
+import { fakeView, lampDescriptor, writeLamp } from './lamp-feed.fakes';
 import { Viewport } from './viewport';
 
 /** The component's gesture handler (private: the renderer calls it, and jsdom has no renderer). */
@@ -148,6 +150,42 @@ describe('Viewport', () => {
     expect(session.contextKeys()['selection.toggleControl']).toBeUndefined();
     canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     expect(session.entries().length).toBe(logged + 1);
+  });
+
+  it('draws each lamp from every sim snapshot, not per command, and every lamp unknown on a reset (F2.5)', async () => {
+    const listeners: ((view: SnapshotView | null) => void)[] = [];
+    const off = vi.fn();
+    vi.spyOn(SimHost.prototype, 'subscribe').mockImplementation((listener) => {
+      listeners.push(listener);
+      return off;
+    });
+    const drawn: (readonly [number | undefined, string | undefined, number])[] = [];
+    vi.spyOn(ViewportRenderer.prototype, 'setLampOutputs').mockImplementation((outputs: LampOutputs) => {
+      const lamp = outputs.get(4);
+      drawn.push([lamp?.lightOutputRel, lamp?.status, outputs.size]);
+    });
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    expect(listeners).toHaveLength(1);
+    const session = TestBed.inject(Session);
+    const logged = session.entries().length;
+    const descriptor = lampDescriptor([{ entity: 4, kind: 'lamp.incandescent', recordOffset: 0 }]);
+    const section = new DataView(new ArrayBuffer(56));
+    // A filament warming over three snapshots, with no command in between, then a reset.
+    for (const light of [0.02, 0.4, 1]) {
+      writeLamp(section, 0, light, 1);
+      listeners[0](fakeView(descriptor, section));
+    }
+    listeners[0](null);
+    expect(session.entries().length).toBe(logged);
+    expect(drawn).toStrictEqual([
+      [0.02, 'solved', 1],
+      [0.4, 'solved', 1],
+      [1, 'solved', 1],
+      [undefined, undefined, 0],
+    ]);
+    fixture.destroy();
+    expect(off).toHaveBeenCalledOnce();
   });
 
   it('does not expose the E2E hook without ?e2e=1', async () => {
