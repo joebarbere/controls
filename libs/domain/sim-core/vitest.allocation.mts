@@ -1,5 +1,5 @@
 import { defineDomainVitestConfig } from '../vitest.domain.mjs';
-import { ALLOCATION_SPEC } from './vitest.config.mjs';
+import { ALLOCATION_SPECS } from './vitest.config.mjs';
 
 /**
  * The per-tick allocation gates alone, without coverage (see `vitest.config.mts`): the second run of
@@ -9,7 +9,7 @@ const config = defineDomainVitestConfig(import.meta.dirname, 'sim-core');
 config.test = {
   ...config.test,
   name: 'sim-core:allocation',
-  include: [ALLOCATION_SPEC],
+  include: [...ALLOCATION_SPECS],
   coverage: { ...config.test?.coverage, enabled: false },
 };
 

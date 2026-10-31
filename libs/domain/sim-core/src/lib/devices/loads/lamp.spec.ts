@@ -1,4 +1,11 @@
-import { BUILTIN_CATALOG, type LampIncandescentParams, leadResistanceOhm, type LeadParams } from '@controls/catalog';
+import {
+  BUILTIN_CATALOG,
+  LAMP_FILAMENT_MAX_K,
+  LAMP_FILAMENT_MIN_K,
+  type LampIncandescentParams,
+  leadResistanceOhm,
+  type LeadParams,
+} from '@controls/catalog';
 import { deviceOutputSchemaProblems } from '@controls/sim-protocol';
 import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, LAMP, LEAD } from '../../../testing/bench';
@@ -67,9 +74,20 @@ describe('tungsten resistivity (Jones and Langmuir)', () => {
         },
       ),
     );
+    // The inrush band's source (the lamp entry's `inrush-band`): a cold-to-hot ratio of 13.5–16.1 for
+    // rated temperatures of 2500–2900 K at a 293.15 K bench.
+    expect(tungstenResistivity(2500) / tungstenResistivity(293.15)).toBeCloseTo(13.48, 2);
+    expect(tungstenResistivity(2900) / tungstenResistivity(293.15)).toBeCloseTo(16.11, 2);
     // About T^1.2 overall (the usual rule of thumb): 16.3× from 300 K to 3000 K.
     expect(tungstenResistivity(3000) / tungstenResistivity(300)).toBeCloseTo(16.29, 2);
     expect(TUNGSTEN_TABLE_MAX_K).toBe(LAMP_MAX_TEMP_K.value);
+    // The save format's bounds on filamentTempK sit inside the model's range: above where the table's
+    // first segment extended reaches 0 Ω, at its top (save-format review of F2.5).
+    expect(LAMP_FILAMENT_MAX_K).toBe(LAMP_MAX_TEMP_K.value);
+    const zeroK = 300 - TUNGSTEN_RESISTIVITY.microOhmCm[0] / ((8.06 - 5.65) / 100);
+    expect(zeroK).toBeCloseTo(65.56, 2);
+    expect(LAMP_FILAMENT_MIN_K).toBeGreaterThan(zeroK);
+    expect(tungstenResistivity(LAMP_FILAMENT_MIN_K)).toBeGreaterThan(0);
   });
 
   it('x^(17/8) is x² · ⁸√x within an ulp or two of Math.pow, and 0 for x ≤ 0', () => {
@@ -102,6 +120,14 @@ describe('the lamp model (golden)', () => {
     expect(RATED_OHM / COLD_OHM).toBeCloseTo(14.785, 3);
   });
 
+  it('a saved filament outside the model range is clamped into it at the bank build (never a negative R)', () => {
+    const host = benchLampHost();
+    const cold = host.withSim(3, { filamentTempK: 200 });
+    expect(cold.sim(3)).toStrictEqual({ filamentTempK: LAMP_AMBIENT_K.value });
+    cold.operate(2, 'closed', true).advance(10);
+    expect(cold.record(3)['status']).toBe('solved');
+  });
+
   it('a new lamp starts at ambient: the inrush at the closing solve is E over the cold resistance and the series R', () => {
     const host = benchLampHost();
     expect(host.sim(3)).toStrictEqual({ filamentTempK: LAMP_AMBIENT_K.value });
@@ -126,8 +152,8 @@ describe('the lamp model (golden)', () => {
     host.advance(1700);
     const settled = host.amps(3);
     const ratio = peak / settled;
-    // Relay and lamp makers put lamp-load inrush at about 10 to 15 times the steady current (the
-    // lamp entry's `filament-time-constant` source); this lamp gives 14.3 on the bench.
+    // The band follows from Jones and Langmuir: ρ(T_r)/ρ(T_a) is 13.5–16.1 for T_r of 2500–2900 K,
+    // lowered by the series resistance (the lamp entry's `inrush-band` source); this lamp gives 14.3.
     expect(ratio).toBeGreaterThan(10);
     expect(ratio).toBeLessThan(15);
     expect(ratio).toBeCloseTo(14.26, 2);
@@ -178,8 +204,22 @@ describe('the lamp model (golden)', () => {
     expect(warmUp).toBeGreaterThan(30);
     host.advance(2000);
     expect(host.engine.stats.continuousSolves).toBe(warmUp);
-    // Each re-solve keeps the stamped resistance within LAMP_RESOLVE_RELTOL of the filament's.
     expect(LAMP_RESOLVE_RELTOL.value).toBe(0.01);
+  });
+
+  it('through the warm-up the solve never lags the filament by more than 1 %, and does lag by over 0.5 % (the threshold bites)', () => {
+    const host = benchLampHost().operate(2, 'closed', true);
+    let worst = 0;
+    for (let t = 0; t < 400; t++) {
+      host.advance(1);
+      const r = host.record(3);
+      // The filament's R(T) now against what the last solve saw, V / I.
+      const seen = (r['voltageV'] as number) / (r['currentA'] as number);
+      const lag = Math.abs((r['resistanceOhm'] as number) - seen) / (r['resistanceOhm'] as number);
+      expect(lag).toBeLessThanOrEqual(LAMP_RESOLVE_RELTOL.value);
+      worst = Math.max(worst, lag);
+    }
+    expect(worst).toBeGreaterThan(0.005);
   });
 
   it('a reload mid-warm-up re-solves at exactly the ticks the straight run does (the trigger reads the solution)', () => {

@@ -13,6 +13,7 @@ import {
   I2T_FUSE,
   THERMAL_LOAD,
 } from '@controls/sim-core/testing';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { decodeSnapshot } from '@controls/sim-protocol';
 import { createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
@@ -80,7 +81,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 5, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: SIM_ENGINE_VERSION, catalogVersion: 1 });
   });
 });
 

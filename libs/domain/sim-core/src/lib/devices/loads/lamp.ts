@@ -57,8 +57,8 @@ import { tungstenResistivity } from './tungsten';
  * **Abstractions** (for `electrical-realism-reviewer`): a constant emissivity and heat capacity
  * (both rise with temperature in tungsten, which is why the model's steady state gives P ∝ V^1.54
  * where the published fit says 1.6); no conduction loss to the lead-in wires and supports, so a
- * filament cools by radiation alone and approaches ambient slowly (the light is gone within about a
- * quarter of a second, see the spec); no burnout, evaporation or end of life (the temperature is
+ * filament cools by radiation alone and approaches ambient slowly (its light falls to 10 % in about
+ * 84 ms and below one display step in under half a second, see the spec); no burnout, evaporation or end of life (the temperature is
  * clamped at the resistivity table's 3600 K, 100 K below tungsten's melting point).
  */
 
@@ -164,7 +164,10 @@ export const LAMP_MODEL: SimDeviceModel = {
       // A null-initial key: a lamp entering the netlist for the first time starts at ambient. A
       // hand-built world may lack the key altogether (the bench plant's `sim: {}`); the same applies.
       const t = d.bag['filamentTempK'];
-      temp[i] = typeof t === 'number' ? t : ambient;
+      // Clamped into the model's range: the key's schema already refuses below 200 K (the resistivity
+      // table's extension reaches 0 Ω near 65.6 K), and the filament never goes below ambient or past
+      // the table's top, so a bag from anywhere starts where the model can step it.
+      temp[i] = typeof t === 'number' ? Math.min(maxK, Math.max(ambient, t)) : ambient;
       branch[i] = d.branches[0];
       ratedOhm[i] = (p.ratedVoltageV * p.ratedVoltageV) / p.ratedPowerW;
       const tr = p.filamentRatedTempK;

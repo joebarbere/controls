@@ -2,7 +2,8 @@ import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { createGame, type Game, loadGame, runConsoleScript } from '@controls/scripting-api';
 import { readCtrl } from '@controls/save-format';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
@@ -27,7 +28,7 @@ export const SOURCES_SNAPSHOT_HASH = '153b26d1a977fda513661e938672c4d53502ffc583
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sources.console');
 const ctrlDir = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl');
-const fixture = join(ctrlDir, 'sources-engine-5.ctrl');
+const fixture = join(ctrlDir, `sources-engine-${SIM_ENGINE_VERSION}.ctrl`);
 
 function sim(...argv: string[]): { status: number | null; stdout: string[] } {
   const result = spawnSync(process.execPath, [bundle, ...argv], {
@@ -78,7 +79,7 @@ describe('the sources scenario (F2.4)', () => {
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(5);
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
     expect(loaded.game.hash()).toBe(SOURCES_HASH);
     expect(loaded.game.snapshotHash()).toBe(SOURCES_SNAPSHOT_HASH);
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [SOURCES_HASH] });
@@ -107,6 +108,27 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
       const read = readCtrl(new Uint8Array(readFileSync(join(ctrlDir, file))));
       if (!read.ok) throw new Error(read.error.message);
       expect(read.value.manifest.simEngineVersion, file).toBe(Number(/-engine-(\d+)\.ctrl$/.exec(file)?.[1]));
+    }
+  });
+
+  it("this engine's fixtures rebuild identically from their scenarios (world.json and replay.log)", () => {
+    const current = readdirSync(ctrlDir).filter((f) => f.endsWith(`-engine-${SIM_ENGINE_VERSION}.ctrl`));
+    expect(current.length).toBeGreaterThan(2);
+    const dir = mkdtempSync(join(tmpdir(), 'sim-cli-rebuild-'));
+    try {
+      for (const file of current) {
+        const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios', file.replace(/-engine-\d+\.ctrl$/, '.console'));
+        const out = join(dir, file);
+        expect(sim('run', scenario, '--world', WORKSHOP_LEVEL, '--save', out).status, file).toBe(0);
+        const [saved, rebuilt] = [join(ctrlDir, file), out].map((path) => {
+          const read = readCtrl(new Uint8Array(readFileSync(path)));
+          if (!read.ok) throw new Error(read.error.message);
+          return { world: read.value.world, replayLog: read.value.replayLog };
+        });
+        expect(rebuilt, file).toStrictEqual(saved);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
