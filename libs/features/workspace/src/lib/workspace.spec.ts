@@ -206,6 +206,33 @@ describe('Workspace console.toggle (F1.5)', () => {
   });
 });
 
+describe('Workspace view.netlistInspector (F2.6)', () => {
+  afterEach(() => (document.body.innerHTML = ''));
+
+  it('shows the netlist inspector in the collapsed side panel and focuses it, then closes back to the opener', async () => {
+    const { fixture, host } = await setup();
+    const session = TestBed.inject(Session);
+    host.layout.set({ ...DEFAULT_WORKSPACE_LAYOUT, inspector: { size: 320, collapsed: true } });
+    await fixture.whenStable();
+    const inspector = document.getElementById('ctl-inspector') as HTMLElement; // hidden while collapsed
+    const menu = within(fixture.nativeElement as HTMLElement).getByRole('button', { name: 'Menu' });
+    menu.focus();
+
+    expect(session.exec('view.netlistInspector').ok).toBe(true);
+    await fixture.whenStable();
+    expect(host.layout().inspector.collapsed).toBe(false);
+    expect(within(inspector).queryByText('Selected: panel')).toBeNull(); // the netlist replaces the projected content
+    // No sim yet (no worker in this spec): the hint takes focus.
+    expect(document.activeElement).toBe(within(inspector).getByText('No sim snapshot yet.'));
+
+    session.exec('view.netlistInspector'); // focus is in it: close it
+    await fixture.whenStable();
+    expect(within(inspector).getByText('Selected: panel')).toBeTruthy();
+    expect(host.layout().inspector.collapsed).toBe(false);
+    expect(document.activeElement).toBe(menu);
+  });
+});
+
 describe('normaliseLayout', () => {
   it('clamps sizes into the panel limits, rounds them and coerces flags', () => {
     expect(

@@ -110,6 +110,27 @@ describe('the bench-lamp scenario (F2.5)', () => {
     expect(out['lightOutputRel']).toBeLessThan(1 / 255);
   });
 
+  it("pins the lit lamp's current derived from game.probe, which the game's netlist inspector must show (F2.6)", async () => {
+    // apps/game-e2e/src/netlist-inspector.spec.ts reads this golden: the inspector's lamp-branch |I|
+    // (the snapshot's branch current) must equal it within display rounding. Derived from the probe:
+    // I = P / V, the lamp's dissipation over the ideal voltmeter's reading across it.
+    const game = createGame({ world: workshopWorld() });
+    const lines = readFileSync(join(scenarios, 'bench-lamp.console'), 'utf8').split('\n');
+    const at = lines.findIndex((line) => line.startsWith('sim.step'));
+    expect((await runConsoleScript(game, lines.slice(0, at + 1).join('\n'))).ok).toBe(true);
+    const across = game.probe('3:a', '3:b');
+    if (across.kind !== 'dc') throw new Error(across.kind);
+    const powerW = lamp(game)['powerW'] as number;
+    const lampCurrentA = powerW / across.volts;
+    // The record's own current agrees to the filament loop's tolerance (measured 6.7e-9), far inside
+    // the inspector's three significant figures.
+    expect(Math.abs(lampCurrentA / (lamp(game)['currentA'] as number) - 1)).toBeLessThan(1e-7);
+    const golden = { tick: game.tick(), probeVolts: across.volts, powerW, lampCurrentA };
+    await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
+      join(import.meta.dirname, 'goldens/inspector/bench-lamp-lit.json'),
+    );
+  });
+
   it('the current trace shows the cold-filament inrush: a peak 10 to 15 times the settled current, decaying', async () => {
     const game = createGame({ world: workshopWorld() });
     const lines = readFileSync(join(scenarios, 'bench-lamp.console'), 'utf8').split('\n');

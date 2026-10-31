@@ -107,7 +107,7 @@ flowchart TB
             direction LR
             VP["3D viewport (region landmark)<br/>ctl-viewport canvas (the focus target)<br/>+ [ctlViewportOverlay] (HUD, fed by viewState)"]
             VS["ctl-splitter<br/>vertical"]
-            INS["Inspector<br/>[ctlInspector]"]
+            INS["Inspector<br/>[ctlInspector], or ctl-netlist-inspector (F2.6)"]
         end
         HS["ctl-splitter horizontal"]
         BOT["Console panel<br/>[ctlBottomPanel]: ctl-dev-console (F1.5)"]
@@ -119,7 +119,26 @@ flowchart TB
 - It is two-way bound to `settings.workspace.layout`, so it persists once F1.8a wires the storage.
 - Splitters follow the WAI-ARIA window-splitter pattern: arrows resize (Shift for big steps), Home/End jump to the limits, and Enter collapses or restores. Pointer drags use pointer capture.
 - **`console.toggle`** (backtick) is applied by the workspace too: it expands the bottom panel and focuses its `[data-autofocus]` element, or collapses it and restores focus when focus is already inside. See [dev console](console.md).
+- **`view.netlistInspector`** (F2.6, `when: console.available`, unlogged UI chrome, no default key) shows the netlist inspector in the side panel the same way: it expands the panel if collapsed and focuses the tree, or, with focus already inside, closes it (the projected `[ctlInspector]` content comes back) and restores focus. See [the netlist inspector](#the-netlist-inspector-f26).
 - **Reset layout** runs the `view.resetLayout` view command through `Session.exec`. The workspace applies it when the command reports back (`Session.onCommand`), so any surface that runs the command resets the layout. It is logged and never changes the world hash.
+
+## The netlist inspector (F2.6)
+
+`ctl-netlist-inspector` (`feature-workspace`, `netlist/`) lists the sim's islands, each island's nodes (with their member terminals) and branches, with live |V| and |I|. It is a view: it reads the SimHost snapshot and never the world.
+
+```mermaid
+flowchart LR
+    SH["SimHost.select<br/>10 Hz, trailing sample,<br/>starts from the latest snapshot"] --> NS["netlistSampler<br/>NetlistReadout.of(descriptor).read<br/>→ display strings"]
+    NS -->|"set only if a string changed<br/>(sameNetlistValues)"| V["values signal"]
+    V --> T["buildNetlistTree(descriptor)<br/>(computed: per generation)"]
+    T --> UI["role=tree, flat treeitems<br/>aria-level / setsize / posinset"]
+    UI -->|"selected node's members"| HL["Workspace effect →<br/>Viewport.highlightTerminals"]
+```
+
+- **Structure** comes from the snapshot's topology descriptor, named as `netlist.dump` (`formatNetlist`) names it: `Node 4: 3:a`, `Branch 1 e3.filament: 3 -> 4`. Rows are keyed by identity (a node by its first member, a branch by its element), so expansion and the selection survive a new generation.
+- **Values** go through `NetlistReadout`, the overlays' readout: an island shows its `islandStatus` and nominal band (`solved · band dc12`); a node of an unsolved or unreferenced island and a branch of an unsolved island read `no reading`, never 0 V or 0 A. Quantities have three significant figures and an SI prefix (`formatQuantity`); a DC branch adds its direction against its ends (`a -> b`).
+- **Rate:** `SimHost.select` at `PANEL_SAMPLE_HZ` (10 Hz); a sample whose strings and tick are unchanged is not set, so the panel redraws at most ten times a second and not at all while paused. Rows are tracked by key, so a new sample only rewrites text.
+- **Keyboard:** one tab stop (roving `tabindex`); Up and Down, Home and End, Right expands or enters, Left collapses or goes to the parent, Enter and Space toggle. The focused row is the selection (`aria-selected`). Selecting a node rings its terminals in 3D (`ViewportRenderer.highlightTerminals`, view state only); closing the inspector clears it.
 
 ## Keybindings and the tool belt
 

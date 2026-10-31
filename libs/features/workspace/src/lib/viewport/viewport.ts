@@ -323,6 +323,11 @@ export class Viewport {
     return this.renderer.captureThumbnail();
   }
 
+  /** Highlights terminals in 3D (the netlist inspector's selected node; view state only), `null` clears. */
+  highlightTerminals(terminals: readonly { readonly entity: number; readonly terminal: string }[] | null): void {
+    this.renderer.highlightTerminals(terminals);
+  }
+
   /** A gesture's commit point → exactly one Command (or, for a cancelled placement, none). */
   private onIntent(intent: ViewportIntent): void {
     switch (intent.kind) {

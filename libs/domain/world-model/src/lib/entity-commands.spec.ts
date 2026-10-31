@@ -238,6 +238,7 @@ describe('world registry, replay log and cheats', () => {
       'toolbelt.select:false',
       'view.focus:false',
       'view.mode:false',
+      'view.netlistInspector:false',
       'view.overlay:false',
       'view.resetLayout:false',
     ]);

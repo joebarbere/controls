@@ -612,9 +612,9 @@ Acceptance:
 - [x] **Voltage overlay:** leads and terminals coloured by |V| against the island reference, on a fixed scale for each nominal band, with a legend.
 - [x] **Current overlay:** current animated along leads from |I|, showing direction for DC. AC shows magnitude only, which is a documented abstraction. With `prefers-reduced-motion`, the arrows are static.
 - [ ] Frame time with both overlays on is measured on SwiftShader and on a real GPU, and recorded. Overlay resources pass the disposal test.
-- [ ] **Netlist inspector:** a docked panel listing islands, nodes (with their member terminals) and branches, with live V and I at up to 10 Hz. It is keyboard-navigable, and selecting a node highlights its terminals in 3D (view state only).
+- [x] **Netlist inspector:** a docked panel listing islands, nodes (with their member terminals) and branches, with live V and I at up to 10 Hz. It is keyboard-navigable, and selecting a node highlights its terminals in 3D (view state only).
 - [x] **`netlist.dump`:** a read-only console command, like `world.hash`. It prints `formatNetlist` plus the island diagnostics, gives the same text headless and in the game, and is golden-tested on the bench demo.
-- [ ] **E2E:** the inspector's lamp-branch current equals the value derived from `game.probe`, within display rounding.
+- [x] **E2E:** the inspector's lamp-branch current equals the value derived from `game.probe`, within display rounding.
 - [x] **Band 0 means "no scale"**, not the first bin of some scale: an island in band 0 (`none`, every island until F2.4's sources choose one) gets no overlay colour (#52 review).
 - [x] **The HUD's "last solve" keys off `islandCount > 0`**: with no islands the snapshot holds no solution and writes `lastSolveTick` 0, which is not a solve at tick 0 (#52 review).
 
@@ -631,6 +631,12 @@ _Overlays done 2026-10-31 (`renderer-engineer`; [rendering architecture](../docs
 - _Frame time with both overlays on, SwiftShader WebGL2, 500 devices and 500 leads: 115–245 ms per frame at 1280 × 720 (81–91 ms off) and 247–267 ms at 1920 × 1080 (194–210 ms off), on a loaded machine; the HUD's main-thread cost stayed at 5–12 ms. Disposal: the overlay layers pass the controller's disposal pattern (`sim-overlays.spec.ts`)._
 - _The netlist inspector (with its 3D terminal highlight, already exposed as `ViewportRenderer.highlightTerminals`), `netlist.dump`, the inspector-vs-probe E2E and the HUD fix are separate PRs._
 - [ ] **TODO (manual, the user): measure the frame time with both overlays on a real GPU** (ideally a 2020-era integrated one, at 1080p, WebGL2 and WebGPU) with the procedure in the [rendering architecture](../docs/architecture/rendering.md#debug-overlays-f26), and record it there; then tick the frame-time item above.
+
+_Netlist inspector and its E2E done 2026-10-31 (`angular-ui-engineer`; [UI shell](../docs/architecture/ui-shell.md#the-netlist-inspector-f26), [UI caveats](../docs/caveats/ui.md)); `test-engineer` review pending. Notes:_
+
+- _Opened by `view.netlistInspector` (`logged: false` like `console.toggle`, so not save format; `when: console.available`; no default key) into the existing side panel, replacing its projected content while open. Values through `SimHost.select` at 10 Hz and `NetlistReadout`; structure from the descriptor, named as `netlist.dump` names it._
+- _`SimHost.select` now samples the latest snapshot when it subscribes: before, a panel opened while time was paused stayed empty until the next snapshot._
+- _"Derived from `game.probe`": `game.probe` runs only headless, so `sim-cli` pins I = P / V across the lit lamp (`goldens/inspector/bench-lamp-lit.json`, cross-checked with the lamp record's own current) and `apps/game-e2e/src/netlist-inspector.spec.ts` compares the inspector's branch current to it within half a unit in the third significant figure, like the `netlist.dump` goldens._
 
 ### F2.7 Oracle harness and performance gate
 

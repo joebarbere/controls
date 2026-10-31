@@ -433,7 +433,7 @@ export class SimHost {
 
   /**
    * A panel's view of the snapshot (ADR 0011 §9.3): `selector(view)` at most `hz` times a second
-   * (at most 30), with a trailing sample, set only when the selected value changes (`equal`), reset
+   * (at most 30), with a trailing sample, starting from the latest snapshot if there is one, set only when the selected value changes (`equal`), reset
    * to `initial` on a source reset or a generation change, frozen and `stale` while crashed.
    * Unsubscribes with `destroyRef`.
    */
@@ -494,6 +494,15 @@ export class SimHost {
     };
     this.selections.add(dispose);
     options.destroyRef?.onDestroy(dispose);
+    // A panel opened while time is paused gets no new snapshot: start from the latest one (F2.6).
+    // Opened while crashed, it is frozen like every other selection then: `stale`, with the last
+    // snapshot if the reader still holds one, else `initial`.
+    if (this.phaseState() === 'crashed') stale.set(true);
+    const current = this.link?.reader.current ?? null;
+    if (current !== null) {
+      generation = current.descriptor;
+      sample(current);
+    }
     return Object.assign(value.asReadonly(), { stale: stale.asReadonly() });
   }
 
