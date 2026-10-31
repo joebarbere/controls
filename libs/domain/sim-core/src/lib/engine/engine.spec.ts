@@ -16,7 +16,7 @@ import {
   entityStreamKey,
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
-import { GCProfiler } from 'node:v8';
+import { GCProfiler, getHeapStatistics } from 'node:v8';
 import { join } from 'node:path';
 import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
@@ -524,7 +524,7 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     expect(host.engine.revision).toBeGreaterThan(revision);
   });
 
-  it('the per-tick hot path allocates nothing: scavenges do not grow with the number of steps', () => {
+  it('the per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
     // A thermal load in a battery loop: continuous work every tick, a cadence solve every 10.
     const host = Host.fresh().run([
       ['entity.place', { ref: BATTERY, positionMm: origin }],
@@ -532,19 +532,24 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    host.engine.advanceTo(50_000); // warm: every buffer grown, the JIT settled
-    const scavenges = (steps: number) => {
-      const profiler = new GCProfiler();
-      profiler.start();
-      host.engine.advanceTo(host.engine.tick + steps);
-      return (profiler.stop()?.statistics ?? []).filter((s) => s.gcType === 'Scavenge').length;
-    };
-    // A few scavenges happen whatever the length (the runtime's own, measured 2–4 at 1M and at 3M
-    // steps alike), so the gate is growth: 1M steps in all, and three times the steps may add at most
-    // one. A per-step allocation of 64 bytes or more adds about two per 500 000 steps.
-    const short = scavenges(250_000);
-    const long = scavenges(750_000);
-    expect(long).toBeLessThanOrEqual(short + 1);
+    host.engine.advanceTo(100_000); // warm: every buffer grown, the JIT settled
+    // Bytes allocated: the heap's growth plus what each collection freed. GC counts are no measure:
+    // the runtime's own 2-4 scavenges land in either of two windows at random.
+    const steps = 500_000;
+    const profiler = new GCProfiler();
+    const start = getHeapStatistics().used_heap_size;
+    profiler.start();
+    host.engine.advanceTo(host.engine.tick + steps);
+    const stats = profiler.stop()?.statistics ?? [];
+    const freed = stats.reduce(
+      (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
+      0,
+    );
+    const perStep = (getHeapStatistics().used_heap_size - start + freed) / steps;
+    // Measured 12.8 B/step under coverage and 16.7 without: about 100 B per cadence solve (32 B of
+    // it inside DcSolver.solveNonlinear) plus a few in the synthetic thermal layer. Zero allocation per
+    // tick is the plan's criterion and not yet met (plan F2.3a notes); this gate stops it growing.
+    expect(perStep).toBeLessThan(24);
   });
 });
 

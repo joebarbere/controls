@@ -254,6 +254,7 @@ export class SimEngine {
     emit: LayerContext['emit'];
   };
   private readonly hook: DcIterationHook;
+  private readonly nonlinear: { hook: DcIterationHook; warmStart: DcSolution | null };
   private readonly simOf = (entity: number): StateBag | undefined => this.liveBag(entity);
 
   private constructor(world: World, options: SimEngineOptions) {
@@ -277,6 +278,7 @@ export class SimEngine {
           bank.iterate(this.branchDevice[index], netlist.branches[index], iterate, values);
       }
     };
+    this.nonlinear = { hook: this.hook, warmStart: null };
     this.ctx = {
       tick: this.tickNow,
       dtS: TICK_S.value,
@@ -530,7 +532,8 @@ export class SimEngine {
   private unknownsOf(island: NetlistIsland, solved: boolean): number {
     if (!solved) return 0;
     let sources = 0;
-    for (const index of island.branches) if (this.current.branches[index].kind === 'vsource') sources++;
+    const branches = island.branches;
+    for (let i = 0; i < branches.length; i++) if (this.current.branches[branches[i]].kind === 'vsource') sources++;
     return island.nodes.length - 1 + sources;
   }
 
@@ -542,13 +545,21 @@ export class SimEngine {
     }
     this.fillValues();
     const warmStart = this.solved ? this.solution : null;
-    const next = this.solver.solveNonlinear(netlist, this.values, { hook: this.hook, warmStart }, this.spare);
-    for (const island of netlist.islands) {
+    // One options object for every solve (no allocation per cadence solve): only its warm start moves.
+    this.nonlinear.warmStart = warmStart;
+    const next = this.solver.solveNonlinear(netlist, this.values, this.nonlinear, this.spare);
+    // Indexed loops throughout: a cadence solve allocates nothing of the engine's own.
+    const islands = netlist.islands;
+    for (let k = 0; k < islands.length; k++) {
+      const island = islands[k];
       const result = next.islands[island.index];
       if (this.unmodelled[island.index] === 1) {
         // Placeholder values only kept the solver going: nothing here is a reading.
-        for (const node of island.nodes) next.nodes[2 * node] = next.nodes[2 * node + 1] = 0;
-        for (const branch of island.branches) next.branches[2 * branch] = next.branches[2 * branch + 1] = 0;
+        const nodes = island.nodes;
+        for (let i = 0; i < nodes.length; i++) next.nodes[2 * nodes[i]] = next.nodes[2 * nodes[i] + 1] = 0;
+        const branches = island.branches;
+        for (let i = 0; i < branches.length; i++)
+          next.branches[2 * branches[i]] = next.branches[2 * branches[i] + 1] = 0;
         result.solved = false;
         result.flags = 0;
         result.iterations = 0;
@@ -565,7 +576,8 @@ export class SimEngine {
     else if (why === 'layer') this.stats.layerSolves++;
     else this.stats.startSolves++;
     // Island events on the rising edge of their flags (ADR 0011 §4).
-    for (const island of netlist.islands) {
+    for (let k = 0; k < islands.length; k++) {
+      const island = islands[k];
       const flags = next.islands[island.index].flags;
       const rising = flags & ~this.previousFlags[island.index];
       const entities = this.islandEntities[island.index];
@@ -580,10 +592,14 @@ export class SimEngine {
     const netlist = this.current;
     const values = this.values;
     values.clear();
-    for (const island of netlist.islands) {
+    const islands = netlist.islands;
+    for (let k = 0; k < islands.length; k++) {
+      const island = islands[k];
       this.unmodelled[island.index] = 0;
       if (island.kind !== 'dc' && island.kind !== 'empty') continue;
-      for (const index of island.branches) {
+      const branches = island.branches;
+      for (let i = 0; i < branches.length; i++) {
+        const index = branches[i];
         const branch = netlist.branches[index];
         const bank = this.branchBank[index];
         if (bank?.dcValue !== undefined && bank.dcValue(this.branchDevice[index], branch, values)) {

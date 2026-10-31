@@ -416,7 +416,7 @@ Acceptance:
 
   The electrical layer runs on every topology change and every 10 ticks. A protection trip changes the topology and is re-solved within the same tick.
 
-- [x] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`.
+- [ ] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`. _**Not yet met** (#52 review, measured with `GCProfiler`): struct-of-arrays banks, preallocated buffers and indexed loops are in, and tolerances are seeded, but a step still allocates about 13–17 bytes amortised (12.8 under coverage, 16.7 without, over 500 000 steps of a battery and a thermal load): about 100 bytes per cadence solve, 32 of them inside `DcSolver.solveNonlinear` (F2.2's code), plus a few in the layer. `engine.spec.ts` gates it below 24 bytes per step so it can't grow; a planted 64-byte allocation per step fails the gate. Getting to zero needs the solver's allocation found and removed (F2.2's owner) and the engine's remaining per-solve allocation traced._
 - [x] **`CommandBus.advanceTo(tick)`:** unlogged, with no history change. A property test shows every world change's `apply`/`invert` preserves `tick`.
 - [x] **`replayEntries`** advances the engine to each entry's tick, then to `endTick`. v1 logs replay unchanged (a property test on the P1 fixtures). A `tick` lower than the current one is still an error.
 - [x] **Scripting API:**
