@@ -157,6 +157,14 @@ function rig(): SnapshotReadRig {
  * and measured at a seventh of it; a raw-ms gate would need the calibrated headroom first). Gated on
  * allocation: a read must allocate nothing.
  */
+/**
+ * The allocation probe's smoke form: windows of 5,000 reads (a read that allocates a boxed double,
+ * 12 B, still shows as 12 B; a one-off 11 kB step would be 2.2 B, but it must land in every window of
+ * a size to count, and the smallest of 3 is kept), the warm-up to optimised code unchanged.
+ */
+const SMOKE_READS = 5_000;
+const SMOKE_WINDOWS = 3;
+
 export const SNAPSHOT_READ_CASE: BenchCase = {
   name: 'snapshot-read-500-devices',
   warmup: 2_000,
@@ -167,8 +175,8 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
     rig().read();
     return String(rig().sum());
   },
-  invariant: () => {
-    const bytes = bytesPerRead(rig());
+  invariant: (smoke) => {
+    const bytes = smoke ? bytesPerRead(rig(), SMOKE_READS, SMOKE_WINDOWS) : bytesPerRead(rig());
     return {
       value: bytes,
       failure:
