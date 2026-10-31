@@ -17,7 +17,9 @@ import { snapshotHash } from './snapshot';
  * fingerprint is re-pinned, and it can only be re-pinned next to a new version number.
  *
  * To change the contract: bump `SIM_PROTOCOL_VERSION`, add its fingerprint below (keep the old
- * ones: history), amend ADR 0011 and re-pin the snapshot goldens.
+ * ones: history), amend ADR 0011 and re-pin the snapshot goldens. **A pin is never edited**: a
+ * version's fingerprint is what that version shipped; a different contract is a new version. The
+ * newest pin must be the current version, so a pin can't be added ahead of the bump either.
  */
 
 const PINNED: Readonly<Record<number, string>> = {
@@ -66,6 +68,8 @@ describe('the protocol fingerprint (ADR 0011 §12)', () => {
       PINNED[layout.SIM_PROTOCOL_VERSION],
       `no fingerprint pinned for protocol ${layout.SIM_PROTOCOL_VERSION}`,
     ).toBe(fingerprint());
+    // The newest pin is this version: no fingerprint pinned for a version that doesn't exist yet.
+    expect(Math.max(...Object.keys(PINNED).map(Number))).toBe(layout.SIM_PROTOCOL_VERSION);
   });
 
   it('covers the island encoding, the bands, the device records and the messages', () => {

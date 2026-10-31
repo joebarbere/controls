@@ -72,7 +72,10 @@ const splitPhaseBand: SourceBandRule = (params, region) =>
 /**
  * The band rule of each source model kind (by catalogue model kind). The AC bands are the region
  * profile's nominal systems (`RegionProfile`, sourced to ANSI C84.1 there), matched exactly on the
- * line-to-neutral voltage the source model builds its phases from.
+ * line-to-neutral voltage the source model builds its phases from. Split-phase 120/240 V and
+ * 208Y/120 V both have 120 V line to neutral, so they are told apart by **model kind**
+ * (`utility.splitPhase` and `generator.portable` against `utility.threePhase`), never by voltage;
+ * among three-phase services the line-to-neutral voltage then picks 208Y/120 or 480Y/277.
  */
 export const SOURCE_BAND_RULES: Readonly<Record<string, SourceBandRule>> = Object.freeze({
   battery: (params) => dcBand(params['nominalVoltageV']),

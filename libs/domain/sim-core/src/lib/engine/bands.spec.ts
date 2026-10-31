@@ -80,6 +80,9 @@ describe('nominal bands', () => {
     expect(of(GENERATOR)).toBe('ac120-240'); // the stub's 120/240 V nameplate
     // A nameplate that is no band's nominal has no scale, never the nearest one.
     expect(SOURCE_BAND_RULES['battery']({ nominalVoltageV: 6 }, NEC_REGION)).toBe(0);
+    // Exact, never "nearest within a volt": a nameplate a little off a nominal has no band.
+    expect(SOURCE_BAND_RULES['battery']({ nominalVoltageV: 12.9 }, NEC_REGION)).toBe(0);
+    expect(SOURCE_BAND_RULES['supply.dinPsu']({ ratedVoltageV: 24.5 }, NEC_REGION)).toBe(0);
     expect(SOURCE_BAND_RULES['supply.dinPsu']({ ratedVoltageV: 12 }, NEC_REGION)).toBe(band('dc12'));
     expect(SOURCE_BAND_RULES['utility.threePhase']({ lineToNeutralV: 347 }, NEC_REGION)).toBe(0);
     expect(SOURCE_BAND_RULES['utility.splitPhase']({ lineToNeutralV: 110 }, NEC_REGION)).toBe(0);
