@@ -59,6 +59,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- **Sim events reach scripts in the same order as headless, whatever the timing** (F2.3b review): the worker cuts its event batches at every command, so an event raised by time and one raised by a command at the same tick no longer swap when publishing is throttled.
 - Smaller installers: the desktop app no longer packs about 31 MB of unused `node_modules` (Angular, three, zod, CodeMirror and others, already bundled into the renderer) into `app.asar`. `app.asar` drops from 34.3 MB to 2.9 MB and the Linux AppImage from 132.1 MB to 126.2 MB. electron-builder also stops running a native-module rebuild on every package.
 
 ## [0.2.0] - 2026-10-29

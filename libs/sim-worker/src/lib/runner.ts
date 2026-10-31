@@ -9,6 +9,7 @@ import {
   PUBLISH_MIN_WALL_MS,
   SIM_PROTOCOL_VERSION,
   type SimErrorCode,
+  type SimEvent,
   SimStateExport,
   type SimTransport,
   slotCapacityFor,
@@ -100,6 +101,12 @@ export class SimWorkerRunner {
   private readonly watches = new Map<number, WatchTarget>();
   /** Events at or before this tick are a replay start's history, not news: dropped. */
   private quietThrough = -1;
+  /**
+   * Events taken from the engine and not yet posted: sorted batches, one per stretch between command
+   * boundaries, concatenated (ADR 0011 §4). Cutting at each command, as headless delivers per call,
+   * makes what main receives the same list headless whatever the publish timing.
+   */
+  private pendingEvents: SimEvent[] = [];
   private readonly diagnostics: WorkerDiagnostics;
   private readonly maxSlotBytes: number;
 
@@ -327,6 +334,7 @@ export class SimWorkerRunner {
 
   /** Re-executes one logged entry on the mirror bus and hands it to the engine at its tick. */
   private apply(entry: ReplayEntry): void {
+    this.cutEvents(); // what time raised up to this command is one batch; the command's start the next
     const result = replayEntries(this.bus as CommandBus<World>, [entry], { time: this.engine as SimEngine });
     if (!result.ok) {
       throw new RunnerError('desync', `The mirror bus refused entry ${entry.seq}: ${result.error.kind}.`, entry.seq);
@@ -411,10 +419,18 @@ export class SimWorkerRunner {
     this.writer?.writeDiagnostics(this.diagnostics.current);
   }
 
-  private flushEvents(): void {
+  /** Ends the current batch: the engine's events since the last cut, sorted, after the pending ones. */
+  private cutEvents(): void {
     const all = (this.engine as SimEngine).takeEvents();
-    const events = this.quietThrough < 0 ? all : all.filter((event) => event.tick > this.quietThrough);
-    if (events.length > 0) this.port.post({ type: 'events', events });
+    for (const event of all) if (event.tick > this.quietThrough) this.pendingEvents.push(event);
+  }
+
+  private flushEvents(): void {
+    this.cutEvents();
+    if (this.pendingEvents.length === 0) return;
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
+    this.port.post({ type: 'events', events });
   }
 }
 

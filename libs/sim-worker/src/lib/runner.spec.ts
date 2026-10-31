@@ -1,6 +1,17 @@
 import { createWorld, type ReplayEntry, type World } from '@controls/save-format';
 import { createGame, type Game } from '@controls/scripting-api';
-import { ENGINE_BENCH, ENGINE_TEST_CATALOG, engineTestOptions } from '@controls/sim-core/testing';
+import type { SimDeviceModel } from '@controls/sim-core';
+import {
+  BATTERY,
+  end,
+  ENGINE_BENCH,
+  ENGINE_TEST_CATALOG,
+  engineTestOptions,
+  FLIP,
+  LEAD,
+  origin,
+  THERMAL_LOAD,
+} from '@controls/sim-core/testing';
 import {
   MIN_SLOT_BYTES,
   PUBLISH_MIN_WALL_MS,
@@ -179,6 +190,70 @@ describe('following the host', () => {
     h.drain();
     expect(events.length).toBeGreaterThan(0);
     expect(h.of('events').flatMap((m) => m.events)).toEqual(events);
+  });
+
+  it('delivers events as headless does whatever the publish timing: batches cut at each command (#62 review)', () => {
+    // A thermal load that also reports `overRated` every 20 ticks without changing the topology (as
+    // F2.4's protection events can): a time-driven event that no forced publish flushes. At tick 20 a
+    // command closes a battery's loop through a flip load, raising `nonConverged` for island [1, 3]
+    // at the same tick. Headless delivers the advance's events, then the command's: overRated
+    // (entity 2) before nonConverged (entity 1), the reverse of one batch sorted by entity.
+    const base = engineTestOptions();
+    const thermal = base.deviceModels['test.thermalLoad'] as SimDeviceModel;
+    const alarming: SimDeviceModel = {
+      ...thermal,
+      bank(devices) {
+        const bank = thermal.bank(devices);
+        return {
+          ...bank,
+          protection(ctx) {
+            const changed = bank.protection?.(ctx) ?? false;
+            if ((ctx.tick + 1) % 20 === 0) for (const device of devices) ctx.emit('overRated', device.entity);
+            return changed;
+          },
+        };
+      },
+    };
+    const engine = () => ({
+      ...engineTestOptions(),
+      deviceModels: { ...base.deviceModels, 'test.thermalLoad': alarming },
+    });
+    const game = createGame({ world: createWorld({ seed: 11 }), registry: registry(), engine: engine() });
+    const initial = game.world() as World;
+    const headless: unknown[] = [];
+    game.on('sim', (event) => headless.push(event));
+    game.execOrThrow('entity.place', { ref: BATTERY, positionMm: origin });
+    game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: origin });
+    game.execOrThrow('entity.place', { ref: FLIP, positionMm: origin });
+    game.execOrThrow('lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(3, 'a') });
+    game.advance(20);
+    game.execOrThrow('lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') });
+    game.advance(25);
+    expect(headless.slice(0, 2)).toMatchObject([
+      { tick: 20, kind: 'overRated', entity: 2 },
+      { tick: 20, kind: 'nonConverged', entities: [1, 3] },
+    ]);
+    // Every timing: throttled (no wall time passes, so only forced publishes go out), each chunk a
+    // new window, and in between; and the commands sent at once or with a query between them.
+    for (const msPerRead of [0, PUBLISH_MIN_WALL_MS, 1]) {
+      for (const queried of [false, true]) {
+        const h = harness({ engine: engine() });
+        h.msPerRead = msPerRead;
+        h.init({ kind: 'world', world: initial, firstSeq: 0 });
+        const entries = game.entries();
+        for (const entry of entries.slice(0, 4)) h.send({ type: 'command', entry });
+        h.send({ type: 'advance', tick: 20 });
+        if (queried) h.query('state', 20);
+        h.send({ type: 'command', entry: entries[4] });
+        h.send({ type: 'advance', tick: 45 });
+        h.drain();
+        expect({ msPerRead, queried, events: h.of('events').flatMap((m) => m.events) }).toEqual({
+          msPerRead,
+          queried,
+          events: headless,
+        });
+      }
+    }
   });
 
   it('answers a query only after every earlier message, at its tick (ADR 0011 §9.5)', () => {

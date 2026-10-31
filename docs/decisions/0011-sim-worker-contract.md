@@ -190,7 +190,7 @@ interface SimStateExport {
 
 `sim-protocol` parses every export with the save-format schemas before materialising it.
 
-- **Sim events** are batched with each publish and sorted by tick, then entity id, then kind. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content is deterministic: `game.on('sim')` gets the same list headless. Events are not in any hash. Where they go in the UI:
+- **Sim events** are posted with each publish, as batches **cut at every command boundary**: what time raised up to a command is one batch, what that command and the time after it raised (up to the next command) the next, each sorted by tick, then entity id, then kind, and concatenated in order. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content and order are deterministic: `game.on('sim')` gets the same list headless, whatever the publish timing. (Headless delivers each `exec`/`advance` call's events as one sorted batch; extra cuts between time-only calls change nothing, since their ticks don't overlap, so only the command boundaries matter. One sorted batch per publish would not do: publishes are throttled by wall time, so a time-driven event and a command's event at the same tick would arrive in either order. F2.3b review, from the F2.4 test review.) Events are not in any hash. Where they go in the UI:
 
   | Event                                   | UI                                                                                        |
   | --------------------------------------- | ----------------------------------------------------------------------------------------- |
