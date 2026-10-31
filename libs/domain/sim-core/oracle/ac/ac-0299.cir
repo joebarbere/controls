@@ -4,7 +4,8 @@ controls oracle ac-0299
 RG1 1 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 33e-1 0
-RI0 e0 1 10e-3
+RI0 e0 m0 10e-3
+LI0 m0 1 27e-5
 VS1 1 s1 0
 L1 s1 0 33e-5
 VS2 1 s2 0

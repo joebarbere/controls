@@ -1,8 +1,8 @@
 import type { AcSourceParams } from '@controls/catalog';
 import type { SourcedConstant } from '../../constants';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
+import { AC_STAMP_VSOURCE, AcBranchValues } from '../../mna/ac-values';
 import { angularFrequency, type PhasorAngle } from '../../mna/phasor';
-import type { ElementRef } from '../../netlist/types';
 
 /*
  * AC sources behind a transformer's or an alternator's impedance (plan F2.4): the utility services,
@@ -24,8 +24,14 @@ import type { ElementRef } from '../../netlist/types';
  *   takes half of it; L1 at 0°, L2 at 180°. A bolted L1–L2 fault draws V_LL / |Z|. **Abstraction:** a
  *   real centre-tapped transformer's half-winding impedance is less than half the full winding's, so
  *   its line-to-neutral bolted fault current is higher than the line-to-line one (about 1.5× is the
- *   usual rule of thumb in short-circuit guides); here they are equal. Two independent halves can't
- *   give both, and the difference matters only for fault studies (P4's service entrance).
+ *   usual rule of thumb in short-circuit guides); here they are equal, which is acceptable while P2's
+ *   services are headless and have no protective devices. The standard simple model that gives both
+ *   is a T-equivalent: Z_full / 2 in each of L1 and L2 plus a neutral branch Z_n = Z_LN − Z_full / 2,
+ *   with the half-winding impedance R_LN = 1.5 R, X_LN = 1.2 X in per-unit on the 120 V base (0.375 R
+ *   and 0.3 X of the full winding in ohms). Z_n is then negative (about −0.125 R − j0.2 X), which a
+ *   phasor MNA accepts because the network stays passive, and I_LN / I_LL ≈ 1.5 (8.2 kA against 5.2 kA
+ *   here); mutual coupling between the halves would do too. P4's service entrance must adopt one, with
+ *   an I_LN / I_LL ≈ 1.5 test (simulation caveats). The generator stub inherits the same abstraction.
  * - The EMF is the open-circuit (no-load) voltage: the source impedance alone gives the voltage drop
  *   under load. No tap changer, regulation or frequency dynamics.
  */
@@ -69,7 +75,9 @@ export function threePhaseWinding(params: AcSourceParams, frequencyHz: number): 
 
 /**
  * The available bolted fault current at the source's terminals (A, RMS): a split-phase source's
- * L1–L2 fault, V_LL / |Z|; a three-phase source's three-phase fault, V_LN / |Z_phase|.
+ * L1–L2 fault, V_LL / |Z|; a three-phase source's three-phase fault, V_LN / |Z_phase|. Transformer
+ * limited: the primary is an infinite bus (no utility system impedance), so this is the upper bound
+ * of what a real service can deliver.
  */
 export function boltedFaultCurrentA(params: AcSourceParams, phases: 1 | 3): number {
   if (phases === 1) return splitPhaseLineToLineV(params) / ratedImpedance(params, splitPhaseLineToLineV(params)).z;
@@ -88,14 +96,40 @@ function acSourceModel(
     kind,
     output: null,
     bank(devices: readonly SimDevice[]): SimDeviceBank {
-      const emf = devices.map((d) => (d.params as AcSourceParams).lineToNeutralV);
-      const z = devices.map((d) => winding(d.params as AcSourceParams, d.frequencyHz));
+      // Every winding's value is fixed for the bank's life, so it is worked out here once (validated by
+      // `vsourcePolar` into a scratch value set) and copied in at each solve: building it per solve
+      // allocated (a phasor unit and boxed doubles) on the engine's AC allocation gate.
+      const scratch = new AcBranchValues(1);
+      const slot = new Int32Array(Math.max(0, ...devices.flatMap((d) => d.branches)) + 1).fill(-1);
+      const winds = devices.flatMap((d) => d.branches).length;
+      const re = new Float64Array(winds);
+      const im = new Float64Array(winds);
+      const ohms = new Float64Array(winds);
+      const henries = new Float64Array(winds);
+      let w = 0;
+      devices.forEach((d) => {
+        const p = d.params as AcSourceParams;
+        const z = winding(p, d.frequencyHz);
+        // A device's branches are its windings in part order: l1, l2 (, l3).
+        d.branches.forEach((branch, j) => {
+          scratch.vsourcePolar(0, p.lineToNeutralV, angles[`l${j + 1}`], z.ohms, z.henries);
+          re[w] = scratch.emfRe[0];
+          im[w] = scratch.emfIm[0];
+          ohms[w] = scratch.ohms[0];
+          henries[w] = scratch.seriesHenries[0];
+          slot[branch] = w++;
+        });
+      });
       return {
         bag: () => ({}),
-        acValue: (i, b, values) => {
-          // A device's branch is always one of its own elements: the winding's part names its line.
-          const { part } = b.element as Extract<ElementRef, { kind: 'entity' }>;
-          values.vsourcePolar(b.index, emf[i], angles[part], z[i].ohms, z[i].henries);
+        acValue: (_i, b, values) => {
+          const k = b.index;
+          const at = slot[k];
+          values.stamps[k] = AC_STAMP_VSOURCE;
+          values.emfRe[k] = re[at];
+          values.emfIm[k] = im[at];
+          values.ohms[k] = ohms[at];
+          values.seriesHenries[k] = henries[at];
           return true;
         },
       };
@@ -113,7 +147,8 @@ export const UTILITY_THREE_PHASE_MODEL = acSourceModel('utility.threePhase', THR
  * The portable generator, **a stub** (plan F2.4): its nameplate EMF behind its source impedance, as
  * the split-phase utility is modelled, with no engine, governor or voltage-regulator dynamics, no fuel
  * and no overload. It has no catalogue entry, so it can't be placed; generators and transfer switches
- * are in the backlog. Its nameplate is {@link GENERATOR_STUB_NAMEPLATE}.
+ * are in the backlog. Its nameplate is {@link GENERATOR_STUB_NAMEPLATE}. It shares the split-phase
+ * abstraction above (line-to-neutral fault equal to line-to-line).
  */
 export const GENERATOR_PORTABLE_MODEL = acSourceModel('generator.portable', SPLIT_ANGLES, splitPhaseWinding);
 

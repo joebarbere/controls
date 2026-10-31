@@ -3,17 +3,18 @@ controls oracle ac-0331
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
-VS0 0 s0 0
-V0 e0 s0 DC 0 AC 12e1 -120
-RI0 e0 1 39e-2
-VS1 2 s1 0
-R1 s1 0 27e3
+VS0 2 s0 0
+R0 s0 0 27e3
+VS1 0 s1 0
+L1 s1 1 18e-5
 VS2 1 s2 0
-R2 s2 0 22e-1
-VS3 1 s3 0
-R3 s3 2 12e3
-VS4 0 s4 0
-L4 s4 1 18e-5
+R2 s2 2 12e3
+VS3 0 s3 0
+V3 e3 s3 DC 0 AC 12e1 -120
+RI3 e3 m3 39e-2
+LI3 m3 1 33e-5
+VS4 1 s4 0
+R4 s4 0 22e-1
 .control
 set numdgt=17
 ac lin 1 60 60

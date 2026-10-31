@@ -5,11 +5,11 @@ RG1 1 0 1000000000000
 VS0 1 s0 0
 C0 s0 0 15e-6
 VS1 0 s1 0
-R1 s1 1 12e0
+V1 e1 s1 DC 0 AC 33e1 0
+RI1 e1 m1 15e-1
+LI1 m1 1 12e-7
 VS2 0 s2 0
-V2 e2 s2 DC 0 AC 33e1 0
-RI2 e2 m2 15e-1
-LI2 m2 1 10e-6
+R2 s2 1 12e0
 .control
 set numdgt=17
 ac lin 1 60 60

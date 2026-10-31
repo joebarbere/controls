@@ -4,8 +4,7 @@ controls oracle ac-0334
 RG1 1 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 82e0 180
-RI0 e0 m0 47e-1
-LI0 m0 1 10e-5
+RI0 e0 1 47e-1
 VS1 1 s1 0
 C1 s1 0 10e-4
 VS2 0 s2 0

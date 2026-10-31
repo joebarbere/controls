@@ -4,11 +4,12 @@ controls oracle ac-0380
 RG1 1 0 1000000000000
 VS0 0 s0 0
 L0 s0 1 82e-2
-VS1 0 s1 0
-V1 e1 s1 DC 0 AC 27e-1 -120
-RI1 e1 1 18e-1
+VS1 1 s1 0
+C1 s1 0 47e-5
 VS2 0 s2 0
-C2 s2 1 33e-6
+V2 e2 s2 DC 0 AC 27e-1 -120
+RI2 e2 m2 18e-1
+LI2 m2 1 82e-5
 .control
 set numdgt=17
 ac lin 1 60 60

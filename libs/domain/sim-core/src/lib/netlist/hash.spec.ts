@@ -18,7 +18,8 @@ import {
 import { compileNetlist } from './compile';
 import { computeTopologyHash, elementKey, TOPOLOGY_ENCODING_HEADER, topologyBytes } from './hash';
 import type { NetlistBranch, NetlistNode } from './types';
-import { BENCH_SUPPLY, DIN_PSU } from '../../testing/sources';
+import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
+import { ENGINE_TEST_CATALOG, GENERATOR } from '../../testing/engine';
 import { MODEL_KINDS } from '@controls/catalog';
 
 /**
@@ -39,6 +40,9 @@ const MODEL_KIND_TOPOLOGY = {
   lead: '1b026937ba140eaab9f3a11092eff4883b8fa9b4a8e68c200244599e8fbbd279',
   supplyBench: '7732d91373abae4657ac515c62277f699d9ddf951682082bafde8072c479c586',
   supplyDinPsu: '80deabcc976dfdabbaf5ad3e701a428f0c2d04cce25a9b2588b231b3c09b7d7e',
+  utilitySplitPhase: 'c2e31c95f99edd9bca9b57e2035de1181f44eda6b4442fb071671675871a59ca',
+  utilityThreePhase: 'cc4f65c1d86e9fbc42924402d94c5993c3b6e81d8bd62b60e96c46d480224038',
+  generatorPortable: '8eeb8201e5e992fc957fc1ff99113d658ec03878366c38ec97a4c71b6dd5fe48',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -50,6 +54,9 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   lead: 'lead',
   supplyBench: 'supply.bench',
   supplyDinPsu: 'supply.dinPsu',
+  utilitySplitPhase: 'utility.splitPhase',
+  utilityThreePhase: 'utility.threePhase',
+  generatorPortable: 'generator.portable',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -151,11 +158,11 @@ describe('topologyHash', () => {
 
   it('is pinned for every built-in model kind, so a silent netlist-model change fails the build', () => {
     // A change here needs a SIM_ENGINE_VERSION bump (ADR 0013, "Solution order and topologyHash").
-    const one = (ref: typeof LEAD, closed?: boolean) => {
-      const bus = benchBus();
+    const one = (ref: typeof LEAD, closed?: boolean, catalog = BUILTIN_CATALOG) => {
+      const bus = benchBus(catalog);
       run(bus, 'entity.place', { ref, positionMm: origin });
       if (closed !== undefined) run(bus, 'device.operate', { id: 1, control: 'closed', value: closed });
-      return compileNetlist(bus.state, BUILTIN_CATALOG).topologyHash;
+      return compileNetlist(bus.state, catalog).topologyHash;
     };
     const lead = () => {
       const bus = benchBus();
@@ -171,6 +178,10 @@ describe('topologyHash', () => {
       lead: lead(),
       supplyBench: one(BENCH_SUPPLY),
       supplyDinPsu: one(DIN_PSU),
+      utilitySplitPhase: one(UTILITY_SPLIT),
+      utilityThreePhase: one(UTILITY_208),
+      // The generator stub has no built-in entry (not placeable): pinned through the test catalogue's.
+      generatorPortable: one(GENERATOR, undefined, ENGINE_TEST_CATALOG),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 

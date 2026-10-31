@@ -9,7 +9,10 @@ import {
   splitPhaseWinding,
   threePhaseLineToLineV,
   threePhaseWinding,
+  UTILITY_SPLIT_PHASE_MODEL,
 } from './ac-source';
+import { AcBranchValues } from '../../mna/ac-values';
+import { deriveStream } from '@controls/world-model';
 
 /*
  * The utility services and the generator stub (plan F2.4), headless: phasor sources behind an
@@ -87,6 +90,33 @@ describe('AC source impedance from kVA and %Z (hand calculations)', () => {
     expect(boltedFaultCurrentA(params(GENERATOR), 1)).toBeCloseTo(208.333, 3);
     // Not placeable: no built-in catalogue entry has the stub's kind.
     expect(BUILTIN_CATALOG.devices.some((d) => d.model.kind === 'generator.portable')).toBe(false);
+  });
+});
+
+describe('the region frequency reaches the bank (SimDevice.frequencyHz)', () => {
+  it('at 50 Hz a winding gets L = X / (2π · 50), so ωL is the rated X / 2 again', () => {
+    const p = params(UTILITY_SPLIT);
+    const { x } = ratedImpedance(p, 240);
+    const bank = UTILITY_SPLIT_PHASE_MODEL.bank([
+      { entity: 1, params: p, bag: {}, branches: [0, 1], frequencyHz: 50, stream: () => deriveStream(0, 'x') },
+    ]);
+    const values = new AcBranchValues(2);
+    const branch = (index: number, part: string): NetlistBranch => ({
+      index,
+      element: { kind: 'entity', entity: 1, part },
+      kind: 'vsource',
+      model: 'utility.splitPhase',
+      source: 'ac',
+      a: 0,
+      b: index + 1,
+      island: 0,
+      values: {},
+    });
+    expect(bank.acValue?.(0, branch(0, 'l1'), values)).toBe(true);
+    expect(bank.acValue?.(0, branch(1, 'l2'), values)).toBe(true);
+    for (const b of [0, 1]) expect(values.seriesHenries[b] * 2 * Math.PI * 50).toBeCloseTo(x / 2, 15);
+    expect(values.seriesHenries[0]).toBeCloseTo(splitPhaseWinding(p, 60).henries * (60 / 50), 15);
+    expect([values.emfRe[1], values.emfIm[1]]).toStrictEqual([-120, 0]); // L2 at 180°
   });
 });
 

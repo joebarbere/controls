@@ -170,6 +170,8 @@ export interface LargeAcCircuitSpec {
   /** Extra loop-closing elements per 100 nodes (0–30). */
   readonly meshPercent: number;
   readonly wellConditioned: boolean;
+  /** Non-ideal sources get a series inductance too (F2.4); off by default, so pinned draws are unchanged. */
+  readonly sourceInductance?: boolean;
 }
 
 /** xorshift32: integer-only, the same sequence in every runtime. */
@@ -199,6 +201,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
   const groups = Math.max(1, Math.min(spec.islands, Math.floor(n / 2)));
   const start = (g: number) => Math.floor((g * n) / groups);
   const well = spec.wellConditioned;
+  const withL = spec.sourceInductance === true;
   const element = (kind: number): AcElementDraw => ({
     kind,
     mantissa: rng.below(9000),
@@ -221,7 +224,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
       const parent = rng.below(2) === 0 ? node - 1 : first + rng.below(node - first);
       const roll = rng.below(20);
       const kind = roll < 2 || node === first + 1 ? 10 : rng.below(7);
-      const stamp = drawStamp(element(kind), well, true);
+      const stamp = drawStamp(element(kind), well, true, withL);
       if (rng.below(2) === 0) push(parent, node, stamp);
       else push(node, parent, stamp);
     }
@@ -230,7 +233,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
     for (let e = 0; e < extra; e++) {
       const a = first + rng.below(size);
       const b = rng.below(25) === 0 ? a : first + rng.below(size);
-      push(a, b, drawStamp(element(rng.below(11)), well, false));
+      push(a, b, drawStamp(element(rng.below(11)), well, false, withL));
     }
   }
   const netlist = syntheticNetlist(n, edges, 'ac');

@@ -93,12 +93,16 @@ const volts = (value: number, source: string): RegionValue => ({ value, unit: 'V
  * (point of delivery) and a utilization (point of use) band; utilization's lower limits allow for the
  * voltage drop of the premises wiring. On a 120 V base the boundaries are: Range A service 114–126 V,
  * utilization 108–125 V; Range B service 110–127 V, utilization 104–127 V. Here as fractions of
- * nominal, which is how the standard scales its other low-voltage systems. Clause references for
- * `electrical-realism-reviewer` to confirm against the 2020 edition: the definitions of the ranges
- * and the table of standard nominal system voltages and voltage ranges (its Table 1).
+ * nominal; the standard tabulates each low-voltage system in rounded volts, which these fractions agree
+ * with within that rounding (208 V: 197.6 and 216.7 V against the table's 197 and 216). Notes taken:
+ * Range A's utilization maximum of 125 V is the standard's note lowering 126 V for 120–600 V systems;
+ * the utilization minimums are the general column (108 V and 104 V), not the slightly higher values
+ * published copies show in parentheses (110 V and 106 V), which appear to apply to circuits that also
+ * supply lighting. The 2020 text itself was not available to the realism review: no clause number is
+ * cited until someone checks it.
  */
 const C84_1_RANGES =
-  'ANSI C84.1-2020: Range A and Range B and their service and utilization limits for low-voltage nominal systems (the voltage-range definitions and the table of standard nominal system voltages and voltage ranges, Table 1), paraphrased on a 120 V base; the table is not reproduced';
+  "ANSI C84.1-2020, Electric Power Systems and Equipment, Voltage Ratings (60 Hz): Range A and Range B service and utilization limits for 120–600 V nominal systems, as given for the 120 V system in its table of nominal system voltages and voltage ranges (with its note limiting Range A utilization to 125 V) and scaled to the other low-voltage systems, which the table's rounded values follow; paraphrased as fractions of nominal (Range A service ±5 %, utilization −10 %/+4.2 %; Range B service −8.3 %/+5.8 %, utilization −13.3 %/+5.8 %); corroborated by published utility service-voltage rules (Pacific Power and PG&E voltage-tolerance documents). Utilization minimums from the general column, not the parenthesised lighting values. Table not reproduced";
 const fraction = (volts120: number, what: string): RegionValue => ({
   value: volts120 / 120,
   unit: '1',
@@ -155,12 +159,12 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
   voltageRanges: {
     serviceA: { min: fraction(114, 'Range A service minimum'), max: fraction(126, 'Range A service maximum') },
     utilizationA: {
-      min: fraction(108, 'Range A utilization minimum'),
-      max: fraction(125, 'Range A utilization maximum'),
+      min: fraction(108, 'Range A utilization minimum (the general column)'),
+      max: fraction(125, "Range A utilization maximum (the standard's 125 V note for 120–600 V systems)"),
     },
     serviceB: { min: fraction(110, 'Range B service minimum'), max: fraction(127, 'Range B service maximum') },
     utilizationB: {
-      min: fraction(104, 'Range B utilization minimum'),
+      min: fraction(104, 'Range B utilization minimum (the general column)'),
       max: fraction(127, 'Range B utilization maximum'),
     },
   },

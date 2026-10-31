@@ -1,5 +1,5 @@
 controls oracle ac-0060
-* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 60 nodes 11 elements 17
+* Generated (plan F2.7, ADR 0012): do not edit; regenerate with `pnpm sim oracle regen`. ac seed 20261031 index 60 nodes 11 elements 19
 .options sparse gmin=1e-12 noopac
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
@@ -11,49 +11,53 @@ RG7 7 0 1000000000000
 RG8 8 0 1000000000000
 RG9 9 0 1000000000000
 RG10 10 0 1000000000000
-VS0 10 s0 0
-C0 s0 7 47e-7
-VS1 5 s1 0
-L1 s1 1 47e-4
-VS2 3 s2 0
-R2 s2 4 22e1
-VS3 4 s3 0
-C3 s3 9 12e-4
-VS4 8 s4 0
-L4 s4 0 47e-5
-VS5 2 s5 0
-L5 s5 5 68e-5
-VS6 4 s6 0
-R6 s6 8 15e-1
-VS7 0 s7 0
-V7 e7 s7 DC 0 AC 18e-1 -120
-RI7 e7 7 15e-3
-VS8 7 s8 0
-L8 s8 4 10e-5
-VS9 3 s9 0
-C9 s9 0 47e-6
-VS10 4 s10 0
-V10 e10 s10 DC 0 AC 10e-1 180
-RI10 e10 m10 33e-1
-LI10 m10 1 47e-7
-VS11 5 s11 0
-R11 s11 6 12e2
-VS12 0 s12 0
-L12 s12 2 56e-3
-VS13 7 s13 0
-L13 s13 10 18e-5
-VS14 6 s14 0
-L14 s14 8 10e-3
-VS15 9 s15 0
-V15 e15 s15 DC 0 AC 68e-1 180
-RI15 e15 10 68e-2
+VS0 9 s0 0
+R0 s0 8 12e-1
+VS1 7 s1 0
+R1 s1 2 15e2
+VS2 7 s2 0
+L2 s2 5 10e-4
+VS3 5 s3 0
+L3 s3 3 82e-5
+VS4 0 s4 0
+V4 e4 s4 DC 0 AC 18e-1 -120
+RI4 e4 m4 15e-3
+LI4 m4 7 15e-5
+VS5 7 s5 0
+C5 s5 6 33e-5
+VS6 6 s6 0
+C6 s6 1 39e-5
+VS7 9 s7 0
+C7 s7 6 68e-7
+VS8 10 s8 0
+C8 s8 7 68e-5
+VS9 4 s9 0
+R9 s9 10 10e2
+VS10 6 s10 0
+L10 s10 8 10e-3
+VS11 2 s11 0
+L11 s11 5 68e-5
+VS12 5 s12 0
+L12 s12 1 47e-4
+VS13 3 s13 0
+C13 s13 9 47e-4
+VS14 9 s14 0
+R14 s14 1 82e-1
+VS15 5 s15 0
+V15 e15 s15 DC 0 AC 10e1 120
+RI15 e15 m15 12e-2
+LI15 m15 2 82e-6
 VS16 9 s16 0
-R16 s16 8 12e-1
+R16 s16 4 27e0
+VS17 5 s17 0
+R17 s17 6 12e2
+VS18 8 s18 0
+L18 s18 0 47e-5
 .control
 set numdgt=17
 ac lin 1 60 60
 print v(1) v(2) v(3) v(4) v(5) v(6) v(7) v(8) v(9) v(10)
 print i(vs0) i(vs1) i(vs2) i(vs3) i(vs4) i(vs5) i(vs6) i(vs7) i(vs8) i(vs9)
-print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16)
+print i(vs10) i(vs11) i(vs12) i(vs13) i(vs14) i(vs15) i(vs16) i(vs17) i(vs18)
 .endc
 .end

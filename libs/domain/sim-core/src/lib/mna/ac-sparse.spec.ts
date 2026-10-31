@@ -113,6 +113,7 @@ function nudged(values: AcBranchValues, nudge: number): AcBranchValues {
   for (let b = 0; b < values.count; b++) {
     out.ohms[b] = values.ohms[b] * f;
     out.henries[b] = values.henries[b] * f;
+    out.seriesHenries[b] = values.seriesHenries[b] * f;
     out.farads[b] = values.farads[b] * f;
     out.emfRe[b] = values.emfRe[b] * f;
     out.emfIm[b] = values.emfIm[b] / f;
@@ -229,6 +230,30 @@ describe('AcSolver sparse path', () => {
         }
       }),
       { numRuns: 6 },
+    );
+  });
+
+  it('with series inductance behind the sources (F2.4), bit-identical cold, warm and thrashed, and warm equals cold', () => {
+    // The source rows' complex Z (`VALUE_Z`) is replayed from the stamp program on a cache hit: it must
+    // be recomputed from each solve's ω and values exactly as a fresh stamp computes it.
+    fc.assert(
+      fc.property(midArb, frequencyArb, nudgeArb, (base, hz, nudge) => {
+        const spec = { ...base, sourceInductance: true };
+        const circuit = largeAcCircuit(spec);
+        const expected = solveWith(sparse(), circuit);
+        const thrashed = sparse(new FactorisationCache<ComplexSparseFactors>(1));
+        const warm = sparse();
+        for (const round of [0, 1]) {
+          expectSameBits(solveWith(thrashed, circuit), expected);
+          expectSameBits(solveWith(warm, circuit), expected);
+          if (round === 1) expect(warm.cache.has(circuit.netlist.topologyHash)).toBe(factored(expected));
+        }
+        const changed = { ...circuit, values: nudged(circuit.values, nudge) };
+        expectSameBits(solveWith(warm, circuit, hz), solveWith(sparse(), circuit, hz));
+        expectSameBits(solveWith(warm, changed), solveWith(sparse(), changed));
+        expect(Array.from(circuit.values.seriesHenries).some((h) => h > 0)).toBe(true);
+      }),
+      { numRuns: 4 },
     );
   });
 

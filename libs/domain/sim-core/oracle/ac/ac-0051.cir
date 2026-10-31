@@ -4,20 +4,19 @@ controls oracle ac-0051
 RG1 1 0 1000000000000
 RG2 2 0 1000000000000
 RG3 3 0 1000000000000
-VS0 3 s0 0
-L0 s0 1 27e-2
-VS1 2 s1 0
-R1 s1 1 82e0
+VS0 0 s0 0
+L0 s0 1 39e-3
+VS1 1 s1 0
+C1 s1 2 18e-5
 VS2 0 s2 0
-V2 e2 s2 DC 0 AC 27e0 180
-RI2 e2 m2 56e-2
-LI2 m2 2 82e-5
-VS3 1 s3 0
-L3 s3 3 56e-5
+C2 s2 3 39e-6
+VS3 2 s3 0
+R3 s3 1 82e0
 VS4 3 s4 0
-R4 s4 1 68e2
-VS5 3 s5 0
-C5 s5 0 33e-7
+R4 s4 1 56e3
+VS5 0 s5 0
+V5 e5 s5 DC 0 AC 27e0 180
+RI5 e5 2 56e-2
 .control
 set numdgt=17
 ac lin 1 60 60

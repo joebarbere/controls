@@ -218,9 +218,7 @@ function drawElement(rng: Sfc32, domain: OracleDomain, kind: OracleElementKind, 
         angleDeg: domain === 'ac' ? PHASOR_ANGLES[rng.nextInt(0, PHASOR_ANGLES.length - 1)] : 0,
         internalResistanceOhm: drawValue(rng, ORACLE_RANGES.internalResistanceOhm),
       };
-      // AC: half the sources get a series inductance (F2.4's source reactance).
-      if (domain !== 'ac' || rng.nextInt(0, 1) === 0) return source;
-      return { ...source, seriesInductanceH: drawValue(rng, ORACLE_RANGES.sourceInductanceH) };
+      return source;
     }
     case 'isource':
       return { kind, a, b, currentA: drawValue(rng, ORACLE_RANGES.currentA) };
@@ -287,12 +285,29 @@ export function generateOracleCircuit(domain: OracleDomain, seed: number, index:
     connect(pick(rng, TREE_WEIGHTS[domain]), p[rng.nextInt(0, p.length - 1)], q[rng.nextInt(0, q.length - 1)]);
   }
   shuffle(rng, elements);
+  // AC: about half the sources get a series inductance (F2.4's source reactance), drawn from a stream
+  // of their own, so the circuit stream is untouched and each existing circuit only gains `LI` lines.
+  const withL = domain === 'ac' ? sourceInductances(seed, index, elements) : elements;
   return {
     name: oracleCircuitName(domain, index),
     domain,
     seed,
     index,
     nodeCount,
-    elements: referencedToGround(elements),
+    elements: referencedToGround(withL),
   };
+}
+
+/** The stream key of an AC circuit's source inductances: its circuit key plus `:source-l`. */
+export function sourceInductanceStreamKey(index: number): string {
+  return `${oracleStreamKey('ac', index)}:source-l`;
+}
+
+/** Gives about half the voltage sources of `elements`, in order, a series inductance from their own stream. */
+function sourceInductances(seed: number, index: number, elements: readonly OracleElement[]): OracleElement[] {
+  const rng = deriveStream(seed, sourceInductanceStreamKey(index));
+  return elements.map((element) => {
+    if (element.kind !== 'vsource' || rng.nextInt(0, 1) === 0) return element;
+    return { ...element, seriesInductanceH: drawValue(rng, ORACLE_RANGES.sourceInductanceH) };
+  });
 }
