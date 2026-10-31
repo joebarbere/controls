@@ -3,7 +3,14 @@ import { createWorld, FiniteNumber } from '@controls/save-format';
 import { stateBagArb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { z } from 'zod';
-import { deviceOperateCommand } from './device-commands';
+import { bindingArgs, defaultBindingDecls, SELECTION_ENTITY_ID_KEY } from '@controls/commands';
+import {
+  DEVICE_OPERATE_SELECTION_BINDING,
+  deviceOperateCommand,
+  SELECTION_TOGGLE_CONTROL_KEY,
+  SELECTION_TOGGLE_VALUE_KEY,
+  selectionToggle,
+} from './device-commands';
 import { createWorldBus, createWorldRegistry } from './session';
 
 const SPST = { id: 'switch.tessaline-spst-toggle', version: 1 };
@@ -151,5 +158,41 @@ describe('device.operate', () => {
     expect(bus.exec('device.operate', { id: 1, control: 'handle', value: 'on' }).ok).toBe(true);
     expect(bus.state.entities[0].state).toStrictEqual({ handle: 'on', setpointV: 12.5 });
     expect(deviceOperateCommand(catalog).id).toBe('device.operate');
+  });
+});
+
+describe('the operate key (F2.5): device.operate on the selection, one logged command', () => {
+  it('selectionToggle names the first toggle and the value that flips it, from commanded state only', () => {
+    const bus = withSwitch();
+    expect(selectionToggle(bus.state, 1)).toStrictEqual({ control: 'closed', value: true });
+    bus.exec('device.operate', { id: 1, control: 'closed', value: true });
+    expect(selectionToggle(bus.state, 1)).toStrictEqual({ control: 'closed', value: false });
+    expect(selectionToggle(bus.state, 2)).toBeNull(); // a battery has no toggle
+    expect(selectionToggle(bus.state, 3)).toBeNull(); // a prop is not a device
+    expect(selectionToggle(bus.state, 9)).toBeNull();
+    // The sim bag never decides it.
+    const withSim = { ...bus.state, entities: bus.state.entities.map((e) => ({ ...e, sim: { closed: false } })) };
+    expect(selectionToggle(withSim, 1)).toStrictEqual({ control: 'closed', value: false });
+  });
+
+  it('E in the viewport runs device.operate with the id, control and value from the context keys', () => {
+    const decls = defaultBindingDecls(createWorldRegistry()).filter((d) => d.id === DEVICE_OPERATE_SELECTION_BINDING);
+    expect(decls).toHaveLength(1);
+    const [decl] = decls;
+    expect(decl.defaults).toStrictEqual(['E']);
+    expect(decl.when).toBe(`viewport.focused && ${SELECTION_TOGGLE_CONTROL_KEY}`);
+    const bus = withSwitch();
+    const context = {
+      'viewport.focused': true,
+      [SELECTION_ENTITY_ID_KEY]: 1,
+      [SELECTION_TOGGLE_CONTROL_KEY]: 'closed',
+      [SELECTION_TOGGLE_VALUE_KEY]: true,
+    };
+    const args = bindingArgs(decl.target, context);
+    expect(args).toStrictEqual({ id: 1, control: 'closed', value: true });
+    const entries = bus.entries.length;
+    expect(bus.exec('device.operate', args).ok).toBe(true);
+    expect(bus.entries.length).toBe(entries + 1);
+    expect(bus.state.entities[0].state['closed']).toBe(true);
   });
 });

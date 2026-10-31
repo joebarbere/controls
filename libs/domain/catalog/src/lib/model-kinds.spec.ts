@@ -9,8 +9,10 @@ describe('MODEL_KINDS', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'generator.portable',
+      'heater',
       'lamp.incandescent',
       'lead',
+      'resistor',
       'supply.bench',
       'supply.dinPsu',
       'switch.spst',
@@ -31,8 +33,10 @@ describe('MODEL_KINDS', () => {
     expect(summary).toStrictEqual({
       battery: { stateOfCharge: 'sim number 1' },
       'generator.portable': {},
+      heater: {},
       'lamp.incandescent': { filamentTempK: 'sim number null' },
       lead: {},
+      resistor: {},
       'supply.bench': {
         currentLimitA: 'commanded number 1',
         mode: 'sim enum cv',

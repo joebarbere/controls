@@ -18,7 +18,7 @@ import {
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
+import { AC_SOURCE, BATTERY, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
   DROOP,
   ENGINE_BENCH,
@@ -27,6 +27,7 @@ import {
   engineTestOptions,
   FLIP,
   I2T_FUSE,
+  OPAQUE,
   ORDER_A,
   ORDER_B,
   THERMAL_LOAD,
@@ -213,18 +214,28 @@ describe('SimEngine: electrical results', () => {
     expect(loads(11)).not.toBe(loads(12));
   });
 
-  it('never presents an unmodelled island as a reading: the real lamp has no filament model until F2.5', () => {
+  it('never presents an unmodelled island as a reading: an element no model can value', () => {
     expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual([
       'battery',
       'generator.portable',
+      'heater',
+      'lamp.incandescent',
+      'resistor',
       'supply.bench',
       'supply.dinPsu',
       'utility.splitPhase',
       'utility.threePhase',
     ]);
-    const engine = SimEngine.start(benchLamp(true));
+    // The bench lamp's circuit with the lamp swapped for a load no model values (what the lamp was
+    // before F2.5's filament model).
+    const engine = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: OPAQUE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+    ]).engine;
     const [island] = engine.islands();
-    expect(island).toMatchObject({ kind: 'dc', status: 'unmodelled', iterations: 0, entities: [1, 2, 3] });
+    expect(island).toMatchObject({ kind: 'dc', status: 'unmodelled', iterations: 0, entities: [1, 2] });
     expect(engine.probe(end(1, 'pos'), end(1, 'neg'))).toStrictEqual({
       kind: 'unsolved',
       tick: 0,
@@ -517,7 +528,7 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
       [2, {}],
       [3, { tempK: expect.any(Number) }],
       [4, { blown: false, heatA2s: expect.any(Number) }],
-      [5, { filamentTempK: null }], // no lamp model until F2.5
+      [5, { filamentTempK: 293.15 }], // initialised at ambient on entering the netlist (F2.5), unwired so cold
     ]);
     expect(world.entities[2].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
     expect(world.entities[0].sim['stateOfCharge']).toBeLessThan(1);

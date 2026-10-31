@@ -5,6 +5,7 @@ import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './scene';
 import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
+import type { LampOutputs } from './world/world-sync';
 import { Disposer } from './disposer';
 import { RenderLoop, windowFrameClock } from './loop/render-loop';
 import type { FrameTiming } from './stats/frame-timer';
@@ -69,6 +70,7 @@ export class ViewportRenderer {
   // Kept until the controller exists (WebGPU init is async), then applied.
   private world: World | null = null;
   private placement: CatalogRef | null = null;
+  private lampOutputs: LampOutputs | null = null;
   private readonly intentListeners = new Set<ViewportIntentListener>();
 
   async init(canvas: HTMLCanvasElement, options: ViewportOptions = {}): Promise<RenderBackend> {
@@ -109,6 +111,7 @@ export class ViewportRenderer {
       if (doc.visibilityState === 'visible') loop.requestRender();
     });
     if (this.world) controller.syncWorld(this.world);
+    if (this.lampOutputs) controller.setLampOutputs(this.lampOutputs);
     controller.setPlacement(this.placement);
     controller.onIntent((intent) => this.intentListeners.forEach((l) => l(intent)));
     loop.requestRender(); // the first frame
@@ -137,6 +140,16 @@ export class ViewportRenderer {
   syncWorld(world: World): void {
     this.world = world;
     this.controller?.syncWorld(world);
+  }
+
+  /**
+   * Lamp sim outputs by entity id (see `ViewportController.setLampOutputs`): drawn through the display
+   * curve and the validity rule, redrawn only when a drawn level or status changes. Kept until the
+   * controller exists.
+   */
+  setLampOutputs(outputs: LampOutputs): void {
+    this.lampOutputs = outputs;
+    this.controller?.setLampOutputs(outputs);
   }
 
   /** Arms placement of the active tool's prop, or disarms it (`null`). */

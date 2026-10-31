@@ -1,0 +1,30 @@
+{
+  "id": "heater.hearthvale-12v-50w",
+  "version": 1,
+  "title": "12 V 50 W heater element on a base",
+  "brand": "Hearthvale",
+  "modelName": "HV-1250",
+  "category": "load",
+  "sizeMm": { "widthMm": 90, "heightMm": 50, "depthMm": 40 },
+  "terminals": [
+    { "id": "a", "label": "1", "positionMm": { "x": 10, "y": 25, "z": 12 } },
+    { "id": "b", "label": "2", "positionMm": { "x": 80, "y": 25, "z": 12 } }
+  ],
+  "model": { "kind": "heater", "params": { "ratedVoltageV": 12, "ratedPowerW": 50 } },
+  "controls": [],
+  "sources": [
+    {
+      "id": "low-voltage-heater-class",
+      "kind": "real-world",
+      "citation": "The 12 V resistance heating element (vehicle and bench heaters, de-icing pads), commonly rated in watts at 12 V; 50 W is a usual rating of the class (typical published figures, paraphrased, not one vendor's). Its resistance is V² / P = 2.88 Ω. A nickel-chromium element's resistance rises only a few percent from cold to hot (a temperature coefficient of about 1e-4 per kelvin), so it is taken as constant at the rated (hot) value.",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: the element in a guard on a 90 × 50 mm base, 40 mm tall, with a screw terminal at each end; not modelled on a product.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

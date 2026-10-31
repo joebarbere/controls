@@ -10,6 +10,7 @@ import {
 } from 'three/webgpu';
 import { metresToMm } from '@controls/units';
 import type { RoomBoundsMm } from './cameras/camera-math';
+import type { DrawnLamp } from './sim/lamp-display';
 
 /**
  * Walkable area used when the world has no floor fixture (an empty world, a test). game-design: a
@@ -57,7 +58,9 @@ export function disposeScene(scene: Scene): void {
  * Stable, JSON-plain summary of a scene graph for snapshot tests: positions in integer mm and, when
  * not zero, the Euler rotation (x, y, z components) in integer millidegrees. Meshes also give their
  * geometry's local bounding box (`[min x, y, z, max x, y, z]`, integer mm), so a recipe that changes
- * size shows up, and `drawn: false` when their material is never drawn (snap proxies).
+ * size shows up, and `drawn: false` when their material is never drawn (snap proxies). A lamp records
+ * what it is drawn as (`lamp`: integer level 0…255 and status, by the validity rule) and a switch its
+ * lever's commanded state (`switch`).
  */
 export interface SceneGraphNode {
   name: string;
@@ -68,6 +71,10 @@ export interface SceneGraphNode {
   selectable?: string;
   /** A device's label (`userData.label`: its fictional brand and model). */
   label?: string;
+  /** A lamp's drawn emissive level (0…255) and status (`sim/lamp-display`). */
+  lamp?: DrawnLamp;
+  /** A switch's lever: `closed` follows the entity's `state.closed`. */
+  switch?: { closed: boolean };
   boundsMm?: [number, number, number, number, number, number];
   drawn?: false;
   children?: SceneGraphNode[];
@@ -91,6 +98,10 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
   if (sel) node.selectable = `${sel.kind}:${sel.id}`;
   const label = object.userData['label'];
   if (typeof label === 'string') node.label = label;
+  const lamp = object.userData['lamp'] as DrawnLamp | undefined;
+  if (lamp) node.lamp = { level: lamp.level, status: lamp.status };
+  const lever = object.userData['switch'] as { closed: boolean } | undefined;
+  if (lever) node.switch = { closed: lever.closed };
   if (object instanceof Mesh) {
     const geometry = object.geometry as BufferGeometry;
     if ((geometry.getAttribute('position')?.count ?? 0) > 0) {

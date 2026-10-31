@@ -21,6 +21,7 @@ import type { NetlistBranch, NetlistNode } from './types';
 import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
 import { ENGINE_TEST_CATALOG, GENERATOR } from '../../testing/engine';
 import { MODEL_KINDS } from '@controls/catalog';
+import { HEATER, RESISTOR_10R } from '../../testing/loads';
 
 /**
  * Golden topology hashes of the bench lamp. They are persisted in every save's `WorldV2.sim` and in
@@ -43,6 +44,8 @@ const MODEL_KIND_TOPOLOGY = {
   utilitySplitPhase: 'c2e31c95f99edd9bca9b57e2035de1181f44eda6b4442fb071671675871a59ca',
   utilityThreePhase: 'cc4f65c1d86e9fbc42924402d94c5993c3b6e81d8bd62b60e96c46d480224038',
   generatorPortable: '8eeb8201e5e992fc957fc1ff99113d658ec03878366c38ec97a4c71b6dd5fe48',
+  resistor: '1009461cfdcc929226b38a50b75915dcbb86fea43ee19dd6f19b14a21a1f5d11',
+  heater: '4a85e1ec73b28157987099d92067df6693f37104397ffb0fb46091caad369dec',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -57,6 +60,8 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   utilitySplitPhase: 'utility.splitPhase',
   utilityThreePhase: 'utility.threePhase',
   generatorPortable: 'generator.portable',
+  resistor: 'resistor',
+  heater: 'heater',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -182,6 +187,8 @@ describe('topologyHash', () => {
       utilityThreePhase: one(UTILITY_208),
       // The generator stub has no built-in entry (not placeable): pinned through the test catalogue's.
       generatorPortable: one(GENERATOR, undefined, ENGINE_TEST_CATALOG),
+      resistor: one(RESISTOR_10R),
+      heater: one(HEATER),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 

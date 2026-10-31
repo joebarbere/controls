@@ -9,7 +9,14 @@ import {
 import { mm } from '@controls/units';
 import { BUILTIN_CATALOG, type Catalog, type DeviceDefinition } from '@controls/catalog';
 import { builtinProp, type CatalogRef, type PropSpec } from '@controls/world-model';
-import { buildDeviceGeometry, buildDeviceMaterials, deviceDefinitionFor, deviceLabel } from './devices';
+import {
+  buildDeviceGeometry,
+  buildDeviceLever,
+  buildDeviceMaterials,
+  deviceDefinitionFor,
+  deviceLabel,
+  type DeviceLever,
+} from './devices';
 
 /*
  * Procedural prop recipes (plan §4.9 "procedural first"). Sizes come from the built-in prop table
@@ -75,6 +82,10 @@ interface Recipe {
   readonly material: Material | Material[];
   /** The fictional brand and model a device carries (`userData.label`); `null` for props. */
   readonly label: string | null;
+  /** The catalogue model kind a device draws (`lamp.incandescent`, …); `null` for props. */
+  readonly modelKind: string | null;
+  /** The switch's lever (its geometry is owned by the recipe), or `null`. */
+  readonly lever: DeviceLever | null;
   users: number;
 }
 
@@ -99,16 +110,28 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
       geometry: buildDeviceGeometry(device),
       material: buildDeviceMaterials(device),
       label: deviceLabel(device),
+      modelKind: device.model.kind,
+      lever: buildDeviceLever(device),
       users: 0,
     };
   }
   const spec = prop ?? UNKNOWN_PROP;
-  return { spec, geometry: buildPropGeometry(spec), material: buildPropMaterial(spec), label: null, users: 0 };
+  return {
+    spec,
+    geometry: buildPropGeometry(spec),
+    material: buildPropMaterial(spec),
+    label: null,
+    modelKind: null,
+    lever: null,
+    users: 0,
+  };
 }
 
-function disposeMaterial(material: Material | Material[]): void {
-  if (Array.isArray(material)) material.forEach((m) => m.dispose());
-  else material.dispose();
+function disposeRecipe(recipe: Recipe): void {
+  recipe.geometry.dispose();
+  recipe.lever?.geometry.dispose();
+  if (Array.isArray(recipe.material)) recipe.material.forEach((m) => m.dispose());
+  else recipe.material.dispose();
 }
 
 /**
@@ -144,17 +167,13 @@ export class PropRecipes {
     if (!recipe) return;
     recipe.users--;
     if (recipe.users > 0) return;
-    recipe.geometry.dispose();
-    disposeMaterial(recipe.material);
+    disposeRecipe(recipe);
     this.recipes.delete(key);
   }
 
   /** Disposes everything, whatever the counts (viewport teardown). */
   dispose(): void {
-    this.recipes.forEach((r) => {
-      r.geometry.dispose();
-      disposeMaterial(r.material);
-    });
+    this.recipes.forEach(disposeRecipe);
     this.recipes.clear();
   }
 }

@@ -12,8 +12,8 @@ import { startSandbox } from './support/sandbox';
  * drift (ADR 0014), not a golden to re-pin. The `?sab=0` fallback gives the same hashes.
  * F2.5 moves this golden to `bench-lamp.console` (plan F2.3b note).
  */
-const SIM_STEP_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
-const SIM_STEP_SNAPSHOT_HASH = 'eb20079b8a1efe00ac453b628550c8e650fe03a1cb85aef66651ae6e847c16ff';
+const SIM_STEP_HASH = 'e065dd0a3e81636b487a7c49514f4276a7ae70fe146cdf33d1f5cdecb0c74648';
+const SIM_STEP_SNAPSHOT_HASH = '59e3d2fce15102087368c376180b33c96507877ed367a650303f39ba657ef789';
 
 type Hooks = {
   __controlsSession?: {
