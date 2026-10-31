@@ -39,5 +39,5 @@ export const GMIN_S: SourcedConstant = {
   unit: 'S',
   kind: 'numerical',
   source:
-    "numerical: the conventional SPICE minimum conductance, 1e-12 S (1 TΩ), the default GMIN of Berkeley SPICE2 (L. W. Nagel, \"SPICE2: A Computer Program to Simulate Semiconductor Circuits\", UCB/ERL M520, 1975) and of the ngspice user manual. sim-core puts it from every node to the island reference, as ngspice's documented `rshunt` option does with a resistor to ground, so F2.7's oracle decks set `rshunt = 1e12` to match. At this size it moves a 12 V circuit through ohms-scale loads by about 1e-12 relative, far below any meter's resolution.",
+    "numerical: the conventional SPICE minimum conductance, 1e-12 S (1 TΩ), the default GMIN of Berkeley SPICE2 (L. W. Nagel, \"SPICE2: A Computer Program to Simulate Semiconductor Circuits\", UCB/ERL M520, 1975) and of the ngspice user manual. sim-core puts it from every node to the island reference, as ngspice's documented `rshunt` option does with a resistor to ground, so F2.7's oracle decks set `rshunt = 1e12` to match. Its effect on a result is a relative error of about gmin × R_th, the Thévenin resistance the node sees: 1e-10 at 100 Ω, 1e-6 at 1 MΩ. That is below a bench meter's resolution, but not below an insulation-resistance tester's range, which must exclude it.",
 };

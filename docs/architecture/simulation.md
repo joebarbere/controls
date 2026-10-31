@@ -150,8 +150,16 @@ F2.3a can copy this straight into `WorldV2.sim` and the snapshot payload ([ADR 0
 
 ### Tests
 
-- **Goldens** (`src/testing/dc-goldens.ts`, each with its hand calculation): a divider and a battery into a load (real bench worlds through `compileNetlist`); two unequal batteries in parallel, alone and sharing a load (Millman); an unbalanced and a balanced Wheatstone bridge (Thévenin); floating islands under `gmin` (a lone lamp, and a lamp left dangling off a battery); a current source into nothing but `gmin` (V = I / gmin); and ideal sources in parallel (singular, beside a healthy island). They hold to 1e-9 relative, except currents of gmin size (≈ 1e-11 A), whose stated tolerances are 1e-4 to 1e-3, all within the plan's 0.5 %.
-- **Properties** (fast-check): KCL at every node within 1e-9 · max|I| + 1e-12 A; power balance with `gmin` losses within 1e-9 relative; linearity and superposition; singular exactly when an ideal-source loop exists, including inside resistive meshes; bit-identical solves; finite values for a current source into a floating cluster. They run over synthetic circuits (2–14 nodes, 1–3 islands, loops, self-loops, every stamp) and over compiled bench worlds, with generator-health floors.
+- **Goldens** (`src/testing/dc-goldens.ts`, each with its hand calculation): a divider and a battery into a load (real bench worlds through `compileNetlist`); two unequal batteries in parallel, alone and sharing a load (Millman); an unbalanced and a balanced Wheatstone bridge (Thévenin); floating islands under `gmin` (a lone lamp, and a lamp left dangling off a battery); a current source into nothing but `gmin` (V = I / gmin); and ideal sources in parallel (singular, beside a healthy island). They hold to 1e-9 relative, except two stated cases: the bridge's difference current (1e-8, because gmin moves it about 7e-10) and currents of gmin size (≈ 1e-11 A), bounded by their stated 1e-13 A absolute floor. All are within the plan's 0.5 %.
+- **Properties** (fast-check), under the plan's F2.2 floor policy (KCL per node within 1e-9 · max|I| + 1e-12 A plus each branch's g · ulp(V)-scale rounding term):
+  - KCL at every node, and power balance with `gmin` losses;
+  - linearity and superposition;
+  - singular exactly when an ideal-source loop exists, including inside resistive meshes;
+  - bit-identical solves, including into an `out` full of sentinels, and no −0 anywhere;
+  - finite values for a current source into a floating cluster;
+  - a SHA-256 pin over the bits of 300 seeded solves (a deliberate numeric change re-pins it and bumps `SIM_ENGINE_VERSION`).
+
+  They run over synthetic circuits (2–14 nodes, 1–3 islands, loops, self-loops, every stamp, resistances from 0.1 mΩ to 100 kΩ) and over compiled bench worlds, with generator-health floors.
 
 ## Not yet
 

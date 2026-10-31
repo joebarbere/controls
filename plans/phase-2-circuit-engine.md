@@ -299,6 +299,13 @@ _Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md),
 
 `sim-core`, in `mna/` and `lu/`. **Owner:** `sim-engine-engineer`, with `test-engineer` for the property tests. It lands in three parts.
 
+**Floor policy** for every solver property and golden in F2.2, decided in the #46 review (`test-engineer`); ADR 0012 (F2.7) refers to it. It replaces the literal 1e-12 A floor. ε is machine epsilon, y_b a branch's stamped admittance (0 for a source, whose current is an unknown or exact), and |·| a complex magnitude for phasors (part 2):
+
+- **KCL at node n:** `1e-9 · max|I| + 1e-12 A + 16 ε Σ_{b∋n} |y_b| (|V_a| + |V_b|)`. A resistor's current is g · (Va − Vb) from node voltages known only to an ulp, so it carries g · ulp(V) of rounding however exact the solve. Corollary: the reference node's KCL isn't a row of the system (it is eliminated); it is identically minus the sum of the other nodes', so its floor adds their rounding terms.
+- **Power balance:** `1e-9` relative to Σ|terms| plus `Σ_n |V_n| ×` node n's KCL floor (Tellegen's theorem).
+- **Linearity and superposition:** each branch within 1e-9 of the scale plus, for every solve compared, its own `1e-12 A + 16 ε |y_b| (|V_a| + |V_b|)` scaled by its factor (k for k · x̂, 1 for each term of a sum).
+- **Generators** keep resistances down to 1e-4 Ω (busbar scale).
+
 Acceptance, **part 1: dense DC**:
 
 - [x] Real MNA with the ground node eliminated. Stamps: resistor, voltage source with internal resistance, and current source.
@@ -306,16 +313,17 @@ Acceptance, **part 1: dense DC**:
 - [x] Dense LU with partial pivoting on preallocated `Float64Array`s. A singular island is flagged `singular` and never produces NaN.
 - [x] **Golden fixtures,** each with its derivation written in the fixture file: a divider, a Wheatstone bridge, a battery with internal R into a load, two unequal batteries in parallel, and a floating island under `gmin`.
 - [x] **fast-check properties:**
-  - KCL holds at every node within `1e-9 · max|I| + 1e-12 A`;
-  - source power equals dissipated power, `gmin` losses included, within `1e-9` relative;
+  - KCL holds at every node within the floor policy's bound (it was `1e-9 · max|I| + 1e-12 A`);
+  - source power equals dissipated power, `gmin` losses included, within `1e-9` relative plus the policy's Tellegen floor;
   - linearity and superposition hold.
 
-_Part 1 done 2026-10-30, pending the `test-engineer` and `electrical-realism-reviewer` reviews ([simulation architecture](../docs/architecture/simulation.md#the-dc-solver-f22-part-1), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+_Part 1 done 2026-10-30; reviewed by `test-engineer` (changes made) and `electrical-realism-reviewer` (approved with notes, below and in F2.3a and F2.4) ([simulation architecture](../docs/architecture/simulation.md#the-dc-solver-f22-part-1), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
 
 - _"Ground" is each island's own reference node (F2.1's review note): the negative end of its first `vsource` element, else its smallest node. `gmin` is `GMIN_S`, 1e-12 S, from every node to that reference; F2.7's decks match it with ngspice's `rshunt`._
 - _A current source is a stamp mode (`isource`), not a new netlist element kind: no P2 device is one, and a supply in current limit (part 3) is a `vsource` element stamped as one. The element kinds, the unknowns and so the matrix layout stay a function of `topologyHash`._
 - _Singular is decided structurally (a loop of zero-ohm sources), with a numerical backstop. A planted fault showed the numerical check alone misses about 3 in 4 such loops inside resistive meshes._
-- _Power balance uses 1e-9 relative plus the KCL floor carried through Tellegen's theorem (1e-12 A × Σ|V|), which only matters on islands where nothing but `gmin` carries current. The property circuits keep resistances at 0.1 Ω and up, because below that a branch current's own rounding, g · ulp(V), exceeds the 1e-12 A KCL floor; parts 2 and 3 (low-impedance AC plant) need a decision on that floor (caveats)._
+- _The properties use the floor policy above, with resistances from 1e-4 Ω. A SHA-256 over the bits of 300 seeded solves is pinned in `mna/properties.spec.ts`: a deliberate numeric change re-pins it with the other numeric goldens and bumps `SIM_ENGINE_VERSION` (D8)._
+- _`gmin` moves a result by a relative error of about gmin × R_th (1e-10 at 100 Ω, 1e-6 at 1 MΩ), so an insulation-resistance measurement (P5 meters) must exclude it (caveats)._
 - _Branch values come from `dcBranchValues`: a hook (F2.4's EMF against state of charge, F2.5's R(T)), else per-kind defaults (a lead's resistance; a battery's nominal EMF behind its internal resistance, a placeholder until F2.4)._
 
 Acceptance, **part 2: complex phasor** (needs F2.7):
@@ -359,6 +367,7 @@ Acceptance:
   - `game.advance(ticks)` and `game.advanceTo(tick)`;
   - `game.probe(a, b)`, now implemented: an **ideal, non-loading** voltage difference between two terminals, given as `"<entityId>:<terminalId>"`. It returns DC volts, or AC RMS and phase. It is a script and test query, not a player instrument (DMMs are P5). `NotAvailableError` stays for `tag` (P10);
   - `game.snapshot()` (codec bytes) and `game.on('sim')`.
+- [ ] **Singular islands are surfaced, never silent** (`electrical-realism-reviewer`, #46). An island with `ISLAND_FLAG_SINGULAR` raises the `singular` sim event and a diagnostic (`game.on('sim')`, the inspector and the console, F2.3b and F2.6); its zeros are never presented as a 0 V reading. `game.probe` refuses or flags a probe on a singular island, and a probe across two islands reports a floating reading (their voltages aren't comparable), never a difference of two references.
 - [ ] **`engineCompatible(manifest, build)`** (D8, narrow v0 compatibility): pure and tested in `scripting-api`. Same `simEngineVersion` and `catalogVersion` → verify the log; both 0 (a migrated P1 save) → verify, falling back to `restarted` (`engine-changed`) on failure, never a refusal; any other mismatch, a single 0 included → `engine-changed` without verifying.
 - [ ] **Sim commands.** `sim.step {ticks}`, `sim.setSpeed {speed: 0|1|10|60}` and `sim.pause` are declared in domain code; they are logged and don't change the world. A headless host implements `sim.step` by advancing, so a `.console` file can step time both in `sim-cli` and in the game.
 - [ ] **Determinism:**
@@ -410,7 +419,9 @@ Acceptance:
   - terminal voltage = EMF − I·R within 0.5 %;
   - over one hour of sim time (headless `advance`), state of charge falls by ∫I dt ÷ capacity within 0.5 %.
 
+- [ ] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
 - [ ] **Bench DC supply:**
+  - a non-zero output resistance (sourced, typical), so supplies paralleled in CV mode are never an ideal-source loop (`singular`) and settle through the CV/CC loop (`electrical-realism-reviewer`, #46);
   - `device.operate` controls for the voltage setpoint, the current limit and output on/off;
   - constant-voltage/constant-current crossover at R = V/I within 0.5 %, and a property test that it never exceeds either setpoint beyond its tolerance;
   - its mode is published in the device record, with no mode chatter at the crossover (tested).

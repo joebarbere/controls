@@ -24,10 +24,9 @@ describe('DC MNA goldens', () => {
           singular.has(island.index),
         );
         if (singular.has(island.index)) continue;
-        const { worst, maxI } = kcl(golden.netlist, solution, island);
-        expect(worst).toBeLessThanOrEqual(1e-9 * maxI + 1e-12);
-        const { delivered, dissipated, scale, voltageSum } = power(golden.netlist, golden.values, solution, island);
-        expect(Math.abs(delivered - dissipated)).toBeLessThanOrEqual(1e-9 * scale + 1e-12 * voltageSum);
+        expect(kcl(golden.netlist, golden.values, solution, island)).toBeLessThanOrEqual(1);
+        const { delivered, dissipated, scale, floor } = power(golden.netlist, golden.values, solution, island);
+        expect(Math.abs(delivered - dissipated)).toBeLessThanOrEqual(1e-9 * scale + floor);
       }
       for (const value of [...solution.nodes, ...solution.branches]) expect(Number.isFinite(value)).toBe(true);
     });

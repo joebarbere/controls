@@ -228,6 +228,25 @@ describe('DcSolver', () => {
     expect(solver.solve(other, new DcBranchValues(0), out)).not.toBe(out);
   });
 
+  it('normalises −0 sources to +0 everywhere', () => {
+    // A −0 V source behind 2 Ω, a 3 Ω load and a −0 A current source on a resistor element: every
+    // node voltage and branch current is zero, and each must be +0, not −0.
+    const netlist = syntheticNetlist(3, [
+      { a: 0, b: 1, kind: 'vsource' },
+      { a: 1, b: 0, kind: 'resistor' },
+      { a: 1, b: 2, kind: 'resistor' },
+      { a: 2, b: 0, kind: 'vsource' },
+    ]);
+    const values = new DcBranchValues(4);
+    values.vsource(0, -0, 2);
+    values.resistor(1, 3);
+    values.isource(2, -0);
+    values.isource(3, -0);
+    const solution = solveDc(netlist, values);
+    expect(solution.islands[0].flags).toBe(0);
+    for (const v of [...solution.nodes, ...solution.branches]) expect(Object.is(v, 0)).toBe(true);
+  });
+
   it('gives every value one bit pattern: no −0 and the imaginary parts +0', () => {
     const netlist = compileNetlist(benchLamp(false), BUILTIN_CATALOG);
     const solution = solveDc(netlist, dcBranchValues(netlist, lampHook(28.8)));

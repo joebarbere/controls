@@ -58,13 +58,16 @@ const systemArb = fc
     n: fc.integer({ min: 1, max: MAX_N }),
     pool: fc.array(entry, { minLength: MAX_N * MAX_N, maxLength: MAX_N * MAX_N }),
     rhs: fc.array(entry, { minLength: MAX_N, maxLength: MAX_N }),
-    // Diagonal dominance keeps a system well conditioned; 0 leaves it raw.
+    // Diagonal dominance fixes where the pivots are; 0 leaves the matrix raw.
     dominance: fc.constantFrom(0, 1e4),
+    // A cyclic row rotation, so dominant systems need row swaps (0 leaves them in place).
+    rotate: fc.nat({ max: MAX_N - 1 }),
   })
-  .map(({ n, pool, rhs, dominance }) => ({
+  .map(({ n, pool, rhs, dominance, rotate }) => ({
     rows: Array.from({ length: n }, (_, i) => pool.slice(i * MAX_N, i * MAX_N + n)),
     b: rhs.slice(0, n),
     dominance,
+    rotate,
   }));
 
 describe('DenseLu', () => {
@@ -195,19 +198,32 @@ describe('DenseLu', () => {
     expect(Array.from(solve([[3]], [9], lu) ?? [])).toStrictEqual([3]);
   });
 
+  it('a factorisation is forgotten by the next begin', () => {
+    const lu = new DenseLu();
+    load(lu, [[2]]);
+    expect(lu.factor()).toBe(true);
+    lu.begin(1);
+    expect(() => lu.solve(new Float64Array(1))).toThrow(/no successful factorisation/);
+  });
+
   it('is backward stable and bit-identical on reuse (property)', () => {
     const shared = new DenseLu(1);
     fc.assert(
-      fc.property(systemArb, ({ rows, b, dominance }) => {
+      fc.property(systemArb, ({ rows, b, dominance, rotate }) => {
         const n = rows.length;
-        const a = rows.map((row, i) => row.map((v, j) => (i === j ? v + (v >= 0 ? dominance : -dominance) : v)));
-        const x = solve(a, b, shared);
+        // Dominance makes the diagonal the natural pivot; rotating the rows then moves every pivot off
+        // the diagonal, so the dominant systems are solved only if the row swaps are right.
+        const dominant = rows.map((row, i) => row.map((v, j) => (i === j ? v + (v >= 0 ? dominance : -dominance) : v)));
+        const shift = rotate % n;
+        const a = dominant.map((_, i) => dominant[(i + shift) % n]);
+        const rhs = b.map((_, i) => b[(i + shift) % n]);
+        const x = solve(a, rhs, shared);
         if (x === null) return; // a raw random matrix may be singular; the solver must say so, not produce NaN
         for (const v of x) expect(Number.isFinite(v)).toBe(true);
-        // Partial pivoting is backward stable for these sizes; a well-conditioned (dominant) system
-        // must also have a tiny backward error.
-        if (dominance > 0) expect(backwardError(a, x, b)).toBeLessThan(1e-13 * n);
-        const again = solve(a, b, new DenseLu());
+        // GEPP is normwise backward stable whatever the conditioning (Golub and Van Loan §3.4.6): the
+        // growth factor, not cond(A), bounds it, and it is tiny at these sizes.
+        expect(backwardError(a, x, rhs)).toBeLessThan(1e-13 * n);
+        const again = solve(a, rhs, new DenseLu());
         expect(again).not.toBeNull();
         expect(Array.from(again ?? []).every((v, i) => Object.is(v, x[i]))).toBe(true);
       }),

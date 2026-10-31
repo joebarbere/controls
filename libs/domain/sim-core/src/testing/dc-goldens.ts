@@ -23,8 +23,10 @@ import { branchOf, current, nodeOf, syntheticNetlist, voltage } from './mna';
  * - a lamp filament's resistance is set by the fixture's hook, as F2.5's R(T) model will set it.
  *
  * Node voltages are against the island's reference node, which here is always a battery's `neg`.
- * `gmin` (1e-12 S per node) is left out of the closed forms: it moves these results by about 1e-12
- * relative, far inside the tolerance. The plan allows up to 0.5 %; these goldens hold to 1e-9.
+ * `gmin` (1e-12 S per node) is left out of the closed forms. It moves a result by a relative error of
+ * about gmin × R_th, the Thévenin resistance a node sees: 1e-10 at 100 Ω, 1e-6 at 1 MΩ. Here R_th is
+ * at most a few hundred ohms, so the effect is ≤ ~1e-9 (the bridge, which notes its own margin) and
+ * far below elsewhere. The plan allows up to 0.5 %; these goldens hold to 1e-9 unless a check says so.
  */
 
 export interface DcGoldenCheck {
@@ -150,6 +152,11 @@ function divider(): DcGolden {
  *    V_L = 20/3 − I5 · 200/3 = 11700/1815 ≈ 6.446281 V
  *    V_R = 40/7 + I5 · 1200/7 = 26600/4235 ≈ 6.280992 V   (check: V_L − V_R = 50 I5)
  *    The source delivers I = (10 − V_L)/100 + (10 − V_R)/300 ≈ 0.047934 A.
+ *
+ *    gmin margin: I5 is a small difference current, so gmin's leak at L and R (≈ 6.4e-12 A each,
+ *    through Thévenin resistances of 66.7 Ω and 171 Ω) moves it by about 7e-10 relative (measured
+ *    6.8e-10). That is too close to 1e-9, so the I5 check allows 1e-8; the node voltages move only
+ *    ~1e-10 and keep 1e-9.
  */
 function wheatstone(): Netlist {
   return syntheticNetlist(4, [
@@ -180,7 +187,12 @@ function unbalancedBridge(): DcGolden {
     values: bridgeValues(netlist, 400),
     tolerance: TOLERANCE,
     checks: [
-      { label: 'bridge current I5 = 2/605 A', actual: (s) => current(s, 5), expected: 2 / 605 },
+      {
+        label: 'bridge current I5 = 2/605 A (gmin moves it ≈ 7e-10 relative)',
+        actual: (s) => current(s, 5),
+        expected: 2 / 605,
+        tolerance: 1e-8,
+      },
       { label: 'V_L = 11700/1815 V', actual: (s) => voltage(s, 2), expected: vl },
       { label: 'V_R = 26600/4235 V', actual: (s) => voltage(s, 3), expected: vr },
       { label: 'V_T = 10 V (ideal source)', actual: (s) => voltage(s, 1), expected: 10 },
@@ -362,11 +374,12 @@ function parallelBatteriesWithLoad(): DcGolden {
  *    - The dangling lamp's only return path is gmin at each of +, 3a and 3b. To first order in gmin,
  *      the battery supplies I_b = 3 gmin E = 3.6e-11 A, the lead carries 2 gmin E (3a's and 3b's) and
  *      the lamp gmin E = 1.2e-11 A, so V(3b) = E − gmin E (3r + 2R_L + 28.8) ≈ 12 − 3.5e-10 V.
- *    - Precision: these currents are not differences of large ones, but each is resolved against KCL
- *      rows holding the lead's 24 S, so the solve leaves an absolute error of about
- *      eps · G · V ≈ 2.2e-16 × 24 × 12 ≈ 6e-14 A. That is ≈ 2e-4 relative of the battery's 3.6e-11 A
- *      and ≈ 3e-6 of the lamp's (resolved through 28.8 Ω). Those two checks allow 1e-3 and 1e-4
- *      relative, with no absolute floor; both are inside the plan's 0.5 %.
+ *    - Precision: each of these currents is resolved against KCL rows holding the lead's 24 S, so
+ *      the solve can leave an absolute error of about ε · G · V ≈ 2.2e-16 × 24 × 12 ≈ 6.4e-14 A,
+ *      whatever the pivot order. Relative to the currents that is ≈ 1.8e-3 of the battery's 3.6e-11 A
+ *      and ≈ 5e-3 of the lamp's 1.2e-11 A, so a relative bound would rest on luck (this LU happens to
+ *      give 2e-4 and 3e-6; another pivot order gave 1.4e-3). Both checks are bounded by that stated
+ *      floor instead: 1e-13 A absolute, no relative term.
  */
 function floating(): DcGolden {
   const netlist = compileNetlist(bench([BATTERY, LAMP, LAMP], [[1, 'pos', 3, 'a']]), BUILTIN_CATALOG);
@@ -396,15 +409,15 @@ function floating(): DcGolden {
         label: 'dangling lamp carries gmin · E',
         actual: (s) => current(s, branchOf(netlist, 3, 'filament')),
         expected: gmin * E,
-        tolerance: 1e-4,
-        absolute: 0,
+        tolerance: 0,
+        absolute: 1e-13,
       },
       {
         label: 'battery supplies 3 gmin E',
         actual: (s) => current(s, branchOf(netlist, 1, 'cell')),
         expected: 3 * gmin * E,
-        tolerance: 1e-3,
-        absolute: 0,
+        tolerance: 0,
+        absolute: 1e-13,
       },
     ],
   };

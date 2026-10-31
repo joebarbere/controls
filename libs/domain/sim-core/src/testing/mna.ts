@@ -87,61 +87,111 @@ export function branchOf(netlist: Netlist, id: number, part?: string): number {
 export const voltage = (solution: DcSolution, node: number): number => solution.nodes[2 * node];
 export const current = (solution: DcSolution, branch: number): number => solution.branches[2 * branch];
 
+/** Machine epsilon (2⁻⁵²). */
+const EPS = Number.EPSILON;
+
+/**
+ * A branch's rounding term in the floor policy (plan F2.2, decided in the #46 review):
+ * 16 · ε · |y_b| · (|V_a| + |V_b|). A resistor's current is g · (Va − Vb) from node voltages known only
+ * to an ulp, so it carries about g · ulp(V) of rounding however exact the solve. Sources stamp no
+ * admittance between their ends (their current is an unknown or exact), so their term is 0.
+ */
+export function branchRounding(netlist: Netlist, values: DcBranchValues, solution: DcSolution, branch: number): number {
+  if (values.stamps[branch] !== DC_STAMP_RESISTOR) return 0;
+  const { a, b } = netlist.branches[branch];
+  const y = 1 / values.ohms[branch];
+  return 16 * EPS * y * (Math.abs(voltage(solution, a)) + Math.abs(voltage(solution, b)));
+}
+
+/**
+ * The KCL floor at each node of an island: 1e-9 · max|I| + 1e-12 A + the rounding term of every
+ * branch at the node, each node's `gmin` to the reference included. The reference node also gets
+ * the sum of every other node's terms (see below).
+ */
+export function kclFloors(
+  netlist: Netlist,
+  values: DcBranchValues,
+  solution: DcSolution,
+  island: NetlistIsland,
+): Map<number, number> {
+  const reference = solution.islands[island.index].referenceNode;
+  const gmin = GMIN_S.value;
+  let maxI = 0;
+  const rounding = new Map<number, number>(island.nodes.map((n) => [n, 0]));
+  const add = (node: number, x: number) => rounding.set(node, (rounding.get(node) ?? 0) + x);
+  for (const node of island.nodes) {
+    if (node === reference) continue;
+    const v = Math.abs(voltage(solution, node));
+    maxI = Math.max(maxI, gmin * v);
+    add(node, 16 * EPS * gmin * v);
+    add(reference, 16 * EPS * gmin * v);
+  }
+  for (const index of island.branches) {
+    const branch = netlist.branches[index];
+    maxI = Math.max(maxI, Math.abs(current(solution, index)));
+    const r = branchRounding(netlist, values, solution, index);
+    add(branch.a, r);
+    if (branch.b !== branch.a) add(branch.b, r);
+  }
+  // The reference node's KCL is not a row of the system (it is eliminated): it is identically minus
+  // the sum of every other node's KCL, so its imbalance is minus the sum of theirs, and the rounding
+  // the other rows leave reaches it through the source currents. Its floor carries their terms.
+  let others = 0;
+  for (const [node, r] of rounding) if (node !== reference) others += r;
+  rounding.set(reference, (rounding.get(reference) ?? 0) + others);
+  const floors = new Map<number, number>();
+  for (const [node, r] of rounding) floors.set(node, 1e-9 * maxI + 1e-12 + r);
+  return floors;
+}
+
 /**
  * KCL at every node of a solved island: current leaving through each element, plus `gmin` from each
- * non-reference node to the reference (which the reference receives). Returns the largest
- * |imbalance| over the island and the largest |current| it saw, for the `1e-9 · max|I| + 1e-12 A` bound.
+ * non-reference node to the reference (which the reference receives). Returns the worst ratio of a
+ * node's |imbalance| to its floor (`kclFloors`): KCL holds when it is ≤ 1.
  */
-export function kcl(netlist: Netlist, solution: DcSolution, island: NetlistIsland): { worst: number; maxI: number } {
+export function kcl(netlist: Netlist, values: DcBranchValues, solution: DcSolution, island: NetlistIsland): number {
   const reference = solution.islands[island.index].referenceNode;
   const gmin = GMIN_S.value;
   const sum = new Map<number, number>(island.nodes.map((n) => [n, 0]));
-  let maxI = 0;
-  let toReference = 0;
+  const add = (node: number, x: number) => sum.set(node, (sum.get(node) ?? 0) + x);
   for (const node of island.nodes) {
     if (node === reference) continue;
     const i = gmin * voltage(solution, node);
-    sum.set(node, (sum.get(node) ?? 0) + i);
-    toReference += i;
-    maxI = Math.max(maxI, Math.abs(i));
+    add(node, i);
+    add(reference, -i);
   }
-  sum.set(reference, (sum.get(reference) ?? 0) - toReference);
   for (const index of island.branches) {
     const branch = netlist.branches[index];
     const i = current(solution, index);
-    maxI = Math.max(maxI, Math.abs(i));
-    sum.set(branch.a, (sum.get(branch.a) ?? 0) + i);
-    sum.set(branch.b, (sum.get(branch.b) ?? 0) - i);
+    add(branch.a, i);
+    add(branch.b, -i);
   }
+  const floors = kclFloors(netlist, values, solution, island);
   let worst = 0;
-  for (const value of sum.values()) worst = Math.max(worst, Math.abs(value));
-  return { worst, maxI };
+  for (const [node, value] of sum) worst = Math.max(worst, Math.abs(value) / (floors.get(node) ?? 1));
+  return worst;
 }
 
 /**
  * Power over a solved island: what the sources deliver, what the resistances (and each source's own
- * series resistance) and `gmin` dissipate, the sum of every term's magnitude (the scale for a
- * relative bound, since sources can absorb as well as deliver), and Σ|V| over its nodes.
- *
- * By Tellegen's theorem, delivered − dissipated = Σ V(n) · (KCL imbalance at n), so the KCL bound's
- * absolute floor of 1e-12 A allows up to 1e-12 · Σ|V| W of imbalance on top of the relative bound.
- * That floor only matters on islands where nothing but gmin carries current.
+ * series resistance) and `gmin` dissipate, the sum of every term's magnitude (the scale for the 1e-9
+ * relative bound, since sources can absorb as well as deliver), and the KCL floor carried through
+ * Tellegen's theorem: delivered − dissipated = Σ V(n) · (KCL imbalance at n), so up to
+ * Σ |V(n)| · floor(n) of imbalance is rounding, not physics.
  */
 export function power(
   netlist: Netlist,
   values: DcBranchValues,
   solution: DcSolution,
   island: NetlistIsland,
-): { delivered: number; dissipated: number; scale: number; voltageSum: number } {
+): { delivered: number; dissipated: number; scale: number; floor: number } {
   let delivered = 0;
   let dissipated = 0;
   let scale = 0;
-  let voltageSum = 0;
   const reference = solution.islands[island.index].referenceNode;
   for (const node of island.nodes) {
     if (node === reference) continue;
     const v = voltage(solution, node);
-    voltageSum += Math.abs(v);
     const p = GMIN_S.value * v * v;
     dissipated += p;
     scale += p;
@@ -168,5 +218,9 @@ export function power(
       scale += Math.abs(p);
     }
   }
-  return { delivered, dissipated, scale, voltageSum };
+  let floor = 0;
+  for (const [node, f] of kclFloors(netlist, values, solution, island)) {
+    floor += Math.abs(voltage(solution, node)) * f;
+  }
+  return { delivered, dissipated, scale, floor };
 }

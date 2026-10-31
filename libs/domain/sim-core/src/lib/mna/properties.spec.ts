@@ -2,6 +2,7 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import type { World } from '@controls/save-format';
 import fc from 'fast-check';
 import {
+  AC_SOURCE,
   BATTERY,
   benchBus,
   end,
@@ -13,20 +14,24 @@ import {
   TEST_CATALOG,
   TEST_MODELS,
 } from '../../testing/bench';
-import { kcl, power, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { sha256 } from '@controls/world-model';
+import { branchRounding, kcl, power, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
 import { compileNetlist } from '../netlist/compile';
 import type { Netlist } from '../netlist/types';
-import { DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR, solveDc } from './dc';
+import { createDcSolution, DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR, solveDc } from './dc';
 import { DC_STAMP_ISOURCE, DC_STAMP_VSOURCE, dcBranchValues, DcBranchValues } from './values';
 
 /*
- * Plan F2.2 part 1 properties over random linear circuits:
+ * Plan F2.2 part 1 properties over random linear circuits, under the floor policy in the plan's F2.2
+ * section (decided in the #46 review; `src/testing/mna.ts` implements it):
  *
- * - KCL holds at every node within 1e-9 · max|I| + 1e-12 A;
+ * - KCL holds at every node n within 1e-9 · max|I| + 1e-12 A + 16 ε Σ_{b∋n} |y_b| (|V_a| + |V_b|);
  * - the power the sources deliver equals what the resistances and gmin dissipate, within 1e-9
- *   relative (plus the KCL floor carried through Tellegen's theorem, see `power`);
- * - the solution is linear in the sources and obeys superposition;
- * - a singular island is flagged and all +0, every value is finite, and solves are bit-identical.
+ *   relative plus Σ_n |V_n| × node n's KCL floor (Tellegen);
+ * - the solution is linear in the sources and obeys superposition, each branch within the same
+ *   rounding term for every solve compared;
+ * - a singular island is flagged and all +0, every value is finite and never −0, solves are
+ *   bit-identical, even into a dirty `out`, and the bits of 300 seeded solves are pinned.
  *
  * Synthetic circuits: 2–14 nodes in 1–3 islands, each island connected by a random spanning tree of
  * conducting elements (resistors, and voltage sources, some ideal), then up to 14 extra elements that
@@ -41,12 +46,12 @@ import { DC_STAMP_ISOURCE, DC_STAMP_VSOURCE, dcBranchValues, DcBranchValues } fr
 const MAX_NODES = 14;
 const MAX_EXTRA = 14;
 /**
- * Resistances run 0.1 Ω to 100 kΩ (sources ±48 V). Not lower: a resistor's current is g · (Va − Vb),
- * and node voltages are known only to an ulp, so a branch's current carries an irreducible
- * g · ulp(V) of rounding (1000 S × ulp(48 V) ≈ 7e-12 A for 1 mΩ), above the plan's 1e-12 A KCL floor.
- * At 0.1 Ω it is ≈ 7e-14 A. The bench's leads (0.041 Ω at 12 V) give ≈ 4e-14 A; see the caveats.
+ * Resistances run 0.1 mΩ to 100 kΩ (sources ±48 V): busbar-scale conductances included. A
+ * resistor's current is g · (Va − Vb) from node voltages known only to an ulp, so it carries
+ * g · ulp(V) of rounding (1e4 S × ulp(48 V) ≈ 7e-11 A at 0.1 mΩ); the floor policy's per-branch term
+ * covers it.
  */
-const DECADES = [1e-1, 1, 10, 100, 1e3, 1e4];
+const DECADES = [1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100, 1e3, 1e4];
 
 /** An element and its value, drawn without `.chain`: indices are reduced modulo what they pick from. */
 interface ElementDraw {
@@ -153,11 +158,10 @@ function checkPhysics({ netlist, values }: Circuit, solution: DcSolution): void 
       for (const b of island.branches) expect(Object.is(solution.branches[2 * b], 0)).toBe(true);
       continue;
     }
-    const { worst, maxI } = kcl(netlist, solution, island);
-    expect(worst, `KCL on island ${island.index}`).toBeLessThanOrEqual(1e-9 * maxI + 1e-12);
-    const { delivered, dissipated, scale, voltageSum } = power(netlist, values, solution, island);
+    expect(kcl(netlist, values, solution, island), `KCL on island ${island.index}`).toBeLessThanOrEqual(1);
+    const { delivered, dissipated, scale, floor } = power(netlist, values, solution, island);
     expect(Math.abs(delivered - dissipated), `power on island ${island.index}`).toBeLessThanOrEqual(
-      1e-9 * scale + 1e-12 * voltageSum,
+      1e-9 * scale + floor,
     );
   }
 }
@@ -177,24 +181,60 @@ function scaledSources(values: DcBranchValues, k: number, keep: (branch: number)
 
 const maxAbs = (xs: Float64Array) => xs.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
 
+/** One solve compared, with the factor its error is scaled by (k for k · x̂, 1 for a term of a sum). */
+interface Compared {
+  readonly circuit: Circuit;
+  readonly solution: DcSolution;
+  readonly factor: number;
+}
+
 /**
- * |x − y| ≤ 1e-9 · scale + floor componentwise, over node voltages and branch currents. The floor is
- * the 1e-12 a single solve is held to, times how many solves' errors `y` carries (k for k · x̂, 2
- * for a sum of two).
+ * |x − y| ≤ 1e-9 · scale + floor componentwise, over node voltages and branch currents. Each compared
+ * solve contributes |factor| × (1e-12 + its own rounding term for the branch, `branchRounding`) to a
+ * branch's floor, and |factor| × 1e-12 to a node's.
  */
 function expectClose(
   x: DcSolution,
   y: { nodes: Float64Array; branches: Float64Array },
   scaleV: number,
   scaleI: number,
-  floor: number,
+  compared: readonly Compared[],
 ): void {
-  x.nodes.forEach((v, i) => expect(Math.abs(v - y.nodes[i])).toBeLessThanOrEqual(1e-9 * scaleV + floor));
-  x.branches.forEach((v, i) => expect(Math.abs(v - y.branches[i])).toBeLessThanOrEqual(1e-9 * scaleI + floor));
+  const nodeFloor = compared.reduce((f, c) => f + Math.abs(c.factor) * 1e-12, 0);
+  x.nodes.forEach((v, i) => expect(Math.abs(v - y.nodes[i])).toBeLessThanOrEqual(1e-9 * scaleV + nodeFloor));
+  for (let b = 0; b < x.branches.length / 2; b++) {
+    const floor = compared.reduce(
+      (f, c) => f + Math.abs(c.factor) * (1e-12 + branchRounding(c.circuit.netlist, c.circuit.values, c.solution, b)),
+      0,
+    );
+    expect(Math.abs(x.branches[2 * b] - y.branches[2 * b]), `branch ${b}`).toBeLessThanOrEqual(1e-9 * scaleI + floor);
+    expect(Object.is(x.branches[2 * b + 1], 0)).toBe(true);
+  }
 }
 
-const isSource = (values: DcBranchValues, b: number) =>
-  values.stamps[b] === DC_STAMP_VSOURCE || values.stamps[b] === DC_STAMP_ISOURCE;
+/** A solution full of sentinels, as a reused `out` might be: every field must be overwritten. */
+function dirtySolution(netlist: Netlist): DcSolution {
+  const out = createDcSolution(netlist);
+  const sentinels = [NaN, -0, 7];
+  out.nodes.forEach((_, i) => (out.nodes[i] = sentinels[i % 3]));
+  out.branches.forEach((_, i) => (out.branches[i] = sentinels[(i + 1) % 3]));
+  out.topologyHash = 'stale';
+  netlist.islands.forEach((island, i) => {
+    const dc = island.kind === 'dc' || island.kind === 'empty';
+    Object.assign(out.islands[i], { solved: !dc, referenceNode: 99, unknowns: 99, flags: 255, iterations: 99 });
+  });
+  return out;
+}
+
+/** Field-by-field `Object.is` equality of two solutions. */
+function expectSameBits(actual: DcSolution, expected: DcSolution): void {
+  expect(actual.topologyHash).toBe(expected.topologyHash);
+  expect(actual.nodes.length).toBe(expected.nodes.length);
+  expect(actual.branches.length).toBe(expected.branches.length);
+  actual.nodes.forEach((v, i) => expect(Object.is(v, expected.nodes[i]), `node value ${i}`).toBe(true));
+  actual.branches.forEach((v, i) => expect(Object.is(v, expected.branches[i]), `branch value ${i}`).toBe(true));
+  expect(actual.islands).toStrictEqual(expected.islands);
+}
 
 // Real bench circuits.
 const BENCH_DEVICES = [BATTERY, LAMP, LAMP, SPST, SUPPLY];
@@ -305,14 +345,13 @@ describe('DC MNA properties (synthetic circuits)', () => {
           scaledSources(circuit.values, k, () => true),
         );
         const expected = { nodes: base.nodes.map((v) => k * v), branches: base.branches.map((v) => k * v) };
-        expectClose(
-          scaled,
-          expected,
-          Math.abs(k) * maxAbs(base.nodes),
-          Math.abs(k) * maxAbs(base.branches),
-          (1 + Math.abs(k)) * 1e-12,
-        );
+        expectClose(scaled, expected, Math.abs(k) * maxAbs(base.nodes), Math.abs(k) * maxAbs(base.branches), [
+          { circuit, solution: scaled, factor: 1 },
+          { circuit, solution: base, factor: k },
+        ]);
         expect(scaled.islands.map((i) => i.flags)).toStrictEqual(base.islands.map((i) => i.flags));
+        // k = 0 (and sign flips of zero) make −0 in the arithmetic: none may reach the solution.
+        for (const v of [...scaled.nodes, ...scaled.branches]) expect(Object.is(v, -0)).toBe(false);
       }),
       { numRuns: 200 },
     );
@@ -335,7 +374,11 @@ describe('DC MNA properties (synthetic circuits)', () => {
         };
         const scaleV = Math.max(maxAbs(all.nodes), maxAbs(first.nodes), maxAbs(second.nodes));
         const scaleI = Math.max(maxAbs(all.branches), maxAbs(first.branches), maxAbs(second.branches));
-        expectClose(all, sum, scaleV, scaleI, 3e-12);
+        expectClose(all, sum, scaleV, scaleI, [
+          { circuit, solution: all, factor: 1 },
+          { circuit, solution: first, factor: 1 },
+          { circuit, solution: second, factor: 1 },
+        ]);
       }),
       { numRuns: 200 },
     );
@@ -392,12 +435,65 @@ describe('DC MNA properties (synthetic circuits)', () => {
         const otherCircuit = build(other);
         shared.solve(otherCircuit.netlist, otherCircuit.values);
         const reused = shared.solve(circuit.netlist, circuit.values);
-        expect(fresh.nodes.every((v, i) => Object.is(v, reused.nodes[i]))).toBe(true);
-        expect(fresh.branches.every((v, i) => Object.is(v, reused.branches[i]))).toBe(true);
-        expect(fresh.islands).toStrictEqual(reused.islands);
+        expectSameBits(reused, fresh);
+        // Into an `out` full of sentinels (NaN, −0, 7, flags 255, a stale hash): every field is rewritten.
+        const out = dirtySolution(circuit.netlist);
+        expect(shared.solve(circuit.netlist, circuit.values, out)).toBe(out);
+        expectSameBits(out, fresh);
       }),
       { numRuns: 150 },
     );
+  });
+
+  it('rewrites a dirty `out` for an AC island beside a DC one', () => {
+    // An AC source and lamp (island 0, not DC-solvable) beside a battery and lamp (island 1).
+    const bus = benchBus(TEST_CATALOG);
+    for (const ref of [AC_SOURCE, LAMP, BATTERY, LAMP]) bus.exec('entity.place', { ref, positionMm: origin });
+    for (const [a, b] of [
+      [end(1, 'l'), end(2, 'a')],
+      [end(2, 'b'), end(1, 'n')],
+      [end(3, 'pos'), end(4, 'a')],
+      [end(4, 'b'), end(3, 'neg')],
+    ]) {
+      bus.exec('lead.connect', { ref: LEAD, a, b });
+    }
+    const netlist = compileNetlist(bus.state, TEST_CATALOG, { models: TEST_MODELS });
+    expect(netlist.islands.map((i) => i.kind)).toStrictEqual(['ac', 'dc']);
+    const values = dcBranchValues(netlist, (branch, v) => {
+      if (branch.model !== 'lamp.incandescent') return false;
+      v.resistor(branch.index, 28.8);
+      return true;
+    });
+    const fresh = new DcSolver().solve(netlist, values);
+    expect(fresh.islands.map((i) => i.solved)).toStrictEqual([false, true]);
+    const out = dirtySolution(netlist);
+    expect(new DcSolver().solve(netlist, values, out)).toBe(out);
+    expectSameBits(out, fresh);
+    expect(out.topologyHash).toBe(netlist.topologyHash);
+  });
+
+  it('pins the bits of 300 seeded solves (a numeric change re-pins this and bumps SIM_ENGINE_VERSION)', () => {
+    // Any change to what the solver computes (pivot order, tie-breaking, `/ R` against `* (1 / R)`,
+    // where gmin is stamped) moves these bits. If the change is deliberate, re-pin this hash together
+    // with every other numeric golden and bump SIM_ENGINE_VERSION (decision D8): saves from the old
+    // engine then restart their log instead of failing to verify. Byte order is the platform's,
+    // little-endian on every supported target.
+    const solver = new DcSolver();
+    const chunks: Uint8Array[] = [];
+    for (const draw of fc.sample(circuitArb, { seed: 20261030, numRuns: 300 })) {
+      const { netlist, values } = build(draw);
+      const s = solver.solve(netlist, values);
+      const islands = s.islands.flatMap((i) => [i.solved ? 1 : 0, i.referenceNode, i.unknowns, i.flags, i.iterations]);
+      chunks.push(new Uint8Array(Float64Array.from([...s.nodes, ...s.branches, ...islands]).buffer));
+    }
+    const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let offset = 0;
+    for (const c of chunks) {
+      bytes.set(c, offset);
+      offset += c.length;
+    }
+    const hex = Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+    expect(hex).toBe('8144f9c42ec00e5537b2fc98b190a4d6caadba3a692b2c6412c5f7cd623ab66d');
   });
 
   it('a current source into a floating cluster gives finite values held by gmin, never singular', () => {
