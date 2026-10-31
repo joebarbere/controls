@@ -17,7 +17,8 @@ import {
   entityStreamKey,
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
-import { GCProfiler, getHeapStatistics } from 'node:v8';
+import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { join } from 'node:path';
 import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
@@ -639,11 +640,15 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     ]);
     host.engine.advanceTo(40_000); // warm: every buffer grown
     // Bytes allocated in a window: the heap's growth plus what each collection freed. GC counts are no
-    // measure (the runtime's own few scavenges land at random). Code that hasn't been optimized yet
-    // allocates more, and when V8's background compiler delivers depends on machine load, so the gate
-    // takes the smallest of ten 20 000-step windows: an allocation the step itself makes raises every
-    // window, a late tier-up only some (the median of five flaked 3 times in 100 under load).
+    // measure (the runtime's own few scavenges land at random). Code not yet optimized allocates more
+    // (the first windows measure 100-200 B/step, settling by about 120 000 steps), so the gate takes
+    // the smallest of ten 20 000-step windows: an allocation the step itself makes raises every window.
+    // A full collection first: otherwise a scavenge in the window also frees garbage made before it
+    // (by earlier tests in this worker) and counts it as the window's (3 flakes in 100 runs).
+    setFlagsFromString('--expose-gc');
+    const collect = runInNewContext('gc') as () => void;
     const window = (steps: number) => {
+      collect();
       const profiler = new GCProfiler();
       const start = getHeapStatistics().used_heap_size;
       profiler.start();
