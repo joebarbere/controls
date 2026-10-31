@@ -119,7 +119,9 @@ export function encodeSnapshot(source: SnapshotSource, slot: Uint8Array, slotSeq
   const used = snapshotSlotBytes(source);
   if (slot.byteLength < used) throw new RangeError(`the slot holds ${slot.byteLength} bytes; ${used} are needed`);
   if (source.deviceDataBytes % 8 !== 0) throw new SnapshotEncodeError('deviceDataBytes must be a multiple of 8');
-  slot.fill(0, 0, used);
+  // Never the seqlock word (bytes 0–3): the writer has made it odd for this publish, and zeroing it
+  // would make it even (complete) while the slot is half written, so a lapped reader would accept it.
+  slot.fill(0, SLOT_OFFSETS.slotSeq + 4, used);
   const view = new DataView(slot.buffer, slot.byteOffset, used);
   const o = SLOT_OFFSETS;
   view.setInt32(o.slotSeq, slotSeq, true);

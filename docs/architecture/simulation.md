@@ -1,6 +1,6 @@
 # Simulation
 
-How `@controls/sim-core` turns the as-built world into something a solver can run. This page grows with Phase 2: today it covers the netlist compiler (F2.1), the DC solver (F2.2 part 1), sparse LU and the factorisation cache (part 3), the phasor solver (part 2), the oracle corpus and the bench (F2.7). The engine loop (F2.3a) and the worker transport (F2.3b, [ADR 0011](../decisions/0011-sim-worker-contract.md)) are added as they land. Gotchas: [simulation caveats](../caveats/simulation.md).
+How `@controls/sim-core` turns the as-built world into something a solver can run. This page grows with Phase 2: today it covers the netlist compiler (F2.1), the DC solver (F2.2 part 1), sparse LU and the factorisation cache (part 3), the phasor solver (part 2), the oracle corpus and the bench (F2.7), the engine loop (F2.3a) and the sim worker with its snapshot transport (F2.3b, [ADR 0011](../decisions/0011-sim-worker-contract.md)). Gotchas: [simulation caveats](../caveats/simulation.md).
 
 ## The netlist compiler (F2.1)
 
@@ -373,7 +373,7 @@ The floor policy (plan F2.2) with complex magnitudes, in `src/testing/ac.ts`: KC
 
 ## The engine loop (F2.3a)
 
-`SimEngine` (`sim-core` `engine/`) is the sim clock: it follows a world bus deterministically ([ADR 0011](../decisions/0011-sim-worker-contract.md) §2–§4, §9.6). The same engine is the scripting API's time host headless (`sim-cli`, every domain test) and, until F2.3b moves it to the sim worker, runs in-process in the game's session.
+`SimEngine` (`sim-core` `engine/`) is the sim clock: it follows a world bus deterministically ([ADR 0011](../decisions/0011-sim-worker-contract.md) §2–§4, §9.6). The same engine is the scripting API's time host headless (`sim-cli`, every domain test) and runs in the sim worker ([below](#the-sim-worker-and-snapshot-transport-f23b)). Since F2.3b it also builds the topology descriptor of each generation (`topologyDescriptor()`) and encodes snapshots into the worker's slots (`encodeInto`).
 
 ```mermaid
 flowchart TB
@@ -413,7 +413,7 @@ flowchart TB
 
 **State and saves.** `exportState()` is every netlisted device's whole sim bag plus the solution record (`null` for an empty netlist). `materialiseWorld` (`sim-protocol`) writes exactly those bags and `WorldV2.sim` into the bus world; everything else is the bus world's. `SimEngine.start(world)` continues from a materialised world: with `sim: null` it solves at the world's tick, with a record it checks `topologyHash` and the sizes against the compiled netlist and adopts it, or throws `SimStartError` (`start-failed`), never re-solving silently. A save at any tick, loaded and run on, equals the uninterrupted run (a property, step by step, through JSON and through `.ctrl` bytes).
 
-**The snapshot** (`sim-protocol`, ADR 0011 §5): `encodeSnapshot` writes one slot from the engine's preallocated arrays with little-endian `DataView` stores, every reserved byte zero; the hashed region is bytes 8 onwards (the tick, the counts, the flags, the raw topology hash, then nodes, branches, islands and device records). `game.snapshot()` returns those bytes, `snapshotHash` their SHA-256. An unsolved island's entry has 0 iterations, 0 unknowns and no reference node. Device records are written from the bags and the solution, never from per-step caches, so a snapshot is a pure function of the export. The seqlock transport, the descriptor and `SnapshotView` are F2.3b's.
+**The snapshot** (`sim-protocol`, ADR 0011 §5): `encodeSnapshot` writes one slot from the engine's preallocated arrays with little-endian `DataView` stores, every reserved byte zero; the hashed region is bytes 8 onwards (the tick, the counts, the flags, the raw topology hash, then nodes, branches, islands and device records). `game.snapshot()` returns those bytes, `snapshotHash` their SHA-256. An unsolved island's entry has 0 iterations, 0 unknowns and no reference node. Device records are written from the bags and the solution, never from per-step caches, so a snapshot is a pure function of the export. The seqlock transport, the descriptor and `SnapshotView` are in [the sim worker](#the-sim-worker-and-snapshot-transport-f23b) below.
 
 **Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` became 3 when this feature materialised the solution record (2 was #51's sparse pivoting), and is 4 since F2.4's sources.
 
@@ -461,6 +461,48 @@ flowchart LR
 **Saves.** Loads check each control's value against its catalogue range (`invalid-device-state`); `fixtures/v2/ctrl/sources-engine-4.ctrl` (the sources scenario: a DIN PSU mid-hiccup, a bench supply in CC, a discharged battery) loads as `continued` and the PSU retries at the uninterrupted run's tick; a save from another engine loads its devices' bags but solves again at the save's tick.
 
 **Tests.** Goldens with their hand calculations: terminal voltage = E − I·r (to 1e-9), the state of charge over a minute (sim-core) and over one hour against ∫I dt and the closed form (`apps/sim-cli/src/battery-hour.spec.ts`, outside coverage instrumentation), CV and CC values, the crossover at V/I ± 0.5 % from fresh starts, the hiccup's event ticks. Properties: never past either setpoint beyond the band, over random setpoints and load histories (with a fixed-seed health floor); F2.4's own session arbitrary (`devices/sources/properties.spec.ts`: a hiccuping DIN PSU, a bench supply in CC, a discharging battery, random operations and advances up to 2,500 ticks) with its save-and-load, replay and at-cut and after-cut health tests, beside the engine sessions' F2.3a mix; reload goldens mid-hiccup and inside the hysteresis band; the sources scenario pinned in Node and Chromium (D6); allocation gates for the DIN PSU regulating and shorted. No chatter: 100 cadence solves at the crossover, a sweep up and down crossing once each way a band apart, and a self-heating lamp-like load that pulls a supply into CC and lets it back to CV once.
+
+## The sim worker and snapshot transport (F2.3b)
+
+The engine runs in a module Web Worker (`@controls/sim-worker`, `type:worker`); the page reads its output from a `SharedArrayBuffer` (ADR 0011 §4–§8). The main thread owns the bus, `seq` and the clock, and the worker follows it: `SimWorkerRunner` (`runner.ts`) is the inbox and run loop, `SnapshotWriter` and `SnapshotReader` (`@controls/sim-protocol`) are the two ends of the seqlock, and the message schemas (`messages.ts`) are parsed on receipt at both ends.
+
+```mermaid
+flowchart TB
+    subgraph main["Main thread (SimHost, F2.3b part 2)"]
+      POST["postMessage: init · advance · command · query · release · stop"]
+      READ["SnapshotReader.latest()<br/>(woken by Atomics.waitAsync)"]
+    end
+    subgraph worker["Sim worker (SimWorkerRunner)"]
+      IN["inbox (strict order)"] --> H{"head message"}
+      H -->|advance / command / query| RUN["runTo(tick): engine.advanceTo in chunks<br/>ending on 10-tick cadence boundaries"]
+      RUN --> SLICE{"WORK_SLICE_MS used?"}
+      SLICE -->|yes| YIELD["yield (MessageChannel), resume later"]
+      SLICE -->|no| APPLY["command: replayEntries(mirror bus, [entry], {time: engine})<br/>(seq, tick, args checked: desync on a mismatch)"]
+      APPLY --> CHG{"new generation?"}
+      RUN --> CHG
+      CHG -->|yes| TOPO["topology {descriptor, buffer?}<br/>then a forced publish"]
+      CHG -->|"no, a new solve"| THR["publish, throttled to PUBLISH_MIN_WALL_MS"]
+      H -->|query| ANS["state {export, snapshotHash}<br/>or snapshotBytes"]
+      IN -->|empty| IDLE["idle: forced publish at the exact tick"]
+    end
+    POST --> IN
+    TOPO --> SAB
+    THR --> SAB
+    IDLE --> SAB
+    SAB["SAB: header · diagnostics · slot 0 · slot 1<br/>(SnapshotWriter: slotSeq odd → encodeInto → even,<br/>latestSlot, publishSeq++, notify)"] --> READ
+    THR -.->|"?sab=0: one slot per message, transferred"| READ
+```
+
+- **Starting.** The first message must be `init`, and its `protocol` is checked before anything else is parsed: another version is `error {code: 'protocol-mismatch'}` and the worker says nothing more. A big-endian platform, or a world whose solution record doesn't fit its netlist, is `start-failed`. The transport is `sab` only when `init` asks for it and the worker's own scope is `crossOriginIsolated` with `SharedArrayBuffer`; otherwise `message`. The worker replies `ready`, the first descriptor and a snapshot at the start tick.
+- **A replay start** (`{kind: 'replay', log}`: load verification and the crash restart) starts the engine on the log's initial world and queues every entry, then an `advance` to `endTick`, through the same inbox as live commands. So it is sliced and published the same way, and its sim events (history, not news) are dropped.
+- **The mirror bus** is a world bus on the same catalogue; each `command` is run through `replayEntries(bus, [entry], {time: engine})`, so its `seq`, tick and logged args are checked exactly as a replay checks them, and the engine applies it at its tick. Any refusal is `desync`.
+- **Order.** Messages are handled strictly in order: a command or a query whose tick is ahead of the engine first runs the engine to it; one behind it is `desync`. A `query` is answered only after every earlier message, so a `state` export is always at the query's tick. `release`, `watch`, `unwatch` and `stop` are handled on receipt (they don't depend on the engine's progress).
+- **Publishing** (§7): after a solve, throttled to one per `PUBLISH_MIN_WALL_MS` (4 ms) of worker wall time; unthrottled on a new generation (after its `topology` message) and when the inbox empties (the idle publish, so a paused sim shows its exact tick). Events go out just before the publish that follows them. Slots are sized for twice the first topology with minimums; a generation that outgrows them gets a new buffer in its `topology` message, and one over `MAX_SLOT_BYTES` is `capacity`.
+- **The fallback** (`?sab=0`, or no isolation) encodes each publish into one of three pooled `ArrayBuffer`s with the same `encodeInto` and transfers it; the host copies it like a shared slot and sends it back with `release`. With none free, a throttled publish is skipped and a forced one waits for a buffer.
+- **Wall time** reaches only `pacing/worker-clock.ts` (the lint exemption): the slice, the throttle and the diagnostics area (§5.6, written under its own seqlock, shared mode only). The engine sees integer ticks only, and the bytes of a tick's snapshot never depend on which ticks were published.
+- **The reader** (`SnapshotReader`) copies the latest complete slot into a private, double-buffered copy: a read is one `set()` and a few `Atomics.load`s, retried up to `MAX_READ_ATTEMPTS` per slot when the slot's sequence word is odd or changed, then the previous slot, else a counted miss. A slot whose generation has no descriptor yet is held back (`awaitingDescriptor`) until the `topology` message arrives; the view the listeners hold is never touched by a rejected copy. `latest()` returns the same `SnapshotView` every time.
+- **`islandStatus(kind, flags, iterations)`** (`sim-protocol`) is the one rule for whether an island's values are a reading (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`); `SimEngine.islands()` uses it, so a status read from a snapshot always agrees with the engine's.
+- **Tests:** `transport.spec.ts` (round trip, a torn read retried with a simulated writer that laps the reader mid-copy and with a real writer thread, the generation join, fallback bytes identical), `runner.spec.ts` (the protocol check, both starts, desync, ordered queries, slicing, throttled and forced publishes, buffer growth, the starved pool, and a property: the worker's snapshot bytes and materialised hash equal the headless `Game`'s after any session, either transport, any slicing).
 
 ## The oracle corpus (F2.7)
 
@@ -535,5 +577,5 @@ Each timed re-solve is put in the reference machine's milliseconds by the calibr
 - **AC loads** (F2.5): AC loads reach the phasor solver through `AcValueHook` (F2.4's services do); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
 - **The source records in `sim-protocol`** (F2.3b): `BUILTIN_DEVICE_OUTPUTS` registered in `DEVICE_OUTPUT_SCHEMAS` with a `SIM_PROTOCOL_VERSION` bump, and the nominal bands (`NOMINAL_BANDS`) the sources choose for overlays.
-- **The sim worker** (F2.3b): the seqlock transport, the descriptor, pacing and `SimHost`; until then the game runs the engine in-process.
-- **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.
+- **`SimHost` and pacing in the game** (F2.3b part 2): the worker and its transport exist (above); until `SimHost` drives them, the game runs the engine in-process.
+- **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

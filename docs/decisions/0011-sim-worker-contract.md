@@ -190,7 +190,7 @@ interface SimStateExport {
 
 `sim-protocol` parses every export with the save-format schemas before materialising it.
 
-- **Sim events** are batched with each publish and sorted by tick, then entity id, then kind. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content is deterministic: `game.on('sim')` gets the same list headless. Events are not in any hash. Where they go in the UI:
+- **Sim events** are posted with each publish, as batches **cut at every command boundary**: what time raised up to a command is one batch, what that command and the time after it raised (up to the next command) the next, each sorted by tick, then entity id, then kind, and concatenated in order. Island events (`nonConverged`, `singular`) fire on the rising edge only, not on every solve. Their content and order are deterministic: `game.on('sim')` gets the same list headless, whatever the publish timing. (Headless delivers each `exec`/`advance` call's events as one sorted batch; extra cuts between time-only calls change nothing, since their ticks don't overlap, so only the command boundaries matter. One sorted batch per publish would not do: publishes are throttled by wall time, so a time-driven event and a command's event at the same tick would arrive in either order. F2.3b review, from the F2.4 test review.) Events are not in any hash. Where they go in the UI:
 
   | Event                                   | UI                                                                                        |
   | --------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -760,6 +760,18 @@ F2.3a implemented the slot codec, the export, `materialiseWorld`, the events and
 - **`NOMINAL_BANDS` holds only `none`** (index 0) in F2.3a: the band follows from source nameplates and setpoints, which F2.4's source models provide. F2.4 appends the sourced bands and bumps the protocol. **`DEVICE_OUTPUT_SCHEMAS` is empty in code**: no built-in device model publishes a record yet, and §5.4's table stays provisional until F2.4 and F2.5.
 - **Island events' rising edge across a topology change** (§4): a flag rises only if no island the new island's entities were in before the change already had it, so merging or splitting a singular island raises nothing new, while removing the loop and bringing it back (a delete and its undo) does. Island events sort by their smallest entity.
 - **The game runs the engine in-process until F2.3b** (§1, §9.4): the session's `Game` has the same in-process engine as `sim-cli`, so `world.hash` and saves materialise synchronously and a `.console` file's `sim.step` steps time in the game too. No pacing runs (time moves only by `sim.step`). F2.3b moves the engine to the worker and makes `game.hash()` and `game.save()` throw `NotAvailableError` in the game, as §9.4 says.
+
+## Implementation notes (F2.3b)
+
+F2.3b implemented the transport, the worker and `SimHost`. Where the text above left a point open, or the implementation pinned one down, it did so as follows. Nothing here changes a byte offset, a message shape or a hashed byte, so `SIM_PROTOCOL_VERSION` stays 1.
+
+- **The host's view of a worker is `SimWorkerLike`** (`sim-protocol`, types only): `postMessage(message, transfer)`, `terminate()` and `listen({message, error, messageError})`. `apps/game`'s factory adapts the DOM `Worker` around the literal constructor; `@controls/sim-worker`'s `createInProcessSimWorker` runs the real runner on the calling thread for app specs; feature specs use a scripted fake.
+- **A replay start runs through the inbox** (§4, §10): the worker starts the engine on the log's initial world, then queues each entry as a `command` and a final `advance` to `endTick`, so a long crash-restart log is sliced and published like live play. Its sim events are dropped, as headless replays drop them. Main validates the log first (commanded state only), and decides the `MAX_VERIFY_TICKS` bound before it ever sends a replay start.
+- **Mirror checks are `replayEntries`'** (§1): each `command` runs through `replayEntries(bus, [entry], {time: engine})`, so `seq`, tick, args and refusals are checked exactly as on a replay; any failure is `desync` with the entry's `seq`.
+- **`release`, `watch`, `unwatch` and `stop` are handled on receipt**, out of the inbox: none depends on the engine's progress, and a queued `release` would starve the fallback's pool behind a long `advance`.
+- **Traces are F2.6's.** The worker records watches but sends no `trace` batches yet; the message schema is in place.
+- **The reader's private copy is double-buffered**, so a slot held back for its descriptor never disturbs the current view (§6.2 "return current"). A slot of a generation older than both held descriptors is ignored; one of the previous generation is still shown (the descriptor of a new generation arrives before its first slot, so the latest slot may still be the old generation's).
+- **Test-only sizing:** the worker's environment takes `maxSlotBytes` and `minSlotBytes` overrides, used by specs to provoke `capacity` and a buffer growth cheaply. The game uses the constants.
 
 ## Resolved in review
 

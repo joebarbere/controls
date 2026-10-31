@@ -50,7 +50,7 @@ describe('scope:headless lint boundary', () => {
   });
 
   it('rejects the sim worker (type:worker): sim-cli runs the engine in-process', async () => {
-    expect(await boundaryErrors("export { SIM_WORKER_PACKAGE } from '@controls/sim-worker';")).toEqual([
+    expect(await boundaryErrors("export { SimWorkerRunner } from '@controls/sim-worker';")).toEqual([
       'A project tagged with "scope:headless" can only depend on libs tagged with "type:domain"',
     ]);
   });
@@ -98,11 +98,21 @@ describe('type:worker lint boundary', () => {
     ['type:rendering', 'libs/rendering/renderer/src/lib/boundary-probe.ts'],
     ['type:ui', 'libs/ui/src/lib/boundary-probe.ts'],
     ['type:platform', 'libs/platform/api/src/lib/boundary-probe.ts'],
-    ['type:domain', 'libs/domain/sim-core/src/lib/boundary-probe.ts'],
   ])('rejects %s importing the worker', async (tag, file) => {
-    const errors = await boundaryErrors("export { SIM_WORKER_PACKAGE } from '@controls/sim-worker';", file);
+    const errors = await boundaryErrors("export { SimWorkerRunner } from '@controls/sim-worker';", file);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(new RegExp(`^A project tagged with "${tag}" can only depend on libs tagged with `));
+  });
+
+  // Since F2.3b the worker depends on sim-core (and through it on every other domain lib), so a domain
+  // lib importing it is a dependency cycle, which the rule reports before it checks tags.
+  it('rejects type:domain importing the worker (a cycle: the worker depends on every domain lib)', async () => {
+    const errors = await boundaryErrors(
+      "export { SimWorkerRunner } from '@controls/sim-worker';",
+      'libs/domain/sim-core/src/lib/boundary-probe.ts',
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/^Circular dependency between "sim-core" and "sim-worker" detected/);
   });
 
   it.each([

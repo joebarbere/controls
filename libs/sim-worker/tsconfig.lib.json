@@ -12,6 +12,7 @@
     "vitest.config.mts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
+    "src/testing/**",
     "src/**/*.test.tsx",
     "src/**/*.spec.tsx",
     "src/**/*.test.js",
