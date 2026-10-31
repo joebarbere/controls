@@ -136,14 +136,33 @@ describe('SparseLu', () => {
     const swapped = new SparseFactors();
     expect(lu.factor(pattern, values, identity(2), 1, swapped)).toBe(true);
     expect(swapped.prow[0]).toBe(1);
-    // Ties go to the lowest row.
+    // Ties go to the lowest row: column 0 has the diagonal 0.01, below 0.1 × 2, and rows 1 and 2
+    // tie at |2| (#49 review: a two-candidate case can't tell lowest from first-found or highest).
     const tie = fromRows([
-      [0, 2],
-      [2, 0],
+      [0.01, 1, 0],
+      [2, 1, 1],
+      [-2, 0, 1],
     ]);
-    const tied = new SparseFactors();
-    expect(lu.factor(tie.pattern, tie.values, identity(2), 1, tied)).toBe(true);
-    expect(tied.prow[0]).toBe(1);
+    for (const order of [identity(3), Int32Array.of(0, 2, 1)]) {
+      const tied = new SparseFactors();
+      expect(lu.factor(tie.pattern, tie.values, order, 0.1, tied)).toBe(true);
+      expect(tied.prow[0]).toBe(1);
+      // A replay of the same values keeps the tie's choice, so it is accepted (not a fallback).
+      const { replays, fallbacks } = lu;
+      expect(lu.factor(tie.pattern, tie.values, order, 0.1, tied)).toBe(true);
+      expect([lu.replays - replays, lu.fallbacks - fallbacks]).toStrictEqual([1, 0]);
+      expect(tied.prow[0]).toBe(1);
+    }
+    // The tied rows swapped: the lowest is still chosen, now carrying the other sign.
+    const reversed = fromRows([
+      [0.01, 1, 0],
+      [-2, 0, 1],
+      [2, 1, 1],
+    ]);
+    const other = new SparseFactors();
+    expect(lu.factor(reversed.pattern, reversed.values, identity(3), 0.1, other)).toBe(true);
+    expect(other.prow[0]).toBe(1);
+    expect(other.udiag[0]).toBe(-2);
   });
 
   it('reports structurally and numerically singular matrices, and non-finite entries', () => {

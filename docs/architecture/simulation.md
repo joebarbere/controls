@@ -254,7 +254,7 @@ flowchart LR
     HK --> FP{"x is the last solve and<br/>values unchanged?"}
     FP -- yes --> DONE["converged"]
     FP -- no --> LS["linear solve → x̃"]
-    LS --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + current rounding?"}
+    LS --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
     CV -- yes --> DONE
     CV -- "no, under the cap" --> DAMP["α halves on oscillation (to 1/16),<br/>doubles back when steps shrink;<br/>x ← x + α (x̃ − x)"]
     DAMP --> X
@@ -263,7 +263,9 @@ flowchart LR
 
 The reported solution is always the last linear solve, never a damped blend, so every row holds for the values left in `values`. A linear island takes one solve, and a singular solve ends the loop.
 
-The current tolerance includes the floor policy's island rounding term, Σ 32 ε |y| (|Va| + |Vb|), because no solve resolves a current better. Without it, a 2.2e-7 A current wobbling by 6e-13 A once kept an island from converging. The constants (`OUTER_LOOP_*`) are numerical, and sourced against SPICE's defaults.
+Each branch's current tolerance includes its own rounding (`currentResolution`): a resistor's 32 ε (|Va| + |Vb|) / R, and for a voltage-mode source the sum over the branches at its nodes. No solve resolves a current better: without the term, a 2.2e-7 A current wobbling by 6e-13 A once kept an island from converging. The term is per branch, never island-wide. An island-wide sum grows with the island and let a 1e-5 A load on a long busbar loop stop with its resistance off by ×35 (#49 review). The constants (`OUTER_LOOP_*`) are numerical, and sourced against SPICE's defaults.
+
+A `nonConverged` island's values are the last linear solve's: self-consistent, so they look real. Anything player-facing must show such an island as unsettled (caveats).
 
 ### Tests (part 3)
 

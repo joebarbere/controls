@@ -372,9 +372,14 @@ _Part 3 done 2026-10-30, except the re-solve gate; `test-engineer` review pendin
 - _**The crossover is 64 unknowns, not §4.5's 300.** Measured on the built bundle: sparse with a warm cache beats dense from about 30 unknowns (16× at 290), and with a cold cache from about 130. 64 sits above every circuit of the pinned 300-solve hash (at most 40 unknowns), so small circuits keep their dense bits: the pin didn't move, and `SIM_ENGINE_VERSION` stays 1._
 - _**The cache keeps what is a function of topology and stamp modes:** the pattern, the slot map, the AMD order, a recorded stamp program and the conductive components, keyed by `topologyHash`, island and stamp-mode signature (a supply in current limit changes the pattern without changing the hash). The island's last numeric factors are replayed when the pivot rule picks the same rows at every column, else refactored afresh, so warm and cold results are bit-identical by construction._
 - _**Dense against sparse** compares residuals on every circuit and values (1e-9 of the island's largest, plus the ε·G·V current floor) on the well-conditioned subset (1 Ω–10 kΩ, sources behind ≥ 0.1 Ω): worst 5 % of the bound over 1,500 fresh circuits. The DC oracle passes on both paths._
-- _**The outer loop's current tolerance includes the solve's own rounding** (the floor policy's island term); without it a fresh-seed circuit ran to `nonConverged` on 6e-13 A of noise. Damping halves on oscillation and doubles back; iterations are bounded at 40 on the random bench and large-circuit properties (measured from a cold start: median 16, most seen 32)._
+- _**The outer loop's current tolerance includes each branch's own rounding** (per branch, never island-wide: an island-wide term let a small current on a stiff busbar island stop ×35 off, #49 review); without it a fresh-seed circuit ran to `nonConverged` on 6e-13 A of noise. Damping halves on oscillation and doubles back; iterations are bounded at 40 on the random bench and large-circuit properties (measured from a cold start: median 16, most seen 32)._
 - _**The re-solve budget (2 ms, compile and solve).** On an AMD Ryzen 5 5600X under Node 24, the built bundle measured 1.45–1.49 ms with a warm cache (p90 2.5 ms), after making SHA-256 about twice as fast (byte-identical) and the sparse solve about 0.25 ms for the 8 islands. A topology never seen measures 4.5–4.6 ms. Beside `pnpm verify`'s parallel test workers the warm case measured 2.3–2.6 ms, and CI runners are slower. Per the risk table this goes to the user: the case reports without a gate until the three CI OSes' numbers are in. Options, laid out in the PR: (A) run `bench` as its own step after the parallel targets, with the bundle test in `bench.spec.ts` no longer asserting the budget under load; (B) the same, with that test moved into the `bench` target; or another gate, or a spec change._
 - _**Review notes for later features:** F2.4's CV/CC supply and F2.5's lamp plug into `DcIterationHook`; F2.3a passes the last solution record as `warmStart`. A strongly nonlinear law should give a good initial guess rather than rely on a cold start._
+- _**`electrical-realism-reviewer` (#49, approved with notes):**_
+  - _F2.5: re-measure the outer loop's iterations once the real tungsten R(T) lands. The headroom today is 1.56× (the most seen, 32, against the bound of 50)._
+  - _F2.4: add a CV/CC-crossover hysteresis test with a lamp load (a cold filament pulls the supply into CC, then lets it back to CV as it heats)._
+  - _Elements whose resistance falls with current or temperature (a positive slope f′, an NTC) converge only as 1/(1 − f′): their models must leave that margin in the tolerance or the cap._
+  - _F2.4 and P5: show a `nonConverged` island as unsettled in every readout (meters, overlays, the inspector, `game.probe`), never as a steady value. Its values are the last linear solve's and look real (caveats)._
 
 ### F2.3a Sim clock and engine loop (headless)
 
@@ -453,7 +458,8 @@ Acceptance:
   - a non-zero output resistance (sourced, typical), so supplies paralleled in CV mode are never an ideal-source loop (`singular`) and settle through the CV/CC loop (`electrical-realism-reviewer`, #46);
   - `device.operate` controls for the voltage setpoint, the current limit and output on/off;
   - constant-voltage/constant-current crossover at R = V/I within 0.5 %, and a property test that it never exceeds either setpoint beyond its tolerance;
-  - its mode is published in the device record, with no mode chatter at the crossover (tested).
+  - its mode is published in the device record, with no mode chatter at the crossover (tested), including a CV/CC-crossover hysteresis test with a lamp load (#49 review);
+  - a supply or island the outer loop flags `nonConverged` is shown as unsettled, never as a steady reading, in the device record and every readout (#49 review; P5's meters carry it on).
 - [ ] **DIN 24 VDC PSU:**
   - current limit with hiccup mode: overload for t_detect, off for t_off, then retry, with tick-exact timing;
   - a short circuit gives a periodic hiccup at the documented period ±1 tick;

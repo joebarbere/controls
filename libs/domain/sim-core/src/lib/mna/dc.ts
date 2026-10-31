@@ -61,8 +61,10 @@ import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_UNSET, DC_STAMP_VSOURCE, 
  * one is stamped into the CSC pattern of its symbolic factorisation and factored by `SparseLu`
  * (Gilbert–Peierls, AMD order). The symbolic factorisation is built by running the same stamping
  * once in record mode (the (row, column) of every call), and is kept in the factorisation cache by
- * `topologyHash`, island and stamp modes. Both backends see the same matrix entries, bit for bit;
- * they differ only in pivot order, so their results agree to rounding, not to the bit.
+ * `topologyHash`, island and stamp modes. Both backends assemble the same terms, from the one
+ * stamping routine (the sparse path replays its recorded program, in call order); they differ in
+ * pivot order, so their results agree to rounding, not to the bit. The sparse path's bits are pinned
+ * by their own hash (`sparse.spec.ts`), as the dense path's are (`properties.spec.ts`).
  *
  * **Nonlinear outer loop (part 3).** `solveNonlinear` repeats each island's linear solve, calling a
  * value hook with the current iterate before each one (a lamp's R(T), a supply's CV/CC mode), until
@@ -288,6 +290,9 @@ export class DcSolver {
   private savedOhms = new Float64Array(0);
   private savedEmf = new Float64Array(0);
   private savedAmps = new Float64Array(0);
+  /** Outer loop: each branch's current resolution, and each node's sum of its branches' terms. */
+  private branchResolution = new Float64Array(0);
+  private nodeResolution = new Float64Array(0);
 
   constructor(options: DcSolverOptions = {}) {
     const threshold = options.sparseMinUnknowns ?? SPARSE_MIN_UNKNOWNS.value;
@@ -317,10 +322,10 @@ export class DcSolver {
    *    island linearly, giving x̃;
    * 3. it has converged when every node voltage of x̃ is within `OUTER_LOOP_RELTOL` (relative) plus
    *    `OUTER_LOOP_VNTOL` of x, and every branch current within `OUTER_LOOP_RELTOL` plus
-   *    `OUTER_LOOP_ABSTOL` plus the island's current rounding (the floor policy's
-   *    Σ 32 ε |y| (|Va| + |Vb|): no linear solve resolves a current better, so successive solves differ
-   *    by that much noise); or when x is exactly the last x̃ and the hook left every value unchanged (a
-   *    fixed point: a linear island takes one solve);
+   *    `OUTER_LOOP_ABSTOL` plus that branch's own current resolution (`currentResolution`: the floor
+   *    policy's 32 ε |y| (|Va| + |Vb|) term, per branch: no linear solve resolves a current better, so
+   *    successive solves differ by that much noise); or when x is exactly the last x̃ and the hook left
+   *    every value unchanged (a fixed point: a linear island takes one solve);
    * 4. otherwise x ← x + α (x̃ − x). The damping α starts at 1, halves (down to
    *    `OUTER_LOOP_MIN_DAMPING`) whenever a step reverses the previous one's direction or is larger (an
    *    oscillation), and doubles back (up to 1) when a step shrinks in the same direction;
@@ -344,6 +349,8 @@ export class DcSolver {
       this.savedEmf = new Float64Array(branchCount);
       this.savedAmps = new Float64Array(branchCount);
     }
+    if (this.branchResolution.length < branchCount) this.branchResolution = new Float64Array(branchCount);
+    if (this.nodeResolution.length < netlist.nodes.length) this.nodeResolution = new Float64Array(netlist.nodes.length);
     const stepLength = 2 * (netlist.nodes.length + branchCount);
     if (this.previousStep.length < stepLength) this.previousStep = new Float64Array(stepLength);
     const given = options.warmStart ?? null;
@@ -414,10 +421,12 @@ export class DcSolver {
       let dot = 0;
       let s = 0;
       const vntol = OUTER_LOOP_VNTOL.value;
-      // A current is resolved only to the island's rounding, Σ_b 2 · 16 ε |y_b| (|Va| + |Vb|) (the
-      // F2.2 floor policy's KCL term): below that, successive solves differ by noise, so the loop
-      // must not demand more. On most islands OUTER_LOOP_ABSTOL is the larger.
-      const abstol = OUTER_LOOP_ABSTOL.value + this.currentResolution(netlist, island, values, solution);
+      // A current is resolved only to its own rounding (see `currentResolution`): below that,
+      // successive solves differ by noise, so the loop must not demand more. Per branch, never
+      // island-wide: an island-wide sum grows with the island and swamps a small current.
+      this.currentResolution(netlist, island, values, solution);
+      const abstol = OUTER_LOOP_ABSTOL.value;
+      const resolution = this.branchResolution;
       const reltol = OUTER_LOOP_RELTOL.value;
       for (const node of island.nodes) {
         const next = solution.nodes[2 * node];
@@ -432,7 +441,8 @@ export class DcSolver {
         const next = solution.branches[2 * index];
         const now = iterate.branches[2 * index];
         const d = next - now;
-        if (Math.abs(d) > reltol * Math.max(Math.abs(next), Math.abs(now)) + abstol) within = false;
+        const allowed = reltol * Math.max(Math.abs(next), Math.abs(now)) + abstol + resolution[index];
+        if (Math.abs(d) > allowed) within = false;
         if (havePreviousStep) dot += d * step[s];
         step[s++] = d;
         norm = Math.max(norm, Math.abs(d));
@@ -467,24 +477,43 @@ export class DcSolver {
     if (!converged) result.flags |= ISLAND_FLAG_NON_CONVERGED;
   }
 
-  /** The island's current rounding term, Σ over resistive branches and gmin of 2 · 16 ε |y| (|Va| + |Vb|). */
+  /**
+   * Fills `branchResolution` with each island branch's current resolution on `solution`: how finely
+   * any linear solve fixes that current, so how far apart two solves of nearly the same system may
+   * put it (the floor policy's per-branch rounding term, 2 · 16 ε |y| (|Va| + |Vb|)):
+   *
+   * - a resistor: its own term, from its end voltages and its conductance;
+   * - a voltage-mode source: its current comes out of the KCL rows at its two ends, so the terms of
+   *   every resistive branch (and gmin) at those nodes, plus its own if it has a series resistance;
+   * - a current source: 0 (its current is exactly `amps`).
+   */
   private currentResolution(
     netlist: Netlist,
     island: NetlistIsland,
     values: DcBranchValues,
     solution: DcSolution,
-  ): number {
+  ): void {
     const nodes = solution.nodes;
-    let sum = 0;
-    for (const node of island.nodes) sum += GMIN_S.value * Math.abs(nodes[2 * node]);
+    const nodeTerm = this.nodeResolution;
+    const out = this.branchResolution;
+    const scale = 32 * Number.EPSILON;
+    for (const node of island.nodes) nodeTerm[node] = scale * GMIN_S.value * Math.abs(nodes[2 * node]);
     for (const index of island.branches) {
-      const stamp = values.stamps[index];
-      const ohms = values.ohms[index];
-      if (stamp === DC_STAMP_ISOURCE || (stamp === DC_STAMP_VSOURCE && ohms === 0)) continue;
+      out[index] = 0;
+      if (values.stamps[index] !== DC_STAMP_RESISTOR) continue;
       const branch = netlist.branches[index];
-      sum += (Math.abs(nodes[2 * branch.a]) + Math.abs(nodes[2 * branch.b])) / ohms;
+      const term = (scale * (Math.abs(nodes[2 * branch.a]) + Math.abs(nodes[2 * branch.b]))) / values.ohms[index];
+      out[index] = term;
+      nodeTerm[branch.a] += term;
+      if (branch.b !== branch.a) nodeTerm[branch.b] += term;
     }
-    return 32 * Number.EPSILON * sum;
+    for (const index of island.branches) {
+      if (values.stamps[index] !== DC_STAMP_VSOURCE) continue;
+      const branch = netlist.branches[index];
+      const ohms = values.ohms[index];
+      const own = ohms > 0 ? (scale * (Math.abs(nodes[2 * branch.a]) + Math.abs(nodes[2 * branch.b]))) / ohms : 0;
+      out[index] = nodeTerm[branch.a] + (branch.b !== branch.a ? nodeTerm[branch.b] : 0) + own;
+    }
   }
 
   /** Sizes the per-netlist scratch, checks the values and returns the solution to write into. */

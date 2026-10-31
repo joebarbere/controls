@@ -73,7 +73,7 @@ describe('amdOrder', () => {
     );
   });
 
-  it('never makes more fill than the natural order on random sparse patterns, on average far less', () => {
+  it('makes far less fill than the natural order over a sample of random sparse patterns, in total', () => {
     let amdTotal = 0;
     let naturalTotal = 0;
     for (const { n, pairs } of fc.sample(patternArb, { seed: 20261030, numRuns: 60 })) {
@@ -124,7 +124,7 @@ describe('amdOrder', () => {
     expect(amd).toBeLessThan(0.5 * natural);
   });
 
-  it('puts dense rows last, ascending, and merges indistinguishable variables', () => {
+  it('puts dense rows last, ascending, and orders a complete bipartite graph no worse than natural order', () => {
     // 200 nodes each joined to nodes 7 and 150 (dense: degree 199 > 10·√200 ≈ 141), plus a path.
     const n = 200;
     const pairs: [number, number][] = [];
@@ -137,7 +137,8 @@ describe('amdOrder', () => {
     const order = amdOrder(n, colPtr, rowIdx);
     expect([...order.slice(n - 2)]).toStrictEqual([7, 150]);
     expect(isPermutation(order, n)).toBe(true);
-    // A complete bipartite K(3, 40): the 40 are indistinguishable and become one supervariable.
+    // A complete bipartite K(3, 40), whose 40 variables are indistinguishable (supervariable merging
+    // itself is pinned through the sparse path's bits, `sparse.spec.ts`).
     const bip: [number, number][] = [];
     for (let a = 0; a < 3; a++) for (let b = 3; b < 43; b++) bip.push([a, b]);
     const g = csc(43, bip);

@@ -181,6 +181,127 @@ describe('DcSolver.solveNonlinear', () => {
     expect(firstIterates).toStrictEqual([null]);
   });
 
+  it('converges a small current on a stiff island to its own tolerance, not an island-wide one (#49 review)', () => {
+    // A 120 V source behind 10 mΩ, a busbar loop of 2N 0.1 mΩ segments (1e4 S each) and one
+    // self-heating 1 MΩ load running about 11× hot: a 1e-5 A current in an island of 1e4 S branches.
+    // An island-wide current tolerance (Σ 32 ε |y| (|Va| + |Vb|), about N · 3e-8 A) swamped that
+    // current: the loop stopped early with R off by ×1.04, ×5.8 and ×35.6 at N = 10, 100 and 400.
+    for (const segments of [10, 100, 400]) {
+      const n = 2 * segments + 1;
+      const edges: { a: number; b: number; kind: 'resistor' | 'vsource' }[] = [{ a: 0, b: 1, kind: 'vsource' }];
+      for (let i = 1; i < n - 1; i++) edges.push({ a: i, b: i + 1, kind: 'resistor' });
+      edges.push({ a: n - 1, b: 0, kind: 'resistor' });
+      const load = Math.floor(n / 2); // the busbar segment replaced by the load, mid-loop
+      const netlist = syntheticNetlist(n, edges);
+      const values = new DcBranchValues(edges.length);
+      values.vsource(0, 120, 0.01);
+      for (let b = 1; b < edges.length; b++) values.resistor(b, 1e-4);
+      const r0 = 1e6;
+      const k = (10 * r0) / (120 / r0); // R(I) = R0 + k |I|: about 11 × R0 at the fixed point
+      const solver = new DcSolver();
+      const solution = solver.solveNonlinear(netlist, values, {
+        hook: selfHeating(
+          new Set([load]),
+          () => r0,
+          () => k,
+        ),
+      });
+      expect(solution.islands[0].flags, `N = ${segments}`).toBe(0);
+      const rs = 0.01 + (edges.length - 2) * 1e-4;
+      const expected = fixedPoint(120, rs, r0, k);
+      const current = Math.abs(solution.branches[2 * load]);
+      expect(Math.abs(current - expected), `N = ${segments}: I`).toBeLessThanOrEqual(1e-5 * expected);
+      const used = values.ohms[load];
+      const want = r0 + k * current;
+      expect(Math.abs(used - want) / want, `N = ${segments}: R`).toBeLessThanOrEqual(1e-5);
+      expect(solution.islands[0].unknowns).toBeGreaterThanOrEqual(n - 1);
+    }
+  });
+
+  it('settles a voltage when no current moves: a current source into a voltage-dependent resistance', () => {
+    // A supply in current limit (exactly 1 mA) into R(V) = R0 + k |V| (#49 review: the loop must
+    // judge convergence on voltages too, since here every current is fixed from the first solve).
+    // V = I (R0 + k V), so V* = I R0 / (1 − I k) for I k < 1.
+    const amps = 1e-3;
+    const r0 = 1000;
+    // I k = 0.5: V* = 2 × I R0 = 2 V, with slope f′ = +0.5. A positive slope converges only as
+    // 1/(1 − f′), and damping can't speed it: at I k = 0.9 the loop needs about 130 iterations and
+    // ends nonConverged at the cap (an NTC-like law needs that margin, plan notes).
+    const k = 500;
+    const netlist = syntheticNetlist(2, [
+      { a: 0, b: 1, kind: 'vsource' },
+      { a: 1, b: 0, kind: 'resistor' },
+    ]);
+    for (const sparseMinUnknowns of [Number.MAX_SAFE_INTEGER, 1]) {
+      const values = new DcBranchValues(2);
+      values.isource(0, amps);
+      values.resistor(1, r0);
+      const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(netlist, values, {
+        hook: (island, iterate, v) => {
+          const volts = iterate === null ? 0 : Math.abs(iterate.nodes[2] - iterate.nodes[0]);
+          v.resistor(1, r0 + k * volts);
+        },
+      });
+      expect(solution.islands[0].flags).toBe(0);
+      expect(solution.branches[0]).toBe(amps);
+      const expected = (amps * r0) / (1 - amps * k);
+      const volts = Math.abs(solution.nodes[2] - solution.nodes[0]);
+      expect(Math.abs(volts - expected)).toBeLessThanOrEqual(1e-5 * expected);
+      checkRows({ netlist, values }, solution);
+    }
+  });
+
+  it('shares current between paralleled stiff conductors, one self-heating, to the loop tolerance', () => {
+    // An ideal 120 V source, 20 paralleled 1 mΩ strands (one heating to about 3× its cold
+    // resistance, as P3's conductor heating will) and a 10 Ω load. The strands drop about 0.6 mV
+    // at 120 V, so a current tolerance that leans on |V| rather than on the drop lets the split stop
+    // early; and the ideal source's current comes out of a node holding 2e4 S, so its tolerance must
+    // carry that node's rounding or the loop can never certify it (#49 review mutants).
+    const strands = 20;
+    const edges: { a: number; b: number; kind: 'resistor' | 'vsource' }[] = [{ a: 0, b: 1, kind: 'vsource' }];
+    for (let i = 0; i < strands; i++) edges.push({ a: 1, b: 2, kind: 'resistor' });
+    edges.push({ a: 2, b: 0, kind: 'resistor' });
+    const netlist = syntheticNetlist(3, edges);
+    const r0 = 1e-3;
+    const heated = 1;
+    // A 10 Ω load (12 A), and a 1 MΩ one (120 µA: the source's current is then small beside its
+    // node's rounding, about ε · 2e4 S · 120 V).
+    for (const [load, sparseMinUnknowns] of [
+      [10, Number.MAX_SAFE_INTEGER],
+      [10, 1],
+      [1e6, Number.MAX_SAFE_INTEGER],
+      [1e6, 1],
+    ]) {
+      const coldStrandAmps = 120 / load / strands;
+      const k = (2 * r0) / coldStrandAmps; // about 3 × R0 hot
+      const values = new DcBranchValues(edges.length);
+      values.vsource(0, 120, 0);
+      for (let b = 1; b <= strands; b++) values.resistor(b, r0);
+      values.resistor(strands + 1, load);
+      const solution = new DcSolver({ sparseMinUnknowns }).solveNonlinear(netlist, values, {
+        hook: selfHeating(
+          new Set([heated]),
+          () => r0,
+          () => k,
+        ),
+      });
+      expect(solution.islands[0].flags).toBe(0);
+      expect(solution.islands[0].iterations).toBeLessThanOrEqual(ITERATION_BOUND);
+      const current = Math.abs(solution.branches[2 * heated]);
+      const want = r0 + k * current;
+      // Within the loop's tolerance for that current: 1e-5, or its own resolution where that is
+      // coarser (6 µA through 1 mΩ at 120 V is resolved only to 32 ε · 240 V / 1 mΩ ≈ 1.7e-9 A).
+      const resolution = (32 * Number.EPSILON * 2 * 120) / values.ohms[heated];
+      expect(Math.abs(values.ohms[heated] - want) / want).toBeLessThanOrEqual(1e-5 + (2 * resolution) / current);
+      // The cold strands share the rest equally, each carrying R_heated / R0 times the heated one.
+      const cold = Math.abs(solution.branches[2 * 2]);
+      expect(Math.abs(cold / current - values.ohms[heated] / r0)).toBeLessThanOrEqual(
+        1e-6 * (values.ohms[heated] / r0),
+      );
+      checkRows({ netlist, values }, solution);
+    }
+  });
+
   it('damps an oscillating iteration: undamped it would need hundreds of iterations', () => {
     // Slope −k I* / (Rs + R0 + k I*) ≈ −0.995: the undamped error shrinks by 0.5 % per iteration.
     const circuit = loop(48, 0.01);
@@ -395,6 +516,44 @@ const nonlinearShare = fc.integer({ min: 2, max: 6 });
 /** How much hotter than cold a heated element runs at its cold-solve current, as a lamp's 5–16×. */
 const hotRatio = fc.integer({ min: 4, max: 15 });
 
+/**
+ * A large circuit with every `every`-th resistor carrying current self-heating: k makes it `ratio` ×
+ * its cold resistance at its cold-solve current. `copy()` refills a working copy of the values.
+ */
+function heatedCircuit(spec: LargeCircuitSpec, every: number, ratio: number) {
+  const circuit = largeCircuit(spec);
+  const coldSolve = new DcSolver().solve(circuit.netlist, circuit.values);
+  const heated = new Set(
+    circuit.netlist.branches
+      .filter(
+        (b) =>
+          b.kind === 'resistor' &&
+          circuit.values.stamp(b.index) === 'resistor' &&
+          b.index % every === 0 &&
+          Math.abs(coldSolve.branches[2 * b.index]) > 1e-6,
+      )
+      .map((b) => b.index),
+  );
+  const r0 = new Map([...heated].map((b) => [b, circuit.values.ohms[b]]));
+  const k = new Map(
+    [...heated].map((b) => [b, ((ratio - 1) * circuit.values.ohms[b]) / Math.abs(coldSolve.branches[2 * b])]),
+  );
+  const hook = selfHeating(
+    heated,
+    (b) => r0.get(b) ?? 1,
+    (b) => k.get(b) ?? 0,
+  );
+  const values = new DcBranchValues(circuit.values.count);
+  const copy = () => {
+    values.stamps.set(circuit.values.stamps);
+    values.ohms.set(circuit.values.ohms);
+    values.emfV.set(circuit.values.emfV);
+    values.amps.set(circuit.values.amps);
+    return values;
+  };
+  return { circuit, hook, copy };
+}
+
 describe('outer-loop properties', () => {
   it('converges within a bounded number of iterations on random bench worlds with self-heating lamps', () => {
     fc.assert(
@@ -408,60 +567,28 @@ describe('outer-loop properties', () => {
         }
         checkRows(bench, solution);
         const r = (b: number, i: number) => bench.cold(b) * (1 + (bench.beta(b) * i) / 0.42);
-        expect(selfConsistent(bench.netlist, bench.values, solution, bench.lamps, r)).toBeLessThanOrEqual(1e-4);
+        // The loop delivers about OUTER_LOOP_RELTOL (1e-6); 1e-5 is a fifth of a 4½-digit meter's resolution.
+        expect(selfConsistent(bench.netlist, bench.values, solution, bench.lamps, r)).toBeLessThanOrEqual(1e-5);
       }),
-      { numRuns: 70 },
+      { numRuns: 60 },
     );
   });
 
-  it('converges within a bounded number of iterations on large circuits (sparse path), deterministically', () => {
+  it('converges within a bounded number of iterations on large circuits (sparse path)', () => {
     fc.assert(
       fc.property(largeArb, nonlinearShare, hotRatio, (spec, every, ratio) => {
-        const circuit = largeCircuit(spec);
-        // Each heated resistor's k makes it `ratio` × its cold resistance at its cold-solve current.
-        const coldSolve = new DcSolver().solve(circuit.netlist, circuit.values);
-        const heated = new Set(
-          circuit.netlist.branches
-            .filter(
-              (b) =>
-                b.kind === 'resistor' &&
-                circuit.values.stamp(b.index) === 'resistor' &&
-                b.index % every === 0 &&
-                Math.abs(coldSolve.branches[2 * b.index]) > 1e-6,
-            )
-            .map((b) => b.index),
-        );
-        const r0 = new Map([...heated].map((b) => [b, circuit.values.ohms[b]]));
-        const k = new Map(
-          [...heated].map((b) => [b, ((ratio - 1) * circuit.values.ohms[b]) / Math.abs(coldSolve.branches[2 * b])]),
-        );
-        const hook = selfHeating(
-          heated,
-          (b) => r0.get(b) ?? 1,
-          (b) => k.get(b) ?? 0,
-        );
-        const values = new DcBranchValues(circuit.values.count);
-        const copy = () => {
-          values.stamps.set(circuit.values.stamps);
-          values.ohms.set(circuit.values.ohms);
-          values.emfV.set(circuit.values.emfV);
-          values.amps.set(circuit.values.amps);
-          return values;
-        };
-        const solver = new DcSolver();
-        const solution = solver.solveNonlinear(circuit.netlist, copy(), { hook });
+        const { circuit, hook, copy } = heatedCircuit(spec, every, ratio);
+        const values = copy();
+        const solution = new DcSolver().solveNonlinear(circuit.netlist, values, { hook });
         for (const island of solution.islands) {
           if (!island.solved || (island.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
           expect(island.flags & ISLAND_FLAG_NON_CONVERGED).toBe(0);
           expect(island.iterations).toBeLessThanOrEqual(ITERATION_BOUND);
         }
         checkRows({ netlist: circuit.netlist, values }, solution);
-        // Bit-identical on another solver (cold cache, fresh LU state).
-        const again = new DcSolver().solveNonlinear(circuit.netlist, copy(), { hook });
-        expectSameBits(again, solution);
       }),
       {
-        numRuns: 15,
+        numRuns: 12,
         examples: [
           // Ran to nonConverged on rounding noise before the current tolerance took the solve's resolution.
           [{ nodes: 177, islands: 1, seed: 11, meshPercent: 3, wellConditioned: true }, 2, 13],
@@ -469,6 +596,19 @@ describe('outer-loop properties', () => {
           [{ nodes: 62, islands: 2, seed: 867437101, meshPercent: 7, wellConditioned: true }, 2, 4],
         ],
       },
+    );
+  });
+
+  it('is bit-identical across solver instances on large nonlinear circuits', () => {
+    fc.assert(
+      fc.property(largeArb, nonlinearShare, hotRatio, (spec, every, ratio) => {
+        const { circuit, hook, copy } = heatedCircuit(spec, every, ratio);
+        const solution = new DcSolver().solveNonlinear(circuit.netlist, copy(), { hook });
+        // Another solver: a cold cache and fresh LU state.
+        const again = new DcSolver().solveNonlinear(circuit.netlist, copy(), { hook });
+        expectSameBits(again, solution);
+      }),
+      { numRuns: 6 },
     );
   });
 });

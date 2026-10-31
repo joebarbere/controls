@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import { type DcSolution, ISLAND_FLAG_SINGULAR } from '../lib/mna/dc';
-import type { DcBranchValues } from '../lib/mna/values';
+import { DC_STAMP_RESISTOR, type DcBranchValues } from '../lib/mna/values';
 import type { Netlist } from '../lib/netlist/types';
 import { kcl, power, sourceRows } from './mna';
 
@@ -18,8 +18,9 @@ export const isSingular = (solution: DcSolution, island: number): boolean =>
   (solution.islands[island].flags & ISLAND_FLAG_SINGULAR) !== 0;
 
 /**
- * Checks every row of the system (KCL and the source rows) on every solved, non-singular island,
- * and the singular contract on the rest. `withPower` adds the power balance, gmin losses included.
+ * Checks every equation of the system on every solved, non-singular island: KCL at every node, every
+ * source row, and each resistor's own law (`resistorRows`), with the singular contract on the rest.
+ * `withPower` adds the power balance, gmin losses included.
  */
 export function checkRows({ netlist, values }: Circuit, solution: DcSolution, withPower = false): void {
   for (const v of solution.nodes) expect(Number.isFinite(v)).toBe(true);
@@ -35,12 +36,33 @@ export function checkRows({ netlist, values }: Circuit, solution: DcSolution, wi
     expect(sourceRows(netlist, values, solution, island), `source rows on island ${island.index}`).toBeLessThanOrEqual(
       1,
     );
+    resistorRows({ netlist, values }, solution, island.branches);
     if (withPower) {
       const { delivered, dissipated, scale, floor } = power(netlist, values, solution, island);
       expect(Math.abs(delivered - dissipated), `power on island ${island.index}`).toBeLessThanOrEqual(
         1e-9 * scale + floor,
       );
     }
+  }
+}
+
+/**
+ * Each resistor's own equation, I = (Va − Vb) / R, within 1e-12 · |I| + 64 ε (|Va| + |Vb|) / R: the
+ * current comes from voltages known only to an ulp (#49 review). KCL and the source rows alone
+ * can't see a resistor whose current fits its nodes' balance but not its resistance (values left
+ * different from the ones a solution was solved with).
+ */
+export function resistorRows({ netlist, values }: Circuit, solution: DcSolution, branches: readonly number[]): void {
+  for (const b of branches) {
+    if (values.stamps[b] !== DC_STAMP_RESISTOR) continue;
+    const branch = netlist.branches[b];
+    if (branch.a === branch.b) continue;
+    const va = solution.nodes[2 * branch.a];
+    const vb = solution.nodes[2 * branch.b];
+    const want = (va - vb) / values.ohms[b];
+    const floor =
+      1e-12 * Math.abs(want) + (64 * Number.EPSILON * (Math.abs(va) + Math.abs(vb))) / values.ohms[b] + 1e-300;
+    expect(Math.abs(solution.branches[2 * b] - want), `Ohm's law on branch ${b}`).toBeLessThanOrEqual(floor);
   }
 }
 

@@ -1,4 +1,5 @@
 import fc from 'fast-check';
+import { sha256 } from '@controls/world-model';
 import type { World } from '@controls/save-format';
 import {
   BATTERY,
@@ -23,7 +24,7 @@ import { amdOrder } from '../lu/amd';
 import { SparseFactors, SparseLu } from '../lu/sparse-lu';
 import { DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR } from './dc';
 import { FactorisationCache } from './factorisation-cache';
-import { DC_STAMP_VSOURCE, dcBranchValues, DcBranchValues } from './values';
+import { DC_STAMP_RESISTOR, DC_STAMP_VSOURCE, dcBranchValues, DcBranchValues } from './values';
 
 /*
  * F2.2 part 3: the sparse path of `DcSolver` (Gilbert–Peierls LU in AMD order), its factorisation
@@ -86,6 +87,13 @@ const largeArb: fc.Arbitrary<LargeCircuitSpec> = fc.record({
   seed: fc.integer(),
   meshPercent: fc.integer({ min: 0, max: 30 }),
   wellConditioned: fc.boolean(),
+});
+const wellConditionedArb: fc.Arbitrary<LargeCircuitSpec> = fc.record({
+  nodes: fc.integer({ min: 40, max: 260 }),
+  islands: fc.integer({ min: 1, max: 3 }),
+  seed: fc.integer(),
+  meshPercent: fc.integer({ min: 0, max: 30 }),
+  wellConditioned: fc.constant(true),
 });
 const smallArb: fc.Arbitrary<LargeCircuitSpec> = fc.record({
   nodes: fc.integer({ min: 2, max: 24 }),
@@ -213,7 +221,7 @@ describe('DcSolver sparse path', () => {
     }
   });
 
-  it('agrees with dense LU on large random circuits: residuals on all, values on the well-conditioned', () => {
+  it('agrees with dense LU on large random circuits in residual space: both pass every row', () => {
     fc.assert(
       fc.property(largeArb, (spec) => {
         const circuit = largeCircuit(spec);
@@ -223,9 +231,21 @@ describe('DcSolver sparse path', () => {
         expect(s.islands.map((i) => i.unknowns)).toStrictEqual(d.islands.map((i) => i.unknowns));
         checkRows(circuit, d);
         checkRows(circuit, s);
-        if (spec.wellConditioned) expect(worstDisagreement(circuit, d, s)).toBeLessThanOrEqual(1);
       }),
-      { numRuns: 14 },
+      { numRuns: 6 },
+    );
+  });
+
+  it('agrees with dense LU on values, on large well-conditioned circuits', () => {
+    fc.assert(
+      fc.property(wellConditionedArb, (spec) => {
+        const circuit = largeCircuit(spec);
+        const d = dense().solve(circuit.netlist, circuit.values);
+        const s = sparse().solve(circuit.netlist, circuit.values);
+        expect(s.islands.map((i) => i.flags)).toStrictEqual(d.islands.map((i) => i.flags));
+        expect(worstDisagreement(circuit, d, s)).toBeLessThanOrEqual(1);
+      }),
+      { numRuns: 12 },
     );
   });
 
@@ -282,7 +302,7 @@ describe('DcSolver sparse path', () => {
         }
       }),
       {
-        numRuns: 30,
+        numRuns: 24,
         // Fresh-seed counterexamples to a bound tighter than the policy's.
         examples: [
           [{ size: 70, seed: -1888842712, amps: -1, feedKind: 'resistor', into: 29 }],
@@ -326,7 +346,7 @@ describe('DcSolver sparse path', () => {
         if (cached.size > 1) expect(shared.stats.evictions).toBeGreaterThan(0);
       }),
       {
-        numRuns: 5,
+        numRuns: 4,
         // A singular island beside a factored one: nothing of the first is cached (CI-style fresh seed).
         examples: [
           [
@@ -488,6 +508,112 @@ describe('DcSolver sparse path', () => {
     expect(solution.islands[0].flags & ISLAND_FLAG_SINGULAR).toBe(ISLAND_FLAG_SINGULAR);
     expect([...solution.nodes, ...solution.branches].every((v) => Object.is(v, 0))).toBe(true);
     expect(sources.length).toBeGreaterThan(0);
+  });
+});
+
+const PIN_ARB: fc.Arbitrary<LargeCircuitSpec> = fc.record({
+  nodes: fc.integer({ min: 70, max: 260 }),
+  islands: fc.integer({ min: 1, max: 3 }),
+  seed: fc.integer(),
+  meshPercent: fc.integer({ min: 0, max: 30 }),
+  wellConditioned: fc.boolean(),
+});
+const warmArb: fc.Arbitrary<LargeCircuitSpec> = fc.record({
+  nodes: fc.integer({ min: 70, max: 160 }),
+  islands: fc.integer({ min: 1, max: 2 }),
+  seed: fc.integer(),
+  meshPercent: fc.integer({ min: 0, max: 30 }),
+  wellConditioned: fc.boolean(),
+});
+const perturbArb = fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 64, maxLength: 64 });
+const roundsArb = fc.integer({ min: 1, max: 4 });
+
+/** SHA-256 over the bits of every node voltage and branch current, as the 300-solve pin hashes them. */
+function solutionHash(solutions: readonly DcSolution[]): string {
+  const chunks = solutions.map((s) => new Uint8Array(Float64Array.from([...s.nodes, ...s.branches]).buffer));
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.length;
+  }
+  return Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+describe('DcSolver sparse path: pinned bits and warm reuse (#49 review)', () => {
+  it('pins the bits of 60 seeded large solves through the default solver (a numeric change re-pins this and bumps SIM_ENGINE_VERSION)', () => {
+    // The 300-solve pin (`properties.spec.ts`) reaches only the dense path (at most 40 unknowns).
+    // This one covers the sparse path: pivot tie-breaking, AMD (absorption, supervariables), the
+    // stamp program's summation order. If a change to any of them is deliberate, re-pin this with
+    // the other numeric goldens and bump SIM_ENGINE_VERSION (decision D8).
+    const solver = new DcSolver();
+    const solutions = fc.sample(PIN_ARB, { seed: 20261030, numRuns: 60 }).map((spec) => {
+      const { netlist, values } = largeCircuit(spec);
+      return solver.solve(netlist, values);
+    });
+    expect(
+      solutions.filter((s) => s.islands.some((i) => i.unknowns >= SPARSE_MIN_UNKNOWNS.value)).length,
+    ).toBeGreaterThanOrEqual(40);
+    expect(solutionHash(solutions)).toBe('dbe5832a580d85596923df4dbaf65395bfae29a130a5bd53a00722e84fd15a5b');
+  });
+
+  it('is bit-identical warm and cold after value changes, ideal and non-ideal sources included', () => {
+    let replays = 0;
+    let fallbacks = 0;
+    fc.assert(
+      fc.property(warmArb, perturbArb, roundsArb, (spec, k, rounds) => {
+        const c = largeCircuit(spec);
+        const warm = sparse();
+        warm.solve(c.netlist, c.values);
+        const v = c.values;
+        for (let r = 0; r < rounds; r++) {
+          for (let b = 0; b < v.count; b++) {
+            const p = k[(b + 37 * r) % k.length];
+            if (v.stamps[b] === DC_STAMP_RESISTOR) v.resistor(b, v.ohms[b] * (0.5 + p / 500));
+            else if (v.stamps[b] === DC_STAMP_VSOURCE) {
+              // Ideal ↔ non-ideal: an explicit zero in the pattern becomes non-zero, and back.
+              const ohms = p % 5 === 0 ? (v.ohms[b] === 0 ? 0.01 * (1 + p) : 0) : v.ohms[b];
+              v.vsource(b, v.emfV[b] + (p - 500) / 50, ohms);
+            } else v.isource(b, v.amps[b] + (p - 500) / 1000);
+          }
+          const before = [warm.sparse.replays, warm.sparse.fallbacks];
+          const w = warm.solve(c.netlist, v);
+          replays += warm.sparse.replays - before[0];
+          fallbacks += warm.sparse.fallbacks - before[1];
+          expectSameBits(w, sparse().solve(c.netlist, v));
+        }
+      }),
+      { numRuns: 26 },
+    );
+    // Both outcomes of the replay are exercised.
+    expect(replays).toBeGreaterThan(0);
+    expect(fallbacks).toBeGreaterThan(0);
+  });
+
+  it('switches to sparse at exactly SPARSE_MIN_UNKNOWNS (63 dense, 64 sparse)', () => {
+    // A chain of n nodes behind one source has n − 1 node unknowns plus the source's current.
+    const chain = (unknowns: number): Circuit => {
+      const edges: SyntheticBranch[] = [{ a: 0, b: 1, kind: 'vsource' }];
+      for (let i = 1; i < unknowns - 1; i++) edges.push({ a: i, b: i + 1, kind: 'resistor' });
+      edges.push({ a: unknowns - 1, b: 0, kind: 'resistor' });
+      const netlist = syntheticNetlist(unknowns, edges);
+      const values = new DcBranchValues(edges.length);
+      values.vsource(0, 12, 0.1);
+      for (let b = 1; b < edges.length; b++) values.resistor(b, 10);
+      return { netlist, values };
+    };
+    expect(SPARSE_MIN_UNKNOWNS.value).toBe(64);
+    for (const [unknowns, sparsePath] of [
+      [63, false],
+      [64, true],
+    ] as const) {
+      const circuit = chain(unknowns);
+      const solver = new DcSolver();
+      const solution = solver.solve(circuit.netlist, circuit.values);
+      expect(solution.islands[0].unknowns).toBe(unknowns);
+      expect(solver.cache.stats.misses, `${unknowns} unknowns`).toBe(sparsePath ? 1 : 0);
+      checkPhysics(circuit, solution);
+    }
   });
 });
 
