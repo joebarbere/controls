@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "enum": [
+        "voltage",
+        "current"
+      ],
+      "title": "Overlay",
+      "description": "voltage: |V| on leads and terminals; current: |I| along the leads"
+    },
+    "on": {
+      "type": "boolean",
+      "title": "Show",
+      "description": "true shows the overlay, false hides it"
+    }
+  },
+  "required": [
+    "name",
+    "on"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of view.overlay"
+}

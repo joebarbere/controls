@@ -13,3 +13,13 @@ export * from './lib/geometry/devices';
 export { WorldSync, entitySelectableId, applyTransform, type SyncResult } from './lib/world/world-sync';
 export { FixtureSync, BENCH_FOCUS_ELEVATION_DEG } from './lib/world/fixture-sync';
 export type { PickHit } from './lib/picking/picker';
+export {
+  SimOverlays,
+  type OverlayGraph,
+  type OverlayLegendState,
+  type OverlayName,
+  type OverlayTerminalRef,
+  type SnapshotFeed,
+} from './lib/overlays/sim-overlays';
+export * from './lib/sim/overlay-scale';
+export * from './lib/sim/overlay-steps';

@@ -1,0 +1,223 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SimOverlays in the viewport > voltage and current on the bench (band 0: no voltage scale; the unwired lamp: no reading) 1`] = `
+{
+  "current": true,
+  "inScene": true,
+  "leads": [
+    {
+      "amps": 30,
+      "arrows": 1,
+      "connection": 1,
+      "direction": "a→b",
+      "volts": [
+        "noScale",
+        "noScale",
+      ],
+    },
+    {
+      "amps": 30,
+      "arrows": 4,
+      "connection": 2,
+      "direction": "a→b",
+      "volts": [
+        "noScale",
+        "noScale",
+      ],
+    },
+  ],
+  "reducedMotion": false,
+  "terminals": [
+    {
+      "entity": 1,
+      "highlighted": false,
+      "positionMm": [
+        918,
+        -268,
+        298,
+      ],
+      "terminal": "neg",
+      "volts": "noScale",
+    },
+    {
+      "entity": 1,
+      "highlighted": false,
+      "positionMm": [
+        1033,
+        -268,
+        298,
+      ],
+      "terminal": "pos",
+      "volts": "noScale",
+    },
+    {
+      "entity": 2,
+      "highlighted": false,
+      "positionMm": [
+        1110,
+        -280,
+        212,
+      ],
+      "terminal": "a",
+      "volts": "noScale",
+    },
+    {
+      "entity": 2,
+      "highlighted": false,
+      "positionMm": [
+        1150,
+        -280,
+        212,
+      ],
+      "terminal": "b",
+      "volts": "noScale",
+    },
+    {
+      "entity": 3,
+      "highlighted": false,
+      "positionMm": [
+        1310,
+        -275,
+        212,
+      ],
+      "terminal": "a",
+      "volts": "unknown",
+    },
+    {
+      "entity": 3,
+      "highlighted": false,
+      "positionMm": [
+        1340,
+        -275,
+        212,
+      ],
+      "terminal": "b",
+      "volts": "unknown",
+    },
+  ],
+  "voltage": true,
+}
+`;
+
+exports[`SimOverlays in the viewport > voltage and current on the bench (band 0: no voltage scale; the unwired lamp: no reading) 2`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "overlay:sim-leads",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-terminals",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-terminals-unknown",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -951,
+        1000,
+        1000,
+        951,
+      ],
+      "name": "overlay:sim-highlight",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "overlay:sim-arrows-dc",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-arrows-ac",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "overlay:sim",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;

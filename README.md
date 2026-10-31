@@ -40,6 +40,7 @@ What exists today (Phases 0 and 1):
 - Placement with a snapping ghost preview: pick a prop (1–9), aim, click or press Enter to place it; drag an object (or select it, M, Enter) to move it; Delete removes it; Escape cancels. Each commit is exactly one command, so the mouse reaches the same `world.hash` as the equivalent console lines.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). The viewport draws only when something changes (idle behind the menu); a frame-time HUD shows in dev builds.
 - Procedural 3D models of the bench battery, the bench supply and the DIN-rail supply, sized from their catalogue entries and labelled with their fictional brands.
+- Debug overlays (sandbox and dev builds): `view.overlay voltage|current` colours leads and terminals by voltage on a fixed scale per nominal system, or animates current along the leads (direction for DC, magnitude for AC), with a text legend; unsolved circuits show "no reading", never 0 V, and reduced motion keeps the arrows still.
 - Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
 
 ### Simulation

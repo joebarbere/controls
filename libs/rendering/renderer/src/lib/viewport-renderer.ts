@@ -6,6 +6,13 @@ import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './scene';
 import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
 import { Disposer } from './disposer';
+import type {
+  OverlayGraph,
+  OverlayLegendState,
+  OverlayName,
+  OverlayTerminalRef,
+  SnapshotFeed,
+} from './overlays/sim-overlays';
 import { RenderLoop, windowFrameClock } from './loop/render-loop';
 import type { FrameTiming } from './stats/frame-timer';
 import {
@@ -70,6 +77,15 @@ export class ViewportRenderer {
   private world: World | null = null;
   private placement: CatalogRef | null = null;
   private readonly intentListeners = new Set<ViewportIntentListener>();
+  /** Overlay view state (F2.6), kept until the controller exists, like the world. */
+  private readonly overlayState = {
+    voltage: false,
+    current: false,
+    reducedMotion: false,
+    feed: null as SnapshotFeed | null,
+    highlight: null as readonly OverlayTerminalRef[] | null,
+  };
+  private readonly legendListeners = new Set<(state: OverlayLegendState) => void>();
 
   async init(canvas: HTMLCanvasElement, options: ViewportOptions = {}): Promise<RenderBackend> {
     const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: options.forceWebGL ?? false });
@@ -110,6 +126,7 @@ export class ViewportRenderer {
     });
     if (this.world) controller.syncWorld(this.world);
     controller.setPlacement(this.placement);
+    this.applyOverlayState(controller);
     controller.onIntent((intent) => this.intentListeners.forEach((l) => l(intent)));
     loop.requestRender(); // the first frame
     return this.backendName;
@@ -137,6 +154,64 @@ export class ViewportRenderer {
   syncWorld(world: World): void {
     this.world = world;
     this.controller?.syncWorld(world);
+  }
+
+  /**
+   * Where the overlays read sim snapshots (`SimHost`, ADR 0011 §9.2); `null` detaches. The
+   * subscription is the renderer's and ends with {@link dispose}.
+   */
+  attachSnapshots(feed: SnapshotFeed | null): void {
+    this.overlayState.feed = feed;
+    this.controller?.overlays.attach(feed);
+  }
+
+  /** Switches a debug overlay (the `view.overlay` view command). View state only. */
+  setOverlay(name: OverlayName, on: boolean): void {
+    this.overlayState[name] = on;
+    this.controller?.overlays.setOverlay(name, on);
+  }
+
+  /** Whether an overlay is on. */
+  overlay(name: OverlayName): boolean {
+    return this.overlayState[name];
+  }
+
+  /** `prefers-reduced-motion`: current arrows are static. */
+  setReducedMotion(on: boolean): void {
+    this.overlayState.reducedMotion = on;
+    this.controller?.overlays.setReducedMotion(on);
+  }
+
+  /**
+   * Highlights terminals in 3D (the netlist inspector's selected node: view state only); `null` or
+   * `[]` clears. Returns how many drawn terminals are highlighted (0 before `init`).
+   */
+  highlightTerminals(terminals: readonly OverlayTerminalRef[] | null): number {
+    this.overlayState.highlight = terminals;
+    return this.controller?.overlays.highlightTerminals(terminals) ?? 0;
+  }
+
+  /** The overlay legend's state; listeners may subscribe before `init` resolves. */
+  get overlayLegend(): OverlayLegendState {
+    return (
+      this.controller?.overlays.legendState ?? {
+        voltage: this.overlayState.voltage,
+        current: this.overlayState.current,
+        bands: [],
+        noScale: false,
+        unknown: false,
+      }
+    );
+  }
+
+  onOverlayLegend(listener: (state: OverlayLegendState) => void): () => void {
+    this.legendListeners.add(listener);
+    return () => this.legendListeners.delete(listener);
+  }
+
+  /** What the overlays draw (tests and the `?e2e=1` hook), or `undefined` before `init`. */
+  overlayGraph(): OverlayGraph | undefined {
+    return this.controller?.overlays.describe();
   }
 
   /** Arms placement of the active tool's prop, or disarms it (`null`). */
@@ -282,6 +357,18 @@ export class ViewportRenderer {
     this.renderer?.dispose();
     this.renderer = undefined;
     this.intentListeners.clear();
+    this.legendListeners.clear();
+  }
+
+  private applyOverlayState(controller: ViewportController): void {
+    const o = this.overlayState;
+    const overlays = controller.overlays;
+    this.disposer.add(overlays.onLegendChange((s) => this.legendListeners.forEach((l) => l(s))));
+    overlays.setReducedMotion(o.reducedMotion);
+    overlays.attach(o.feed);
+    overlays.setOverlay('voltage', o.voltage);
+    overlays.setOverlay('current', o.current);
+    if (o.highlight) overlays.highlightTerminals(o.highlight);
   }
 }
 

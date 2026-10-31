@@ -192,4 +192,43 @@ describe('ViewportRenderer (fake GPU)', () => {
     clock.ticks(3);
     expect(viewport.framesDrawn).toBe(0);
   });
+
+  // F2.6: the overlays' view state is kept until init, like the world, and released on dispose.
+  it('keeps overlay state set before init, relays the legend, and drops the snapshot subscription on dispose', async () => {
+    const clock = new ManualFrameClock();
+    const doc = new FakeDocument(new FakeWindow(clock));
+    const canvas = new FakeCanvas(doc);
+    const viewport = new ViewportRenderer();
+    const listeners = new Set<(view: null) => void>();
+    const feed = {
+      running: false,
+      subscribe: (l: (view: null) => void) => (listeners.add(l), () => listeners.delete(l)),
+    };
+    viewport.attachSnapshots(feed);
+    viewport.setOverlay('current', true);
+    viewport.setReducedMotion(true);
+    expect(viewport.highlightTerminals([{ entity: 1, terminal: 'pos' }])).toBe(0); // not drawn yet
+    expect(viewport.overlay('current')).toBe(true);
+    expect(viewport.overlayLegend).toMatchObject({ voltage: false, current: true });
+    expect(viewport.overlayGraph()).toBeUndefined();
+    const legend = vi.fn();
+    viewport.onOverlayLegend(legend);
+    await viewport.init(canvas as unknown as HTMLCanvasElement);
+    const gpu = fake.renderers.at(-1) as FakeRenderer;
+    clock.ticks(3);
+    expect(listeners.size).toBe(1);
+    expect(viewport.overlayGraph()).toMatchObject({
+      voltage: false,
+      current: true,
+      reducedMotion: true,
+      inScene: true,
+    });
+    gpu.render.mockClear();
+    viewport.setOverlay('voltage', true);
+    clock.ticks(3);
+    expect(gpu.render).toHaveBeenCalledTimes(1); // switching an overlay draws
+    expect(legend).toHaveBeenLastCalledWith(expect.objectContaining({ voltage: true, current: true }));
+    viewport.dispose();
+    expect(listeners.size).toBe(0);
+  });
 });

@@ -786,6 +786,16 @@ F2.3b implemented the transport and the worker (part 1) and `SimHost` with the s
 - **`desktop-e2e`'s violation probes are a blocked `fetch` and a deferred eval**: DevTools evaluation is exempt from the eval check only for the duration of the call, so the eval is scheduled with `setTimeout` and runs as the worker's own task (#60 review). The `forcefullyCrashRenderer` check waits for the `render-process-gone` handler (its own P2 PR).
 - **`autosave`'s behind test** is `(lastAdvance − progress) ÷ max(1, requested speed)` against `AUTOSAVE_MAX_BEHIND_MS`: the commanded lead in wall time at the requested speed.
 
+## Implementation notes (F2.6 overlays)
+
+F2.6 implemented §9.2's overlays (`renderer-engineer`). Where the text above left a point open, or the implementation pinned one down:
+
+- **Overlays draw their own lead and terminal geometry** (§9.2 "Picking"): nothing drew leads before P3, so `SimOverlays` draws instanced lead segments and terminal markers from the world (connections and catalogue terminals). They are still never pickable nor among the picker's roots; when P3 draws conductors, the overlays recolour those.
+- **`NetlistReadout` in `sim-protocol`** is the one place a reader turns a `SnapshotView` into |V(node) − V(islandReference)|, |I|, a DC direction and each island's `islandStatus` and band (§5.3), allocation-free and cached per descriptor, so the overlays and the netlist inspector agree. It is not a layout change: no protocol bump. `fakeSnapshotView` builds views from plain values through `encodeSnapshot` (§6.3's fake snapshots).
+- **Band names are the join** (§5.3): the renderer resolves `NOMINAL_BANDS[band]` by name to a voltage scale (`dc12`, `dc24`, `ac120-240`, `ac208y120`, `ac480y277`); index 0 (`none`) and an unknown name are no scale. Appending a band remains a protocol bump (§12); a renderer spec fails until the name has a scale.
+- **The current scale is one for every band** (logarithmic, 1 mA to 100 A): current follows the load, not the supply. Band 0 still shows current.
+- **AC shows magnitude only:** AC and mixed islands get no direction (`branchDirection` 0).
+
 ## Resolved in review
 
 The proposal's open questions, by number:

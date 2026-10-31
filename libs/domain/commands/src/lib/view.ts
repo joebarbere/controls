@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AnyCommandDef, CommandDef } from './command';
-import { defineViewCommand } from './builtin';
+import { CONSOLE_AVAILABLE_KEY, defineViewCommand } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
 
@@ -43,6 +43,23 @@ export const ViewTargetId = z
 /** `view.focus {target}`: the selectable id to focus. */
 export const ViewFocusArgs = z.strictObject({ target: ViewTargetId });
 export type ViewFocusArgs = z.infer<typeof ViewFocusArgs>;
+
+/** The debug overlays `view.overlay` switches (plan F2.6). */
+export const ViewOverlayName = z.enum(['voltage', 'current']);
+export type ViewOverlayName = z.infer<typeof ViewOverlayName>;
+
+/**
+ * `view.overlay {name, on}`: strict. Key order is console grammar (`view.overlay voltage true`), and
+ * the id and shape are save format (the replay log holds them).
+ */
+export const ViewOverlayArgs = z.strictObject({
+  name: ViewOverlayName.meta({
+    title: 'Overlay',
+    description: 'voltage: |V| on leads and terminals; current: |I| along the leads',
+  }),
+  on: z.boolean().meta({ title: 'Show', description: 'true shows the overlay, false hides it' }),
+});
+export type ViewOverlayArgs = z.infer<typeof ViewOverlayArgs>;
 
 /** Binding ids of the view keys (settings `controls.keybindings` keys; stable, like command ids). */
 export const VIEW_MODE_WALK_BINDING = 'view.mode.walk';
@@ -106,9 +123,26 @@ export function viewFocusCommand<S>(): CommandDef<ViewFocusArgs, S> {
   });
 }
 
-/** `view.mode` and `view.focus`, for registering with any state type (world registries add them). */
+/**
+ * `view.overlay --name voltage|current --on true|false` (plan F2.6): switches a debug overlay in the
+ * viewport, |V| against the island reference on the leads and terminals, or |I| animated along the
+ * leads. A view command: logged, never a world change. Offered where the console is
+ * (`console.available`: sandbox and dev builds) until F5.3 gates debug tools by difficulty. No
+ * default key.
+ */
+export function viewOverlayCommand<S>(): CommandDef<ViewOverlayArgs, S> {
+  return defineViewCommand<ViewOverlayArgs, S>({
+    id: 'view.overlay',
+    title: 'Show or hide a debug overlay',
+    category: 'View',
+    args: ViewOverlayArgs,
+    when: CONSOLE_AVAILABLE_KEY,
+  });
+}
+
+/** `view.mode`, `view.focus` and `view.overlay`, for registering with any state type (world registries add them). */
 export function viewportCommands<S>(): AnyCommandDef<S>[] {
-  return [viewModeCommand<S>(), viewFocusCommand<S>()];
+  return [viewModeCommand<S>(), viewFocusCommand<S>(), viewOverlayCommand<S>()];
 }
 
 /** The extra binding declarations of a list of commands (`CommandDef.bindings`), in list order. */

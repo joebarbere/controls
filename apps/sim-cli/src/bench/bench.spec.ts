@@ -449,5 +449,8 @@ describe('sim bench', () => {
     const read = report.cases.find((c) => c.name === 'snapshot-read-500-devices');
     expect(read).toMatchObject({ budgetMs: null, ok: true, invariant: { failure: null } });
     expect(read?.p99Ms).toBeGreaterThanOrEqual(read?.medianMs ?? Infinity);
+    // F2.6: the same read with the overlays' netlist readout, gated the same way.
+    const overlay = report.cases.find((c) => c.name === 'overlay-read-500-devices');
+    expect(overlay).toMatchObject({ budgetMs: null, ok: true, invariant: { failure: null } });
   });
 });

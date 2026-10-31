@@ -55,6 +55,7 @@ import {
 import { KeyboardInput } from './input/keyboard-input';
 import { PlacementGhost } from './overlays/ghost';
 import { SelectionHighlight } from './overlays/highlight';
+import { SimOverlays } from './overlays/sim-overlays';
 import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
 import { buildBaseScene, DEFAULT_ROOM_BOUNDS, describeSceneGraph, disposeScene, type SceneGraphNode } from './scene';
@@ -155,6 +156,8 @@ export class ViewportController {
   private readonly world: WorldSync;
   private readonly ghost: PlacementGhost;
   private readonly highlight: SelectionHighlight;
+  /** The debug overlays (F2.6: voltage, current) and the netlist inspector's terminal highlight. */
+  readonly overlays: SimOverlays;
   private readonly orbit: OrbitControls;
   private readonly keyboard: KeyboardInput;
   private readonly look: PointerLockLook;
@@ -220,6 +223,8 @@ export class ViewportController {
 
     this.highlight = new SelectionHighlight(this.scene);
     this.disposer.add(() => this.highlight.dispose());
+    this.overlays = new SimOverlays(this.scene, () => this.invalidate());
+    this.disposer.add(() => this.overlays.dispose());
     this.refreshSelectables();
     const offSelection = this.selection.onChange(() => {
       this.refreshHighlight();
@@ -324,6 +329,7 @@ export class ViewportController {
       this.refreshSurfaces();
     }
     const result = this.world.sync(world);
+    this.overlays.syncWorld(world);
     if (this.moving && this.world.entityOf(this.moving.id) !== this.moving.entity) this.endMove();
     if (result.membershipChanged || fixturesChanged) {
       this.refreshSelectables();
@@ -481,6 +487,7 @@ export class ViewportController {
         this.markHoverDirty();
         animating = true; // damping: keep going until OrbitControls reports no change
       }
+      if (this.overlays.update(dtSeconds)) animating = true; // current arrows while the sim runs
       if (this.hoverDirty) {
         this.hoverDirty = false;
         this.updateHover();
