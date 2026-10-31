@@ -51,12 +51,13 @@ describe('the topology descriptor', () => {
       netlist.branches.map((b) => [b.element, b.a, b.b, b.island]),
     );
     expect(descriptor.islands).toEqual(netlist.islands.map((i) => ({ kind: i.kind, nodes: i.nodes })));
-    // The thermal load (3) and the I²t fuse (4) publish records; the battery and switch don't.
+    // The battery (1, since F2.4), the thermal load (3) and the I²t fuse (4) publish records; the switch doesn't.
     expect(descriptor.devices.map((d) => [d.entity, d.kind])).toEqual([
+      [1, 'battery'],
       [3, 'test.thermalLoad'],
       [4, 'test.i2tFuse'],
     ]);
-    expect(Object.keys(descriptor.schemas).sort()).toEqual(['test.i2tFuse', 'test.thermalLoad']);
+    expect(Object.keys(descriptor.schemas).sort()).toEqual(['battery', 'test.i2tFuse', 'test.thermalLoad']);
     // Cached by identity within a generation; a topology change makes a new object.
     expect(engine.topologyDescriptor()).toBe(descriptor);
   });
