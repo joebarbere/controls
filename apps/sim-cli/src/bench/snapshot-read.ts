@@ -28,12 +28,11 @@ import { runInNewContext } from 'node:vm';
 export const READ_PLANT = Object.freeze({ devices: 500, nodes: 1_000, branches: 1_500, islands: 50 });
 
 /**
- * The allocation gate, in bytes per read. A read that allocates anything allocates at least one heap
- * object, 12 B or more (a boxed double), so every-read garbage measures 12+; a step of one scavenge's
- * bookkeeping in one window shows as up to about 1 B per read at 20,000 reads (0.88 measured; 0.000 in
- * a quiet process). 4 B fails the first and never the second: "a read allocates nothing".
+ * The allocation gate, in bytes per read: under 1 B, so any object allocated on every read (12 B or
+ * more, a boxed double) fails, and so does one every dozen reads. With the warm-up windows discarded
+ * (`bytesPerRead`) a read measures 0 B: 13 of 13 `sim bench` runs on a loaded machine (#60 review 2).
  */
-export const READ_ALLOCATION_GATE_BYTES = 4;
+export const READ_ALLOCATION_GATE_BYTES = 1;
 
 /** A reader on a shared buffer whose two slots hold the plant, and the fields a frame reads. */
 export interface SnapshotReadRig {
@@ -118,15 +117,15 @@ export function snapshotReadRig(plant = READ_PLANT): SnapshotReadRig {
 /**
  * Bytes allocated per frame's read, by the method of the simulation caveats: `--expose-gc` at run
  * time, a collection before each window, heap growth plus what each GC freed (`GCProfiler`), and the
- * smallest of several windows (code not yet optimised allocates more). Returned as the slope between
- * windows of `reads` and `2 × reads` reads, so the profiler's own fixed cost per window cancels out
- * and only what each read adds is left.
+ * smallest of several windows (code not yet optimised allocates more). Returned as a slope between
+ * windows of `reads`, `2 × reads` and `3 × reads` reads, so the profiler's own fixed cost per window
+ * cancels out and only what each read adds is left.
  */
-export function bytesPerRead(rig: SnapshotReadRig, reads = 20_000, windows = 6): number {
+export function bytesPerRead(rig: SnapshotReadRig, reads = 20_000, windows = 6, warmup = 20_000): number {
   setFlagsFromString('--expose-gc');
   const collect = runInNewContext('gc') as () => void;
   // Long enough for the read to reach optimised code: before that it may box what it returns.
-  for (let i = 0; i < 20_000; i++) {
+  for (let i = 0; i < warmup; i++) {
     rig.announce();
     rig.read();
   }
@@ -146,6 +145,12 @@ export function bytesPerRead(rig: SnapshotReadRig, reads = 20_000, windows = 6):
     );
     return getHeapStatistics().used_heap_size - start + freed;
   };
+  // One window of each size first, discarded: the first measured window of a process carries a
+  // one-time cost (about 17.7 kB) that isn't the read's.
+  for (const count of [reads, 2 * reads, 3 * reads]) window(count);
   const smallest = (count: number) => Math.min(...Array.from({ length: windows }, () => window(count)));
-  return Math.max(0, (smallest(2 * reads) - smallest(reads)) / reads);
+  const [one, two, three] = [smallest(reads), smallest(2 * reads), smallest(3 * reads)];
+  // Two independent slopes, the smaller kept: what a read allocates raises both, while a one-off
+  // step (about 11 kB, now and then in one window size) raises at most one.
+  return Math.max(0, Math.min(two - one, three - two) / reads);
 }

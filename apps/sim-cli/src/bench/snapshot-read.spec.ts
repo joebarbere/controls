@@ -1,13 +1,12 @@
-import { runBenchCase } from './bench';
-import { SNAPSHOT_READ_CASE } from './cases';
 import { bytesPerRead, READ_ALLOCATION_GATE_BYTES, READ_PLANT, snapshotReadRig } from './snapshot-read';
 
 /*
- * The per-frame snapshot read's bench case (plan F2.3b, #60 review): every frame's read is a real
- * copy, it allocates nothing, and the allocation gate fails a read that does allocate.
+ * The per-frame snapshot read's rig and allocation measure (plan F2.3b, #60 review): every frame's
+ * read is a real copy, it allocates nothing, and the measure catches a read that does. The full case,
+ * with its p50/p99 and the gate at full size, runs in `sim bench` (the `bench` target in `verify`).
  */
 
-describe('the snapshot read bench case', () => {
+describe('the snapshot read rig', () => {
   it('copies a fresh slot every frame and reads every device field', () => {
     const rig = snapshotReadRig();
     rig.announce();
@@ -17,10 +16,15 @@ describe('the snapshot read bench case', () => {
     rig.read();
     expect(rig.sum()).toBe(first);
     expect(first).toBeGreaterThan(0);
+    expect(READ_PLANT.devices).toBe(500);
     expect(() => rig.read()).toThrow(/copied nothing/); // no publish announced: nothing new
   });
 
-  it('the gate bites: a read that allocates is measured and fails the case', () => {
+  it('a read allocates nothing (a small measurement; the full one is the bench case)', () => {
+    expect(bytesPerRead(snapshotReadRig(), 1_000, 2)).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
+  });
+
+  it('the measure catches a read that allocates', () => {
     const rig = snapshotReadRig();
     const kept: number[][] = [];
     const leaky = {
@@ -31,17 +35,6 @@ describe('the snapshot read bench case', () => {
       },
       sum: () => rig.sum(),
     };
-    expect(bytesPerRead(leaky, 5_000, 4)).toBeGreaterThan(8 * READ_ALLOCATION_GATE_BYTES);
-  });
-
-  it('runs as a bench case: deterministic, reported with p50 and p99, and gated on allocation: a read allocates nothing', () => {
-    const result = runBenchCase({ ...SNAPSHOT_READ_CASE, warmup: 50, runs: 200 }, () => 0);
-    expect(result.ok).toBe(true);
-    expect(result.deterministic).toBe(true);
-    expect(result.budgetMs).toBeNull();
-    expect(result.invariant?.failure).toBeNull();
-    expect(result.invariant?.value).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
-    expect(result.p99Ms).toBeGreaterThanOrEqual(result.medianMs);
-    expect(READ_PLANT.devices).toBe(500);
+    expect(bytesPerRead(leaky, 1_000, 2)).toBeGreaterThan(32 * READ_ALLOCATION_GATE_BYTES);
   });
 });

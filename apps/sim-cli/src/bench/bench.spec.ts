@@ -59,6 +59,26 @@ describe('percentile', () => {
 });
 
 describe('runBenchCase', () => {
+  it('runs an invariant once after the timed runs: its failure fails the case, its value is reported', () => {
+    let checks = 0;
+    const holds = runBenchCase(
+      fixedCase({ invariant: () => (checks++, { value: 0, failure: null }) }),
+      steppingClock([1, 1, 1]),
+    );
+    expect(checks).toBe(1);
+    expect(holds).toMatchObject({ ok: true, invariant: { value: 0, failure: null } });
+    const fails = runBenchCase(
+      fixedCase({ invariant: () => ({ value: 16, failure: 'allocated 16 B' }) }),
+      steppingClock([1, 1, 1]),
+    );
+    expect(fails).toMatchObject({
+      ok: false,
+      deterministic: true,
+      invariant: { value: 16, failure: 'allocated 16 B' },
+    });
+    expect(runBenchCase(fixedCase(), steppingClock([1, 1, 1])).invariant).toBeNull();
+  });
+
   it('reports the median of the timed runs, not the warm-up', () => {
     let calls = 0;
     const run = () => {

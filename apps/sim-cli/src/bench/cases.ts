@@ -174,7 +174,7 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
       failure:
         bytes < READ_ALLOCATION_GATE_BYTES
           ? null
-          : `a read of ${READ_PLANT.devices} devices allocated ${bytes.toFixed(1)} B (want 0)`,
+          : `a read of ${READ_PLANT.devices} devices allocated ${bytes.toFixed(1)} B (the gate: under ${READ_ALLOCATION_GATE_BYTES} B)`,
     };
   },
 };
