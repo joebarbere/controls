@@ -637,10 +637,12 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    host.engine.advanceTo(100_000); // warm: every buffer grown, the JIT tiered up
+    host.engine.advanceTo(40_000); // warm: every buffer grown
     // Bytes allocated in a window: the heap's growth plus what each collection freed. GC counts are no
-    // measure (the runtime's own few scavenges land at random), and one short window can catch a JIT
-    // tier-up's allocation, so the gate takes the median of five 20 000-step windows.
+    // measure (the runtime's own few scavenges land at random). Code that hasn't been optimized yet
+    // allocates more, and when V8's background compiler delivers depends on machine load, so the gate
+    // takes the smallest of ten 20 000-step windows: an allocation the step itself makes raises every
+    // window, a late tier-up only some (the median of five flaked 3 times in 100 under load).
     const window = (steps: number) => {
       const profiler = new GCProfiler();
       const start = getHeapStatistics().used_heap_size;
@@ -653,7 +655,7 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       );
       return (getHeapStatistics().used_heap_size - start + freed) / steps;
     };
-    const perStep = [0, 1, 2, 3, 4].map(() => window(20_000)).sort((x, y) => x - y)[2];
+    const perStep = Math.min(...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => window(20_000)));
     // Measured 20.8-21.0 B/step in these windows, with and without coverage (it falls to about 13 over
     // longer runs as the JIT settles): about 100-200 B per cadence solve, 32 B of it inside
     // DcSolver.solveNonlinear, plus a few in the synthetic thermal layer. Zero allocation per tick is
