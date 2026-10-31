@@ -90,7 +90,7 @@ export const DeviceSource = z.strictObject({
 export type DeviceSource = z.infer<typeof DeviceSource>;
 
 /** Device categories, for the palette and the build menu. Adding one is a catalogue change. */
-export const DeviceCategory = z.enum(['source', 'load', 'switch', 'lead']);
+export const DeviceCategory = z.enum(['source', 'load', 'switch', 'protection', 'lead']);
 export type DeviceCategory = z.infer<typeof DeviceCategory>;
 
 /** One catalogue entry (catalogue format v1). */

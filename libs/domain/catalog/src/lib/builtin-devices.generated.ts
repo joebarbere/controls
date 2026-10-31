@@ -86,6 +86,173 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "breaker.saltmere-1p-15a",
+  "version": 1,
+  "title": "15 A single-pole thermal-magnetic circuit breaker on a base",
+  "brand": "Saltmere",
+  "modelName": "SB-115",
+  "category": "protection",
+  "sizeMm": {
+    "widthMm": 40,
+    "heightMm": 90,
+    "depthMm": 70
+  },
+  "terminals": [
+    {
+      "id": "line",
+      "label": "LINE",
+      "positionMm": {
+        "x": 20,
+        "y": 80,
+        "z": 20
+      }
+    },
+    {
+      "id": "load",
+      "label": "LOAD",
+      "positionMm": {
+        "x": 20,
+        "y": 10,
+        "z": 20
+      }
+    }
+  ],
+  "model": {
+    "kind": "breaker.thermalMagnetic",
+    "params": {
+      "ratedCurrentA": 15,
+      "thermalTimeConstantS": 60,
+      "ultimateTripRatio": 1.25,
+      "magneticTripMinRatio": 8,
+      "magneticTripMaxRatio": 12,
+      "contactResistanceOhm": 0.01
+    }
+  },
+  "controls": [
+    {
+      "id": "on",
+      "label": "Handle on",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "molded-case-15a-class",
+      "kind": "real-world",
+      "citation": "The 15 A single-pole thermal-magnetic molded-case breaker of NEC-region branch circuits, listed to UL 489. Paraphrased, not reproduced: it carries its rating continuously, and must trip within an hour at 135 % (for ratings up to 50 A) and within two minutes at 200 % (up to 30 A). Manufacturers' watts-loss figures put a pole at about 2 W at its rating, about 150 mV, so a contact resistance of 10 mΩ is taken (2.25 W at 15 A).",
+      "covers": [
+        "model.params.ratedCurrentA",
+        "model.params.contactResistanceOhm"
+      ]
+    },
+    {
+      "id": "trip-curve-band",
+      "kind": "game-design",
+      "citation": "game-design inside manufacturer-style curves for NEC-region residential thermal-magnetic breakers (not IEC 60898): inverse-time thermal trips from a little above the rating (ultimate trip 1.25 ×; a 60 s time constant gives about 30 s at 200 %), and an instantaneous magnetic pickup published as a band near ten times the rating (8 to 12 ×, drawn per breaker). The fictional datasheet's band, tested: 135 %: 30 s to 1 h; 200 %: 10 s to 2 min; 500 %: 1 to 15 s; 13 × and above: within 1 ms.",
+      "covers": [
+        "model.params.thermalTimeConstantS",
+        "model.params.ultimateTripRatio",
+        "model.params.magneticTripMinRatio",
+        "model.params.magneticTripMaxRatio"
+      ]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: a single-pole breaker on a 40 × 90 mm base, 70 mm tall, with the line terminal at the top and the load terminal at the bottom; standalone (no panel until P4); not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "fuse.emberlyn-5x20-fa-1a",
+  "version": 1,
+  "title": "1 A fast-acting 5 × 20 mm fuse in an inline holder on a base",
+  "brand": "Emberlyn",
+  "modelName": "EF-520-1A",
+  "category": "protection",
+  "sizeMm": {
+    "widthMm": 70,
+    "heightMm": 30,
+    "depthMm": 30
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 8,
+        "y": 15,
+        "z": 12
+      }
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 62,
+        "y": 15,
+        "z": 12
+      }
+    }
+  ],
+  "model": {
+    "kind": "fuse",
+    "params": {
+      "ratedCurrentA": 1,
+      "meltingI2tA2s": 0.7,
+      "minimumFusingRatio": 1.2,
+      "elementFraction": 0.3,
+      "bodyTimeConstantS": 10,
+      "resistanceOhm": 0.1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "fast-acting-5x20-class",
+      "kind": "real-world",
+      "citation": "The 1 A fast-acting 5 × 20 mm glass cartridge fuse, a common supplemental-protection class listed to UL 248-14. Typical published figures for the class, paraphrased (not one vendor's): a cold resistance of about 0.1 Ω and a nominal melting I²t of roughly 0.5 to 1 A²·s (0.7 A²·s is taken).",
+      "covers": [
+        "model.params.ratedCurrentA",
+        "model.params.meltingI2tA2s",
+        "model.params.resistanceOhm"
+      ]
+    },
+    {
+      "id": "opening-time-band",
+      "kind": "game-design",
+      "citation": "game-design inside UL 248-14's envelope for supplemental fuses (paraphrased): carries its rating, opens within an hour at 135 % and two minutes at 200 %. The fictional datasheet's band, tested: carries 110 %; 135 %: 1 s to 1 h; 200 %: 0.1 to 5 s; 1000 %: 1 to 20 ms. I_min of 1.2 × the rating, between 1 and 1.35 as the envelope requires.",
+      "covers": [
+        "model.params.minimumFusingRatio"
+      ]
+    },
+    {
+      "id": "two-body-melt",
+      "kind": "game-design",
+      "citation": "game-design: a fast element taking 30 % of the steady temperature rise inside a slow body (end caps and holder) of 10 s time constant, the element's own time constant (0.151 s) following from the melting I²t (electrical-realism-reviewer's worked example). It gives about 12 s at 135 %, 0.9 s at 200 % and 7 ms at 1000 %, near published fast-acting curves.",
+      "covers": [
+        "model.params.elementFraction",
+        "model.params.bodyTimeConstantS"
+      ]
+    },
+    {
+      "id": "holder-layout",
+      "kind": "game-design",
+      "citation": "game-design: an inline fuse holder on a 70 × 30 mm base, 30 mm tall, with a screw terminal at each end; not modelled on a product. Replacing the fuse in P2 means deleting it and placing a new one.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "heater.hearthvale-12v-50w",
   "version": 1,
   "title": "12 V 50 W heater element on a base",

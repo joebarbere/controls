@@ -8,6 +8,8 @@ describe('MODEL_KINDS', () => {
   it('lists the P2 kinds, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
+      'breaker.thermalMagnetic',
+      'fuse',
       'generator.portable',
       'heater',
       'lamp.incandescent',
@@ -32,6 +34,12 @@ describe('MODEL_KINDS', () => {
     );
     expect(summary).toStrictEqual({
       battery: { stateOfCharge: 'sim number 1' },
+      'breaker.thermalMagnetic': {
+        on: 'commanded boolean false',
+        thermal: 'sim number 0',
+        tripped: 'sim boolean false',
+      },
+      fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       heater: {},
       'lamp.incandescent': { filamentTempK: 'sim number null' },
@@ -89,7 +97,7 @@ describe('MODEL_KINDS', () => {
   it('modelKind looks up own kinds only', () => {
     expect(modelKind('battery')).toBe(MODEL_KINDS['battery']);
     expect(modelKind('toString')).toBeUndefined();
-    expect(modelKind('fuse')).toBeUndefined();
+    expect(modelKind('relay')).toBeUndefined();
   });
 });
 

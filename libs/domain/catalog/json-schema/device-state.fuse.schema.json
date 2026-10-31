@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "sim": {
+      "type": "object",
+      "properties": {
+        "blown": {
+          "type": "boolean"
+        },
+        "bodyHeat": {
+          "type": "number",
+          "minimum": 0
+        },
+        "elementHeat": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "blown",
+        "bodyHeat",
+        "elementHeat"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "state",
+    "sim"
+  ],
+  "additionalProperties": false,
+  "title": "Device state of model kind fuse",
+  "description": "EntityV2.state (commanded) and EntityV2.sim (sim-owned) of a fuse device (ADR 0011, ADR 0013). Every key is present; null means absent."
+}

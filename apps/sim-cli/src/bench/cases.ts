@@ -12,8 +12,6 @@ import {
   NetlistCompiler,
   SimEngine,
 } from '@controls/sim-core';
-import { ENGINE_TEST_CATALOG, engineTestOptions, I2T_FUSE, THERMAL_LOAD } from '@controls/sim-core/testing';
-import { createWorldRegistry } from '@controls/world-model';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -101,38 +99,43 @@ function resolve(resolver: Resolver, world: World): string {
   return solutionChecksum(netlist, resolver.solver.solve(netlist, resolver.values));
 }
 
-/** Loops in the per-tick case's plant: a battery, an I²t fuse and a thermal load each, wired in series. */
+/**
+ * Loops in the per-tick case's plant: a battery, the catalogue's fuse, its breaker (handle on) and its
+ * lamp each, wired in series (F2.5 test review: the real device models, not the synthetic ones).
+ */
 export const TICK_MIX_LOOPS = 250;
+/** The plant is materialised here: the lamps settled (no continuous re-solves), off the solve cadence. */
+export const TICK_MIX_START = 2001;
 
 let tickMix: World | null = null;
 let tickEngine: SimEngine | null = null;
 
 /**
- * The per-tick case's plant, built once: {@link TICK_MIX_LOOPS} loops of a battery, a fuse and a load
- * (750 devices, 1,000 nodes), materialised at tick 1. The fuse and the load are the engine's synthetic
- * test models (`@controls/sim-core/testing`: an I²t protection layer and a thermal continuous layer)
- * until F2.4 and F2.5 bring the real ones; the battery has no layer work yet.
+ * The per-tick case's plant, built once: {@link TICK_MIX_LOOPS} loops of a battery, a 1 A fuse, a 15 A
+ * breaker and a 12 V lamp (1,000 devices, 1,250 nodes), every layer the catalogue's real models: the
+ * battery's coulomb counting and the lamp's filament (continuous), the fuse's two bodies and the
+ * breaker's bimetal (protection). Materialised at {@link TICK_MIX_START}, so the lamps have settled (a
+ * timed step never re-solves) and the step isn't a cadence tick.
  */
 function tickMixWorld(): World {
   if (tickMix === null) {
-    const game = createGame({
-      seed: 1,
-      registry: createWorldRegistry({ catalog: ENGINE_TEST_CATALOG }),
-      engine: engineTestOptions(),
-    });
+    const game = createGame({ seed: 1 });
     const lead = { id: 'lead.quillfern-test-1m', version: 1 };
     const at = { x: 0, y: 0, z: 0 };
     for (let k = 0; k < TICK_MIX_LOOPS; k++) {
-      const battery = 3 * k + 1;
+      const battery = 4 * k + 1;
       game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
-      game.execOrThrow('entity.place', { ref: I2T_FUSE, positionMm: at });
-      game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'fuse.emberlyn-5x20-fa-1a', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'breaker.saltmere-1p-15a', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'lamp.lumivane-12v-5w', version: 1 }, positionMm: at });
+      game.execOrThrow('device.operate', { id: battery + 2, control: 'on', value: true });
       const end = (offset: number, terminal: string) => ({ entity: battery + offset, terminal });
       game.execOrThrow('lead.connect', { ref: lead, a: end(0, 'pos'), b: end(1, 'a') });
-      game.execOrThrow('lead.connect', { ref: lead, a: end(1, 'b'), b: end(2, 'a') });
-      game.execOrThrow('lead.connect', { ref: lead, a: end(2, 'b'), b: end(0, 'neg') });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(1, 'b'), b: end(2, 'line') });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(2, 'load'), b: end(3, 'a') });
+      game.execOrThrow('lead.connect', { ref: lead, a: end(3, 'b'), b: end(0, 'neg') });
     }
-    game.advance(1);
+    game.advanceTo(TICK_MIX_START);
     tickMix = game.materialisedWorld() as World;
   }
   return tickMix;
@@ -199,21 +202,23 @@ export const BENCH_CASES: readonly BenchCase[] = [
   },
   {
     // Spec §4.5's per-tick budget: one step's discrete, continuous and protection layers, no solve.
-    // `prepare` (untimed) starts an engine on the plant at tick 1, so the timed run is step 1, which
-    // isn't a cadence tick: layers only. Every run starts from the same state, so the checksum holds.
+    // `prepare` (untimed) starts an engine on the plant at TICK_MIX_START, which isn't a cadence tick,
+    // so the timed run is that step's layers only (the lamps have settled: no continuous re-solve).
+    // Every run starts from the same state, so the checksum holds.
     name: 'tick-device-mix',
     warmup: 20,
     runs: 101,
     budgetMs: 0.3,
     prepare: () => {
-      tickEngine = SimEngine.start(tickMixWorld(), engineTestOptions());
+      tickEngine = SimEngine.start(tickMixWorld());
     },
     run: () => {
       const engine = tickEngine as SimEngine;
-      engine.advanceTo(2);
-      return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.netlist.devices.length}`;
+      engine.advanceTo(TICK_MIX_START + 1);
+      return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.stats.continuousSolves}:${engine.netlist.devices.length}`;
     },
-    // A digest of the bags the layers wrote (Σ tempK, Σ heatA2s), untimed: idle layers can't pass.
+    // A digest of the bags the layers wrote (Σ charge, Σ filament temperature, Σ fuse heat, Σ bimetal),
+    // untimed: idle layers can't pass.
     checksum: () => bagDigest(tickEngine as SimEngine),
   },
   {
@@ -237,15 +242,16 @@ export const BENCH_CASES: readonly BenchCase[] = [
 
 let plantEngine: SimEngine | null = null;
 
-/** Σ tempK and Σ heatA2s over the engine's exported bags. */
+/** Σ of each layer-written key over the engine's exported bags. */
 function bagDigest(engine: SimEngine): string {
-  let temp = 0;
-  let heat = 0;
+  const sums = { stateOfCharge: 0, filamentTempK: 0, elementHeat: 0, bodyHeat: 0, thermal: 0 };
   for (const { state } of engine.exportState().entities) {
-    if (typeof state['tempK'] === 'number') temp += state['tempK'];
-    if (typeof state['heatA2s'] === 'number') heat += state['heatA2s'];
+    for (const key of Object.keys(sums) as (keyof typeof sums)[]) {
+      const value = state[key];
+      if (typeof value === 'number') sums[key] += value;
+    }
   }
-  return `${temp}:${heat}`;
+  return Object.values(sums).join(':');
 }
 
 /** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
