@@ -40,12 +40,21 @@ describe('voltage scales', () => {
     }
   });
 
-  it('takes the AC bands from the region profile, line to line', () => {
-    expect(VOLTAGE_SCALES['ac120-240'].nominalV.value).toBe(NEC_REGION.splitPhase.lineToLineV.value);
-    expect(VOLTAGE_SCALES['ac208y120'].nominalV.value).toBe(208);
-    expect(VOLTAGE_SCALES['ac480y277'].nominalV.value).toBe(480);
+  it('takes the AC bands from the region profile, line to neutral (the island reference is the neutral)', () => {
+    expect(VOLTAGE_SCALES['ac120-240'].nominalV.value).toBe(NEC_REGION.splitPhase.lineToNeutralV.value);
+    expect(VOLTAGE_SCALES['ac208y120'].nominalV.value).toBe(120);
+    expect(VOLTAGE_SCALES['ac480y277'].nominalV.value).toBe(277);
+    expect(VOLTAGE_SCALES['ac120-240'].fullScaleV.value).toBeCloseTo(160, 12);
+    expect(VOLTAGE_SCALES['ac208y120'].fullScaleV.value).toBeCloseTo(160, 12);
+    expect(VOLTAGE_SCALES['ac480y277'].fullScaleV.value).toBeCloseTo(369.333, 3);
+    // The titles still tell the two 120 V systems apart.
+    expect(VOLTAGE_SCALES['ac120-240'].title).toBe('120/240 V AC');
+    expect(VOLTAGE_SCALES['ac208y120'].title).toBe('208Y/120 V AC');
     expect(VOLTAGE_SCALES['ac480y277'].title).toBe('480Y/277 V AC');
-    expect(VOLTAGE_SCALES['ac480y277'].nominalV.source).toBe(NEC_REGION.threePhaseIndustrial.lineToLineV.source);
+    expect(VOLTAGE_SCALES['ac480y277'].nominalV.source).toBe(NEC_REGION.threePhaseIndustrial.lineToNeutralV.source);
+    // A healthy line reads at three quarters of the scale, like the DC bands' nominal.
+    expect(binOf(voltageCoordinate(120, VOLTAGE_SCALES['ac120-240']))).toBe(24);
+    expect(binOf(voltageCoordinate(277, VOLTAGE_SCALES['ac480y277']))).toBe(24);
   });
 
   it('keeps a healthy supply in range: ANSI C84.1 range B maximum is under full scale', () => {
@@ -165,8 +174,11 @@ describe('colours and the legend', () => {
       ],
       overRange: 'over 16 V',
     });
-    expect(voltageLegend(VOLTAGE_SCALES['ac208y120']).ticks[3].label).toBe('208 V (nominal)');
-    expect(voltageLegend(VOLTAGE_SCALES['ac208y120']).ticks[4].label).toBe('277 V');
+    expect(voltageLegend(VOLTAGE_SCALES['ac208y120']).title).toBe('|V| to the island reference, 208Y/120 V AC scale');
+    expect(voltageLegend(VOLTAGE_SCALES['ac208y120']).ticks[3].label).toBe('120 V (nominal)');
+    expect(voltageLegend(VOLTAGE_SCALES['ac208y120']).ticks[4].label).toBe('160 V');
+    expect(voltageLegend(VOLTAGE_SCALES['ac480y277']).ticks[3].label).toBe('277 V (nominal)');
+    expect(voltageLegend(VOLTAGE_SCALES['ac480y277']).ticks[4].label).toBe('369 V');
     expect(voltageLegend(VOLTAGE_SCALES['dc12']).colours).toHaveLength(OVERLAY_BINS);
   });
 

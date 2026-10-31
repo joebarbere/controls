@@ -36,14 +36,19 @@ export interface VoltageScale {
   /** How the legend names the system (`12 V DC`, `208Y/120 V AC`). */
   readonly title: string;
   readonly kind: 'dc' | 'ac';
-  /** The band's highest nominal voltage between any two of its conductors (line-to-line for AC). */
+  /**
+   * The nominal voltage a healthy reading shows against the island reference: the DC nominal, and for
+   * AC the **line-to-neutral** voltage, since an AC source's reference node is its neutral (so a
+   * 120/240 V line reads 120 V, not 240 V). Line-to-line voltages reach up to √3 or 2 × this and read
+   * high on the scale or over range; the title still names the system.
+   */
   readonly nominalV: ScaleValue;
   /** The top of the in-range bins; above it is the over-range bin. */
   readonly fullScaleV: ScaleValue;
 }
 
 /**
- * Game-design: full scale is 4/3 of the band's highest nominal voltage, so the nominal value sits at
+ * Game-design: full scale is 4/3 of the band's nominal (line to neutral for AC), so the nominal value sits at
  * three quarters of the bar (bin 24) and a healthy supply (ANSI C84.1 range B tops out at about
  * +5.8 %; a charging lead-acid battery or a 24 V supply at its +20 % tolerance stays under +33 %)
  * never reads over range. A spec checks the region's range B against it.
@@ -69,7 +74,7 @@ const dcScale = (band: string, volts: number, source: string): VoltageScale => {
 };
 
 const acScale = (band: string, system: NominalSystem): VoltageScale => {
-  const nominalV: ScaleValue = { ...system.lineToLineV };
+  const nominalV: ScaleValue = { ...system.lineToNeutralV };
   return { band, title: `${system.name} AC`, kind: 'ac', nominalV, fullScaleV: fullScale(nominalV) };
 };
 

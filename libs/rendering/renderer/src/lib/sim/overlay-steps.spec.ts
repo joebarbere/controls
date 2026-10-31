@@ -165,8 +165,8 @@ describe('overlay display steps', () => {
     const ac = run({ band: 2 }, { kind: 'ac', volts: 120 }).steps;
     expect([...ac.leadDirection]).toStrictEqual([0, 0, 0]);
     expect(ac.leadAmps[0]).toBe(ac.leadAmps[1]);
-    // 120 V on the 208Y/120 scale (277.3 V full scale): bin 13.
-    expect(ac.terminalVolts[1]).toBe(13);
+    // 120 V on the 208Y/120 scale (160 V full scale, line to neutral): bin 24, the nominal.
+    expect(ac.terminalVolts[1]).toBe(24);
   });
 
   it('over range reads the over-range bin', () => {
