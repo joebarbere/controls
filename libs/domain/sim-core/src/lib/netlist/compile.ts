@@ -107,7 +107,6 @@ interface DeviceParts {
   readonly fragment: DeviceFragment;
   /** Terminal `i` as a node member. */
   readonly members: readonly TerminalRef[];
-
   /** Element `i`'s ref. */
   readonly elementRefs: readonly ElementRef[];
 }
