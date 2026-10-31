@@ -106,6 +106,7 @@ import { SimEventToasts } from './sim-event-toasts';
       [info]="info.value()"
       [backend]="backend()"
       [isolated]="isolated"
+      [simTransport]="session.sim.transport()"
     />
     <ctl-command-palette />
     <ctl-notifications />

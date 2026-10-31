@@ -478,11 +478,14 @@ Acceptance:
   _Part 2: `sim-host.spec.ts` (fake clock, the protocol-level fake worker on the real engine, shared and message transports), `app.spec.ts` (the real runner in-process, the crash toast's Restart)._
 
 - [x] Time control works from keybindings, the palette and the console. The default chords are conflict-free (checked by the existing keymap specs). The HUD shows sim time and the requested and effective speeds, with an `aria-live` "falling behind" notice. _(Part 3: `sim-args.spec.ts`, `sim-controls.spec.ts`, `apps/game-e2e/src/time-control.spec.ts`.)_
-- [ ] **E2E:**
+- [x] **E2E:**
   - the web harness runs `bench-lamp.console` and its snapshot hash equals `sim-cli`'s pinned golden;
   - with `?sab=0` (the fallback), the hash is the same;
   - `desktop-e2e` shows the worker running under `app://`, with `crossOriginIsolated === true` inside it and no `securitypolicyviolation`.
-- [ ] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page.
+
+  _Part 4: `apps/game-e2e/src/sim-engine.spec.ts` runs over both transports and `apps/desktop-e2e/src/sim-worker.spec.ts` under `app://`._ **Note for F2.5:** `bench-lamp.console` doesn't exist yet, so these checks pin `sim-step.console` (`SIM_STEP_HASH`, `SIM_STEP_SNAPSHOT_HASH`) and `bench-leads` (`BENCH_LEADS_HASH`, `console.spec.ts`) instead. **F2.5 adds `bench-lamp.console` to the web harness check over both `sab` and `?sab=0`**, re-pinning the D6 golden there, and asserts `misses === 0` on it.
+
+- [x] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page. _(Part 4: p99 under 30 µs on a 500-device plant against the 0.1 ms budget; [rendering](../docs/architecture/rendering.md#reading-the-sim-snapshot-f23b-measurements).)_
 - [x] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
 - [x] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
 - [x] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
@@ -695,7 +698,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.1    | Netlist compiler                                  | ✅ Done                                       |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
-| F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
+| F2.3b   | Sim worker, snapshot transport, time control      | 🔍 In review (four-PR stack)                  |
 | F2.4    | Power sources                                     | ✅ Done (reviews pending)                     |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
@@ -720,7 +723,7 @@ Numbers are assigned in the order the ADRs land.
 
 ### New in P2
 
-- **A CSP violation on every start.** Zod 4's eval probe (`new Function("")`, caught) triggers a `script-src eval` violation at start-up under `app://` and in the web harness with the CSP. `smoke.spec.ts` attaches its listener too late to see it. Fix: call `z.config({ jitless: true })` in a module imported first, in the page and in the sim worker (ADR 0011), and have the smoke test listen from page load. It must land before F2.3b's "no `securitypolicyviolation`" check. **Owner:** `electron-platform-engineer`.
+- ~~**A CSP violation on every start.**~~ _Fixed in F2.3b part 4 (Zod jitless in the page and the worker; the smoke test listens from page load)._ Zod 4's eval probe (`new Function("")`, caught) triggers a `script-src eval` violation at start-up under `app://` and in the web harness with the CSP. `smoke.spec.ts` attaches its listener too late to see it. Fix: call `z.config({ jitless: true })` in a module imported first, in the page and in the sim worker (ADR 0011), and have the smoke test listen from page load. It must land before F2.3b's "no `securitypolicyviolation`" check. **Owner:** `electron-platform-engineer`.
 - **Renderer process crash recovery.** Main handles `render-process-gone` by reloading the window, with a crash-loop limit; the latest good autosave is the recovery point (ADR 0011 §10). A separate P2 PR. **Owner:** `electron-platform-engineer`.
 
 ## Close-out

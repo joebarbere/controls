@@ -38,6 +38,25 @@ test.describe.serial('desktop smoke', () => {
     await window.screenshot({ path: test.info().outputPath('viewport.png') });
   });
 
+  // P2 follow-up "A CSP violation on every start" (fixed with Zod's jitless mode, ADR 0011 §10): listen
+  // from the very start of a load, before any script runs, and boot the app again.
+  test('no securitypolicyviolation from page load onwards', async () => {
+    const { window } = running();
+    await window.addInitScript(() => {
+      const scope = globalThis as unknown as { loadViolations: string[] };
+      scope.loadViolations = [];
+      document.addEventListener('securitypolicyviolation', (e) =>
+        scope.loadViolations.push(`${e.violatedDirective} ${e.blockedURI}`),
+      );
+    });
+    await window.reload();
+    await expect(window.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 30_000 });
+    const violations = await window.evaluate(
+      () => (globalThis as unknown as { loadViolations: string[] }).loadViolations,
+    );
+    expect(violations).toEqual([]);
+  });
+
   test('renderer is sandboxed with no Node access', async () => {
     const exposure = await running().window.evaluate(() => {
       const scope = globalThis as unknown as Record<string, unknown>;

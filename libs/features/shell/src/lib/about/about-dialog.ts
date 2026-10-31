@@ -21,6 +21,8 @@ import { Button, Dialog } from '@controls/ui';
         <dd data-testid="about-backend">{{ backend() }}</dd>
         <dt>Isolated</dt>
         <dd data-testid="about-isolated">{{ isolated() ? 'yes' : 'no' }}</dd>
+        <dt>Sim transport</dt>
+        <dd data-testid="about-sim-transport">{{ simTransport() ?? 'no game running' }}</dd>
       </dl>
       <p class="ctl-hint">
         A realistic electrician to controls-engineer simulation. MIT licence; third-party notices ship with the app.
@@ -51,6 +53,11 @@ export class AboutDialog {
   readonly backend = input('starting…');
   /** Cross-origin isolated (SharedArrayBuffer available): see docs/caveats/electron.md. */
   readonly isolated = input(false);
+  /**
+   * How the sim worker publishes snapshots (`ready.transport`, ADR 0011 §8): `sab` (the shared
+   * buffer) or `message` (the fallback), or `null` without a game.
+   */
+  readonly simTransport = input<string | null>(null);
 
   protected readonly platformLabel = computed(() => {
     const info = this.info();
