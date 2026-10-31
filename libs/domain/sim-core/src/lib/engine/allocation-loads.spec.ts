@@ -4,6 +4,7 @@ import { ENGINE_TEST_CATALOG, engineBus, engineTestOptions, THERMAL_LOAD } from 
 import { BENCH_SUPPLY } from '../../testing/sources';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
+import { settledWindows } from './allocation-settle';
 import { SimEngine, type SimEngineOptions } from './engine';
 import type { LayerContext, SimDevice } from './device-model';
 import type { DeviceStateValue } from '@controls/save-format';
@@ -14,11 +15,12 @@ import { FUSE_MODEL } from '../devices/protection/fuse';
 
 /*
  * Per-tick allocation gates for F2.5's devices: a lit lamp, a fuse and a closed breaker (plan F2.5;
- * simulation caveats, "Allocation gates"). The measurement is `allocation.spec.ts`'s, copied, because
- * these gates must run in a process of their own: placed after that file's gates they measured 70 to
- * 96 B/step, all of it in `solveIsland`'s frame (the caveats' "a second bank variant of one model kind
- * in the process" regime, F2.4's solver code), where alone they measure under a byte for the lamp. Fold
- * the two files' measurement into one helper once F2.4's solver allocation work has landed. The gates
+ * simulation caveats, "Allocation gates"). The settling rule is shared with `allocation.spec.ts`
+ * (`allocation-settle.ts`, Node-free); the profiler sampling (`sampledBytes`, `node:inspector`) is a
+ * copy of that file's, because these gates must run in a process of their own: placed after that
+ * file's gates they measured 70 to 96 B/step, all of it in `solveIsland`'s frame (the caveats' "a
+ * second bank variant of one model kind in the process" regime), where alone they measure under a
+ * byte for the lamp. The gates
  * here run in order and share this process: add a gate at the end, and measure its baseline in place.
  */
 
@@ -37,16 +39,6 @@ const BREAKER_GATE = 1;
 const MIXED_GATE = 2.5;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
-/**
- * The measurement settles before it counts, by `allocation.spec.ts`'s rule (#66): windows continue
- * until the last `SETTLED_WINDOWS` lie within `SETTLED_SPREAD` B/step of each other, then the gate
- * takes the median of the last `WINDOWS` (never more than `MAX_WINDOWS_FACTOR` × `WINDOWS` in all). A
- * steady allocation settles at once and is measured in full; only a falling sequence (tier-up still
- * finishing) keeps it going. Keep the constants equal to that file's.
- */
-const SETTLED_WINDOWS = 4;
-const SETTLED_SPREAD = 2;
-const MAX_WINDOWS_FACTOR = 3;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
 const SAMPLING_INTERVAL = 128;
 
@@ -99,12 +91,6 @@ function sampledBytes(engine: SimEngine, steps: number): { bytes: number; sites:
   return { bytes, sites };
 }
 
-function median(xs: readonly number[]): number {
-  const sorted = [...xs].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 /** For the check that the measurement sees an allocation: other engine models, a shorter run. */
 interface MeasureOptions {
   readonly options?: SimEngineOptions;
@@ -125,7 +111,7 @@ interface Allocation {
 /**
  * Bytes allocated per step by `source` into `load` through two leads, or shorted by one lead (`load`
  * null): the layers' work every step and a cadence solve every 10th. The median of the last eight 10 000-step
- * windows once they have settled (see `SETTLED_WINDOWS`), after the warm-up: a per-step allocation raises every window, while a window that catches
+ * windows once they have settled (`settledWindows`, `allocation-settle.ts`), after the warm-up: a per-step allocation raises every window, while a window that catches
  * a late tier-up or a short-lived slower regime is one of a few the median ignores. Never the
  * smallest window: measured by heap growth, single windows read as low as -48 B/step, and the
  * smallest of ten hid a planted 8 B/step.
@@ -165,19 +151,12 @@ function allocatedPerStep(
     if (result.logged) engine.applied(result.entry, bus.state);
   }
   engine.advanceTo(warmUpSteps);
-  const all: number[] = [];
   const perWindow: Map<string, number>[] = [];
-  const settledCount = Math.min(SETTLED_WINDOWS, windowCount);
-  const settled = () => {
-    const last = all.slice(-settledCount);
-    return Math.max(...last) - Math.min(...last) <= SETTLED_SPREAD;
-  };
-  while (all.length < windowCount || (!settled() && all.length < MAX_WINDOWS_FACTOR * windowCount)) {
+  const { perStep, all } = settledWindows(windowCount, () => {
     const sample = sampledBytes(engine, windowSteps);
-    all.push(sample.bytes / windowSteps);
     perWindow.push(sample.sites);
-  }
-  const windows = all.slice(-windowCount);
+    return sample.bytes / windowSteps;
+  });
   const sites = new Map<string, number>();
   for (const sample of perWindow.slice(-windowCount)) {
     for (const [site, bytes] of sample) sites.set(site, (sites.get(site) ?? 0) + bytes);
@@ -188,7 +167,7 @@ function allocatedPerStep(
     .slice(0, 5)
     .map(([site, bytes]) => `  ${(bytes / steps).toFixed(2)} B/step  ${site}`);
   return {
-    perStep: median(windows),
+    perStep,
     report: `windows (B/step, the gate's last ${windowCount} of ${all.length}): ${all.map((w) => w.toFixed(2)).join(' ')}\ntop sites (those windows):\n${top.join('\n')}`,
   };
 }
