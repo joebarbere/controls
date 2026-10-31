@@ -33,6 +33,12 @@ export interface FakeSimWorkerOptions {
   readonly protocol?: number;
   /** Honour `init.transport: 'sab'`: publish through a `SharedArrayBuffer` with the seqlock writer. */
   readonly sab?: boolean;
+  /** Answer `init` with this error instead of starting (`capacity`, `engine-threw`, …). */
+  readonly failInit?: SimErrorCode;
+  /** Never answer `init` (a worker that never becomes ready). */
+  readonly silent?: boolean;
+  /** Answer queries with this instead: a crash (`engine-threw`) or silence (`hang`). */
+  readonly onQuery?: SimErrorCode | 'hang';
 }
 
 /** A fake worker. */
@@ -56,7 +62,7 @@ export class FakeSimWorker implements SimWorkerLike {
   }
 
   /** A factory that records every worker it makes. */
-  static factory(options: FakeSimWorkerOptions = {}): {
+  static factory(options: FakeSimWorkerOptions | ((index: number) => FakeSimWorkerOptions) = {}): {
     readonly factory: SimWorkerFactory;
     readonly workers: FakeSimWorker[];
   } {
@@ -64,11 +70,16 @@ export class FakeSimWorker implements SimWorkerLike {
     return {
       workers,
       factory: () => {
-        const worker = new FakeSimWorker(options);
+        const worker = new FakeSimWorker(typeof options === 'function' ? options(workers.length) : options);
         workers.push(worker);
         return worker;
       },
     };
+  }
+
+  /** The shared snapshot buffer in `sab` mode (specs that hold slots busy), else `null`. */
+  get sharedBuffer(): SharedArrayBuffer | null {
+    return (this.writer?.buffer as SharedArrayBuffer | undefined) ?? null;
   }
 
   /** The engine's tick (what the worker has reached). */
@@ -95,7 +106,14 @@ export class FakeSimWorker implements SimWorkerLike {
 
   /** Reports an error message, as the worker does before the host terminates it. */
   crash(code: SimErrorCode = 'engine-threw'): void {
-    this.post({ type: 'error', code, message: 'A fake failure.', seq: null, tick: this.engine?.tick ?? null });
+    this.post({
+      type: 'error',
+      code,
+      message: 'A fake failure.',
+      seq: null,
+      tick: this.engine?.tick ?? null,
+      reason: null,
+    });
   }
 
   /** What `self.onerror` would report. */
@@ -134,8 +152,27 @@ export class FakeSimWorker implements SimWorkerLike {
   private handle(message: NonNullable<ReturnType<typeof parseHostMessage>>): void {
     switch (message.type) {
       case 'init': {
+        if (this.options.silent === true) return;
+        if (this.options.failInit !== undefined) {
+          this.post({
+            type: 'error',
+            code: this.options.failInit,
+            message: 'A fake start failure.',
+            seq: null,
+            tick: null,
+            reason: null,
+          });
+          return;
+        }
         if ((this.options.protocol ?? SIM_PROTOCOL_VERSION) !== message.protocol) {
-          this.post({ type: 'error', code: 'protocol-mismatch', message: 'Another protocol.', seq: null, tick: null });
+          this.post({
+            type: 'error',
+            code: 'protocol-mismatch',
+            message: 'Another protocol.',
+            seq: null,
+            tick: null,
+            reason: null,
+          });
           return;
         }
         const start = message.start;
@@ -146,8 +183,26 @@ export class FakeSimWorker implements SimWorkerLike {
         try {
           this.engine = SimEngine.start(world, this.options.engine ?? {});
         } catch (error) {
-          const reason = error instanceof SimStartError ? ` (${error.reason})` : '';
-          this.post({ type: 'error', code: 'start-failed', message: `Start failed${reason}.`, seq: null, tick: null });
+          // As the runner: start-failed with its reason for a record that doesn't fit, engine-threw otherwise.
+          if (error instanceof SimStartError) {
+            this.post({
+              type: 'error',
+              code: 'start-failed',
+              message: `Start failed (${error.reason}).`,
+              seq: null,
+              tick: null,
+              reason: error.reason,
+            });
+          } else {
+            this.post({
+              type: 'error',
+              code: 'engine-threw',
+              message: 'Start threw.',
+              seq: null,
+              tick: null,
+              reason: null,
+            });
+          }
           return;
         }
         if (start.kind === 'world') {
@@ -155,7 +210,14 @@ export class FakeSimWorker implements SimWorkerLike {
         } else {
           const replayed = replayLog(start.log, registry, { time: this.engine });
           if (!replayed.ok) {
-            this.post({ type: 'error', code: 'desync', message: 'Replay failed.', seq: null, tick: null });
+            this.post({
+              type: 'error',
+              code: 'desync',
+              message: 'Replay failed.',
+              seq: null,
+              tick: null,
+              reason: null,
+            });
             return;
           }
           this.bus = replayed.bus;
@@ -186,14 +248,45 @@ export class FakeSimWorker implements SimWorkerLike {
         if (message.entry.tick > engine.tick) engine.advanceTo(message.entry.tick);
         const result = replayEntries(this.bus as CommandBus<World>, [message.entry], { time: engine });
         if (!result.ok) {
-          this.post({ type: 'error', code: 'desync', message: 'Desync.', seq: message.entry.seq, tick: engine.tick });
+          this.post({
+            type: 'error',
+            code: 'desync',
+            message: 'Desync.',
+            seq: message.entry.seq,
+            tick: engine.tick,
+            reason: null,
+          });
           return;
         }
         this.publish();
         return;
       }
       case 'query': {
+        if (this.options.onQuery === 'hang') return;
+        if (this.options.onQuery !== undefined) {
+          this.post({
+            type: 'error',
+            code: this.options.onQuery,
+            message: 'A fake crash.',
+            seq: null,
+            tick: this.tick,
+            reason: null,
+          });
+          return;
+        }
         const engine = this.engine as SimEngine;
+        if (message.tick < engine.tick) {
+          // As the runner: main never queries below what it already sent.
+          this.post({
+            type: 'error',
+            code: 'desync',
+            message: 'Query behind.',
+            seq: null,
+            tick: engine.tick,
+            reason: null,
+          });
+          return;
+        }
         if (message.tick > engine.tick) engine.advanceTo(message.tick);
         const bus = this.bus as CommandBus<World>;
         if (bus.currentTick() < message.tick) bus.advanceTo(message.tick);

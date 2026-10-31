@@ -4,9 +4,13 @@ import { TestBed } from '@angular/core/testing';
 import { createWorld, type World } from '@controls/save-format';
 import { createGame, type Game } from '@controls/scripting-api';
 import {
+  BUFFER_OFFSETS,
   MAX_LEAD_WALL_MS,
   PACE_INTERVAL_MS,
+  PUBLISH_SEQ_INDEX,
   SIM_SETTLE_MS,
+  SLOT_OFFSETS,
+  slotOffset,
   STATE_QUERY_TIMEOUT_MS,
   type SnapshotView,
   WATCHDOG_MS,
@@ -441,5 +445,47 @@ describe('SimHost: queries and disposal', () => {
     expect(tick()).toBe(10); // frozen
     start();
     expect(tick()).toBe(-1); // a source reset
+  });
+
+  it('rejects a waitForTick when the worker is replaced or crashes, so a wait fails fast', async () => {
+    const { host, fakes, start } = setup();
+    start();
+    await settle();
+    const replaced = host.waitForTick(1_000_000).catch((e: SimQueryRejection) => e.reason);
+    start();
+    expect(await replaced).toBe('superseded');
+    await settle();
+    const crashed = host.waitForTick(1_000_000).catch((e: SimQueryRejection) => e.reason);
+    fakes.workers[1].crash();
+    expect(await crashed).toBe('crashed');
+    expect(await host.waitForTick(5).catch((e: SimQueryRejection) => e.reason)).toBe('crashed');
+  });
+
+  it('after a miss (both slots busy) re-reads on a task, not in a microtask spin', async () => {
+    const { host, clock, fakes, start } = setup({ worker: { sab: true }, transport: 'sab' });
+    start();
+    await settle();
+    const buffer = fakes.workers[0].sharedBuffer as SharedArrayBuffer;
+    const i32 = new Int32Array(buffer);
+    const slotBytes = new DataView(buffer).getUint32(BUFFER_OFFSETS.slotBytes, true);
+    const seq = (slot: number) => (slotOffset(slot, slotBytes) + SLOT_OFFSETS.slotSeq) / 4;
+    const views: (SnapshotView | null)[] = [];
+    host.subscribe((v) => views.push(v));
+    // Both slots mid-write, and a new publish announced.
+    Atomics.add(i32, seq(0), 1);
+    Atomics.add(i32, seq(1), 1);
+    Atomics.add(i32, PUBLISH_SEQ_INDEX, 1);
+    Atomics.notify(i32, PUBLISH_SEQ_INDEX);
+    await settle();
+    expect(host.stats().misses).toBeGreaterThan(0);
+    expect(host.retryingRead).toBe(true); // a task is scheduled, nothing spins
+    const misses = host.stats().misses;
+    await settle();
+    expect(host.stats().misses).toBe(misses); // no further attempts until the task runs
+    Atomics.add(i32, seq(0), 1); // both slots complete again
+    Atomics.add(i32, seq(1), 1);
+    await clock.advance(0);
+    expect(host.retryingRead).toBe(false);
+    expect(views.at(-1)).not.toBeNull();
   });
 });

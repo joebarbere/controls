@@ -2,9 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { createManifest, readCtrl, writeCtrl } from '@controls/save-format';
 import { BUILD_ENGINE_VERSIONS, createGame, MAX_VERIFY_TICKS } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
-import { FakeSimWorker } from '../testing/fake-sim-worker';
+import { STATE_QUERY_TIMEOUT_MS } from '@controls/sim-protocol';
+import { FakeSimWorker, type FakeSimWorkerOptions } from '../testing/fake-sim-worker';
+import { verifyDeadlineMs } from './load';
 import { Session } from './session';
-import { SIM_TRANSPORT, SIM_WORKER_FACTORY } from './sim-host';
+import { SIM_CLOCK, SIM_TRANSPORT, SIM_WORKER_FACTORY } from './sim-host';
+import type { SimClock } from './sim-link';
 
 /*
  * Loading a save in the game (ADR 0011 §10, plan F2.3b): the log is verified in a worker (a replay
@@ -38,15 +41,47 @@ function rewrite(bytes: Uint8Array, change: (c: Parameters<typeof writeCtrl>[0])
   return writeCtrl(change({ manifest, world, replayLog, thumbnail }));
 }
 
-function setup(factory = true) {
-  const fakes = FakeSimWorker.factory();
+/** A clock whose timers run only when the spec fires them (deadlines are tested, never waited for). */
+class ManualClock implements SimClock {
+  readonly timers = new Map<number, { readonly ms: number; readonly task: () => void }>();
+  private next = 1;
+  now = () => 0;
+  setTimeout = (task: () => void, ms: number): unknown => {
+    const id = this.next++;
+    this.timers.set(id, { ms, task });
+    return id;
+  };
+  clearTimeout = (handle: unknown): void => void this.timers.delete(handle as number);
+  /** Runs the pending timers with a deadline of at least `ms`. */
+  fire(ms: number): number {
+    const due = [...this.timers.entries()].filter(([, t]) => t.ms >= ms);
+    for (const [id, timer] of due) {
+      this.timers.delete(id);
+      timer.task();
+    }
+    return due.length;
+  }
+}
+
+function setup(
+  factory = true,
+  options: FakeSimWorkerOptions | ((index: number) => FakeSimWorkerOptions) = {},
+  clock?: SimClock,
+) {
+  const fakes = FakeSimWorker.factory(options);
   TestBed.configureTestingModule({
     providers: [
       { provide: SIM_WORKER_FACTORY, useValue: factory ? fakes.factory : null },
       { provide: SIM_TRANSPORT, useValue: 'message' },
+      ...(clock === undefined ? [] : [{ provide: SIM_CLOCK, useValue: clock }]),
     ],
   });
   return { session: TestBed.inject(Session), fakes };
+}
+
+/** Lets the fake workers' deliveries (microtasks) run. */
+async function microtasks(): Promise<void> {
+  for (let i = 0; i < 50; i++) await Promise.resolve();
 }
 
 const starts = (fakes: { workers: FakeSimWorker[] }) =>
@@ -164,5 +199,70 @@ describe('prepareLoad', () => {
     result.prepared.dispose();
     expect(fakes.workers[0].terminated).toBe(true);
     expect(worldHash(result.prepared.game.world() as never)).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  describe('a load never depends on the worker being well or fast (#58 review)', () => {
+    it('a verifying worker that crashes after ready restarts the log from world.json (replay-failed), never refuses', async () => {
+      const { session, fakes } = setup(true, (i) => (i === 0 ? { onQuery: 'engine-threw' } : {}));
+      const save = circuitSave();
+      const result = await session.prepareLoad(save.bytes);
+      if (!result.ok) throw new Error(`refused: ${result.error.kind}`);
+      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(starts(fakes)).toEqual(['replay', 'world']);
+      expect(fakes.workers[0].terminated).toBe(true);
+      expect(result.prepared.hash).toBe(save.hash); // world.json as saved
+    });
+
+    it('a verifying worker that misses its deadline restarts the log; the deadline grows with the log', async () => {
+      const clock = new ManualClock();
+      const { session, fakes } = setup(true, (i) => (i === 0 ? { onQuery: 'hang' } : {}), clock);
+      const save = circuitSave(400);
+      const pending = session.prepareLoad(save.bytes);
+      await microtasks();
+      const deadline = verifyDeadlineMs({ endTick: 400, initialWorld: { tick: 0 } });
+      expect(deadline).toBeGreaterThan(STATE_QUERY_TIMEOUT_MS);
+      expect(clock.fire(deadline)).toBe(1); // only the verification query's own deadline
+      await microtasks();
+      const result = await pending;
+      if (!result.ok) throw new Error(`refused: ${result.error.kind}`);
+      expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(starts(fakes)).toEqual(['replay', 'world']);
+      expect(fakes.workers[0].terminated).toBe(true);
+    });
+
+    it('a worker that never becomes ready is disposed after the deadline, and the load goes on', async () => {
+      const clock = new ManualClock();
+      const { session, fakes } = setup(true, (i) => (i === 0 ? { silent: true } : {}), clock);
+      const pending = session.prepareLoad(circuitSave().bytes);
+      await microtasks();
+      expect(clock.fire(STATE_QUERY_TIMEOUT_MS)).toBe(1);
+      const result = await pending;
+      expect(result.ok && result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'replay-failed' });
+      expect(fakes.workers[0].terminated).toBe(true);
+      expect(session.sim.workerCount).toBe(1); // only the one that carries on
+    });
+
+    it('a worker failure starting world.json is the simulator failing (sim-failed), not a damaged save', async () => {
+      for (const failInit of ['capacity', 'engine-threw'] as const) {
+        TestBed.resetTestingModule();
+        const { session } = setup(true, { failInit });
+        const noLog = rewrite(circuitSave().bytes, (c) => ({ ...c, replayLog: null }));
+        expect(await session.prepareLoad(noLog)).toMatchObject({ ok: false, error: { kind: 'sim-failed' } });
+      }
+    });
+
+    it('refuses as start-failed only with the reason the worker sent', async () => {
+      const { session } = setup();
+      const save = circuitSave();
+      const damaged = rewrite(save.bytes, (c) => ({
+        ...c,
+        replayLog: null,
+        world: c.world.sim === null ? c.world : { ...c.world, sim: { ...c.world.sim, nodes: [] } },
+      }));
+      expect(await session.prepareLoad(damaged)).toMatchObject({
+        ok: false,
+        error: { kind: 'start-failed', reason: 'length-mismatch' },
+      });
+    });
   });
 });

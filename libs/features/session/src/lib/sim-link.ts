@@ -8,6 +8,7 @@ import {
   type SimEvent,
   type SimQueryError,
   type SimStart,
+  type SimStartReason,
   type SimStateExport,
   type SimTransport,
   type SimWorkerLike,
@@ -50,6 +51,8 @@ export interface SimFailure {
   readonly message: string;
   readonly tick: number | null;
   readonly beforeReady: boolean;
+  /** For `start-failed` from a solution record that doesn't fit: why (protocol 2); `null` otherwise. */
+  readonly reason: SimStartReason | null;
 }
 
 /** The link's callbacks into its host. Only the current link's snapshots and events are delivered. */
@@ -95,6 +98,8 @@ export class SimLink {
   private i32: Int32Array | null = null;
   /** The buffer our `Atomics.waitAsync` is parked on, if any. */
   private waitingOn: Int32Array | null = null;
+  /** A re-read after a miss, on a task (never a microtask spin while both slots stay busy). */
+  private retryTimer: unknown = null;
   private retired: { readonly timer: unknown } | null = null;
 
   constructor(
@@ -115,9 +120,15 @@ export class SimLink {
     this.ready.catch(() => undefined); // observed through `failed` too
     worker.listen({
       message: (data) => this.receive(data),
-      error: () => this.fail({ code: 'worker-error', message: 'The sim worker stopped with an error.', tick: null }),
+      error: () =>
+        this.fail({ code: 'worker-error', message: 'The sim worker stopped with an error.', tick: null, reason: null }),
       messageError: () =>
-        this.fail({ code: 'invalid-message', message: 'A message from the sim worker could not be read.', tick: null }),
+        this.fail({
+          code: 'invalid-message',
+          message: 'A message from the sim worker could not be read.',
+          tick: null,
+          reason: null,
+        }),
     });
     worker.postMessage({ type: 'init', protocol: SIM_PROTOCOL_VERSION, transport, start }, []);
   }
@@ -177,7 +188,15 @@ export class SimLink {
     this.rejectAll(failed ? 'crashed' : reason);
     this.i32 = null;
     this.release();
-    this.rejectReady({ code: 'worker-error', message: 'The sim worker was stopped.', tick: null, beforeReady: true });
+    if (this.retryTimer !== null) this.clock.clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.rejectReady({
+      code: 'worker-error',
+      message: 'The sim worker was stopped.',
+      tick: null,
+      beforeReady: true,
+      reason: null,
+    });
     this.events.closed(this);
   }
 
@@ -245,6 +264,7 @@ export class SimLink {
         code: 'invalid-message',
         message: 'The sim worker sent a message outside the protocol.',
         tick: null,
+        reason: null,
       });
       return;
     }
@@ -283,7 +303,7 @@ export class SimLink {
         this.answer(message.id, new Uint8Array(message.bytes));
         return;
       case 'error':
-        this.fail({ code: message.code, message: message.message, tick: message.tick });
+        this.fail({ code: message.code, message: message.message, tick: message.tick, reason: message.reason });
         return;
     }
   }
@@ -318,9 +338,26 @@ export class SimLink {
   private read(): void {
     if (this.i32 === null || !this.alive) return;
     const before = this.reader.stats.reads;
+    const misses = this.reader.stats.misses;
     const view = this.reader.latest();
     if (view !== null && this.reader.stats.reads !== before) this.accepted(view);
+    if (this.reader.stats.misses !== misses) {
+      // Both slots were busy: try again on a task. Re-arming would see the new publishSeq and
+      // re-read on a microtask, spinning (starving frames and tasks) while the writer stays busy.
+      if (this.retryTimer === null) {
+        this.retryTimer = this.clock.setTimeout(() => {
+          this.retryTimer = null;
+          this.read();
+        }, 0);
+      }
+      return;
+    }
     if (!this.reader.awaitingDescriptor) this.arm();
+  }
+
+  /** Whether a re-read after a miss is scheduled (specs). */
+  get retrying(): boolean {
+    return this.retryTimer !== null;
   }
 
   private arm(): void {

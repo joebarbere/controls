@@ -10,6 +10,7 @@ import {
   SIM_PROTOCOL_VERSION,
   type SimErrorCode,
   type SimEvent,
+  type SimStartReason,
   SimStateExport,
   type SimTransport,
   slotCapacityFor,
@@ -166,11 +167,18 @@ export class SimWorkerRunner {
   }
 
   /** Reports an error raised outside the loop (`self.onerror`, `unhandledrejection`, a CSP violation). */
-  fail(code: SimErrorCode, message: string, seq: number | null = null): void {
+  fail(code: SimErrorCode, message: string, seq: number | null = null, reason: SimStartReason | null = null): void {
     if (this.phase === 'failed' || this.phase === 'stopped') return;
     this.phase = 'failed';
     this.inbox.length = 0;
-    this.port.post({ type: 'error', code, message: message.slice(0, 500), seq, tick: this.engine?.tick ?? null });
+    this.port.post({
+      type: 'error',
+      code,
+      message: message.slice(0, 500),
+      seq,
+      tick: this.engine?.tick ?? null,
+      reason,
+    });
   }
 
   // --- start ----------------------------------------------------------------------------------
@@ -198,7 +206,12 @@ export class SimWorkerRunner {
       this.engine = SimEngine.start(world, this.env.engine ?? {});
     } catch (error) {
       if (error instanceof SimStartError) {
-        this.fail('start-failed', `The world's sim state doesn't fit its circuit (${error.reason}).`);
+        this.fail(
+          'start-failed',
+          `The world's sim state doesn't fit its circuit (${error.reason}).`,
+          null,
+          error.reason,
+        );
         return;
       }
       this.fail('engine-threw', 'The engine failed to start.');

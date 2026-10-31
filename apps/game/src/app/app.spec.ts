@@ -10,7 +10,7 @@ import {
 } from '@controls/feature-settings';
 import type { PendingWritesFlush, Platform } from '@controls/platform-api';
 import { defaultSettings } from '@controls/save-format';
-import { createGame } from '@controls/scripting-api';
+import { createGame, loadGame } from '@controls/scripting-api';
 import { screen, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
@@ -404,6 +404,38 @@ describe('App', () => {
       await waitFor(() => expect(session.sim.status()).toBe('paused'));
       expect(workers).toHaveLength(2);
       expect(await session.hashAt()).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('loads a circuit save through the real runner exactly as headless does (continued, and tampered)', async () => {
+      await setup();
+      const session = TestBed.inject(Session);
+      const game = createGame({ seed: 4 });
+      const at = { x: 0, y: 0, z: 0 };
+      game.execOrThrow('entity.place', { ref: { id: 'battery.ferrovane-12v-7ah', version: 1 }, positionMm: at });
+      game.execOrThrow('entity.place', { ref: { id: 'switch.tessaline-spst-toggle', version: 1 }, positionMm: at });
+      const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 1, terminal: 'pos' },
+        b: { entity: 2, terminal: 'a' },
+      });
+      game.execOrThrow('lead.connect', {
+        ref: lead,
+        a: { entity: 2, terminal: 'b' },
+        b: { entity: 1, terminal: 'neg' },
+      });
+      game.execOrThrow('device.operate', { id: 2, control: 'closed', value: true });
+      game.execOrThrow('sim.step', { ticks: 123 });
+      const bytes = game.save();
+      const headless = loadGame(bytes);
+      const prepared = await session.prepareLoad(bytes);
+      if (!prepared.ok || !headless.ok) throw new Error('refused');
+      expect(prepared.prepared.replay).toEqual(headless.replay);
+      expect(prepared.prepared.replay).toEqual({ status: 'continued' });
+      expect(prepared.prepared.hash).toBe(headless.game.hash());
+      session.adopt(prepared.prepared);
+      expect(await session.hashAt()).toBe(game.hash());
+      expect(workers.at(-1)?.terminated).toBe(false); // the worker that verified it carries on
     });
   });
 });

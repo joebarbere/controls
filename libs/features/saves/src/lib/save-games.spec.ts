@@ -204,8 +204,13 @@ describe('SaveGames', () => {
 
     const refuse = setup({ policy: 'refuse' });
     const again = refuse.io.seed({ kind: 'manual', name: 'Odd' }, mismatched);
+    const workers = refuse.session.sim.workerCount;
     expect(await refuse.saves.load(again)).toBe(false);
     expect(refuse.session.active()).toBe(false);
+    // The workers that checked it are gone: nothing is left running for a refused load.
+    expect(refuse.fakes.workers.length).toBeGreaterThan(0);
+    expect(refuse.fakes.workers.every((w) => w.terminated)).toBe(true);
+    expect(refuse.session.sim.workerCount).toBe(workers);
     expect(refuse.toasts()).toEqual(['error: Couldn’t load “Odd”. Its replay log doesn’t match its world.']);
   });
 
@@ -652,6 +657,70 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
       await done;
       vi.useRealTimers();
       expect(flushed).toHaveBeenCalled();
+    });
+
+    /** A save of a game with a circuit, from another engine (engine-changed) or this one. */
+    function circuitSave(otherEngine: boolean) {
+      const game = createGame({ world: circuitLevel() });
+      game.execOrThrow('device.operate', { id: 2, control: 'closed', value: true });
+      game.execOrThrow('sim.step', { ticks: 30 });
+      const bytes = game.save();
+      if (!otherEngine) return bytes;
+      const read = readCtrl(bytes);
+      if (!read.ok) throw new Error('unreadable');
+      const engine = read.value.manifest.simEngineVersion + 1;
+      return writeCtrl({ ...read.value, manifest: { ...read.value.manifest, simEngineVersion: engine } });
+    }
+
+    it('a file opened from outside the directory is dirty even when its log restarted and nothing was done', async () => {
+      const { saves, io } = setup();
+      io.nextOpen({ name: 'shared.ctrl', bytes: circuitSave(true) }); // engine-changed: a restarted log
+      expect(await saves.openFile()).toBe(true);
+      expect(await saves.isDirty()).toBe(true); // external first: the directory doesn't hold it
+    });
+
+    it('only this session counts: a continued and a restarted load of the same game behave the same', async () => {
+      const bytes = circuitSave(false);
+      const results: boolean[][] = [];
+      for (const otherEngine of [false, true]) {
+        TestBed.resetTestingModule();
+        const { saves, session, io } = setup();
+        const entry = io.seed({ kind: 'manual', name: 'Bench' }, otherEngine ? circuitSave(true) : bytes);
+        expect(await saves.load(entry)).toBe(true);
+        const status = session.replayLog().entries.length > 0 ? 'continued' : 'restarted';
+        expect(status).toBe(otherEngine ? 'restarted' : 'continued');
+        const seen: boolean[] = [await saves.isDirty()];
+        session.exec('sim.step', { ticks: 500 }); // time alone, after a load
+        seen.push(await saves.isDirty());
+        session.exec('entity.place', place(10)); // a command this session
+        seen.push(await saves.isDirty());
+        results.push(seen);
+      }
+      expect(results).toEqual([
+        [false, false, true],
+        [false, false, true],
+      ]);
+    });
+
+    it("an autosave queued before a New sandbox still compares with its own game's baseline", async () => {
+      const { saves, session } = setup({ level: circuitLevel() });
+      session.newSandbox({ seed: 0 });
+      session.exec('entity.place', place(10));
+      session.exec('edit.undo'); // back to the start: not dirty
+      const queued = saves.autosave();
+      session.newSandbox({ seed: 1 }); // replaces the session while the autosave waits
+      expect(await queued).toBe(false); // compared with the old game's own baseline, not "replaced, so dirty"
+    });
+
+    it('a checked save whose adopt fails never leaves its worker running', async () => {
+      const { saves, session, io, fakes } = setup();
+      const entry = io.seed({ kind: 'manual', name: 'Bench' }, circuitSave(false));
+      vi.spyOn(session, 'adopt').mockImplementation(() => {
+        throw new Error('adopt failed');
+      });
+      await expect(saves.load(entry)).rejects.toThrow('adopt failed');
+      expect(fakes.workers.length).toBeGreaterThan(0);
+      expect(fakes.workers.every((w) => w.terminated)).toBe(true);
     });
   });
 });

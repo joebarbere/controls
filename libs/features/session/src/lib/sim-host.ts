@@ -85,7 +85,9 @@ export const SIM_WORKER_FACTORY = new InjectionToken<SimWorkerFactory | null>('c
 
 /**
  * The transport to ask for: the shared buffer when the page is cross-origin isolated, else (or with
- * the `?sab=0` test switch) `postMessage` (ADR 0011 §8).
+ * `?sab=0`) `postMessage` (ADR 0011 §8). `?sab=0` is deliberately honoured in every build, not only
+ * with `?e2e=1`: it only lowers the transport to one that gives the same bytes, so it costs speed,
+ * never correctness, and the desktop app loads a fixed URL anyway.
  */
 export const SIM_TRANSPORT = new InjectionToken<SimTransport>('controls.simTransport', {
   providedIn: 'root',
@@ -101,8 +103,10 @@ export const SIM_TRANSPORT = new InjectionToken<SimTransport>('controls.simTrans
 export interface SimCandidate {
   /** Resolves once the worker is ready; rejects with a {@link SimFailure} (`start-failed`, …). */
   readonly ready: Promise<void>;
-  /** A `state` query at `tick`. */
-  state(tick: number): Promise<SimStateReply>;
+  /** {@link ready}, or a rejection (and the worker terminated) if it isn't ready within `timeoutMs`. */
+  whenReady(timeoutMs: number): Promise<void>;
+  /** A `state` query at `tick`, rejected after `timeoutMs` (default `STATE_QUERY_TIMEOUT_MS`). */
+  state(tick: number, timeoutMs?: number): Promise<SimStateReply>;
   /** Terminates it (a load that didn't go ahead). */
   dispose(): void;
 }
@@ -116,6 +120,7 @@ export type SimSelection<T> = Signal<T> & { readonly stale: Signal<boolean> };
 interface TickWaiter {
   readonly tick: number;
   readonly resolve: () => void;
+  readonly reject: (error: SimQueryRejection) => void;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -235,7 +240,29 @@ export class SimHost {
     if (link === null) return null;
     const candidate: SimCandidate = {
       ready: link.ready,
-      state: (tick) => link.state(tick),
+      whenReady: (timeoutMs) =>
+        new Promise<void>((resolve, reject) => {
+          const timer = this.clock.setTimeout(() => {
+            link.fail({
+              code: 'worker-error',
+              message: 'The sim worker never became ready.',
+              tick: null,
+              reason: null,
+            });
+            reject(new SimQueryRejection('timeout'));
+          }, timeoutMs);
+          link.ready.then(
+            () => {
+              this.clock.clearTimeout(timer);
+              resolve();
+            },
+            (error: unknown) => {
+              this.clock.clearTimeout(timer);
+              reject(error);
+            },
+          );
+        }),
+      state: (tick, timeoutMs) => link.state(tick, timeoutMs),
       dispose: () => {
         if (this.link !== link) link.dispose('superseded');
       },
@@ -304,10 +331,25 @@ export class SimHost {
     return snapshotHash(await this.link.snapshotBytes(tick));
   }
 
-  /** Resolves once a snapshot at `tick` or later has been read (the e2e hook's `waitForTick`). */
+  /**
+   * Resolves once a snapshot at `tick` or later has been read (the e2e hook's `waitForTick`). Rejects
+   * (`superseded`, `crashed`) if the worker is replaced or crashes first, so a wait fails fast.
+   */
   waitForTick(tick: number): Promise<void> {
     if ((this.link?.progress ?? 0) >= tick && this.link?.phase === 'ready') return Promise.resolve();
-    return new Promise((resolve) => this.tickWaiters.push({ tick, resolve }));
+    if (this.phaseState() === 'crashed') return Promise.reject(new SimQueryRejection('crashed'));
+    return new Promise((resolve, reject) => this.tickWaiters.push({ tick, resolve, reject }));
+  }
+
+  private rejectWaiters(reason: 'superseded' | 'crashed'): void {
+    const waiters = this.tickWaiters;
+    this.tickWaiters = [];
+    for (const waiter of waiters) waiter.reject(new SimQueryRejection(reason));
+  }
+
+  /** Whether the current worker's reader is waiting a task to retry after a miss (specs). */
+  get retryingRead(): boolean {
+    return this.link?.retrying ?? false;
   }
 
   /** How far behind the worker is, in wall time at the requested speed (the autosave skip, ADR 0011 §9.5). */
@@ -471,7 +513,7 @@ export class SimHost {
     this.behindState.set(false);
     this.simTickState.set(next?.progress ?? 0);
     this.commandedTickState.set(this.binding?.tick() ?? 0);
-    this.tickWaiters = [];
+    this.rejectWaiters('superseded');
     this.phaseState.set(next === null ? phaseWithout : 'starting');
     for (const listener of [...this.listeners]) listener(null);
     if (next?.phase === 'ready') {
@@ -514,6 +556,7 @@ export class SimHost {
     const code = failure.beforeReady && failure.code === 'worker-error' ? 'start-failed' : failure.code;
     const crash: SimCrash = { code, message: failure.message, tick: failure.tick ?? link.progress };
     this.crashState.set(crash);
+    this.rejectWaiters('crashed');
     for (const listener of [...this.listeners]) listener(null);
     this.sampleNow();
     if (failure.code !== 'protocol-mismatch') for (const listener of [...this.crashListeners]) listener(crash);
@@ -594,7 +637,7 @@ export class SimHost {
     if (link === null || binding === null || !this.shouldPace()) return;
     const now = this.clock.now();
     if (link.lastAdvance > link.progress && now - link.lastPublishWall >= WATCHDOG_MS) {
-      link.fail({ code: 'watchdog', message: 'The sim worker stopped responding.', tick: link.progress });
+      link.fail({ code: 'watchdog', message: 'The sim worker stopped responding.', tick: link.progress, reason: null });
       return;
     }
     if (this.requested > 0) {

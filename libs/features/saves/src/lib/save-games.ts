@@ -192,14 +192,13 @@ export class SaveGames {
 
   /** {@link isDirty} for a saver already taken (its tick and its state query). */
   private async dirty(saver: SessionSaver): Promise<boolean> {
-    if (!this.session.active() || !saver.changedWorld) return false;
+    if (!this.session.active()) return false;
+    const stored = this.stored?.generation === saver.generation ? this.stored.hash : saver.baseline;
+    // A file opened from outside the directory isn't in it, whatever happened since: dirty first.
+    if (stored === null) return true;
+    if (!saver.changedWorld) return false;
     try {
-      const stored =
-        this.stored?.generation === saver.generation
-          ? this.stored.hash
-          : await this.session.baselineHash(saver.generation);
-      if (stored === null) return true;
-      return (await saver.hash()) !== stored;
+      return (await saver.hash()) !== (await stored);
     } catch {
       return true;
     }
@@ -468,7 +467,12 @@ export class SaveGames {
     // Writes the game being left if the directory lacks it (pointing Continue at that autosave), so
     // nothing is lost; then this load points Continue at the save it loaded.
     await this.autosave();
-    this.session.adopt(loaded);
+    try {
+      this.session.adopt(loaded);
+    } catch (error) {
+      loaded.dispose(); // never leave a checked save's worker running
+      throw error;
+    }
     const generation = this.session.generation();
     const external = entry.kind === 'external';
     // The baseline is the game's own hash, from the worker that checked it (plan F2.3b).

@@ -42,6 +42,8 @@ export function loadErrorReason(error: GameLoadError): string {
       return 'The save’s simulation state doesn’t match its circuit, so it may be damaged.';
     case 'sim-unavailable':
       return 'The simulator isn’t available, so the save can’t be checked.';
+    case 'sim-failed':
+      return 'The simulator failed while starting the save. Try again; the save itself may be fine.';
   }
 }
 

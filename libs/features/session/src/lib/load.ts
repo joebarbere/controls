@@ -11,7 +11,12 @@ import {
   verifyFailure,
 } from '@controls/scripting-api';
 import type { SimStartFailure } from '@controls/sim-core';
-import { materialiseWorld, type SimStart } from '@controls/sim-protocol';
+import {
+  materialiseWorld,
+  type SimStart,
+  STATE_QUERY_TIMEOUT_MS,
+  VERIFY_QUERY_MS_PER_TICK,
+} from '@controls/sim-protocol';
 import { checkWorldDevices, worldHash } from '@controls/world-model';
 import type { SimCandidate, SimFailure, SimHost } from './sim-host';
 
@@ -37,8 +42,14 @@ export interface SimUnavailableError {
   readonly message: string;
 }
 
+/** The simulator failed starting the save (a crash, a worker that never loaded, a deadline): not the save's fault. */
+export interface SimFailedError {
+  readonly kind: 'sim-failed';
+  readonly message: string;
+}
+
 /** Why a save didn't load in the game. */
-export type GameLoadError = LoadGameError | SimUnavailableError;
+export type GameLoadError = LoadGameError | SimUnavailableError | SimFailedError;
 
 /** A save checked and ready to adopt: its game, the worker that carries on, and the baseline hash. */
 export interface PreparedLoad {
@@ -58,44 +69,60 @@ export interface PreparedLoad {
 export type PrepareLoadResult =
   { readonly ok: true; readonly prepared: PreparedLoad } | { readonly ok: false; readonly error: GameLoadError };
 
-const START_FAILURES: readonly SimStartFailure[] = [
-  'solution-on-empty-netlist',
-  'topology-mismatch',
-  'length-mismatch',
-];
-
-/** The start failure a worker reported (its message names the reason, never a value). */
-function startFailure(failure: SimFailure): SimStartFailure {
-  return START_FAILURES.find((reason) => failure.message.includes(reason)) ?? 'topology-mismatch';
-}
+/**
+ * How starting a candidate worker went. Only `start-failed` with a reason from the worker (protocol
+ * 2) means the save itself is at fault; every other failure is the simulator's (`failed`): a crash, a
+ * deadline passed, a worker that never loaded.
+ */
+type Started =
+  | { readonly ok: true; readonly candidate: SimCandidate; readonly hash: string }
+  | { readonly ok: false; readonly why: 'unavailable' }
+  | { readonly ok: false; readonly why: 'start-failed'; readonly reason: SimStartFailure }
+  | { readonly ok: false; readonly why: 'failed' };
 
 const isFailure = (error: unknown): error is SimFailure =>
   typeof error === 'object' && error !== null && 'code' in error && 'beforeReady' in error;
 
-/** Starts a candidate and waits for `ready` and its state at `tick`; `null` with the failure otherwise. */
-async function started(
-  host: SimHost,
-  start: SimStart,
-  busWorld: World,
-): Promise<
-  | { readonly ok: true; readonly candidate: SimCandidate; readonly hash: string }
-  | { readonly ok: false; readonly failure: SimFailure | null }
-> {
+/**
+ * Starts a candidate and waits for `ready` (at most `STATE_QUERY_TIMEOUT_MS`) and its state at the
+ * world's tick (at most `stateMs`). The candidate is disposed on any failure.
+ */
+async function started(host: SimHost, start: SimStart, busWorld: World, stateMs: number): Promise<Started> {
   const candidate = host.prepare(start);
-  if (candidate === null) return { ok: false, failure: null };
+  if (candidate === null) return { ok: false, why: 'unavailable' };
   try {
-    await candidate.ready;
-    const reply = await candidate.state(busWorld.tick);
+    await candidate.whenReady(STATE_QUERY_TIMEOUT_MS);
+    const reply = await candidate.state(busWorld.tick, stateMs);
     return { ok: true, candidate, hash: worldHash(materialiseWorld(busWorld, reply.export)) };
   } catch (error) {
     candidate.dispose();
-    return { ok: false, failure: isFailure(error) ? error : null };
+    if (isFailure(error) && error.code === 'start-failed' && error.reason !== null) {
+      return { ok: false, why: 'start-failed', reason: error.reason };
+    }
+    return { ok: false, why: 'failed' }; // a crash, a SimQueryRejection (crashed, timeout), a dead worker
   }
+}
+
+/**
+ * The verification query's deadline: the usual one plus a budget per tick of log, so a slow machine
+ * only waits longer and a load's outcome never depends on wall time (#58 review). Should even that
+ * pass, verification counts as failed and the log restarts: never a refusal.
+ */
+export function verifyDeadlineMs(log: {
+  readonly endTick: number;
+  readonly initialWorld: { readonly tick: number };
+}): number {
+  return STATE_QUERY_TIMEOUT_MS + (log.endTick - log.initialWorld.tick) * VERIFY_QUERY_MS_PER_TICK;
 }
 
 const UNAVAILABLE: SimUnavailableError = {
   kind: 'sim-unavailable',
   message: 'The simulator isn’t available, so the save can’t be checked.',
+};
+
+const SIM_FAILED: SimFailedError = {
+  kind: 'sim-failed',
+  message: 'The simulator failed while starting the save.',
 };
 
 /** Checks `bytes` as a save and starts its sim worker, without touching the session. Never throws. */
@@ -143,12 +170,19 @@ export async function prepareLoad(
     if (!resumed.ok) {
       replay = verifyFailure(plan.compatibility, { kind: 'replay-failed', message: resumed.error.message });
     } else {
-      const verified = await started(host, { kind: 'replay', log: plan.log }, resumed.game.world() as World);
+      const verified = await started(
+        host,
+        { kind: 'replay', log: plan.log },
+        resumed.game.world() as World,
+        verifyDeadlineMs(plan.log),
+      );
+      if (!verified.ok && verified.why === 'unavailable') return { ok: false, error: UNAVAILABLE };
       if (verified.ok && verified.hash === worldHash(world)) {
         return done(resumed.game, { status: 'continued' }, verified.candidate, verified.hash);
       }
       if (verified.ok) verified.candidate.dispose();
-      if (!verified.ok && verified.failure === null) return { ok: false, error: UNAVAILABLE };
+      // A mismatch, or a verifying worker that crashed or passed its deadline: the log isn't kept,
+      // the save is (D8: never refused for its log).
       replay = verifyFailure(
         plan.compatibility,
         verified.ok
@@ -161,26 +195,27 @@ export async function prepareLoad(
   // A new log from world.json, numbered on from the saved log.
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
   let start = world;
-  let fresh = await started(host, { kind: 'world', world: start, firstSeq }, start);
-  if (!fresh.ok) {
-    if (fresh.failure === null) return { ok: false, error: UNAVAILABLE };
-    if (fresh.failure.code !== 'start-failed' || plan.compatibility === 'verify') {
-      return {
-        ok: false,
-        error: {
-          kind: 'start-failed',
-          reason: startFailure(fresh.failure),
-          message: "The save's simulation state doesn't fit its circuit.",
-        },
-      };
-    }
+  let fresh = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
+  if (!fresh.ok && fresh.why === 'start-failed' && plan.compatibility !== 'verify') {
     // D8: another engine's solution record may not fit this build's netlist: drop it and solve anew.
     start = { ...world, sim: null };
-    fresh = await started(host, { kind: 'world', world: start, firstSeq }, start);
-    if (!fresh.ok) return { ok: false, error: UNAVAILABLE };
+    fresh = await started(host, { kind: 'world', world: start, firstSeq }, start, STATE_QUERY_TIMEOUT_MS);
     if (replay.status === 'restarted' && replay.reason !== 'engine-changed') {
       replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
     }
+  }
+  if (!fresh.ok) {
+    if (fresh.why === 'unavailable') return { ok: false, error: UNAVAILABLE };
+    if (fresh.why === 'failed') return { ok: false, error: SIM_FAILED };
+    // A same-engine save whose solution record doesn't fit its circuit: damaged.
+    return {
+      ok: false,
+      error: {
+        kind: 'start-failed',
+        reason: fresh.reason,
+        message: "The save's simulation state doesn't fit its circuit.",
+      },
+    };
   }
   const game = createGame({ world: start, registry, time: host.time, firstSeq });
   return done(game, replay, fresh.candidate, fresh.hash);

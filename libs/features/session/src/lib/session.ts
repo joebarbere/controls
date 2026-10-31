@@ -36,8 +36,14 @@ export interface SessionSaver {
   readonly generation: number;
   /** The tick it was taken at: the moment Save was pressed (ADR 0011 §9.5). */
   readonly tick: number;
-  /** Whether the session had a logged world command when it was taken (the dirty model, §9.5). */
+  /**
+   * Whether **this session** (since its start or adopt) had logged a world command when it was taken
+   * (the dirty model, ADR 0011 §9.5): entries carried over in a continued log don't count, so a
+   * continued and a restarted load of the same save behave the same.
+   */
   readonly changedWorld: boolean;
+  /** The game's own `world.hash` at its start or adopt, captured with the saver (the dirty baseline). */
+  readonly baseline: Promise<string>;
   /**
    * That game at that tick as `.ctrl` bytes, with the `world.hash` they hold, once the sim worker has
    * answered. Rejects with `SimQueryRejection` (`crashed`, `timeout`, …) and `CtrlWriteError` like
@@ -97,6 +103,8 @@ export class Session {
   private readonly uiContext = signal<Readonly<Record<string, ContextValue>>>({});
   private readonly log = signal<readonly ReplayEntry[]>([]);
   private readonly started = signal(0);
+  /** The first `seq` this session logs: entries below it were carried over from a loaded log. */
+  private sessionSeq = 0;
   /** The game's own `world.hash` when it started or was adopted (the dirty model's baseline). */
   private baseline: { readonly generation: number; readonly hash: Promise<string> } = {
     generation: 0,
@@ -221,7 +229,8 @@ export class Session {
     return {
       generation: this.started(),
       tick: captured.tick,
-      changedWorld: log.entries.some((entry) => this.changesWorld(entry.id)),
+      changedWorld: log.entries.some((entry) => entry.seq >= this.sessionSeq && this.changesWorld(entry.id)),
+      baseline: this.baseline.hash,
       save: async (options = {}) => {
         const world = await captured.world;
         return { bytes: writeSave(world, log, options), hash: worldHash(world) };
@@ -275,6 +284,8 @@ export class Session {
   private attach(game: Game): void {
     this.unsubscribe();
     this.game = game;
+    const log = game.replayLog();
+    this.sessionSeq = log.firstSeq + log.entries.length;
     this.sim.bind({
       tick: () => game.tick(),
       advanceTo: (tick) => game.advanceTo(tick),

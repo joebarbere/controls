@@ -24,11 +24,11 @@ import {
 import { CommandPalette } from '@controls/feature-palette';
 import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
 import { KeybindingService, Session, type SimCrash, ToolBelt } from '@controls/feature-session';
-import { EVENT_TOAST_COALESCE_MS, type SimEvent } from '@controls/sim-protocol';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
 import { PLATFORM } from './platform.token';
+import { SimEventToasts } from './sim-event-toasts';
 
 /**
  * Assembles the shell: the workspace (always mounted; behind the main menu it is the 3D backdrop),
@@ -163,12 +163,11 @@ export class App {
     // Toast actions run commands through the one registry (the crash toast's Restart simulation).
     this.notifications.setActionRunner((commandId) => void this.session.exec(commandId));
     const offCrash = this.session.sim.onCrash((crash) => this.crashed(crash));
-    const offEvents = this.session.sim.onEvents((events) => this.simEvents(events));
+    inject(SimEventToasts); // trip and blow toasts, coalesced per device
     inject(DestroyRef).onDestroy(() => {
       offLoaded();
       offThumbnail();
       offCrash();
-      offEvents();
       this.notifications.setActionRunner(null);
     });
   }
@@ -180,21 +179,6 @@ export class App {
       level: 'error',
       action: { label: 'Restart simulation', commandId: 'sim.restart' },
     });
-  }
-
-  /** Trips and blown fuses get one warning toast per device per `EVENT_TOAST_COALESCE_MS` of wall time (ADR 0011 §4). */
-  private readonly toasted = new Map<string, number>();
-  private simEvents(events: readonly SimEvent[]): void {
-    for (const event of events) {
-      if ((event.kind !== 'tripped' && event.kind !== 'blown') || event.entity === null) continue;
-      const key = `${event.kind}:${event.entity}`;
-      const now = performance.now(); // wall time: at 60× a window of sim time would be a blink
-      const last = this.toasted.get(key);
-      if (last !== undefined && now - last < EVENT_TOAST_COALESCE_MS) continue;
-      this.toasted.set(key, now);
-      const what = event.kind === 'tripped' ? 'tripped' : 'blew';
-      this.notifications.notify(`Device #${event.entity} ${what}.`, { level: 'warning' });
-    }
   }
 
   /** New sandbox asks for a seed first (the new-game dialog); {@link startSandbox} runs on Start. */
