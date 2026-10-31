@@ -210,9 +210,17 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "filament-time-constant",
       "kind": "game-design",
-      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds (relay and lamp makers' notes put the lamp-load inrush at roughly 10 to 15 times the steady current, decaying over a few tens of milliseconds for small lamps and up to a few hundred for large ones). 50 ms is taken as the small-signal thermal time constant at the rated point; with the 5 W rating it implies about 0.4 mJ/K of heat capacity, a filament of a couple of milligrams of tungsten.",
+      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds, its inrush decaying over a few tens of milliseconds. 50 ms is taken as the small-signal thermal time constant at the rated point; with the 5 W rating it implies about 0.4 mJ/K of heat capacity, a filament of a couple of milligrams of tungsten.",
       "covers": [
         "model.params.thermalTimeConstantMs"
+      ]
+    },
+    {
+      "id": "inrush-band",
+      "kind": "real-world",
+      "citation": "Physics from H. A. Jones and I. Langmuir, General Electric Review 30 (1927): a filament's cold-to-hot resistance ratio is ρ(T_r)/ρ(T_a), 13.5 to 16.1 for rated temperatures of 2500 to 2900 K at a 293 K ambient. The source and lead resistance in series lower the current ratio, so the tested inrush band is 10 to 15 times the settled current.",
+      "covers": [
+        "model.params.filamentRatedTempK"
       ]
     },
     {

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { KEY_PLATFORM, KeybindingService, Session, ToolBelt } from '@controls/feature-session';
-import type { ViewportIntent, ViewportState } from '@controls/renderer';
+import { type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
 import { Viewport } from './viewport';
 
 /** The component's gesture handler (private: the renderer calls it, and jsdom has no renderer). */
@@ -118,7 +118,11 @@ describe('Viewport', () => {
     const id = session.world().entities.at(-1)?.id as number;
     const viewport = fixture.componentInstance;
     // jsdom has no renderer: select the switch through the view state the renderer would publish.
-    viewport.state.set({ selected: { id: `entity-${id}`, kind: 'device', entityId: id } } as unknown as ViewportState);
+    const info = { id: `entity-${id}`, kind: 'device', entityId: id };
+    viewport.state.set({ selected: info, hovered: null } as unknown as ViewportState);
+    // jsdom has no layout or GPU: give the canvas a size and stand in for the pick under the pointer.
+    const pick = vi.spyOn(ViewportRenderer.prototype, 'pickAt').mockReturnValue(info as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 100));
     await fixture.whenStable();
     expect(session.contextKeys()['selection.toggleControl']).toBe('closed');
     expect(session.contextKeys()['selection.toggleValue']).toBe(true);
@@ -133,6 +137,11 @@ describe('Viewport', () => {
     ).toEqual([['device.operate', { id, control: 'closed', value: true }]]);
     await fixture.whenStable();
     expect(session.contextKeys()['selection.toggleValue']).toBe(false); // the next flip opens it
+    expect(pick).toHaveBeenCalled(); // picked at the pointer
+    // With the pointer off the switch (over empty space), a double-click operates nothing.
+    pick.mockReturnValue(null);
+    canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 100, clientY: 50 }));
+    expect(session.entries().length).toBe(logged + 1);
     // A selection without a toggle publishes none, and a double-click does nothing.
     viewport.state.set({ selected: null } as unknown as ViewportState);
     await fixture.whenStable();

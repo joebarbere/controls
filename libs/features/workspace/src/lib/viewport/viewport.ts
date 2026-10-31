@@ -92,7 +92,7 @@ const TEST_HOOK = '__controlsViewport';
       [attr.aria-label]="label()"
       (focus)="session.setContext(viewportFocusedKey, true)"
       (blur)="session.setContext(viewportFocusedKey, null)"
-      (dblclick)="operateSelection()"
+      (dblclick)="operateSelection($event)"
     ></canvas>
     @if (state()?.mode === 'walk' || state()?.placement?.source === 'reticle') {
       <div class="crosshair" aria-hidden="true"></div>
@@ -337,12 +337,20 @@ export class Viewport {
 
   /**
    * A double-click on a device: `device.operate` on its toggle, as E does (one logged command). The
-   * first click of the pair has selected it. Nothing happens for a selection without a toggle.
+   * first click of the pair has selected it. Only the device under the pointer is operated: a
+   * double-click elsewhere, with a switch still selected, does nothing. Nothing happens for a
+   * selection without a toggle.
    */
-  protected operateSelection(): void {
+  protected operateSelection(event: MouseEvent): void {
     const id = this.state()?.selected?.entityId;
     const toggle = this.selectedToggle();
     if (id === undefined || id === null || toggle === null) return;
+    // Picked at the double-click itself, not from the hover state (which a frame updates later).
+    const rect = this.canvas().nativeElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const ndcX = (2 * (event.clientX - rect.left)) / rect.width - 1;
+    const ndcY = 1 - (2 * (event.clientY - rect.top)) / rect.height;
+    if (this.renderer.pickAt(ndcX, ndcY)?.entityId !== id) return;
     this.report(this.session.exec('device.operate', { id, control: toggle.control, value: toggle.value }));
   }
 

@@ -16,10 +16,11 @@ import { SimEngine, type SimEngineOptions } from './engine';
 /** Steps before measuring. Under coverage tier-up ends about 110 000: the median absorbs the first windows. */
 const WARM_UP_STEPS = 100_000;
 /**
- * Gates from in-place baselines, under load (the worst median of 100 runs without coverage and 40 with):
- * a lit lamp 0.00-0.72 B/step without coverage, 0.76-0.83 with (gate 1.5).
+ * Gates from in-place baselines, uncovered (this file runs in `vitest.allocation.mts` beside F2.4's
+ * gates, out of the covered run): a lit lamp 0.70 B/step at worst (the worst median of 100 runs with
+ * other test suites loading the machine; gate 1).
  */
-const LAMP_GATE = 1.5;
+const LAMP_GATE = 1;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
@@ -176,7 +177,7 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
     if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC ${name} ${a.perStep}\n${a.report}`);
   };
 
-  it('a lit lamp (the filament ODE every tick) stays under 1.5 bytes per step', () => {
+  it('a lit lamp (the filament ODE every tick) stays under 1 byte per step', () => {
     const measured = allocatedPerStep(BATTERY, 'pos', 'neg', LAMP);
     log('lamp', measured);
     expect(measured.perStep, measured.report).toBeLessThan(LAMP_GATE);

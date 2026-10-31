@@ -8,8 +8,8 @@ import type { SourcedConstant } from '../../constants';
 /**
  * The points (K, µΩ·cm), ascending in temperature. Measured on tungsten filament wire by H. A. Jones
  * and I. Langmuir, "The characteristics of tungsten filaments as functions of temperature", General
- * Electric Review 30 (1927), the classic lamp-engineering data; the same values are reproduced in the
- * CRC Handbook of Chemistry and Physics. Every other 100 K step is kept below 3600 K (and every step
+ * Electric Review 30 (1927), pp. 310–319, 354–361 and 408–412, the classic lamp-engineering data. Every
+ * other 100 K step is kept below 3600 K (and every step
  * up to 600 K, where the curve bends most); interpolating linearly between them is within about 0.5 %
  * of the full table. Physical measurements, not a standard's table.
  */
@@ -23,7 +23,7 @@ export const TUNGSTEN_RESISTIVITY: {
   kind: 'real-world',
   unit: 'µΩ·cm',
   source:
-    'H. A. Jones and I. Langmuir, "The characteristics of tungsten filaments as functions of temperature", General Electric Review 30 (1927): the resistivity of tungsten filament wire from 300 K to 3600 K (reproduced in the CRC Handbook of Chemistry and Physics). A subset of their points; linear interpolation between them. For electrical-realism-reviewer to confirm each point against the handbook.',
+    'H. A. Jones and I. Langmuir, "The characteristics of tungsten filaments as functions of temperature", General Electric Review 30 (1927), pp. 310–319, 354–361 and 408–412: the resistivity of tungsten filament wire from 300 K to 3600 K. A subset of their points; linear interpolation between them.',
   temperaturesK: Object.freeze([
     300, 400, 500, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600,
   ]),

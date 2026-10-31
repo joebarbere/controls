@@ -1,4 +1,5 @@
 import { createGame, type Game, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -30,7 +31,10 @@ export const BENCH_LAMP_SNAPSHOT_HASH = '0e4bd06d4b3435e6664c5b26c7080e801381f91
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
-const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-lamp-engine-5.ctrl');
+const fixture = join(
+  WORKSPACE_ROOT,
+  `libs/domain/save-format/fixtures/v2/ctrl/bench-lamp-engine-${SIM_ENGINE_VERSION}.ctrl`,
+);
 
 function sim(...argv: string[]): { status: number | null; stdout: string[]; stderr: string } {
   const result = spawnSync(process.execPath, [bundle, ...argv], {
@@ -147,7 +151,7 @@ describe('the bench-lamp scenario (F2.5)', () => {
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(5);
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
     expect(loaded.game.hash()).toBe(BENCH_LAMP_HASH);
     expect(loaded.game.snapshotHash()).toBe(BENCH_LAMP_SNAPSHOT_HASH);
     expect(sim('replay', fixture)).toMatchObject({ status: 0, stdout: [BENCH_LAMP_HASH] });

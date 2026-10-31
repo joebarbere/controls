@@ -64,6 +64,15 @@ export interface ModelKindDef {
 const positive = FiniteNumber.positive();
 
 /**
+ * The filament temperatures a save may hold (K). Below the resistivity table's first point (300 K) the
+ * lamp model extends its first segment, which reaches 0 Ω at about 65.6 K, so a save at 1 K would
+ * give a negative resistance (`sim-core`'s tungsten table). 200 K is game-design: below any bench a
+ * player can build (−73 °C), far above that zero. 3600 K is the table's top, where the model clamps.
+ */
+export const LAMP_FILAMENT_MIN_K = 200;
+export const LAMP_FILAMENT_MAX_K = 3600;
+
+/**
  * Battery parameters (F2.4). The EMF is the rested open-circuit voltage, linear in the state of charge
  * between `openCircuitVoltageEmptyV` (0) and `openCircuitVoltageFullV` (1), behind a constant
  * `internalResistanceOhm`; `capacityAh` is what coulomb counting divides by (`sim-core`'s battery model).
@@ -276,9 +285,9 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       filamentTempK: key(
         'sim',
         'number',
-        FiniteNumber.positive().nullable(),
+        FiniteNumber.min(LAMP_FILAMENT_MIN_K).max(LAMP_FILAMENT_MAX_K).nullable(),
         null,
-        'Filament temperature (K). null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
+        'Filament temperature (K), 200 to 3600. null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
       ),
     },
     description: 'An incandescent lamp: a tungsten filament whose resistance rises with its temperature.',

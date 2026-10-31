@@ -28,7 +28,11 @@ type Hooks = {
   };
   __controlsViewport?: {
     select(id: string | null): boolean;
+    focus(id: string): boolean;
     sceneGraph(): SceneNode | undefined;
+    projectMm(p: { x: number; y: number; z: number }): { x: number; y: number } | undefined;
+    pickAt(ndcX: number, ndcY: number): { id: string } | null;
+    whenIdle(): Promise<void>;
   };
 };
 const session = <T>(page: Page, read: (h: NonNullable<Hooks['__controlsSession']>) => T) =>
@@ -58,6 +62,35 @@ const drawn = (page: Page) =>
     const root = (window as unknown as Hooks).__controlsViewport?.sceneGraph();
     return { lamp: find(root, 'entity-3')?.lamp, switch: find(root, 'entity-2')?.switch };
   });
+/**
+ * Page coordinates over `entity` (`entity-2`), or over the bench beside it when `entity` is null: the
+ * first of a few world points on and around the device whose pick is what we want.
+ */
+async function pointOver(page: Page, canvas: Locator, entity: string | null): Promise<{ x: number; y: number }> {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('no canvas');
+  const found = await page.evaluate(
+    ({ entity, width, height }) => {
+      const h = (window as unknown as Hooks).__controlsViewport;
+      if (!h) throw new Error('viewport hook missing');
+      // The switch is placed at (1100, -300, 200) mm; its body is 60 × 40 × 45 mm.
+      const points = [];
+      for (const dx of [30, 15, 45, -150, -250, 250])
+        for (const dz of [22, 10, 35, 0]) points.push({ x: 1100 + dx, y: -280, z: 200 + dz });
+      for (const p of points) {
+        const s = h.projectMm(p);
+        if (!s || s.x < 1 || s.y < 1 || s.x > width - 1 || s.y > height - 1) continue;
+        const picked = h.pickAt((2 * s.x) / width - 1, 1 - (2 * s.y) / height)?.id ?? null;
+        if (entity === null ? picked === null || !picked.startsWith('entity-') : picked === entity) return s;
+      }
+      return null;
+    },
+    { entity, width: box.width, height: box.height },
+  );
+  if (!found) throw new Error(`no point over ${entity ?? 'empty space'}`);
+  return { x: box.x + found.x, y: box.y + found.y };
+}
+
 const lastEntry = (page: Page) => session(page, (h) => h.entries().at(-1));
 const lastOutput = (page: Page) => page.getByTestId('console-output').locator('.entry').last();
 
@@ -121,20 +154,32 @@ test('the bench demo: console, keyboard and mouse light the lamp and put it out,
   await expect(lastOutput(page)).toHaveText(BENCH_LAMP_LIT_HASH);
   expect(await session(page, (h) => h.snapshotHash())).toBe(BENCH_LAMP_LIT_SNAPSHOT_HASH);
   // Lit: light ≈ 1.25 of rated draws above the rated level (204 of 255); the lever drawn closed.
-  await expect.poll(() => drawn(page)).toMatchObject({ lamp: { status: 'solved' }, switch: { closed: true } });
-  expect((await drawn(page)).lamp?.level).toBeGreaterThan(204);
+  await expect.poll(async () => (await drawn(page)).lamp?.level ?? 0).toBeGreaterThan(204);
+  expect(await drawn(page)).toMatchObject({ lamp: { status: 'solved' }, switch: { closed: true } });
   await page.keyboard.press('Backquote');
   await expect(canvas).toBeFocused();
 
-  // A double-click on the (still selected) switch opens it: the same command with the other value.
-  await canvas.dispatchEvent('dblclick');
-  await expect
-    .poll(() => lastEntry(page))
-    .toMatchObject({
-      id: 'device.operate',
-      tick: 1500,
-      args: { id: 2, control: 'closed', value: false },
-    });
+  // A real mouse double-click on the switch opens it: the same command with the other value. First
+  // deselect it and frame the bench (view state only, nothing logged), so the first click of the pair is what
+  // selects it again; a double-click on the bench beside it logs nothing.
+  await page.keyboard.press('Escape');
+  await expect(viewport).not.toHaveAttribute('data-selected', 'entity-2');
+  expect(await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.focus('bench'))).toBe(true);
+  await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.whenIdle());
+  const before = await session(page, (h) => h.entries().length);
+  const beside = await pointOver(page, canvas, null);
+  await page.mouse.dblclick(beside.x, beside.y);
+  await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.whenIdle());
+  expect(await session(page, (h) => h.entries().length)).toBe(before);
+  const over = await pointOver(page, canvas, 'entity-2');
+  await page.mouse.dblclick(over.x, over.y);
+  await expect(viewport).toHaveAttribute('data-selected', 'entity-2');
+  await expect.poll(() => session(page, (h) => h.entries().length)).toBe(before + 1);
+  expect(await lastEntry(page)).toMatchObject({
+    id: 'device.operate',
+    tick: 1500,
+    args: { id: 2, control: 'closed', value: false },
+  });
 
   await openConsole(page);
   await typeLine(page, 'sim.step 500');

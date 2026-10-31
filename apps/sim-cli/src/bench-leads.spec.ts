@@ -1,4 +1,5 @@
 import { createGame, ENGINE_CHANGED_MESSAGE, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -101,7 +102,9 @@ describe('the bench-leads scenario', () => {
     const replay = sim('replay', fixture);
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_3_HASH}`);
-    expect(replay.stderr).toContain('written by sim engine 3, catalogue 1; this build is engine 5, catalogue 1');
+    expect(replay.stderr).toContain(
+      `written by sim engine 3, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue 1`,
+    );
   });
 
   it('the engine-1 fixture (written before the engine ran) is not reproduced, and loads as engine-changed (D8)', () => {
@@ -110,7 +113,9 @@ describe('the bench-leads scenario', () => {
     const replay = sim('replay', fixture);
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_1_HASH}`);
-    expect(replay.stderr).toContain('written by sim engine 1, catalogue 1; this build is engine 5, catalogue 1');
+    expect(replay.stderr).toContain(
+      `written by sim engine 1, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue 1`,
+    );
     expect(replay.stderr).toContain(ENGINE_CHANGED_MESSAGE);
     expect(replay.stderr).toContain(`"sim run <empty.console> --world ${fixture}"`);
     expect(replay.stderr).toContain(`"sim hash ${fixture}"`);
