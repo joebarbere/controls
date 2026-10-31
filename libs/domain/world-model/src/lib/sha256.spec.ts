@@ -26,6 +26,34 @@ const fractionBits = (p: number, k: bigint) => Number(integerRoot(BigInt(p) << (
 
 const NODE = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
+/**
+ * A string unit: any code point (lone surrogates included), or one from each of UTF-8's encoded
+ * lengths, the surrogate range on its own (so halves land next to each other: pairs, reversed
+ * pairs, a high half before a real pair, a half at the end) or an edge between them. `utf8Encode`
+ * reads code units, so these reach every branch it has.
+ *
+ * It replaces `fc.oneof(fc.string({ unit: 'binary' }), fc.string({ unit: 'grapheme' }))`, which
+ * never drew a lone surrogate (fast-check's binary unit skips U+D800–U+DFFF) and was slow: building
+ * `fc.string({ unit: 'binary' })` tokenizes fast-check's "dangerous strings" with the unit, which
+ * first maps all 1,114,112 code points into a reverse table, about 0.6 s the first time in each
+ * process, nearly all of the test's time. A custom unit has no unmapper, so it skips that, and
+ * graphemes are only sequences of these code points.
+ */
+const codePointArb = fc
+  .oneof(
+    fc.integer({ min: 0, max: 0x10_ffff }),
+    fc.integer({ min: 0, max: 0x7f }),
+    fc.integer({ min: 0x80, max: 0x7ff }),
+    fc.integer({ min: 0x800, max: 0xffff }),
+    fc.integer({ min: 0xd800, max: 0xdfff }),
+    fc.integer({ min: 0x1_0000, max: 0x10_ffff }),
+    fc.constantFrom(
+      ...[0, 0x7f, 0x80, 0x7ff, 0x800, 0xd7ff, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0xe000, 0xfffd, 0xffff],
+      ...[0x1_0000, 0x10_ffff],
+    ),
+  )
+  .map((cp) => String.fromCodePoint(cp));
+
 describe('SHA-256 (FIPS 180-4)', () => {
   it('uses the constants defined in sections 4.2.2 and 5.3.3 (recomputed exactly from the primes)', () => {
     const primes = firstPrimes(64);
@@ -94,7 +122,7 @@ describe('utf8Encode', () => {
 
   it('matches Node for any string, including unpaired surrogates', () => {
     fc.assert(
-      fc.property(fc.oneof(fc.string({ unit: 'binary' }), fc.string({ unit: 'grapheme' })), (text) => {
+      fc.property(fc.string({ unit: codePointArb }), (text) => {
         expect(Buffer.from(utf8Encode(text)).equals(Buffer.from(text, 'utf8'))).toBe(true);
       }),
     );
