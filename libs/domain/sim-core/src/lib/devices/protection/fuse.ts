@@ -24,7 +24,7 @@ import { branchReading, enumField, f64Field, READING_SOLVED, statusField } from 
  *   I²t = I_min² / (w / τ_e + (1 − w) / τ_b),   τ_e = w / (I_min² / I²t − (1 − w) / τ_b).
  *
  * For the bench fuse (1 A, 0.7 A²s, I_min 1.2 A, w 0.3, τ_b 10 s) τ_e = 0.151 s, and it melts after
- * 12.0 s at 135 %, 0.908 s at 200 %, 0.107 s at 300 % and 7.2 ms at 1000 % (the specs compute them):
+ * 12.05 s at 135 %, 0.908 s at 200 %, 0.107 s at 300 % and 7.16 ms at 1000 % (the specs compute them):
  * the slow body gives the long-overload end a real fast-acting fuse's seconds-to-minutes, where one
  * body melted in under a second. Explicit Euler at the 1 ms tick (dt/τ_e = 0.0066); a current so large
  * that one tick takes the sum past 1 blows in that tick, as a real fuse clears a bolted fault within a

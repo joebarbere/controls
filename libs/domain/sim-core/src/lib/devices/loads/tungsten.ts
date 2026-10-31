@@ -8,10 +8,10 @@ import type { SourcedConstant } from '../../constants';
 /**
  * The points (K, µΩ·cm), ascending in temperature. Measured on tungsten filament wire by H. A. Jones
  * and I. Langmuir, "The characteristics of tungsten filaments as functions of temperature", General
- * Electric Review 30 (1927), pp. 310–319, 354–361 and 408–412, the classic lamp-engineering data. Every
- * other 100 K step is kept below 3600 K (and every step
- * up to 600 K, where the curve bends most); interpolating linearly between them is within about 0.5 %
- * of the full table. Physical measurements, not a standard's table.
+ * Electric Review 30 (1927), pp. 310–319, 354–361 and 408–412, the classic lamp-engineering data.
+ * Every other 100 K step is kept below 3600 K (and every step up to 600 K, where the curve bends most);
+ * interpolating linearly between them is within about 0.5 % of the full table. Physical measurements,
+ * not a standard's table.
  */
 export const TUNGSTEN_RESISTIVITY: {
   readonly kind: SourcedConstant['kind'];

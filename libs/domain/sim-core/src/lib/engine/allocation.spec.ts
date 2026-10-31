@@ -12,6 +12,7 @@ import {
 } from '../../testing/engine';
 import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
 import type { SimDeviceModel } from './device-model';
+import { settledWindows } from './allocation-settle';
 import { SimEngine, type SimEngineOptions } from './engine';
 
 /*
@@ -37,16 +38,6 @@ import { SimEngine, type SimEngineOptions } from './engine';
 const WARM_UP_STEPS = 100_000;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
-/**
- * The measurement settles before it counts: windows continue until the last `SETTLED_WINDOWS` lie
- * within `SETTLED_SPREAD` B/step of each other, then the gate takes the median of the last `WINDOWS`
- * (never more than `MAX_WINDOWS` in all). A steady allocation settles at once and is measured in full;
- * only a falling sequence (tier-up still finishing) keeps it going. CI's slowest runner finished a late
- * tier-up inside the AC gate's windows: 11.97 9.65 10.28 10.04 2.70 0.50 0.51 0.00, median 6.18.
- */
-const SETTLED_WINDOWS = 4;
-const SETTLED_SPREAD = 2;
-const MAX_WINDOWS_FACTOR = 3;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
 const SAMPLING_INTERVAL = 128;
 
@@ -99,12 +90,6 @@ function sampledBytes(engine: SimEngine, steps: number): { bytes: number; sites:
   return { bytes, sites };
 }
 
-function median(xs: readonly number[]): number {
-  const sorted = [...xs].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 /** For the check that the measurement sees an allocation: other engine models, a shorter run. */
 interface MeasureOptions {
   readonly options?: SimEngineOptions;
@@ -122,7 +107,7 @@ interface Allocation {
 
 /**
  * Bytes allocated per step by `source` into `load` through two leads, or shorted by one lead (`load`
- * null): the layers' work every step and a cadence solve every 10th. The median of eight 10 000-step
+ * null): the layers' work every step and a cadence solve every 10th. The median of the last eight (once settled: `settledWindows`, `allocation-settle.ts`) 10 000-step
  * windows after the warm-up: a per-step allocation raises every window, while a window that catches
  * a late tier-up or a short-lived slower regime is one of a few the median ignores. Never the
  * smallest window: measured by heap growth, single windows read as low as -48 B/step, and the
@@ -174,19 +159,12 @@ function allocatedBy(
     if (result.logged) engine.applied(result.entry, bus.state);
   }
   engine.advanceTo(warmUpSteps);
-  const all: number[] = [];
   const perWindow: Map<string, number>[] = [];
-  const settledCount = Math.min(SETTLED_WINDOWS, windowCount);
-  const settled = () => {
-    const last = all.slice(-settledCount);
-    return Math.max(...last) - Math.min(...last) <= SETTLED_SPREAD;
-  };
-  while (all.length < windowCount || (!settled() && all.length < MAX_WINDOWS_FACTOR * windowCount)) {
+  const { perStep, all } = settledWindows(windowCount, () => {
     const sample = sampledBytes(engine, windowSteps);
-    all.push(sample.bytes / windowSteps);
     perWindow.push(sample.sites);
-  }
-  const windows = all.slice(-windowCount);
+    return sample.bytes / windowSteps;
+  });
   const sites = new Map<string, number>();
   for (const sample of perWindow.slice(-windowCount)) {
     for (const [site, bytes] of sample) sites.set(site, (sites.get(site) ?? 0) + bytes);
@@ -197,7 +175,7 @@ function allocatedBy(
     .slice(0, 5)
     .map(([site, bytes]) => `  ${(bytes / steps).toFixed(2)} B/step  ${site}`);
   return {
-    perStep: median(windows),
+    perStep,
     report: `windows (B/step, the gate's last ${windowCount} of ${all.length}): ${all.map((w) => w.toFixed(2)).join(' ')}\ntop sites (those windows):\n${top.join('\n')}`,
   };
 }

@@ -1,3 +1,4 @@
+import { DescriptorIndex } from '@controls/sim-protocol';
 import { LAMP_KIND, LampSnapshotFeed } from './lamp-feed';
 import { fakeView, lampDescriptor, writeLamp } from './lamp-feed.fakes';
 
@@ -19,6 +20,7 @@ describe('LampSnapshotFeed', () => {
   });
 
   it('updates in place on every snapshot of a generation, resolving the fields again only on a new one', () => {
+    const of = vi.spyOn(DescriptorIndex, 'of');
     const descriptor = lampDescriptor([{ entity: 5, kind: LAMP_KIND, recordOffset: 0 }]);
     const section = new DataView(new ArrayBuffer(56));
     const feed = new LampSnapshotFeed();
@@ -30,6 +32,7 @@ describe('LampSnapshotFeed', () => {
     expect(second).toBe(first);
     expect(second.get(5)).toBe(entry); // the same entry, rewritten
     expect(entry).toStrictEqual({ lightOutputRel: 0.9, status: 'unsettled' });
+    expect(of).toHaveBeenCalledTimes(1); // two snapshots of one generation: resolved once
     // A new generation: the lamp moved in the device section, and a heater took its old offset.
     const next = lampDescriptor(
       [
@@ -42,6 +45,9 @@ describe('LampSnapshotFeed', () => {
     moved.setFloat64(0, 12, true); // the heater's voltage, where the lamp used to be
     writeLamp(moved, 32, 0.5, 1);
     expect([...feed.update(fakeView(next, moved))]).toStrictEqual([[5, { lightOutputRel: 0.5, status: 'solved' }]]);
+    expect(of).toHaveBeenCalledTimes(2); // a new descriptor: resolved again
+    expect(of).toHaveBeenLastCalledWith(next);
+    of.mockRestore();
   });
 
   it('leaves every lamp unknown on a reset, and reads a status code past the table as unsolved', () => {
