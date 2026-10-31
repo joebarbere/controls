@@ -3,7 +3,7 @@ import { type CatalogRef, migrateWorld, type World } from '@controls/save-format
 import { materialiseWorld } from '@controls/sim-protocol';
 import { createWorldBus, createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
-import { BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
+import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
   DROOP,
   ENGINE_BENCH,
@@ -16,6 +16,7 @@ import {
   leakyTestOptions,
   ORDER_A,
   ORDER_B,
+  REACTOR,
   THERMAL_LOAD,
   TWIN_SUPPLY,
 } from '../../testing/engine';
@@ -50,6 +51,8 @@ const PARITY_REFS: Readonly<Record<string, CatalogRef>> = {
   'test.twinSupply': TWIN_SUPPLY,
   'test.orderA': ORDER_A,
   'test.orderB': ORDER_B,
+  'test.acSource': AC_SOURCE,
+  'test.reactor': REACTOR,
 };
 
 type Op =
@@ -64,13 +67,17 @@ type Op =
   /** Place a device and wire its first two terminals across battery 1 (a powered loop). */
   | { kind: 'wire'; ref: number }
   /** Delete an entity, then undo: the engine restores its tombstone. */
-  | { kind: 'deleteUndo'; pick: number };
+  | { kind: 'deleteUndo'; pick: number }
+  /** An AC source in a loop of its own with a load: an AC island, solved by the phasor solver. */
+  | { kind: 'acLoop'; ref: number };
 
 const REFS: readonly CatalogRef[] = [...Object.values(PARITY_REFS), BATTERY, SPST, LAMP];
 const refArb = fc.nat({ max: REFS.length - 1 });
 /** The electrical models, for `wire`: what makes islands singular, unsettled, settled warm or tripped. */
 const WIRED: readonly CatalogRef[] = [TWIN_SUPPLY, FLIP, DROOP, THERMAL_LOAD, I2T_FUSE, LAMP];
 const wiredArb = fc.nat({ max: WIRED.length - 1 });
+/** Loads with an AC value, for `acLoop`. */
+const AC_LOADS: readonly CatalogRef[] = [THERMAL_LOAD, I2T_FUSE, REACTOR];
 const pick = fc.nat({ max: 9 });
 const terminalPick = fc.tuple(pick, fc.nat({ max: 1 }));
 const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -81,6 +88,10 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('disconnect' as const), pick }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('delete' as const), pick }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('deleteUndo' as const), pick }) },
+  {
+    weight: 2,
+    arbitrary: fc.record({ kind: fc.constant('acLoop' as const), ref: fc.nat({ max: AC_LOADS.length - 1 }) }),
+  },
   { weight: 1, arbitrary: fc.constant({ kind: 'undo' as const }) },
   { weight: 1, arbitrary: fc.constant({ kind: 'redo' as const }) },
   // Often a few ticks (mid-interval), sometimes long enough for the fuse to melt (about 0.15 s).
@@ -148,6 +159,15 @@ function apply(host: Host, op: Op): void {
     case 'delete':
       exec(host, 'entity.delete', { id: entityAt(op.pick) });
       return;
+    case 'acLoop': {
+      if (!exec(host, 'entity.place', { ref: AC_SOURCE, positionMm: origin })) return;
+      const source = host.bus.state.nextEntityId - 1;
+      if (!exec(host, 'entity.place', { ref: AC_LOADS[op.ref], positionMm: origin })) return;
+      const load = source + 1;
+      exec(host, 'lead.connect', { ref: LEAD, a: end(source, 'l'), b: end(load, 'a') });
+      exec(host, 'lead.connect', { ref: LEAD, a: end(load, 'b'), b: end(source, 'n') });
+      return;
+    }
     case 'deleteUndo':
       if (exec(host, 'entity.delete', { id: entityAt(op.pick) })) exec(host, 'edit.undo');
       return;
@@ -275,6 +295,7 @@ describe('engine determinism properties', () => {
       topologyAfter: 0,
       eventsAfter: 0,
       tombstones: 0,
+      ac: 0,
     };
     for (const { before, after } of samples) {
       const host = benchHost();
@@ -286,6 +307,7 @@ describe('engine determinism properties', () => {
       const statuses = host.engine.islands().map((i) => i.status);
       if (statuses.includes('singular')) counts.singular++;
       if (statuses.includes('nonConverged')) counts.nonConverged++;
+      if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'solved')) counts.ac++;
       host.engine.takeEvents();
       const generation = host.engine.topologyGeneration;
       let restored = false;
@@ -304,13 +326,16 @@ describe('engine determinism properties', () => {
     }
     // Measured on this seed, of 40: 24 mid-interval, 6 blown, 15 heated, 10 singular and 4 unsettled
     // islands at the cut; 40 topology changes, 18 with events and 15 restored tombstones after it.
+    // Measured on this seed, of 40: 26 mid-interval, 11 blown, 13 heated, 7 singular, 3 unsettled and
+    // 15 solved AC islands at the cut; 39 topology changes, 17 with events and 11 restored tombstones after it.
     expect(counts.midInterval).toBeGreaterThan(18);
-    expect(counts.blown).toBeGreaterThan(3);
-    expect(counts.heated).toBeGreaterThan(10);
-    expect(counts.singular).toBeGreaterThan(6);
+    expect(counts.blown).toBeGreaterThan(6);
+    expect(counts.heated).toBeGreaterThan(8);
+    expect(counts.singular).toBeGreaterThan(4);
     expect(counts.nonConverged).toBeGreaterThan(1);
-    expect(counts.topologyAfter).toBeGreaterThan(34);
-    expect(counts.eventsAfter).toBeGreaterThan(12);
-    expect(counts.tombstones).toBeGreaterThan(10);
+    expect(counts.ac).toBeGreaterThan(9);
+    expect(counts.topologyAfter).toBeGreaterThan(33);
+    expect(counts.eventsAfter).toBeGreaterThan(11);
+    expect(counts.tombstones).toBeGreaterThan(7);
   });
 });

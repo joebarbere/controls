@@ -91,8 +91,8 @@ describe('the bench-leads scenario', () => {
     }
   });
 
-  it('the engine-2 fixture of this scenario replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-leads-engine-2.ctrl');
+  it('the engine-3 fixture of this scenario replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/bench-leads-engine-3.ctrl');
     const replay = sim('replay', fixture);
     expect(replay.stderr).toBe('');
     expect(replay.stdout).toEqual([BENCH_LEADS_HASH]);
@@ -104,7 +104,7 @@ describe('the bench-leads scenario', () => {
     const replay = sim('replay', fixture);
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_1_HASH}`);
-    expect(replay.stderr).toContain('written by sim engine 1, catalogue 1; this build is engine 2, catalogue 1');
+    expect(replay.stderr).toContain('written by sim engine 1, catalogue 1; this build is engine 3, catalogue 1');
     expect(replay.stderr).toContain(ENGINE_CHANGED_MESSAGE);
     expect(replay.stderr).toContain(`"sim run <empty.console> --world ${fixture}"`);
     expect(replay.stderr).toContain(`"sim hash ${fixture}"`);

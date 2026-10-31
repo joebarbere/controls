@@ -94,12 +94,12 @@ describe('the sim-step scenario', () => {
     });
   });
 
-  it('its checked-in save (engine 2, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
-    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-2.ctrl');
+  it('its checked-in save (engine 3, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
+    const fixture = join(WORKSPACE_ROOT, 'libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-3.ctrl');
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
-    expect(loaded.manifest.simEngineVersion).toBe(2);
+    expect(loaded.manifest.simEngineVersion).toBe(3);
     expect(loaded.game.tick()).toBe(1234);
     expect(loaded.game.hash()).toBe(SIM_STEP_HASH);
     const record = loaded.game.materialisedWorld().sim;

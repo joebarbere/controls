@@ -154,6 +154,14 @@ export class NotAvailableError extends Error {
   }
 }
 
+/**
+ * What {@link Game.probe} reads: the engine's `ProbeReading`, with an AC reading's phase angle in
+ * degrees added for display (`atan2` of the phasor, (−180, 180]). Never hashed or saved.
+ */
+export type GameProbeReading =
+  | Exclude<ProbeReading, { readonly kind: 'ac' }>
+  | (Extract<ProbeReading, { readonly kind: 'ac' }> & { readonly phaseDeg: number });
+
 /** Thrown by {@link Game.probe} for an end that isn't `"<entityId>:<terminalId>"` of a netlisted device. */
 export class ProbeError extends Error {
   constructor(
@@ -207,13 +215,14 @@ export interface Game {
   /**
    * An **ideal, non-loading** probe between two terminals, `"<entityId>:<terminalId>"` (`'1:pos'`):
    * what an ideal voltmeter would read, red on `a`, black on `b`, without being part of the circuit.
-   * A script and test query, not a player instrument (meters are P5). Only a `dc` reading is a reading:
-   * terminals on different islands read `floating`, and a singular, non-converged (`unsettled`) or
-   * unsolved island is reported as such, never as a number. AC islands are `unsolved` (`acPending`)
-   * until F2.2 part 2 adds RMS volts and phase. Throws {@link ProbeError} for an end that names no
-   * netlisted terminal, and {@link NotAvailableError} without an engine.
+   * A script and test query, not a player instrument (meters are P5). A `dc` reading gives volts; an
+   * `ac` one its RMS magnitude `rmsVolts` (what a meter shows by default), the phasor `re`, `im` and a
+   * display-only `phaseDeg`. Terminals on different islands read `floating`, and a singular,
+   * non-converged (`unsettled`) or unsolved (unmodelled, mixed) island is reported as such, never as a
+   * number. Throws {@link ProbeError} for an end that names no netlisted terminal, and
+   * {@link NotAvailableError} without an engine.
    */
-  probe(a: string, b: string): ProbeReading;
+  probe(a: string, b: string): GameProbeReading;
   /** The islands of the current netlist and whether each one's values are a reading. */
   islands(): SimIslandInfo[];
   /** The snapshot at this tick: the hashed bytes of its slot (ADR 0011 §5, §11), a fresh copy. */
@@ -381,7 +390,11 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     probe(a, b) {
       const sim = needEngine('probe');
       try {
-        return sim.probe(parseProbeEnd(a, 'a'), parseProbeEnd(b, 'b'));
+        const reading = sim.probe(parseProbeEnd(a, 'a'), parseProbeEnd(b, 'b'));
+        if (reading.kind !== 'ac') return reading;
+        // Display only (D6): `Math.atan2` may round differently between V8 builds, so the angle is
+        // computed here, outside `sim-core`, and never reaches a snapshot, a save or `world.hash`.
+        return { ...reading, phaseDeg: (Math.atan2(reading.im, reading.re) * 180) / Math.PI + 0 };
       } catch (error) {
         if (error instanceof SimProbeError) throw new ProbeError('unknown-terminal', error.end);
         throw error;

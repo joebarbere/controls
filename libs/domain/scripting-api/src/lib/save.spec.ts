@@ -36,7 +36,8 @@ describe('the .ctrl fixtures', () => {
       if (path.endsWith('world-only.ctrl')) {
         expect(result.replay.status).toBe('absent');
       } else if (engineCompatible(result.manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed') {
-        // The world v2 kickoff's saves are engine 1, which never ran: never verified, never refused.
+        // Saves from engines before this one (the world v2 kickoff's engine 1, which never ran): never
+        // verified, never refused.
         expect(result.manifest.simEngineVersion).toBe(1);
         expect(result.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
         // world.json loads as saved; it holds no solution (engine 1 never ran), so the engine solves at
@@ -267,6 +268,6 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
-    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 2 });
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 3 });
   });
 });

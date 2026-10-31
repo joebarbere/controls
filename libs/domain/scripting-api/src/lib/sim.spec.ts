@@ -6,7 +6,13 @@ import {
   type World,
   writeCtrl,
 } from '@controls/save-format';
-import { ENGINE_BENCH, ENGINE_TEST_CATALOG, engineTestOptions, I2T_FUSE } from '@controls/sim-core/testing';
+import {
+  ENGINE_BENCH,
+  ENGINE_TEST_CATALOG,
+  engineTestOptions,
+  I2T_FUSE,
+  THERMAL_LOAD,
+} from '@controls/sim-core/testing';
 import { decodeSnapshot } from '@controls/sim-protocol';
 import { createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
@@ -74,7 +80,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 2, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 3, catalogVersion: 1 });
   });
 });
 
@@ -162,6 +168,28 @@ describe('game.probe: ideal and non-loading', () => {
     expect(game.probe('1:pos', '5:a')).toStrictEqual({ kind: 'floating', tick: 0 });
     expect(game.probe('5:a', '5:b')).toMatchObject({ kind: 'unsolved', reason: 'unmodelled' });
     expect(game.islands().map((i) => i.status)).toStrictEqual(['solved', 'unmodelled']);
+  });
+
+  it('reads an AC island as RMS volts with a display-only phase, at the region frequency', () => {
+    const game = createGame({ seed: 4, registry: registry(), engine });
+    const at = { x: 0, y: 0, z: 0 };
+    game.execOrThrow('entity.place', { ref: { id: 'source.test-ac-120v', version: 1 }, positionMm: at });
+    game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: at });
+    const lead = { id: 'lead.quillfern-test-1m', version: 1 };
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 1, terminal: 'l' }, b: { entity: 2, terminal: 'a' } });
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 2, terminal: 'b' }, b: { entity: 1, terminal: 'n' } });
+    const hash = game.hash();
+    const reading = game.probe('1:l', '1:n');
+    if (reading.kind !== 'ac') throw new Error(`expected an AC reading, got ${reading.kind}`);
+    expect(reading.frequencyHz).toBe(60);
+    expect(reading.rmsVolts).toBeGreaterThan(100);
+    expect(reading.rmsVolts).toBeLessThan(120);
+    expect(Math.abs(reading.phaseDeg)).toBeLessThan(1e-6); // a resistive loop: in phase with the source
+    const reversed = game.probe('1:n', '1:l');
+    expect(reversed.kind === 'ac' && Math.abs(Math.abs(reversed.phaseDeg) - 180)).toBeLessThan(1e-6);
+    expect(reversed.kind === 'ac' && reversed.rmsVolts).toBe(reading.rmsVolts);
+    expect(game.hash()).toBe(hash); // probing changes nothing, and no angle is hashed
+    expect(game.islands().map((i) => [i.kind, i.status])).toStrictEqual([['ac', 'solved']]);
   });
 
   it('refuses a malformed end or one that names no netlisted terminal', () => {

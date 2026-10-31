@@ -27,6 +27,9 @@ import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TES
  *   outer loop settles by its tolerance stop (the warm start from the solution record);
  * - `test.leaky`: **deliberately wrong**, a step counter kept only in its bank and not in its bag, so
  *   the save-and-load property must fail on it (never in `engineTestOptions`, only `leakyTestOptions`);
+ * - `test.reactor`: an inductor of `henries` on AC (a lagging current, so phasors with a phase), a
+ *   small resistance on DC;
+ * - `test.acSource` (from `bench.ts`): a 120 V RMS phasor source at 0° behind 0.1 Ω (AC islands);
  * - `test.twinSupply`: two ideal sources (12 V and 13 V) between the same terminals, a loop of zero-ohm
  *   sources (the singular island).
  */
@@ -38,6 +41,7 @@ export const ORDER_A = { id: 'probe.test-order-a', version: 1 };
 export const ORDER_B = { id: 'probe.test-order-b', version: 1 };
 export const TWIN_SUPPLY = { id: 'supply.test-twin', version: 1 };
 export const DROOP = { id: 'load.test-droop', version: 1 };
+export const REACTOR = { id: 'load.test-reactor', version: 1 };
 export const LEAKY = { id: 'load.test-leaky', version: 1 };
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
@@ -103,6 +107,14 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
     params: z.strictObject({ coldOhm: FiniteNumber.positive(), perAmp: FiniteNumber.min(0) }),
     keys: {},
     description: 'A test resistance that rises with its own current (it settles).',
+  },
+  'test.reactor': {
+    kind: 'test.reactor',
+    placement: 'entity',
+    terminals: twoTerminals,
+    params: z.strictObject({ henries: FiniteNumber.positive(), dcOhm: FiniteNumber.positive() }),
+    keys: {},
+    description: 'A test inductor (AC) with a small DC resistance.',
   },
   'test.leaky': {
     kind: 'test.leaky',
@@ -200,6 +212,7 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(TWIN_SUPPLY, 'Test twin supply', 'test.twinSupply', {}, ['neg', 'pos']),
   entry(DROOP, 'Test droop load', 'test.droop', { coldOhm: 2, perAmp: 0.1 }),
   entry(LEAKY, 'Test leaky load', 'test.leaky', {}),
+  entry(REACTOR, 'Test reactor', 'test.reactor', { henries: 0.05, dcOhm: 0.5 }),
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
 ];
@@ -231,6 +244,7 @@ export const ENGINE_TEST_MODELS: NetlistModels = {
     'test.flip': { kind: 'test.flip', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.droop': { kind: 'test.droop', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.leaky': { kind: 'test.leaky', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.reactor': { kind: 'test.reactor', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.twinSupply': {
       kind: 'test.twinSupply',
       simTopologyKeys: [],
@@ -282,12 +296,19 @@ const thermalLoad: SimDeviceModel = {
     // follow from the exported state).
     const power = (i: number, ctx: LayerContext) => {
       const island = ctx.netlist.branches[branch[i]].island;
-      const amps = ctx.islandReadable(island) ? ctx.solution.branches[2 * branch[i]] : 0;
-      return amps * amps * resistance(i);
+      if (!ctx.islandReadable(island)) return 0;
+      // |I|² from the phasor (im is 0 on a DC island): the RMS power I²R either way.
+      const re = ctx.solution.branches[2 * branch[i]];
+      const im = ctx.solution.branches[2 * branch[i] + 1];
+      return (re * re + im * im) * resistance(i);
     };
     return {
       bag: (i) => ({ tempK: temp[i] }),
       dcValue: (i, b, values) => {
+        values.resistor(b.index, resistance(i));
+        return true;
+      },
+      acValue: (i, b, values) => {
         values.resistor(b.index, resistance(i));
         return true;
       },
@@ -336,12 +357,17 @@ const i2tFuse: SimDeviceModel = {
         values.resistor(b.index, ohms[i]);
         return true;
       },
+      acValue: (i, b, values) => {
+        values.resistor(b.index, ohms[i]);
+        return true;
+      },
       protection: (ctx) => {
         let changed = false;
         for (let i = 0; i < n; i++) {
           if (blown[i] === 1 || !ctx.islandReadable(ctx.netlist.branches[branch[i]].island)) continue;
-          const amps = ctx.solution.branches[2 * branch[i]];
-          heat[i] += amps * amps * ctx.dtS;
+          const re = ctx.solution.branches[2 * branch[i]];
+          const im = ctx.solution.branches[2 * branch[i] + 1];
+          heat[i] += (re * re + im * im) * ctx.dtS;
           if (heat[i] >= melt[i]) {
             blown[i] = 1;
             ctx.emit('blown', entities[i]);
@@ -395,6 +421,25 @@ const droop: SimDeviceModel = {
   },
 };
 
+const reactor: SimDeviceModel = {
+  kind: 'test.reactor',
+  output: null,
+  bank(devices) {
+    const params = devices.map((d) => d.params);
+    return {
+      bag: () => ({}),
+      dcValue: (i, b, values) => {
+        values.resistor(b.index, params[i]['dcOhm']);
+        return true;
+      },
+      acValue: (i, b, values) => {
+        values.inductor(b.index, params[i]['henries']);
+        return true;
+      },
+    };
+  },
+};
+
 /** Deliberately wrong: `steps` lives only in the bank, so a rebuild or a load forgets it. */
 const leaky: SimDeviceModel = {
   kind: 'test.leaky',
@@ -409,6 +454,23 @@ const leaky: SimDeviceModel = {
       },
       continuous: () => {
         for (let i = 0; i < steps.length; i++) steps[i]++;
+      },
+    };
+  },
+};
+
+/** The test AC source: its nominal RMS EMF at 0° behind 0.1 Ω (test values, never a real supply's). */
+export const AC_SOURCE_OHMS = 0.1;
+const acSource: SimDeviceModel = {
+  kind: 'test.acSource',
+  output: null,
+  bank(devices) {
+    const volts = devices.map((d) => d.params['nominalVoltageV']);
+    return {
+      bag: () => ({}),
+      acValue: (i, b, values) => {
+        values.vsourcePolar(b.index, volts[i], 0, AC_SOURCE_OHMS);
+        return true;
       },
     };
   },
@@ -462,6 +524,8 @@ export function engineTestOptions(journal: string[] = []): Required<SimEngineOpt
       'test.i2tFuse': i2tFuse,
       'test.flip': flip,
       'test.twinSupply': twinSupply,
+      'test.acSource': acSource,
+      'test.reactor': reactor,
       'test.droop': droop,
       'test.orderA': orderProbe('test.orderA', journal),
       'test.orderB': orderProbe('test.orderB', journal),

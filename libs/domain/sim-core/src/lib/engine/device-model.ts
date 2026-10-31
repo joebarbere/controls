@@ -1,6 +1,7 @@
 import type { DeviceStateValue } from '@controls/save-format';
 import type { DeviceOutputSchema, SimEventKind } from '@controls/sim-protocol';
 import type { Sfc32 } from '@controls/world-model';
+import type { AcBranchValues } from '../mna/ac-values';
 import type { DcSolution } from '../mna/dc';
 import type { DcBranchValues } from '../mna/values';
 import type { Netlist, NetlistBranch, StateBag } from '../netlist/types';
@@ -73,6 +74,13 @@ export interface SimDeviceBank {
    * leaves its island unmodelled: not solved, never a reading.
    */
   dcValue?(index: number, branch: NetlistBranch, values: DcBranchValues): boolean;
+  /**
+   * Sets the phasor value of `branch` (one of device `index`'s, on an `ac` island) in `values` at the
+   * region frequency, and returns `true`; or returns `false` for the kind's default
+   * (`AC_DEFAULT_VALUES`). A branch with neither leaves its island unmodelled. AC islands are linear in
+   * P2 (no outer loop): each solve stamps these values once.
+   */
+  acValue?(index: number, branch: NetlistBranch, values: AcBranchValues): boolean;
   /**
    * The nonlinear outer loop's hook for `branch` (`DcIterationHook`, F2.2 part 3): set its value from
    * `iterate` (null on a cold start). Pure in its inputs.

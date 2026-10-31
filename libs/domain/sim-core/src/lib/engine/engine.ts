@@ -1,4 +1,4 @@
-import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog, regionProfile } from '@controls/catalog';
 import type { ReplayEntry, World } from '@controls/save-format';
 import {
   compareSimEvents,
@@ -25,6 +25,8 @@ import {
   ISLAND_FLAG_SINGULAR,
   islandReferenceNode,
 } from '../mna/dc';
+import { AcSolver } from '../mna/ac';
+import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue } from '../mna/ac-values';
 import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
@@ -115,10 +117,9 @@ export class SimProbeError extends Error {
  * - `singular`: a loop of ideal sources (ADR 0011 §5.3): its zeros are not 0 V;
  * - `nonConverged`: the outer loop hit its cap: values that look real but aren't settled;
  * - `unmodelled`: an element no device model can value yet (the lamp until F2.5): not solved;
- * - `acPending`: an AC island, solved by F2.2 part 2's phasor solver (not yet);
  * - `mixed`: DC and AC sources in one island (P2 has no converters): not solved.
  */
-export type SimIslandStatus = 'solved' | 'singular' | 'nonConverged' | 'unmodelled' | 'acPending' | 'mixed';
+export type SimIslandStatus = 'solved' | 'singular' | 'nonConverged' | 'unmodelled' | 'mixed';
 
 /** One island of the current netlist, for scripts, the console and the inspector (F2.6). */
 export interface SimIslandInfo {
@@ -139,18 +140,33 @@ export interface SimIslandInfo {
 export type ProbeReading =
   /** V(a) − V(b), in volts, from the solution at `solvedAt`. */
   | { readonly kind: 'dc'; readonly volts: number; readonly tick: number; readonly solvedAt: number }
+  /**
+   * An AC island: the phasor V(a) − V(b) = `re` + j·`im` (RMS volts) at the region frequency, and its
+   * RMS magnitude `rmsVolts` = |V(a) − V(b)| (what a meter shows by default). No angle is computed
+   * here: an angle needs atan2, which D6 keeps out of `sim-core`; the scripting API derives one for
+   * display only, and it never enters a hash.
+   */
+  | {
+      readonly kind: 'ac';
+      readonly rmsVolts: number;
+      readonly re: number;
+      readonly im: number;
+      readonly frequencyHz: number;
+      readonly tick: number;
+      readonly solvedAt: number;
+    }
   /** The terminals are on different islands: their voltages aren't comparable (no common reference). */
   | { readonly kind: 'floating'; readonly tick: number }
   /** The island is singular: there is no defined reading. */
   | { readonly kind: 'singular'; readonly tick: number; readonly island: number }
   /** The island's outer loop didn't converge: unsettled, never a steady reading. */
   | { readonly kind: 'unsettled'; readonly tick: number; readonly island: number }
-  /** The island isn't solved (`unmodelled`, `acPending` or `mixed`). */
+  /** The island isn't solved (`unmodelled` or `mixed`). */
   | {
       readonly kind: 'unsolved';
       readonly tick: number;
       readonly island: number;
-      readonly reason: 'unmodelled' | 'acPending' | 'mixed';
+      readonly reason: 'unmodelled' | 'mixed';
     };
 
 export interface SimEngineOptions {
@@ -217,6 +233,12 @@ export class SimEngine {
   private solution: DcSolution;
   private spare: DcSolution;
   private values: DcBranchValues;
+  private acValues: AcBranchValues;
+  private readonly acSolver = new AcSolver();
+  /** The region's supply frequency (`RegionProfile.frequencyHz`, 60 Hz for NEC): the AC islands' analysis frequency. */
+  private readonly frequencyHz: number;
+  /** Whether the current netlist has an `ac` island (so a solve runs the phasor solver too). */
+  private hasAc = false;
   private generation = 0;
   private revisionCount = 0;
   // Devices and banks (rebuilt at every topology change).
@@ -229,6 +251,7 @@ export class SimEngine {
   private branchBank: (SimDeviceBank | null)[] = [];
   private branchDevice = new Int32Array(0);
   private branchDefault: (DcDefaultValue | undefined)[] = [];
+  private branchAcDefault: (AcDefaultValue | undefined)[] = [];
   // Per island: unmodelled, the entities, the flags of the last solve, and the snapshot's arrays.
   private unmodelled = new Uint8Array(0);
   private islandEntities: (readonly number[])[] = [];
@@ -268,6 +291,8 @@ export class SimEngine {
     this.solution = createDcSolution(this.current);
     this.spare = createDcSolution(this.current);
     this.values = new DcBranchValues(this.current.branches.length);
+    this.acValues = new AcBranchValues(this.current.branches.length);
+    this.frequencyHz = regionProfile(world.regionId).frequencyHz.value;
     this.hook = (island, iterate, values) => {
       const netlist = this.current;
       const branches = island.branches;
@@ -417,16 +442,19 @@ export class SimEngine {
     const status = this.status(island);
     switch (status) {
       case 'solved': {
-        const volts = this.solution.nodes[2 * na] - this.solution.nodes[2 * nb];
-        return { kind: 'dc', volts: volts + 0, tick, solvedAt: this.lastSolve };
+        const nodes = this.solution.nodes;
+        const re = nodes[2 * na] - nodes[2 * nb] + 0;
+        if (this.current.islands[island].kind !== 'ac')
+          return { kind: 'dc', volts: re, tick, solvedAt: this.lastSolve };
+        const im = nodes[2 * na + 1] - nodes[2 * nb + 1] + 0;
+        const rmsVolts = Math.sqrt(re * re + im * im);
+        return { kind: 'ac', rmsVolts, re, im, frequencyHz: this.frequencyHz, tick, solvedAt: this.lastSolve };
       }
       case 'singular':
         return { kind: 'singular', tick, island };
       case 'nonConverged':
         return { kind: 'unsettled', tick, island };
       default:
-        // TODO(F2.2 part 2): an `ac` island solved by the phasor solver reads RMS volts and a phase
-        // (with `dmath`'s atan2, ADR 0014); until then it is `acPending`, never a reading.
         return { kind: 'unsolved', tick, island, reason: status };
     }
   }
@@ -467,6 +495,7 @@ export class SimEngine {
       this.solution = createDcSolution(next);
       this.spare = createDcSolution(next);
       this.values = new DcBranchValues(next.branches.length);
+      this.acValues = new AcBranchValues(next.branches.length);
       this.solved = false;
       // A flag rises only if no island these devices were in before the change already had it (a merge
       // or a split of a singular island isn't a new loop).
@@ -548,6 +577,9 @@ export class SimEngine {
     // One options object for every solve (no allocation per cadence solve): only its warm start moves.
     this.nonlinear.warmStart = warmStart;
     const next = this.solver.solveNonlinear(netlist, this.values, this.nonlinear, this.spare);
+    // Then the AC islands, into the same record: the DC solve left them zeroed and unsolved, and the
+    // phasor solver writes only `ac` islands (mixed islands stay unsolved: P2 has no converters).
+    if (this.hasAc) this.acSolver.solve(netlist, this.acValues, this.frequencyHz, next);
     // Indexed loops throughout: a cadence solve allocates nothing of the engine's own.
     const islands = netlist.islands;
     for (let k = 0; k < islands.length; k++) {
@@ -596,6 +628,10 @@ export class SimEngine {
     for (let k = 0; k < islands.length; k++) {
       const island = islands[k];
       this.unmodelled[island.index] = 0;
+      if (island.kind === 'ac') {
+        this.fillAcValues(island);
+        continue;
+      }
       if (island.kind !== 'dc' && island.kind !== 'empty') continue;
       const branches = island.branches;
       for (let i = 0; i < branches.length; i++) {
@@ -620,6 +656,34 @@ export class SimEngine {
     }
   }
 
+  /** An AC island's phasor values: a bank's, else the kind's default (a lead), else unmodelled. */
+  private fillAcValues(island: NetlistIsland): void {
+    const netlist = this.current;
+    const values = this.acValues;
+    const branches = island.branches;
+    for (let i = 0; i < branches.length; i++) {
+      const index = branches[i];
+      const branch = netlist.branches[index];
+      values.stamps[index] = AC_STAMP_UNSET;
+      const bank = this.branchBank[index];
+      if (bank?.acValue !== undefined && bank.acValue(this.branchDevice[index], branch, values)) {
+        if (values.stamps[index] === AC_STAMP_UNSET) {
+          throw new Error(`A device model returned true for AC branch ${index} without a value`);
+        }
+        continue;
+      }
+      const fallback = this.branchAcDefault[index];
+      if (fallback !== undefined) {
+        fallback(branch, values);
+        continue;
+      }
+      // No model can value it: a harmless stamp keeps the phasor solver going, then the island is discarded.
+      if (branch.kind === 'vsource') values.vsource(index, 0, 0, 1);
+      else values.resistor(index, 1);
+      this.unmodelled[island.index] = 1;
+    }
+  }
+
   private readable(island: number): boolean {
     return this.status(island) === 'solved';
   }
@@ -630,7 +694,6 @@ export class SimEngine {
    */
   private status(island: number): SimIslandStatus {
     const kind = this.current.islands[island].kind;
-    if (kind === 'ac') return 'acPending';
     if (kind === 'mixed') return 'mixed';
     const result = this.solution.islands[island];
     if (result.iterations === 0) return 'unmodelled';
@@ -730,6 +793,8 @@ export class SimEngine {
     this.branchBank = new Array<SimDeviceBank | null>(branchCount).fill(null);
     this.branchDevice = new Int32Array(branchCount);
     this.branchDefault = netlist.branches.map((branch) => ownModel(DC_DEFAULT_VALUES, branch.model));
+    this.branchAcDefault = netlist.branches.map((branch) => ownModel(AC_DEFAULT_VALUES, branch.model));
+    this.hasAc = netlist.islands.some((island) => island.kind === 'ac');
     for (const branch of netlist.branches) {
       if (branch.element.kind !== 'entity') continue;
       const slot = devices.get(branch.element.entity);

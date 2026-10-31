@@ -1,5 +1,6 @@
 import type { CommandBus } from '@controls/commands';
 import { replayEntries } from '@controls/commands';
+import { regionProfile } from '@controls/catalog';
 import { createWorld, migrateWorld, World } from '@controls/save-format';
 import {
   decodeSnapshot,
@@ -33,6 +34,8 @@ import {
   THERMAL_PARAMS,
   THERMAL_TOLERANCE,
   TWIN_SUPPLY,
+  AC_SOURCE_OHMS,
+  REACTOR,
 } from '../../testing/engine';
 import { ISLAND_FLAG_NON_CONVERGED as SOLVER_NON_CONVERGED, ISLAND_FLAG_SINGULAR as SOLVER_SINGULAR } from '../mna/dc';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
@@ -225,17 +228,119 @@ describe('SimEngine: electrical results', () => {
     expect(engine.exportState().solution?.islands).toStrictEqual([{ flags: 0, iterations: 0 }]);
   });
 
-  it('leaves AC islands unsolved until F2.2 part 2, never as a reading', () => {
+  const acLoop: readonly (readonly [string, object])[] = [
+    ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+    ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+    ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'a') }],
+    ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'n') }],
+  ];
+
+  it('solves AC islands with the phasor solver at the region frequency: RMS readings, in the same record', () => {
+    expect(regionProfile('nec').frequencyHz.value).toBe(60);
+    const host = Host.fresh().run(acLoop);
+    expect(host.engine.islands()).toMatchObject([{ kind: 'ac', status: 'solved', iterations: 1 }]);
+    const source = host.engine.probe(end(1, 'l'), end(1, 'n'));
+    const load = host.engine.probe(end(2, 'a'), end(2, 'b'));
+    if (source.kind !== 'ac' || load.kind !== 'ac') throw new Error('expected AC readings');
+    expect(source).toMatchObject({ frequencyHz: 60, tick: 0, solvedAt: 0 });
+    // 120 V RMS behind 0.1 Ω into two ~41 mΩ leads and a ~2 Ω load: all resistive, so in phase.
+    expect(source.rmsVolts).toBeLessThan(120);
+    expect(source.rmsVolts).toBeGreaterThan(100);
+    expect(load.rmsVolts).toBeLessThan(source.rmsVolts);
+    expect(Math.abs(source.im)).toBeLessThan(1e-9 * source.rmsVolts);
+    expect(source.rmsVolts).toBe(Math.sqrt(source.re * source.re + source.im * source.im));
+    // The source's terminal voltage is 120 V less the drop across its 0.1 Ω (KVL, within rounding).
+    const record = host.engine.exportState().solution as NonNullable<World['sim']>;
+    const cell = host.engine.netlist.branches.find((b) => b.element.kind === 'entity' && b.element.entity === 1);
+    const amps = Math.hypot(
+      record.branches[2 * (cell?.index as number)],
+      record.branches[2 * (cell?.index as number) + 1],
+    );
+    expect(source.rmsVolts).toBeCloseTo(120 - amps * AC_SOURCE_OHMS, 9);
+    // The load heats on |I|² from the phasor current.
+    host.advanceTo(50);
+    expect(host.materialised().entities[1].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
+  });
+
+  it('solves an AC island a command creates, at the command tick (not just on the cadence)', () => {
+    const host = Host.fresh();
+    host.advanceTo(13);
+    host.run(acLoop);
+    expect(host.engine.lastSolveTick).toBe(13);
+    expect(host.engine.probe(end(1, 'l'), end(1, 'n'))).toMatchObject({ kind: 'ac', solvedAt: 13 });
+    host.exec('lead.disconnect', { id: 2 });
+    host.exec('edit.undo'); // a topology change and back, at tick 13: re-solved each time
+    expect(host.engine.probe(end(2, 'a'), end(2, 'b'))).toMatchObject({ kind: 'ac', solvedAt: 13 });
+  });
+
+  it('DC and AC islands share one record without writing into each other', () => {
+    // A short through one lead on each kind of source, so neither has a seeded tolerance.
+    const dcOnly = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(1, 'neg') }],
+    ]);
+    const acOnly = Host.fresh().run([
+      ['entity.place', { ref: CRATE, positionMm: origin }], // keep the AC source at id 2
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'l'), b: end(2, 'n') }],
+    ]);
+    const both = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(1, 'neg') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'l'), b: end(2, 'n') }],
+    ]);
+    expect(both.engine.islands().map((i) => [i.kind, i.status])).toStrictEqual([
+      ['dc', 'solved'],
+      ['ac', 'solved'],
+    ]);
+    expect(both.engine.probe(end(1, 'pos'), end(1, 'neg'))).toStrictEqual(
+      dcOnly.engine.probe(end(1, 'pos'), end(1, 'neg')),
+    );
+    expect(both.engine.probe(end(2, 'l'), end(2, 'n'))).toStrictEqual(acOnly.engine.probe(end(2, 'l'), end(2, 'n')));
+    const dc = both.engine.probe(end(1, 'pos'), end(1, 'neg'));
+    expect(dc.kind === 'dc' && dc.volts).toBeGreaterThan(1);
+    // A cadence re-solve keeps both.
+    both.advanceTo(11);
+    expect(both.engine.probe(end(1, 'pos'), end(1, 'neg'))).toMatchObject({ kind: 'dc', solvedAt: 10 });
+    expect(both.engine.probe(end(2, 'l'), end(2, 'n'))).toMatchObject({ kind: 'ac', solvedAt: 10 });
+  });
+
+  it('reads a reactive AC load as a phasor with its phase: the inductor voltage leads its current', () => {
     const host = Host.fresh().run([
       ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
-      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+      ['entity.place', { ref: REACTOR, positionMm: origin }],
       ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'n') }],
     ]);
-    expect(host.engine.islands()).toMatchObject([{ kind: 'ac', status: 'acPending', iterations: 0 }]);
-    expect(host.engine.probe(end(1, 'l'), end(1, 'n'))).toMatchObject({ kind: 'unsolved', reason: 'acPending' });
-    host.advanceTo(50); // the load's continuous layer sees no current from an unsolved island
-    expect(host.materialised().entities[1].sim['tempK']).toBe(THERMAL_PARAMS.ambientK);
+    const coil = host.engine.probe(end(2, 'a'), end(2, 'b'));
+    if (coil.kind !== 'ac') throw new Error('expected an AC reading');
+    // 50 mH at 60 Hz is 18.85 Ω of reactance against about 0.18 Ω of resistance in the loop, so the
+    // coil takes nearly all of the 120 V, about 90° ahead of the current through it.
+    expect(coil.rmsVolts).toBeGreaterThan(119);
+    expect(coil.rmsVolts).toBeLessThan(120);
+    const record = host.engine.exportState().solution as NonNullable<World['sim']>;
+    const element = host.engine.netlist.branches.find((b) => b.element.kind === 'entity' && b.element.entity === 2);
+    const [ire, iim] = [
+      record.branches[2 * (element?.index as number)],
+      record.branches[2 * (element?.index as number) + 1],
+    ];
+    // V = jωL·I: re(V) = −ωL·im(I), im(V) = ωL·re(I) (the probe is a minus b, the current a to b).
+    const omegaL = 2 * Math.PI * 60 * 0.05;
+    expect(coil.re).toBeCloseTo(-omegaL * iim, 6);
+    expect(coil.im).toBeCloseTo(omegaL * ire, 6);
+    expect(Math.abs(coil.im)).toBeGreaterThan(1); // a real phase, not just a real part
+  });
+
+  it('leaves a mixed island unsolved, never a reading', () => {
+    const host = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'l') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'n'), b: end(1, 'neg') }],
+    ]);
+    expect(host.engine.islands()).toMatchObject([{ kind: 'mixed', status: 'mixed', iterations: 0 }]);
+    expect(host.engine.probe(end(1, 'pos'), end(1, 'neg'))).toMatchObject({ kind: 'unsolved', reason: 'mixed' });
   });
 
   it('surfaces a singular island: one event on the rising edge, and no reading', () => {
@@ -532,23 +637,27 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    host.engine.advanceTo(100_000); // warm: every buffer grown, the JIT settled
-    // Bytes allocated: the heap's growth plus what each collection freed. GC counts are no measure:
-    // the runtime's own 2-4 scavenges land in either of two windows at random.
-    const steps = 500_000;
-    const profiler = new GCProfiler();
-    const start = getHeapStatistics().used_heap_size;
-    profiler.start();
-    host.engine.advanceTo(host.engine.tick + steps);
-    const stats = profiler.stop()?.statistics ?? [];
-    const freed = stats.reduce(
-      (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
-      0,
-    );
-    const perStep = (getHeapStatistics().used_heap_size - start + freed) / steps;
-    // Measured 12.8 B/step under coverage and 16.7 without: about 100 B per cadence solve (32 B of
-    // it inside DcSolver.solveNonlinear) plus a few in the synthetic thermal layer. Zero allocation per
-    // tick is the plan's criterion and not yet met (plan F2.3a notes); this gate stops it growing.
+    host.engine.advanceTo(100_000); // warm: every buffer grown, the JIT tiered up
+    // Bytes allocated in a window: the heap's growth plus what each collection freed. GC counts are no
+    // measure (the runtime's own few scavenges land at random), and one short window can catch a JIT
+    // tier-up's allocation, so the gate takes the median of five 20 000-step windows.
+    const window = (steps: number) => {
+      const profiler = new GCProfiler();
+      const start = getHeapStatistics().used_heap_size;
+      profiler.start();
+      host.engine.advanceTo(host.engine.tick + steps);
+      const stats = profiler.stop()?.statistics ?? [];
+      const freed = stats.reduce(
+        (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
+        0,
+      );
+      return (getHeapStatistics().used_heap_size - start + freed) / steps;
+    };
+    const perStep = [0, 1, 2, 3, 4].map(() => window(20_000)).sort((x, y) => x - y)[2];
+    // Measured 20.8-21.0 B/step in these windows, with and without coverage (it falls to about 13 over
+    // longer runs as the JIT settles): about 100-200 B per cadence solve, 32 B of it inside
+    // DcSolver.solveNonlinear, plus a few in the synthetic thermal layer. Zero allocation per tick is
+    // the plan's criterion and not yet met (plan F2.3a notes); this gate stops it growing.
     expect(perStep).toBeLessThan(24);
   });
 });

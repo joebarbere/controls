@@ -81,10 +81,11 @@ Settings are versioned separately (`settingsVersion`):
 
 `SIM_ENGINE_VERSION` (`@controls/sim-core`), written into every save's manifest (decision D8, [ADR 0013](decisions/0013-world-document-v2.md)), is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save from another engine version loads `world.json` as saved with a new replay log (`engine-changed`), never refused. Saves migrated from P1 carry 0.
 
-| simEngineVersion | App version     | Change                                                                                                                                                                                                       |
-| ---------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1                | 0.3.0 (planned) | The world v2 kickoff: the field exists, no engine ran, every save's `sim` is `null`.                                                                                                                         |
-| 2                | 0.3.0 (planned) | F2.3a, the engine loop: saves and `world.hash` hold the materialised solution record, so a world with a non-empty netlist hashes differently from what engine 1 wrote for the same log (`BENCH_LEADS_HASH`). |
+| simEngineVersion | App version     | Change                                                                                                                                                                                                            |
+| ---------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1                | 0.3.0 (planned) | The world v2 kickoff: the field exists, no engine ran, every save's `sim` is `null`.                                                                                                                              |
+| 2                | 0.3.0 (planned) | #51 (F2.2 part 2): sparse LU uses plain partial pivoting (`PIVOT_THRESHOLD` 1), which moved the sparse solver pins.                                                                                               |
+| 3                | 0.3.0 (planned) | F2.3a, the engine loop: saves and `world.hash` hold the materialised solution record, so a world with a non-empty netlist hashes differently from what engine 1 or 2 wrote for the same log (`BENCH_LEADS_HASH`). |
 
 ### Device catalogue (`catalogVersion`)
 
