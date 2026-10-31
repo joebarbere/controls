@@ -81,4 +81,22 @@ describe('SimControls', () => {
     expect(formatSpeed(9.26)).toBe('9.3×');
     expect(formatSpeed(42.4)).toBe('42×');
   });
+
+  it('says "Catching up" while the worker is far behind what was commanded, and announces it', async () => {
+    const { fixture, session, fakes } = await setup();
+    fakes.workers[0].hold(); // the worker stops answering: progress stays put
+    session.exec('sim.step', { ticks: 600_000 });
+    await waitFor(async () => {
+      await fixture.whenStable();
+      expect(screen.getByTestId('sim-catching-up').textContent).toContain('Catching up: 0:00:00.000 of 0:10:00.000');
+    });
+    expect(TestBed.inject(SimHost).catchingUp()).toBe(true);
+    expect(screen.getByTestId('sim-announcement').textContent).toBe('The simulation is catching up.');
+    fakes.workers[0].release();
+    await waitFor(async () => {
+      await fixture.whenStable();
+      expect(screen.queryByTestId('sim-catching-up')).toBeNull();
+    });
+    expect(TestBed.inject(SimHost).catchingUp()).toBe(false);
+  });
 });

@@ -12,6 +12,7 @@ type Hooks = {
     entries(): ReadonlyArray<{ id: string; args: Record<string, unknown>; tick: number }>;
     simTick(): number;
     simStatus(): string;
+    simPacing(): boolean;
     waitForTick(tick: number): Promise<void>;
     busWorld(): { tick: number };
   };
@@ -121,13 +122,13 @@ test('a hidden window suspends the sim and a shown one resumes it (U1)', async (
   await expect(hud.getByTestId('sim-announcement')).toHaveText(
     'The simulation is suspended while the window is hidden.',
   );
-  const held = await hook(page, (h) => h.busWorld().tick);
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
-  expect(await hook(page, (h) => h.busWorld().tick)).toBe(held);
+  expect(await hook(page, (h) => h.simPacing())).toBe(false); // no pacing loop at all while hidden
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await expect(hud).toHaveAttribute('data-status', 'running');
-  await expect.poll(() => hook(page, (h) => h.busWorld().tick)).toBeGreaterThan(held);
+  const shown = await hook(page, (h) => h.busWorld().tick);
+  expect(await hook(page, (h) => h.simPacing())).toBe(true);
+  await expect.poll(() => hook(page, (h) => h.busWorld().tick)).toBeGreaterThan(shown);
 });
