@@ -11,7 +11,7 @@ import { workshopWorld } from './testing/workshop';
  * inductance's phasors (Node's V8 against Chromium's).
  */
 export const MAINS_HASH = '9d4d91f1172c61bfadb578c2bebfd63938261a07326820dbf43f8fb931c2cc8b';
-export const MAINS_SNAPSHOT_HASH = '3283a86c3478dff172fb2ea286970803496055710dc9d3e66824c08f43205a62';
+export const MAINS_SNAPSHOT_HASH = '0e95acf9b6b7cd8a753aec3833aeb0ea8786a0da796c3fef81f2f8fe8b2bbe3b';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');
 

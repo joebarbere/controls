@@ -5,7 +5,9 @@ import { READING_STATUS_VALUES } from './readings';
 /*
  * What the built-in models write is what the protocol says they write (ADR 0011 §5.4, F2.3b): a
  * record added or changed in a model without registering it in `sim-protocol` (and bumping
- * `SIM_PROTOCOL_VERSION`) fails here, so the worker and a reader never disagree on a layout.
+ * `SIM_PROTOCOL_VERSION`) fails here, so the worker and a reader never disagree on a layout. A change
+ * made consistently on both sides is caught by `sim-protocol`'s `protocol-fingerprint.spec.ts`, which
+ * pins the registry's fingerprint per `SIM_PROTOCOL_VERSION` (F2.5 test review).
  */
 
 describe('the built-in device records are the protocol registry', () => {

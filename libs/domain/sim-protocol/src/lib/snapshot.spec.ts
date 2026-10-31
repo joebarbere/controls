@@ -112,8 +112,8 @@ function encode(s: SnapshotSource, slotSeq = 0): Uint8Array {
 const hashed = (s: SnapshotSource) => snapshotHashedBytes(encode(s));
 
 describe('the snapshot layout (ADR 0011 §5)', () => {
-  it('is protocol version 4, with a 96-byte slot header whose hashed region starts at byte 8', () => {
-    expect(SIM_PROTOCOL_VERSION).toBe(4);
+  it('is protocol version 5, with a 96-byte slot header whose hashed region starts at byte 8', () => {
+    expect(SIM_PROTOCOL_VERSION).toBe(5);
     expect([SLOT_HEADER_BYTES, SLOT_HASHED_START]).toStrictEqual([96, 8]);
     expect(SLOT_OFFSETS).toMatchObject({ tick: 8, lastSolveTick: 16, flags: 44, topologyHash: 48, payloadBytes: 80 });
     expect(slotBytesFor(3, 4, 2, 24)).toBe(96 + 48 + 64 + 32 + 24);

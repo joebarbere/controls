@@ -52,7 +52,7 @@ What exists today (Phases 0 and 1, and Phase 2 so far):
 - An incandescent lamp with a real tungsten filament: its resistance rises as it heats, so switching on a cold lamp draws a surge of about 14 times its running current, and its light follows the filament's temperature. A power resistor that says when it is over its rating, and a 12 V heater element.
 - Protection that behaves like the real thing: a 1 A fast-acting fuse that heats with the current and blows (in under a millisecond on a dead short, never below its minimum fusing current) and stays blown until replaced, and a 15 A thermal-magnetic breaker with a slow thermal trip on overload, an instantaneous magnetic trip on a short, and a handle that must go off and on again to reset it.
 - Honest readings: a device's record says whether its circuit was solved, and an unsettled solve is never shown as a steady value.
-- `netlist.dump` in the dev console and in scripts: the compiled netlist and why each island was or wasn't solved, the same text headless and in the game.
+- `netlist.dump` in the dev console and in scripts: the compiled netlist, why each island was or wasn't solved, and its voltage class (12 V or 24 V DC, 120/240 V, 208Y/120 V, 480Y/277 V, from its sources' nameplates), the same text headless and in the game.
 
 ### Commands and world
 

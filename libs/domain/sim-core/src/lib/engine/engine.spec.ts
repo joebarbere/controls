@@ -648,7 +648,7 @@ describe('SimEngine: the snapshot', () => {
     const host = Host.fresh().run(ENGINE_BENCH).advanceTo(100); // before the fuse melts
     const snapshot = decodeSnapshot(host.engine.snapshot());
     const exported = host.engine.exportState();
-    expect(SIM_PROTOCOL_VERSION).toBe(4);
+    expect(SIM_PROTOCOL_VERSION).toBe(5);
     expect(snapshot).toMatchObject({
       tick: 100,
       lastSolveTick: 90,
@@ -658,7 +658,7 @@ describe('SimEngine: the snapshot', () => {
     expect([...snapshot.nodes]).toStrictEqual(exported.solution?.nodes);
     expect([...snapshot.branches]).toStrictEqual(exported.solution?.branches);
     expect(snapshot.islands).toStrictEqual([
-      { kind: 'dc', flags: 0, iterations: 1, referenceNode: 0, unknowns: expect.any(Number), band: 0 },
+      { kind: 'dc', flags: 0, iterations: 1, referenceNode: 0, unknowns: expect.any(Number), band: 1 }, // dc12: the 12 V battery
     ]);
     // Records in entity order: the battery (1, 40 bytes), the load (3) then the fuse (4), 16 bytes each.
     const view = new DataView(snapshot.devices.buffer);

@@ -16,9 +16,9 @@ import { SimEngine, type SimEngineOptions, type SimIslandDiagnostic } from './en
  * netlist 5 nodes, 6 branches, 2 islands        ← formatNetlist, unchanged
  * …
  * solution tick 1230                            ← or `solution none` (an empty netlist)
- * solve island 0 solved flags none iterations 1 reference 1 unknowns 3 band none
- * solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 2
- * solve island 2 mixed flags none iterations 0 reference none unknowns 0 band none sources dc 0 ac 3
+ * solve island 0 solved flags none iterations 1 reference 1 unknowns 3 band dc12
+ * solve island 1 unmodelled flags none iterations 0 reference none unknowns 0 band none (no-source) unvalued 2
+ * solve island 2 mixed flags none iterations 0 reference none unknowns 0 band none (mixed) sources dc 0 ac 3
  * ```
  */
 
@@ -36,7 +36,8 @@ const list = (indices: readonly number[]) => (indices.length === 0 ? 'none' : in
 
 /** One island's diagnostics line (see the file comment). */
 export function formatIslandDiagnostic(island: SimIslandDiagnostic): string {
-  const band = NOMINAL_BANDS[island.band] ?? `#${island.band}`;
+  const name = NOMINAL_BANDS[island.band] ?? `#${island.band}`;
+  const band = island.bandReason === null ? name : `${name} (${island.bandReason})`;
   const reference = island.referenceNode < 0 ? 'none' : String(island.referenceNode);
   let line =
     `solve island ${island.index} ${island.status} flags ${formatIslandFlags(island.flags)}` +

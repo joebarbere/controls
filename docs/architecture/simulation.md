@@ -698,10 +698,36 @@ flowchart LR
 - **Why an island wasn't solved** needs one thing the solution record doesn't hold: which branches no model could value. `islandDiagnostics()` runs the value pass every solve starts with (`fillValues`), which marks them in a per-branch array. The pass only refills the solver's scratch values, so it changes no state, snapshot or hash; a property test takes dumps throughout random sessions and compares every snapshot with an undumped twin.
 - **Status** is `islandStatus(kind, flags, iterations)`, as everywhere; `reference` and `unknowns` are what the snapshot's island entry holds (`none`/0 when unsolved); `band` is `NOMINAL_BANDS[band]` (an unknown index prints as `#N`, never a wrong name).
 
+## Nominal bands (F2.6)
+
+An island's **nominal band** (`NOMINAL_BANDS` in `sim-protocol`, protocol 5) tells the voltage overlay which fixed scale to use, without computing anything. Band 0, `none`, means no scale. The engine chooses it when it rebuilds after a topology change (`engine/bands.ts`), and writes it into the snapshot's island entry. It is never persisted, so no world hash depends on it.
+
+| Band        | From                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| `dc12`      | a DC source whose nameplate is 12 V (the battery's `nominalVoltageV`)                                |
+| `dc24`      | a DC source whose nameplate is 24 V (the DIN PSU's `ratedVoltageV`)                                  |
+| `ac120-240` | a split-phase source at the region's 120 V line-to-neutral (the utility service, the generator stub) |
+| `ac208y120` | a three-phase source at the region's commercial 120 V line-to-neutral                                |
+| `ac480y277` | a three-phase source at the region's industrial 277 V line-to-neutral                                |
+
+```mermaid
+flowchart TD
+    I[island] --> M{mixed?}
+    M -- yes --> NM["none (mixed)"]
+    M -- no --> S{any source branch?}
+    S -- no --> NS["none (no-source)"]
+    S -- yes --> A{all the same band?}
+    A -- no --> ND["none (sources-disagree)"]
+    A -- yes --> Z{that band is none?}
+    Z -- yes --> NU["none (unrated-source)"]
+    Z -- no --> B[that band]
+```
+
+The bench supply has no band: it is adjustable from 0 to 30 V, so no fixed scale is honest. A nameplate that matches no band (a 6 V battery) is `none`, never the nearest band. The DC nominals carry a `source` (`DC_BAND_NOMINALS`); the AC ones are the region profile's nominal systems. The overlays' full scale for each band (4/3 of nominal, a game-design choice) is the renderer's (`docs/architecture/rendering.md`).
+
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
-- **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b), and the loads' and protective devices' (protocol 4, F2.5).
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.
 - **Fuse and breaker recipes** (renderer): the fuse and the breaker have engine models but no procedural recipe yet, so they draw as unknown objects.

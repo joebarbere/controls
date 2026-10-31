@@ -13,5 +13,5 @@ branch 1 e3.filament resistor lamp.incandescent 3 -> 4 island 1 ratedPowerW=5 ra
 branch 2 c1 resistor lead 1 -> 2 island 0 resistanceOhm=0.04094815541017536
 branch 3 c2 resistor lead 2 -> 0 island 0 resistanceOhm=0.04094815541017536
 solution tick 1230
-solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band none
-solve island 1 solved flags none iterations 1 reference 3 unknowns 1 band none
+solve island 0 solved flags none iterations 1 reference 0 unknowns 3 band dc12
+solve island 1 solved flags none iterations 1 reference 3 unknowns 1 band none (no-source)

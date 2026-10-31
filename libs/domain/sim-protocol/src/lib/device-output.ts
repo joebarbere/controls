@@ -197,8 +197,25 @@ export function decodeDeviceRecord(schema: DeviceOutputSchema, data: DataView, o
 }
 
 /**
- * The nominal voltage bands an island can be in (ADR 0011 §5.3), by index, for the overlays' scales.
- * F2.3a has only `none` (index 0): the band is chosen from the island's source nameplates and
- * setpoints, which the source models of F2.4 provide. Appending a band bumps `SIM_PROTOCOL_VERSION`.
+ * The nominal voltage bands an island can be in (ADR 0011 §5.3), by index, for the overlays' scales
+ * (protocol 5, F2.6). Index 0, `none`, means "no scale", never the first bin of one. The engine
+ * chooses an island's band from its sources' nameplates (`sim-core` `engine/bands.ts`); the overlays
+ * look scales up by **name**, so a name is never changed. Appending a band bumps `SIM_PROTOCOL_VERSION`.
+ *
+ * - `dc12`: a 12 V DC system (the 12 V lead-acid battery);
+ * - `dc24`: a 24 V DC system (the DIN-rail control supply);
+ * - `ac120-240`: the 120/240 V split-phase service (and the portable generator);
+ * - `ac208y120`: the 208Y/120 V three-phase service;
+ * - `ac480y277`: the 480Y/277 V three-phase service.
  */
-export const NOMINAL_BANDS: readonly string[] = Object.freeze(['none']);
+export const NOMINAL_BANDS: readonly string[] = Object.freeze([
+  'none',
+  'dc12',
+  'dc24',
+  'ac120-240',
+  'ac208y120',
+  'ac480y277',
+]);
+
+/** `NOMINAL_BANDS`' index 0: no scale (no source, a source without a fixed nominal, or disagreeing sources). */
+export const NOMINAL_BAND_NONE = 0;
