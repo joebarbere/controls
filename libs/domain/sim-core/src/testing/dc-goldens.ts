@@ -374,12 +374,13 @@ function parallelBatteriesWithLoad(): DcGolden {
  *    - The dangling lamp's only return path is gmin at each of +, 3a and 3b. To first order in gmin,
  *      the battery supplies I_b = 3 gmin E = 3.6e-11 A, the lead carries 2 gmin E (3a's and 3b's) and
  *      the lamp gmin E = 1.2e-11 A, so V(3b) = E − gmin E (3r + 2R_L + 28.8) ≈ 12 − 3.5e-10 V.
- *    - Precision: each of these currents is resolved against KCL rows holding the lead's 24 S, so
- *      the solve can leave an absolute error of about ε · G · V ≈ 2.2e-16 × 24 × 12 ≈ 6.4e-14 A,
- *      whatever the pivot order. Relative to the currents that is ≈ 1.8e-3 of the battery's 3.6e-11 A
- *      and ≈ 5e-3 of the lamp's 1.2e-11 A, so a relative bound would rest on luck (this LU happens to
- *      give 2e-4 and 3e-6; another pivot order gave 1.4e-3). Both checks are bounded by that stated
- *      floor instead: 1e-13 A absolute, no relative term.
+ *    - Precision: the battery's current is resolved against KCL rows holding the lead's 24 S, so the
+ *      solve can leave an absolute error of about ε · G · V ≈ 2.2e-16 × 24 × 12 ≈ 6.4e-14 A, whatever
+ *      the pivot order: ≈ 1.8e-3 of its 3.6e-11 A, so a relative bound would rest on luck (this LU
+ *      gives 2e-4; another pivot order gave 1.4e-3). Its check is bounded by that stated floor
+ *      instead: 1e-13 A absolute (0.28 %), no relative term. The lamp's current comes from its own
+ *      node's row, which holds only the lamp's 0.035 S and gmin: ε · g · V ≈ 1e-16 A. Its check allows
+ *      5e-14 A absolute (0.42 % of 1.2e-11 A). Both are inside the plan's 0.5 %.
  */
 function floating(): DcGolden {
   const netlist = compileNetlist(bench([BATTERY, LAMP, LAMP], [[1, 'pos', 3, 'a']]), BUILTIN_CATALOG);
@@ -410,7 +411,7 @@ function floating(): DcGolden {
         actual: (s) => current(s, branchOf(netlist, 3, 'filament')),
         expected: gmin * E,
         tolerance: 0,
-        absolute: 1e-13,
+        absolute: 5e-14,
       },
       {
         label: 'battery supplies 3 gmin E',

@@ -15,7 +15,7 @@ import {
   TEST_MODELS,
 } from '../../testing/bench';
 import { sha256 } from '@controls/world-model';
-import { branchRounding, kcl, power, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { kcl, linearResidual, power, sourceRows, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
 import { compileNetlist } from '../netlist/compile';
 import type { Netlist } from '../netlist/types';
 import { createDcSolution, DcSolver, type DcSolution, ISLAND_FLAG_SINGULAR, solveDc } from './dc';
@@ -147,7 +147,28 @@ function build(draw: CircuitDraw): Circuit {
 const singular = (solution: DcSolution, island: number) =>
   (solution.islands[island].flags & ISLAND_FLAG_SINGULAR) !== 0;
 
-/** Checks the physics on every solved, non-singular island, and the singular contract on the rest. */
+/**
+ * Checks every row of the system (KCL and the source rows) on every solved, non-singular island,
+ * and the singular contract on the rest. `checkPhysics` adds the power balance.
+ */
+function checkRows({ netlist, values }: Circuit, solution: DcSolution): void {
+  for (const v of solution.nodes) expect(Number.isFinite(v)).toBe(true);
+  for (const v of solution.branches) expect(Number.isFinite(v)).toBe(true);
+  for (const island of netlist.islands) {
+    if (!solution.islands[island.index].solved) continue;
+    if (singular(solution, island.index)) {
+      for (const node of island.nodes) expect(Object.is(solution.nodes[2 * node], 0)).toBe(true);
+      for (const b of island.branches) expect(Object.is(solution.branches[2 * b], 0)).toBe(true);
+      continue;
+    }
+    expect(kcl(netlist, values, solution, island), `KCL on island ${island.index}`).toBeLessThanOrEqual(1);
+    expect(sourceRows(netlist, values, solution, island), `source rows on island ${island.index}`).toBeLessThanOrEqual(
+      1,
+    );
+  }
+}
+
+/** `checkRows` plus the power balance, gmin losses included. */
 function checkPhysics({ netlist, values }: Circuit, solution: DcSolution): void {
   for (const v of solution.nodes) expect(Number.isFinite(v)).toBe(true);
   for (const v of solution.branches) expect(Number.isFinite(v)).toBe(true);
@@ -159,6 +180,9 @@ function checkPhysics({ netlist, values }: Circuit, solution: DcSolution): void 
       continue;
     }
     expect(kcl(netlist, values, solution, island), `KCL on island ${island.index}`).toBeLessThanOrEqual(1);
+    expect(sourceRows(netlist, values, solution, island), `source rows on island ${island.index}`).toBeLessThanOrEqual(
+      1,
+    );
     const { delivered, dissipated, scale, floor } = power(netlist, values, solution, island);
     expect(Math.abs(delivered - dissipated), `power on island ${island.index}`).toBeLessThanOrEqual(
       1e-9 * scale + floor,
@@ -179,38 +203,10 @@ function scaledSources(values: DcBranchValues, k: number, keep: (branch: number)
   return out;
 }
 
-const maxAbs = (xs: Float64Array) => xs.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
-
-/** One solve compared, with the factor its error is scaled by (k for k · x̂, 1 for a term of a sum). */
-interface Compared {
-  readonly circuit: Circuit;
-  readonly solution: DcSolution;
-  readonly factor: number;
-}
-
-/**
- * |x − y| ≤ 1e-9 · scale + floor componentwise, over node voltages and branch currents. Each compared
- * solve contributes |factor| × (1e-12 + its own rounding term for the branch, `branchRounding`) to a
- * branch's floor, and |factor| × 1e-12 to a node's.
- */
-function expectClose(
-  x: DcSolution,
-  y: { nodes: Float64Array; branches: Float64Array },
-  scaleV: number,
-  scaleI: number,
-  compared: readonly Compared[],
-): void {
-  const nodeFloor = compared.reduce((f, c) => f + Math.abs(c.factor) * 1e-12, 0);
-  x.nodes.forEach((v, i) => expect(Math.abs(v - y.nodes[i])).toBeLessThanOrEqual(1e-9 * scaleV + nodeFloor));
-  for (let b = 0; b < x.branches.length / 2; b++) {
-    const floor = compared.reduce(
-      (f, c) => f + Math.abs(c.factor) * (1e-12 + branchRounding(c.circuit.netlist, c.circuit.values, c.solution, b)),
-      0,
-    );
-    expect(Math.abs(x.branches[2 * b] - y.branches[2 * b]), `branch ${b}`).toBeLessThanOrEqual(1e-9 * scaleI + floor);
-    expect(Object.is(x.branches[2 * b + 1], 0)).toBe(true);
-  }
-}
+/** Factors whose multiplication is exact in binary floating point: 0 and ± powers of two. */
+const EXACT_FACTORS = [0, -4, 0.5, 2, 1024];
+/** Factors that round, so they get the forward-error bound. */
+const ROUNDING_FACTORS = [-3, 2.5, 1e3];
 
 /** A solution full of sentinels, as a reused `out` might be: every field must be overwritten. */
 function dirtySolution(netlist: Netlist): DcSolution {
@@ -324,6 +320,38 @@ const MESH = syntheticNetlist(4, [
   { a: 3, b: 1, kind: 'vsource' },
 ]);
 
+/** A zero element: the shrunk counterexamples' filler. */
+const Z: ElementDraw = { kind: 0, mantissa: 0, decade: 0, sourceValue: 0, ideal: 0 };
+const tree = (entries: Readonly<Record<number, readonly [number, ElementDraw]>>) =>
+  Array.from({ length: MAX_NODES }, (_, i) => entries[i] ?? ([0, Z] as const));
+
+/** CI (Ubuntu, `48faae4`): linearity at k = 2.5 failed, 1.437e-9 against a bound of 2.85e-11. */
+const CI_LINEARITY: CircuitDraw = {
+  nodes: 7,
+  islands: 1,
+  tree: tree({
+    1: [0, { ...Z, mantissa: 6901, decade: 6 }],
+    2: [0, { ...Z, kind: 6 }],
+    3: [178, { ...Z, kind: 6, ideal: 1 }],
+  }),
+  extra: [[752, 113, { ...Z, kind: 6, sourceValue: 1 }]],
+};
+/** CI (macOS, `48faae4`): superposition failed, 7.276e-8 against a bound of 1.3e-11. */
+const CI_SUPERPOSITION: CircuitDraw = {
+  nodes: 8,
+  islands: 1,
+  tree: tree({
+    1: [0, { ...Z, kind: 6 }],
+    3: [0, { ...Z, decade: 8 }],
+    5: [98, { ...Z, kind: 6, sourceValue: 1 }],
+  }),
+  extra: [
+    [0, 0, Z],
+    [219, 877, { ...Z, kind: 6, sourceValue: 8, ideal: 1 }],
+  ],
+};
+const CI_SUPERPOSITION_MASK = Array.from({ length: 32 }, (_, i) => i === 8);
+
 describe('DC MNA properties (synthetic circuits)', () => {
   it('KCL holds at every node and power balances, gmin losses included', () => {
     fc.assert(
@@ -337,23 +365,33 @@ describe('DC MNA properties (synthetic circuits)', () => {
 
   it('is linear: scaling every source by k scales the solution by k', () => {
     fc.assert(
-      fc.property(circuitArb, fc.constantFrom(-3, 0.5, 2.5, 1e3, 0), (draw, k) => {
+      fc.property(circuitArb, fc.constantFrom(...EXACT_FACTORS, ...ROUNDING_FACTORS), (draw, k) => {
         const circuit = build(draw);
         const base = solveDc(circuit.netlist, circuit.values);
-        const scaled = solveDc(
-          circuit.netlist,
-          scaledSources(circuit.values, k, () => true),
-        );
+        const scaledValues = scaledSources(circuit.values, k, () => true);
+        const scaled = solveDc(circuit.netlist, scaledValues);
         const expected = { nodes: base.nodes.map((v) => k * v), branches: base.branches.map((v) => k * v) };
-        expectClose(scaled, expected, Math.abs(k) * maxAbs(base.nodes), Math.abs(k) * maxAbs(base.branches), [
-          { circuit, solution: scaled, factor: 1 },
-          { circuit, solution: base, factor: k },
-        ]);
+        if (EXACT_FACTORS.includes(k)) {
+          // Scaling every right-hand side by 2^m scales every rounding exactly (the matrix is the
+          // same), so the solve is k · x̂ bit for bit (±0 aside: the solver writes +0).
+          scaled.nodes.forEach((v, i) => expect(v === expected.nodes[i], `node value ${i}`).toBe(true));
+          scaled.branches.forEach((v, i) => expect(v === expected.branches[i], `branch value ${i}`).toBe(true));
+        } else {
+          // A rounding k: in residual space, x̂(k b) − k x̂(b) satisfies every row within both solves'
+          // bounds, once each solve satisfies its own rows.
+          checkRows(circuit, base);
+          checkRows({ netlist: circuit.netlist, values: scaledValues }, scaled);
+          const parts = [
+            { values: scaledValues, solution: scaled, coefficient: 1 },
+            { values: circuit.values, solution: base, coefficient: -k },
+          ];
+          expect(linearResidual(circuit.netlist, parts)).toBeLessThanOrEqual(1);
+        }
         expect(scaled.islands.map((i) => i.flags)).toStrictEqual(base.islands.map((i) => i.flags));
         // k = 0 (and sign flips of zero) make −0 in the arithmetic: none may reach the solution.
         for (const v of [...scaled.nodes, ...scaled.branches]) expect(Object.is(v, -0)).toBe(false);
       }),
-      { numRuns: 200 },
+      { numRuns: 200, examples: [[CI_LINEARITY, 2.5]] },
     );
   });
 
@@ -363,24 +401,24 @@ describe('DC MNA properties (synthetic circuits)', () => {
         const circuit = build(draw);
         const keep = (b: number) => mask[b % mask.length];
         const all = solveDc(circuit.netlist, circuit.values);
-        const first = solveDc(circuit.netlist, scaledSources(circuit.values, 1, keep));
-        const second = solveDc(
-          circuit.netlist,
-          scaledSources(circuit.values, 1, (b) => !keep(b)),
-        );
-        const sum = {
-          nodes: first.nodes.map((v, i) => v + second.nodes[i]),
-          branches: first.branches.map((v, i) => v + second.branches[i]),
-        };
-        const scaleV = Math.max(maxAbs(all.nodes), maxAbs(first.nodes), maxAbs(second.nodes));
-        const scaleI = Math.max(maxAbs(all.branches), maxAbs(first.branches), maxAbs(second.branches));
-        expectClose(all, sum, scaleV, scaleI, [
-          { circuit, solution: all, factor: 1 },
-          { circuit, solution: first, factor: 1 },
-          { circuit, solution: second, factor: 1 },
-        ]);
+        const firstValues = scaledSources(circuit.values, 1, keep);
+        const secondValues = scaledSources(circuit.values, 1, (b) => !keep(b));
+        const first = solveDc(circuit.netlist, firstValues);
+        const second = solveDc(circuit.netlist, secondValues);
+        // Each solve must satisfy every row of its own system (KCL and source rows at rounding level);
+        // then x̂(all) − x̂(first) − x̂(second) satisfies the source-free system within their bounds,
+        // and the sources cancel exactly (first + second = all).
+        checkRows(circuit, all);
+        checkRows({ netlist: circuit.netlist, values: firstValues }, first);
+        checkRows({ netlist: circuit.netlist, values: secondValues }, second);
+        const parts = [
+          { values: circuit.values, solution: all, coefficient: 1 },
+          { values: firstValues, solution: first, coefficient: -1 },
+          { values: secondValues, solution: second, coefficient: -1 },
+        ];
+        expect(linearResidual(circuit.netlist, parts)).toBeLessThanOrEqual(1);
       }),
-      { numRuns: 200 },
+      { numRuns: 200, examples: [[CI_SUPERPOSITION, CI_SUPERPOSITION_MASK]] },
     );
   });
 
@@ -496,10 +534,11 @@ describe('DC MNA properties (synthetic circuits)', () => {
     expect(hex).toBe('8144f9c42ec00e5537b2fc98b190a4d6caadba3a692b2c6412c5f7cd623ab66d');
   });
 
-  it('a current source into a floating cluster gives finite values held by gmin, never singular', () => {
+  it('a current source into a floating cluster is held by gmin: never singular, KCL and power hold', () => {
     fc.assert(
       fc.property(floatingArb, ({ cluster, amps }) => {
-        // Node 0 feeds node 1 through a current source; nodes 1–6 are a resistor cluster with no other way back.
+        // Node 0 feeds node 1 through a current source; nodes 1–6 are a resistor cluster (down to
+        // 0.1 mΩ, so up to 1e4 S per branch, stiffer than gmin / ε) with no other way back.
         const edges: SyntheticBranch[] = [{ a: 0, b: 1, kind: 'resistor' }];
         for (const [x, y] of cluster) edges.push({ a: 1 + x, b: 1 + y, kind: 'resistor' });
         const netlist = syntheticNetlist(7, edges);
@@ -507,8 +546,8 @@ describe('DC MNA properties (synthetic circuits)', () => {
         values.isource(0, amps / 1000);
         cluster.forEach(([, , e], i) => values.resistor(i + 1, ohmsOf(e)));
         const solution = solveDc(netlist, values);
-        for (const v of [...solution.nodes, ...solution.branches]) expect(Number.isFinite(v)).toBe(true);
         expect(solution.islands.every((i) => (i.flags & ISLAND_FLAG_SINGULAR) === 0)).toBe(true);
+        checkPhysics({ netlist, values }, solution);
       }),
       { numRuns: 100 },
     );

@@ -228,6 +228,29 @@ describe('DcSolver', () => {
     expect(solver.solve(other, new DcBranchValues(0), out)).not.toBe(out);
   });
 
+  it('holds a floating cluster stiffer than gmin / ε by gmin alone, never singular', () => {
+    // Nodes 1 and 2 joined by two parallel 0.1 mΩ resistors (2e4 S, where G + gmin rounds to G),
+    // fed from node 0 (the reference) only by a current source. With a per-node KCL row the second
+    // pivot is G − G = 0 exactly; the cluster's sum row gives 2 gmin instead.
+    const netlist = syntheticNetlist(3, [
+      { a: 0, b: 1, kind: 'resistor' },
+      { a: 1, b: 2, kind: 'resistor' },
+      { a: 2, b: 1, kind: 'resistor' },
+    ]);
+    const values = new DcBranchValues(3);
+    values.resistor(1, 1e-4);
+    values.resistor(2, 1e-4);
+    for (const amps of [0, 1e-3]) {
+      values.isource(0, amps);
+      const solution = solveDc(netlist, values);
+      expect(solution.islands[0]).toMatchObject({ flags: 0, referenceNode: 0, unknowns: 2 });
+      // Σ gmin V = I with V1 ≈ V2: each node at I / (2 gmin), 5e8 V for 1 mA (0 V for 0 A).
+      expect(voltage(solution, 1)).toBeCloseTo(amps / (2 * GMIN_S.value), 0);
+      expect(voltage(solution, 2)).toBeCloseTo(amps / (2 * GMIN_S.value), 0);
+      expect(current(solution, 0)).toBe(amps);
+    }
+  });
+
   it('normalises −0 sources to +0 everywhere', () => {
     // A −0 V source behind 2 Ω, a 3 Ω load and a −0 A current source on a resistor element: every
     // node voltage and branch current is zero, and each must be +0, not −0.

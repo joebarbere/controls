@@ -24,6 +24,24 @@ import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_UNSET, DC_STAMP_VSOURCE, 
  * sources. The solver checks that structurally, with a union-find, before any arithmetic, so the
  * flag never depends on a pivot tolerance. As a backstop, a zero or non-finite pivot or a non-finite
  * result flags the island too. A singular island's values are all +0, never NaN.
+ *
+ * Floating components: a conductive component (nodes joined by resistors and voltage-mode sources)
+ * that doesn't hold the reference is tied to it only by gmin, through current sources. Its KCL rows
+ * then sum to almost nothing: once its conductance G exceeds about gmin / ε (≈ 4.5e3 S, R below
+ * ≈ 0.2 mΩ), G + gmin rounds to G and elimination leaves an exact zero pivot, though the matrix is
+ * not singular. Such a component is pinned structurally, by an exact change of variables and a row
+ * operation (the same solution):
+ *
+ * - its representative r (its smallest node) has the unknown c = V(r), its common mode, and every
+ *   other member the unknown u = V − c. Differences (resistors, voltage-source rows) involve only u,
+ *   where c cancels exactly; only the gmin terms carry c. So the u-block is a well-conditioned
+ *   Laplacian grounded at r, instead of a nearly singular one held by gmin;
+ * - r's KCL row is replaced by the sum of all the members' rows, built structurally: the internal
+ *   conductances and source currents never enter, leaving gmin · (|S| c + Σ u) plus the currents of
+ *   the branches that leave the component. Its pivot comes out ≈ |S| · gmin, accurately.
+ *
+ * Voltages are written as c + u, and currents inside the component come from u. Islands with no
+ * floating component are unaffected, bit for bit. The plan's caveats record the reasoning.
  */
 
 /** Island flag bits, as in the snapshot's island entry (ADR 0011 §5.3). */
@@ -89,6 +107,15 @@ export function islandReferenceNode(netlist: Netlist, island: NetlistIsland): nu
   return island.nodes[0];
 }
 
+/** Union-find root with path halving. */
+function find(parent: Int32Array, x: number): number {
+  while (parent[x] !== x) {
+    parent[x] = parent[parent[x]];
+    x = parent[x];
+  }
+  return x;
+}
+
 /** `+0` for `-0`, so every stored value has one bit pattern. */
 const positiveZero = (x: number): number => (x === 0 ? 0 : x);
 
@@ -105,7 +132,13 @@ export class DcSolver {
   private branchUnknown = new Int32Array(0);
   /** Union-find parents over node indices, for the zero-ohm source loop check. */
   private parent = new Int32Array(0);
+  /** Node → the smallest node of its conductive component in the current island. */
+  private comp = new Int32Array(0);
   private rhs = new Float64Array(0);
+  /** The current island's matrix and order, and its reference node's component. */
+  private a: Float64Array = new Float64Array(0);
+  private n = 0;
+  private referenceRoot = -1;
 
   /**
    * Solves every `dc` and `empty` island of `netlist` with `values`, into `out` if it fits (else a
@@ -121,6 +154,7 @@ export class DcSolver {
     if (this.nodeUnknown.length < netlist.nodes.length) {
       this.nodeUnknown = new Int32Array(netlist.nodes.length);
       this.parent = new Int32Array(netlist.nodes.length);
+      this.comp = new Int32Array(netlist.nodes.length);
     }
     if (this.branchUnknown.length < netlist.branches.length)
       this.branchUnknown = new Int32Array(netlist.branches.length);
@@ -166,32 +200,51 @@ export class DcSolver {
       return;
     }
 
+    this.conductiveComponents(netlist, island, values);
+    const comp = this.comp;
     const a = this.lu.begin(n);
     if (this.rhs.length < n) this.rhs = new Float64Array(n);
     const rhs = this.rhs;
     rhs.fill(0, 0, n);
+    this.a = a;
+    this.n = n;
+    this.referenceRoot = comp[reference];
     const gmin = GMIN_S.value;
     for (const node of island.nodes) {
       const i = nodeUnknown[node];
-      if (i >= 0) a[i * n + i] += gmin;
+      if (i < 0) continue;
+      const root = comp[node];
+      if (root === this.referenceRoot) {
+        a[i * n + i] += gmin;
+      } else {
+        // Floating: V = c + u with c in the representative's column, so gmin · V puts gmin on c and
+        // on u (u_rep ≡ 0), in the member's own row and in the component's sum row.
+        const r = nodeUnknown[root];
+        if (node !== root) {
+          a[i * n + r] += gmin;
+          a[i * n + i] += gmin;
+          a[r * n + i] += gmin;
+        }
+        a[r * n + r] += gmin;
+      }
     }
     for (const index of island.branches) {
       const branch = netlist.branches[index];
-      const ia = nodeUnknown[branch.a];
-      const ib = nodeUnknown[branch.b];
       const stamp = values.stamps[index];
       const k = branchUnknown[index];
       if (k >= 0) {
         // KCL: the source's current I leaves `a` and enters `b`.
         if (branch.a !== branch.b) {
-          if (ia >= 0) a[ia * n + k] += 1;
-          if (ib >= 0) a[ib * n + k] -= 1;
+          this.kclEntry(branch.a, branch.b, k, 1);
+          this.kclEntry(branch.b, branch.a, k, -1);
         }
         if (stamp === DC_STAMP_VSOURCE) {
-          // Vb − Va + R·I = E.
+          // Vb − Va + R·I = E (a difference, so a floating component's common mode cancels).
           if (branch.a !== branch.b) {
-            if (ib >= 0) a[k * n + ib] += 1;
-            if (ia >= 0) a[k * n + ia] -= 1;
+            const cb = this.diffColumn(branch.b);
+            const ca = this.diffColumn(branch.a);
+            if (cb >= 0) a[k * n + cb] += 1;
+            if (ca >= 0) a[k * n + ca] -= 1;
           }
           a[k * n + k] = values.ohms[index];
           rhs[k] = values.emfV[index];
@@ -203,17 +256,17 @@ export class DcSolver {
       } else if (branch.a !== branch.b) {
         if (stamp === DC_STAMP_RESISTOR) {
           const g = 1 / values.ohms[index];
-          if (ia >= 0) a[ia * n + ia] += g;
-          if (ib >= 0) a[ib * n + ib] += g;
-          if (ia >= 0 && ib >= 0) {
-            a[ia * n + ib] -= g;
-            a[ib * n + ia] -= g;
-          }
+          const ca = this.diffColumn(branch.a);
+          const cb = this.diffColumn(branch.b);
+          this.kclEntry(branch.a, branch.b, ca, g);
+          this.kclEntry(branch.b, branch.a, cb, g);
+          this.kclEntry(branch.a, branch.b, cb, -g);
+          this.kclEntry(branch.b, branch.a, ca, -g);
         } else {
           // A current source on a resistor element: amps leave `a` and enter `b`.
           const amps = values.amps[index];
-          if (ia >= 0) rhs[ia] -= amps;
-          if (ib >= 0) rhs[ib] += amps;
+          this.kclRhs(branch.a, branch.b, -amps);
+          this.kclRhs(branch.b, branch.a, amps);
         }
       }
     }
@@ -229,7 +282,13 @@ export class DcSolver {
     let ok = true;
     for (const node of island.nodes) {
       const i = nodeUnknown[node];
-      const v = i >= 0 ? positiveZero(rhs[i]) : 0;
+      const root = comp[node];
+      let v = 0;
+      if (i >= 0) {
+        // A floating member's unknown is u = V − c; its representative's is c itself.
+        v = root === this.referenceRoot || node === root ? rhs[i] : rhs[nodeUnknown[root]] + rhs[i];
+      }
+      v = positiveZero(v);
       if (!Number.isFinite(v)) ok = false;
       nodes[2 * node] = v;
       nodes[2 * node + 1] = 0;
@@ -240,7 +299,12 @@ export class DcSolver {
       let current: number;
       if (k >= 0) current = rhs[k];
       else if (values.stamps[index] === DC_STAMP_ISOURCE) current = values.amps[index];
-      else current = (nodes[2 * branch.a] - nodes[2 * branch.b]) * (1 / values.ohms[index]);
+      else if (comp[branch.a] === this.referenceRoot) {
+        current = (nodes[2 * branch.a] - nodes[2 * branch.b]) * (1 / values.ohms[index]);
+      } else {
+        // Inside a floating component, from the differences u, not from c + u: no common mode to cancel.
+        current = (this.relative(branch.a) - this.relative(branch.b)) * (1 / values.ohms[index]);
+      }
       current = positiveZero(current);
       if (!Number.isFinite(current)) ok = false;
       branches[2 * index] = current;
@@ -256,8 +320,8 @@ export class DcSolver {
     for (const index of island.branches) {
       if (values.stamps[index] !== DC_STAMP_VSOURCE || values.ohms[index] !== 0) continue;
       const branch = netlist.branches[index];
-      const ra = this.find(branch.a);
-      const rb = this.find(branch.b);
+      const ra = find(parent, branch.a);
+      const rb = find(parent, branch.b);
       if (ra === rb) return true;
       // Union by the smaller root, so the structure is a pure function of the branch order.
       if (ra < rb) parent[rb] = ra;
@@ -266,13 +330,74 @@ export class DcSolver {
     return false;
   }
 
-  private find(x: number): number {
-    const parent = this.parent;
-    while (parent[x] !== x) {
-      parent[x] = parent[parent[x]];
-      x = parent[x];
+  /**
+   * Fills `comp` with each island node's conductive component, as its smallest node: nodes joined by
+   * resistors and voltage-mode sources. Current sources (either element kind) conduct nothing.
+   */
+  private conductiveComponents(netlist: Netlist, island: NetlistIsland, values: DcBranchValues): void {
+    const comp = this.comp;
+    for (const node of island.nodes) comp[node] = node;
+    for (const index of island.branches) {
+      const stamp = values.stamps[index];
+      if (stamp !== DC_STAMP_RESISTOR && stamp !== DC_STAMP_VSOURCE) continue;
+      const branch = netlist.branches[index];
+      const ra = find(comp, branch.a);
+      const rb = find(comp, branch.b);
+      if (ra < rb) comp[rb] = ra;
+      else if (rb < ra) comp[ra] = rb;
     }
-    return x;
+    // Union by the smaller root keeps every root its component's smallest node.
+    for (const node of island.nodes) comp[node] = find(comp, node);
+  }
+
+  /**
+   * Adds `value` to column `col` of node `x`'s KCL row, for a branch whose other end is `other`.
+   * In a floating component, the representative's row is the sum of all the members' KCL rows, so a
+   * contribution also goes there when its branch leaves the component, and not at all when it stays
+   * inside (where it cancels exactly in the sum). The reference's row and column don't exist.
+   */
+  private kclEntry(x: number, other: number, col: number, value: number): void {
+    const ix = this.nodeUnknown[x];
+    if (col < 0 || ix < 0) return;
+    const a = this.a;
+    const n = this.n;
+    const root = this.comp[x];
+    if (root === this.referenceRoot) {
+      a[ix * n + col] += value;
+      return;
+    }
+    if (x !== root) a[ix * n + col] += value;
+    if (this.comp[other] !== root) a[this.nodeUnknown[root] * n + col] += value;
+  }
+
+  /**
+   * The column of V(x) in a voltage difference inside x's conductive component, or −1. The
+   * reference has no column; in a floating component a difference involves only u = V − c, and the
+   * representative's u is 0 (its column holds c, which cancels in a difference).
+   */
+  private diffColumn(x: number): number {
+    const root = this.comp[x];
+    if (root !== this.referenceRoot && x === root) return -1;
+    return this.nodeUnknown[x];
+  }
+
+  /** A floating member's solved u = V − c (0 for the representative). */
+  private relative(x: number): number {
+    return x === this.comp[x] ? 0 : this.rhs[this.nodeUnknown[x]];
+  }
+
+  /** As `kclEntry`, for a current injected into the right-hand side. */
+  private kclRhs(x: number, other: number, value: number): void {
+    const ix = this.nodeUnknown[x];
+    if (ix < 0) return;
+    const rhs = this.rhs;
+    const root = this.comp[x];
+    if (root === this.referenceRoot) {
+      rhs[ix] += value;
+      return;
+    }
+    if (x !== root) rhs[ix] += value;
+    if (this.comp[other] !== root) rhs[this.nodeUnknown[root]] += value;
   }
 
   private singular(netlist: Netlist, island: NetlistIsland, solution: DcSolution, result: DcIslandResult): void {
