@@ -53,6 +53,29 @@ describe('runConsoleScript', () => {
     expect(game.replayLog()).toEqual(direct.replayLog());
   });
 
+  it('prints a netlist.dump query as its lines, in order with the other lines, and never logs it (F2.6)', async () => {
+    const game = createGame({ seed: 7 });
+    const place = (ref: string, x: number) =>
+      `entity.place --ref.id ${ref} --ref.version 1 --positionMm.x ${x} --positionMm.y 0 --positionMm.z 0`;
+    const script = [
+      'netlist.dump',
+      place('battery.ferrovane-12v-7ah', 0),
+      'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 1 --b.terminal neg',
+      'sim.step 15',
+      'netlist.dump',
+      'world.hash',
+    ].join('\n');
+    const result = await runConsoleScript(game, script);
+    expect(result).toMatchObject({ ok: true, executed: 3 });
+    const empty = createGame({ seed: 7 }).netlistDump().trimEnd().split('\n');
+    const now = game.netlistDump().trimEnd().split('\n');
+    expect(result.output).toEqual([...empty, ...now, game.hash()]);
+    expect(now[0]).toBe('netlist.dump tick 15');
+    expect(now).toContain('solution tick 10');
+    expect(game.entries().map((e) => e.id)).toEqual(['entity.place', 'lead.connect', 'sim.step']);
+    expect(CONSOLE_QUERIES).toContain('netlist.dump');
+  });
+
   it('checks the whole file before running anything', async () => {
     const game = createGame({ seed: 7 });
     const result = await runConsoleScript(game, 'entity.delete 1\nview.resetLayout\nentity.move --nope 1\n');

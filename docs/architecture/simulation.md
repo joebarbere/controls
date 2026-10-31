@@ -601,9 +601,34 @@ flowchart LR
 
 Each timed re-solve is put in the reference machine's milliseconds by the calibration run beside it, so a slower or loaded runner slows both halves of every pair. The calibration loop is a fixed workload sharing no code with sim-core (a scattered float multiply-add, SHA-like integer rounds, short-lived records and a pointer chase, roughly in the re-solve's proportions), and `CALIBRATION_REFERENCE_MS` (0.69 ms) is its median on the reference machine, an AMD Ryzen 5 5600X under Node 24.12.0. The report carries the raw median and `calibration.scale` beside the gated `ratio`. Measured on the reference machine: the gated ratio is 0.50–0.79 under ambient load (31 runs, median 0.67) and 0.43–0.91 beside a saturating parallel test load (32 runs, all passing), and an exact 1.5× slowdown planted in the re-solve fails 25 of 30 runs (a planted triple hash in the compile, about 1.6×, fails 20 of 20). On the CI runners, inside `pnpm verify` on the PR that switched it on, the raw medians were 3.35 ms (Ubuntu), 3.23 ms (macOS) and 3.32 ms (Windows), and the gated ratios 0.76, 0.58 and 0.85. How to re-baseline, and why the pairing: [simulation caveats](../caveats/simulation.md).
 
+## `netlist.dump` (F2.6)
+
+`netlist.dump` is a console query, like `world.hash` (`CONSOLE_QUERIES` in `scripting-api`): never a command, never logged, no hash moves. Its text is `netlistDump(world)` in `sim-core` (`engine/dump.ts`), a **pure function of the materialised world**: it starts a throwaway `SimEngine` on the world, which compiles the same netlist and adopts the same solution record as the engine that exported it, then writes `formatNetlist` and one `solve island` line per island from `SimEngine.islandDiagnostics()`.
+
+```mermaid
+flowchart LR
+    subgraph Headless["sim-cli / scripting API"]
+        G[Game.netlistDump] --> M1[materialisedWorld]
+    end
+    subgraph Game["the game"]
+        C[dev console] --> H[SimHost.netlistDumpAt]
+        H -->|"query 'state' (existing)"| W[sim worker]
+        W -->|SimStateExport| H
+        H --> M2[materialiseWorld]
+    end
+    M1 --> D["netlistDump(world): SimEngine.start + formatEngineDump"]
+    M2 --> D
+    D --> T[the same bytes]
+```
+
+- **No new worker message.** The game reuses the `state` query that `world.hash` and saves use, and dumps on the main thread, so `SIM_PROTOCOL_VERSION` is unchanged (ADR 0011 §9.4 note).
+- **Why an island wasn't solved** needs one thing the solution record doesn't hold: which branches no model could value. `islandDiagnostics()` runs the value pass every solve starts with (`fillValues`), which marks them in a per-branch array. The pass only refills the solver's scratch values, so it changes no state, snapshot or hash; a property test takes dumps throughout random sessions and compares every snapshot with an undumped twin.
+- **Status** is `islandStatus(kind, flags, iterations)`, as everywhere; `reference` and `unknowns` are what the snapshot's island entry holds (`none`/0 when unsolved); `band` is `NOMINAL_BANDS[band]` (an unknown index prints as `#N`, never a wrong name).
+
 ## Not yet
 
 - **AC loads** (F2.5): AC loads reach the phasor solver through `AcValueHook` (F2.4's services do); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
 - **Nominal bands** (`NOMINAL_BANDS`, overlays): only `none`; the sources' records are registered (protocol 3, F2.3b).
+- **Bench-lamp `netlist.dump` golden** (F2.5): added with F2.5's `bench-lamp` scenario.
 - **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.

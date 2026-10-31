@@ -74,6 +74,7 @@ describe('a game with a time host', () => {
       () => game.hash(),
       () => game.save(),
       () => game.materialisedWorld(),
+      () => game.netlistDump(),
       () => game.snapshot(),
       () => game.snapshotHash(),
       () => game.islands(),
@@ -92,6 +93,7 @@ describe('a game with a time host', () => {
       time: recorder(() => ({ tick: 0, entities: [], solution: null })).host,
     });
     expect(exporting.hash()).toBe(worldHash(createWorld({ seed: 1 })));
+    expect(exporting.netlistDump()).toContain('solution none');
     expect(readCtrl(exporting.save()).ok).toBe(true);
   });
 

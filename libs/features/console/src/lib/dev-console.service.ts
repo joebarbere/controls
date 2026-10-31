@@ -6,6 +6,7 @@ import {
   type ConsoleTarget,
   describeExecError,
   formatConsoleScriptError,
+  runConsoleQuery,
   runConsoleScript,
 } from '@controls/scripting-api';
 import { consoleHelp } from './help';
@@ -83,6 +84,7 @@ export class DevConsole {
     registry: this.session.registry,
     exec: (id, args) => this.session.exec(id, args),
     hash: () => this.session.hashAt(),
+    netlistDump: () => this.session.netlistDumpAt(),
   };
 
   /** Runs one typed line. */
@@ -118,14 +120,15 @@ export class DevConsole {
         this.push({ kind: 'output', text: 'Pick a console-line file (.console), or drop one on the console.' });
         return done(true);
       case 'query': {
-        // A round trip to the sim worker: a placeholder now, the hash when it arrives.
-        const id = this.push({ kind: 'output', text: 'world.hash: computing…' });
-        this.session.hashAt().then(
-          (hash) => this.replace(id, { kind: 'output', text: hash }),
+        // A round trip to the sim worker: a placeholder now, the answer's lines when it arrives.
+        const query = action.id;
+        const id = this.push({ kind: 'output', text: `${query}: computing…` });
+        runConsoleQuery(this.target, query).then(
+          (lines) => this.replaceWith(id, lines),
           () =>
             this.replace(id, {
               kind: 'error',
-              text: 'world.hash: the simulation didn’t answer (restart it if it crashed).',
+              text: `${query}: the simulation didn’t answer (restart it if it crashed).`,
             }),
         );
         return done();
@@ -207,7 +210,7 @@ export class DevConsole {
     } catch {
       this.push({
         kind: 'error',
-        text: `${name}: the simulation didn’t answer a world.hash line (restart it if it crashed).`,
+        text: `${name}: the simulation didn’t answer a query line (restart it if it crashed).`,
       });
       return;
     } finally {
@@ -236,6 +239,17 @@ export class DevConsole {
       return next.length > MAX_CONSOLE_OUTPUT ? next.slice(next.length - MAX_CONSOLE_OUTPUT) : next;
     });
     return id;
+  }
+
+  /** Replaces a placeholder with one output entry per line (a multi-line query such as `netlist.dump`). */
+  private replaceWith(id: number, lines: readonly string[]): void {
+    this.output.update((entries) => {
+      const at = entries.findIndex((e) => e.id === id);
+      if (at < 0) return entries;
+      const filled = lines.map((text, i) => ({ kind: 'output' as const, text, id: i === 0 ? id : this.nextId++ }));
+      const next = [...entries.slice(0, at), ...filled, ...entries.slice(at + 1)];
+      return next.length > MAX_CONSOLE_OUTPUT ? next.slice(next.length - MAX_CONSOLE_OUTPUT) : next;
+    });
   }
 
   /** Fills in an entry pushed earlier (a placeholder), if it is still shown. */

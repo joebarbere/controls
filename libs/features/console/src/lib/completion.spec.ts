@@ -26,6 +26,7 @@ describe('completeConsoleInput', () => {
     expect(at('ent')?.candidates).toEqual(['entity.delete', 'entity.move', 'entity.place', 'entity.rotate']);
     expect(at('')?.candidates.length).toBe(consoleIds(registry).length);
     expect(at('world.')).toMatchObject({ from: 0, to: 6, prefix: 'world.', candidates: ['world.hash'] });
+    expect(at('netl')?.candidates).toEqual(['netlist.dump']);
     expect(at('  he')).toMatchObject({ from: 2, candidates: ['help'] });
     expect(at('help ent')?.candidates).toContain('entity.move');
   });

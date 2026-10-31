@@ -17,20 +17,36 @@ import type { World } from '@controls/world-model';
  */
 
 /**
- * What a console-line file runs against: a headless `Game` (its `hash()` is synchronous), or the
- * game's console, whose `world.hash` is a round trip to the sim worker (ADR 0011 §9.4).
+ * What a console-line file runs against: a headless `Game` (its `hash()` and `netlistDump()` are
+ * synchronous), or the game's console, whose queries are a round trip to the sim worker (ADR 0011 §9.4).
  */
 export interface ConsoleTarget {
   readonly registry: CommandRegistry<World>;
   exec(id: string, args?: unknown): ExecResult;
   hash(): string | Promise<string>;
+  /** The `netlist.dump` text (plan F2.6), ending with a newline. */
+  netlistDump(): string | Promise<string>;
 }
 
 /**
  * Read-only console queries that are not commands (they change nothing and are never logged).
- * `world.hash` prints the current `world.hash`. F1.5 adds `help`, `run` and `clear` in the console.
+ * `world.hash` prints the current `world.hash`; `netlist.dump` prints the netlist and its island
+ * diagnostics (F2.6), one output line per text line. F1.5 adds `help`, `run` and `clear` in the console.
  */
-export const CONSOLE_QUERIES: readonly string[] = ['world.hash'];
+export const CONSOLE_QUERIES: readonly string[] = ['world.hash', 'netlist.dump'];
+
+/** The output lines of a console query's text: one per line, without the final newline. */
+export function queryLines(text: string): string[] {
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+}
+
+/** Runs one console query against `target` and returns its output lines. */
+export async function runConsoleQuery(target: ConsoleTarget, id: string): Promise<string[]> {
+  if (id === 'netlist.dump') return queryLines(await target.netlistDump());
+  return [await target.hash()];
+}
 
 /** Longest console-line file accepted, in lines. */
 export const MAX_CONSOLE_SCRIPT_LINES = 10_000;
@@ -99,8 +115,9 @@ function firstColumn(source: string): number {
  * Runs a console-line file against `target`. Every line is parsed and mapped onto its command's
  * args **before** anything runs, so a typo on line 40 doesn't leave lines 1–39 applied. Execution
  * then stops at the first command that fails; commands before it stay applied (and logged), like
- * typing the same lines into the console. Asynchronous everywhere (ADR 0011 §9.4): a `world.hash`
- * line waits for the target's hash before the next line runs, so it covers exactly the lines before it.
+ * typing the same lines into the console. Asynchronous everywhere (ADR 0011 §9.4): a `world.hash` or
+ * `netlist.dump` line waits for the target's answer before the next line runs, so it covers exactly
+ * the lines before it.
  */
 export async function runConsoleScript(target: ConsoleTarget, text: string): Promise<ConsoleScriptResult> {
   const lines = splitConsoleLines(text);
@@ -125,7 +142,7 @@ export async function runConsoleScript(target: ConsoleTarget, text: string): Pro
   let executed = 0;
   for (const step of steps) {
     if (step.kind === 'query') {
-      output.push(await target.hash());
+      output.push(...(await runConsoleQuery(target, step.id)));
       continue;
     }
     const result = target.exec(step.id, step.args);

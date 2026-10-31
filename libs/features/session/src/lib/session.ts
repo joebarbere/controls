@@ -215,6 +215,11 @@ export class Session {
     return (await this.sim.hashAt()).hash;
   }
 
+  /** The `netlist.dump` text at the current tick, from the sim worker's export (`SimHost.netlistDumpAt`, F2.6). */
+  async netlistDumpAt(): Promise<string> {
+    return (await this.sim.netlistDumpAt()).text;
+  }
+
   /**
    * Binds a save to the game running now, at its current tick (ADR 0011 §9.5): the bus world, the
    * log and `endTick` are captured in this call, and the worker's `state` query is posted in it, so
@@ -318,6 +323,7 @@ export class Session {
     target[TEST_HOOK] = {
       exec: (id: string, args?: unknown) => this.exec(id, args),
       hash: () => this.hashAt(),
+      netlistDump: () => this.netlistDumpAt(),
       snapshotHash: () => this.sim.snapshotHash(),
       busWorld: () => this.game.world(),
       simTick: () => this.sim.simTick(),

@@ -1,0 +1,22 @@
+netlist.dump tick 2345
+netlist 6 nodes, 6 branches, 3 islands
+topology 8ff6e5fb705eb7becbe8b29d4f9323fe0aad98b97f6d1bba5b6574914ccd31de
+island 0 dc nodes 0 1 branches 0 3
+island 1 dc nodes 2 3 branches 1 4
+island 2 dc nodes 4 5 branches 2 5
+node 0 island 0: 1:neg
+node 1 island 0: 1:pos
+node 2 island 1: 2:neg
+node 3 island 1: 2:pos
+node 4 island 2: 3:neg
+node 5 island 2: 3:pos
+branch 0 e1.output vsource supply.dinPsu dc 0 -> 1 island 0
+branch 1 e2.output vsource supply.bench dc 2 -> 3 island 1 currentLimitA=2 outputOn=1 setpointV=5
+branch 2 e3.cell vsource battery dc 4 -> 5 island 2 internalResistanceOhm=0.023 openCircuitVoltageFullV=12.9
+branch 3 c1 resistor lead 1 -> 0 island 0 resistanceOhm=0.04094815541017536
+branch 4 c2 resistor lead 3 -> 2 island 1 resistanceOhm=0.04094815541017536
+branch 5 c3 resistor lead 5 -> 4 island 2 resistanceOhm=0.04094815541017536
+solution tick 2340
+solve island 0 solved flags none iterations 1 reference 0 unknowns 2 band none
+solve island 1 solved flags none iterations 1 reference 2 unknowns 2 band none
+solve island 2 solved flags none iterations 1 reference 4 unknowns 2 band none
