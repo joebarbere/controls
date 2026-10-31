@@ -13,6 +13,7 @@ import {
   percentile,
   runBench,
   runBenchCase,
+  SMOKE_RUNS,
 } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { BENCH_CASES, PENDING_BENCH_CASES } from './cases';
@@ -348,6 +349,7 @@ describe('sim bench', () => {
     expect(run.stderr).toEqual([]);
     const report = JSON.parse(run.stdout.join('\n')) as BenchReport;
     expect(report).toEqual({
+      smoke: false,
       cases: [
         {
           name: 'fixed',
@@ -412,25 +414,64 @@ describe('sim bench', () => {
     }
   });
 
+  it('--smoke runs each case 3 times with no warm-up, gates determinism and invariants but not budgets', async () => {
+    let calls = 0;
+    const smokes: boolean[] = [];
+    const slow = fixedCase({
+      warmup: 10,
+      runs: 51,
+      budgetMs: 1,
+      run: () => (calls++, 'same'),
+      invariant: (smoke) => (smokes.push(smoke), { value: 0, failure: null }),
+    });
+    const run = await sim({ benchCases: [slow], now: steppingClock([5, 5, 5]) }, 'bench', '--smoke');
+    expect(run.code).toBe(EXIT_OK);
+    expect(run.stderr).toEqual([]);
+    const report = JSON.parse(run.stdout.join('\n')) as BenchReport;
+    expect(report).toMatchObject({ smoke: true, ok: true, cases: [{ runs: SMOKE_RUNS, medianMs: 5, ratio: 5 }] });
+    expect(calls).toBe(SMOKE_RUNS);
+    expect(smokes).toEqual([true]);
+    // Without --smoke the same case is over budget, and its invariant runs in full.
+    expect((await sim({ benchCases: [slow], now: steppingClock(Array<number>(51).fill(5)) }, 'bench')).code).toBe(
+      EXIT_FAILURE,
+    );
+    expect(smokes).toEqual([true, false]);
+    // A failing invariant or a nondeterministic case still fails a smoke run.
+    const leaky = fixedCase({ invariant: () => ({ value: 16, failure: 'allocated 16 B' }) });
+    expect((await sim({ benchCases: [leaky], now: steppingClock([1, 1, 1]) }, 'bench', '--smoke')).code).toBe(
+      EXIT_FAILURE,
+    );
+    let i = 0;
+    const flaky = fixedCase({ run: () => String(i++) });
+    expect((await sim({ benchCases: [flaky], now: steppingClock([1, 1, 1]) }, 'bench', '--smoke')).code).toBe(
+      EXIT_FAILURE,
+    );
+  });
+
   it('takes no arguments', async () => {
     expect((await sim({}, 'bench', 'x')).code).toBe(EXIT_USAGE);
     expect((await sim({}, 'bench', '--seed', '1')).code).toBe(EXIT_USAGE);
+    expect((await sim({}, 'bench', '--smoke', 'x')).code).toBe(EXIT_USAGE);
+    expect((await sim({}, 'bench', '--smoke', '--smoke')).code).toBe(EXIT_USAGE);
   });
 
   it('runs from the built bundle (as the Nx bench target does) with the real cases and clock', () => {
-    // Shape and determinism only, never timing: this runs beside the suite's other workers, so only
-    // the Nx `bench` target (run on its own, after everything else in `pnpm verify`) gates (#53).
-    const result = spawnSync(process.execPath, [join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs'), 'bench'], {
-      cwd: WORKSPACE_ROOT,
-      encoding: 'utf8',
-      timeout: 30_000,
-    });
-    expect([EXIT_OK, EXIT_FAILURE]).toContain(result.status);
-    // The only thing it may say on stderr is that a case is over budget.
-    for (const line of result.stderr.split('\n').filter((l) => l !== '')) expect(line).toMatch(/ over budget: /);
+    // Shape, determinism and the invariants, never timing: this runs beside the suite's other
+    // workers, so only the Nx `bench` target (run on its own, after everything else in `pnpm verify`)
+    // measures and gates budgets (#53). `--smoke` keeps this to seconds rather than re-running that
+    // measurement here (it took the whole 30 s on CI's Windows runner, #66).
+    const result = spawnSync(
+      process.execPath,
+      [join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs'), 'bench', '--smoke'],
+      { cwd: WORKSPACE_ROOT, encoding: 'utf8', timeout: 30_000 },
+    );
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(EXIT_OK);
     const report = JSON.parse(result.stdout) as BenchReport;
+    expect(report).toMatchObject({ smoke: true, ok: true });
     expect(report.cases.map((c) => c.name)).toEqual(BENCH_CASES.map((c) => c.name));
     for (const c of report.cases) {
+      expect(c.runs).toBe(SMOKE_RUNS);
       expect(c.deterministic).toBe(true);
       expect(c.checksum).not.toBeNull();
       expect(c.medianMs).toBeGreaterThanOrEqual(0);

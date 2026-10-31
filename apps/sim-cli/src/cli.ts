@@ -79,6 +79,7 @@ Commands:
                    document (world.json, a level)
   bench            Run the performance cases (warm-up, then the median of N runs)
       --report <file>     Also write the JSON report to this file (the Nx bench target does, for CI's log)
+      --smoke             Prove every case runs, not how fast: 3 runs each, no warm-up, budgets not gated
                    and print a JSON report; fail if a case is over its budget or
                    not deterministic
   oracle regen     Regenerate the ngspice oracle corpus (libs/domain/sim-core/oracle):
@@ -97,9 +98,12 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   run: ['seed', 'world', 'log', 'save', 'expect'],
   replay: ['expect'],
   hash: ['expect'],
-  bench: ['report'],
+  bench: ['report', 'smoke'],
   oracle: ['ngspice', 'out', 'jobs'],
 };
+
+/** Options that take no value: present or not (stored as ''). */
+const FLAGS: ReadonlySet<string> = new Set(['smoke']);
 
 class UsageError extends Error {}
 class Failure extends Error {}
@@ -125,7 +129,7 @@ function parseArgv(argv: readonly string[]): Parsed | 'help' {
     }
     const name = arg.slice(2);
     if (!allowed.includes(name)) throw new UsageError(`Unknown option ${arg} for "${command}"`);
-    const value = rest[++i];
+    const value = FLAGS.has(name) ? '' : rest[++i];
     if (value === undefined) throw new UsageError(`${arg} needs a value`);
     if (Object.prototype.hasOwnProperty.call(options, name)) throw new UsageError(`${arg} is given twice`);
     options[name] = value;
@@ -184,12 +188,14 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
 /**
  * `sim bench`: prints the report as JSON (stdout stays data only), and with `--report <file>` also
  * writes it there (Nx hides a passing task's output, so CI prints the file in a step of its own);
- * exit 1 unless every case passed.
+ * exit 1 unless every case passed. `--smoke`: every real case, the real clock and every gate but the
+ * budgets, in seconds (bench.ts).
  */
 async function bench(parsed: Parsed, io: CliIo): Promise<number> {
+  const smoke = parsed.options['smoke'] !== undefined;
   const report = io.benchCases
-    ? runBench(io.benchCases, io.now ?? wallClockMs)
-    : runBench(BENCH_CASES, io.now ?? wallClockMs, PENDING_BENCH_CASES);
+    ? runBench(io.benchCases, io.now ?? wallClockMs, [], smoke)
+    : runBench(BENCH_CASES, io.now ?? wallClockMs, PENDING_BENCH_CASES, smoke);
   const json = JSON.stringify(report, null, 2);
   io.stdout(json);
   const reportFile = parsed.options['report'];

@@ -44,7 +44,7 @@ pnpm package:desktop   # electron-builder installers for this OS (package:deskto
 pnpm version:sync      # root version -> apps/desktop/package.json + libs/domain/units/src/lib/version.ts
 pnpm sim run <script>  # headless: a .ts module exporting (game) => … or a .console file; prints world.hash (--seed, --world, --log, --expect)
 pnpm sim replay <log>  # replay a .ctrl or replay-log JSON, print the hash; `pnpm sim hash <file>` hashes a .ctrl or world JSON; `sim run … --save x.ctrl` writes a save
-pnpm sim bench         # perf cases (warm-up, median of N), JSON report, exit 1 over budget; the Nx `bench` target in verify runs the built bundle
+pnpm sim bench         # perf cases (warm-up, median of N), JSON report, exit 1 over budget; the Nx `bench` target in verify runs the built bundle; `--smoke` = every case, 3 runs, budgets not gated
 ```
 
 Run Nx through pnpm (`pnpm nx …`), never a global `nx`. Use `pnpm --silent sim …` when piping (stdout is data only). Guide: [`docs/guides/scripting.md`](docs/guides/scripting.md).
