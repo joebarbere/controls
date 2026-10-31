@@ -465,6 +465,17 @@ describe('SimHost: queries and disposal', () => {
     expect(tick()).toBe(-1); // a source reset
   });
 
+  it('select starts from the latest snapshot, so a panel opened while paused shows it (F2.6)', async () => {
+    const { host, start, game } = setup();
+    start();
+    await settle();
+    game().execOrThrow('sim.step', { ticks: 5 });
+    await settle();
+    const ref = TestBed.inject(Injector).get(DestroyRef);
+    const tick = host.select((view) => view.tick, { initial: -1, destroyRef: ref });
+    expect(tick()).toBe(5); // no new snapshot needed
+  });
+
   it('rejects a waitForTick when the worker is replaced or crashes, so a wait fails fast', async () => {
     const { host, fakes, start } = setup();
     start();

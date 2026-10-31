@@ -8,6 +8,7 @@ import {
   viewFocusCommand,
   ViewModeArgs,
   viewModeCommand,
+  viewNetlistInspectorCommand,
   ViewOverlayArgs,
   viewOverlayCommand,
   viewportCommands,
@@ -93,5 +94,20 @@ describe('view.overlay (F2.6)', () => {
     expect(formatConsoleLine('view.overlay', { name: 'voltage', on: true })).toBe(
       'view.overlay --name voltage --on true',
     );
+  });
+});
+
+describe('view.netlistInspector (F2.6)', () => {
+  it('is an unlogged view command with no args, offered where the console is, with no default key', () => {
+    const def = viewNetlistInspectorCommand();
+    expect(def.when).toBe(CONSOLE_AVAILABLE_KEY);
+    expect(def.logged).toBe(false);
+    expect(def.keybinding).toBeUndefined();
+    const registry = new CommandRegistry<{ n: number }>().registerAll(viewportCommands());
+    const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
+    expect(bus.exec('view.netlistInspector').ok).toBe(true);
+    expect(bus.exec('view.netlistInspector', { open: true }).ok).toBe(false);
+    expect(bus.state).toEqual({ n: 1 });
+    expect(bus.entries).toEqual([]);
   });
 });

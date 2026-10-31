@@ -29,6 +29,7 @@ describe('paletteItems', () => {
       'sim.step',
       'view.overlay', // disabled here: console.available is unset; View, by title: Show or hide a debug overlay, Toggle console
       'console.toggle',
+      'view.netlistInspector', // Toggle netlist inspector
     ]);
     expect(ids(items)).not.toContain('palette.open');
     expect([...PALETTE_HIDDEN_COMMANDS]).toEqual(['palette.open']);

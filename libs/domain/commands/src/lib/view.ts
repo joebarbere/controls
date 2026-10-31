@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AnyCommandDef, CommandDef } from './command';
-import { CONSOLE_AVAILABLE_KEY, defineViewCommand } from './builtin';
+import { CONSOLE_AVAILABLE_KEY, defineViewCommand, NoArgs } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
 
@@ -140,9 +140,27 @@ export function viewOverlayCommand<S>(): CommandDef<ViewOverlayArgs, S> {
   });
 }
 
-/** `view.mode`, `view.focus` and `view.overlay`, for registering with any state type (world registries add them). */
+/**
+ * `view.netlistInspector` (plan F2.6): opens the netlist inspector in the workspace's side panel and
+ * focuses its tree, or closes it when focus is already in it (like `console.toggle`). UI chrome, so
+ * `logged: false`: it never enters the replay log and its id is not save format. Offered where the
+ * console is (`console.available`) until F5.3 gates debug tools by difficulty. No default key (bind
+ * one in Key bindings).
+ */
+export function viewNetlistInspectorCommand<S>(): CommandDef<NoArgs, S> {
+  return defineViewCommand<NoArgs, S>({
+    id: 'view.netlistInspector',
+    title: 'Toggle netlist inspector',
+    category: 'View',
+    args: NoArgs,
+    when: CONSOLE_AVAILABLE_KEY,
+    logged: false,
+  });
+}
+
+/** `view.mode`, `view.focus`, `view.overlay` and `view.netlistInspector`, for registering with any state type (world registries add them). */
 export function viewportCommands<S>(): AnyCommandDef<S>[] {
-  return [viewModeCommand<S>(), viewFocusCommand<S>(), viewOverlayCommand<S>()];
+  return [viewModeCommand<S>(), viewFocusCommand<S>(), viewOverlayCommand<S>(), viewNetlistInspectorCommand<S>()];
 }
 
 /** The extra binding declarations of a list of commands (`CommandDef.bindings`), in list order. */

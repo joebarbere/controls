@@ -4,12 +4,14 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
   Injector,
   input,
   model,
   output,
+  signal,
   viewChild,
 } from '@angular/core';
 import type { RenderBackend, ViewportState } from '@controls/renderer';
@@ -23,6 +25,7 @@ import {
   type PanelLayout,
   type WorkspaceLayout,
 } from './layout';
+import { NetlistInspector } from './netlist/netlist-inspector';
 import { Viewport } from './viewport/viewport';
 
 type PanelId = keyof WorkspaceLayout;
@@ -33,7 +36,9 @@ type PanelId = keyof WorkspaceLayout;
  *
  * Content slots: `[ctlWorkspaceToolbar]` (start of the toolbar), `[ctlViewportOverlay]` (HUD over
  * the viewport), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders). The
- * `console.toggle` command opens the bottom panel and focuses its `[data-autofocus]` element.
+ * `console.toggle` command opens the bottom panel and focuses its `[data-autofocus]` element;
+ * `view.netlistInspector` (F2.6) shows the netlist inspector in the side panel the same way, and
+ * passes the node it has selected to the renderer's terminal highlight (view state only).
  *
  * With `chrome` off (behind the main menu) only the viewport is shown, as the menu backdrop.
  * The viewport region is a landmark only; its canvas is the one keyboard focus target.
@@ -43,7 +48,7 @@ type PanelId = keyof WorkspaceLayout;
  */
 @Component({
   selector: 'ctl-workspace',
-  imports: [Viewport, Splitter, Button],
+  imports: [Viewport, Splitter, Button, NetlistInspector],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[class.chrome-hidden]': '!chrome()',
@@ -95,13 +100,18 @@ type PanelId = keyof WorkspaceLayout;
         (collapseToggle)="togglePanel('inspector')"
       />
       <section
+        #inspectorPanel
         id="ctl-inspector"
         class="panel inspector"
         aria-labelledby="ctl-inspector-title"
         [hidden]="layout().inspector.collapsed"
       >
         <h2 id="ctl-inspector-title" class="panel-title">Inspector</h2>
-        <ng-content select="[ctlInspector]"><p class="ctl-hint">Nothing selected.</p></ng-content>
+        @if (netlistOpen()) {
+          <ctl-netlist-inspector />
+        } @else {
+          <ng-content select="[ctlInspector]"><p class="ctl-hint">Nothing selected.</p></ng-content>
+        }
       </section>
       <ctl-splitter
         class="h-split"
@@ -164,7 +174,46 @@ export class Workspace {
   constructor() {
     const off = this.session.onCommand('view.resetLayout', () => this.resetLayout());
     const offConsole = this.session.onCommand('console.toggle', () => this.toggleConsole());
-    inject(DestroyRef).onDestroy(() => (off(), offConsole()));
+    const offNetlist = this.session.onCommand('view.netlistInspector', () => this.toggleNetlist());
+    inject(DestroyRef).onDestroy(() => (off(), offConsole(), offNetlist()));
+    // Pushing the inspector's selected node into the framework-free renderer is an imperative side
+    // effect (like the viewport's own effects); closing the inspector clears it.
+    effect(() => this.viewport()?.highlightTerminals(this.netlist()?.highlighted() ?? null));
+  }
+
+  /** Whether the side panel shows the netlist inspector (UI state, toggled by `view.netlistInspector`). */
+  protected readonly netlistOpen = signal(false);
+  private readonly netlist = viewChild(NetlistInspector);
+  private readonly inspectorPanel = viewChild<ElementRef<HTMLElement>>('inspectorPanel');
+  /** Where focus was before `view.netlistInspector` moved it into the side panel. */
+  private netlistOpener: Element | null = null;
+
+  /**
+   * The effect of `view.netlistInspector` (F2.6), like `console.toggle`: with focus in the open
+   * inspector, close it and put focus back where it was (else on the viewport); otherwise show it,
+   * expanding the side panel if needed, and focus its tree.
+   */
+  private toggleNetlist(): void {
+    const panel = this.inspectorPanel()?.nativeElement;
+    if (!this.chrome() || !panel) return;
+    const active = panel.ownerDocument.activeElement;
+    if (this.netlistOpen() && !this.layout().inspector.collapsed && panel.contains(active)) {
+      this.netlistOpen.set(false);
+      const opener = this.netlistOpener;
+      this.netlistOpener = null;
+      if (opener === panel.ownerDocument.body || !restoreFocus(opener)) this.focusViewport();
+      return;
+    }
+    if (!panel.contains(active)) this.netlistOpener = active;
+    const focusPanel = () =>
+      (panel.querySelector<HTMLElement>('[data-autofocus]') ?? focusableElements(panel)[0])?.focus();
+    if (this.netlistOpen() && !this.layout().inspector.collapsed) {
+      focusPanel(); // already shown: no render is coming, so focus now
+      return;
+    }
+    this.netlistOpen.set(true);
+    if (this.layout().inspector.collapsed) this.update('inspector', { ...this.layout().inspector, collapsed: false });
+    afterNextRender(focusPanel, { injector: this.injector }); // once it has rendered
   }
 
   private readonly bottomPanel = viewChild<ElementRef<HTMLElement>>('bottomPanel');
