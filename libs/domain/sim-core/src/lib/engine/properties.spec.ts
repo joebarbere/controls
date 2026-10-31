@@ -5,6 +5,7 @@ import { createWorldBus, createWorldRegistry, worldHash } from '@controls/world-
 import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
+  AC_TWIN,
   DROOP,
   ENGINE_BENCH,
   ENGINE_TEST_CATALOG,
@@ -53,6 +54,7 @@ const PARITY_REFS: Readonly<Record<string, CatalogRef>> = {
   'test.orderB': ORDER_B,
   'test.acSource': AC_SOURCE,
   'test.reactor': REACTOR,
+  'test.acTwin': AC_TWIN,
 };
 
 type Op =
@@ -74,10 +76,10 @@ type Op =
 const REFS: readonly CatalogRef[] = [...Object.values(PARITY_REFS), BATTERY, SPST, LAMP];
 const refArb = fc.nat({ max: REFS.length - 1 });
 /** The electrical models, for `wire`: what makes islands singular, unsettled, settled warm or tripped. */
-const WIRED: readonly CatalogRef[] = [TWIN_SUPPLY, FLIP, DROOP, THERMAL_LOAD, I2T_FUSE, LAMP];
+const WIRED: readonly CatalogRef[] = [TWIN_SUPPLY, FLIP, DROOP, THERMAL_LOAD, I2T_FUSE, LAMP, AC_TWIN];
 const wiredArb = fc.nat({ max: WIRED.length - 1 });
 /** Loads with an AC value, for `acLoop`. */
-const AC_LOADS: readonly CatalogRef[] = [THERMAL_LOAD, I2T_FUSE, REACTOR];
+const AC_LOADS: readonly CatalogRef[] = [THERMAL_LOAD, I2T_FUSE, REACTOR, AC_TWIN];
 const pick = fc.nat({ max: 9 });
 const terminalPick = fc.tuple(pick, fc.nat({ max: 1 }));
 const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -285,7 +287,7 @@ describe('engine determinism properties', () => {
   });
 
   it('the sessions cut mid-interval, with heat, a blown fuse, singular and unsettled islands and restored tombstones (generator health)', () => {
-    const samples = fc.sample(sessionArb, { seed: 20261031, numRuns: 40 });
+    const samples = fc.sample(sessionArb, { seed: 20261031, numRuns: 60 });
     const counts = {
       midInterval: 0,
       blown: 0,
@@ -296,6 +298,7 @@ describe('engine determinism properties', () => {
       eventsAfter: 0,
       tombstones: 0,
       ac: 0,
+      acSingular: 0,
     };
     for (const { before, after } of samples) {
       const host = benchHost();
@@ -308,6 +311,7 @@ describe('engine determinism properties', () => {
       if (statuses.includes('singular')) counts.singular++;
       if (statuses.includes('nonConverged')) counts.nonConverged++;
       if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'solved')) counts.ac++;
+      if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'singular')) counts.acSingular++;
       host.engine.takeEvents();
       const generation = host.engine.topologyGeneration;
       let restored = false;
@@ -324,18 +328,18 @@ describe('engine determinism properties', () => {
       if (host.engine.takeEvents().length > 0) counts.eventsAfter++;
       if (host.engine.topologyGeneration > generation) counts.topologyAfter++;
     }
-    // Measured on this seed, of 40: 24 mid-interval, 6 blown, 15 heated, 10 singular and 4 unsettled
-    // islands at the cut; 40 topology changes, 18 with events and 15 restored tombstones after it.
-    // Measured on this seed, of 40: 26 mid-interval, 11 blown, 13 heated, 7 singular, 3 unsettled and
-    // 15 solved AC islands at the cut; 39 topology changes, 17 with events and 11 restored tombstones after it.
-    expect(counts.midInterval).toBeGreaterThan(18);
-    expect(counts.blown).toBeGreaterThan(6);
-    expect(counts.heated).toBeGreaterThan(8);
-    expect(counts.singular).toBeGreaterThan(4);
+    // Measured on this seed, of 60: 39 mid-interval, 5 blown, 20 heated, 17 singular (12 of them AC),
+    // 4 unsettled and 23 solved AC islands at the cut; 59 topology changes, 30 with events and 15
+    // restored tombstones after it.
+    expect(counts.midInterval).toBeGreaterThan(30);
+    expect(counts.blown).toBeGreaterThan(2);
+    expect(counts.heated).toBeGreaterThan(14);
+    expect(counts.singular).toBeGreaterThan(11);
+    expect(counts.acSingular).toBeGreaterThan(7);
     expect(counts.nonConverged).toBeGreaterThan(1);
-    expect(counts.ac).toBeGreaterThan(9);
-    expect(counts.topologyAfter).toBeGreaterThan(33);
-    expect(counts.eventsAfter).toBeGreaterThan(11);
-    expect(counts.tombstones).toBeGreaterThan(7);
+    expect(counts.ac).toBeGreaterThan(16);
+    expect(counts.topologyAfter).toBeGreaterThan(50);
+    expect(counts.eventsAfter).toBeGreaterThan(22);
+    expect(counts.tombstones).toBeGreaterThan(10);
   });
 });

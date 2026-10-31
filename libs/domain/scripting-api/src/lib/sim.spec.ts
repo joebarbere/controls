@@ -173,23 +173,39 @@ describe('game.probe: ideal and non-loading', () => {
   it('reads an AC island as RMS volts with a display-only phase, at the region frequency', () => {
     const game = createGame({ seed: 4, registry: registry(), engine });
     const at = { x: 0, y: 0, z: 0 };
+    // Entity 1, unconnected, is an empty island whose reference is node 0 (exactly 0 V), so any write
+    // the probe made into the solution would show in the snapshot bytes.
+    game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: at });
     game.execOrThrow('entity.place', { ref: { id: 'source.test-ac-120v', version: 1 }, positionMm: at });
     game.execOrThrow('entity.place', { ref: THERMAL_LOAD, positionMm: at });
     const lead = { id: 'lead.quillfern-test-1m', version: 1 };
-    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 1, terminal: 'l' }, b: { entity: 2, terminal: 'a' } });
-    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 2, terminal: 'b' }, b: { entity: 1, terminal: 'n' } });
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 2, terminal: 'l' }, b: { entity: 3, terminal: 'a' } });
+    game.execOrThrow('lead.connect', { ref: lead, a: { entity: 3, terminal: 'b' }, b: { entity: 2, terminal: 'n' } });
+    expect(game.materialisedWorld().sim?.nodes.slice(0, 2)).toStrictEqual([0, 0]);
     const hash = game.hash();
-    const reading = game.probe('1:l', '1:n');
+    const snapshot = game.snapshotHash();
+    const reading = game.probe('2:l', '2:n');
     if (reading.kind !== 'ac') throw new Error(`expected an AC reading, got ${reading.kind}`);
     expect(reading.frequencyHz).toBe(60);
     expect(reading.rmsVolts).toBeGreaterThan(100);
     expect(reading.rmsVolts).toBeLessThan(120);
     expect(Math.abs(reading.phaseDeg)).toBeLessThan(1e-6); // a resistive loop: in phase with the source
-    const reversed = game.probe('1:n', '1:l');
+    const reversed = game.probe('2:n', '2:l');
     expect(reversed.kind === 'ac' && Math.abs(Math.abs(reversed.phaseDeg) - 180)).toBeLessThan(1e-6);
     expect(reversed.kind === 'ac' && reversed.rmsVolts).toBe(reading.rmsVolts);
-    expect(game.hash()).toBe(hash); // probing changes nothing, and no angle is hashed
-    expect(game.islands().map((i) => [i.kind, i.status])).toStrictEqual([['ac', 'solved']]);
+    // Probing changes nothing: the snapshot is encoded afresh (game.hash() is cached by revision, so
+    // the snapshot is the check that sees a write into the engine's state), and no angle is stored.
+    expect(game.snapshotHash()).toBe(snapshot);
+    expect(game.hash()).toBe(hash);
+    const saved = readCtrl(game.save());
+    if (!saved.ok) throw new Error(saved.error.message);
+    for (const text of [JSON.stringify(game.materialisedWorld()), JSON.stringify(saved.value)]) {
+      expect(text).not.toContain('phase');
+    }
+    expect(game.islands().map((i) => [i.kind, i.status])).toStrictEqual([
+      ['empty', 'solved'],
+      ['ac', 'solved'],
+    ]);
   });
 
   it('refuses a malformed end or one that names no netlisted terminal', () => {

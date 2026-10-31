@@ -36,11 +36,14 @@ import {
   THERMAL_TOLERANCE,
   TWIN_SUPPLY,
   AC_SOURCE_OHMS,
+  AC_TWIN,
   REACTOR,
 } from '../../testing/engine';
 import { ISLAND_FLAG_NON_CONVERGED as SOLVER_NON_CONVERGED, ISLAND_FLAG_SINGULAR as SOLVER_SINGULAR } from '../mna/dc';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from './device-model';
+import type { AcBranchValues } from '../mna/ac-values';
+import type { NetlistBranch } from '../netlist/types';
 import { SimDesyncError, SimEngine, type SimEngineOptions, SimProbeError, SimStartError } from './engine';
 
 /** A minimal headless host: a world bus and an engine that follows it (what the scripting API does). */
@@ -331,6 +334,89 @@ describe('SimEngine: electrical results', () => {
     expect(coil.re).toBeCloseTo(-omegaL * iim, 6);
     expect(coil.im).toBeCloseTo(omegaL * ire, 6);
     expect(Math.abs(coil.im)).toBeGreaterThan(1); // a real phase, not just a real part
+  });
+
+  it('surfaces a singular AC island: one event on the rising edge, and a singular probe', () => {
+    const host = Host.fresh().run([
+      ['entity.place', { ref: AC_TWIN, positionMm: origin }],
+      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'n') }],
+    ]);
+    expect(host.engine.islands()).toMatchObject([{ kind: 'ac', status: 'singular', entities: [1, 2] }]);
+    expect(host.engine.probe(end(1, 'l'), end(1, 'n'))).toStrictEqual({ kind: 'singular', tick: 0, island: 0 });
+    expect(host.engine.takeEvents()).toStrictEqual([
+      { tick: 0, kind: 'singular', entity: null, entities: [1], detail: {} },
+    ]);
+    host.advanceTo(40); // still singular at every cadence solve: no new event, and the load never heats
+    expect(host.engine.takeEvents()).toStrictEqual([]);
+    expect(host.materialised().entities[1].sim['tempK']).toBe(THERMAL_PARAMS.ambientK);
+    expect(decodeSnapshot(host.engine.snapshot()).flags & ISLAND_FLAG_SINGULAR).toBe(ISLAND_FLAG_SINGULAR);
+  });
+
+  it('heats and melts on an inductive AC loop at |I|²·R, the phasor magnitude (closed form, one step)', () => {
+    // 120 V∠0 behind 0.1 Ω, two leads, the reactor (j18.85 Ω), a thermal load and a fuse in series:
+    // the current lags by about 84°, so its real part alone would give about 1 % of the true power.
+    const host = Host.fresh().run([
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['entity.place', { ref: REACTOR, positionMm: origin }],
+      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
+      ['entity.place', { ref: I2T_FUSE, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(3, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(4, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(4, 'b'), b: end(1, 'n') }],
+    ]);
+    const record = host.engine.exportState().solution as NonNullable<World['sim']>;
+    const load = host.engine.netlist.branches.find((b) => b.element.kind === 'entity' && b.element.entity === 3);
+    const [re, im] = [record.branches[2 * (load?.index as number)], record.branches[2 * (load?.index as number) + 1]];
+    expect(Math.abs(im)).toBeGreaterThan(5 * Math.abs(re)); // strongly reactive
+    const i2 = re * re + im * im;
+    host.advanceTo(1); // one step: continuous (the load), then protection (the fuse), over 1 ms
+    const [thermal, fuse] = [host.materialised().entities[2].sim, host.materialised().entities[3].sim];
+    // The load's cold resistance with its seeded tolerance, at ambient (T = T0, so R = R0).
+    const u = deriveStream(11, entityStreamKey(3)).nextFloat();
+    const r0 = THERMAL_PARAMS.coldResistanceOhm * (1 + THERMAL_TOLERANCE * (2 * u - 1));
+    const dT = (0.001 * i2 * r0) / THERMAL_PARAMS.heatCapacityJPerK;
+    expect(thermal['tempK'] as number).toBeCloseTo(THERMAL_PARAMS.ambientK + dT, 12);
+    const link = host.engine.netlist.branches.find((b) => b.element.kind === 'entity' && b.element.entity === 4);
+    const [fre, fim] = [record.branches[2 * (link?.index as number)], record.branches[2 * (link?.index as number) + 1]];
+    expect(fuse['heatA2s'] as number).toBeCloseTo((fre * fre + fim * fim) * 0.001, 15);
+    expect(dT).toBeGreaterThan(1e-3);
+  });
+
+  it('refuses a model that claims an AC value without setting it, on any solve, not just the first', () => {
+    // Sets its value until it breaks, then returns true without one: on the next cadence solve (the same
+    // value buffers, no topology change) the guard must find the stamp cleared, or that solve would
+    // quietly reuse the last solve's value.
+    let broken = false;
+    const base = engineTestOptions();
+    const options = {
+      ...base,
+      deviceModels: {
+        ...base.deviceModels,
+        'test.reactor': {
+          kind: 'test.reactor',
+          output: null,
+          bank: () => ({
+            bag: () => ({}),
+            acValue: (_i: number, b: NetlistBranch, values: AcBranchValues) => {
+              if (!broken) values.inductor(b.index, 0.05);
+              return true;
+            },
+          }),
+        },
+      },
+    };
+    const host = Host.fresh(options).run([
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['entity.place', { ref: REACTOR, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'n') }],
+    ]);
+    expect(host.engine.islands()[0].status).toBe('solved');
+    broken = true;
+    expect(() => host.engine.advanceTo(11)).toThrow(/without a value/);
   });
 
   it('leaves a mixed island unsolved, never a reading', () => {
@@ -630,21 +716,26 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     expect(host.engine.revision).toBeGreaterThan(revision);
   });
 
-  it('the per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
-    // A thermal load in a battery loop: continuous work every tick, a cadence solve every 10.
+  /**
+   * Bytes allocated per step by a battery-or-AC-source loop through a thermal load (continuous work every
+   * tick, a cadence solve every 10): the heap's growth plus what each collection freed, in the smallest
+   * of ten 20 000-step windows after 40 000 warm-up steps.
+   *
+   * - GC counts are no measure: the runtime's own few scavenges land at random.
+   * - A full collection starts each window (`--expose-gc` through `setFlagsFromString`, the collector
+   *   from `runInNewContext('gc')`): otherwise a scavenge in the window also frees garbage made before it
+   *   (by earlier tests in this worker) and counts it as the window's (3 flakes in 100 runs).
+   * - The smallest window, not the median: code not yet optimized allocates more (100-200 B/step at
+   *   first), and a per-step allocation raises every window while a late tier-up raises only some.
+   */
+  function allocatedPerStep(source: typeof BATTERY, pos: string, neg: string): number {
     const host = Host.fresh().run([
-      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: source, positionMm: origin }],
       ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
-      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
-      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+      ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
     ]);
     host.engine.advanceTo(40_000); // warm: every buffer grown
-    // Bytes allocated in a window: the heap's growth plus what each collection freed. GC counts are no
-    // measure (the runtime's own few scavenges land at random). Code not yet optimized allocates more
-    // (the first windows measure 100-200 B/step, settling by about 120 000 steps), so the gate takes
-    // the smallest of ten 20 000-step windows: an allocation the step itself makes raises every window.
-    // A full collection first: otherwise a scavenge in the window also frees garbage made before it
-    // (by earlier tests in this worker) and counts it as the window's (3 flakes in 100 runs).
     setFlagsFromString('--expose-gc');
     const collect = runInNewContext('gc') as () => void;
     const window = (steps: number) => {
@@ -660,12 +751,23 @@ describe('SimEngine: the warm start, readability and revisions', () => {
       );
       return (getHeapStatistics().used_heap_size - start + freed) / steps;
     };
-    const perStep = Math.min(...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => window(20_000)));
-    // Measured 20.8-21.0 B/step in these windows, with and without coverage (it falls to about 13 over
-    // longer runs as the JIT settles): about 100-200 B per cadence solve, 32 B of it inside
-    // DcSolver.solveNonlinear, plus a few in the synthetic thermal layer. Zero allocation per tick is
-    // the plan's criterion and not yet met (plan F2.3a notes); this gate stops it growing.
-    expect(perStep).toBeLessThan(24);
+    return Math.min(...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => window(20_000)));
+  }
+
+  // Zero allocation per tick is the plan's criterion and not yet met (plan F2.3a notes): these gates
+  // stop it growing. Each gate sits about 10-15 % over the worst of 80 measured runs (40 with coverage,
+  // 40 without), and a planted 64-byte per-step allocation fails both.
+
+  it('the DC per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
+    // Measured 21.18-21.19 B/step with coverage, 20.88-21.53 without: about 200 B per cadence solve, 32 B
+    // of it inside DcSolver.solveNonlinear, plus a few in the synthetic thermal layer.
+    expect(allocatedPerStep(BATTERY, 'pos', 'neg')).toBeLessThan(24);
+  });
+
+  it('the AC per-tick path stays under 36 bytes allocated per step (its own baseline, not yet zero)', () => {
+    // Measured 14.78-14.79 B/step with coverage and 30.49-31.32 without (V8 optimizes the phasor path
+    // differently when coverage instruments it): the DC solve's share, the phasor solve's, and the layer.
+    expect(allocatedPerStep(AC_SOURCE, 'l', 'n')).toBeLessThan(36);
   });
 });
 

@@ -29,6 +29,8 @@ import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TES
  *   the save-and-load property must fail on it (never in `engineTestOptions`, only `leakyTestOptions`);
  * - `test.reactor`: an inductor of `henries` on AC (a lagging current, so phasors with a phase), a
  *   small resistance on DC;
+ * - `test.acTwin`: two ideal AC sources (120 V and 121 V at 0°) across the same terminals, a loop of
+ *   zero-ohm sources (a singular AC island);
  * - `test.acSource` (from `bench.ts`): a 120 V RMS phasor source at 0° behind 0.1 Ω (AC islands);
  * - `test.twinSupply`: two ideal sources (12 V and 13 V) between the same terminals, a loop of zero-ohm
  *   sources (the singular island).
@@ -42,6 +44,7 @@ export const ORDER_B = { id: 'probe.test-order-b', version: 1 };
 export const TWIN_SUPPLY = { id: 'supply.test-twin', version: 1 };
 export const DROOP = { id: 'load.test-droop', version: 1 };
 export const REACTOR = { id: 'load.test-reactor', version: 1 };
+export const AC_TWIN = { id: 'source.test-ac-twin', version: 1 };
 export const LEAKY = { id: 'load.test-leaky', version: 1 };
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
@@ -107,6 +110,14 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
     params: z.strictObject({ coldOhm: FiniteNumber.positive(), perAmp: FiniteNumber.min(0) }),
     keys: {},
     description: 'A test resistance that rises with its own current (it settles).',
+  },
+  'test.acTwin': {
+    kind: 'test.acTwin',
+    placement: 'entity',
+    terminals: ['l', 'n'],
+    params: z.strictObject({}),
+    keys: {},
+    description: 'Two ideal AC test sources in parallel (always singular).',
   },
   'test.reactor': {
     kind: 'test.reactor',
@@ -213,6 +224,7 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(DROOP, 'Test droop load', 'test.droop', { coldOhm: 2, perAmp: 0.1 }),
   entry(LEAKY, 'Test leaky load', 'test.leaky', {}),
   entry(REACTOR, 'Test reactor', 'test.reactor', { henries: 0.05, dcOhm: 0.5 }),
+  entry(AC_TWIN, 'Test AC twin source', 'test.acTwin', {}, ['n', 'l']),
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
 ];
@@ -245,6 +257,21 @@ export const ENGINE_TEST_MODELS: NetlistModels = {
     'test.droop': { kind: 'test.droop', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.leaky': { kind: 'test.leaky', simTopologyKeys: [], topology: resistorBetween('element') },
     'test.reactor': { kind: 'test.reactor', simTopologyKeys: [], topology: resistorBetween('element') },
+    'test.acTwin': {
+      kind: 'test.acTwin',
+      simTopologyKeys: [],
+      topology: () => ({
+        joins: [],
+        elements: ['cellA', 'cellB'].map((part) => ({
+          part,
+          kind: 'vsource' as const,
+          source: 'ac' as const,
+          a: 'n',
+          b: 'l',
+          values: {},
+        })),
+      }),
+    },
     'test.twinSupply': {
       kind: 'test.twinSupply',
       simTopologyKeys: [],
@@ -421,6 +448,18 @@ const droop: SimDeviceModel = {
   },
 };
 
+const acTwin: SimDeviceModel = {
+  kind: 'test.acTwin',
+  output: null,
+  bank: () => ({
+    bag: () => ({}),
+    acValue: (_i, b, values) => {
+      values.vsourcePolar(b.index, b.element.kind === 'entity' && b.element.part === 'cellA' ? 120 : 121, 0, 0);
+      return true;
+    },
+  }),
+};
+
 const reactor: SimDeviceModel = {
   kind: 'test.reactor',
   output: null,
@@ -526,6 +565,7 @@ export function engineTestOptions(journal: string[] = []): Required<SimEngineOpt
       'test.twinSupply': twinSupply,
       'test.acSource': acSource,
       'test.reactor': reactor,
+      'test.acTwin': acTwin,
       'test.droop': droop,
       'test.orderA': orderProbe('test.orderA', journal),
       'test.orderB': orderProbe('test.orderB', journal),
