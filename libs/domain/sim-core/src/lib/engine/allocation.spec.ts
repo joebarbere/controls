@@ -10,7 +10,7 @@ import {
   RHEOSTAT,
   THERMAL_LOAD,
 } from '../../testing/engine';
-import { BENCH_SUPPLY, DIN_PSU } from '../../testing/sources';
+import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
 import type { SimDeviceModel } from './device-model';
 import { SimEngine, type SimEngineOptions } from './engine';
 
@@ -231,9 +231,17 @@ function mixedDcCommands(): Command[] {
   ];
 }
 
-/** AC: the phasor source into a reactor (1, 2) and into a heating load (3, 4). */
+/**
+ * AC: the phasor source into a reactor (1, 2) and into a heating load (3, 4); a split-phase service,
+ * L1 to N (5, 6), and a 208Y/120 V service, L2 to N (7, 8), each into a heating load (F2.4 part 2).
+ */
 function mixedAcCommands(): Command[] {
-  return [...loopCommands(1, AC_SOURCE, 'l', 'n', REACTOR), ...loopCommands(3, AC_SOURCE, 'l', 'n', THERMAL_LOAD)];
+  return [
+    ...loopCommands(1, AC_SOURCE, 'l', 'n', REACTOR),
+    ...loopCommands(3, AC_SOURCE, 'l', 'n', THERMAL_LOAD),
+    ...loopCommands(5, UTILITY_SPLIT, 'l1', 'n', THERMAL_LOAD),
+    ...loopCommands(7, UTILITY_208, 'l2', 'n', THERMAL_LOAD),
+  ];
 }
 
 /**
@@ -273,6 +281,11 @@ describe('SimEngine per-tick allocation (regression gates, not yet zero)', () =>
   // retry re-solves a load whose resistance moved while it cooled (more outer-loop iterations a solve).
   it('the DIN PSU hiccuping into a heating load stays under 6 bytes per step', () => {
     const { perStep, report } = allocatedPerStep(DIN_PSU, 'pos', 'neg');
+    expect(perStep, report).toBeLessThan(6);
+  });
+
+  it('a split-phase service with series inductance (F2.4 part 2) stays under 6 bytes per step', () => {
+    const { perStep, report } = allocatedPerStep(UTILITY_SPLIT, 'l1', 'n');
     expect(perStep, report).toBeLessThan(6);
   });
 

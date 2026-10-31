@@ -56,7 +56,7 @@ type Stamp =
   | { readonly kind: 'r'; readonly ohms: number }
   | { readonly kind: 'l'; readonly henries: number }
   | { readonly kind: 'c'; readonly farads: number }
-  | { readonly kind: 'v'; readonly re: number; readonly im: number; readonly ohms: number };
+  | { readonly kind: 'v'; readonly re: number; readonly im: number; readonly ohms: number; readonly henries: number };
 
 const scaled = (mantissa: number, decades: readonly number[], decade: number) =>
   (1 + (mantissa % 9000) / 1000) * decades[decade % decades.length];
@@ -65,7 +65,7 @@ const scaled = (mantissa: number, decades: readonly number[], decade: number) =>
  * The stamp an element draw names. `tree` forces a conducting tree element of a well-conditioned
  * circuit to a resistor or a source (no reactive tree).
  */
-export function drawStamp(e: AcElementDraw, wellConditioned: boolean, tree: boolean): Stamp {
+export function drawStamp(e: AcElementDraw, wellConditioned: boolean, tree: boolean, sourceInductance = false): Stamp {
   let kind = e.kind % 11;
   if (wellConditioned && tree && kind >= 3 && kind <= 6) kind = 0;
   if (kind <= 2) return { kind: 'r', ohms: scaled(e.mantissa, wellConditioned ? WELL_R_DECADES : R_DECADES, e.decade) };
@@ -86,7 +86,11 @@ export function drawStamp(e: AcElementDraw, wellConditioned: boolean, tree: bool
     : e.ideal % 6 === 0
       ? 0
       : Math.max(MIN_SOURCE_OHMS, scaled(e.mantissa, R_DECADES, e.decade) / 100);
-  return { kind: 'v', re, im, ohms };
+  // A non-ideal source's series inductance (F2.4's source reactance), only when the draw asks for it,
+  // so the circuits (and pins) of draws without it are unchanged: 1 µH … 0.1 H, about 4e-4 … 40 Ω at 60 Hz.
+  const henries =
+    sourceInductance && ohms > 0 ? scaled(e.mantissa + Math.abs(e.sourceIm), L_DECADES, e.decade + e.angle) : 0;
+  return { kind: 'v', re, im, ohms, henries };
 }
 
 /** Writes `stamps` into new AC values for `netlist`. */
@@ -96,7 +100,7 @@ export function stampValues(netlist: Netlist, stamps: readonly Stamp[]): AcBranc
     if (stamp.kind === 'r') values.resistor(b, stamp.ohms);
     else if (stamp.kind === 'l') values.inductor(b, stamp.henries);
     else if (stamp.kind === 'c') values.capacitor(b, stamp.farads);
-    else values.vsource(b, stamp.re, stamp.im, stamp.ohms);
+    else values.vsource(b, stamp.re, stamp.im, stamp.ohms, stamp.henries);
   });
   return values;
 }
@@ -110,12 +114,15 @@ export interface AcCircuitDraw {
   /** Extra elements from `x % nodes`: to any node when `y % 4 === 0` (merging islands), else within its group. */
   readonly extra: readonly (readonly [number, number, AcElementDraw])[];
   readonly wellConditioned?: boolean;
+  /** Non-ideal sources get a series inductance too (F2.4); off by default. */
+  readonly sourceInductance?: boolean;
 }
 
 /** Builds the circuit a draw names, at `frequencyHz`. Islands without a source are `empty` (not AC-solved). */
 export function buildAcCircuit(draw: AcCircuitDraw, frequencyHz = 60): AcCircuit {
   const n = draw.nodes;
   const well = draw.wellConditioned === true;
+  const withL = draw.sourceInductance === true;
   const groups = Math.min(draw.islands, n);
   const groupStart = (g: number) => Math.floor((g * n) / groups);
   const groupOf = (node: number) => {
@@ -134,7 +141,7 @@ export function buildAcCircuit(draw: AcCircuitDraw, frequencyHz = 60): AcCircuit
     if (node === start) continue;
     const [pick, e] = draw.tree[node % draw.tree.length];
     const other = start + (pick % (node - start));
-    const stamp = drawStamp(e, well, true);
+    const stamp = drawStamp(e, well, true, withL);
     if (pick % 2 === 0) push(other, node, stamp);
     else push(node, other, stamp);
   }
@@ -143,12 +150,12 @@ export function buildAcCircuit(draw: AcCircuitDraw, frequencyHz = 60): AcCircuit
     // A quarter of the extras join any two nodes (merging islands); the rest stay in a's group, so
     // multi-island circuits survive the loops.
     if (y % 4 === 0) {
-      push(a, Math.floor(y / 4) % n, drawStamp(e, well, false));
+      push(a, Math.floor(y / 4) % n, drawStamp(e, well, false, withL));
     } else {
       const group = groupOf(a);
       const start = groupStart(group);
       const size = (group + 1 < groups ? groupStart(group + 1) : n) - start;
-      push(a, start + (y % size), drawStamp(e, well, false));
+      push(a, start + (y % size), drawStamp(e, well, false, withL));
     }
   }
   const netlist = syntheticNetlist(n, edges, 'ac');
@@ -163,6 +170,8 @@ export interface LargeAcCircuitSpec {
   /** Extra loop-closing elements per 100 nodes (0–30). */
   readonly meshPercent: number;
   readonly wellConditioned: boolean;
+  /** Non-ideal sources get a series inductance too (F2.4); off by default, so pinned draws are unchanged. */
+  readonly sourceInductance?: boolean;
 }
 
 /** xorshift32: integer-only, the same sequence in every runtime. */
@@ -192,6 +201,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
   const groups = Math.max(1, Math.min(spec.islands, Math.floor(n / 2)));
   const start = (g: number) => Math.floor((g * n) / groups);
   const well = spec.wellConditioned;
+  const withL = spec.sourceInductance === true;
   const element = (kind: number): AcElementDraw => ({
     kind,
     mantissa: rng.below(9000),
@@ -214,7 +224,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
       const parent = rng.below(2) === 0 ? node - 1 : first + rng.below(node - first);
       const roll = rng.below(20);
       const kind = roll < 2 || node === first + 1 ? 10 : rng.below(7);
-      const stamp = drawStamp(element(kind), well, true);
+      const stamp = drawStamp(element(kind), well, true, withL);
       if (rng.below(2) === 0) push(parent, node, stamp);
       else push(node, parent, stamp);
     }
@@ -223,7 +233,7 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
     for (let e = 0; e < extra; e++) {
       const a = first + rng.below(size);
       const b = rng.below(25) === 0 ? a : first + rng.below(size);
-      push(a, b, drawStamp(element(rng.below(11)), well, false));
+      push(a, b, drawStamp(element(rng.below(11)), well, false, withL));
     }
   }
   const netlist = syntheticNetlist(n, edges, 'ac');

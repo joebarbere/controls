@@ -13,7 +13,8 @@ V1 e1 s1 DC 0 AC 22e0 0
 RI1 e1 3 15e-1
 VS2 0 s2 0
 V2 e2 s2 DC 0 AC 56e0 -120
-RI2 e2 3 47e-2
+RI2 e2 m2 47e-2
+LI2 m2 3 68e-7
 VS3 5 s3 0
 L3 s3 1 68e-2
 VS4 3 s4 0
@@ -26,7 +27,8 @@ VS7 0 s7 0
 L7 s7 5 47e-2
 VS8 4 s8 0
 V8 e8 s8 DC 0 AC 56e1 120
-RI8 e8 3 68e-3
+RI8 e8 m8 68e-3
+LI8 m8 3 82e-5
 VS9 0 s9 0
 R9 s9 2 56e-2
 VS10 4 s10 0

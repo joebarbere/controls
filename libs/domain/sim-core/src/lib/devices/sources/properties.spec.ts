@@ -4,8 +4,8 @@ import { compareSimEvents } from '@controls/sim-protocol';
 import { worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { BATTERY } from '../../../testing/bench';
-import { FLIP, RESISTOR_2_4, RHEOSTAT, THERMAL_LOAD } from '../../../testing/engine';
-import { BENCH_SUPPLY, DIN_PSU, SourceHost } from '../../../testing/sources';
+import { FLIP, GENERATOR, RESISTOR_2_4, RHEOSTAT, THERMAL_LOAD } from '../../../testing/engine';
+import { BENCH_SUPPLY, DIN_PSU, SourceHost, UTILITY_208, UTILITY_480, UTILITY_SPLIT } from '../../../testing/sources';
 import { SimEngine } from '../../engine/engine';
 
 /*
@@ -18,6 +18,7 @@ import { SimEngine } from '../../engine/engine';
  * - a battery discharging into a resistor (`stateOfCharge`).
  *
  * Then random edits: the rheostat and the supply's controls operated, more supply and battery loops,
+ * utility services and the generator stub feeding loads (AC islands, part 2),
  * leads removed, deletes undone, and time passing in steps long enough (up to 2,500 ticks) that the cut
  * often lands inside a 1,100-tick hiccup cycle. The engine sessions (`engine/properties.spec.ts`) keep
  * F2.3a's op mix; the two together cover every engine model (the parity guard there).
@@ -31,6 +32,8 @@ type Op =
   | { kind: 'supplyLoop'; din: boolean; load: number }
   /** Another battery into a load. */
   | { kind: 'batteryLoop'; load: number }
+  /** A utility service or the generator stub feeding a load (or a short) from L1 to N: an AC island. */
+  | { kind: 'serviceLoop'; source: number; load: number }
   | { kind: 'disconnect'; pick: number }
   | { kind: 'deleteUndo'; pick: number }
   | { kind: 'undo' }
@@ -46,6 +49,8 @@ const CONTROLS = [
 ] as const;
 
 /** Module-level arbitraries (never built inside `.chain`). */
+/** AC services, for `serviceLoop`. */
+const SERVICES: readonly CatalogRef[] = [UTILITY_SPLIT, UTILITY_208, UTILITY_480, GENERATOR];
 const pick = fc.nat({ max: 9 });
 const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
@@ -75,6 +80,14 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
     weight: 1,
     arbitrary: fc.record({ kind: fc.constant('batteryLoop' as const), load: fc.nat({ max: LOADS.length - 2 }) }),
+  },
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      kind: fc.constant('serviceLoop' as const),
+      source: fc.nat({ max: SERVICES.length - 1 }),
+      load: fc.constantFrom(0, 1, 3),
+    }),
   },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('disconnect' as const), pick }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant('deleteUndo' as const), pick }) },
@@ -138,6 +151,9 @@ function apply(host: SourceHost, op: Op): void {
       return;
     case 'batteryLoop':
       loop(host, BATTERY, 'pos', 'neg', LOADS[op.load]);
+      return;
+    case 'serviceLoop':
+      loop(host, SERVICES[op.source], 'l1', 'n', LOADS[op.load]);
       return;
     case 'disconnect': {
       const connections = world.connections;
@@ -241,7 +257,7 @@ describe('source determinism properties (F2.4)', () => {
   });
 
   it('the cuts land mid-hiccup, in current limit and on a discharged battery (generator health, at the cut)', () => {
-    const counts = { midInterval: 0, hiccupOff: 0, limitCounting: 0, benchCc: 0, discharged: 0 };
+    const counts = { midInterval: 0, hiccupOff: 0, limitCounting: 0, benchCc: 0, discharged: 0, service: 0 };
     for (const { before } of HEALTH_SAMPLES) {
       const host = sourceBench();
       before.forEach((op) => apply(host, op));
@@ -252,14 +268,17 @@ describe('source determinism properties (F2.4)', () => {
       if (sims.some((s) => s['mode'] === 'limit' && (s['phaseTicks'] as number) > 0)) counts.limitCounting++;
       if (sims.some((s) => s['mode'] === 'cc')) counts.benchCc++;
       if (sims.some((s) => typeof s['stateOfCharge'] === 'number' && s['stateOfCharge'] < 1)) counts.discharged++;
+      if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'solved')) counts.service++;
     }
-    // Measured on this seed, of 24: 10 cut mid-interval, 4 cut inside a hiccup's off period, 6 with a
-    // limit counting towards a trip, 20 with the bench supply in CC and 9 with a discharged battery.
-    expect(counts.midInterval).toBeGreaterThan(6);
-    expect(counts.hiccupOff).toBeGreaterThan(2);
-    expect(counts.limitCounting).toBeGreaterThan(3);
-    expect(counts.benchCc).toBeGreaterThan(14);
-    expect(counts.discharged).toBeGreaterThan(5);
+    // Measured on this seed, of 24 (with part 2's service loops): 11 cut mid-interval, 7 inside a
+    // hiccup's off period, 3 with a limit counting towards a trip, 23 with the bench supply in CC, 11
+    // with a discharged battery and 6 with a solved AC service island.
+    expect(counts.midInterval).toBeGreaterThan(7);
+    expect(counts.hiccupOff).toBeGreaterThan(4);
+    expect(counts.limitCounting).toBeGreaterThan(1);
+    expect(counts.benchCc).toBeGreaterThan(17);
+    expect(counts.discharged).toBeGreaterThan(7);
+    expect(counts.service).toBeGreaterThan(3);
   });
 
   it('after a reload the sessions still hiccup and change mode (generator health, after the cut)', () => {
@@ -274,9 +293,9 @@ describe('source determinism properties (F2.4)', () => {
       if (loaded.events.some((e) => e.kind === 'hiccup')) counts.hiccupsAfterReload++;
       if (JSON.stringify(modes()) !== first) counts.modeChangesAfterReload++;
     }
-    // Measured on this seed, of 24: 10 reloaded sessions hiccup after the cut, 15 change a mode.
-    expect(counts.hiccupsAfterReload).toBeGreaterThan(6);
-    expect(counts.modeChangesAfterReload).toBeGreaterThan(10);
+    // Measured on this seed, of 24: 11 reloaded sessions hiccup after the cut, 17 change a mode.
+    expect(counts.hiccupsAfterReload).toBeGreaterThan(7);
+    expect(counts.modeChangesAfterReload).toBeGreaterThan(11);
   });
 
   it('starts from an engine that solves the bench at once (the base of every session)', () => {

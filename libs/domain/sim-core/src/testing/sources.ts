@@ -4,7 +4,7 @@ import { createWorldBus, createWorldRegistry } from '@controls/world-model';
 import { decodeSnapshot, materialiseWorld, type SimEvent } from '@controls/sim-protocol';
 import { SimEngine, type SimEngineOptions } from '../lib/engine/engine';
 import { BATTERY, end } from './bench';
-import { engineBus, engineTestOptions, RESISTOR_2_4, RHEOSTAT } from './engine';
+import { engineBus, engineTestOptions, GENERATOR, RESISTOR_2_4, RHEOSTAT } from './engine';
 
 /*
  * Helpers for F2.4's source specs: the refs of the built-in sources (the battery is `BATTERY` in
@@ -14,6 +14,9 @@ import { engineBus, engineTestOptions, RESISTOR_2_4, RHEOSTAT } from './engine';
 
 export const BENCH_SUPPLY = { id: 'supply.brindlecore-bench-30v-5a', version: 1 };
 export const DIN_PSU = { id: 'supply.railwick-din-24v-5a', version: 1 };
+export const UTILITY_SPLIT = { id: 'utility.larkmoor-split-phase-25kva', version: 1 };
+export const UTILITY_208 = { id: 'utility.larkmoor-208y120-150kva', version: 1 };
+export const UTILITY_480 = { id: 'utility.larkmoor-480y277-1000kva', version: 1 };
 
 /**
  * The engine models the source sessions (`devices/sources/properties.spec.ts`) put through the
@@ -26,6 +29,9 @@ export const SOURCE_SESSION_REFS = Object.freeze({
   'supply.dinPsu': DIN_PSU,
   'test.resistor': RESISTOR_2_4,
   'test.rheostat': RHEOSTAT,
+  'utility.splitPhase': { id: 'utility.larkmoor-split-phase-25kva', version: 1 },
+  'utility.threePhase': { id: 'utility.larkmoor-208y120-150kva', version: 1 },
+  'generator.portable': GENERATOR,
 });
 
 /** A world bus and an engine that follows it, on the engine test catalogue and models. */

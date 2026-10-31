@@ -19,7 +19,8 @@ VS3 2 s3 0
 L3 s3 7 82e-4
 VS4 3 s4 0
 V4 e4 s4 DC 0 AC 12e-1 180
-RI4 e4 1 39e-1
+RI4 e4 m4 39e-1
+LI4 m4 1 33e-5
 VS5 3 s5 0
 L5 s5 6 82e-4
 VS6 0 s6 0

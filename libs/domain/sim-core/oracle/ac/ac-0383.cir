@@ -17,12 +17,14 @@ V2 e2 s2 DC 0 AC 82e-1 -120
 RI2 e2 2 18e-3
 VS3 3 s3 0
 V3 e3 s3 DC 0 AC 27e1 0
-RI3 e3 5 82e-1
+RI3 e3 m3 82e-1
+LI3 m3 5 56e-7
 VS4 3 s4 0
 C4 s4 4 27e-6
 VS5 0 s5 0
 V5 e5 s5 DC 0 AC 27e0 180
-RI5 e5 5 15e-3
+RI5 e5 m5 15e-3
+LI5 m5 5 18e-5
 VS6 0 s6 0
 R6 s6 6 27e1
 VS7 1 s7 0

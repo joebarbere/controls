@@ -74,8 +74,11 @@ function adaptedResidual(netlist: Netlist, values: AcBranchValues, result: Oracl
         break;
       }
       default: {
+        // Z = R + jωL (F2.4's series inductance).
         const r = values.ohms[k];
-        residual = [-drop[0] - (values.emfRe[k] - ik[0] * r), -drop[1] - (values.emfIm[k] - ik[1] * r)];
+        const x = omega * values.seriesHenries[k];
+        const zi = [r * ik[0] - x * ik[1], r * ik[1] + x * ik[0]];
+        residual = [-drop[0] - (values.emfRe[k] - zi[0]), -drop[1] - (values.emfIm[k] - zi[1])];
       }
     }
     worst = Math.max(worst, abs(residual) / scale);

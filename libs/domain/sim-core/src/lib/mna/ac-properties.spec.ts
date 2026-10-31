@@ -94,6 +94,7 @@ function scaledSources(values: AcBranchValues, k: Phasor, keep: (branch: number)
   out.ohms.set(values.ohms);
   out.henries.set(values.henries);
   out.farads.set(values.farads);
+  out.seriesHenries.set(values.seriesHenries);
   for (let b = 0; b < values.count; b++) {
     if (!keep(b)) continue;
     const [er, ei] = [values.emfRe[b], values.emfIm[b]];
@@ -158,6 +159,40 @@ describe('AC MNA properties (synthetic circuits)', () => {
       }),
       { numRuns: 90, examples: [[NEAR_RESONANCE]] },
     );
+  });
+
+  it('the same holds with series inductance behind the sources (F2.4: utility and generator reactance)', () => {
+    fc.assert(
+      fc.property(circuitArb, (draw) => {
+        const circuit = build({ ...draw, sourceInductance: true });
+        const dense = solve(circuit);
+        checkAcRows(circuit, dense, true);
+        // The sparse path replays the new complex Z code (`VALUE_Z`): its solution passes every row too.
+        const sparse = new AcSolver({ sparseMinUnknowns: 1 }).solve(
+          circuit.netlist,
+          circuit.values,
+          circuit.frequencyHz,
+        );
+        expect(sparse.islands.map((i) => i.flags)).toStrictEqual(dense.islands.map((i) => i.flags));
+        checkAcRows(circuit, sparse, true);
+      }),
+      { numRuns: 50 },
+    );
+  });
+
+  it('sources with series inductance are drawn often enough (generator health, fixed seed)', () => {
+    let sources = 0;
+    let inductive = 0;
+    for (const draw of fc.sample(circuitArb, { seed: 20261031, numRuns: 60 })) {
+      const { values } = build({ ...draw, sourceInductance: true });
+      for (let b = 0; b < values.count; b++) {
+        if (values.stamps[b] !== AC_STAMP_VSOURCE) continue;
+        sources++;
+        if (values.seriesHenries[b] > 0) inductive++;
+      }
+    }
+    expect(sources).toBeGreaterThan(100);
+    expect(inductive / sources).toBeGreaterThan(0.6);
   });
 
   it('is linear: scaling every source by a complex k scales the solution by k', () => {

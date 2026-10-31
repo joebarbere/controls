@@ -32,17 +32,18 @@ import { buildSymbolic, endsChecksum, find, grow, type StampProgram } from './sh
  * 2. the current phasor of every `vsource` element, in ascending branch order.
  *
  * Rows are KCL at each non-reference node (Σ y (Va − Vb) + gmin · V + source currents = 0), then one
- * row per source: Vb − Va + R·I = E. Values are RMS phasors (ADR 0011 §5.3), interleaved `re, im` in
+ * row per source: Vb − Va + Z·I = E, with Z = R + jωL its series impedance (L since F2.4). Values are RMS phasors (ADR 0011 §5.3), interleaved `re, im` in
  * the solution record exactly as DC's are, so `DcSolution` is the record for both.
  *
  * Stamps (`ac-values.ts`): a resistor's admittance 1 / R, an inductor's 1 / (jωL) = −j / (ωL), a
  * capacitor's jωC, all four-entry two-terminal stamps; `gmin` (real) from every node to the reference;
- * a voltage source's ±1 incidence and its series R. Every matrix entry is complex and stored
+ * a voltage source's ±1 incidence and its series impedance R + jωL. Every matrix entry is complex and stored
  * interleaved (`ComplexDenseLu`, `ComplexSparseLu`).
  *
- * **Singular is still structural.** With M = [[Y, B], [−Bᵀ, R]], Re(xᴴ M x) = Vᴴ Re(Y) V + Iᴴ R I
- * (the incidence terms cancel to an imaginary part, and an inductor's or capacitor's admittance is
- * purely imaginary, so it adds nothing real). Re(Y) holds gmin on every node, so the real part is
+ * **Singular is still structural.** With M = [[Y, B], [−Bᵀ, Z]] (Z the sources' series R + jωL),
+ * Re(xᴴ M x) = Vᴴ Re(Y) V + Iᴴ R I (the incidence terms cancel to an imaginary part, and an inductor's
+ * or capacitor's admittance and a source's jωL are purely imaginary, so they add nothing real). A
+ * source with series L must have R > 0 (`ac-values.ts`), so "zero-ohm" still means zero impedance. Re(Y) holds gmin on every node, so the real part is
  * positive unless V = 0 and current flows only in zero-ohm sources; M x = 0 then needs a current
  * circulating through those sources: a loop of ideal sources. So M is singular exactly when the
  * island's zero-ohm sources close a loop, as in DC, and the same union-find decides it before any
@@ -83,8 +84,8 @@ const MODE_RECORD = 1;
 const VALUE_GMIN = 0;
 const VALUE_ONE = 1;
 const VALUE_MINUS_ONE = 2;
-/** `ohms[b]` (real). */
-const VALUE_OHMS = 3;
+/** A source's series impedance R + jωL: `ohms[b]` and the `yIm[b]` slot (ωL, computed each solve). */
+const VALUE_Z = 3;
 /** The branch's admittance y (complex). */
 const VALUE_Y = 4;
 /** −y. */
@@ -216,6 +217,9 @@ export class AcSolver {
       if (branch.kind === 'vsource') {
         if (stamp !== AC_STAMP_VSOURCE) throw new Error(`AcSolver: vsource branch ${index} stamped as passive`);
         branchUnknown[index] = n++;
+        // A source's series reactance ωL at this solve's ω (+0 for a purely resistive source).
+        this.yRe[index] = 0;
+        this.yIm[index] = omega * values.seriesHenries[index];
       } else {
         if (stamp === AC_STAMP_VSOURCE) throw new Error(`AcSolver: resistor branch ${index} stamped as a vsource`);
         branchUnknown[index] = -1;
@@ -391,8 +395,10 @@ export class AcSolver {
       if (code === VALUE_GMIN) out[s] += gmin;
       else if (code === VALUE_ONE) out[s] += 1;
       else if (code === VALUE_MINUS_ONE) out[s] += -1;
-      else if (code === VALUE_OHMS) out[s] += values.ohms[branches[c]];
-      else if (code === VALUE_Y) {
+      else if (code === VALUE_Z) {
+        out[s] += values.ohms[branches[c]];
+        out[s + 1] += yIm[branches[c]];
+      } else if (code === VALUE_Y) {
         out[s] += yRe[branches[c]];
         out[s + 1] += yIm[branches[c]];
       } else {
@@ -423,8 +429,10 @@ export class AcSolver {
       if (code === VALUE_GMIN) a[at] += GMIN_S.value;
       else if (code === VALUE_ONE) a[at] += 1;
       else if (code === VALUE_MINUS_ONE) a[at] += -1;
-      else if (code === VALUE_OHMS) a[at] += this.stampOhms[branch];
-      else if (code === VALUE_Y) {
+      else if (code === VALUE_Z) {
+        a[at] += this.stampOhms[branch];
+        a[at + 1] += this.yIm[branch];
+      } else if (code === VALUE_Y) {
         a[at] += this.yRe[branch];
         a[at + 1] += this.yIm[branch];
       } else {
@@ -487,11 +495,11 @@ export class AcSolver {
           // KCL: the source's current I leaves `a` and enters `b`.
           if (ia >= 0) this.add(ia, k, VALUE_ONE, index);
           if (ib >= 0) this.add(ib, k, VALUE_MINUS_ONE, index);
-          // Vb − Va + R·I = E.
+          // Vb − Va + Z·I = E.
           if (ib >= 0) this.add(k, ib, VALUE_ONE, index);
           if (ia >= 0) this.add(k, ia, VALUE_MINUS_ONE, index);
         }
-        this.add(k, k, VALUE_OHMS, index);
+        this.add(k, k, VALUE_Z, index);
         this.rhsEmf(k, values, index);
       } else if (branch.a !== branch.b) {
         if (ia >= 0) this.add(ia, ia, VALUE_Y, index);

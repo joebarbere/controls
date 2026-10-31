@@ -34,6 +34,29 @@ export interface NominalSystem {
   readonly lineToLineV: RegionValue;
 }
 
+/** A band of steady-state voltage, as fractions of the nominal system voltage (unit `1`). */
+export interface VoltageRange {
+  readonly min: RegionValue;
+  readonly max: RegionValue;
+}
+
+/**
+ * A region's supply-voltage tolerance bands (F2.4): what a utility delivers at the **service** point
+ * (the meter) and what equipment sees at its **utilization** point (after the building's wiring drop),
+ * in the normal range A and the occasional range B. As fractions of nominal, so they apply to every
+ * nominal system of the region (120 V, 240 V, 208 V, 480 V, …) at the low-voltage level.
+ */
+export interface VoltageRanges {
+  /** Range A at the service point: the voltage a utility should hold in normal operation. */
+  readonly serviceA: VoltageRange;
+  /** Range A at the utilization point: what equipment must operate satisfactorily within. */
+  readonly utilizationA: VoltageRange;
+  /** Range B at the service point: outside range A, infrequent and limited in time, corrected soon. */
+  readonly serviceB: VoltageRange;
+  /** Range B at the utilization point. */
+  readonly utilizationB: VoltageRange;
+}
+
 /** One region's electrical profile. */
 export interface RegionProfile {
   readonly id: RegionId;
@@ -46,6 +69,13 @@ export interface RegionProfile {
   readonly threePhaseCommercial: NominalSystem;
   /** Three-phase four-wire wye, the industrial service. */
   readonly threePhaseIndustrial: NominalSystem;
+  /** Steady-state voltage ranges (F2.4): service and utilization, ranges A and B. */
+  readonly voltageRanges: VoltageRanges;
+}
+
+/** `range` at `nominalV`: the band in volts, `[min, max]`. */
+export function voltageBand(range: VoltageRange, nominalV: number): readonly [number, number] {
+  return [range.min.value * nominalV, range.max.value * nominalV];
 }
 
 const ANSI_C84_1 =
@@ -54,6 +84,31 @@ const IEEE_141 =
   'IEEE Std 141-1993 ("Red Book", Recommended Practice for Electric Power Distribution for Industrial Plants), ch. 3, "Voltage considerations", on the nominal voltages of US low-voltage systems (withdrawn; superseded by the IEEE 3000 series, IEEE Std 3001.x and 3002.x)';
 
 const volts = (value: number, source: string): RegionValue => ({ value, unit: 'V', kind: 'real-world', source });
+
+/**
+ * ANSI C84.1's voltage ranges, as facts on a 120 V base (paraphrased; the standard's table is not
+ * reproduced). The standard defines two ranges for each nominal system: **Range A**, the band service
+ * voltage is held to in normal operation and equipment is designed to work well in, and **Range B**,
+ * wider, for conditions that should be infrequent, limited in time and corrected. Each has a service
+ * (point of delivery) and a utilization (point of use) band; utilization's lower limits allow for the
+ * voltage drop of the premises wiring. On a 120 V base the boundaries are: Range A service 114–126 V,
+ * utilization 108–125 V; Range B service 110–127 V, utilization 104–127 V. Here as fractions of
+ * nominal; the standard tabulates each low-voltage system in rounded volts, which these fractions agree
+ * with within that rounding (208 V: 197.6 and 216.7 V against the table's 197 and 216). Notes taken:
+ * Range A's utilization maximum of 125 V is the standard's note lowering 126 V for 120–600 V systems;
+ * the utilization minimums are the general column (108 V and 104 V), not the slightly higher values
+ * published copies show in parentheses (110 V and 106 V), which appear to apply to circuits that also
+ * supply lighting. The 2020 text itself was not available to the realism review: no clause number is
+ * cited until someone checks it.
+ */
+const C84_1_RANGES =
+  "ANSI C84.1-2020, Electric Power Systems and Equipment, Voltage Ratings (60 Hz): Range A and Range B service and utilization limits for 120–600 V nominal systems, as given for the 120 V system in its table of nominal system voltages and voltage ranges (with its note limiting Range A utilization to 125 V) and scaled to the other low-voltage systems, which the table's rounded values follow; paraphrased as fractions of nominal (Range A service ±5 %, utilization −10 %/+4.2 %; Range B service −8.3 %/+5.8 %, utilization −13.3 %/+5.8 %); corroborated by published utility service-voltage rules (Pacific Power and PG&E voltage-tolerance documents). Utilization minimums from the general column, not the parenthesised values (which appear to apply to circuits that also supply lighting). Table not reproduced";
+const fraction = (volts120: number, what: string): RegionValue => ({
+  value: volts120 / 120,
+  unit: '1',
+  kind: 'real-world',
+  source: `${what}: ${volts120} V on a 120 V base, as a fraction of nominal. ${C84_1_RANGES}.`,
+});
 
 /** The NEC region: the United States' 60 Hz supply and its usual low-voltage systems. */
 export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
@@ -100,6 +155,18 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
       480,
       `The same 480Y/277 V system between phases: the nominal designation of 277 × √3 = 479.78 V; both members are rounded, since 480 / √3 = 277.13 V. ${ANSI_C84_1}.`,
     ),
+  },
+  voltageRanges: {
+    serviceA: { min: fraction(114, 'Range A service minimum'), max: fraction(126, 'Range A service maximum') },
+    utilizationA: {
+      min: fraction(108, 'Range A utilization minimum (the general column)'),
+      max: fraction(125, "Range A utilization maximum (the standard's 125 V note for 120–600 V systems)"),
+    },
+    serviceB: { min: fraction(110, 'Range B service minimum'), max: fraction(127, 'Range B service maximum') },
+    utilizationB: {
+      min: fraction(104, 'Range B utilization minimum (the general column)'),
+      max: fraction(127, 'Range B utilization maximum'),
+    },
   },
 });
 

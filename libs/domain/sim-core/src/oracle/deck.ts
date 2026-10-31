@@ -19,7 +19,8 @@ import { type OracleCircuit, type OracleElement, ORACLE_FREQUENCY_HZ, valueText 
  *   `i(VS<k>)` is element k's current, positive from `a` to `b`, straight from ngspice's solution
  *   vector (ngspice reports no complex device currents in AC). A sense source changes no voltage.
  * - **Voltage sources** are `V<k>` (the EMF, + at the internal node `e<k>`) in series with `RI<k>` (the
- *   internal resistance) to `b`.
+ *   internal resistance) to `b`, or, with a series inductance (AC, F2.4), `RI<k>` to `m<k>` and `LI<k>`
+ *   on to `b`.
  * - `noopac`: the AC analysis skips the DC operating point, which would be singular for a loop of
  *   inductors and is meaningless for a phasor circuit.
  * - **Printing:** `numdgt=17` prints 17 significant digits, enough to round-trip every double, so the
@@ -51,7 +52,17 @@ function elementLines(ac: boolean, k: number, element: OracleElement): string[] 
       const emf = valueText(element.emfV);
       // dc: the EMF; ac: no DC value, the phasor as magnitude (RMS) and angle (degrees).
       const spec = ac ? `DC 0 AC ${emf} ${element.angleDeg}` : `DC ${emf}`;
-      return [sense, `V${k} ${e} ${s} ${spec}`, `RI${k} ${e} ${element.b} ${valueText(element.internalResistanceOhm)}`];
+      const r = valueText(element.internalResistanceOhm);
+      if (element.seriesInductanceH === undefined)
+        return [sense, `V${k} ${e} ${s} ${spec}`, `RI${k} ${e} ${element.b} ${r}`];
+      // A series inductance (F2.4) after the internal resistance, through a second internal node.
+      const m = `m${k}`;
+      return [
+        sense,
+        `V${k} ${e} ${s} ${spec}`,
+        `RI${k} ${e} ${m} ${r}`,
+        `LI${k} ${m} ${element.b} ${valueText(element.seriesInductanceH)}`,
+      ];
     }
     case 'isource':
       return [sense, `I${k} ${s} ${element.b} DC ${valueText(element.currentA)}`];

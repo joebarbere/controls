@@ -214,7 +214,14 @@ describe('SimEngine: electrical results', () => {
   });
 
   it('never presents an unmodelled island as a reading: the real lamp has no filament model until F2.5', () => {
-    expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual(['battery', 'supply.bench', 'supply.dinPsu']);
+    expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual([
+      'battery',
+      'generator.portable',
+      'supply.bench',
+      'supply.dinPsu',
+      'utility.splitPhase',
+      'utility.threePhase',
+    ]);
     const engine = SimEngine.start(benchLamp(true));
     const [island] = engine.islands();
     expect(island).toMatchObject({ kind: 'dc', status: 'unmodelled', iterations: 0, entities: [1, 2, 3] });

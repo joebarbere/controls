@@ -11,7 +11,8 @@ VS0 1 s0 0
 C0 s0 6 18e-5
 VS1 0 s1 0
 V1 e1 s1 DC 0 AC 68e0 0
-RI1 e1 1 33e-1
+RI1 e1 m1 33e-1
+LI1 m1 1 27e-5
 VS2 4 s2 0
 C2 s2 3 33e-6
 VS3 1 s3 0
@@ -29,7 +30,8 @@ VS8 5 s8 0
 R8 s8 4 47e2
 VS9 0 s9 0
 V9 e9 s9 DC 0 AC 12e0 180
-RI9 e9 3 33e-1
+RI9 e9 m9 33e-1
+LI9 m9 3 39e-7
 VS10 0 s10 0
 R10 s10 5 10e3
 .control

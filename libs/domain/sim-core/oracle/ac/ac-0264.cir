@@ -10,7 +10,8 @@ VS1 3 s1 0
 R1 s1 0 68e2
 VS2 0 s2 0
 V2 e2 s2 DC 0 AC 27e-1 0
-RI2 e2 2 39e-3
+RI2 e2 m2 39e-3
+LI2 m2 2 10e-5
 VS3 2 s3 0
 R3 s3 1 82e-1
 VS4 0 s4 0

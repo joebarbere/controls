@@ -43,7 +43,8 @@ export interface OracleNetlistBranch {
   readonly b: number;
   /**
    * The element's values, keys sorted: `resistanceOhm`; a DC `vsource`'s `emfV`, an AC one's phasor
-   * `emfRe` and `emfIm` (from the exact angle constants), and `internalResistanceOhm`; `currentA`;
+   * `emfRe` and `emfIm` (from the exact angle constants), `internalResistanceOhm` and (AC) its
+   * `seriesInductanceH` (0 when it has none); `currentA`;
    * `inductanceH`; `capacitanceF`.
    */
   readonly values: Readonly<Record<string, number>>;
@@ -84,13 +85,14 @@ function branchOf(domain: OracleDomain, index: number, element: OracleElement): 
       const internalResistanceOhm = valueNumber(element.internalResistanceOhm);
       if (domain === 'dc') return { index, kind, source: domain, a, b, values: { emfV: emf, internalResistanceOhm } };
       const unit = phasorUnit(element.angleDeg);
+      const seriesInductanceH = element.seriesInductanceH === undefined ? 0 : valueNumber(element.seriesInductanceH);
       return {
         index,
         kind,
         source: domain,
         a,
         b,
-        values: { emfIm: emf * unit.im, emfRe: emf * unit.re, internalResistanceOhm },
+        values: { emfIm: emf * unit.im, emfRe: emf * unit.re, internalResistanceOhm, seriesInductanceH },
       };
     }
   }
@@ -211,6 +213,7 @@ export function oracleAcInput(circuit: OracleCircuit): {
           valueNumber(element.emfV),
           element.angleDeg,
           valueNumber(element.internalResistanceOhm),
+          element.seriesInductanceH === undefined ? 0 : valueNumber(element.seriesInductanceH),
         );
         return { ...base, kind: 'vsource', source: 'ac' };
       default:

@@ -8,10 +8,12 @@ RG4 4 0 1000000000000
 RG5 5 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 22e0 120
-RI0 e0 3 18e-3
+RI0 e0 m0 18e-3
+LI0 m0 3 47e-7
 VS1 5 s1 0
 V1 e1 s1 DC 0 AC 22e0 180
-RI1 e1 2 47e-1
+RI1 e1 m1 47e-1
+LI1 m1 2 18e-5
 VS2 4 s2 0
 L2 s2 0 82e-3
 VS3 0 s3 0
@@ -27,7 +29,8 @@ V7 e7 s7 DC 0 AC 10e0 0
 RI7 e7 3 68e-1
 VS8 2 s8 0
 V8 e8 s8 DC 0 AC 27e0 180
-RI8 e8 3 68e-1
+RI8 e8 m8 68e-1
+LI8 m8 3 33e-6
 .control
 set numdgt=17
 ac lin 1 60 60

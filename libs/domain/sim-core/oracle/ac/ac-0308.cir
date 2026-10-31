@@ -20,7 +20,8 @@ V4 e4 s4 DC 0 AC 27e0 180
 RI4 e4 5 47e-1
 VS5 0 s5 0
 V5 e5 s5 DC 0 AC 56e0 120
-RI5 e5 2 12e-2
+RI5 e5 m5 12e-2
+LI5 m5 2 12e-6
 VS6 1 s6 0
 R6 s6 0 15e-2
 VS7 3 s7 0

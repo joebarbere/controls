@@ -806,6 +806,7 @@ export class SimEngine {
         params,
         bag,
         branches: branchesOf.get(id) ?? [],
+        frequencyHz: this.frequencyHz,
         stream: () => deriveStream(seed, entityStreamKey(id)),
       });
     }

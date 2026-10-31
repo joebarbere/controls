@@ -26,7 +26,8 @@ VS5 2 s5 0
 R5 s5 1 27e3
 VS6 3 s6 0
 V6 e6 s6 DC 0 AC 22e-1 180
-RI6 e6 7 22e-2
+RI6 e6 m6 22e-2
+LI6 m6 7 12e-6
 VS7 9 s7 0
 C7 s7 8 47e-5
 VS8 7 s8 0

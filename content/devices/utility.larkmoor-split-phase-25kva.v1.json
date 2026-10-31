@@ -1,0 +1,40 @@
+{
+  "id": "utility.larkmoor-split-phase-25kva",
+  "version": 1,
+  "title": "120/240 V split-phase utility service, 25 kVA transformer",
+  "brand": "Larkmoor Power",
+  "modelName": "LP-SP25",
+  "category": "source",
+  "sizeMm": { "widthMm": 300, "heightMm": 300, "depthMm": 200 },
+  "terminals": [
+    { "id": "l1", "label": "L1", "positionMm": { "x": 50, "y": 250, "z": 200 } },
+    { "id": "l2", "label": "L2", "positionMm": { "x": 250, "y": 250, "z": 200 } },
+    { "id": "n", "label": "N", "positionMm": { "x": 150, "y": 250, "z": 200 } }
+  ],
+  "model": {
+    "kind": "utility.splitPhase",
+    "params": { "ratedKva": 25, "percentImpedance": 2, "xOverR": 2, "lineToNeutralV": 120 }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "pole-transformer-class",
+      "kind": "real-world",
+      "citation": "A single-phase overhead (pole-mounted) distribution transformer serving a house: 25 kVA is a common size for one to a few homes, with an impedance of about 1.5–3 % and an X/R ratio of about 1–3, typical of published manufacturers' data and utility service guides for small single-phase units (paraphrased, not one vendor's). 2 % and an X/R of 2 are taken: a full-winding impedance of 0.02 × 240² / 25 000 = 46.1 mΩ, about 5.2 kA of bolted fault current across L1–L2, the infinite-primary (transformer-limited) available fault current: an upper bound, with no utility system impedance.",
+      "covers": ["model.params.ratedKva", "model.params.percentImpedance", "model.params.xOverR"]
+    },
+    {
+      "id": "split-phase-nominal",
+      "kind": "real-world",
+      "citation": "120 V from each line to the neutral (the secondary's centre tap), the 120/240 V single-phase three-wire nominal system of ANSI C84.1-2020 (the region profile's split-phase system).",
+      "covers": ["model.params.lineToNeutralV"]
+    },
+    {
+      "id": "headless-layout",
+      "kind": "game-design",
+      "citation": "game-design: a placeholder size and terminal layout. The service is headless in P2 (no service entrance or meter base until P4), so it is not drawn.",
+      "covers": ["sizeMm", "terminals"]
+    }
+  ],
+  "extensions": {}
+}

@@ -126,6 +126,23 @@ describe('generateOracleCircuit', () => {
   });
 });
 
+describe('series inductance behind AC sources (F2.4)', () => {
+  it("about half the AC corpus's sources have one, none of the DC corpus's, each inside its range", () => {
+    const sources = (domain: 'dc' | 'ac') =>
+      oracleCorpus(domain).flatMap((c) => c.elements.filter((e) => e.kind === 'vsource'));
+    expect(sources('dc').some((e) => e.kind === 'vsource' && e.seriesInductanceH !== undefined)).toBe(false);
+    const ac = sources('ac');
+    const withL = ac.filter((e) => e.kind === 'vsource' && e.seriesInductanceH !== undefined);
+    expect(withL.length / ac.length).toBeGreaterThan(0.4);
+    expect(withL.length / ac.length).toBeLessThan(0.6);
+    for (const e of withL) {
+      const henries = valueNumber((e as Extract<OracleElement, { kind: 'vsource' }>).seriesInductanceH as never);
+      expect(henries).toBeGreaterThanOrEqual(1e-6);
+      expect(henries).toBeLessThanOrEqual(8.2e-4);
+    }
+  });
+});
+
 describe('articulation', () => {
   const r = { mantissa: 10, exponent: 0 };
   const R = (a: number, b: number): OracleElement => ({ kind: 'resistor', a, b, resistanceOhm: r });

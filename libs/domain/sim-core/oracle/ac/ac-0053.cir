@@ -4,7 +4,8 @@ controls oracle ac-0053
 RG1 1 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 22e-1 -120
-RI0 e0 1 15e-3
+RI0 e0 m0 15e-3
+LI0 m0 1 68e-5
 VS1 1 s1 0
 R1 s1 0 10e3
 VS2 1 s2 0

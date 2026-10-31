@@ -13,7 +13,8 @@ VS3 2 s3 0
 R3 s3 1 82e3
 VS4 0 s4 0
 V4 e4 s4 DC 0 AC 39e1 0
-RI4 e4 1 10e-2
+RI4 e4 m4 10e-2
+LI4 m4 1 27e-6
 .control
 set numdgt=17
 ac lin 1 60 60

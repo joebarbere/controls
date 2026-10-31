@@ -21,12 +21,14 @@ VS4 5 s4 0
 C4 s4 1 82e-5
 VS5 5 s5 0
 V5 e5 s5 DC 0 AC 56e1 180
-RI5 e5 1 47e-2
+RI5 e5 m5 47e-2
+LI5 m5 1 12e-6
 VS6 5 s6 0
 C6 s6 6 39e-4
 VS7 4 s7 0
 V7 e7 s7 DC 0 AC 47e-1 120
-RI7 e7 5 22e-1
+RI7 e7 m7 22e-1
+LI7 m7 5 39e-6
 VS8 3 s8 0
 L8 s8 4 56e-4
 .control

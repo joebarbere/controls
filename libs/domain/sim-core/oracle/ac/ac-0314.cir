@@ -54,7 +54,8 @@ VS17 11 s17 0
 R17 s17 5 27e0
 VS18 5 s18 0
 V18 e18 s18 DC 0 AC 56e0 -120
-RI18 e18 12 27e-2
+RI18 e18 m18 27e-2
+LI18 m18 12 68e-6
 .control
 set numdgt=17
 ac lin 1 60 60

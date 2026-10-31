@@ -50,6 +50,11 @@ export const ORACLE_RANGES = {
   emfV: { minExponent: -1, maxExponent: 1 },
   /** 10 mΩ … 8.2 Ω behind each voltage source. */
   internalResistanceOhm: { minExponent: -3, maxExponent: -1 },
+  /**
+   * 1.0 µH … 0.82 mH behind half the AC voltage sources (F2.4: source reactance), about 0.4 mΩ … 0.31 Ω
+   * at 60 Hz, so X/R spans well below and above 1 against the internal resistance.
+   */
+  sourceInductanceH: { minExponent: -7, maxExponent: -5 },
   /** 1.0 mA … 8.2 A. */
   currentA: { minExponent: -4, maxExponent: -1 },
   /** 0.10 mH … 0.82 H: about 0.04 Ω … 310 Ω of reactance at 60 Hz. */
@@ -204,8 +209,8 @@ function drawElement(rng: Sfc32, domain: OracleDomain, kind: OracleElementKind, 
   switch (kind) {
     case 'resistor':
       return { kind, a, b, resistanceOhm: drawValue(rng, ORACLE_RANGES.resistanceOhm) };
-    case 'vsource':
-      return {
+    case 'vsource': {
+      const source = {
         kind,
         a,
         b,
@@ -213,6 +218,8 @@ function drawElement(rng: Sfc32, domain: OracleDomain, kind: OracleElementKind, 
         angleDeg: domain === 'ac' ? PHASOR_ANGLES[rng.nextInt(0, PHASOR_ANGLES.length - 1)] : 0,
         internalResistanceOhm: drawValue(rng, ORACLE_RANGES.internalResistanceOhm),
       };
+      return source;
+    }
     case 'isource':
       return { kind, a, b, currentA: drawValue(rng, ORACLE_RANGES.currentA) };
     case 'inductor':
@@ -278,12 +285,29 @@ export function generateOracleCircuit(domain: OracleDomain, seed: number, index:
     connect(pick(rng, TREE_WEIGHTS[domain]), p[rng.nextInt(0, p.length - 1)], q[rng.nextInt(0, q.length - 1)]);
   }
   shuffle(rng, elements);
+  // AC: about half the sources get a series inductance (F2.4's source reactance), drawn from a stream
+  // of their own, so the circuit stream is untouched and each existing circuit only gains `LI` lines.
+  const withL = domain === 'ac' ? sourceInductances(seed, index, elements) : elements;
   return {
     name: oracleCircuitName(domain, index),
     domain,
     seed,
     index,
     nodeCount,
-    elements: referencedToGround(elements),
+    elements: referencedToGround(withL),
   };
+}
+
+/** The stream key of an AC circuit's source inductances: its circuit key plus `:source-l`. */
+export function sourceInductanceStreamKey(index: number): string {
+  return `${oracleStreamKey('ac', index)}:source-l`;
+}
+
+/** Gives about half the voltage sources of `elements`, in order, a series inductance from their own stream. */
+function sourceInductances(seed: number, index: number, elements: readonly OracleElement[]): OracleElement[] {
+  const rng = deriveStream(seed, sourceInductanceStreamKey(index));
+  return elements.map((element) => {
+    if (element.kind !== 'vsource' || rng.nextInt(0, 1) === 0) return element;
+    return { ...element, seriesInductanceH: drawValue(rng, ORACLE_RANGES.sourceInductanceH) };
+  });
 }

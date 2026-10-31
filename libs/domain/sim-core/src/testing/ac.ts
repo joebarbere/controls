@@ -99,6 +99,11 @@ export function admittance({ values, frequencyHz }: AcCircuit, branch: number): 
 /** A source's EMF phasor. */
 const emf = (values: AcBranchValues, branch: number): Phasor => [values.emfRe[branch], values.emfIm[branch]];
 
+/** A source's series impedance R + jωL at the circuit's ω, as the solver stamps it (F2.4's L). */
+export function sourceImpedance({ values, frequencyHz }: AcCircuit, branch: number): Phasor {
+  return [values.ohms[branch], angularFrequency(frequencyHz) * values.seriesHenries[branch]];
+}
+
 /**
  * A branch's rounding term in the floor policy, with complex magnitudes: 16 ε |y_b| (|V_a| + |V_b|) for
  * a passive branch. A source behind a series R > 0 is a branch of admittance 1 / R too: its current is
@@ -113,18 +118,18 @@ export function acBranchRounding(circuit: AcCircuit, solution: DcSolution, branc
   const volts = cabs(phasorV(solution, a)) + cabs(phasorV(solution, b));
   const y = admittance(circuit, branch);
   if (y !== null) return 16 * EPS * cabs(y) * volts;
-  const ohms = circuit.values.ohms[branch];
-  return ohms > 0 ? (16 * EPS * (volts + cabs(emf(circuit.values, branch)))) / ohms : 0;
+  const z = cabs(sourceImpedance(circuit, branch));
+  return z > 0 ? (16 * EPS * (volts + cabs(emf(circuit.values, branch)))) / z : 0;
 }
 
-/** |Va| + |Vb| + |R I| + |E|: a source row's terms. */
-function sourceRowTerm({ netlist, values }: AcCircuit, solution: DcSolution, index: number): number {
-  const { a, b } = netlist.branches[index];
+/** |Va| + |Vb| + |Z I| + |E|: a source row's terms. */
+function sourceRowTerm(circuit: AcCircuit, solution: DcSolution, index: number): number {
+  const { a, b } = circuit.netlist.branches[index];
   return (
     cabs(phasorV(solution, a)) +
     cabs(phasorV(solution, b)) +
-    values.ohms[index] * cabs(phasorI(solution, index)) +
-    cabs(emf(values, index))
+    cabs(sourceImpedance(circuit, index)) * cabs(phasorI(solution, index)) +
+    cabs(emf(circuit.values, index))
   );
 }
 
@@ -205,7 +210,7 @@ function sourceRowBound(circuit: AcCircuit, solution: DcSolution, index: number,
 const sources = ({ netlist }: AcCircuit, island: NetlistIsland) =>
   island.branches.filter((index) => netlist.branches[index].kind === 'vsource');
 
-/** The source rows Vb − Va + R I = E: the worst |residual| ÷ its bound (≤ 1 holds). */
+/** The source rows Vb − Va + Z I = E: the worst |residual| ÷ its bound (≤ 1 holds). */
 export function acSourceRows(circuit: AcCircuit, solution: DcSolution, island: NetlistIsland): number {
   const { netlist, values } = circuit;
   const rows = sources(circuit, island);
@@ -215,7 +220,7 @@ export function acSourceRows(circuit: AcCircuit, solution: DcSolution, island: N
     const { a, b } = netlist.branches[index];
     const acc = new ComplexAccumulator();
     if (a !== b) acc.addScaledDifference([1, 0], phasorV(solution, b), phasorV(solution, a));
-    acc.addProduct([values.ohms[index], 0], phasorI(solution, index));
+    acc.addProduct(sourceImpedance(circuit, index), phasorI(solution, index));
     const e = emf(values, index);
     acc.add([-e[0], -e[1]]);
     worst = Math.max(worst, cabs(acc.value) / sourceRowBound(circuit, solution, index, largest));
@@ -297,6 +302,10 @@ export function acPower(
         const e = emf(values, index);
         const s = cmul(e, conj(i));
         const loss = i2 * values.ohms[index];
+        // A source's series reactance absorbs vars like an inductor: ωL |I|² (F2.4).
+        const q = i2 * omega * values.seriesHenries[index];
+        reactive.absorbed += q;
+        reactive.scale += q;
         // Each part of E conj(I) carries rounding of order ε |E| |I| (its two products), so both
         // balances take the apparent power |E| |I| as the term: a purely resistive island's Q is 0
         // only to that (a self-looped source's Q = Im(|E|² / R) came out 2.9e-11 var on 1e5 VA).
@@ -414,7 +423,7 @@ export function acLinearResidual(netlist: Netlist, frequencyHz: number, parts: r
       parts.forEach((p, j) => {
         const c = p.coefficient;
         if (a !== b) acc.addScaledDifference(c, phasorV(p.solution, b), phasorV(p.solution, a));
-        acc.addProduct(cmul(c, [p.values.ohms[index], 0]), phasorI(p.solution, index));
+        acc.addProduct(cmul(c, sourceImpedance(circuitOf(p), index)), phasorI(p.solution, index));
         acc.addProduct([-c[0], -c[1]], emf(p.values, index));
         const circuit = circuitOf(p);
         bound +=

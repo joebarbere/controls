@@ -508,15 +508,15 @@ Acceptance:
   - current limit with hiccup mode: overload for t_detect, off for t_off, then retry, with tick-exact timing;
   - a short circuit gives a periodic hiccup at the documented period ±1 tick;
   - values come from typical published behaviour, attributed to a fictional model.
-- [ ] **Utility service, 120/240 split-phase:**
+- [x] **Utility service, 120/240 split-phase:**
   - L1, L2 and N as separate conductor nodes;
   - behind a source impedance derived from the transformer's kVA and %Z, using sourced typical values;
   - golden: the available bolted fault current at the service is V/|Z| within 0.5 %.
 
   **Headless only in P2**; the service entrance and load centre are P4.
 
-- [ ] **Three-phase 208Y/120 and 480Y/277.** Golden fixtures: line-to-line = √3 × line-to-neutral (via `sqrt`), and a balanced load's neutral current is about 0. **Headless only**; gameplay is P6.
-- [ ] **Portable generator (stub):** a registered model with nameplate EMF and source impedance, and no engine dynamics. Not placeable, and documented as a stub; generators and transfer switches are in the backlog.
+- [x] **Three-phase 208Y/120 and 480Y/277.** Golden fixtures: line-to-line = √3 × line-to-neutral (via `sqrt`), and a balanced load's neutral current is about 0. **Headless only**; gameplay is P6.
+- [x] **Portable generator (stub):** a registered model with nameplate EMF and source impedance, and no engine dynamics. Not placeable, and documented as a stub; generators and transfer switches are in the backlog.
 - [x] The battery, bench supply and DIN PSU can be placed on the bench, with procedural recipes and scene-graph snapshots. Their labels use fictional brands.
 
 _Part 1 (battery, bench supply, DIN PSU, recipes) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#power-sources-f24), [simulation caveats](../docs/caveats/simulation.md#power-sources-f24)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Part 2 (utility, three-phase, generator stub, the C84.1 bands) is the next PR in the stack. Notes:_
@@ -529,6 +529,15 @@ _Part 1 (battery, bench supply, DIN PSU, recipes) done 2026-10-31 ([simulation a
 - _**`SIM_ENGINE_VERSION` 4:** `SIM_STEP_HASH` and `SIM_STEP_SNAPSHOT_HASH` re-pinned (Node and Chromium), a new `sim-step-engine-4.ctrl` fixture; `BENCH_LEADS_HASH` didn't move._
 - _**Placing:** the recipes draw from the catalogue entry; the mouse can't place catalogue devices yet (`propFootprint` covers built-in props only), so they are placed with `entity.place` and an orientation._
 - _**Reviews of part 1 (2026-10-31):** `electrical-realism-reviewer` signed off on condition of its findings 1–4: the battery now collapses below 2 % and stops accepting charge towards 14.4 V (no energy created), and the Peukert gap is a caveat. `save-format-guardian`: every new kind's `topologyHash` pinned (with a guard over `MODEL_KINDS`), control values range-checked at load, `engine-changed` loads solve again from `sim: null`, the `sources-engine-4.ctrl` fixture and an engine-version collision guard. `test-engineer`: reload goldens (mid-hiccup, inside the hysteresis band, the battery), the source sessions split from the engine sessions' F2.3a mix, the unsettled-limit and charge/clamp tests, DIN PSU allocation gates, and the sources scenario pinned in Node and Chromium._
+
+_Part 2 (utility, three-phase, generator stub, the C84.1 bands) done 2026-10-31, stacked on part 1; `electrical-realism-reviewer` and `test-engineer` reviews pending. Notes:_
+
+- _**Source reactance:** the AC solver's `vsource` gained a series inductance (Z = R + jωL, R > 0 required with it, value code `VALUE_Z`), and the AC oracle corpus was extended (half its sources carry one) and regenerated with ngspice 47: worst 3.6e-5 of the allowance for volts, 4.6e-5 for amps (ADR 0012, amended), the inductance drawn from its own stream so each deck only gains its `LI` lines. No solver pin moved; no `SIM_ENGINE_VERSION` bump._
+- _**Impedance:** from kVA, %Z and X/R on the source's own base (only `Math.sqrt`), V_LL = √3 · V_LN for wye, never the nominal name. Split-phase halves take half the full winding's impedance, so the L–N bolted fault equals the L–L one (an abstraction: real centre-tapped units give about 1.5× on L–N). A new hook, `SimDevice.frequencyHz`, gives a bank the region frequency (L = X/ω)._
+- _**Typical values** (for the realism review): 25 kVA, 2 %, X/R 2 (split-phase, 5.2 kA bolted); 150 kVA, 4 %, X/R 3 (208Y/120 V, 10.4 kA); 1000 kVA, 5.75 %, X/R 6 (480Y/277 V, 20.9 kA); generator stub 7.5 kVA, 15 %, X/R 5 (208 A)._
+- _**ANSI C84.1:** `RegionProfile.voltageRanges` holds Range A and B, service and utilization, as fractions of nominal on a 120 V base (114–126, 108–125, 110–127, 104–127 V), paraphrased; the clause references are for `electrical-realism-reviewer` to confirm against the 2020 edition._
+- _**Not yet:** the services' device records and the sources' nominal bands (`NOMINAL_BANDS`) are F2.3b's protocol tables; the generator has no catalogue entry (not placeable, by the plan)._
+- _**Reviews of part 2 (2026-10-31):** realism: the split-phase comment names the T-equivalent (I_LN / I_LL ≈ 1.5) that P4 must adopt, the C84.1 citation follows the reviewer's wording (no clause number, the 125 V note, the general utilization column, agreement within the table's rounding), and the fault currents say they are transformer-limited. Tests: the oracle's inductance from a derived stream (reviewable diff), sparse warm-equals-cold and bit-identity with series L, a 50 Hz bank test, services in the F2.4 source sessions, the mains scenario pinned in Node and Chromium, and an allocation gate for a split-phase service (the winding values precomputed, the source Z stamped in place). Save format: `topologyHash` pinned for the utility kinds and the generator stub (through the test catalogue)._
 
 ### F2.5 First loads and switching
 
@@ -681,7 +690,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
-| F2.4    | Power sources                                     | 🟡 Part 1 done (part 2: utility, three-phase) |
+| F2.4    | Power sources                                     | ✅ Done (reviews pending)                     |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
 | F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |

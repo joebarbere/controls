@@ -7,7 +7,8 @@ VS0 2 s0 0
 R0 s0 0 15e1
 VS1 0 s1 0
 V1 e1 s1 DC 0 AC 27e0 -120
-RI1 e1 1 68e-3
+RI1 e1 m1 68e-3
+LI1 m1 1 47e-7
 VS2 1 s2 0
 C2 s2 2 22e-4
 .control

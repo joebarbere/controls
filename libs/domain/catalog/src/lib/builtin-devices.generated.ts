@@ -433,5 +433,269 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     }
   ],
   "extensions": {}
+},
+{
+  "id": "utility.larkmoor-208y120-150kva",
+  "version": 1,
+  "title": "208Y/120 V three-phase utility service, 150 kVA transformer",
+  "brand": "Larkmoor Power",
+  "modelName": "LP-3W150",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 300,
+    "depthMm": 200
+  },
+  "terminals": [
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 50,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 150,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "l3",
+      "label": "L3",
+      "positionMm": {
+        "x": 250,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 350,
+        "y": 250,
+        "z": 200
+      }
+    }
+  ],
+  "model": {
+    "kind": "utility.threePhase",
+    "params": {
+      "ratedKva": 150,
+      "percentImpedance": 4,
+      "xOverR": 3,
+      "lineToNeutralV": 120
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "commercial-transformer-class",
+      "kind": "real-world",
+      "citation": "A three-phase pad-mounted distribution transformer for a small commercial building: 150 kVA, with an impedance of about 2–5 % and an X/R ratio of about 2–4, typical of published manufacturers' data for the size (paraphrased, not one vendor's). 4 % and an X/R of 3 are taken: per phase 0.04 × (√3 × 120)² / 150 000 = 11.5 mΩ, about 10.4 kA of bolted three-phase fault current, the infinite-primary (transformer-limited) available fault current: an upper bound, with no utility system impedance.",
+      "covers": [
+        "model.params.ratedKva",
+        "model.params.percentImpedance",
+        "model.params.xOverR"
+      ]
+    },
+    {
+      "id": "wye-208-nominal",
+      "kind": "real-world",
+      "citation": "120 V from each phase to the neutral of the 208Y/120 V three-phase four-wire nominal system of ANSI C84.1-2020 (the region profile's commercial system); 208 V is the rounded name of 120 × √3 = 207.85 V.",
+      "covers": [
+        "model.params.lineToNeutralV"
+      ]
+    },
+    {
+      "id": "headless-layout",
+      "kind": "game-design",
+      "citation": "game-design: a placeholder size and terminal layout. Three-phase service is headless in P2 (gameplay is P6), so it is not drawn.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "utility.larkmoor-480y277-1000kva",
+  "version": 1,
+  "title": "480Y/277 V three-phase utility service, 1000 kVA transformer",
+  "brand": "Larkmoor Power",
+  "modelName": "LP-3W1000",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 300,
+    "depthMm": 200
+  },
+  "terminals": [
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 50,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 150,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "l3",
+      "label": "L3",
+      "positionMm": {
+        "x": 250,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 350,
+        "y": 250,
+        "z": 200
+      }
+    }
+  ],
+  "model": {
+    "kind": "utility.threePhase",
+    "params": {
+      "ratedKva": 1000,
+      "percentImpedance": 5.75,
+      "xOverR": 6,
+      "lineToNeutralV": 277
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "industrial-transformer-class",
+      "kind": "real-world",
+      "citation": "A three-phase liquid-filled substation or pad-mounted transformer for an industrial plant: 1000 kVA, with an impedance of 5.75 %, a long-standing typical value for the size, and an X/R ratio of about 5–7, from published manufacturers' data and short-circuit study guides (paraphrased, not one vendor's). An X/R of 6 is taken: per phase 0.0575 × (√3 × 277)² / 1 000 000 = 13.2 mΩ, about 20.9 kA of bolted three-phase fault current, the infinite-primary (transformer-limited) available fault current: an upper bound, with no utility system impedance.",
+      "covers": [
+        "model.params.ratedKva",
+        "model.params.percentImpedance",
+        "model.params.xOverR"
+      ]
+    },
+    {
+      "id": "wye-480-nominal",
+      "kind": "real-world",
+      "citation": "277 V from each phase to the neutral of the 480Y/277 V three-phase four-wire nominal system of ANSI C84.1-2020 (the region profile's industrial system); 480 V is the rounded name of 277 × √3 = 479.78 V.",
+      "covers": [
+        "model.params.lineToNeutralV"
+      ]
+    },
+    {
+      "id": "headless-layout",
+      "kind": "game-design",
+      "citation": "game-design: a placeholder size and terminal layout. Three-phase service is headless in P2 (gameplay is P6), so it is not drawn.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "utility.larkmoor-split-phase-25kva",
+  "version": 1,
+  "title": "120/240 V split-phase utility service, 25 kVA transformer",
+  "brand": "Larkmoor Power",
+  "modelName": "LP-SP25",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 300,
+    "heightMm": 300,
+    "depthMm": 200
+  },
+  "terminals": [
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 50,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 250,
+        "y": 250,
+        "z": 200
+      }
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 150,
+        "y": 250,
+        "z": 200
+      }
+    }
+  ],
+  "model": {
+    "kind": "utility.splitPhase",
+    "params": {
+      "ratedKva": 25,
+      "percentImpedance": 2,
+      "xOverR": 2,
+      "lineToNeutralV": 120
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "pole-transformer-class",
+      "kind": "real-world",
+      "citation": "A single-phase overhead (pole-mounted) distribution transformer serving a house: 25 kVA is a common size for one to a few homes, with an impedance of about 1.5–3 % and an X/R ratio of about 1–3, typical of published manufacturers' data and utility service guides for small single-phase units (paraphrased, not one vendor's). 2 % and an X/R of 2 are taken: a full-winding impedance of 0.02 × 240² / 25 000 = 46.1 mΩ, about 5.2 kA of bolted fault current across L1–L2, the infinite-primary (transformer-limited) available fault current: an upper bound, with no utility system impedance.",
+      "covers": [
+        "model.params.ratedKva",
+        "model.params.percentImpedance",
+        "model.params.xOverR"
+      ]
+    },
+    {
+      "id": "split-phase-nominal",
+      "kind": "real-world",
+      "citation": "120 V from each line to the neutral (the secondary's centre tap), the 120/240 V single-phase three-wire nominal system of ANSI C84.1-2020 (the region profile's split-phase system).",
+      "covers": [
+        "model.params.lineToNeutralV"
+      ]
+    },
+    {
+      "id": "headless-layout",
+      "kind": "game-design",
+      "citation": "game-design: a placeholder size and terminal layout. The service is headless in P2 (no service entrance or meter base until P4), so it is not drawn.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
 }
 ];

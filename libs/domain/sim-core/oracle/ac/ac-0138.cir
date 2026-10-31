@@ -31,7 +31,8 @@ V8 e8 s8 DC 0 AC 18e1 -120
 RI8 e8 3 47e-3
 VS9 7 s9 0
 V9 e9 s9 DC 0 AC 27e0 120
-RI9 e9 2 47e-3
+RI9 e9 m9 47e-3
+LI9 m9 2 10e-6
 .control
 set numdgt=17
 ac lin 1 60 60

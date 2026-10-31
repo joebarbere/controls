@@ -17,7 +17,8 @@ V0 e0 s0 DC 0 AC 33e1 0
 RI0 e0 7 68e-3
 VS1 11 s1 0
 V1 e1 s1 DC 0 AC 27e0 120
-RI1 e1 1 39e-2
+RI1 e1 m1 39e-2
+LI1 m1 1 27e-6
 VS2 0 s2 0
 L2 s2 2 82e-2
 VS3 8 s3 0
@@ -49,7 +50,8 @@ VS15 5 s15 0
 L15 s15 0 33e-3
 VS16 6 s16 0
 V16 e16 s16 DC 0 AC 10e0 120
-RI16 e16 9 56e-2
+RI16 e16 m16 56e-2
+LI16 m16 9 39e-6
 .control
 set numdgt=17
 ac lin 1 60 60

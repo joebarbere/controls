@@ -93,3 +93,32 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
   expect(await hook(page, (h) => h.hash())).toBe(SOURCES_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(SOURCES_SNAPSHOT_HASH);
 });
+
+/**
+ * F2.4 part 2: the split-phase service's series-inductance phasors across runtimes.
+ * `apps/sim-cli/scenarios/mains.console` must reach the hashes `apps/sim-cli/src/mains.spec.ts` pins.
+ */
+const MAINS_HASH = '9d4d91f1172c61bfadb578c2bebfd63938261a07326820dbf43f8fb931c2cc8b';
+const MAINS_SNAPSHOT_HASH = '3283a86c3478dff172fb2ea286970803496055710dc9d3e66824c08f43205a62';
+
+test('the mains scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  await page.keyboard.press('Backquote');
+  await expect(page.getByRole('textbox', { name: 'Console input' })).toBeFocused();
+
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.type('run');
+  await page.keyboard.press('Enter');
+  const text = readFileSync(join(__dirname, '../../sim-cli/scenarios/mains.console'));
+  await (await chooser).setFiles({ name: 'mains.console', mimeType: 'text/plain', buffer: text });
+  await expect(page.getByTestId('console-output').locator('.entry').last()).toHaveText(
+    'Ran 4 commands from mains.console.',
+  );
+
+  expect(await hook(page, (h) => h.world().tick)).toBe(100);
+  expect(await hook(page, (h) => h.hash())).toBe(MAINS_HASH);
+  expect(await hook(page, (h) => h.snapshotHash())).toBe(MAINS_SNAPSHOT_HASH);
+});

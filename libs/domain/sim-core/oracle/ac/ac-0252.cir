@@ -6,7 +6,8 @@ VS0 0 s0 0
 R0 s0 1 47e3
 VS1 0 s1 0
 V1 e1 s1 DC 0 AC 15e1 0
-RI1 e1 1 27e-2
+RI1 e1 m1 27e-2
+LI1 m1 1 12e-6
 .control
 set numdgt=17
 ac lin 1 60 60

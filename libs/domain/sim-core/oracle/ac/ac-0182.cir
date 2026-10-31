@@ -16,7 +16,8 @@ VS0 5 s0 0
 R0 s0 11 68e0
 VS1 0 s1 0
 V1 e1 s1 DC 0 AC 15e1 180
-RI1 e1 9 18e-1
+RI1 e1 m1 18e-1
+LI1 m1 9 10e-7
 VS2 4 s2 0
 L2 s2 8 82e-5
 VS3 1 s3 0

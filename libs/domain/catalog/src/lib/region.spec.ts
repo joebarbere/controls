@@ -1,5 +1,5 @@
 import { RegionId } from '@controls/save-format';
-import { NEC_REGION, REGION_PROFILES, regionProfile, type RegionValue } from './region';
+import { NEC_REGION, REGION_PROFILES, regionProfile, type RegionValue, voltageBand } from './region';
 
 /** Region profiles (plan F2.2 part 2): every region has one, and every value is sourced and consistent. */
 describe('region profiles', () => {
@@ -38,14 +38,34 @@ describe('region profiles', () => {
       for (const system of [profile.splitPhase, profile.threePhaseCommercial, profile.threePhaseIndustrial]) {
         values.push(system.lineToNeutralV, system.lineToLineV);
       }
+      for (const range of Object.values(profile.voltageRanges)) values.push(range.min, range.max);
     }
     for (const value of values) {
       expect(Number.isFinite(value.value) && value.value > 0).toBe(true);
-      expect(['Hz', 'V']).toContain(value.unit);
+      expect(['Hz', 'V', '1']).toContain(value.unit);
       expect(value.kind).toBe('real-world');
       expect(value.source.length).toBeGreaterThan(40);
       // Realism charter: cite standards by name, never quote the NEC.
       expect(value.source).not.toMatch(/NFPA 70|NEC Table/);
     }
+  });
+
+  it('has the ANSI C84.1 ranges (F2.4): A inside B, utilization below service, on a 120 V base', () => {
+    const r = NEC_REGION.voltageRanges;
+    const at120 = (range: (typeof r)['serviceA']) => voltageBand(range, 120).map((v) => Math.round(v * 1e9) / 1e9);
+    expect(at120(r.serviceA)).toStrictEqual([114, 126]);
+    expect(at120(r.utilizationA)).toStrictEqual([108, 125]);
+    expect(at120(r.serviceB)).toStrictEqual([110, 127]);
+    expect(at120(r.utilizationB)).toStrictEqual([104, 127]);
+    for (const [a, b] of [
+      [r.serviceA, r.serviceB],
+      [r.utilizationA, r.utilizationB],
+    ]) {
+      expect(b.min.value).toBeLessThan(a.min.value);
+      expect(b.max.value).toBeGreaterThanOrEqual(a.max.value);
+    }
+    expect(r.utilizationA.min.value).toBeLessThan(r.serviceA.min.value);
+    // Scaled to the other systems: Range A service at 480 V is ±5 %.
+    expect(voltageBand(r.serviceA, 480).map((v) => Math.round(v))).toStrictEqual([456, 504]);
   });
 });

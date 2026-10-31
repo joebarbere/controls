@@ -126,6 +126,26 @@ export const DinPsuParams = z
   .refine((p) => p.currentLimitA >= p.ratedCurrentA, { message: 'currentLimitA must be at least ratedCurrentA' });
 export type DinPsuParams = z.infer<typeof DinPsuParams>;
 
+/**
+ * An AC source behind a transformer's (or an alternator's) impedance (F2.4): the utility services and
+ * the portable generator stub. The impedance is derived, never tabulated: on the source's own base,
+ * Z = (%Z / 100) · V_LL² / S, split into R and X by the X/R ratio (`sim-core`'s `sourceImpedance`).
+ */
+export const AcSourceParams = z.strictObject({
+  /** Rated apparent power (kVA): the base of the per-unit impedance. */
+  ratedKva: positive,
+  /** Impedance at its rating, in percent of its base (%Z; a generator's subtransient reactance). */
+  percentImpedance: positive,
+  /** Reactance over resistance of that impedance. */
+  xOverR: positive,
+  /**
+   * Line-to-neutral EMF (V, RMS): the exact magnitude each phase is built from. The line-to-line
+   * voltage follows from the phase angles (2 × for split-phase, √3 × for wye), never from a name.
+   */
+  lineToNeutralV: positive,
+});
+export type AcSourceParams = z.infer<typeof AcSourceParams>;
+
 /** SPST switch parameters: none in P2 (a closed switch is an ideal merge, F2.1). Ratings arrive with P4. */
 export const SwitchSpstParams = z.strictObject({});
 export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
@@ -183,7 +203,8 @@ function enumKey<const V extends readonly [string, ...string[]]>(
 
 /**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
- * (the bench demo), the test lead, and F2.4's bench supply and DIN-rail supply. The fuse, breaker,
+ * (the bench demo), the test lead, and F2.4's bench supply, DIN-rail supply, utility services
+ * (split-phase and three-phase, headless in P2) and portable generator stub. The fuse, breaker,
  * resistor and heater arrive with F2.5; adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
@@ -202,6 +223,15 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       ),
     },
     description: 'A battery: an EMF that falls with the state of charge, behind an internal resistance.',
+  },
+  'generator.portable': {
+    kind: 'generator.portable',
+    placement: 'entity',
+    terminals: ['l1', 'l2', 'n'],
+    params: AcSourceParams,
+    keys: {},
+    description:
+      'A portable generator (a stub): a 120/240 V split-phase EMF behind its nameplate source impedance, with no engine dynamics.',
   },
   'lamp.incandescent': {
     kind: 'lamp.incandescent',
@@ -302,6 +332,24 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       ),
     },
     description: 'A single-pole, single-throw switch: closed joins its two terminals, open separates them.',
+  },
+  'utility.splitPhase': {
+    kind: 'utility.splitPhase',
+    placement: 'entity',
+    terminals: ['l1', 'l2', 'n'],
+    params: AcSourceParams,
+    keys: {},
+    description:
+      'A utility service, single-phase three-wire (120/240 V): L1 and L2 180° apart about the neutral, behind the transformer impedance.',
+  },
+  'utility.threePhase': {
+    kind: 'utility.threePhase',
+    placement: 'entity',
+    terminals: ['l1', 'l2', 'l3', 'n'],
+    params: AcSourceParams,
+    keys: {},
+    description:
+      'A utility service, three-phase four-wire wye: L1, L2 and L3 120° apart about the neutral, behind the transformer impedance.',
   },
 } satisfies Record<string, ModelKindDef>);
 

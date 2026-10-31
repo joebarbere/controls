@@ -20,7 +20,8 @@ VS5 1 s5 0
 R5 s5 0 39e2
 VS6 1 s6 0
 V6 e6 s6 DC 0 AC 22e-1 120
-RI6 e6 4 56e-2
+RI6 e6 m6 56e-2
+LI6 m6 4 22e-7
 VS7 3 s7 0
 C7 s7 1 68e-7
 .control
