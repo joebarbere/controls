@@ -299,16 +299,47 @@ _Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md),
 
 `sim-core`, in `mna/` and `lu/`. **Owner:** `sim-engine-engineer`, with `test-engineer` for the property tests. It lands in three parts.
 
+**Floor policy** for every solver property and golden in F2.2, decided in the #46 review (`test-engineer`); ADR 0012 (F2.7) refers to it. It replaces the literal 1e-12 A floor. ε is machine epsilon, y_b a branch's stamped admittance (0 for a source, whose current is an unknown or exact), and |·| a complex magnitude for phasors (part 2):
+
+- **KCL at every node of an island:** `1e-9 · max|I| + 1e-12 A + Σ_b 2 · 16 ε |y_b| (|V_a| + |V_b|) + 2 · 16 ε · max_k t_k · max_n G_n`, with t_k a source row's term (below) and G_n a node's total conductance. The last term exists because elimination mixes the source rows (volts) into the KCL rows (amps) through the conductances. Seed 1369986703: an ideal 28 650 V source off a 1 S node leaves ε · 28 650 · 1 ≈ 6e-12 A where the node voltages are 3e-8 V. A resistor's current is g · (Va − Vb) from node voltages known only to an ulp, so it carries g · ulp(V) of rounding however exact the solve. The sum runs over the island's branches, gmin included, **not only those at node n**: Gaussian elimination's residual is normwise (|L||U|, not |A|). A weak node's row can carry a stiff neighbour's rounding, through the multipliers or through a source current that the neighbour's row sets. Seed −710639118: a 0 V ideal source joins a node held by 10 kΩ to one carrying 1e4 S at 21 V, giving 27× a per-node floor. The same covers the nodes whose own KCL isn't a row: the eliminated reference, and a floating component's representative.
+- **Power balance:** `1e-9` relative to Σ|terms| plus `Σ_n |V_n| ×` node n's KCL floor (Tellegen's theorem).
+- **Source rows** (the voltage-side counterpart of KCL): each source element's equation (Vb − Va + R·I = E, or I = amps) holds within `1e-9 · T + 1e-12 V + 16 ε t`, with t the row's `|Va| + |Vb| + |R·I| + |E|` (or `|I| + |amps|`) and T the island's largest t. With KCL, every row of the system is checked.
+- **Linearity:** for k = 0 or ± a power of two, checked on values, exactly. Scaling every right-hand side by 2^m scales every rounding exactly, so x̂(k·b) = k·x̂(b) bit for bit. For other k, the residual-space check below.
+- **Superposition, and linearity with other k:** checked in **residual space**, never on values. First, each solve compared must pass KCL and its source rows. Then, for d = Σ c_p x̂_p (x̂(k b) − k x̂(b), or x̂(all) − x̂(first) − x̂(second)), every row of the system applied to d must hold within Σ |c_p| × that solve's bound, plus 4 ε Σ |c_p| × the row's terms, with Σ c_p b_p cancelling exactly. Each row of d is that same combination of the solves' own residuals plus the rounding of forming d, so this holds by construction once the row checks pass. It also checks that the right-hand sides cancel.
+- **Why not compare values:** a value comparison measures forward error, the residual times |A⁻¹|. Near-ideal source loops held by weak ties make that unbounded by any local or island term. CI on `48faae4` saw 1.4e-9 V and 7.3e-8 V, from 1e4 A and 7e4 A circulating against 1.3e-3 S and 1e-4 S of tie (ε·I/G). These were tried and failed fresh-seed runs (7 and 11 in 120):
+  - the brief's per-island voltage term, `16 ε Σ_vsource (|E| + |R·I|)` (about 2000× too small on the first counterexample);
+  - an ε·|I|/G_n extension;
+  - a Skeel |A⁻¹||A||x̂| bound;
+  - an a-posteriori 2·|A⁻¹ r| bound.
+
+  The last two fail because GEPP's backward error is |L||U|, not |A|, and the measured A⁻¹ itself carries cond·ε error. The same applies to dense-against-sparse in part 3 and to the oracle comparison in F2.7: compare residuals, or use well-conditioned cases.
+
+- **Floating clusters:** there the KCL floor is dominated by the common mode (5e8 V × 1e4 S ≈ 3e-2 A of rounding term), so it can't see an error in the cluster's internal currents or in its common mode. The checks there are exact value checks instead:
+  - gmin · Σ V over the fed component equals the feed current (1e-13 relative in the property, 1e-15 in the unit cases);
+  - each internal current matches its analytic value or its node's KCL, within that branch's rounding measured relative to the cluster (16 ε g (|u_a| + |u_b|));
+  - the feed is either a current source on a resistor element or a `vsource` element in current limit, into a random member.
+- **Generators** keep resistances down to 1e-4 Ω (busbar scale).
+
 Acceptance, **part 1: dense DC**:
 
-- [ ] Real MNA with the ground node eliminated. Stamps: resistor, voltage source with internal resistance, and current source.
-- [ ] `gmin` from every node to ground. Its value has a `source` explaining its numerical role; it is not an electrical rating.
-- [ ] Dense LU with partial pivoting on preallocated `Float64Array`s. A singular island is flagged `singular` and never produces NaN.
-- [ ] **Golden fixtures,** each with its derivation written in the fixture file: a divider, a Wheatstone bridge, a battery with internal R into a load, two unequal batteries in parallel, and a floating island under `gmin`.
-- [ ] **fast-check properties:**
-  - KCL holds at every node within `1e-9 · max|I| + 1e-12 A`;
-  - source power equals dissipated power, `gmin` losses included, within `1e-9` relative;
+- [x] Real MNA with the ground node eliminated. Stamps: resistor, voltage source with internal resistance, and current source.
+- [x] `gmin` from every node to ground. Its value has a `source` explaining its numerical role; it is not an electrical rating.
+- [x] Dense LU with partial pivoting on preallocated `Float64Array`s. A singular island is flagged `singular` and never produces NaN.
+- [x] **Golden fixtures,** each with its derivation written in the fixture file: a divider, a Wheatstone bridge, a battery with internal R into a load, two unequal batteries in parallel, and a floating island under `gmin`.
+- [x] **fast-check properties:**
+  - KCL holds at every node within the floor policy's bound (it was `1e-9 · max|I| + 1e-12 A`);
+  - source power equals dissipated power, `gmin` losses included, within `1e-9` relative plus the policy's Tellegen floor;
   - linearity and superposition hold.
+
+_Part 1 done 2026-10-30; reviewed by `test-engineer` (changes made) and `electrical-realism-reviewer` (approved with notes, below and in F2.3a and F2.4) ([simulation architecture](../docs/architecture/simulation.md#the-dc-solver-f22-part-1), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+
+- _"Ground" is each island's own reference node (F2.1's review note): the negative end of its first `vsource` element, else its smallest node. `gmin` is `GMIN_S`, 1e-12 S, from every node to that reference; F2.7's decks match it with an explicit 1e12 Ω shunt resistor from each circuit node to the reference (not ngspice's `rshunt`, which also shunts sense-source and internal nodes)._
+- _A current source is a stamp mode (`isource`), not a new netlist element kind: no P2 device is one, and a supply in current limit (part 3) is a `vsource` element stamped as one. The element kinds, the unknowns and so the matrix layout stay a function of `topologyHash`._
+- _Singular is decided structurally (a loop of zero-ohm sources), with a numerical backstop. A planted fault showed the numerical check alone misses about 3 in 4 such loops inside resistive meshes._
+- _Floating components are pinned structurally (#46 re-review). A conductive component that doesn't hold the island's reference is tied to it only by gmin, through current sources (a busbar section isolated by an open breaker, in parts 2 and 3). Once its conductance exceeds about gmin / ε (≈ 4.5e3 S, R below ≈ 0.2 mΩ), G + gmin rounds to G and the per-node formulation's last pivot is exactly 0: a false `singular`. The solver now gives such a component an exact change of variables, its common mode c = V(rep) and u = V − c for the other members (differences involve only u), and replaces the representative's row by the component's structural sum row (gmin · (|S| c + Σ u) plus the crossing currents). Same solution, well-conditioned; other islands are bit-identical (the 300-solve pin didn't move). So "singular ⇔ an ideal-source loop" holds again, and a property keeps generating clusters down to 0.1 mΩ (1e4 S per branch)._
+- _The properties use the floor policy above, with resistances from 1e-4 Ω. A SHA-256 over the bits of 300 seeded solves is pinned in `mna/properties.spec.ts`: a deliberate numeric change re-pins it with the other numeric goldens and bumps `SIM_ENGINE_VERSION` (D8)._
+- _`gmin` moves a result by a relative error of about gmin × R_th (1e-10 at 100 Ω, 1e-6 at 1 MΩ), so an insulation-resistance measurement (P5 meters) must exclude it (caveats)._
+- _Branch values come from `dcBranchValues`: a hook (F2.4's EMF against state of charge, F2.5's R(T)), else per-kind defaults (a lead's resistance; a battery's nominal EMF behind its internal resistance, a placeholder until F2.4)._
 
 Acceptance, **part 2: complex phasor** (needs F2.7):
 
@@ -323,7 +354,12 @@ Acceptance, **part 2: complex phasor** (needs F2.7):
 Acceptance, **part 3: sparse, cache and nonlinear loop**:
 
 - [ ] Gilbert–Peierls sparse LU in CSC with AMD ordering, reimplemented from the published papers. MIT spice-ts or brownout code may be adapted only with a `THIRD_PARTY_NOTICES.md` row and an origin comment.
-- [ ] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test).
+- [ ] Above a threshold (§4.5 says about 300 unknowns; the bench confirms the crossover), dense and sparse results agree within `1e-9` relative on random systems (property test). How, per the F2.2 floor policy (#46 review):
+  - compare **residuals on all circuits**: each solver's solution passes KCL and the source rows;
+  - compare **values on a well-conditioned subset** (resistance minimums, no near-ideal source loops), so that a self-consistent but wrong sparse result fails.
+
+  Value comparisons on ill-conditioned circuits measure forward error, which is unbounded.
+
 - [ ] **Factorisation cache** keyed by `topologyHash`:
   - the symbolic factorisation is reused when only values change;
   - a fixed-size LRU evicts deterministically and never changes results;
@@ -351,6 +387,7 @@ Acceptance:
   - `game.advance(ticks)` and `game.advanceTo(tick)`;
   - `game.probe(a, b)`, now implemented: an **ideal, non-loading** voltage difference between two terminals, given as `"<entityId>:<terminalId>"`. It returns DC volts, or AC RMS and phase. It is a script and test query, not a player instrument (DMMs are P5). `NotAvailableError` stays for `tag` (P10);
   - `game.snapshot()` (codec bytes) and `game.on('sim')`.
+- [ ] **Singular islands are surfaced, never silent** (`electrical-realism-reviewer`, #46). An island with `ISLAND_FLAG_SINGULAR` raises the `singular` sim event and a diagnostic (`game.on('sim')`, the inspector and the console, F2.3b and F2.6); its zeros are never presented as a 0 V reading. `game.probe` refuses or flags a probe on a singular island, and a probe across two islands reports a floating reading (their voltages aren't comparable), never a difference of two references.
 - [ ] **`engineCompatible(manifest, build)`** (D8, narrow v0 compatibility): pure and tested in `scripting-api`. Same `simEngineVersion` and `catalogVersion` → verify the log; both 0 (a migrated P1 save) → verify, falling back to `restarted` (`engine-changed`) on failure, never a refusal; any other mismatch, a single 0 included → `engine-changed` without verifying.
 - [ ] **Sim commands.** `sim.step {ticks}`, `sim.setSpeed {speed: 0|1|10|60}` and `sim.pause` are declared in domain code; they are logged and don't change the world. A headless host implements `sim.step` by advancing, so a `.console` file can step time both in `sim-cli` and in the game.
 - [ ] **Determinism:**
@@ -402,7 +439,9 @@ Acceptance:
   - terminal voltage = EMF − I·R within 0.5 %;
   - over one hour of sim time (headless `advance`), state of charge falls by ∫I dt ÷ capacity within 0.5 %.
 
+- [ ] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
 - [ ] **Bench DC supply:**
+  - a non-zero output resistance (sourced, typical), so supplies paralleled in CV mode are never an ideal-source loop (`singular`) and settle through the CV/CC loop (`electrical-realism-reviewer`, #46);
   - `device.operate` controls for the voltage setpoint, the current limit and output on/off;
   - constant-voltage/constant-current crossover at R = V/I within 0.5 %, and a property test that it never exceeds either setpoint beyond its tolerance;
   - its mode is published in the device record, with no mode chatter at the crossover (tested).
@@ -472,7 +511,7 @@ Acceptance:
 - [ ] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
 - [ ] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
 - [ ] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
-- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound.
+- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. Values are compared on the **well-conditioned corpus only**, with sim-core's own residual checks (KCL and source rows, F2.2 floor policy) alongside on every circuit (#46 review). On ill-conditioned circuits two correct solvers can differ by more than any tolerance.
 - [ ] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
 - [ ] **`pnpm sim bench`,** also run as the Nx `bench` target in `verify`:
   - it covers a seeded synthetic 2,000-node plant (mostly radial, with some loops) and a per-tick mix of devices;
@@ -557,7 +596,7 @@ Numbers are assigned in the order the ADRs land.
 | —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted    |
 | —       | World document v2 + leads + catalogue v1          | ✅ Done        |
 | F2.1    | Netlist compiler                                  | ✅ Done        |
-| F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started |
+| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Part 1 done |
 | F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started |
 | F2.4    | Power sources                                     | ⬜ Not started |
