@@ -381,6 +381,42 @@ describe('NetlistCompiler (incremental)', () => {
     expect(second.branches[2]).toMatchObject({ element: { kind: 'connection', connection: 1 }, a: 0, b: 3 });
   });
 
+  it('a compile that throws part-way never leaves a half-written structure to match the next compile', () => {
+    // The compiler overwrites its structure list in place (F2.2 part 3b). Here B rewrites switch 1's
+    // entry, then throws on switch 2; C has B's switch 1 and A's switch 2, exactly the half-written
+    // list. Compared against it, C would be "unchanged" and get A's netlist (switch 1 closed).
+    const models: NetlistModels = {
+      devices: {
+        'switch.spst': {
+          kind: 'switch.spst',
+          simTopologyKeys: [],
+          topology: ({ state }) => {
+            if (state['bad'] === true) throw new Error('model failure');
+            return { joins: state['closed'] === true ? [['a', 'b']] : [], elements: [] };
+          },
+        },
+      },
+      connections: BUILTIN_NETLIST_MODELS.connections,
+    };
+    const bus = benchBus();
+    for (const ref of [SPST, SPST]) run(bus, 'entity.place', { ref, positionMm: origin });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'b'), b: end(2, 'a') });
+    const withStates = (one: World['entities'][number]['state'], two: World['entities'][number]['state']): World => ({
+      ...bus.state,
+      entities: bus.state.entities.map((e) => ({ ...e, state: e.id === 1 ? one : two })),
+    });
+    const closed = { closed: true };
+    const open = { closed: false };
+    const compiler = new NetlistCompiler(BUILTIN_CATALOG, { models });
+    const a = compiler.compile(withStates(closed, closed));
+    expect(() => compiler.compile(withStates(open, { closed: true, bad: true }))).toThrow('model failure');
+    const world = withStates(open, closed);
+    const c = compiler.compile(world);
+    expect(c).not.toStrictEqual(a);
+    expect(c).toStrictEqual(compileNetlist(world, BUILTIN_CATALOG, { models }));
+    expect(compiler.stats).toStrictEqual({ structural: 2, valuesOnly: 0, unchanged: 0 });
+  });
+
   it('a value-only change rebuilds only the branch values: same nodes, islands and hash', () => {
     const compiler = new NetlistCompiler(TEST_CATALOG, { models: TEST_MODELS });
     const bus = benchBus(TEST_CATALOG);

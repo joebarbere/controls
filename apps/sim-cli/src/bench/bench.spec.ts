@@ -4,7 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type CliIo, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, runCli } from '../cli';
 import { WORKSPACE_ROOT } from '../script-loader';
-import { type BenchCase, type BenchReport, median, percentile, runBench, runBenchCase } from './bench';
+import { readFileSync as readSource } from 'node:fs';
+import {
+  type BenchCalibration,
+  type BenchCase,
+  type BenchReport,
+  median,
+  percentile,
+  runBench,
+  runBenchCase,
+} from './bench';
+import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { BENCH_CASES, PENDING_BENCH_CASES } from './cases';
 
 /** A fake clock: each run of a case takes the next duration from the list (ms). */
@@ -57,13 +67,24 @@ describe('runBenchCase', () => {
     };
     const result = runBenchCase(fixedCase({ warmup: 2, runs: 3, run }), steppingClock([5, 1, 9]));
     expect(calls).toBe(5);
-    expect(result).toMatchObject({ runs: 3, medianMs: 5, budgetMs: null, marginMs: null, ok: true });
+    expect(result).toMatchObject({
+      runs: 3,
+      medianMs: 5,
+      budgetMs: null,
+      calibration: null,
+      gatedMs: 5,
+      marginMs: null,
+      ratio: null,
+      ok: true,
+    });
     expect(result.checksum).toBe('same');
   });
 
   it('passes at the budget and fails one step over it, reporting the margin', () => {
     expect(runBenchCase(fixedCase({ budgetMs: 5 }), steppingClock([5, 5, 5]))).toMatchObject({
+      gatedMs: 5,
       marginMs: 0,
+      ratio: 1,
       ok: true,
     });
     expect(runBenchCase(fixedCase({ budgetMs: 5 }), steppingClock([6, 6, 1]))).toMatchObject({
@@ -113,6 +134,142 @@ describe('runBenchCase', () => {
   });
 });
 
+describe('runBenchCase with a calibration (F2.2 part 3b)', () => {
+  const calibration = (overrides: Partial<BenchCalibration> = {}): BenchCalibration => ({
+    name: 'cal',
+    referenceMs: 2,
+    run: () => 'cal',
+    ...overrides,
+  });
+  /** Durations for interleaved runs: case i, then calibration i. */
+  const interleaved = (cases: number[], cals: number[]) => cases.flatMap((c, i) => [c, cals[i]]);
+
+  it('holds the median of each run in reference-machine ms (tᵢ × reference / cᵢ) to the budget', () => {
+    // Pairs (case, calibration): (9, 4), (10, 3), (7, 6) against a 2 ms reference give 4.5, 6.67 and
+    // 2.33 reference ms: median 4.5 against the 5 ms budget. The calibration's own median (4 ms, scale
+    // 2) is reported, not gated.
+    const benchCase = fixedCase({ budgetMs: 5, calibration: calibration() });
+    const result = runBenchCase(benchCase, steppingClock(interleaved([9, 10, 7], [4, 3, 6])));
+    expect(result).toMatchObject({
+      medianMs: 9,
+      budgetMs: 5,
+      calibration: { name: 'cal', medianMs: 4, p90Ms: 6, referenceMs: 2, scale: 2, checksum: 'cal' },
+      gatedMs: 4.5,
+      marginMs: 0.5,
+      ratio: 0.9,
+      ok: true,
+    });
+  });
+
+  it('pairs each run with the calibration beside it, so a burst of load on one pair cancels', () => {
+    // The middle pair ran 3× slower (both halves): it still normalises to 4 reference ms.
+    const benchCase = fixedCase({ budgetMs: 5, calibration: calibration() });
+    const result = runBenchCase(benchCase, steppingClock(interleaved([8, 24, 8], [4, 12, 4])));
+    expect(result).toMatchObject({ gatedMs: 4, ok: true });
+    // A burst that hits two case runs but only one calibration run: the plain medians (24 ms against a
+    // budget of 5 × 4 / 2 = 10 ms) would fail; two of the three pairs are still clean.
+    const skewed = runBenchCase(benchCase, steppingClock(interleaved([8, 24, 24], [4, 12, 4])));
+    expect(skewed).toMatchObject({ medianMs: 24, calibration: { scale: 2 }, gatedMs: 4, ok: true });
+  });
+
+  it('passes at the budget and fails one step over it; a faster machine tightens it', () => {
+    const benchCase = fixedCase({ budgetMs: 5, calibration: calibration() });
+    expect(runBenchCase(benchCase, steppingClock(interleaved([10, 10, 10], [4, 4, 4]))).ok).toBe(true);
+    expect(runBenchCase(benchCase, steppingClock(interleaved([11, 11, 11], [4, 4, 4]))).ok).toBe(false);
+    // Calibration at 1 ms against the 2 ms reference: 3 ms here is 6 reference ms, over 5.
+    expect(runBenchCase(benchCase, steppingClock(interleaved([3, 3, 3], [1, 1, 1])))).toMatchObject({
+      gatedMs: 6,
+      ok: false,
+    });
+  });
+
+  it('a 1.5× slower case fails a gate it passed, whatever the machine speed', () => {
+    const benchCase = fixedCase({ budgetMs: 5, calibration: calibration() });
+    for (const speed of [0.5, 1, 3]) {
+      const cal = [2, 2, 2].map((c) => c * speed);
+      const t = [4, 4, 4].map((c) => c * speed);
+      expect(runBenchCase(benchCase, steppingClock(interleaved(t, cal))).ok).toBe(true);
+      expect(
+        runBenchCase(
+          benchCase,
+          steppingClock(
+            interleaved(
+              t.map((x) => x * 1.5),
+              cal,
+            ),
+          ),
+        ).ok,
+      ).toBe(false);
+    }
+  });
+
+  it('fails when a calibration run takes no measurable time, never passes', () => {
+    const benchCase = fixedCase({ budgetMs: 5, calibration: calibration() });
+    expect(runBenchCase(benchCase, steppingClock(interleaved([1, 1, 1], [0, 0, 0])))).toMatchObject({
+      gatedMs: Number.POSITIVE_INFINITY,
+      ok: false,
+    });
+  });
+
+  it('times the calibration right after each timed run of the case, and runs it untimed in the warm-up', () => {
+    const order: string[] = [];
+    let t = 0;
+    const clock = () => {
+      order.push('clock');
+      return (t += 1);
+    };
+    const benchCase = fixedCase({
+      warmup: 1,
+      runs: 2,
+      budgetMs: 100,
+      prepare: () => order.push('prepare'),
+      run: () => (order.push('case'), 'same'),
+      calibration: calibration({ run: () => (order.push('cal'), 'cal') }),
+    });
+    runBenchCase(benchCase, clock);
+    const timedRun = ['prepare', 'clock', 'case', 'clock', 'clock', 'cal', 'clock'];
+    expect(order).toEqual(['prepare', 'case', 'cal', ...timedRun, ...timedRun]);
+  });
+
+  it('fails when the calibration is not deterministic, whatever the timing', () => {
+    let i = 0;
+    const benchCase = fixedCase({ budgetMs: 100, calibration: calibration({ run: () => `cal-${i++}` }) });
+    const result = runBenchCase(benchCase, steppingClock(interleaved([1, 1, 1], [2, 2, 2])));
+    expect(result).toMatchObject({ checksum: 'same', deterministic: false, ok: false });
+    expect(result.calibration?.checksum).toBeNull();
+  });
+
+  it('refuses a calibration without a budget, or with a reference that is not positive', () => {
+    expect(() => runBenchCase(fixedCase({ calibration: calibration() }), steppingClock([]))).toThrow(RangeError);
+    for (const referenceMs of [0, -1, Number.NaN]) {
+      const benchCase = fixedCase({ budgetMs: 1, calibration: calibration({ referenceMs }) });
+      expect(() => runBenchCase(benchCase, steppingClock([]))).toThrow(RangeError);
+    }
+  });
+});
+
+describe('the calibration loop', () => {
+  it('returns the same checksum on every run', () => {
+    const first = runCalibration();
+    for (let i = 0; i < 3; i++) expect(runCalibration()).toBe(first);
+  });
+
+  it('shares no code with what it calibrates: it imports nothing but a type', () => {
+    // A regression in sim-core (or anything it uses) must not slow the calibration too, or the gate
+    // would absorb it.
+    const source = readSource(join(WORKSPACE_ROOT, 'apps/sim-cli/src/bench/calibration.ts'), 'utf8');
+    const imports = source.split('\n').filter((line) => /^\s*(import|export .* from)\b/.test(line));
+    expect(imports).toStrictEqual(["import type { SourcedConstant } from '@controls/sim-core';"]);
+    expect(source).not.toMatch(/\brequire\(|\bimport\(/);
+  });
+
+  it('has a sourced reference that names its machine', () => {
+    expect(CALIBRATION_REFERENCE_MS.value).toBeGreaterThan(0);
+    expect(CALIBRATION_REFERENCE_MS).toMatchObject({ unit: 'ms', kind: 'numerical' });
+    expect(CALIBRATION_REFERENCE_MS.source).toMatch(/Ryzen 5 5600X/);
+  });
+});
+
 describe('runBench', () => {
   it('lists pending cases without running them or letting them fail the report', () => {
     const pending = [{ name: 'later', budgetMs: 1, enabledBy: 'F9.9' }];
@@ -139,6 +296,16 @@ describe('the shipped bench cases', () => {
       expect(c.name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
       expect(c.runs).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it('gate the re-solve at spec §4.5’s 2 ms, scaled by the calibration loop; nothing else is calibrated', () => {
+    const calibrated = BENCH_CASES.filter((c) => c.calibration !== undefined);
+    expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([['plant-resolve-topology-change', 2]]);
+    expect(calibrated[0].calibration).toMatchObject({
+      run: runCalibration,
+      referenceMs: CALIBRATION_REFERENCE_MS.value,
+    });
+    expect(PENDING_BENCH_CASES.map((c) => c.name)).not.toContain('plant-resolve-topology-change');
   });
 });
 
@@ -168,7 +335,10 @@ describe('sim bench', () => {
           medianMs: 1,
           p90Ms: 1,
           budgetMs: null,
+          calibration: null,
+          gatedMs: 1,
           marginMs: null,
+          ratio: null,
           checksum: 'same',
           deterministic: true,
           ok: true,
@@ -185,6 +355,19 @@ describe('sim bench', () => {
     expect(run.code).toBe(EXIT_FAILURE);
     expect(JSON.parse(run.stdout.join('\n')).ok).toBe(false);
     expect(run.stderr).toEqual(['sim: bench case "over" over budget: median 3 ms > 2 ms']);
+  });
+
+  it('names the reference-machine time and the calibration when a calibrated case is over budget', async () => {
+    const over = fixedCase({
+      name: 'over',
+      budgetMs: 2,
+      calibration: { name: 'cal', referenceMs: 1, run: () => 'cal' },
+    });
+    const run = await sim({ benchCases: [over], now: steppingClock([5, 2, 5, 2, 5, 2]) }, 'bench');
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(run.stderr).toEqual([
+      'sim: bench case "over" over budget: 2.5 ms on the reference machine > 2 ms (median 5 ms here, beside the cal at 2 ms against its reference 1 ms)',
+    ]);
   });
 
   it('exits 1 when a case is not deterministic', async () => {
@@ -229,6 +412,10 @@ describe('sim bench', () => {
     }
     // The plant compiles to exactly 2,000 nodes in the bundle too.
     expect(report.cases[0].checksum).toMatch(/^2000:/);
+    // The re-solve gate ran calibrated, beside the case (it holds under this suite's parallel load).
+    const resolve = report.cases.find((c) => c.name === 'plant-resolve-topology-change');
+    expect(resolve).toMatchObject({ budgetMs: 2, ok: true, calibration: { name: 'calibration-loop' } });
+    expect(resolve?.ratio).toBeLessThanOrEqual(1);
     // The spec §4.5 budgets that wait for the solver and the engine stay visible.
     expect(report.pending).toStrictEqual(PENDING_BENCH_CASES);
   });
