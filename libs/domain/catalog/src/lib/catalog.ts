@@ -135,6 +135,11 @@ function checkControls(controls: readonly DeviceControl[], kind: ModelKindDef, a
     if (control.type === 'selector' && !control.options.every((o) => key.values?.includes(o))) {
       add(path, 'Selector options must be values of the key');
     }
+    // A new device starts at its key's initial value, so that value must be one the control allows
+    // (a 0–5 V supply can't start at a kind's 12 V): F2.4 save-format review.
+    if (key.type === expected && !checkControlValue(control, kind, key.initial).ok) {
+      add(path, `The key's initial value (${String(key.initial)}) is outside this control's range`);
+    }
   });
 }
 

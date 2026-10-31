@@ -387,11 +387,11 @@ flowchart TB
       APPLY["recompile (NetlistCompiler, live sim bags)<br/>netlist changed? solve at t"] --> STATE
       ADV --> STEP
       STEP["step t → t+1"] --> S1{"t mod 10 = 0<br/>and not solved at t?"}
-      S1 -->|yes| SOLVE["electrical layer: fill values (banks, defaults, else unmodelled)<br/>DcSolver.solveNonlinear (warm start = solution record),<br/>then AcSolver at the region frequency, into the same record"]
+      S1 -->|yes| SOLVE["electrical layer: fill values (banks, defaults, else unmodelled)<br/>DcSolver.solveNonlinear (warm start = solution record),<br/>then AcSolver at the region frequency, into the same record;<br/>then each bank's afterSolve (a supply commits its CV/CC mode)"]
       S1 -->|no| L
       SOLVE --> L["discrete → continuous → protection<br/>(every bank, model-kind order)"]
-      L --> S2{"a layer changed<br/>the topology?"}
-      S2 -->|yes| TRIP["recompile, solve at t+1 (same step)<br/>event at t+1"]
+      L --> S2{"a layer changed the topology<br/>or a value it solves with?"}
+      S2 -->|yes| TRIP["recompile if a kind with sim topology keys changed,<br/>solve at t+1 (same step); event at t+1"]
       S2 -->|no| STATE
       TRIP --> STATE["state at t+1: banks (struct-of-arrays), solution record, events"]
     end
@@ -405,7 +405,7 @@ flowchart TB
 
 **Commands and time.** `CommandBus.advanceTo(tick)` moves the bus's state without logging, taking a `seq` or touching the history (ADR 0011 §3). `replayEntries(bus, entries, { time, endTick })` advances the time host and the bus to each entry's tick, runs it, calls `time.applied(entry, state)`, and finally advances to `endTick`; an earlier tick is still `tick-mismatch`. In the scripting API, `Game.exec` hands every logged entry to the engine and carries out `sim.step` by advancing once it is logged; on replay a step moves nothing, and the next entry's tick (or `endTick`) carries its effect. `sim.setSpeed` and `sim.resume` are no-ops headless (pacing is F2.3b's).
 
-**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. In F2.3a no built-in kind has a bank: the battery keeps its placeholder EMF from `DC_DEFAULT_VALUES` (F2.4), and the lamp has no filament model (F2.5), so a branch nothing can value leaves its island **unmodelled**: solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations.
+**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. Since F2.4 the battery and the supplies have banks (below); the lamp has no filament model until F2.5, so a branch nothing can value leaves its island **unmodelled**: solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations. Two hooks came with F2.4: `afterSolve(ctx, values)`, called after every solve with exactly the values it was solved with, commits state the solve decided (a supply's CV/CC mode) before anything reads it; and a layer that returns `true` gets a re-solve within the step even when only a value changed (a PSU switching its output off), not only on a topology change. `LayerContext.islandStatus` gives a record its island's status.
 
 **Honest results.** `islands()` gives each island's status: `solved`, `singular`, `nonConverged`, `unmodelled` or `mixed`; only `solved` values are readings, and the status follows from the netlist and the solution record alone, so a loaded engine says the same. `probe(a, b)` (ideal, non-loading) returns DC volts V(a) − V(b) on a solved DC island, and on an AC island the phasor V(a) − V(b) with its RMS magnitude (`rmsVolts`, what a meter shows by default) at the region frequency, `floating` for terminals on different islands (never a difference of two references), and `singular`, `unsettled` or `unsolved` otherwise. Island flags raise `singular` and `nonConverged` sim events on their rising edge; across a topology change a flag rises only if none of the island's entities was in an island with it before. Layer events (`blown`, …) are stamped at the end of their step.
 
@@ -415,9 +415,50 @@ flowchart TB
 
 **The snapshot** (`sim-protocol`, ADR 0011 §5): `encodeSnapshot` writes one slot from the engine's preallocated arrays with little-endian `DataView` stores, every reserved byte zero; the hashed region is bytes 8 onwards (the tick, the counts, the flags, the raw topology hash, then nodes, branches, islands and device records). `game.snapshot()` returns those bytes, `snapshotHash` their SHA-256. An unsolved island's entry has 0 iterations, 0 unknowns and no reference node. Device records are written from the bags and the solution, never from per-step caches, so a snapshot is a pure function of the export. The seqlock transport, the descriptor and `SnapshotView` are F2.3b's.
 
-**Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` is 3 since this feature materialised the solution record (2 was #51's sparse pivoting).
+**Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` became 3 when this feature materialised the solution record (2 was #51's sparse pivoting), and is 4 since F2.4's sources.
 
 **Measured** (built bundle, AMD Ryzen 5 5600X, Node 24): one step of the layers on 750 synthetic devices (`tick-device-mix`, gated at §4.5's 0.3 ms) takes about 0.015 ms median.
+
+## Power sources (F2.4)
+
+`sim-core` `devices/` holds the built-in device models (`BUILTIN_DEVICE_MODELS`); `devices/sources/` has the battery, the bench supply and the DIN-rail PSU. Each is a netlist model (what the compiler needs: one `vsource` element from `neg` to `pos`, `devices/sources/netlist-models.ts`, registered in `netlist/models.ts`) plus an engine bank. Catalogue entries are in `content/devices/` (`battery.ferrovane-12v-7ah`, `supply.brindlecore-bench-30v-5a`, `supply.railwick-din-24v-5a`), their kinds in `MODEL_KINDS`.
+
+```mermaid
+flowchart LR
+    subgraph battery["battery (sim: stateOfCharge)"]
+      SOC["s"] --> EMF["E(s) = E_empty + (E_full − E_empty)·s"]
+      EMF --> VB["dcValue: vsource(E(s), r)"]
+      I1["solved cell current"] --> CC1["continuous: s −= I·Δt / 3600 Q<br/>(solved islands only, clamped to [0, 1])"]
+      CC1 --> SOC
+    end
+    subgraph reg["regulated output (bench supply, DIN PSU)"]
+      MODE["mode (sim bag)"] --> START["dcValue: CV vsource(V, R_out)<br/>or CC isource(I_lim)"]
+      START --> LOOP["outer loop: regulate(stamped mode, I, V)<br/>CV→CC if I > I_lim(1+h)+i₀<br/>CC→CV if V > V_knee + h·V + v₀"]
+      LOOP --> AFTER["afterSolve: mode ← the stamp solved with"]
+      AFTER --> MODE
+    end
+    subgraph din["DIN PSU protection layer"]
+      LIM["limit: count ticks"] -->|"= hiccupDetectMs"| OFF["hiccupOff: isource(0)<br/>event hiccup off, re-solve in the step"]
+      OFF -->|"= hiccupOffMs"| RETRY["ok: event hiccup retry, re-solve"]
+      RETRY --> LIM
+    end
+```
+
+**The battery.** The EMF is the rested open-circuit voltage, linear in the state of charge between the catalogue's empty and full values (11.8 V and 12.9 V; the lead-acid open-circuit voltage tracks the electrolyte's specific gravity, which falls about linearly with charge), behind its constant internal resistance. The continuous layer coulomb-counts the cell's solved current each tick into `stateOfCharge` (its only sim key, unchanged since catalogue v1, so no `schemaVersion` bump). The nominal-EMF placeholder is gone: `DC_DEFAULT_VALUES.battery` is now the full-charge EMF (a new battery, for raw solver callers with no engine model), and the DC goldens set their 12 V test EMF through their own hook. **It never creates energy** (realism review): below 2 % the EMF collapses linearly to 0 V at empty, and charging it is a piecewise-linear cell (discharge EMF E(s); charge EMF rising from E(s) at 80 % to the 14.4 V gassing voltage at full; no current in between), its segment chosen by an `iterate` hook from the iterate's terminal voltage, so a full battery on a float charger settles at no current. The abstractions (constant r; no Peukert or temperature effect, so capacity optimistic by about 20 % at C/5, 40 % at C/2 and roughly 70 % at 1C; 100 % charge efficiency; a straight-line charge curve with no overpotential, so a 13.8 V float charges to about 93 % and overcharge is limited by r alone) are in the simulation caveats.
+
+**CV/CC regulation** (`regulator.ts`). A regulated output is a `vsource` element stamped CV (setpoint behind the output resistance, from the class's load-regulation figure: 1 mΩ for the bench supply, 48 mΩ for the DIN PSU) or CC (`isource` at the limit). The mode is a discrete choice in the outer loop, from the iterate and the mode it was solved in (the branch's stamp), with a 0.1 % hysteresis band (`CV_CC_HYSTERESIS`, plus 1 µA and 1 µV floors) either way, so a load at the crossover never chatters. Crossover is at R_load = V / I − R_out. After the solve, `afterSolve` commits the mode into the bank, so the `sim` bag, a save and the record agree with the solution. Because the output resistance is never 0, supplies paralleled in CV are a resistive loop that the loop settles (one limits), never `singular`.
+
+**The bench supply** (`supply.bench`): commanded `setpointV`, `currentLimitA` and `outputOn` (`device.operate`; the catalogue controls bound them to 0–30 V and 0–5 A) reach the solver as the output element's netlist values, so a setting change keeps `topologyHash` and is re-solved at the command's tick. Off is an open circuit (`isource(0)`), and the mode resets to CV.
+
+**The DIN PSU** (`supply.dinPsu`): 24 V behind 48 mΩ, a 6 A limit, and hiccup mode in the protection layer: `hiccupDetectMs` (100) ticks in limit switch the output off (`hiccupOff`, an open circuit) for `hiccupOffMs` (1000) ticks, then it retries. The off and retry re-solve within their step, so a short hiccups with a period of exactly 1100 ticks; `mode` and `phaseTicks` are in the `sim` bag, so a save mid-hiccup resumes the same period.
+
+**Records and the validity rule** (ADR 0011 §5.4, amended): each source publishes a record ending in `u8 status` (`unsolved`, `solved`, `unsettled`, `singular`). Solved quantities (terminal voltage, current) are written only on a solved island and are 0 otherwise; the device's own state (EMF, state of charge, mode) is always written. A `nonConverged` island's supply is `unsettled`, never a steady reading. The schemas are `BUILTIN_DEVICE_OUTPUTS`; registering them in `sim-protocol` is F2.3b's.
+
+**Placeable.** The renderer draws the three with procedural recipes (`libs/rendering/renderer` `geometry/devices.ts`): one merged geometry per kind with a group per material slot, sized and with terminals from the catalogue entry, the fictional brand and model as the label (rendering caveats).
+
+**Saves.** Loads check each control's value against its catalogue range (`invalid-device-state`); `fixtures/v2/ctrl/sources-engine-4.ctrl` (the sources scenario: a DIN PSU mid-hiccup, a bench supply in CC, a discharged battery) loads as `continued` and the PSU retries at the uninterrupted run's tick; a save from another engine loads its devices' bags but solves again at the save's tick.
+
+**Tests.** Goldens with their hand calculations: terminal voltage = E − I·r (to 1e-9), the state of charge over a minute (sim-core) and over one hour against ∫I dt and the closed form (`apps/sim-cli/src/battery-hour.spec.ts`, outside coverage instrumentation), CV and CC values, the crossover at V/I ± 0.5 % from fresh starts, the hiccup's event ticks. Properties: never past either setpoint beyond the band, over random setpoints and load histories (with a fixed-seed health floor); F2.4's own session arbitrary (`devices/sources/properties.spec.ts`: a hiccuping DIN PSU, a bench supply in CC, a discharging battery, random operations and advances up to 2,500 ticks) with its save-and-load, replay and at-cut and after-cut health tests, beside the engine sessions' F2.3a mix; reload goldens mid-hiccup and inside the hysteresis band; the sources scenario pinned in Node and Chromium (D6); allocation gates for the DIN PSU regulating and shorted. No chatter: 100 cadence solves at the crossover, a sweep up and down crossing once each way a band apart, and a self-heating lamp-like load that pulls a supply into CC and lets it back to CV once.
 
 ## The oracle corpus (F2.7)
 
@@ -490,6 +531,7 @@ Each timed re-solve is put in the reference machine's milliseconds by the calibr
 ## Not yet
 
 - **AC sources and loads** (F2.4, F2.5): the utility and three-phase sources and AC loads reach the phasor solver through `AcValueHook`; an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
-- **Device models** (F2.4, F2.5): the battery's state of charge, the supplies, the lamp's filament, the fuse and breaker. The engine's hooks exist (above); the built-in kinds have no bank yet.
+- **Device models** (F2.5): the lamp's filament, the fuse and breaker, the resistor and heater. F2.4's sources have theirs (above).
+- **The source records in `sim-protocol`** (F2.3b): `BUILTIN_DEVICE_OUTPUTS` registered in `DEVICE_OUTPUT_SCHEMAS` with a `SIM_PROTOCOL_VERSION` bump, and the nominal bands (`NOMINAL_BANDS`) the sources choose for overlays.
 - **The sim worker** (F2.3b): the seqlock transport, the descriptor, pacing and `SimHost`; until then the game runs the engine in-process.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

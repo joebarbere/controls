@@ -280,18 +280,26 @@ interface DeviceOutputField {
 
 Fields are ordered `f64`, then 4-byte, then `u8`, and the record is zero-padded to 8 bytes. Records are in device-index order (entity id ascending), one for each entity whose model publishes outputs. Props publish none. Readers join a descriptor device to a world entity by **(id, kind)**; a mismatch means the device is treated as absent. The P2 schemas below are **provisional**: each device-model PR (F2.4, F2.5) finalises its own schema with `renderer-engineer` and `angular-ui-engineer`, and the ADR is amended in that PR.
 
-| Kind                 | Fields (offset: type name)                                                              | Bytes |
-| -------------------- | --------------------------------------------------------------------------------------- | ----: |
-| `lamp.incandescent`  | 0: f64 `powerW` · 8: f64 `lightOutputRel` · 16: f64 `filamentTempK`                     |    24 |
-| `fuse`               | 0: f64 `meltFraction` · 8: u8 `state` [`intact`, `blown`]                               |    16 |
-| `breaker.thermalMag` | 0: f64 `thermalFraction` · 8: u8 `state` [`closed`, `tripped`, `open`]                  |    16 |
-| `battery`            | 0: f64 `emfV` · 8: f64 `terminalV` · 16: f64 `currentA` · 24: f64 `stateOfCharge`       |    32 |
-| `supply.bench`       | 0: f64 `outputV` · 8: f64 `outputA` · 16: u8 `mode` [`off`, `cv`, `cc`]                 |    24 |
-| `supply.dinPsu`      | 0: f64 `outputV` · 8: f64 `outputA` · 16: u8 `mode` [`off`, `ok`, `limit`, `hiccupOff`] |    24 |
-| `resistor`           | 0: f64 `powerW` · 8: u8 `overRated` [`no`, `yes`]                                       |    16 |
-| `heater`             | 0: f64 `powerW`                                                                         |     8 |
+| Kind                 | Fields (offset: type name)                                                                          | Bytes |
+| -------------------- | --------------------------------------------------------------------------------------------------- | ----: |
+| `lamp.incandescent`  | 0: f64 `powerW` · 8: f64 `lightOutputRel` · 16: f64 `filamentTempK`                                 |    24 |
+| `fuse`               | 0: f64 `meltFraction` · 8: u8 `state` [`intact`, `blown`]                                           |    16 |
+| `breaker.thermalMag` | 0: f64 `thermalFraction` · 8: u8 `state` [`closed`, `tripped`, `open`]                              |    16 |
+| `battery`            | 0: f64 `emfV` · 8: f64 `terminalV` · 16: f64 `currentA` · 24: f64 `stateOfCharge` · 32: u8 `status` |    40 |
+| `supply.bench`       | 0: f64 `outputV` · 8: f64 `outputA` · 16: u8 `mode` [`off`, `cv`, `cc`] · 17: u8 `status`           |    24 |
+| `supply.dinPsu`      | 0: f64 `outputV` · 8: f64 `outputA` · 16: u8 `mode` [`ok`, `limit`, `hiccupOff`] · 17: u8 `status`  |    24 |
+| `resistor`           | 0: f64 `powerW` · 8: u8 `overRated` [`no`, `yes`]                                                   |    16 |
+| `heater`             | 0: f64 `powerW`                                                                                     |     8 |
 
 Switches publish no record: the renderer draws the handle from the world's commanded `closed`. Leads are connections, not entities: their current is their branch's.
+
+**Amended in F2.4 (the source records are final; `sim-engine-engineer` with `renderer-engineer`; `angular-ui-engineer` to confirm):**
+
+- **The validity rule.** Every F2.4 record ends with `u8 status` [`unsolved`, `solved`, `unsettled`, `singular`], the status of the device's island in the slot's solution (`islandStatus`: `unmodelled` and `mixed` are `unsolved`, `nonConverged` is `unsettled`). Code 0 is `unsolved`, so a zeroed record is never a reading. **Fields computed from the solution** (`terminalV`, `currentA`, `outputV`, `outputA`) are a reading only when `status` is `solved` and are written 0 otherwise; **fields that are the device's own sim state** (`emfV`, `stateOfCharge`, `mode`) are always written. A reader shows `unsettled` values and modes as unsettled, never as steady, and `unsolved` or `singular` ones as unknown, never as 0 V or 0 A. F2.5's lamp, fuse, breaker, resistor and heater records follow the same rule.
+- `battery` gains `status` (40 bytes). `currentA` is the discharge current, positive out of `pos`; it is negative while charging.
+- `supply.bench`'s `mode` is `off` while the output is switched off, else the regulation mode from the `sim` bag.
+- `supply.dinPsu`'s `mode` drops `off`: P2's DIN PSU has no AC input to lose, so it is always powered. An input (P4) adds a value, which is a protocol bump.
+- The schemas live with their models in `sim-core` (`BUILTIN_DEVICE_OUTPUTS`, each checked by `deviceOutputSchemaProblems`). Registering them in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` with the `SIM_PROTOCOL_VERSION` bump is part of F2.3b's protocol work, which owns that table; until then the engine writes them in-process (headless and in the game's in-process engine).
 
 #### 5.5 Hashed and unhashed
 

@@ -31,10 +31,13 @@ import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/v
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
 import type { IslandKind, Netlist, NetlistIsland, StateBag, TerminalRef } from '../netlist/types';
+
+export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
+import { BUILTIN_DEVICE_MODELS } from '../devices';
 import {
-  BUILTIN_DEVICE_MODELS,
   type LayerContext,
+  type SimIslandStatus,
   type SimDevice,
   type SimDeviceBank,
   type SimDeviceModel,
@@ -109,17 +112,6 @@ export class SimProbeError extends Error {
     this.name = 'SimProbeError';
   }
 }
-
-/**
- * Why an island's values are or aren't a reading:
- *
- * - `solved`: a reading;
- * - `singular`: a loop of ideal sources (ADR 0011 §5.3): its zeros are not 0 V;
- * - `nonConverged`: the outer loop hit its cap: values that look real but aren't settled;
- * - `unmodelled`: an element no device model can value yet (the lamp until F2.5): not solved;
- * - `mixed`: DC and AC sources in one island (P2 has no converters): not solved.
- */
-export type SimIslandStatus = 'solved' | 'singular' | 'nonConverged' | 'unmodelled' | 'mixed';
 
 /** One island of the current netlist, for scripts, the console and the inspector (F2.6). */
 export interface SimIslandInfo {
@@ -245,11 +237,30 @@ export class SimEngine {
   private discreteBanks: SimDeviceBank[] = [];
   private continuousBanks: SimDeviceBank[] = [];
   private protectionBanks: SimDeviceBank[] = [];
+  /**
+   * Per discrete and protection bank: 1 if its kind lists `simTopologyKeys`, so a change it reports may
+   * move the netlist (a blown fuse); 0 if only a value its `dcValue` reads can have moved (a PSU's
+   * hiccup), which needs a re-solve but no recompile: the compile reads a bag only through those keys.
+   */
+  private discreteTopology = new Uint8Array(0);
+  private protectionTopology = new Uint8Array(0);
+  private readonly netlistModels: NetlistModels;
+  private afterSolveBanks: SimDeviceBank[] = [];
   private devices = new Map<number, DeviceSlot>();
   private readonly tombstones = new Map<number, StateBag>();
   // Per branch: the bank and device index that values it, and the kind's default.
   private branchBank: (SimDeviceBank | null)[] = [];
   private branchDevice = new Int32Array(0);
+  /**
+   * Per branch: its bank's `dcValue`, `acValue` and `iterate` hooks, looked up once at a rebuild. Each
+   * kind's bank is an object of its own shape, so reading `bank.dcValue` per solve was a load across
+   * many maps: in a process running several kinds it deoptimized `fillValues` whenever a new kind's
+   * bank arrived, and the unoptimized code boxed values until it was optimized again (simulation
+   * caveats). An array of functions has one map. Called with the bank as `this`.
+   */
+  private branchDcValue: (SimDeviceBank['dcValue'] | null)[] = [];
+  private branchAcValue: (SimDeviceBank['acValue'] | null)[] = [];
+  private branchIterate: (SimDeviceBank['iterate'] | null)[] = [];
   private branchDefault: (DcDefaultValue | undefined)[] = [];
   private branchAcDefault: (AcDefaultValue | undefined)[] = [];
   // Per island: unmodelled, the entities, the flags of the last solve, and the snapshot's arrays.
@@ -274,6 +285,7 @@ export class SimEngine {
     netlist: Netlist;
     solution: DcSolution;
     islandReadable(island: number): boolean;
+    islandStatus(island: number): SimIslandStatus;
     emit: LayerContext['emit'];
   };
   private readonly hook: DcIterationHook;
@@ -283,7 +295,8 @@ export class SimEngine {
   private constructor(world: World, options: SimEngineOptions) {
     this.catalog = options.catalog ?? BUILTIN_CATALOG;
     this.deviceModels = options.deviceModels ?? BUILTIN_DEVICE_MODELS;
-    this.compiler = new NetlistCompiler(this.catalog, { models: options.netlistModels ?? BUILTIN_NETLIST_MODELS });
+    this.netlistModels = options.netlistModels ?? BUILTIN_NETLIST_MODELS;
+    this.compiler = new NetlistCompiler(this.catalog, { models: this.netlistModels });
     this.world = world;
     this.tickNow = world.tick;
     // The world's sim bags are what was materialised: right at a start (CompileOptions.sim falls back to them).
@@ -298,9 +311,8 @@ export class SimEngine {
       const branches = island.branches;
       for (let i = 0; i < branches.length; i++) {
         const index = branches[i];
-        const bank = this.branchBank[index];
-        if (bank?.iterate !== undefined)
-          bank.iterate(this.branchDevice[index], netlist.branches[index], iterate, values);
+        const hook = this.branchIterate[index];
+        if (hook) hook.call(this.branchBank[index], this.branchDevice[index], netlist.branches[index], iterate, values);
       }
     };
     this.nonlinear = { hook: this.hook, warmStart: null };
@@ -310,6 +322,7 @@ export class SimEngine {
       netlist: this.current,
       solution: this.solution,
       islandReadable: (island) => this.readable(island),
+      islandStatus: (island) => this.status(island),
       emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
     };
     this.rebuild();
@@ -469,18 +482,30 @@ export class SimEngine {
     ctx.solution = this.solution;
     // Indexed loops over preallocated arrays: a step allocates nothing (no iterators, no closures).
     let topologyChanged = false;
+    let valuesChanged = false;
     const discrete = this.discreteBanks;
     for (let i = 0; i < discrete.length; i++) {
-      if ((discrete[i].discrete as (c: LayerContext) => boolean)(ctx)) topologyChanged = true;
+      if ((discrete[i].discrete as (c: LayerContext) => boolean)(ctx)) {
+        if (this.discreteTopology[i] === 1) topologyChanged = true;
+        else valuesChanged = true;
+      }
     }
     const continuous = this.continuousBanks;
     for (let i = 0; i < continuous.length; i++) (continuous[i].continuous as (c: LayerContext) => void)(ctx);
     const protection = this.protectionBanks;
     for (let i = 0; i < protection.length; i++) {
-      if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) topologyChanged = true;
+      if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) {
+        if (this.protectionTopology[i] === 1) topologyChanged = true;
+        else valuesChanged = true;
+      }
     }
     this.tickNow = t + 1;
-    if (topologyChanged && this.recompile()) this.solve(t + 1, 'layer');
+    // A layer changed the topology (a fuse blew) or a value the solve reads (a PSU switching off, F2.4):
+    // recompile only if it may have moved the topology (a kind with sim topology keys), and re-solve at
+    // t + 1 either way, so the change is tick-exact. A value-only change never compiles: the compile
+    // walks the whole world, allocating (an F2.4 gate: 12 B/step for two hiccuping PSUs in 15 devices).
+    if (topologyChanged) this.recompile();
+    if (topologyChanged || valuesChanged) this.solve(t + 1, 'layer');
   }
 
   /** Recompiles the commanded world with the live sim state; true if the netlist changed. */
@@ -607,6 +632,16 @@ export class SimEngine {
     else if (why === 'command') this.stats.commandSolves++;
     else if (why === 'layer') this.stats.layerSolves++;
     else this.stats.startSolves++;
+    // Sim state the solve decided (a supply's CV/CC mode) is committed before anything reads it.
+    const after = this.afterSolveBanks;
+    if (after.length > 0) {
+      const ctx = this.ctx;
+      ctx.tick = tick;
+      ctx.netlist = netlist;
+      ctx.solution = next;
+      for (let i = 0; i < after.length; i++)
+        (after[i].afterSolve as (c: LayerContext, v: DcBranchValues) => void)(ctx, this.values);
+    }
     // Island events on the rising edge of their flags (ADR 0011 §4).
     for (let k = 0; k < islands.length; k++) {
       const island = islands[k];
@@ -637,8 +672,8 @@ export class SimEngine {
       for (let i = 0; i < branches.length; i++) {
         const index = branches[i];
         const branch = netlist.branches[index];
-        const bank = this.branchBank[index];
-        if (bank?.dcValue !== undefined && bank.dcValue(this.branchDevice[index], branch, values)) {
+        const dcValue = this.branchDcValue[index];
+        if (dcValue && dcValue.call(this.branchBank[index], this.branchDevice[index], branch, values)) {
           if (values.stamps[index] === 0)
             throw new Error(`A device model returned true for branch ${index} without a value`);
           continue;
@@ -665,8 +700,8 @@ export class SimEngine {
       const index = branches[i];
       const branch = netlist.branches[index];
       values.stamps[index] = AC_STAMP_UNSET;
-      const bank = this.branchBank[index];
-      if (bank?.acValue !== undefined && bank.acValue(this.branchDevice[index], branch, values)) {
+      const acValue = this.branchAcValue[index];
+      if (acValue && acValue.call(this.branchBank[index], this.branchDevice[index], branch, values)) {
         if (values.stamps[index] === AC_STAMP_UNSET) {
           throw new Error(`A device model returned true for AC branch ${index} without a value`);
         }
@@ -785,13 +820,23 @@ export class SimEngine {
       this.stats.bankBuilds++;
     }
     this.devices = devices;
-    this.discreteBanks = banks.filter((b) => b.bank.discrete !== undefined).map((b) => b.bank);
+    const topological = (b: Bank) =>
+      (ownModel(this.netlistModels.devices, b.kind)?.simTopologyKeys.length ?? 0) > 0 ? 1 : 0;
+    const discrete = banks.filter((b) => b.bank.discrete !== undefined);
+    const protection = banks.filter((b) => b.bank.protection !== undefined);
+    this.discreteBanks = discrete.map((b) => b.bank);
+    this.discreteTopology = Uint8Array.from(discrete, topological);
     this.continuousBanks = banks.filter((b) => b.bank.continuous !== undefined).map((b) => b.bank);
-    this.protectionBanks = banks.filter((b) => b.bank.protection !== undefined).map((b) => b.bank);
+    this.protectionBanks = protection.map((b) => b.bank);
+    this.protectionTopology = Uint8Array.from(protection, topological);
+    this.afterSolveBanks = banks.filter((b) => b.bank.afterSolve !== undefined).map((b) => b.bank);
 
     const branchCount = netlist.branches.length;
     this.branchBank = new Array<SimDeviceBank | null>(branchCount).fill(null);
     this.branchDevice = new Int32Array(branchCount);
+    this.branchDcValue = new Array<SimDeviceBank['dcValue'] | null>(branchCount).fill(null);
+    this.branchAcValue = new Array<SimDeviceBank['acValue'] | null>(branchCount).fill(null);
+    this.branchIterate = new Array<SimDeviceBank['iterate'] | null>(branchCount).fill(null);
     this.branchDefault = netlist.branches.map((branch) => ownModel(DC_DEFAULT_VALUES, branch.model));
     this.branchAcDefault = netlist.branches.map((branch) => ownModel(AC_DEFAULT_VALUES, branch.model));
     this.hasAc = netlist.islands.some((island) => island.kind === 'ac');
@@ -799,8 +844,12 @@ export class SimEngine {
       if (branch.element.kind !== 'entity') continue;
       const slot = devices.get(branch.element.entity);
       if (slot === undefined || slot.bank === null) continue;
-      this.branchBank[branch.index] = slot.bank.bank;
+      const bank = slot.bank.bank;
+      this.branchBank[branch.index] = bank;
       this.branchDevice[branch.index] = slot.index;
+      this.branchDcValue[branch.index] = bank.dcValue ?? null;
+      this.branchAcValue[branch.index] = bank.acValue ?? null;
+      this.branchIterate[branch.index] = bank.iterate ?? null;
     }
 
     const islandCount = netlist.islands.length;

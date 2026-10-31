@@ -63,7 +63,11 @@ export interface ModelKindDef {
 
 const positive = FiniteNumber.positive();
 
-/** Battery parameters (provisional; F2.4 finalises the model: EMF against state of charge, internal resistance). */
+/**
+ * Battery parameters (F2.4). The EMF is the rested open-circuit voltage, linear in the state of charge
+ * between `openCircuitVoltageEmptyV` (0) and `openCircuitVoltageFullV` (1), behind a constant
+ * `internalResistanceOhm`; `capacityAh` is what coulomb counting divides by (`sim-core`'s battery model).
+ */
 export const BatteryParams = z
   .strictObject({
     /** Nameplate voltage (V). */
@@ -81,6 +85,46 @@ export const BatteryParams = z
     message: 'openCircuitVoltageFullV must be above openCircuitVoltageEmptyV',
   });
 export type BatteryParams = z.infer<typeof BatteryParams>;
+
+/**
+ * Bench DC supply parameters (F2.4): a constant-voltage/constant-current supply whose setpoint and
+ * current limit the player sets (`device.operate`) up to its maximums.
+ */
+export const BenchSupplyParams = z.strictObject({
+  /** The highest voltage setpoint (V). */
+  maxVoltageV: positive,
+  /** The highest current limit (A). */
+  maxCurrentA: positive,
+  /**
+   * The output resistance in constant-voltage mode (Ω): the regulated output's droop with load, from
+   * its load-regulation figure. Never 0, so supplies in parallel are never an ideal-source loop.
+   */
+  outputResistanceOhm: positive,
+});
+export type BenchSupplyParams = z.infer<typeof BenchSupplyParams>;
+
+/**
+ * DIN-rail switch-mode power supply parameters (F2.4): a fixed output voltage with a current limit
+ * that, when it holds for `hiccupDetectMs`, switches the output off for `hiccupOffMs` and retries
+ * (hiccup mode). Times are integer milliseconds, so ticks (1 tick = 1 ms).
+ */
+export const DinPsuParams = z
+  .strictObject({
+    /** The regulated output voltage (V). */
+    ratedVoltageV: positive,
+    /** The rated continuous output current (A). */
+    ratedCurrentA: positive,
+    /** Where the current limit holds the output (A): at or above the rating. */
+    currentLimitA: positive,
+    /** The output resistance in regulation (Ω), from its load-regulation figure. Never 0. */
+    outputResistanceOhm: positive,
+    /** How long the output may sit in current limit before it shuts down (ms, = ticks). */
+    hiccupDetectMs: Int.min(1),
+    /** How long it stays off before it retries (ms, = ticks). */
+    hiccupOffMs: Int.min(1),
+  })
+  .refine((p) => p.currentLimitA >= p.ratedCurrentA, { message: 'currentLimitA must be at least ratedCurrentA' });
+export type DinPsuParams = z.infer<typeof DinPsuParams>;
 
 /** SPST switch parameters: none in P2 (a closed switch is an ideal merge, F2.1). Ratings arrive with P4. */
 export const SwitchSpstParams = z.strictObject({});
@@ -128,10 +172,19 @@ function key(
   return { owner, type, schema, initial, values: null, description };
 }
 
+function enumKey<const V extends readonly [string, ...string[]]>(
+  owner: StateOwner,
+  values: V,
+  initial: V[number],
+  description: string,
+): StateKeyDef {
+  return { owner, type: 'enum', schema: z.enum(values), initial, values, description };
+}
+
 /**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
- * (the bench demo), plus the test lead. The fuse, breaker, supplies, resistor and heater arrive with
- * their device-model PRs (F2.4, F2.5); adding them needs no `schemaVersion` bump.
+ * (the bench demo), the test lead, and F2.4's bench supply and DIN-rail supply. The fuse, breaker,
+ * resistor and heater arrive with F2.5; adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -173,6 +226,66 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     params: LeadParams,
     keys: {},
     description: 'A test lead: a resistive connection between two terminals, made with lead.connect.',
+  },
+  'supply.bench': {
+    kind: 'supply.bench',
+    placement: 'entity',
+    terminals: ['neg', 'pos'],
+    params: BenchSupplyParams,
+    keys: {
+      currentLimitA: key(
+        'commanded',
+        'number',
+        FiniteNumber.min(0),
+        1,
+        "Current limit (A), set with device.operate up to the supply's maxCurrentA. A new supply starts at 1 A.",
+      ),
+      mode: enumKey(
+        'sim',
+        ['cv', 'cc'],
+        'cv',
+        'Regulation mode the engine last settled in: constant voltage or constant current. Kept so the crossover has hysteresis (no chatter) and a load continues in the same mode.',
+      ),
+      outputOn: key(
+        'commanded',
+        'boolean',
+        z.boolean(),
+        false,
+        'Whether the output is switched on (device.operate). A new supply starts with its output off.',
+      ),
+      setpointV: key(
+        'commanded',
+        'number',
+        FiniteNumber.min(0),
+        12,
+        "Voltage setpoint (V), set with device.operate up to the supply's maxVoltageV. A new supply starts at 12 V.",
+      ),
+    },
+    description:
+      'A bench DC supply: constant voltage behind a small output resistance up to its current limit, then constant current.',
+  },
+  'supply.dinPsu': {
+    kind: 'supply.dinPsu',
+    placement: 'entity',
+    terminals: ['neg', 'pos'],
+    params: DinPsuParams,
+    keys: {
+      mode: enumKey(
+        'sim',
+        ['ok', 'limit', 'hiccupOff'],
+        'ok',
+        'Where the supply is: regulating (ok), holding its current limit, or switched off between hiccup retries.',
+      ),
+      phaseTicks: key(
+        'sim',
+        'number',
+        Int.min(0),
+        0,
+        'Ticks spent in the current overload (limit) or off period (hiccupOff); 0 while regulating.',
+      ),
+    },
+    description:
+      'A DIN-rail switch-mode supply: a fixed voltage with a current limit that hiccups (off, then retry) under a sustained overload.',
   },
   'switch.spst': {
     kind: 'switch.spst',

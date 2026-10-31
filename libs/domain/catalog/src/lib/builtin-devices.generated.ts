@@ -207,6 +207,178 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "supply.brindlecore-bench-30v-5a",
+  "version": 1,
+  "title": "0–30 V 0–5 A bench DC power supply",
+  "brand": "Brindlecore",
+  "modelName": "BX-217",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 130,
+    "heightMm": 270,
+    "depthMm": 160
+  },
+  "terminals": [
+    {
+      "id": "neg",
+      "label": "−",
+      "positionMm": {
+        "x": 56,
+        "y": 0,
+        "z": 35
+      }
+    },
+    {
+      "id": "pos",
+      "label": "+",
+      "positionMm": {
+        "x": 75,
+        "y": 0,
+        "z": 35
+      }
+    }
+  ],
+  "model": {
+    "kind": "supply.bench",
+    "params": {
+      "maxVoltageV": 30,
+      "maxCurrentA": 5,
+      "outputResistanceOhm": 0.001
+    }
+  },
+  "controls": [
+    {
+      "id": "setpointV",
+      "label": "Voltage",
+      "type": "setpoint",
+      "unit": "V",
+      "min": 0,
+      "max": 30,
+      "step": 0.01
+    },
+    {
+      "id": "currentLimitA",
+      "label": "Current limit",
+      "type": "setpoint",
+      "unit": "A",
+      "min": 0,
+      "max": 5,
+      "step": 0.001
+    },
+    {
+      "id": "outputOn",
+      "label": "Output",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "linear-bench-supply-class",
+      "kind": "real-world",
+      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep. The size is the footprint on the bench (130 × 270 mm: width, then front to back) and the height above it (160 mm), the bench axes every bench device uses.",
+      "covers": [
+        "model.params.maxVoltageV",
+        "model.params.maxCurrentA",
+        "model.params.outputResistanceOhm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "binding-post-layout",
+      "kind": "game-design",
+      "citation": "game-design: the − and + binding posts sit on the front panel 35 mm above the bench, 19 mm apart (the 0.75 in spacing of dual banana plugs, a common bench convention); the layout is not modelled on a product.",
+      "covers": [
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "supply.railwick-din-24v-5a",
+  "version": 1,
+  "title": "24 V 5 A DIN-rail power supply",
+  "brand": "Railwick",
+  "modelName": "RW-24-5",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 40,
+    "heightMm": 125,
+    "depthMm": 114
+  },
+  "terminals": [
+    {
+      "id": "neg",
+      "label": "V−",
+      "positionMm": {
+        "x": 12,
+        "y": 112,
+        "z": 114
+      }
+    },
+    {
+      "id": "pos",
+      "label": "V+",
+      "positionMm": {
+        "x": 28,
+        "y": 112,
+        "z": 114
+      }
+    }
+  ],
+  "model": {
+    "kind": "supply.dinPsu",
+    "params": {
+      "ratedVoltageV": 24,
+      "ratedCurrentA": 5,
+      "currentLimitA": 6,
+      "outputResistanceOhm": 0.048,
+      "hiccupDetectMs": 100,
+      "hiccupOffMs": 1000
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "din-psu-120w-class",
+      "kind": "real-world",
+      "citation": "The slim 24 V 5 A (120 W) DIN-rail switch-mode supply, a common control-panel class. Typical published figures, paraphrased (not one vendor's): 24 V DC output, 5 A continuous; load regulation within about ±1 % from no load to full load. The output resistance is the worst-case slope of that band (0.24 V over 5 A, 48 mΩ): the band is a tolerance, and real units typically droop less; body about 40 mm wide, 125 mm tall and 114 mm deep from the rail.",
+      "covers": [
+        "model.params.ratedVoltageV",
+        "model.params.ratedCurrentA",
+        "model.params.outputResistanceOhm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "din-psu-overload-protection",
+      "kind": "real-world",
+      "citation": "Overload protection of the class: a current limit that typically engages between about 105 % and 150 % of the rated current, recovering automatically (hiccup mode) once the fault is removed. 120 % (6 A) is taken, inside that band. Paraphrased from manufacturers' datasheets for the class.",
+      "covers": [
+        "model.params.currentLimitA"
+      ]
+    },
+    {
+      "id": "hiccup-timing",
+      "kind": "game-design",
+      "citation": "game-design: 100 ms in current limit before the output shuts down, then 1 s off before each restart attempt, a hiccup period of 1.1 s. Datasheets for the class describe hiccup recovery but rarely give its timing; these are chosen to look like it (a short burst, then about a second off).",
+      "covers": [
+        "model.params.hiccupDetectMs",
+        "model.params.hiccupOffMs"
+      ]
+    },
+    {
+      "id": "terminal-layout",
+      "kind": "game-design",
+      "citation": "game-design: the V− and V+ output screw terminals sit on the front face near the top, 16 mm apart; not modelled on a product.",
+      "covers": [
+        "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "switch.tessaline-spst-toggle",
   "version": 1,
   "title": "SPST toggle switch on a base",

@@ -50,18 +50,20 @@ describe('the built-in catalogue (content/devices)', () => {
     expect(files).toStrictEqual(BUILTIN_CATALOG.devices.map((d) => `${d.id}.v${d.version}.json`));
   });
 
-  it('holds the P2 bench devices and one test lead (plan P2, kickoff world v2 PR)', () => {
+  it('holds the P2 bench devices, the F2.4 supplies and one test lead (plan P2)', () => {
     expect(BUILTIN_CATALOG.devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
       ['battery.ferrovane-12v-7ah', 'battery'],
       ['lamp.lumivane-12v-5w', 'lamp.incandescent'],
       ['lead.quillfern-test-1m', 'lead'],
+      ['supply.brindlecore-bench-30v-5a', 'supply.bench'],
+      ['supply.railwick-din-24v-5a', 'supply.dinPsu'],
       ['switch.tessaline-spst-toggle', 'switch.spst'],
     ]);
   });
 
   it('uses fictional brands only (realism charter), each once', () => {
     const brands = BUILTIN_CATALOG.devices.map((d) => d.brand);
-    expect(brands).toStrictEqual(['Ferrovane', 'Lumivane', 'Quillfern', 'Tessaline']);
+    expect(brands).toStrictEqual(['Ferrovane', 'Lumivane', 'Quillfern', 'Brindlecore', 'Railwick', 'Tessaline']);
   });
 
   it('resolves refs to the entry and its model kind', () => {

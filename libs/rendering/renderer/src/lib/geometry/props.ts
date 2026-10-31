@@ -7,7 +7,9 @@ import {
   type Material,
 } from 'three/webgpu';
 import { mm } from '@controls/units';
+import { BUILTIN_CATALOG, type Catalog, type DeviceDefinition } from '@controls/catalog';
 import { builtinProp, type CatalogRef, type PropSpec } from '@controls/world-model';
+import { buildDeviceGeometry, buildDeviceMaterials, deviceDefinitionFor, deviceLabel } from './devices';
 
 /*
  * Procedural prop recipes (plan §4.9 "procedural first"). Sizes come from the built-in prop table
@@ -35,7 +37,7 @@ const LOOK: Readonly<Record<string, { color: number; roughness: number; metalnes
   unknown: { color: 0xd04a9a, roughness: 0.7, metalness: 0 }, // deliberately loud
 };
 
-/** The spec to draw for a ref: the built-in prop, or {@link UNKNOWN_PROP}. */
+/** The spec to draw for a ref: the built-in prop, or {@link UNKNOWN_PROP} (catalogue devices: `PropRecipes`). */
 export function propSpecFor(ref: CatalogRef): PropSpec {
   return builtinProp(ref) ?? UNKNOWN_PROP;
 }
@@ -69,17 +71,56 @@ export function buildGhostMaterial(): Material {
 interface Recipe {
   readonly spec: PropSpec;
   readonly geometry: BufferGeometry;
-  readonly material: Material;
+  /** One material, or one per geometry group (catalogue devices, `devices.ts`). */
+  readonly material: Material | Material[];
+  /** The fictional brand and model a device carries (`userData.label`); `null` for props. */
+  readonly label: string | null;
   users: number;
 }
 
+/** A catalogue device as a prop spec: its title and size, for labels, bounds and the selectable. */
+function deviceSpec(def: DeviceDefinition): PropSpec {
+  return {
+    id: def.id,
+    title: def.title,
+    shape: 'box',
+    sizeMm: def.sizeMm as NonNullable<DeviceDefinition['sizeMm']>,
+    kind: 'game-design',
+    source: `catalogue entry ${def.id}@${def.version} (its sources)`,
+  };
+}
+
+function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
+  const prop = builtinProp(ref);
+  const device = prop === undefined ? deviceDefinitionFor(ref, catalog) : undefined;
+  if (device !== undefined) {
+    return {
+      spec: deviceSpec(device),
+      geometry: buildDeviceGeometry(device),
+      material: buildDeviceMaterials(device),
+      label: deviceLabel(device),
+      users: 0,
+    };
+  }
+  const spec = prop ?? UNKNOWN_PROP;
+  return { spec, geometry: buildPropGeometry(spec), material: buildPropMaterial(spec), label: null, users: 0 };
+}
+
+function disposeMaterial(material: Material | Material[]): void {
+  if (Array.isArray(material)) material.forEach((m) => m.dispose());
+  else material.dispose();
+}
+
 /**
- * Shared, reference-counted prop geometry and materials: every instance of a prop draws with one
- * geometry and one material, and the last release disposes them, so removing every entity returns
- * GPU memory to baseline. Keyed by `id@version`.
+ * Shared, reference-counted prop and device geometry and materials: every instance of a prop (or of a
+ * catalogue device with a recipe, `devices.ts`) draws with one geometry and its materials, and the last
+ * release disposes them, so removing every entity returns GPU memory to baseline. Keyed by
+ * `id@version`.
  */
 export class PropRecipes {
   private readonly recipes = new Map<string, Recipe>();
+
+  constructor(private readonly catalog: Catalog = BUILTIN_CATALOG) {}
 
   /** Number of live recipes (for disposal tests). */
   get size(): number {
@@ -90,8 +131,7 @@ export class PropRecipes {
     const key = `${ref.id}@${ref.version}`;
     let recipe = this.recipes.get(key);
     if (!recipe) {
-      const spec = propSpecFor(ref);
-      recipe = { spec, geometry: buildPropGeometry(spec), material: buildPropMaterial(spec), users: 0 };
+      recipe = buildRecipe(ref, this.catalog);
       this.recipes.set(key, recipe);
     }
     recipe.users++;
@@ -105,7 +145,7 @@ export class PropRecipes {
     recipe.users--;
     if (recipe.users > 0) return;
     recipe.geometry.dispose();
-    recipe.material.dispose();
+    disposeMaterial(recipe.material);
     this.recipes.delete(key);
   }
 
@@ -113,7 +153,7 @@ export class PropRecipes {
   dispose(): void {
     this.recipes.forEach((r) => {
       r.geometry.dispose();
-      r.material.dispose();
+      disposeMaterial(r.material);
     });
     this.recipes.clear();
   }

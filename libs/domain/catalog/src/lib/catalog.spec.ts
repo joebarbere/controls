@@ -210,6 +210,9 @@ describe('parseCatalog', () => {
     expect(messages([supplyEntry([{ ...selector, id: 'setpointV' }])]).join()).toContain('needs a enum key');
     const bounds = { id: 'setpointV', label: 'V', type: 'setpoint', unit: 'V', min: 2, max: 1, step: 1 };
     expect(messages([supplyEntry([bounds])]).join()).toContain('min must not be above max');
+    // The key starts at 0: a control from 1 V would start a new device outside its own range.
+    const above = { id: 'setpointV', label: 'V', type: 'setpoint', unit: 'V', min: 1, max: 5, step: 1 };
+    expect(messages([supplyEntry([above])]).join()).toContain("initial value (0) is outside this control's range");
   });
 
   it('every parameter, the size and the terminals have a source (realism charter)', () => {

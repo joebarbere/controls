@@ -16,9 +16,6 @@ export function find(parent: Int32Array, x: number): number {
   return x;
 }
 
-/** `+0` for `-0`, so every stored value has one bit pattern. */
-export const positiveZero = (x: number): number => (x === 0 ? 0 : x);
-
 /** A recorded stamping: what `buildSymbolic` turns into a pattern, a slot map and a program. */
 export interface StampProgram {
   readonly rows: Int32Array;

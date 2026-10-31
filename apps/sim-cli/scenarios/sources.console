@@ -1,0 +1,17 @@
+# F2.4: the power sources' sim state, headless and in the game (the D6 cross-runtime golden).
+# A DIN-rail PSU shorted by a lead (it hiccups: 100 ticks in limit, 1000 off), a bench supply shorted
+# by a lead at 5 V and 2 A (it holds its current limit), and a battery shorted by a lead (it
+# discharges). After 2345 ticks the PSU has hiccuped twice and is 45 ticks into its third off period,
+# the bench supply is in CC and the battery is partly discharged.
+#   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json
+entity.place --ref.id supply.railwick-din-24v-5a --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 1 --b.terminal neg
+entity.place --ref.id supply.brindlecore-bench-30v-5a --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal pos --b.entity 2 --b.terminal neg
+device.operate 2 setpointV 5
+device.operate 2 currentLimitA 2
+device.operate 2 outputOn true
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal pos --b.entity 3 --b.terminal neg
+sim.step 2345
+world.hash

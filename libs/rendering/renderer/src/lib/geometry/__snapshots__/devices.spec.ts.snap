@@ -1,0 +1,91 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`device recipes in the scene (scene-graph snapshot) > draws each placed device with its recipe, label and device selectable > bench devices 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        -1,
+        0,
+        151,
+        65,
+        105,
+      ],
+      "label": "Ferrovane FV12-7",
+      "name": "entity-1",
+      "positionMm": [
+        100,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        -15,
+        0,
+        130,
+        270,
+        160,
+      ],
+      "label": "Brindlecore BX-217",
+      "name": "entity-2",
+      "positionMm": [
+        400,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        40,
+        125,
+        115,
+      ],
+      "label": "Railwick RW-24-5",
+      "name": "entity-3",
+      "positionMm": [
+        700,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-3",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;

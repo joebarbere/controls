@@ -62,6 +62,22 @@ describe('checkWorldDevices (the invalid-device-state load check)', () => {
     ]);
   });
 
+  it("checks each control's value against the entry's control range (a crafted 1e9 V setpoint)", () => {
+    const SUPPLY = { id: 'supply.brindlecore-bench-30v-5a', version: 1 };
+    const state = { currentLimitA: 1, outputOn: false, setpointV: 12 };
+    expect(checkWorldDevices(world([entity(1, SUPPLY, state, { mode: 'cv' })]))).toStrictEqual([]);
+    expect(
+      checkWorldDevices(world([entity(1, SUPPLY, { ...state, setpointV: 1e9, currentLimitA: 5.5 }, { mode: 'cv' })])),
+    ).toStrictEqual([
+      { path: 'entities[0].state.setpointV', message: 'Voltage takes a number from 0 to 30 V' },
+      { path: 'entities[0].state.currentLimitA', message: 'Current limit takes a number from 0 to 5 A' },
+    ]);
+    // A value its key refuses is reported once, by the bag check, not again by the control check.
+    expect(
+      checkWorldDevices(world([entity(1, SUPPLY, { ...state, setpointV: -1 }, { mode: 'cv' })])).map((i) => i.path),
+    ).toStrictEqual(['entities[0].state.setpointV']);
+  });
+
   it('built-in props have no device state; unknown refs round-trip untouched', () => {
     expect(checkWorldDevices(world([entity(1, CRATE, { lit: true }, { x: 1 })]))).toStrictEqual([
       { path: 'entities[0].state', message: 'A built-in prop has no device state' },

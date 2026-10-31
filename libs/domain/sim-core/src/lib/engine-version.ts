@@ -11,5 +11,7 @@
  *   solver pins.
  * - 3: F2.3a, the engine loop. Saves and `world.hash` now hold the materialised solution record, so a
  *   world with a non-empty netlist hashes differently from what engine 1 or 2 wrote for the same log.
+ * - 4: F2.4, the power sources. The battery's EMF follows its state of charge (12.9 V when full, never
+ *   the nominal 12 V placeholder) and it discharges; the battery and supplies publish device records.
  */
-export const SIM_ENGINE_VERSION = 3;
+export const SIM_ENGINE_VERSION = 4;

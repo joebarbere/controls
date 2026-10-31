@@ -96,7 +96,7 @@ describe('compileNetlist: the bench lamp', () => {
         'node 2 island 0: 2:a 2:b',
         'node 3 island 0: 3:a',
         'node 4 island 0: 3:b',
-        'branch 0 e1.cell vsource battery dc 0 -> 1 island 0 internalResistanceOhm=0.023 nominalVoltageV=12',
+        'branch 0 e1.cell vsource battery dc 0 -> 1 island 0 internalResistanceOhm=0.023 openCircuitVoltageFullV=12.9',
         'branch 1 e3.filament resistor lamp.incandescent 3 -> 4 island 0 ratedPowerW=5 ratedVoltageV=12',
         `branch 2 c1 resistor lead 1 -> 2 island 0 resistanceOhm=${LEAD_OHM}`,
         `branch 3 c2 resistor lead 2 -> 3 island 0 resistanceOhm=${LEAD_OHM}`,

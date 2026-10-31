@@ -18,6 +18,8 @@ import {
 import { compileNetlist } from './compile';
 import { computeTopologyHash, elementKey, TOPOLOGY_ENCODING_HEADER, topologyBytes } from './hash';
 import type { NetlistBranch, NetlistNode } from './types';
+import { BENCH_SUPPLY, DIN_PSU } from '../../testing/sources';
+import { MODEL_KINDS } from '@controls/catalog';
 
 /**
  * Golden topology hashes of the bench lamp. They are persisted in every save's `WorldV2.sim` and in
@@ -35,6 +37,19 @@ const MODEL_KIND_TOPOLOGY = {
   switchSpstOpen: '8d7d96ae3f1d9482fb364f073f7d7eddeef3c6f1840a08701a49f8c05fd692e4',
   switchSpstClosed: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
   lead: '1b026937ba140eaab9f3a11092eff4883b8fa9b4a8e68c200244599e8fbbd279',
+  supplyBench: '7732d91373abae4657ac515c62277f699d9ddf951682082bafde8072c479c586',
+  supplyDinPsu: '80deabcc976dfdabbaf5ad3e701a428f0c2d04cce25a9b2588b231b3c09b7d7e',
+};
+
+/** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
+const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = {
+  battery: 'battery',
+  lampIncandescent: 'lamp.incandescent',
+  switchSpstOpen: 'switch.spst',
+  switchSpstClosed: 'switch.spst',
+  lead: 'lead',
+  supplyBench: 'supply.bench',
+  supplyDinPsu: 'supply.dinPsu',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -154,7 +169,13 @@ describe('topologyHash', () => {
       switchSpstOpen: one(SPST, false),
       switchSpstClosed: one(SPST, true),
       lead: lead(),
+      supplyBench: one(BENCH_SUPPLY),
+      supplyDinPsu: one(DIN_PSU),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
+  });
+
+  it('pins every model kind in MODEL_KINDS (a new kind without a pin fails here)', () => {
+    expect([...new Set(Object.values(PINNED_KIND))].sort()).toStrictEqual(Object.keys(MODEL_KINDS).sort());
   });
 
   it('names elements by entity and part, or by connection', () => {

@@ -31,9 +31,26 @@ export const DC_STAMP_RESISTOR = 1;
 export const DC_STAMP_VSOURCE = 2;
 export const DC_STAMP_ISOURCE = 3;
 
+/*
+ * The setters check their values inline and call out only to throw. A device hook calls them on every
+ * solve with non-integer doubles; a check helper taking the value was a call V8 didn't always inline,
+ * which boxed the value into a heap number each time (the regulating DIN PSU's 3.4 B/step second
+ * level through `lead` → `resistor` → `finite`; simulation caveats). The throwing helpers are cold.
+ */
 function finite(name: string, branch: number, value: number): void {
   if (!Number.isFinite(value))
     throw new RangeError(`DC value ${name} of branch ${branch} must be finite, got ${value}`);
+}
+
+function badResistor(branch: number, ohms: number): never {
+  finite('ohms', branch, ohms);
+  throw new RangeError(`resistor branch ${branch} needs ohms > 0, got ${ohms}`);
+}
+
+function badVsource(branch: number, emfV: number, ohms: number): never {
+  finite('emfV', branch, emfV);
+  finite('ohms', branch, ohms);
+  throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
 }
 
 /** One DC value per branch, in the netlist's branch order. */
@@ -67,32 +84,62 @@ export class DcBranchValues {
   }
 
   resistor(branch: number, ohms: number): void {
-    finite('ohms', branch, ohms);
-    if (!(ohms > 0)) throw new RangeError(`resistor branch ${branch} needs ohms > 0, got ${ohms}`);
+    if (!(Number.isFinite(ohms) && ohms > 0)) badResistor(branch, ohms);
     this.stamps[branch] = DC_STAMP_RESISTOR;
     this.ohms[branch] = ohms;
   }
 
   vsource(branch: number, emfV: number, ohms: number): void {
-    finite('emfV', branch, emfV);
-    finite('ohms', branch, ohms);
-    if (!(ohms >= 0)) throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
+    if (!(Number.isFinite(emfV) && Number.isFinite(ohms) && ohms >= 0)) badVsource(branch, emfV, ohms);
     this.stamps[branch] = DC_STAMP_VSOURCE;
     this.emfV[branch] = emfV;
     // `+ 0` turns −0 into +0, so a zero-ohm source is always the exact zero the singular check tests.
     this.ohms[branch] = ohms + 0;
   }
 
+  /*
+   * The same three setters reading their values by slot, so that no non-integer double crosses the
+   * call: for the per-solve hooks (a regulated output, a battery's segment, a lead's resistance), whose
+   * calls V8 doesn't inline once a process runs many device kinds (simulation caveats). Each checks
+   * and stores exactly as its by-value twin.
+   */
+
+  /** `resistor(branch, source[key])`. */
+  resistorFrom(branch: number, source: Readonly<Record<string, number>>, key: string): void {
+    const ohms = source[key];
+    if (!(Number.isFinite(ohms) && ohms > 0)) badResistor(branch, ohms);
+    this.stamps[branch] = DC_STAMP_RESISTOR;
+    this.ohms[branch] = ohms;
+  }
+
+  /** `vsource(branch, emfV[i], ohms[i])`. */
+  vsourceAt(branch: number, emfV: Float64Array, ohms: Float64Array, i: number): void {
+    const e = emfV[i];
+    const r = ohms[i];
+    if (!(Number.isFinite(e) && Number.isFinite(r) && r >= 0)) badVsource(branch, e, r);
+    this.stamps[branch] = DC_STAMP_VSOURCE;
+    this.emfV[branch] = e;
+    this.ohms[branch] = r + 0;
+  }
+
+  /** `isource(branch, amps[i])`. */
+  isourceAt(branch: number, amps: Float64Array, i: number): void {
+    const a = amps[i];
+    if (!Number.isFinite(a)) finite('amps', branch, a);
+    this.stamps[branch] = DC_STAMP_ISOURCE;
+    this.amps[branch] = a;
+  }
+
   isource(branch: number, amps: number): void {
-    finite('amps', branch, amps);
+    if (!Number.isFinite(amps)) finite('amps', branch, amps);
     this.stamps[branch] = DC_STAMP_ISOURCE;
     this.amps[branch] = amps;
   }
 }
 
 /**
- * Supplies a branch's value when the netlist alone can't: F2.4's battery EMF against state of charge,
- * F2.5's filament R(T). It writes the value into `values` (by `branch.index`) and returns `true`, or
+ * Supplies a branch's value when the netlist alone can't (a battery's EMF at a state of charge,
+ * F2.5's filament R(T)). It writes the value into `values` (by `branch.index`) and returns `true`, or
  * returns `false` to fall back to the model kind's default. It must be pure in its inputs.
  */
 export type DcValueHook = (branch: NetlistBranch, values: DcBranchValues) => boolean;
@@ -104,16 +151,19 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  * Defaults by model kind, for branches no hook sets:
  *
  * - `lead`: its `resistanceOhm` (resistivity × length ÷ area, F2.1);
- * - `battery`: EMF = `nominalVoltageV` behind `internalResistanceOhm`, a placeholder until F2.4 makes
- *   the EMF a function of state of charge.
+ * - `battery`: its full-charge open-circuit EMF (`openCircuitVoltageFullV`) behind `internalResistanceOhm`:
+ *   a new battery (state of charge 1, its kind's initial value) for callers that run no engine model.
+ *   The engine's battery model (F2.4) always sets the EMF from the live state of charge instead. The
+ *   nominal voltage is never an EMF: a lead-acid battery resting at its nominal 12.0 V is only about a
+ *   quarter charged (plan F2.4, #46 review).
  *
  * Kinds whose value is sim-owned state with no placeholder (the lamp's filament R(T), F2.5) have no
  * default: the engine's hook must set them.
  */
 export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Object.freeze({
-  lead: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  lead: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   battery: (branch, values) =>
-    values.vsource(branch.index, branch.values['nominalVoltageV'], branch.values['internalResistanceOhm']),
+    values.vsource(branch.index, branch.values['openCircuitVoltageFullV'], branch.values['internalResistanceOhm']),
 });
 
 /**

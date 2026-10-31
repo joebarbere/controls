@@ -1,0 +1,45 @@
+{
+  "id": "supply.brindlecore-bench-30v-5a",
+  "version": 1,
+  "title": "0–30 V 0–5 A bench DC power supply",
+  "brand": "Brindlecore",
+  "modelName": "BX-217",
+  "category": "source",
+  "sizeMm": { "widthMm": 130, "heightMm": 270, "depthMm": 160 },
+  "terminals": [
+    { "id": "neg", "label": "−", "positionMm": { "x": 56, "y": 0, "z": 35 } },
+    { "id": "pos", "label": "+", "positionMm": { "x": 75, "y": 0, "z": 35 } }
+  ],
+  "model": {
+    "kind": "supply.bench",
+    "params": { "maxVoltageV": 30, "maxCurrentA": 5, "outputResistanceOhm": 0.001 }
+  },
+  "controls": [
+    { "id": "setpointV", "label": "Voltage", "type": "setpoint", "unit": "V", "min": 0, "max": 30, "step": 0.01 },
+    {
+      "id": "currentLimitA",
+      "label": "Current limit",
+      "type": "setpoint",
+      "unit": "A",
+      "min": 0,
+      "max": 5,
+      "step": 0.001
+    },
+    { "id": "outputOn", "label": "Output", "type": "toggle" }
+  ],
+  "sources": [
+    {
+      "id": "linear-bench-supply-class",
+      "kind": "real-world",
+      "citation": "The single-output 0–30 V, 0–5 A linear laboratory supply, a common bench class with constant-voltage and constant-current regulation and automatic crossover. Typical published figures for the class, paraphrased (not one vendor's): CV load regulation within about 0.01 % + 2 mV from no load to full load, so about 5 mV at 30 V over 5 A, an output resistance of about 1 mΩ; case about 130 mm wide, 160 mm tall and 270 mm deep. The size is the footprint on the bench (130 × 270 mm: width, then front to back) and the height above it (160 mm), the bench axes every bench device uses.",
+      "covers": ["model.params.maxVoltageV", "model.params.maxCurrentA", "model.params.outputResistanceOhm", "sizeMm"]
+    },
+    {
+      "id": "binding-post-layout",
+      "kind": "game-design",
+      "citation": "game-design: the − and + binding posts sit on the front panel 35 mm above the bench, 19 mm apart (the 0.75 in spacing of dual banana plugs, a common bench convention); the layout is not modelled on a product.",
+      "covers": ["terminals"]
+    }
+  ],
+  "extensions": {}
+}

@@ -4,6 +4,7 @@ import { materialiseWorld } from '@controls/sim-protocol';
 import { createWorldBus, createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
+import { SOURCE_SESSION_REFS } from '../../testing/sources';
 import {
   AC_TWIN,
   DROOP,
@@ -230,13 +231,19 @@ function checkParity(before: readonly Op[], after: readonly Op[], options: SimEn
   expect(fingerprint(loaded)).toStrictEqual(fingerprint(straight));
 }
 
+/** The generator-health sessions (a fixed seed), shared by the at-cut and after-cut tests. */
+const HEALTH_SAMPLES = fc.sample(sessionArb, { seed: 20261031, numRuns: 60 });
+
 describe('engine determinism properties', () => {
   it('every engine device model has a parity case (a model without one fails here)', () => {
     const kinds = [...Object.keys(BUILTIN_DEVICE_MODELS), ...Object.keys(engineTestOptions().deviceModels)];
     expect(kinds.length).toBeGreaterThanOrEqual(7);
+    // Over both session arbitraries: this file's (F2.3a's mix) and the sources' (`devices/sources/
+    // properties.spec.ts`, F2.4), so a model is covered by one save-and-load property or the other.
+    const covered: Readonly<Record<string, CatalogRef>> = { ...PARITY_REFS, ...SOURCE_SESSION_REFS };
     for (const kind of kinds) {
-      expect(PARITY_REFS[kind], kind).toBeDefined();
-      expect(ENGINE_TEST_CATALOG.kindOf(PARITY_REFS[kind])?.kind).toBe(kind);
+      expect(covered[kind], kind).toBeDefined();
+      expect(ENGINE_TEST_CATALOG.kindOf(covered[kind])?.kind).toBe(kind);
     }
   });
 
@@ -286,21 +293,9 @@ describe('engine determinism properties', () => {
     );
   });
 
-  it('the sessions cut mid-interval, with heat, a blown fuse, singular and unsettled islands and restored tombstones (generator health)', () => {
-    const samples = fc.sample(sessionArb, { seed: 20261031, numRuns: 60 });
-    const counts = {
-      midInterval: 0,
-      blown: 0,
-      heated: 0,
-      singular: 0,
-      nonConverged: 0,
-      topologyAfter: 0,
-      eventsAfter: 0,
-      tombstones: 0,
-      ac: 0,
-      acSingular: 0,
-    };
-    for (const { before, after } of samples) {
+  it('the sessions cut mid-interval, with heat, a blown fuse, singular and unsettled islands (generator health, at the cut)', () => {
+    const counts = { midInterval: 0, blown: 0, heated: 0, singular: 0, nonConverged: 0, ac: 0, acSingular: 0 };
+    for (const { before } of HEALTH_SAMPLES) {
       const host = benchHost();
       before.forEach((op) => apply(host, op));
       if (host.engine.tick % 10 !== 0) counts.midInterval++;
@@ -312,6 +307,23 @@ describe('engine determinism properties', () => {
       if (statuses.includes('nonConverged')) counts.nonConverged++;
       if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'solved')) counts.ac++;
       if (host.engine.islands().some((i) => i.kind === 'ac' && i.status === 'singular')) counts.acSingular++;
+    }
+    // Measured on this seed, of 60 (unchanged by F2.4's battery model): 39 mid-interval, 5 blown, 20
+    // heated, 17 singular (12 of them AC), 4 unsettled and 23 solved AC islands at the cut.
+    expect(counts.midInterval).toBeGreaterThan(30);
+    expect(counts.blown).toBeGreaterThan(2);
+    expect(counts.heated).toBeGreaterThan(14);
+    expect(counts.singular).toBeGreaterThan(11);
+    expect(counts.acSingular).toBeGreaterThan(7);
+    expect(counts.nonConverged).toBeGreaterThan(1);
+    expect(counts.ac).toBeGreaterThan(16);
+  });
+
+  it('after the cut the sessions change topology, raise events and restore tombstones (generator health)', () => {
+    const counts = { topologyAfter: 0, eventsAfter: 0, tombstones: 0 };
+    for (const { before, after } of HEALTH_SAMPLES) {
+      const host = benchHost();
+      before.forEach((op) => apply(host, op));
       host.engine.takeEvents();
       const generation = host.engine.topologyGeneration;
       let restored = false;
@@ -328,16 +340,7 @@ describe('engine determinism properties', () => {
       if (host.engine.takeEvents().length > 0) counts.eventsAfter++;
       if (host.engine.topologyGeneration > generation) counts.topologyAfter++;
     }
-    // Measured on this seed, of 60: 39 mid-interval, 5 blown, 20 heated, 17 singular (12 of them AC),
-    // 4 unsettled and 23 solved AC islands at the cut; 59 topology changes, 30 with events and 15
-    // restored tombstones after it.
-    expect(counts.midInterval).toBeGreaterThan(30);
-    expect(counts.blown).toBeGreaterThan(2);
-    expect(counts.heated).toBeGreaterThan(14);
-    expect(counts.singular).toBeGreaterThan(11);
-    expect(counts.acSingular).toBeGreaterThan(7);
-    expect(counts.nonConverged).toBeGreaterThan(1);
-    expect(counts.ac).toBeGreaterThan(16);
+    // Measured on this seed, of 60: 59 topology changes, 30 with events and 15 restored tombstones.
     expect(counts.topologyAfter).toBeGreaterThan(50);
     expect(counts.eventsAfter).toBeGreaterThan(22);
     expect(counts.tombstones).toBeGreaterThan(10);

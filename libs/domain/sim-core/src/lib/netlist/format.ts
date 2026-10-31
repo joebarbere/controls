@@ -12,7 +12,7 @@ import type { Netlist, NetlistDiagnostic } from './types';
  * topology 4f0c…
  * island 0 dc nodes 0 1 2 branches 0 1 2
  * node 0 island 0: 1:neg 3:b
- * branch 0 e1.cell vsource battery dc 0 -> 1 island 0 internalResistanceOhm=0.023 nominalVoltageV=12
+ * branch 0 e1.cell vsource battery dc 0 -> 1 island 0 internalResistanceOhm=0.023 openCircuitVoltageFullV=12.9
  * branch 1 c1 resistor lead 1 -> 2 island 0 resistanceOhm=0.04094…
  * diagnostic mixed-island island 2
  * ```

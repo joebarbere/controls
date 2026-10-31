@@ -624,7 +624,7 @@ export function loadGame(bytes: Uint8Array, options: LoadGameOptions = {}): Load
 
 /** Why a save's log restarted as `engine-changed` (D8): shown by the game and `sim-cli` alike. */
 export const ENGINE_CHANGED_MESSAGE =
-  'The save was made with another version of the simulator, so its replay log wasn’t checked and a new log started from the loaded game. The game itself loaded normally.';
+  'The save was made with another version of the simulator, so its replay log wasn’t checked and a new log started from the loaded game, and its circuit readings were worked out again. The game itself loaded normally.';
 
 /** Why a save's log restarted as `too-long-to-verify`: shown by the game and `sim-cli` alike. */
 export const TOO_LONG_TO_VERIFY_MESSAGE =
@@ -702,7 +702,10 @@ export function gameFromSave(
   }
   const registry = options.registry ?? createWorldRegistry();
   const firstSeq = log === null ? 0 : log.firstSeq + log.entries.length;
-  let start = world;
+  // D8: a save from another engine keeps its devices' state (charge, a tripped breaker) but never its
+  // solution record, which another engine's models computed: the engine solves again at the save's
+  // tick, so no reading on screen comes from another engine (F2.4 save-format review).
+  let start: typeof world = compatibility === 'engine-changed' ? { ...world, sim: null } : world;
   let engine: SimEngine | null;
   try {
     engine = startEngine(start, options);

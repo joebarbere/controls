@@ -19,7 +19,7 @@ import {
 } from './dc';
 import { FactorisationCache, type IslandSymbolic } from './factorisation-cache';
 import { angularFrequency } from './phasor';
-import { buildSymbolic, endsChecksum, find, grow, positiveZero, type StampProgram } from './shared';
+import { buildSymbolic, endsChecksum, find, grow, type StampProgram } from './shared';
 
 /*
  * Phasor (AC steady-state) modified nodal analysis (plan F2.2 part 2): the DC solver's formulation
@@ -139,6 +139,11 @@ export class AcSolver {
   private rhsCode = new Uint8Array(64);
   private rhsBranch = new Int32Array(64);
   private rhsCalls = 0;
+  /** ω for `omegaHz`, the last solve's frequency (see `solve`). */
+  private readonly omega = new Float64Array(1);
+  private omegaHz = Number.NaN;
+  /** The series resistances `stamp` is stamping, read by `add` through a branch index. */
+  private stampOhms: Float64Array = new Float64Array(0);
   /** The sparse matrix's values (interleaved), aligned with the current pattern. */
   private sparseValues = new Float64Array(0);
   private signature = new Uint8Array(0);
@@ -159,7 +164,12 @@ export class AcSolver {
    * element kind (a programming error).
    */
   solve(netlist: Netlist, values: AcBranchValues, frequencyHz: number, out?: DcSolution): DcSolution {
-    const omega = angularFrequency(frequencyHz);
+    // ω kept in a slot, never passed or returned per solve: a double crossing a call V8 doesn't inline is
+    // boxed into a heap number (1.6 B/step in a mixed-device process; simulation caveats).
+    if (frequencyHz !== this.omegaHz) {
+      this.omega[0] = angularFrequency(frequencyHz);
+      this.omegaHz = frequencyHz;
+    }
     if (values.count !== netlist.branches.length) {
       throw new RangeError(`AcSolver: ${values.count} values for ${netlist.branches.length} branches`);
     }
@@ -180,26 +190,26 @@ export class AcSolver {
       this.yRe = new Float64Array(netlist.branches.length);
       this.yIm = new Float64Array(netlist.branches.length);
     }
-    for (const island of netlist.islands) {
-      if (island.kind === 'ac') this.solveIsland(netlist, island, values, omega, solution);
+    for (let ii = 0; ii < netlist.islands.length; ii++) {
+      const island = netlist.islands[ii];
+      if (island.kind === 'ac') this.solveIsland(netlist, island, values, solution);
     }
     return solution;
   }
 
-  private solveIsland(
-    netlist: Netlist,
-    island: NetlistIsland,
-    values: AcBranchValues,
-    omega: number,
-    solution: DcSolution,
-  ): void {
+  private solveIsland(netlist: Netlist, island: NetlistIsland, values: AcBranchValues, solution: DcSolution): void {
+    const omega = this.omega[0];
     const result = solution.islands[island.index];
     const reference = islandReferenceNode(netlist, island);
     const nodeUnknown = this.nodeUnknown;
     const branchUnknown = this.branchUnknown;
     let n = 0;
-    for (const node of island.nodes) nodeUnknown[node] = node === reference ? -1 : n++;
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      nodeUnknown[node] = node === reference ? -1 : n++;
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const stamp = values.stamps[index];
       if (stamp === AC_STAMP_UNSET) throw new Error(`AcSolver: branch ${index} has no AC value`);
@@ -209,7 +219,7 @@ export class AcSolver {
       } else {
         if (stamp === AC_STAMP_VSOURCE) throw new Error(`AcSolver: resistor branch ${index} stamped as a vsource`);
         branchUnknown[index] = -1;
-        this.admittance(index, stamp, values, omega);
+        this.admittance(index, stamp, values);
       }
     }
     setRecord(result, reference, n);
@@ -251,15 +261,17 @@ export class AcSolver {
     const nodes = solution.nodes;
     const branches = solution.branches;
     let ok = true;
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       const i = nodeUnknown[node];
-      const re = i >= 0 ? positiveZero(rhs[2 * i]) : 0;
-      const im = i >= 0 ? positiveZero(rhs[2 * i + 1]) : 0;
+      const re = i >= 0 ? rhs[2 * i] + 0 : 0;
+      const im = i >= 0 ? rhs[2 * i + 1] + 0 : 0;
       if (!Number.isFinite(re) || !Number.isFinite(im)) ok = false;
       nodes[2 * node] = re;
       nodes[2 * node + 1] = im;
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const k = branchUnknown[index];
       let re: number;
@@ -276,8 +288,8 @@ export class AcSolver {
         re = yr * dr - yi * di;
         im = yr * di + yi * dr;
       }
-      re = positiveZero(re);
-      im = positiveZero(im);
+      re += 0; // −0 becomes +0, so every stored value has one bit pattern (inline: a call returning a double boxes it)
+      im += 0;
       if (!Number.isFinite(re) || !Number.isFinite(im)) ok = false;
       branches[2 * index] = re;
       branches[2 * index + 1] = im;
@@ -286,7 +298,8 @@ export class AcSolver {
   }
 
   /** Writes a passive branch's admittance at ω into `yRe`, `yIm`. */
-  private admittance(index: number, stamp: number, values: AcBranchValues, omega: number): void {
+  private admittance(index: number, stamp: number, values: AcBranchValues): void {
+    const omega = this.omega[0];
     if (stamp === AC_STAMP_RESISTOR) {
       this.yRe[index] = 1 / values.ohms[index];
       this.yIm[index] = 0;
@@ -396,14 +409,28 @@ export class AcSolver {
   }
 
   /**
-   * Adds `re + j·im` to entry (row, col): into the dense matrix, or, in record mode, as a step of the
-   * stamp program (`code` and `branch` say how to recompute the value, exactly as computed here).
+   * Adds the value `code` and `branch` give (exactly as `assemble` computes it) to entry (row, col):
+   * into the dense matrix, or, in record mode, as a step of the stamp program. Only codes cross the
+   * call, never a double: a non-integer double passed to a call V8 doesn't inline is boxed into a heap
+   * number, and whether it inlines varies from process to process (simulation caveats; DC's `add` too).
+   * A real value adds nothing to the imaginary part, which is bit-identical to adding +0 there: an
+   * entry's imaginary part starts at +0 and can't become −0 (+0 + −0 is +0).
    */
-  private add(row: number, col: number, re: number, im: number, code: number, branch: number): void {
+  private add(row: number, col: number, code: number, branch: number): void {
     if (this.mode === MODE_DENSE) {
+      const a = this.a;
       const at = 2 * (row * this.n + col);
-      this.a[at] += re;
-      this.a[at + 1] += im;
+      if (code === VALUE_GMIN) a[at] += GMIN_S.value;
+      else if (code === VALUE_ONE) a[at] += 1;
+      else if (code === VALUE_MINUS_ONE) a[at] += -1;
+      else if (code === VALUE_OHMS) a[at] += this.stampOhms[branch];
+      else if (code === VALUE_Y) {
+        a[at] += this.yRe[branch];
+        a[at + 1] += this.yIm[branch];
+      } else {
+        a[at] += -this.yRe[branch];
+        a[at + 1] += -this.yIm[branch];
+      }
       return;
     }
     const c = this.calls++;
@@ -443,12 +470,14 @@ export class AcSolver {
   private stamp(netlist: Netlist, island: NetlistIsland, values: AcBranchValues): void {
     const nodeUnknown = this.nodeUnknown;
     const branchUnknown = this.branchUnknown;
-    const gmin = GMIN_S.value;
-    for (const node of island.nodes) {
+    this.stampOhms = values.ohms;
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       const i = nodeUnknown[node];
-      if (i >= 0) this.add(i, i, gmin, 0, VALUE_GMIN, -1);
+      if (i >= 0) this.add(i, i, VALUE_GMIN, -1);
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       const branch = netlist.branches[index];
       const k = branchUnknown[index];
       const ia = nodeUnknown[branch.a];
@@ -456,22 +485,20 @@ export class AcSolver {
       if (k >= 0) {
         if (branch.a !== branch.b) {
           // KCL: the source's current I leaves `a` and enters `b`.
-          if (ia >= 0) this.add(ia, k, 1, 0, VALUE_ONE, index);
-          if (ib >= 0) this.add(ib, k, -1, 0, VALUE_MINUS_ONE, index);
+          if (ia >= 0) this.add(ia, k, VALUE_ONE, index);
+          if (ib >= 0) this.add(ib, k, VALUE_MINUS_ONE, index);
           // Vb − Va + R·I = E.
-          if (ib >= 0) this.add(k, ib, 1, 0, VALUE_ONE, index);
-          if (ia >= 0) this.add(k, ia, -1, 0, VALUE_MINUS_ONE, index);
+          if (ib >= 0) this.add(k, ib, VALUE_ONE, index);
+          if (ia >= 0) this.add(k, ia, VALUE_MINUS_ONE, index);
         }
-        this.add(k, k, values.ohms[index], 0, VALUE_OHMS, index);
+        this.add(k, k, VALUE_OHMS, index);
         this.rhsEmf(k, values, index);
       } else if (branch.a !== branch.b) {
-        const yr = this.yRe[index];
-        const yi = this.yIm[index];
-        if (ia >= 0) this.add(ia, ia, yr, yi, VALUE_Y, index);
-        if (ib >= 0) this.add(ib, ib, yr, yi, VALUE_Y, index);
+        if (ia >= 0) this.add(ia, ia, VALUE_Y, index);
+        if (ib >= 0) this.add(ib, ib, VALUE_Y, index);
         if (ia >= 0 && ib >= 0) {
-          this.add(ia, ib, -yr, -yi, VALUE_MINUS_Y, index);
-          this.add(ib, ia, -yr, -yi, VALUE_MINUS_Y, index);
+          this.add(ia, ib, VALUE_MINUS_Y, index);
+          this.add(ib, ia, VALUE_MINUS_Y, index);
         }
       }
     }
@@ -480,8 +507,12 @@ export class AcSolver {
   /** Whether the island's zero-ohm voltage sources close a loop (a self-loop included). */
   private hasIdealSourceLoop(netlist: Netlist, island: NetlistIsland, values: AcBranchValues): boolean {
     const parent = this.parent;
-    for (const node of island.nodes) parent[node] = node;
-    for (const index of island.branches) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
+      parent[node] = node;
+    }
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       if (values.stamps[index] !== AC_STAMP_VSOURCE || values.ohms[index] !== 0) continue;
       const branch = netlist.branches[index];
       const ra = find(parent, branch.a);
@@ -495,11 +526,13 @@ export class AcSolver {
 
   private singular(netlist: Netlist, island: NetlistIsland, solution: DcSolution, result: DcIslandResult): void {
     result.flags |= ISLAND_FLAG_SINGULAR;
-    for (const node of island.nodes) {
+    for (let ni = 0; ni < island.nodes.length; ni++) {
+      const node = island.nodes[ni];
       solution.nodes[2 * node] = 0;
       solution.nodes[2 * node + 1] = 0;
     }
-    for (const index of island.branches) {
+    for (let bi = 0; bi < island.branches.length; bi++) {
+      const index = island.branches[bi];
       solution.branches[2 * index] = 0;
       solution.branches[2 * index + 1] = 0;
     }

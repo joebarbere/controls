@@ -16,7 +16,10 @@ import { branchOf, current, nodeOf, syntheticNetlist, voltage } from './mna';
  *
  * Values every real-world fixture shares:
  *
- * - E = 12 V, the battery's EMF: its `nominalVoltageV`, the default until F2.4's state-of-charge curve;
+ * - E = 12 V, the battery's EMF, set by each fixture's hook (`valuesFor`), as the engine's battery model
+ *   sets it from the state of charge (F2.4). 12 V is a round test EMF, not the catalogue battery at
+ *   any particular charge: since F2.4 there is no nominal-EMF default (a lead-acid battery resting at
+ *   12.0 V is about a quarter charged), and the hand calculations below stay as they were;
  * - r = 0.023 Ω, the battery's `internalResistanceOhm` (catalogue entry battery.ferrovane-12v-7ah);
  * - R_L = 0.040948155 Ω per 1 m test lead: ρ·L/A = 1.724137931034483e-8 Ω·m × 1 m ÷ 8.2305e-7 m²
  *   = 0.020948155 Ω, plus 2 × 0.01 Ω of clip contact (F2.1's hand calculation, `compile.spec.ts`);
@@ -65,7 +68,7 @@ function bench(
   return bus.state;
 }
 
-/** DC values with lamp filaments set to `ohms[entity]` and batteries' EMF overridden by `emf[entity]`. */
+/** DC values with lamp filaments set to `ohms[entity]` and batteries' EMF set to `emf[entity]`, else E. */
 function valuesFor(
   netlist: Netlist,
   lampOhms: Readonly<Record<number, number>>,
@@ -78,8 +81,8 @@ function valuesFor(
       values.resistor(branch.index, lampOhms[entity]);
       return true;
     }
-    if (branch.model === 'battery' && emf[entity] !== undefined) {
-      values.vsource(branch.index, emf[entity], branch.values['internalResistanceOhm']);
+    if (branch.model === 'battery') {
+      values.vsource(branch.index, emf[entity] ?? E, branch.values['internalResistanceOhm']);
       return true;
     }
     return false;

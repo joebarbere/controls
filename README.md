@@ -38,7 +38,14 @@ What exists today (Phases 0 and 1):
 - The viewport draws the world document by entity id: placed objects appear, move and disappear as commands run (undo and redo included), as procedural props that share geometry, and removing them returns GPU memory to where it was.
 - Placement with a snapping ghost preview: pick a prop (1–9), aim, click or press Enter to place it; drag an object (or select it, M, Enter) to move it; Delete removes it; Escape cancels. Each commit is exactly one command, so the mouse reaches the same `world.hash` as the equivalent console lines.
 - Hover and click selection through BVH picking, with keyboard cycling (`[` and `]`). The viewport draws only when something changes (idle behind the menu); a frame-time HUD shows in dev builds.
+- Procedural 3D models of the bench battery, the bench supply and the DIN-rail supply, sized from their catalogue entries and labelled with their fictional brands.
 - Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
+
+### Simulation
+
+- Batteries that run down: the EMF follows the state of charge (a new 12 V lead-acid battery rests at 12.9 V), behind its internal resistance, and the charge delivered is counted every millisecond and kept in saves.
+- A bench DC supply (0–30 V, 0–5 A) with a voltage setpoint, a current limit and an output switch, and a clean constant-voltage/constant-current crossover; a 24 V DIN-rail supply whose overload protection hiccups (off for a second, then retry).
+- Honest readings: a device's record says whether its circuit was solved, and an unsettled solve is never shown as a steady value.
 
 ### Commands and world
 

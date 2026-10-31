@@ -43,6 +43,17 @@ export interface SimDevice {
   stream(): Sfc32;
 }
 
+/**
+ * Why an island's values are or aren't a reading:
+ *
+ * - `solved`: a reading;
+ * - `singular`: a loop of ideal sources (ADR 0011 §5.3): its zeros are not 0 V;
+ * - `nonConverged`: the outer loop hit its cap: values that look real but aren't settled;
+ * - `unmodelled`: an element no device model can value yet (the lamp until F2.5): not solved;
+ * - `mixed`: DC and AC sources in one island (P2 has no converters): not solved.
+ */
+export type SimIslandStatus = 'solved' | 'singular' | 'nonConverged' | 'unmodelled' | 'mixed';
+
 /** What a layer sees for one step, `[tick, tick + 1)`. The same object every step: never keep it. */
 export interface LayerContext {
   /** The tick the step starts at. Events it emits are stamped `tick + 1`, the state they describe. */
@@ -57,6 +68,8 @@ export interface LayerContext {
    * non-converged. An unsolved island's values are zeros, never a current to integrate.
    */
   islandReadable(island: number): boolean;
+  /** Island `island`'s status in the last solution (what `islandReadable` tests for `solved`). */
+  islandStatus(island: number): SimIslandStatus;
   /** Reports a device event (`blown`, `tripped`, `hiccup`, `overRated`) at `tick + 1`. */
   emit(kind: SimEventKind, entity: number, detail?: Readonly<Record<string, number | string | boolean>>): void;
 }
@@ -86,11 +99,29 @@ export interface SimDeviceBank {
    * `iterate` (null on a cold start). Pure in its inputs.
    */
   iterate?(index: number, branch: NetlistBranch, iterate: DcSolution | null, values: DcBranchValues): void;
-  /** The discrete layer (relays, P6). Returns whether it changed the topology. */
+  /**
+   * Called after every electrical solve (cadence, command, layer or start), with `ctx.solution` the
+   * new solution at `ctx.tick` and `values` exactly the DC values it was solved with (the outer loop's
+   * last stamps). It commits sim state the solve decided, such as a supply's CV/CC mode, into the
+   * bank, so the bag (and so a save and the snapshot) agrees with the solution it describes. Pure in
+   * its inputs; it must not emit events (F2.4).
+   */
+  afterSolve?(ctx: LayerContext, values: DcBranchValues): void;
+  /**
+   * The discrete layer (relays, P6). Returns whether it changed what the electrical layer sees: the
+   * topology, or a value a model's `dcValue` reads from its bank. Either way the engine re-solves at
+   * `tick + 1`, within the step; it recompiles first only for a kind that lists `simTopologyKeys` (the
+   * compile reads a bag through those keys alone, so no other kind's change can move the netlist).
+   */
   discrete?(ctx: LayerContext): boolean;
   /** The continuous layer (filament temperature, state of charge): integrates over the step. */
   continuous?(ctx: LayerContext): void;
-  /** The protection layer (fuse I²t, breaker, PSU hiccup). Returns whether it changed the topology. */
+  /**
+   * The protection layer (fuse I²t, breaker, PSU hiccup). Returns whether it changed what the
+   * electrical layer sees (a blown fuse's topology, a PSU switching its output off): the engine then
+   * re-solves at `tick + 1`, within the step, so the change is tick-exact (recompiling first only for a
+   * kind with `simTopologyKeys`, as `discrete`).
+   */
   protection?(ctx: LayerContext): boolean;
   /**
    * Writes device `index`'s output record (its kind's `output` schema) at `offset`; the bytes arrive
@@ -112,9 +143,4 @@ export interface SimDeviceModel {
   bank(devices: readonly SimDevice[]): SimDeviceBank;
 }
 
-/**
- * The engine models of the built-in kinds. Empty in F2.3a: the battery keeps its placeholder EMF
- * (`DC_DEFAULT_VALUES`) and no state of charge (F2.4); the lamp has no filament model yet (F2.5),
- * so an island holding one is unmodelled. A kind without an engine model keeps its bag as loaded.
- */
-export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({});
+export { BUILTIN_DEVICE_MODELS } from '../devices';

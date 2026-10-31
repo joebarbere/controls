@@ -44,9 +44,17 @@ function finite(name: string, branch: number, value: number): void {
     throw new RangeError(`AC value ${name} of branch ${branch} must be finite, got ${value}`);
 }
 
-function positive(name: string, branch: number, value: number): void {
+/** Throws for a value that isn't finite and > 0. Cold: the setters check inline first (as `values.ts`). */
+function notPositive(name: string, branch: number, value: number): never {
   finite(name, branch, value);
-  if (!(value > 0)) throw new RangeError(`AC value ${name} of branch ${branch} must be > 0, got ${value}`);
+  throw new RangeError(`AC value ${name} of branch ${branch} must be > 0, got ${value}`);
+}
+
+function badVsource(branch: number, emfRe: number, emfIm: number, ohms: number): never {
+  finite('emfRe', branch, emfRe);
+  finite('emfIm', branch, emfIm);
+  finite('ohms', branch, ohms);
+  throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
 }
 
 /** One phasor-solve value per branch, in the netlist's branch order. */
@@ -85,29 +93,28 @@ export class AcBranchValues {
   }
 
   resistor(branch: number, ohms: number): void {
-    positive('ohms', branch, ohms);
+    if (!(Number.isFinite(ohms) && ohms > 0)) notPositive('ohms', branch, ohms);
     this.stamps[branch] = AC_STAMP_RESISTOR;
     this.ohms[branch] = ohms;
   }
 
   inductor(branch: number, henries: number): void {
-    positive('henries', branch, henries);
+    if (!(Number.isFinite(henries) && henries > 0)) notPositive('henries', branch, henries);
     this.stamps[branch] = AC_STAMP_INDUCTOR;
     this.henries[branch] = henries;
   }
 
   capacitor(branch: number, farads: number): void {
-    positive('farads', branch, farads);
+    if (!(Number.isFinite(farads) && farads > 0)) notPositive('farads', branch, farads);
     this.stamps[branch] = AC_STAMP_CAPACITOR;
     this.farads[branch] = farads;
   }
 
   /** A phasor EMF `emfRe` + j·`emfIm` (RMS) behind a series resistance `ohms` ≥ 0. */
   vsource(branch: number, emfRe: number, emfIm: number, ohms: number): void {
-    finite('emfRe', branch, emfRe);
-    finite('emfIm', branch, emfIm);
-    finite('ohms', branch, ohms);
-    if (!(ohms >= 0)) throw new RangeError(`vsource branch ${branch} needs ohms ≥ 0, got ${ohms}`);
+    if (!(Number.isFinite(emfRe) && Number.isFinite(emfIm) && Number.isFinite(ohms) && ohms >= 0)) {
+      badVsource(branch, emfRe, emfIm, ohms);
+    }
     this.stamps[branch] = AC_STAMP_VSOURCE;
     // `+ 0` turns −0 into +0: one bit pattern per value, and a zero-ohm source is exactly 0.
     this.emfRe[branch] = emfRe + 0;

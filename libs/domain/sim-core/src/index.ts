@@ -4,3 +4,4 @@ export * from './lib/netlist';
 export * from './lib/lu';
 export * from './lib/mna';
 export * from './lib/engine';
+export * from './lib/devices';

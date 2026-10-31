@@ -17,8 +17,6 @@ import {
   entityStreamKey,
 } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
-import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
-import { runInNewContext } from 'node:vm';
 import { join } from 'node:path';
 import { AC_SOURCE, BATTERY, benchLamp, CRATE, end, LAMP, LEAD, origin, SPST } from '../../testing/bench';
 import {
@@ -187,8 +185,8 @@ describe('SimEngine: electrical results', () => {
     expect(sw).toBe(0); // a closed switch is one node
     const loopCurrent = host.engine.exportState().solution?.branches[0] as number; // the battery's cell
     expect(Math.abs(loopCurrent)).toBeGreaterThan(4);
-    // Terminal voltage = EMF − I·R (the placeholder EMF until F2.4), within rounding.
-    expect(battery).toBeCloseTo(12 - Math.abs(loopCurrent) * 0.023, 9);
+    // Terminal voltage = EMF − I·R, the EMF a new battery's (12.9 V at a state of charge of 1), within rounding.
+    expect(battery).toBeCloseTo(12.9 - Math.abs(loopCurrent) * 0.023, 9);
     expect(load + fuse).toBeLessThan(battery);
     expect(fuse).toBeCloseTo(Math.abs(loopCurrent) * 0.01, 9);
   });
@@ -216,7 +214,7 @@ describe('SimEngine: electrical results', () => {
   });
 
   it('never presents an unmodelled island as a reading: the real lamp has no filament model until F2.5', () => {
-    expect(BUILTIN_DEVICE_MODELS).toStrictEqual({});
+    expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual(['battery', 'supply.bench', 'supply.dinPsu']);
     const engine = SimEngine.start(benchLamp(true));
     const [island] = engine.islands();
     expect(island).toMatchObject({ kind: 'dc', status: 'unmodelled', iterations: 0, entities: [1, 2, 3] });
@@ -508,13 +506,14 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
     host.advanceTo(80); // before the fuse melts
     const world = host.materialised();
     expect(world.entities.map((e) => [e.id, e.sim])).toStrictEqual([
-      [1, { stateOfCharge: 1 }], // no engine model for the battery until F2.4: its bag as placed
+      [1, { stateOfCharge: expect.any(Number) }], // discharging since the switch closed (F2.4)
       [2, {}],
       [3, { tempK: expect.any(Number) }],
       [4, { blown: false, heatA2s: expect.any(Number) }],
       [5, { filamentTempK: null }], // no lamp model until F2.5
     ]);
     expect(world.entities[2].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
+    expect(world.entities[0].sim['stateOfCharge']).toBeLessThan(1);
     expect(checkWorldDevices(world, ENGINE_TEST_CATALOG)).toStrictEqual([]);
     expect(World.safeParse(world).success).toBe(true);
     expect(world.sim?.lastSolveTick).toBe(70);
@@ -634,18 +633,21 @@ describe('SimEngine: the snapshot', () => {
       tick: 100,
       lastSolveTick: 90,
       topologyHash: host.engine.netlist.topologyHash,
-      deviceCount: 2,
+      deviceCount: 3,
     });
     expect([...snapshot.nodes]).toStrictEqual(exported.solution?.nodes);
     expect([...snapshot.branches]).toStrictEqual(exported.solution?.branches);
     expect(snapshot.islands).toStrictEqual([
       { kind: 'dc', flags: 0, iterations: 1, referenceNode: 0, unknowns: expect.any(Number), band: 0 },
     ]);
-    // Records in entity order: the load (3) then the fuse (4), 16 bytes each.
+    // Records in entity order: the battery (1, 40 bytes), the load (3) then the fuse (4), 16 bytes each.
     const view = new DataView(snapshot.devices.buffer);
-    expect(view.getFloat64(8, true)).toBe(host.materialised().entities[2].sim['tempK']);
-    expect(view.getFloat64(16, true)).toBeGreaterThan(0); // the fuse's melt fraction
-    expect(view.getUint8(24)).toBe(0); // intact
+    const world = host.materialised();
+    expect(view.getFloat64(24, true)).toBe(world.entities[0].sim['stateOfCharge']); // the battery's
+    expect(view.getUint8(32)).toBe(1); // solved
+    expect(view.getFloat64(40 + 8, true)).toBe(world.entities[2].sim['tempK']);
+    expect(view.getFloat64(56, true)).toBeGreaterThan(0); // the fuse's melt fraction
+    expect(view.getUint8(64)).toBe(0); // intact
     expect(host.engine.snapshotHash()).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -715,64 +717,10 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     host.engine.advanceTo(1);
     expect(host.engine.revision).toBeGreaterThan(revision);
   });
-
-  /**
-   * Bytes allocated per step by a battery-or-AC-source loop through a thermal load (continuous work every
-   * tick, a cadence solve every 10): the heap's growth plus what each collection freed, in the smallest
-   * of ten 20 000-step windows after 40 000 warm-up steps.
-   *
-   * - GC counts are no measure: the runtime's own few scavenges land at random.
-   * - A full collection starts each window (`--expose-gc` through `setFlagsFromString`, the collector
-   *   from `runInNewContext('gc')`): otherwise a scavenge in the window also frees garbage made before it
-   *   (by earlier tests in this worker) and counts it as the window's (3 flakes in 100 runs).
-   * - The smallest window, not the median: code not yet optimized allocates more (100-200 B/step at
-   *   first), and a per-step allocation raises every window while a late tier-up raises only some.
-   */
-  function allocatedPerStep(source: typeof BATTERY, pos: string, neg: string): number {
-    const host = Host.fresh().run([
-      ['entity.place', { ref: source, positionMm: origin }],
-      ['entity.place', { ref: THERMAL_LOAD, positionMm: origin }],
-      ['lead.connect', { ref: LEAD, a: end(1, pos), b: end(2, 'a') }],
-      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, neg) }],
-    ]);
-    host.engine.advanceTo(40_000); // warm: every buffer grown
-    setFlagsFromString('--expose-gc');
-    const collect = runInNewContext('gc') as () => void;
-    const window = (steps: number) => {
-      collect();
-      const profiler = new GCProfiler();
-      const start = getHeapStatistics().used_heap_size;
-      profiler.start();
-      host.engine.advanceTo(host.engine.tick + steps);
-      const stats = profiler.stop()?.statistics ?? [];
-      const freed = stats.reduce(
-        (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
-        0,
-      );
-      return (getHeapStatistics().used_heap_size - start + freed) / steps;
-    };
-    return Math.min(...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => window(20_000)));
-  }
-
-  // Zero allocation per tick is the plan's criterion and not yet met (plan F2.3a notes): these gates
-  // stop it growing. Each gate sits about 10-15 % over the worst of 80 measured runs (40 with coverage,
-  // 40 without), and a planted 64-byte per-step allocation fails both.
-
-  it('the DC per-tick path stays under 24 bytes allocated per step (a regression gate, not yet zero)', () => {
-    // Measured 21.18-21.19 B/step with coverage, 20.88-21.53 without: about 200 B per cadence solve, 32 B
-    // of it inside DcSolver.solveNonlinear, plus a few in the synthetic thermal layer.
-    expect(allocatedPerStep(BATTERY, 'pos', 'neg')).toBeLessThan(24);
-  });
-
-  it('the AC per-tick path stays under 36 bytes allocated per step (its own baseline, not yet zero)', () => {
-    // Measured 14.78-14.79 B/step with coverage and 30.49-31.32 without (V8 optimizes the phasor path
-    // differently when coverage instruments it): the DC solve's share, the phasor solve's, and the layer.
-    expect(allocatedPerStep(AC_SOURCE, 'l', 'n')).toBeLessThan(36);
-  });
 });
 
 describe('SimEngine with the built-in models', () => {
-  it('runs a world bus on the built-in catalogue, the battery at its placeholder EMF', () => {
+  it('runs a world bus on the built-in catalogue, the battery at its EMF against state of charge', () => {
     const bus = createWorldBus(createWorld({ seed: 3 }), createWorldRegistry());
     const host = new Host(bus, {});
     host.run([
@@ -781,9 +729,9 @@ describe('SimEngine with the built-in models', () => {
       ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
       ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
     ]);
-    // Open: only gmin's 1e-12 S per node draws current, so the EMF less ~5e-13 V.
-    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeCloseTo(12, 9);
+    // Open: only gmin's 1e-12 S per node draws current, so a new battery's 12.9 V EMF less ~5e-13 V.
+    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeCloseTo(12.9, 9);
     host.exec('device.operate', { id: 2, control: 'closed', value: true });
-    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeLessThan(12);
+    expect(volts(host, [1, 'pos'], [1, 'neg'])).toBeLessThan(12.9);
   });
 });

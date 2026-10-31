@@ -80,7 +80,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 3, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: 4, catalogVersion: 1 });
   });
 });
 
@@ -150,8 +150,9 @@ describe('game.probe: ideal and non-loading', () => {
     const reading = game.probe('1:pos', '1:neg');
     expect(reading).toMatchObject({ kind: 'dc', tick: 0, solvedAt: 0 });
     const volts = reading.kind === 'dc' ? reading.volts : Number.NaN;
-    expect(volts).toBeGreaterThan(11);
-    expect(volts).toBeLessThan(12);
+    // A new battery's 12.9 V EMF (F2.4) less the drop across its 23 mΩ at about 5 A.
+    expect(volts).toBeGreaterThan(12);
+    expect(volts).toBeLessThan(12.9);
     const reversed = game.probe('1:neg', '1:pos');
     expect(reversed.kind === 'dc' && reversed.volts).toBe(-volts);
     // Non-loading: probing changes nothing.
@@ -319,7 +320,12 @@ describe('loading saves from other engines (D8)', () => {
     ]) {
       const loaded = load(saveWith(game, versions, true)); // its log wouldn't even replay
       expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
-      expect(loaded.game.hash()).toBe(game.hash());
+      // The devices' state as saved; the solution record solved again at the save's tick (20), never the
+      // saved one (from the cadence solve at 10, by another engine).
+      const [mine, theirs] = [loaded.game.materialisedWorld(), game.materialisedWorld()];
+      expect({ ...mine, sim: null }).toStrictEqual({ ...theirs, sim: null });
+      expect([theirs.sim?.lastSolveTick, mine.sim?.lastSolveTick]).toStrictEqual([10, 20]);
+      expect(mine.sim?.topologyHash).toBe(theirs.sim?.topologyHash);
       expect(loaded.game.entries()).toStrictEqual([]);
       // The new log continues the saved log's numbering (its last entry was cut off above).
       expect(loaded.game.execOrThrow('view.resetLayout')).toMatchObject({ seq: game.entries().length - 1 });

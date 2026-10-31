@@ -5,6 +5,7 @@ import { createWorldRegistry, type World, worldHash } from '@controls/world-mode
 import fc from 'fast-check';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { engineCompatible } from './engine-compat';
 import {
   BUILD_ENGINE_VERSIONS,
@@ -36,15 +37,16 @@ describe('the .ctrl fixtures', () => {
       if (path.endsWith('world-only.ctrl')) {
         expect(result.replay.status).toBe('absent');
       } else if (engineCompatible(result.manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed') {
-        // Saves from engines before this one (the world v2 kickoff's engine 1, which never ran): never
-        // verified, never refused.
-        expect(result.manifest.simEngineVersion).toBe(1);
+        // Saves from engines before this one (the world v2 kickoff's engine 1, which never ran, and
+        // F2.3a's engine 3): never verified, never refused.
+        expect(result.manifest.simEngineVersion).toBeLessThan(SIM_ENGINE_VERSION);
         expect(result.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
-        // world.json loads as saved; it holds no solution (engine 1 never ran), so the engine solves at
-        // the start, and only the solution record differs from the saved world.
+        // world.json loads as saved, its devices' sim bags included, but never its solution record: another
+        // engine's models computed it, so the engine solves again at the save's tick (`sim: null` at the
+        // start, F2.4 save-format review). Engine 1 never ran, so its worlds hold no record anyway.
         const saved = readCtrlOrThrow(join(fixturesRoot, path)).world;
-        expect(result.game.world()).toStrictEqual(saved);
-        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual(saved);
+        expect(result.game.world()).toStrictEqual({ ...saved, sim: null });
+        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual({ ...saved, sim: null });
       } else {
         expect(result.replay.status).toBe('continued');
       }
@@ -268,6 +270,6 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
-    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 3 });
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 4 });
   });
 });

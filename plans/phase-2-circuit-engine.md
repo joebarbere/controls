@@ -389,7 +389,7 @@ Acceptance, **part 3b: recompile optimisation and the calibrated re-solve gate**
 
 _Part 3b done 2026-10-31; `test-engineer` review pending ([simulation architecture](../docs/architecture/simulation.md#the-recompile-optimisation-and-the-calibrated-gate-f22-part-3b), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
 
-- _**Recompile 1.20 → 0.94 ms** (in-process A/B against the old compiler, 5,000 toggles each, interleaved; from-scratch compile 4.44 → 4.58 ms), netlist, `topologyHash` and every golden bit-identical, so `SIM_ENGINE_VERSION` stays 2. In place: the structure list is overwritten and compared while written; connection ends are cached against the entity entry they resolved to (by `epoch`); members and element refs are built once per fragment; the union-finds, index arrays and encoding buffer are reused; `TopologyWriter` writes the bytes directly, checked against `topologyBytes`. SHA-256 (about 0.3 ms) is now the largest single cost, and only a different hash could cut it._
+- _**Recompile 1.20 → 0.94 ms** (in-process A/B against the old compiler, 5,000 toggles each, interleaved; from-scratch compile 4.44 → 4.58 ms), netlist, `topologyHash` and every golden bit-identical, so `SIM_ENGINE_VERSION` stays 3 on main (F2.4 makes it 4). In place: the structure list is overwritten and compared while written; connection ends are cached against the entity entry they resolved to (by `epoch`); members and element refs are built once per fragment; the union-finds, index arrays and encoding buffer are reused; `TopologyWriter` writes the bytes directly, checked against `topologyBytes`. SHA-256 (about 0.3 ms) is now the largest single cost, and only a different hash could cut it._
 - _**The gate pairs each run with its calibration run:** `median(tᵢ × CALIBRATION_REFERENCE_MS / cᵢ) ≤ 2 ms`, with `CALIBRATION_REFERENCE_MS` 0.69 ms on the Ryzen 5 5600X (Node 24.12.0). This deviates from the decision's literal `median(t) ≤ 2 ms × median(c) / ref`, which is still reported (`calibration.scale`): beside a saturating parallel test load the literal form's ratio spread 3.2× over 32 runs and failed one (1.75), the paired form 1.7×, peaking at 0.91. Ambient load: 31 of 31 pass, ratio 0.50–0.79 (median 0.67)._
 - _**Sensitivity:** a planted exact 1.5× slowdown of the re-solve fails 25 of 30 runs (median ratio 1.10), and a planted triple hash in the compile (about 1.6×) 20 of 20, so the gate catches about 1.5× and more, not every smaller regression; `ratio` is printed on every CI run to watch the drift._
 - _**CI, inside `pnpm verify`:** raw medians 3.35 ms (Ubuntu), 3.23 ms (macOS) and 3.32 ms (Windows); gated ratios 0.76, 0.58 and 0.85, all passing. In the built bundle the warm re-solve's best median went from 1.50 to 1.21 ms locally._
@@ -423,7 +423,7 @@ Acceptance:
 
   The electrical layer runs on every topology change and every 10 ticks. A protection trip changes the topology and is re-solved within the same tick.
 
-- [ ] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`. _**Not yet met** (#52 review, measured with `GCProfiler`): struct-of-arrays banks, preallocated buffers and indexed loops are in, and tolerances are seeded, but a step still allocates about 21 bytes on the DC path (21.2 under coverage, 20.9–21.5 without, over 80 runs of a battery and a thermal load) and 15–31 on the AC path (14.8 under coverage, 30.5–31.3 without): about 200 bytes per cadence solve, 32 of them inside `DcSolver.solveNonlinear` (F2.2's code), plus the phasor solve's share on AC and a few in the layer. `engine.spec.ts` gates the DC path below 24 bytes per step and the AC path below 36, so neither can grow; a planted 64-byte allocation per step fails both. The DC gate's headroom is about 11 %: if a deliberate change lands near it, re-measure (80 runs, with and without coverage) rather than raise it. Getting to zero needs the solver's allocation found and removed (F2.2's owner) and the engine's remaining per-solve allocation traced._
+- [ ] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`. _**Not yet met** (#52 review; re-measured in F2.4 with V8's sampling heap profiler): struct-of-arrays banks, preallocated buffers and indexed loops are in, and tolerances are seeded. The DC path's 21 bytes a step were heap numbers in the dense stamp and the outer loop's check, removed in F2.4 (bit-identical): a battery and a thermal load now allocate 0.0–0.8 B/step (140 runs under load, with and without coverage), a DIN PSU regulating 0.0–4.3 and hiccuping into a short 4.2–8.3. The AC path still allocates 30.6–32.6 B/step without coverage and 14.4–17.3 with, mostly values passed into `AcSolver`'s `add`. `engine/allocation.spec.ts` gates them (4, 6, 10.5 and 36 B/step; a planted 8 B/step fails the DC gates every run, the AC gate only without coverage). Getting to zero needs `ac.ts` to stamp as `dc.ts` now does and the remaining inlining-dependent sites removed (simulation caveats)._
 - [x] **`CommandBus.advanceTo(tick)`:** unlogged, with no history change. A property test shows every world change's `apply`/`invert` preserves `tick`.
 - [x] **`replayEntries`** advances the engine to each entry's tick, then to `endTick`. v1 logs replay unchanged (a property test on the P1 fixtures). A `tick` lower than the current one is still an error.
 - [x] **Scripting API:**
@@ -488,7 +488,7 @@ Acceptance:
 
 Acceptance:
 
-- [ ] **Battery:**
+- [x] **Battery:**
   - EMF as a function of state of charge, from a sourced chemistry, under a fictional brand;
   - internal resistance;
   - state of charge, coulomb-counted, kept in the entity's sim-owned `sim` bag (ADR 0011 §1, ADR 0013).
@@ -497,14 +497,14 @@ Acceptance:
   - terminal voltage = EMF − I·R within 0.5 %;
   - over one hour of sim time (headless `advance`), state of charge falls by ∫I dt ÷ capacity within 0.5 %.
 
-- [ ] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
-- [ ] **Bench DC supply:**
+- [x] **Remove the nominal-EMF placeholder** (`electrical-realism-reviewer`, #46): take `battery` out of `DC_DEFAULT_VALUES` in `mna/values.ts`, or replace its default with the open-circuit voltage against state of charge. A sealed lead-acid battery resting at 12.0 V is only about 25–30 % charged, so the placeholder must never reach a player build. The DC goldens that assume E = 12 V (`src/testing/dc-goldens.ts`) then need a hook giving that EMF.
+- [x] **Bench DC supply:**
   - a non-zero output resistance (sourced, typical), so supplies paralleled in CV mode are never an ideal-source loop (`singular`) and settle through the CV/CC loop (`electrical-realism-reviewer`, #46);
   - `device.operate` controls for the voltage setpoint, the current limit and output on/off;
   - constant-voltage/constant-current crossover at R = V/I within 0.5 %, and a property test that it never exceeds either setpoint beyond its tolerance;
   - its mode is published in the device record, with no mode chatter at the crossover (tested), including a CV/CC-crossover hysteresis test with a lamp load (#49 review);
   - a supply or island the outer loop flags `nonConverged` is shown as unsettled, never as a steady reading, in the device record and every readout (#49 review; P5's meters carry it on).
-- [ ] **DIN 24 VDC PSU:**
+- [x] **DIN 24 VDC PSU:**
   - current limit with hiccup mode: overload for t_detect, off for t_off, then retry, with tick-exact timing;
   - a short circuit gives a periodic hiccup at the documented period ±1 tick;
   - values come from typical published behaviour, attributed to a fictional model.
@@ -517,7 +517,18 @@ Acceptance:
 
 - [ ] **Three-phase 208Y/120 and 480Y/277.** Golden fixtures: line-to-line = √3 × line-to-neutral (via `sqrt`), and a balanced load's neutral current is about 0. **Headless only**; gameplay is P6.
 - [ ] **Portable generator (stub):** a registered model with nameplate EMF and source impedance, and no engine dynamics. Not placeable, and documented as a stub; generators and transfer switches are in the backlog.
-- [ ] The battery, bench supply and DIN PSU can be placed on the bench, with procedural recipes and scene-graph snapshots. Their labels use fictional brands.
+- [x] The battery, bench supply and DIN PSU can be placed on the bench, with procedural recipes and scene-graph snapshots. Their labels use fictional brands.
+
+_Part 1 (battery, bench supply, DIN PSU, recipes) done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#power-sources-f24), [simulation caveats](../docs/caveats/simulation.md#power-sources-f24)); `electrical-realism-reviewer` and `test-engineer` reviews pending. Part 2 (utility, three-phase, generator stub, the C84.1 bands) is the next PR in the stack. Notes:_
+
+- _**Battery:** E(s) linear between the catalogue's empty and full open-circuit voltages (11.8 V and 12.9 V), behind the constant internal resistance; `stateOfCharge` coulomb-counted in the continuous layer, solved islands only. Its keys are unchanged, so no `schemaVersion` bump. The one-hour golden is in `apps/sim-cli/src/battery-hour.spec.ts` (sim-core's coverage instrumentation makes an hour 6× slower, past Vitest's default timeout on a slow runner); sim-core keeps a one-minute version._
+- _**The placeholder:** `DC_DEFAULT_VALUES.battery` is now the full-charge EMF (a new battery) for solver callers with no engine model (the bench's re-solve cases); the battery's netlist values carry `openCircuitVoltageFullV` in place of `nominalVoltageV`. The DC goldens set their 12 V test EMF through their hook, so no solver pin moved._
+- _**CV/CC:** the mode is decided in the outer loop from the iterate and the branch's stamp, with a 0.1 % hysteresis band (`CV_CC_HYSTERESIS`, numerical); the crossover is at R = V/I − R_out. A new engine hook, `afterSolve`, commits the mode into the bank after each solve (the `sim` bag `mode`). Output resistance: 1 mΩ (bench supply), 48 mΩ (DIN PSU), from the classes' load-regulation figures._
+- _**Hiccup:** a second engine hook: a layer returning `true` re-solves within the step even for a value-only change, so the off and the retry are tick-exact; a short's period is exactly 1100 ticks._
+- _**The validity rule (for F2.5):** every record ends in `u8 status` [`unsolved`, `solved`, `unsettled`, `singular`]; solved quantities are written only on a solved island, the device's own state always (ADR 0011 §5.4, amended). The schemas are `BUILTIN_DEVICE_OUTPUTS` in sim-core; registering them in `sim-protocol`'s `DEVICE_OUTPUT_SCHEMAS` with the `SIM_PROTOCOL_VERSION` bump, and the sources' nominal bands, are left to F2.3b, which owns the protocol tables._
+- _**`SIM_ENGINE_VERSION` 4:** `SIM_STEP_HASH` and `SIM_STEP_SNAPSHOT_HASH` re-pinned (Node and Chromium), a new `sim-step-engine-4.ctrl` fixture; `BENCH_LEADS_HASH` didn't move._
+- _**Placing:** the recipes draw from the catalogue entry; the mouse can't place catalogue devices yet (`propFootprint` covers built-in props only), so they are placed with `entity.place` and an orientation._
+- _**Reviews of part 1 (2026-10-31):** `electrical-realism-reviewer` signed off on condition of its findings 1–4: the battery now collapses below 2 % and stops accepting charge towards 14.4 V (no energy created), and the Peukert gap is a caveat. `save-format-guardian`: every new kind's `topologyHash` pinned (with a guard over `MODEL_KINDS`), control values range-checked at load, `engine-changed` loads solve again from `sim: null`, the `sources-engine-4.ctrl` fixture and an engine-version collision guard. `test-engineer`: reload goldens (mid-hiccup, inside the hysteresis band, the battery), the source sessions split from the engine sessions' F2.3a mix, the unsettled-limit and charge/clamp tests, DIN PSU allocation gates, and the sources scenario pinned in Node and Chromium._
 
 ### F2.5 First loads and switching
 
@@ -670,7 +681,7 @@ Numbers are assigned in the order the ADRs land.
 | F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
 | F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
-| F2.4    | Power sources                                     | ⬜ Not started                                |
+| F2.4    | Power sources                                     | 🟡 Part 1 done (part 2: utility, three-phase) |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |
 | F2.6    | Debug tools (overlays, inspector, `netlist.dump`) | ⬜ Not started                                |
 | F2.7    | Oracle harness and `sim-cli bench` gate           | 🟨 In progress                                |
