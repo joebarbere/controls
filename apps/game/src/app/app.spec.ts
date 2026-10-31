@@ -72,7 +72,17 @@ describe('App', () => {
     }).compileComponents();
   });
 
-  afterEach(() => (document.body.innerHTML = ''));
+  afterEach(() => {
+    document.body.innerHTML = '';
+    // CodeMirror (style-mod) keeps one <style> in <head> for the document, about 80 rules, and never
+    // removes it. Left there, every later test's getComputedStyle scans those rules too (ui caveats).
+    // Detached, it goes back in when the next editor mounts.
+    for (const key of Object.getOwnPropertySymbols(document)) {
+      if (key.description !== 'styleSet') continue;
+      const set = (document as unknown as Record<symbol, { styleTag?: HTMLStyleElement } | undefined>)[key];
+      set?.styleTag?.remove();
+    }
+  });
 
   /**
    * The main menu's items. Scoped to the menu so a query names its eight buttons, not every button in

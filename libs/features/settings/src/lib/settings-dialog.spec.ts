@@ -175,6 +175,24 @@ describe('SettingsDialog', () => {
     expect(changeButtons()).toEqual([]);
   });
 
+  it('renders the form only while open, and shows the stored settings each time it opens', async () => {
+    // Closed, the form's controls were candidates in every role query of the shell (ui caveats).
+    const radios = () => screen.queryAllByRole('radio', { hidden: true });
+    const { fixture, user, dialog, opener, store } = await setup();
+    const dark = () => within(dialog).getByRole('radio', { name: 'Dark' }) as HTMLInputElement;
+    expect(document.activeElement).toBe(within(dialog).getByRole('radio', { name: 'Match system' })); // first control
+    await user.keyboard('{Escape}');
+    await fixture.whenStable();
+    expect(radios()).toEqual([]);
+    expect(document.activeElement).toBe(opener);
+
+    store.update('display', { theme: 'dark' }); // while closed: the state is the store's, not the form's
+    await user.click(opener);
+    await fixture.whenStable();
+    expect(dark().checked).toBe(true);
+    expect(document.activeElement).toBe(dark()); // a radio group's tab stop is its checked radio
+  });
+
   it('Back closes the dialog and returns focus to the opener', async () => {
     const { fixture, user, dialog, opener } = await setup();
     within(dialog).getByRole('button', { name: 'Back' }).focus();
