@@ -41,7 +41,7 @@ interface Hooks {
 
 /** Screenshot-only stylesheet: no HUDs, crosshair or focus ring over the canvas. */
 const HIDE_OVERLAYS =
-  'ctl-hud, [data-testid="dev-hud"], .crosshair { visibility: hidden !important; } ' +
+  'ctl-hud, ctl-sim-controls, [data-testid="dev-hud"], .crosshair { visibility: hidden !important; } ' +
   'canvas { outline: none !important; }';
 
 const PROPS: ReadonlyArray<readonly [string, { x: number; y: number; z: number }, number]> = [

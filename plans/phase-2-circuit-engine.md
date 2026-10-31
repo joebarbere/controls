@@ -477,7 +477,7 @@ Acceptance:
 
   _Part 2: `sim-host.spec.ts` (fake clock, the protocol-level fake worker on the real engine, shared and message transports), `app.spec.ts` (the real runner in-process, the crash toast's Restart)._
 
-- [ ] Time control works from keybindings, the palette and the console. The default chords are conflict-free (checked by the existing keymap specs). The HUD shows sim time and the requested and effective speeds, with an `aria-live` "falling behind" notice.
+- [x] Time control works from keybindings, the palette and the console. The default chords are conflict-free (checked by the existing keymap specs). The HUD shows sim time and the requested and effective speeds, with an `aria-live` "falling behind" notice. _(Part 3: `sim-args.spec.ts`, `sim-controls.spec.ts`, `apps/game-e2e/src/time-control.spec.ts`.)_
 - [ ] **E2E:**
   - the web harness runs `bench-lamp.console` and its snapshot hash equals `sim-cli`'s pinned golden;
   - with `?sab=0` (the fallback), the hash is the same;

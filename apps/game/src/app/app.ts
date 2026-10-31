@@ -23,7 +23,7 @@ import {
 } from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
 import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
-import { KeybindingService, Session, type SimCrash, ToolBelt } from '@controls/feature-session';
+import { KeybindingService, Session, type SimCrash, SimControls, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
 import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
@@ -50,6 +50,7 @@ import { SimEventToasts } from './sim-event-toasts';
     DevConsoleComponent,
     LoadGameDialog,
     SaveGameDialog,
+    SimControls,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
@@ -65,13 +66,15 @@ import { SimEventToasts } from './sim-event-toasts';
       <button ctlButton="ghost" type="button" ctlWorkspaceToolbar (click)="openMenu()">Menu</button>
       <ctl-dev-console ctlBottomPanel [available]="consoleAvailable()" />
       @if (!shell.menuOpen()) {
-        <ctl-hud
-          ctlViewportOverlay
-          [mode]="viewState()?.mode ?? 'work'"
-          [selection]="viewState()?.selected?.label ?? null"
-          [tool]="toolLabel()"
-          [assisted]="session.world().assisted"
-        />
+        <ng-container ctlViewportOverlay>
+          <ctl-hud
+            [mode]="viewState()?.mode ?? 'work'"
+            [selection]="viewState()?.selected?.label ?? null"
+            [tool]="toolLabel()"
+            [assisted]="session.world().assisted"
+          />
+          <ctl-sim-controls />
+        </ng-container>
       }
     </ctl-workspace>
     @if (shell.menuOpen()) {
