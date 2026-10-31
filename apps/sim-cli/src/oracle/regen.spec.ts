@@ -148,6 +148,24 @@ describe('sim oracle regen', () => {
     expect(calls.length).toBeLessThanOrEqual(1 + 2 + 2);
   });
 
+  it('reports the first failure in corpus order, whichever run finishes first', async () => {
+    // dc-0001 fails at once; dc-0000 fails only after it, so finishing order and corpus order disagree.
+    let laterFailed: () => void = () => undefined;
+    const later = new Promise<void>((resolve) => (laterFailed = resolve));
+    const racing: NgspiceRunner = async (args) => {
+      if (args[0] === '-v') return { status: 0, stdout: BANNER, stderr: '' };
+      const deck = args[args.length - 1];
+      if (deck.endsWith('dc-0001.cir')) {
+        laterFailed();
+        return { status: 1, stdout: '', stderr: 'second' };
+      }
+      await later;
+      return { status: 1, stdout: '', stderr: 'first' };
+    };
+    const run = await sim({ ngspice: racing }, 'oracle', 'regen', '--out', out, '--jobs', '2');
+    expect(run.stderr).toEqual(['sim: oracle regen: dc-0000: ngspice exited 1: first']);
+  });
+
   it('fails when a run prints too little, times out, or the binary vanishes', async () => {
     const terse = fakeNgspice({
       batch: () => ({ status: 0, stdout: 'Using SPARSE 1.3 as Direct Linear Solver\n', stderr: '' }),
