@@ -127,14 +127,3 @@ export interface OracleCircuit {
 
 /** The AC analysis frequency (Hz): the NEC region's 60 Hz (plan §4.5), the only P2 frequency. */
 export const ORACLE_FREQUENCY_HZ = 60;
-
-/**
- * The `gmin` sim-core stamps from every non-reference node to its island's reference (F2.2 part 1),
- * which the deck stamps too, as an explicit resistor of 1/gmin from each circuit node to node 0 (ADR
- * 0012; why not `.options rshunt`: see `deck.ts`).
- *
- * TODO(F2.2): replace this placeholder with `GMIN_S.value` (`import { GMIN_S } from '../lib/constants'`)
- * when F2.2 part 1 lands, so the oracle and the solver can't disagree; the corpus header records the
- * value either way. Numerical choice, not an electrical rating: ngspice's default `gmin` (1e-12 S).
- */
-export const ORACLE_GMIN_S = 1e-12;

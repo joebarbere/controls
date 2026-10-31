@@ -1,7 +1,8 @@
 import { sha256Hex } from '@controls/world-model';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ORACLE_DOMAINS, ORACLE_FREQUENCY_HZ, ORACLE_GMIN_S, type OracleDomain } from './circuit';
+import { GMIN_S } from '../lib/constants';
+import { ORACLE_DOMAINS, ORACLE_FREQUENCY_HZ, type OracleDomain } from './circuit';
 import { ORACLE_CORPUS, oracleCorpus, oracleDeckPath, oracleResultsPath } from './corpus';
 import { oracleDeck, oracleDeckOptions } from './deck';
 import { oracleNetlist } from './netlist';
@@ -19,7 +20,7 @@ import { type OracleCircuitResult, parseOracleResults } from './results';
  *   netlist (`oracleNetlist`), and KCL with `gmin`. That proves the deck and the netlist describe the
  *   same circuit with the same sign conventions, and that the results parse into the right slots,
  *   before any solver is compared against them.
- * - **The comparison** of sim-core's solvers against the corpus waits for them (F2.2 parts 1 and 2).
+ * - **The DC comparison** is `dc-oracle.spec.ts` (F2.2 part 1); the AC comparison waits for part 2.
  */
 
 const corpusDir = join(import.meta.dirname, '../../oracle');
@@ -75,7 +76,7 @@ describe.each(ORACLE_DOMAINS)('the %s oracle corpus', (domain) => {
       ngspice: 'ngspice-47',
       solver: 'SPARSE 1.3',
       options: oracleDeckOptions(),
-      gminS: ORACLE_GMIN_S,
+      gminS: GMIN_S.value,
       seed: ORACLE_CORPUS[domain].seed,
       count: ORACLE_CORPUS[domain].count,
     });
@@ -121,8 +122,7 @@ describe.each(ORACLE_DOMAINS)('the %s oracle corpus', (domain) => {
   });
 });
 
-describe('sim-core against the oracle corpus', () => {
-  it.todo('DC: dense DC MNA matches every DC circuit within ORACLE_TOLERANCE (F2.2 part 1)');
+describe('sim-core against the AC oracle corpus', () => {
   it.todo('AC: complex phasor MNA matches every AC circuit within ORACLE_TOLERANCE (F2.2 part 2)');
 });
 

@@ -1,4 +1,5 @@
-import { type OracleCircuit, type OracleElement, ORACLE_FREQUENCY_HZ, ORACLE_GMIN_S, valueText } from './circuit';
+import { GMIN_S } from '../lib/constants';
+import { type OracleCircuit, type OracleElement, ORACLE_FREQUENCY_HZ, valueText } from './circuit';
 
 /*
  * The SPICE deck of an oracle circuit (plan F2.7, ADR 0012), for ngspice 47 in batch mode
@@ -31,12 +32,12 @@ const PRINT_CHUNK = 10;
 
 /** The `.options` line every deck carries; the corpus header records it. */
 export function oracleDeckOptions(): string {
-  return `.options sparse gmin=${ORACLE_GMIN_S} noopac`;
+  return `.options sparse gmin=${GMIN_S.value} noopac`;
 }
 
 /** The deck resistance of the explicit `gmin` shunt: 1/gmin, as `String` spells the double. */
 export function gminShuntText(): string {
-  return String(1 / ORACLE_GMIN_S);
+  return String(1 / GMIN_S.value);
 }
 
 function elementLines(ac: boolean, k: number, element: OracleElement): string[] {

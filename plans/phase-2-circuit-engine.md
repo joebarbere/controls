@@ -511,7 +511,7 @@ Acceptance:
 - [x] **A seeded random-circuit generator:** 2–30 nodes; R, V and I sources for DC; R, L, C and phasor V at 60 Hz for AC. It emits both a `sim-core` netlist and a SPICE deck from one intermediate representation.
 - [x] **A checked-in corpus** under `libs/domain/sim-core/oracle/`: the decks plus ngspice's results, with a header recording the ngspice version, its options (`gmin` matched to `sim-core`) and the seeds. ADR 0012 settles the size, targeting at least 500 DC and 500 AC circuits.
 - [x] **A staleness test:** regenerating the decks from the pinned seeds reproduces the checked-in decks byte for byte, as for the JSON Schema export. Any generator drift fails `pnpm verify`.
-- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound.
+- [ ] **A comparison spec in `pnpm verify`** (`sim-core` against ngspice) at ADR 0012's tolerance: targeting at most 1e-6 relative with an absolute floor, and never looser than the 0.5 % golden bound. _DC done (worst 1.06e-3 of the allowance); AC with F2.2 part 2._
 - [x] **`pnpm sim oracle regen`** regenerates the results. It needs ngspice installed (the guide has install notes for Linux, macOS and Windows) and is never part of `verify`.
 - [ ] **`pnpm sim bench`,** also run as the Nx `bench` target in `verify`:
   - it covers a seeded synthetic 2,000-node plant (mostly radial, with some loops) and a per-tick mix of devices;
@@ -520,11 +520,11 @@ Acceptance:
   - it runs the built bundle, never under coverage instrumentation;
   - the re-solve case switches on with F2.2 part 3, and the per-tick case is on from F2.3a.
 
-_Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Proposed; [oracle guide](../docs/guides/oracle.md)). Notes:_
+_Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md), Accepted for DC; [oracle guide](../docs/guides/oracle.md)). Notes:_
 
 - _The corpus is 500 DC + 500 AC biconnected circuits, about 3.4 MB of text. Beyond the staleness test, `verify` checks ngspice's solution against every element equation and KCL in the sim-core netlist (worst residual 3e-9), which pins the deck ↔ netlist mapping before any solver exists, and that at least 95 % of branches carry real current (99 % do)._
 - _test-engineer review (approved): the tolerance floor is `max(1e-12, 1e-7·max|x_ref|)`, above ngspice's own 3e-9 noise; an emulated float64 MNA solver stays at 1.1e-3 of the allowance or less. The solver adapter maps `isource` to a `resistor` with `DC_STAMP_ISOURCE` rather than widening F2.1's `ElementKind` (ADR 0012)._
-- _**Still open:** the comparison spec (`it.todo` for DC with F2.2 part 1 and AC with part 2), confirming ADR 0012's tolerance by measurement, the netlist adapter to the solver's input type, and switching the oracle's placeholder `gmin` to `GMIN_S.value` (`TODO(F2.2)`)._
+- _**DC comparison on** (after #46): `oracleDcInput` adapts each circuit to a `Netlist` plus `DcBranchValues`; `DcSolver`'s values match ngspice's on all 500 DC circuits, worst 1.06e-3 of the allowance for volts (`dc-0170`) and 4.6e-4 for amps (`dc-0152`), with sim-core's own KCL and source rows holding; the reference node is 0 for every circuit; the decks' gmin is `GMIN_S.value`. A planted 1e-5 resistor-stamp error and a flipped isource sign both fail it. **Still open:** the AC adapter and comparison (F2.2 part 2)._
 - _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: one topology change (`plant-recompile-switch`) is 1.2–1.3 ms (1.7–2.8 ms under heavy load), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
 - _`gmin` is stamped in the decks as explicit resistors on the circuit nodes, not `.options rshunt`, which would also shunt the decks' internal sense and source nodes (ADR 0012)._
 

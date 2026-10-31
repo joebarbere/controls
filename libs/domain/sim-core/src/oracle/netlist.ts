@@ -1,11 +1,13 @@
-import type { SourceDomain } from '../lib/netlist/types';
+import { GMIN_S } from '../lib/constants';
+import { DcBranchValues } from '../lib/mna/values';
+import { computeTopologyHash } from '../lib/netlist/hash';
+import type { Netlist, NetlistBranch, NetlistNode, SourceDomain } from '../lib/netlist/types';
 import {
   type OracleCircuit,
   type OracleDomain,
   type OracleElement,
   type OracleElementKind,
   ORACLE_FREQUENCY_HZ,
-  ORACLE_GMIN_S,
   phasorUnit,
   valueNumber,
 } from './circuit';
@@ -19,12 +21,11 @@ import {
  * `resistor` and `vsource` are F2.1's `ElementKind`s; `isource`, `inductor` and `capacitor` are oracle
  * kinds. F2.1's `ElementKind` is deliberately not widened (ADR 0012, test-engineer review).
  *
- * TODO(F2.2): after #46 lands, add the adapter from this netlist to the solver's input, a `Netlist`
- * plus `DcBranchValues`: `resistor` and `vsource` map to themselves, and an `isource` maps to a
- * `resistor` element with the `DC_STAMP_ISOURCE` stamp, so `islandReferenceNode` can never pick a
- * current source's end. Then, in `corpus.spec.ts`: run the element-equation and KCL residuals on the
- * adapted `Netlist` and `DcBranchValues`, assert `islandReferenceNode(...) === 0` for every circuit,
- * and switch the DC comparison on (part 2 adds `inductor` and `capacitor` and the AC comparison).
+ * `oracleDcInput` adapts a DC circuit to the solver's real input, an F2.1 `Netlist` plus F2.2's
+ * `DcBranchValues`: `resistor` and `vsource` map to themselves, and an `isource` becomes a `resistor`
+ * element stamped `DC_STAMP_ISOURCE`, so `islandReferenceNode` (which looks only at `vsource`
+ * elements) can never pick a current source's end. TODO(F2.2 part 2): the AC adapter, with
+ * `inductor` and `capacitor`, and the AC comparison.
  */
 
 export interface OracleNetlistBranch {
@@ -95,7 +96,67 @@ export function oracleNetlist(circuit: OracleCircuit): OracleNetlist {
     domain: circuit.domain,
     frequencyHz: circuit.domain === 'ac' ? ORACLE_FREQUENCY_HZ : null,
     nodeCount: circuit.nodeCount,
-    gminS: ORACLE_GMIN_S,
+    gminS: GMIN_S.value,
     branches: circuit.elements.map((element, index) => branchOf(circuit.domain, index, element)),
   };
+}
+
+/** The model kind each adapted branch carries (ASCII, as the topology encoding requires). */
+const ADAPTED_MODEL = 'oracle.element';
+
+/**
+ * A DC oracle circuit as the DC solver's input (ADR 0012): one island holding every node, node `n`
+ * with the single member terminal `(n + 1, 'n')`, branch `k` connection `k + 1` of model
+ * `oracle.element`, in the circuit's branch order, with its real `topologyHash`. Throws on an AC
+ * circuit (part 2's adapter).
+ */
+export function oracleDcInput(circuit: OracleCircuit): { readonly netlist: Netlist; readonly values: DcBranchValues } {
+  if (circuit.domain !== 'dc') throw new RangeError(`${circuit.name}: not a DC circuit`);
+  const values = new DcBranchValues(circuit.elements.length);
+  const nodes: NetlistNode[] = Array.from({ length: circuit.nodeCount }, (_, index) => ({
+    index,
+    island: 0,
+    members: [{ entity: index + 1, terminal: 'n' }],
+  }));
+  const branches: NetlistBranch[] = circuit.elements.map((element, index): NetlistBranch => {
+    const base = {
+      index,
+      element: { kind: 'connection', connection: index + 1 } as const,
+      model: ADAPTED_MODEL,
+      a: element.a,
+      b: element.b,
+      island: 0,
+      values: {},
+    };
+    switch (element.kind) {
+      case 'resistor':
+        values.resistor(index, valueNumber(element.resistanceOhm));
+        return { ...base, kind: 'resistor', source: null };
+      case 'vsource':
+        values.vsource(index, valueNumber(element.emfV), valueNumber(element.internalResistanceOhm));
+        return { ...base, kind: 'vsource', source: 'dc' };
+      case 'isource':
+        // A `resistor` element with an isource stamp: never a reference candidate.
+        values.isource(index, valueNumber(element.currentA));
+        return { ...base, kind: 'resistor', source: 'dc' };
+      default:
+        throw new RangeError(`${circuit.name}: ${element.kind} is not a DC element`);
+    }
+  });
+  const netlist: Netlist = {
+    nodes,
+    branches,
+    islands: [
+      {
+        index: 0,
+        kind: 'dc',
+        nodes: nodes.map((node) => node.index),
+        branches: branches.map((branch) => branch.index),
+      },
+    ],
+    devices: [],
+    topologyHash: computeTopologyHash(nodes, branches),
+    diagnostics: [],
+  };
+  return { netlist, values };
 }

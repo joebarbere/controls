@@ -2,7 +2,6 @@ import {
   formatOracleResults,
   generateOracleCircuit,
   ORACLE_DOMAINS,
-  ORACLE_GMIN_S,
   type OracleCircuit,
   oracleCorpus,
   ORACLE_CORPUS,
@@ -15,6 +14,7 @@ import {
   OracleResultsError,
   parseNgspiceOutput,
 } from '@controls/sim-core/oracle';
+import { GMIN_S } from '@controls/sim-core';
 import { sha256Hex } from '@controls/world-model';
 import { spawn } from 'node:child_process';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
@@ -226,7 +226,7 @@ export async function regenerateOracle(options: RegenOptions): Promise<RegenSumm
         ngspice,
         solver,
         options: oracleDeckOptions(),
-        gminS: ORACLE_GMIN_S,
+        gminS: GMIN_S.value,
         seed: ORACLE_CORPUS[domain].seed,
         count: counts[domain],
       };

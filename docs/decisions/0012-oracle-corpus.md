@@ -1,6 +1,6 @@
 # ADR 0012: Oracle tolerance and corpus
 
-**Status:** Proposed (2026-10-30). F2.7. The tolerance is **to be confirmed by measurement when F2.2 part 1 lands** (DC) and part 2 (AC); the corpus, its format and the regeneration rules stand now.
+**Status:** **Accepted for DC** (2026-10-30, after F2.2 part 1, #46: the DC comparison runs in `pnpm verify`, margin measured below). **AC pending** F2.2 part 2, which confirms the same tolerance on the AC corpus. The corpus, its format and the regeneration rules stand for both.
 **Date:** 2026-10-30 (Phase 2)
 **Owners:** `test-engineer` and `sim-engine-engineer`.
 **Review:** `test-engineer` approved (2026-10-30) with changes, applied in #47: biconnected circuits, the tolerance floor, `ngspice -n`, an atomic regeneration, and the solver-adapter decision below.
@@ -19,13 +19,13 @@
 - `oracleDeck(circuit)`: the SPICE deck text;
 - `oracleNetlist(circuit)`: the circuit in F2.1's netlist vocabulary (`NetlistBranch`-shaped branches with sorted `values`), the input the solvers are compared on. `resistor` and `vsource` are F2.1's element kinds; `isource` and `inductor`/`capacitor` are oracle kinds.
 
-**The solver adapter (decided; written after #46 lands, `TODO(F2.2)` in `netlist.ts`).** F2.1's `ElementKind` is **not widened**. The adapter maps the oracle netlist onto F2.2's real input, a `Netlist` plus its `DcBranchValues`:
+**The solver adapter** (`oracleDcInput` in `netlist.ts`; AC with part 2). F2.1's `ElementKind` is **not widened**. The adapter maps the oracle netlist onto F2.2's real input, a `Netlist` plus its `DcBranchValues`:
 
 - `resistor` and `vsource` map to themselves;
 - an `isource` maps to a `resistor` element carrying the `DC_STAMP_ISOURCE` stamp, so `islandReferenceNode` (which looks at `vsource` ends) can never pick a current source's end as the reference;
 - `inductor` and `capacitor` follow F2.2 part 2's AC branch values.
 
-With the adapter, the corpus spec runs the element-equation and KCL residuals on the adapted `Netlist` and `DcBranchValues` (not only on `oracleNetlist`), and asserts `islandReferenceNode(...) === 0` for every circuit, which pins the reference-node agreement below.
+`dc-oracle.spec.ts` runs the element-equation and KCL residuals of ngspice's solution on the adapted `Netlist` and `DcBranchValues` (as well as on `oracleNetlist`), and asserts `islandReferenceNode(...) === 0`, and the solver's reported reference node 0, for every DC circuit.
 
 Every value is a decimal `mantissa × 10^exponent` (an E12 mantissa), so the deck's text and the netlist's double are the same number.
 
@@ -45,7 +45,7 @@ Every value is a decimal `mantissa × 10^exponent` (an E12 mantissa), so the dec
 ### The deck
 
 - `.options sparse`: Sparse 1.3, so results don't depend on whether the ngspice build links KLU. `regen` refuses results whose run did not report Sparse.
-- **`gmin` is stamped explicitly**, as `RG<n> n 0 1/gmin` on each circuit node, with `gmin` = 1e-12 S, matching sim-core's `GMIN_S.value` (until F2.2 part 1 lands the oracle uses a placeholder with a `TODO(F2.2)` naming that import). ngspice's `gmin` option shunts only semiconductor junctions, so it is set (`gmin=1e-12`) only for the record. **Not `.options rshunt=1e12`**, although it was suggested in review: `rshunt` shunts every node of the deck, including its internal ones. Each element's sense node `s<k>` sits at its `a` node's voltage, so a node with m elements would get (m + 1)·`gmin`, and each source's internal node `e<k>` one sim-core doesn't have. Explicit shunts on the circuit nodes only are exactly sim-core's stamp.
+- **`gmin` is stamped explicitly**, as `RG<n> n 0 1/gmin` on each circuit node, with `gmin` = 1e-12 S, taken from sim-core's `GMIN_S.value`, so the decks and the solver can't disagree. ngspice's `gmin` option shunts only semiconductor junctions, so it is set (`gmin=1e-12`) only for the record. **Not `.options rshunt=1e12`**, although it was suggested in review: `rshunt` shunts every node of the deck, including its internal ones. Each element's sense node `s<k>` sits at its `a` node's voltage, so a node with m elements would get (m + 1)·`gmin`, and each source's internal node `e<k>` one sim-core doesn't have. Explicit shunts on the circuit nodes only are exactly sim-core's stamp.
 - **Branch currents** come from a 0 V sense source `VS<k>` in series with each element, from its `a` end: ngspice 47 reports no complex device currents in AC (`@r1[i]` is real-only), and a sense current is a direct entry of ngspice's solution vector.
 - A voltage source is `V<k>` (EMF) in series with `RI<k>` (its internal resistance); an AC one is `DC 0 AC <mag> <deg>`. ngspice computes the phasor with its own `cos`/`sin` of the angle in radians, which differs from the exact constants by about 1e-16 relative: negligible.
 - `noopac`: the AC analysis skips the DC operating point, which would be singular for a loop of inductors.
@@ -66,9 +66,9 @@ Every value is a decimal `mantissa × 10^exponent` (an E12 mantissa), so the dec
 - **Staleness:** regenerating every deck from the pinned seeds reproduces the checked-in decks byte for byte, with no stray files; each result's deck hash matches its checked-in deck; the header matches the pinned seeds, counts, options and `gmin`.
 - **Consistency:** ngspice's solution satisfies every element's equation, with values taken from `oracleNetlist`, and KCL with `gmin` at every node. This proves the deck and the netlist describe the same circuit with the same sign conventions, and that the parser puts each value in the right slot, before any solver is compared. Residuals are normalised by the circuit's largest voltage (element equations) or current (KCL), with `gmin` taken from the netlist (`netlist.gminS`), so a wrong `gmin` in `oracleNetlist` fails. Measured worst on the first corpus: 2.9e-9 (DC), 1.2e-9 (AC), all rounding; the check allows 1e-7, while a wrong sign, slot or value is of order 1.
 - **Live branches:** at least 95 % of branches carry more than 1e-6 of their circuit's largest current.
-- **The comparison** (`it.todo` until the solvers exist): sim-core's DC solution of every DC circuit (F2.2 part 1) and its phasor solution of every AC circuit (part 2), within the tolerance below.
+- **The DC comparison** (`dc-oracle.spec.ts`, on since F2.2 part 1): `DcSolver` solves every adapted DC circuit, and every node voltage and branch current must be within the tolerance below of ngspice's; on the same solution, sim-core's own KCL and source-row checks (`testing/mna.ts`) must hold, and the island must not be flagged. **The AC comparison** (`it.todo`) arrives with F2.2 part 2.
 
-### Tolerance (Proposed: to be confirmed by measurement when F2.2 part 1 lands)
+### Tolerance (Accepted for DC; AC to be confirmed with F2.2 part 2)
 
 Each node voltage and branch current is a phasor `x` (DC has `im = 0`), compared with ngspice's `x_ref` by `compareOracleSolution`:
 
@@ -78,11 +78,11 @@ Each node voltage and branch current is a phasor `x` (DC has `im = 0`), compared
 
 for volts and amps alike (each against the maximum of the same quantity: voltages against voltages, currents against currents).
 
-| Parameter                        | Proposed | Why                                                                                                                                                                                                                                             |
-| -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `relative`                       | 1e-6     | The plan's target. **Never looser than the 0.5 % golden bound** (a spec checks it).                                                                                                                                                             |
-| `scale`                          | 1e-7     | The reference is noisy. Against exact rational solutions of the same decks, ngspice's own error reached 2.95e-9 of the circuit's largest value on the first corpus, so a 1e-9 scale floor sat below ngspice's noise. 1e-7 is about 30 times it. |
-| `voltageFloorV`, `currentFloorA` | 1e-12    | Only for circuits whose values are all tiny; the scale floor governs everything else.                                                                                                                                                           |
+| Parameter                        | Value | Why                                                                                                                                                                                                                                             |
+| -------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `relative`                       | 1e-6  | The plan's target. **Never looser than the 0.5 % golden bound** (a spec checks it).                                                                                                                                                             |
+| `scale`                          | 1e-7  | The reference is noisy. Against exact rational solutions of the same decks, ngspice's own error reached 2.95e-9 of the circuit's largest value on the first corpus, so a 1e-9 scale floor sat below ngspice's noise. 1e-7 is about 30 times it. |
+| `voltageFloorV`, `currentFloorA` | 1e-12 | Only for circuits whose values are all tiny; the scale floor governs everything else.                                                                                                                                                           |
 
 **Two floors, two roles.** This floor bounds sim-core's disagreement with a reference that carries about 3e-9 of its own noise. #46's floor policy (F2.2 part 1) bounds sim-core's _own_ residuals (KCL, power balance) in its property tests. They are different checks, and neither replaces the other.
 
@@ -90,7 +90,14 @@ for volts and amps alike (each against the maximum of the same quantity: voltage
 
 **Measured margin** (the test-engineer review's tools: exact rational solutions, and a float64 MNA solver with partial pivoting emulating sim-core, run on the regenerated corpus): the emulated solver against ngspice stays at **1.1e-3 of the allowance or less** (DC: 1.06e-3 for voltages, 4.7e-4 for currents; AC: 1.8e-5 and 5.0e-4). ngspice against the exact solution is at the same level. On the first corpus the review measured up to 0.03 of the allowance.
 
-When F2.2 part 1 lands: run the DC comparison, record the worst observed error per parameter here, and tighten or confirm each (never past the golden bound); then mark this ADR Accepted for DC, and again for AC with part 2.
+**Measured with the real solver (DC, 2026-10-30, F2.2 part 1's `DcSolver`):** over all 500 DC circuits the worst error is **1.06e-3 of the allowance for voltages** (`dc-0170`, node 12) and **4.6e-4 for currents** (`dc-0152`, branch 2): a margin of about 940× and 2,150×, matching the emulated solver. sim-core's own KCL and source rows hold on every circuit, and no island is flagged. The tolerance is confirmed for DC as it stands.
+
+**The comparison bites** (mutants planted in copies, then restored from the copies):
+
+- a 1e-5 relative error in the solver's resistor conductance: 6,622 value mismatches (sim-core's own residuals fail too, since the residual helpers use the true values);
+- a current source's sign flipped in the adapter: 16,472 value mismatches across all 369 circuits holding a current source, while sim-core's own KCL and source rows still hold (the solver is self-consistent on the wrong input). That is the error class only the oracle catches.
+
+With F2.2 part 2: run the AC comparison the same way, record its worst share here, and mark this ADR Accepted for AC.
 
 ### When to regenerate
 

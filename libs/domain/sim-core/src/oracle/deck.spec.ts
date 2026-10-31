@@ -1,7 +1,9 @@
 import { type OracleCircuit, phasorUnit, valueNumber, valueText } from './circuit';
 import { oracleDeckPath, oracleResultsPath } from './corpus';
 import { branchVectorNames, gminShuntText, nodeVectorNames, oracleDeck, oracleDeckOptions } from './deck';
-import { oracleNetlist } from './netlist';
+import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_VSOURCE } from '../lib/mna/values';
+import { computeTopologyHash } from '../lib/netlist/hash';
+import { oracleDcInput, oracleNetlist } from './netlist';
 
 /*
  * The two emitters of one oracle circuit (F2.7): the SPICE deck and the sim-core netlist. A hand-built
@@ -124,6 +126,40 @@ describe('oracleDeck', () => {
   it('places decks and results in the corpus directory', () => {
     expect(oracleDeckPath(DC)).toBe('dc/dc-0007.cir');
     expect(oracleResultsPath('ac')).toBe('ac.results.txt');
+  });
+});
+
+describe('oracleDcInput', () => {
+  const { netlist, values } = oracleDcInput(DC);
+
+  it('maps resistors and voltage sources to themselves, and a current source to a resistor element', () => {
+    expect(netlist.branches.map((b) => [b.kind, b.source, b.a, b.b])).toStrictEqual([
+      ['vsource', 'dc', 0, 1],
+      ['resistor', null, 1, 2],
+      ['resistor', null, 2, 0],
+      ['resistor', 'dc', 0, 2],
+    ]);
+    expect([...values.stamps]).toStrictEqual([
+      DC_STAMP_VSOURCE,
+      DC_STAMP_RESISTOR,
+      DC_STAMP_RESISTOR,
+      DC_STAMP_ISOURCE,
+    ]);
+    expect([values.emfV[0], values.ohms[0], values.ohms[1], values.ohms[2], values.amps[3]]).toStrictEqual([
+      12, 0.023, 4700, 10000, 0.0015,
+    ]);
+  });
+
+  it('is one DC island over every node, with its real topology hash', () => {
+    expect(netlist.islands).toStrictEqual([{ index: 0, kind: 'dc', nodes: [0, 1, 2], branches: [0, 1, 2, 3] }]);
+    expect(netlist.nodes.map((n) => n.island)).toStrictEqual([0, 0, 0]);
+    expect(netlist.topologyHash).toBe(computeTopologyHash(netlist.nodes, netlist.branches));
+    expect(netlist.topologyHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('refuses an AC circuit or an AC element', () => {
+    expect(() => oracleDcInput(AC)).toThrow('ac-0003: not a DC circuit');
+    expect(() => oracleDcInput({ ...AC, domain: 'dc' })).toThrow('ac-0003: inductor is not a DC element');
   });
 });
 

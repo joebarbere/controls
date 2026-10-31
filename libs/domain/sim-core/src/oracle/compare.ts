@@ -70,16 +70,22 @@ function compareQuantity(
   absoluteFloor: number,
   tolerance: OracleTolerance,
   mismatches: OracleMismatch[],
-): void {
+): OracleWorst {
   if (actual.length !== expected.length) {
     throw new RangeError(`${quantity} values: expected ${expected.length} numbers, got ${actual.length}`);
   }
   let largest = 0;
   for (let i = 0; i < expected.length; i += 2) largest = Math.max(largest, modulus(expected[i], expected[i + 1]));
   const floor = Math.max(absoluteFloor, tolerance.scale * largest);
+  const worst = { index: -1, ratio: 0 };
   for (let i = 0; i < expected.length; i += 2) {
     const error = modulus(actual[i] - expected[i], actual[i + 1] - expected[i + 1]);
     const allowed = tolerance.relative * modulus(expected[i], expected[i + 1]) + floor;
+    const ratio = error / allowed;
+    if (!(ratio <= worst.ratio)) {
+      worst.index = i / 2;
+      worst.ratio = ratio;
+    }
     // `!(error <= allowed)` also catches NaN.
     if (!(error <= allowed)) {
       mismatches.push({
@@ -92,6 +98,46 @@ function compareQuantity(
       });
     }
   }
+  return worst;
+}
+
+/** The value that used the largest share of its allowance: its index and |x − x_ref| / allowed (−1, 0 if none). */
+export interface OracleWorst {
+  index: number;
+  ratio: number;
+}
+
+/** How `actual` compares with `expected`: every value outside the tolerance, and the worst of each quantity. */
+export interface OracleComparison {
+  readonly mismatches: readonly OracleMismatch[];
+  readonly worstNode: OracleWorst;
+  readonly worstBranch: OracleWorst;
+}
+
+/** Compares every node voltage and branch current of `actual` with `expected` (ADR 0012). */
+export function compareOracle(
+  expected: OracleCircuitResult,
+  actual: OracleSolution,
+  tolerance: OracleTolerance = ORACLE_TOLERANCE,
+): OracleComparison {
+  const mismatches: OracleMismatch[] = [];
+  const worstNode = compareQuantity(
+    'node',
+    expected.nodes,
+    actual.nodes,
+    tolerance.voltageFloorV,
+    tolerance,
+    mismatches,
+  );
+  const worstBranch = compareQuantity(
+    'branch',
+    expected.branches,
+    actual.branches,
+    tolerance.currentFloorA,
+    tolerance,
+    mismatches,
+  );
+  return { mismatches, worstNode, worstBranch };
 }
 
 /** Every node voltage and branch current of `actual` outside the tolerance of `expected`; empty if it agrees. */
@@ -100,8 +146,5 @@ export function compareOracleSolution(
   actual: OracleSolution,
   tolerance: OracleTolerance = ORACLE_TOLERANCE,
 ): OracleMismatch[] {
-  const mismatches: OracleMismatch[] = [];
-  compareQuantity('node', expected.nodes, actual.nodes, tolerance.voltageFloorV, tolerance, mismatches);
-  compareQuantity('branch', expected.branches, actual.branches, tolerance.currentFloorA, tolerance, mismatches);
-  return mismatches;
+  return [...compareOracle(expected, actual, tolerance).mismatches];
 }

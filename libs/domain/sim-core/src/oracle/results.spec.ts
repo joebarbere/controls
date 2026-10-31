@@ -1,5 +1,5 @@
 import type { OracleCircuit } from './circuit';
-import { compareOracleSolution, GOLDEN_RELATIVE_BOUND, ORACLE_TOLERANCE } from './compare';
+import { compareOracle, compareOracleSolution, GOLDEN_RELATIVE_BOUND, ORACLE_TOLERANCE } from './compare';
 import {
   formatOracleResults,
   type OracleCircuitResult,
@@ -168,6 +168,16 @@ describe('compareOracleSolution', () => {
     expect(mismatches[0].expected).toStrictEqual([100, -50]);
     expect(mismatches[0].error).toBeCloseTo(0.01, 12);
     expect(mismatches[0].allowed).toBeCloseTo(1e-6 * Math.hypot(100, 50) + 1e-7 * Math.hypot(100, 50), 15);
+  });
+
+  it('reports the worst share of the allowance per quantity, a NaN as the worst', () => {
+    const near = { nodes: [0, 0, 100 + 1e-5, -50, 0, 0], branches: [2, 1, 0, 0] };
+    const { worstNode, worstBranch } = compareOracle(expected, near);
+    expect(worstNode.index).toBe(1);
+    expect(worstNode.ratio).toBeCloseTo(1e-5 / (1e-6 * Math.hypot(100, 50) + 1e-7 * Math.hypot(100, 50)), 8);
+    // An exact match uses none of its allowance: no worst value.
+    expect(worstBranch).toStrictEqual({ index: -1, ratio: 0 });
+    expect(compareOracle(expected, { ...near, branches: [2, 1, Number.NaN, 0] }).worstBranch.index).toBe(1);
   });
 
   it('refuses a solution of the wrong size', () => {
