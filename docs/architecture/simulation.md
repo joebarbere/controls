@@ -172,6 +172,131 @@ F2.3a can copy this straight into `WorldV2.sim` and the snapshot payload ([ADR 0
 
   They run over synthetic circuits (2–14 nodes, 1–3 islands, loops, self-loops, every stamp, resistances from 0.1 mΩ to 100 kΩ) and over compiled bench worlds, with generator-health floors.
 
+## Sparse LU and the factorisation cache (F2.2 part 3)
+
+An island with at least `SPARSE_MIN_UNKNOWNS` (64) unknowns is solved by sparse LU instead of dense; smaller ones keep part 1's dense path bit for bit (the pinned 300-solve hash didn't move). Both paths stamp through the same routine, so they see the same matrix entries; they differ only in pivot order, so they agree to rounding, not to the bit. All of it is reimplemented from the papers, with no third-party code: Gilbert and Peierls (1988, doi:10.1137/0909058) for the left-looking LU, Amestoy, Davis and Duff (1996, doi:10.1137/S0895479894278952) for AMD, and Duff, Erisman and Reid (1986, §7.8) for threshold pivoting.
+
+```mermaid
+flowchart TB
+    I["Island, n ≥ 64 unknowns<br/>(singular check first, as dense)"] --> K{"cache.find(topologyHash,<br/>island, stamp modes)"}
+    K -- miss --> REC["Stamp once in record mode:<br/>(row, col, value code, branch) per call"]
+    REC --> SYM["buildSymbolic: CSC pattern, slot map,<br/>AMD column order, stamp program,<br/>conductive components"]
+    SYM --> STORE["cache.store (LRU, 16 topologies,<br/>4 stamp-mode variants per island)"]
+    K -- hit --> REST["restore conductive components"]
+    STORE --> ASM["assemble: replay the stamp program<br/>into the pattern's values and the rhs"]
+    REST --> ASM
+    ASM --> F{"SparseLu.factor"}
+    F -- "same pattern and order:<br/>replay pivots, check the rule each column" --> NUM["L, U in the island's SparseFactors"]
+    F -- "first time, or the rule picks<br/>another row: fresh (DFS reach)" --> NUM
+    NUM --> SOL["solve: L y = P b, U w = y, x = Q w"]
+    SOL --> OUT["DcSolution (as dense)"]
+```
+
+### Sparse LU
+
+`SparseLu` (`lu/sparse-lu.ts`) is left-looking: one column at a time, in the AMD order. For each column it does three things:
+
+1. finds, by an iterative depth-first search over L's graph, the rows the column reaches (Gilbert–Peierls: exactly the pattern of the triangular solve);
+2. applies the earlier columns in topological order;
+3. picks the pivot by **threshold partial pivoting**. The diagonal row is kept while |a_kk| ≥ `PIVOT_THRESHOLD` (0.1) × the largest candidate; otherwise the largest wins, the lowest row on a tie.
+
+MNA's zero diagonals (ideal sources) make off-diagonal pivots routine. Floating components keep part 1's structural pinning, since both paths stamp the same rows. A property drives clusters of 70–160 nodes, down to 0.1 mΩ, through the sparse path: they are never singular, and gmin · ΣV equals the feed to 1e-13.
+
+**Replay.** The factors live in a `SparseFactors` object per island, in the cache entry. When it already holds a factorisation of the same pattern, order and threshold, `factor` replays it: it keeps the L/U patterns and the pivot sequence, skips the searches, and recomputes every value in the order a fresh factorisation would, applying the full pivot rule at every column. If the rule would choose another row, it starts again afresh. So a replay is accepted only when it is the fresh factorisation, bit for bit. On the bench plant it halves the cost of the numeric factorisation.
+
+### AMD
+
+`amdOrder` (`lu/amd.ts`) orders A + Aᵀ by approximate minimum degree on the quotient graph:
+
+- elements absorb their neighbours;
+- the approximate external degree uses |L_e \ L_p|, computed for all elements at once;
+- elements inside L_p are absorbed (aggressive absorption);
+- indistinguishable variables merge into supervariables;
+- rows denser than max(16, 10√n) go last.
+
+It is deterministic: fixed scan orders, LIFO degree buckets, and candidates compared in hash-then-index order. On one 250-unknown plant island it leaves about 970 L+U entries, where the natural order leaves about 22 000.
+
+### The factorisation cache
+
+`FactorisationCache` (`mna/factorisation-cache.ts`) keys its entries by `topologyHash`, island and **stamp-mode signature** (each branch's stamp code). The signature is needed because a mode can change the matrix without changing `topologyHash`: a `vsource` element in current limit has a different row, and a current source can split a conductive component. Each entry keeps:
+
+- the CSC pattern, and the slot of every stamp call (duplicates add in call order);
+- the AMD order;
+- the **stamp program**: each call's value code (`gmin`, ±1, R, ±1/R) and branch, plus the right-hand-side steps. Assembly replays the same additions in the same order as `stamp`, without its branching;
+- the island's conductive components, and a fingerprint of its branch ends. A hit with different ends or unknowns throws: two netlists sharing a `topologyHash` is a caller bug;
+- the island's last `SparseFactors`, for replay.
+
+Everything it keeps is a function of the topology and the stamp modes, except the factors, which are used only after the pivot rule re-verifies them. So **results never depend on the cache's state**.
+
+Eviction is least recently used, by a logical clock, over topologies (`FACTORISATION_CACHE_CAPACITY`, 16) and over each island's mode variants (4). `cache.stats` counts hits, misses and evictions; `sparse.replays`, `.fresh` and `.fallbacks` count numeric factorisations. Returning to an earlier switch state is all hits, and a spec counts them.
+
+### The crossover
+
+Measured on the built bundle (Node 24, AMD Ryzen 5 5600X); each figure is the median over single-island plant-like circuits:
+
+| Unknowns | Dense  | Sparse, warm cache | Sparse, cold (rebuild symbolic) |
+| -------- | ------ | ------------------ | ------------------------------- |
+| 27       | 5.7 µs | 5.6 µs             | 29 µs                           |
+| 53       | 17 µs  | 10 µs              | 54 µs                           |
+| 108      | 86 µs  | 21 µs              | 121 µs                          |
+| 290      | 941 µs | 58 µs              | 348 µs                          |
+
+Sparse with a warm cache wins from about 30 unknowns, and with a cold one from about 130. The threshold is 64. That is above every circuit of the pinned hash (at most 40 unknowns), so small circuits keep their dense bits.
+
+### The nonlinear outer loop
+
+`DcSolver.solveNonlinear(netlist, values, { hook, warmStart?, maxIterations? }, out?)` repeats each DC island's linear solve. Before each solve it calls `hook(island, iterate, values)`, a `DcIterationHook` that sets the island's nonlinear values from the current iterate. On a cold start the iterate is `null` and the hook sets its initial guess. This is the interface F2.4's CV/CC supply and F2.5's lamp R(T) plug into.
+
+```mermaid
+flowchart LR
+    W["warm start<br/>(solution record, same topologyHash)"] -.-> X["iterate x"]
+    X --> HK["hook(island, x, values)"]
+    HK --> FP{"x is the last solve and<br/>values unchanged?"}
+    FP -- yes --> DONE["converged"]
+    FP -- no --> LS["linear solve → x̃"]
+    LS --> CV{"|x̃ − x| within RELTOL +<br/>VNTOL / ABSTOL + each branch's<br/>own current rounding?"}
+    CV -- yes --> DONE
+    CV -- "no, under the cap" --> DAMP["α halves on oscillation (to 1/16),<br/>doubles back when steps shrink;<br/>x ← x + α (x̃ − x)"]
+    DAMP --> X
+    CV -- "cap (50 solves)" --> NC["flags: nonConverged"]
+```
+
+The reported solution is always the last linear solve, never a damped blend, so every row holds for the values left in `values`. A linear island takes one solve, and a singular solve ends the loop.
+
+Each branch's current tolerance includes its own rounding (`currentResolution`): a resistor's 32 ε (|Va| + |Vb|) / R, and for a voltage-mode source the sum over the branches at its nodes. No solve resolves a current better: without the term, a 2.2e-7 A current wobbling by 6e-13 A once kept an island from converging. The term is per branch, never island-wide. An island-wide sum grows with the island and let a 1e-5 A load on a long busbar loop stop with its resistance off by ×35 (#49 review). The constants (`OUTER_LOOP_*`) are numerical, and sourced against SPICE's defaults.
+
+A `nonConverged` island's values are the last linear solve's: self-consistent, so they look real. Anything player-facing must show such an island as unsettled (caveats).
+
+### Tests (part 3)
+
+- **Dense against sparse** (`mna/sparse.spec.ts`), per the floor policy. It runs on random circuits of 40–260 nodes, and on 2–24-node circuits forced sparse:
+  - residuals: both solutions pass KCL and the source rows;
+  - values, on the well-conditioned subset (1 Ω–10 kΩ, every source behind ≥ 0.1 Ω): they agree within 1e-9 of the island's largest |V| or |I|, plus the ε·G·V current floor. Over 1,500 fresh circuits, the worst used 5 % of that bound.
+
+  The DC oracle runs on both paths.
+
+- **Cache:**
+  - a property against a reference LRU model;
+  - mode variants;
+  - the switch round trip: all hits, bit-identical;
+  - value-only changes: a hit and a replay;
+  - a mismatched `topologyHash`, refused;
+  - bit identity cold, warm, shared and thrashed (capacity 1).
+- **LU and AMD:**
+  - backward stability against dense LU;
+  - replay bit-identical to a fresh factorisation, with fallbacks counted;
+  - the arrow matrix: no fill in AMD order;
+  - a 20 000-long chain: no stack overflow;
+  - AMD's fill against the natural order, on random patterns and a grid.
+- **Outer loop** (`mna/nonlinear.spec.ts`):
+  - closed-form fixed points of a self-heating resistor, R(I) = R0 + k|I|, with I* = (−(Rs+R0) + √((Rs+R0)² + 4kE)) / 2k;
+  - damping on a slope of −0.995;
+  - a discontinuous R that must end `nonConverged`;
+  - a CV/CC supply in both modes;
+  - warm starts;
+  - properties bounding the iterations at 40, on random bench worlds with self-heating lamps (hot/cold up to 21×) and on large sparse circuits. The bound is measured: from a cold start the median is 16, the 99th percentile about 21, and the most seen 32.
+- **Generator health** floors on both generators, and 17 planted faults, all killed (listed in the PR).
+
 ## The oracle corpus (F2.7)
 
 The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
@@ -198,17 +323,26 @@ flowchart LR
 
 `pnpm sim bench` (the Nx `bench` target, in `pnpm verify`, from the built bundle) builds a seeded synthetic plant of exactly 2,000 netlist nodes from P2's catalogue: 8 battery feeders, each a random recursive tree of units (an SPST switch and a lamp, with the return path mirroring the supply tree), about 1 unit in 50 adding a tie lead (a loop) and about 1 switch in 20 open. It times:
 
-| Case                     | What                                                                                    | Budget                                           |
-| ------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `plant-compile`          | A from-scratch `compileNetlist`, as on a load                                           | None in the spec (reported)                      |
-| `plant-recompile-switch` | One topology change: open a feeder's root switch (an untimed `prepare` closes it first) | None of its own: part of the re-solve (reported) |
-| re-solve (pending)       | Recompile and solve after a topology change                                             | 2 ms (spec §4.5), switched on by F2.2 part 3     |
-| per tick (pending)       | Discrete + continuous + protection layers                                               | 0.3 ms (spec §4.5), switched on by F2.3a         |
+| Case                            | What                                                                                                                         | Budget                                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `plant-compile`                 | A from-scratch `compileNetlist`, as on a load                                                                                | None in the spec (reported)                      |
+| `plant-recompile-switch`        | One topology change: open a feeder's root switch (an untimed `prepare` closes it first)                                      | None of its own: part of the re-solve (reported) |
+| `plant-resolve-topology-change` | The same change, then the values and the sparse solve of all 8 islands, with the factorisation cache warm (both states seen) | 2 ms (spec §4.5): reported, gate pending (below) |
+| `plant-resolve-new-topology`    | The same, with the cache cleared in `prepare`: every symbolic factorisation is rebuilt                                       | None in the spec (reported)                      |
+| per tick (pending)              | Discrete + continuous + protection layers                                                                                    | 0.3 ms (spec §4.5), switched on by F2.3a         |
 
-Measured 2026-10-30 on an AMD Ryzen 5 5600X under Node 24: `plant-compile` 4.2–4.7 ms and `plant-recompile-switch` 1.2–1.3 ms per topology change (8.5–11 ms and 1.7–2.8 ms with heavy load from other jobs). At 1.3 ms per structural recompile the netlist alone uses about two thirds of the 2 ms re-solve budget, so F2.2 part 3 must measure compile and solve together on this plant, on the slowest CI runner.
+Each case reports its median and p90 in the JSON. Budgets gate on the median. Nx hides a passing task's output, so the `bench` target also writes the report to `dist/apps/sim-cli/bench-report.json` (`sim bench --report <file>`), and a CI step after `pnpm verify` prints it on every OS. That step only prints, so `verify` still equals CI.
+
+Measured 2026-10-30 on an AMD Ryzen 5 5600X under Node 24: `plant-compile` took 4.2–4.7 ms, and `plant-recompile-switch` 1.2–1.3 ms per topology change (8.5–11 ms and 1.7–2.8 ms with heavy load from other jobs). F2.2 part 3 made the hashing faster (recompile 1.1 ms) and measured the re-solve:
+
+- **1.45–1.49 ms** with a warm cache (p90 2.5 ms);
+- **4.5–4.6 ms** for a topology never seen (about 0.37 ms of AMD and pattern building per 250-unknown island).
+
+Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm verify`'s parallel test workers it measured 2.3–2.6 ms, and CI runners are slower than this machine. The CI runners measured it at 2.12 ms (Ubuntu), 3.74 ms (macOS) and 4.77 ms (Windows). **Decided 2026-10-31:** the case stays reported-only, the structural recompile (about 75 % of the cost) is optimised next, and then a gate switches on with the 2 ms budget scaled by a calibration loop timed in the same process (plan F2.2 part 3b), so `verify` stays identical to CI. §4.5's 2 ms remains the target on player hardware.
 
 ## Not yet
 
-- **Solvers** (F2.2 parts 2 and 3): complex phasor MNA for AC islands, sparse LU, the factorisation cache keyed by `topologyHash`, and the nonlinear outer loop (`nonConverged`).
+- **Solvers** (F2.2 part 2): complex phasor MNA for AC islands (on the dense and sparse paths).
+- **The re-solve gate** (spec §4.5's 2 ms): reported now; the recompile optimisation and the calibrated gate follow (plan F2.2 part 3b).
 - **Engine loop** (F2.3a): the tick layers, and calling `NetlistCompiler.compile` on each command and topology event with the engine's sim state.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

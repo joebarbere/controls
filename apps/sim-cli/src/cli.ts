@@ -75,6 +75,7 @@ Commands:
   hash <file>      Print world.hash of a .ctrl save's world.json, or of a world
                    document (world.json, a level)
   bench            Run the performance cases (warm-up, then the median of N runs)
+      --report <file>     Also write the JSON report to this file (the Nx bench target does, for CI's log)
                    and print a JSON report; fail if a case is over its budget or
                    not deterministic
   oracle regen     Regenerate the ngspice oracle corpus (libs/domain/sim-core/oracle):
@@ -93,7 +94,7 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   run: ['seed', 'world', 'log', 'save', 'expect'],
   replay: ['expect'],
   hash: ['expect'],
-  bench: [],
+  bench: ['report'],
   oracle: ['ngspice', 'out', 'jobs'],
 };
 
@@ -150,7 +151,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
       io.stdout(USAGE);
       return EXIT_OK;
     }
-    if (parsed.command === 'bench') return bench(io);
+    if (parsed.command === 'bench') return await bench(parsed, io);
     if (parsed.command === 'oracle') return await oracle(parsed, io);
     const path = resolve(io.cwd, parsed.file);
     const hash =
@@ -177,12 +178,19 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   }
 }
 
-/** `sim bench`: prints the report as JSON (stdout stays data only); exit 1 unless every case passed. */
-function bench(io: CliIo): number {
+/**
+ * `sim bench`: prints the report as JSON (stdout stays data only), and with `--report <file>` also
+ * writes it there (Nx hides a passing task's output, so CI prints the file in a step of its own);
+ * exit 1 unless every case passed.
+ */
+async function bench(parsed: Parsed, io: CliIo): Promise<number> {
   const report = io.benchCases
     ? runBench(io.benchCases, io.now ?? wallClockMs)
     : runBench(BENCH_CASES, io.now ?? wallClockMs, PENDING_BENCH_CASES);
-  io.stdout(JSON.stringify(report, null, 2));
+  const json = JSON.stringify(report, null, 2);
+  io.stdout(json);
+  const reportFile = parsed.options['report'];
+  if (reportFile !== undefined) await writeFile(resolve(io.cwd, reportFile), `${json}\n`);
   for (const result of report.cases) {
     if (!result.deterministic) io.stderr(`sim: bench case "${result.name}" returned different checksums across runs`);
     else if (!result.ok) {

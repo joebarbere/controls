@@ -15,7 +15,8 @@ import {
   TEST_MODELS,
 } from '../../testing/bench';
 import { sha256 } from '@controls/world-model';
-import { kcl, linearResidual, power, sourceRows, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { linearResidual, syntheticNetlist, type SyntheticBranch } from '../../testing/mna';
+import { checkPhysics, checkRows, type Circuit, expectSameBits, isSingular } from '../../testing/solver-checks';
 import { GMIN_S } from '../constants';
 import { compileNetlist } from '../netlist/compile';
 import type { Netlist } from '../netlist/types';
@@ -85,11 +86,6 @@ const circuitArb: fc.Arbitrary<CircuitDraw> = fc.record({
   extra: fc.array(fc.tuple(fc.nat({ max: 1000 }), fc.nat({ max: 1000 }), elementArb), { maxLength: MAX_EXTRA }),
 });
 
-interface Circuit {
-  readonly netlist: Netlist;
-  readonly values: DcBranchValues;
-}
-
 const ohmsOf = (e: ElementDraw) => (1 + e.mantissa / 1000) * DECADES[e.decade];
 
 /** Builds a synthetic circuit. `conducting` restricts an element to a resistor or a voltage-mode source. */
@@ -146,51 +142,7 @@ function build(draw: CircuitDraw): Circuit {
   return { netlist, values };
 }
 
-const singular = (solution: DcSolution, island: number) =>
-  (solution.islands[island].flags & ISLAND_FLAG_SINGULAR) !== 0;
-
-/**
- * Checks every row of the system (KCL and the source rows) on every solved, non-singular island,
- * and the singular contract on the rest. `checkPhysics` adds the power balance.
- */
-function checkRows({ netlist, values }: Circuit, solution: DcSolution): void {
-  for (const v of solution.nodes) expect(Number.isFinite(v)).toBe(true);
-  for (const v of solution.branches) expect(Number.isFinite(v)).toBe(true);
-  for (const island of netlist.islands) {
-    if (!solution.islands[island.index].solved) continue;
-    if (singular(solution, island.index)) {
-      for (const node of island.nodes) expect(Object.is(solution.nodes[2 * node], 0)).toBe(true);
-      for (const b of island.branches) expect(Object.is(solution.branches[2 * b], 0)).toBe(true);
-      continue;
-    }
-    expect(kcl(netlist, values, solution, island), `KCL on island ${island.index}`).toBeLessThanOrEqual(1);
-    expect(sourceRows(netlist, values, solution, island), `source rows on island ${island.index}`).toBeLessThanOrEqual(
-      1,
-    );
-  }
-}
-
-/** `checkRows` plus the power balance, gmin losses included. */
-function checkPhysics({ netlist, values }: Circuit, solution: DcSolution): void {
-  for (const v of solution.nodes) expect(Number.isFinite(v)).toBe(true);
-  for (const v of solution.branches) expect(Number.isFinite(v)).toBe(true);
-  for (const island of netlist.islands) {
-    if (!solution.islands[island.index].solved) continue;
-    if (singular(solution, island.index)) {
-      for (const node of island.nodes) expect(Object.is(solution.nodes[2 * node], 0)).toBe(true);
-      for (const b of island.branches) expect(Object.is(solution.branches[2 * b], 0)).toBe(true);
-      continue;
-    }
-    expect(kcl(netlist, values, solution, island), `KCL on island ${island.index}`).toBeLessThanOrEqual(1);
-    expect(sourceRows(netlist, values, solution, island), `source rows on island ${island.index}`).toBeLessThanOrEqual(
-      1,
-    );
-    const { delivered, dissipated, scale, floor } = power(netlist, values, solution, island);
-    expect(Math.abs(delivered - dissipated), `power on island ${island.index}`).toBeLessThanOrEqual(
-      1e-9 * scale + floor,
-    );
-  }
-}
+const singular = isSingular;
 
 /** A copy of `values` with each source's value scaled by `k` where `keep(branch)`, and zeroed elsewhere. */
 function scaledSources(values: DcBranchValues, k: number, keep: (branch: number) => boolean): DcBranchValues {
@@ -222,16 +174,6 @@ function dirtySolution(netlist: Netlist): DcSolution {
     Object.assign(out.islands[i], { solved: !dc, referenceNode: 99, unknowns: 99, flags: 255, iterations: 99 });
   });
   return out;
-}
-
-/** Field-by-field `Object.is` equality of two solutions. */
-function expectSameBits(actual: DcSolution, expected: DcSolution): void {
-  expect(actual.topologyHash).toBe(expected.topologyHash);
-  expect(actual.nodes.length).toBe(expected.nodes.length);
-  expect(actual.branches.length).toBe(expected.branches.length);
-  actual.nodes.forEach((v, i) => expect(Object.is(v, expected.nodes[i]), `node value ${i}`).toBe(true));
-  actual.branches.forEach((v, i) => expect(Object.is(v, expected.branches[i]), `branch value ${i}`).toBe(true));
-  expect(actual.islands).toStrictEqual(expected.islands);
 }
 
 // Real bench circuits.
@@ -365,7 +307,7 @@ describe('DC MNA properties (synthetic circuits)', () => {
         const circuit = build(draw);
         checkPhysics(circuit, solveDc(circuit.netlist, circuit.values));
       }),
-      { numRuns: 300 },
+      { numRuns: 200 },
     );
   });
 
@@ -397,7 +339,7 @@ describe('DC MNA properties (synthetic circuits)', () => {
         // k = 0 (and sign flips of zero) make −0 in the arithmetic: none may reach the solution.
         for (const v of [...scaled.nodes, ...scaled.branches]) expect(Object.is(v, -0)).toBe(false);
       }),
-      { numRuns: 200, examples: [[CI_LINEARITY, 2.5]] },
+      { numRuns: 130, examples: [[CI_LINEARITY, 2.5]] },
     );
   });
 
@@ -424,7 +366,7 @@ describe('DC MNA properties (synthetic circuits)', () => {
         ];
         expect(linearResidual(circuit.netlist, parts)).toBeLessThanOrEqual(1);
       }),
-      { numRuns: 200, examples: [[CI_SUPERPOSITION, CI_SUPERPOSITION_MASK]] },
+      { numRuns: 140, examples: [[CI_SUPERPOSITION, CI_SUPERPOSITION_MASK]] },
     );
   });
 

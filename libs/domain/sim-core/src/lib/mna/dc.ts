@@ -1,10 +1,22 @@
-import { GMIN_S } from '../constants';
+import {
+  GMIN_S,
+  OUTER_LOOP_ABSTOL,
+  OUTER_LOOP_MAX_ITERATIONS,
+  OUTER_LOOP_MIN_DAMPING,
+  OUTER_LOOP_RELTOL,
+  OUTER_LOOP_VNTOL,
+  PIVOT_THRESHOLD,
+  SPARSE_MIN_UNKNOWNS,
+} from '../constants';
+import { amdOrder } from '../lu/amd';
 import { DenseLu } from '../lu/dense-lu';
+import { SparseFactors, SparseLu } from '../lu/sparse-lu';
 import type { Netlist, NetlistIsland } from '../netlist/types';
+import { FactorisationCache, type IslandSymbolic } from './factorisation-cache';
 import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_UNSET, DC_STAMP_VSOURCE, type DcBranchValues } from './values';
 
 /*
- * Dense DC modified nodal analysis (plan F2.2 part 1), reimplemented from the published formulation
+ * DC modified nodal analysis (plan F2.2 parts 1 and 3), reimplemented from the published formulation
  * (C.-W. Ho, A. E. Ruehli and P. A. Brennan, "The Modified Nodal Approach to Network Analysis", IEEE
  * Trans. Circuits and Systems 22(6), 1975): no third-party code.
  *
@@ -42,6 +54,21 @@ import { DC_STAMP_ISOURCE, DC_STAMP_RESISTOR, DC_STAMP_UNSET, DC_STAMP_VSOURCE, 
  *
  * Voltages are written as c + u, and currents inside the component come from u. Islands with no
  * floating component are unaffected, bit for bit. The plan's caveats record the reasoning.
+ *
+ * **Dense or sparse (part 3).** One stamping routine writes every matrix entry through `add`, in a
+ * fixed call order. An island with fewer than `SPARSE_MIN_UNKNOWNS` unknowns is stamped into a dense
+ * matrix and factored by `DenseLu`, exactly as in part 1 (the pinned 300-solve hash holds). A larger
+ * one is stamped into the CSC pattern of its symbolic factorisation and factored by `SparseLu`
+ * (Gilbert–Peierls, AMD order). The symbolic factorisation is built by running the same stamping
+ * once in record mode (the (row, column) of every call), and is kept in the factorisation cache by
+ * `topologyHash`, island and stamp modes. Both backends assemble the same terms, from the one
+ * stamping routine (the sparse path replays its recorded program, in call order); they differ in
+ * pivot order, so their results agree to rounding, not to the bit. The sparse path's bits are pinned
+ * by their own hash (`sparse.spec.ts`), as the dense path's are (`properties.spec.ts`).
+ *
+ * **Nonlinear outer loop (part 3).** `solveNonlinear` repeats each island's linear solve, calling a
+ * value hook with the current iterate before each one (a lamp's R(T), a supply's CV/CC mode), until
+ * the solution stops moving, with damping and an iteration cap (see `solveNonlinear`).
  */
 
 /** Island flag bits, as in the snapshot's island entry (ADR 0011 §5.3). */
@@ -116,16 +143,117 @@ function find(parent: Int32Array, x: number): number {
   return x;
 }
 
+/** Copies an island record's fields (no allocation). */
+function copyRecord(from: DcIslandResult, to: DcIslandResult): void {
+  to.solved = from.solved;
+  to.referenceNode = from.referenceNode;
+  to.unknowns = from.unknowns;
+  to.flags = from.flags;
+  to.iterations = from.iterations;
+}
+
 /** `+0` for `-0`, so every stored value has one bit pattern. */
 const positiveZero = (x: number): number => (x === 0 ? 0 : x);
 
 /**
- * Solves netlists' DC islands. Reuse one solver: its LU storage and index maps grow to the largest
- * system seen and are then reused, so a steady-state solve allocates nothing. Reuse never changes a
- * result: every solve is a pure function of the netlist and the values.
+ * Sets the values of an island's nonlinear branches for the next outer-loop iteration (F2.2 part 3),
+ * from `iterate`, the current estimate of the solution: the island's entries of `iterate.nodes` and
+ * `iterate.branches` (other islands' entries are meaningless), and its `islands[island.index]`
+ * record. `iterate` is `null` when there is no estimate yet (a cold start without a warm start):
+ * the hook then sets its initial guess (a lamp's cold resistance, a supply in CV).
+ *
+ * It must be a pure function of its inputs, write only branches of `island`, and write them with
+ * `values.resistor`, `.vsource` or `.isource` (a stamp mode may change). A linear branch needn't be
+ * touched. F2.4's supply and F2.5's lamp are its first real users.
+ */
+export type DcIterationHook = (island: NetlistIsland, iterate: DcSolution | null, values: DcBranchValues) => void;
+
+/** How `solveNonlinear` iterates. */
+export interface DcNonlinearOptions {
+  /** The per-iteration value hook. */
+  readonly hook: DcIterationHook;
+  /**
+   * A previous solution of the same topology (the solution record, ADR 0011 §9.6) to start from,
+   * island by island; ignored when its `topologyHash` or size differs, and for islands it didn't
+   * solve or flagged singular. Read only, never written.
+   */
+  readonly warmStart?: DcSolution | null;
+  /** The iteration cap; `OUTER_LOOP_MAX_ITERATIONS` by default. */
+  readonly maxIterations?: number;
+}
+
+/** How a `DcSolver` is set up. */
+export interface DcSolverOptions {
+  /** Islands with at least this many unknowns are solved by sparse LU (`SPARSE_MIN_UNKNOWNS` by default). */
+  readonly sparseMinUnknowns?: number;
+  /** The factorisation cache, which may be shared between solvers; a private one by default. */
+  readonly cache?: FactorisationCache;
+}
+
+const MODE_DENSE = 0;
+const MODE_RECORD = 1;
+
+// How a stamp-program step recomputes its value from the branch values: exactly as `stamp` does.
+const VALUE_GMIN = 0;
+const VALUE_ONE = 1;
+const VALUE_MINUS_ONE = 2;
+/** `ohms[b]`. */
+const VALUE_OHMS = 3;
+/** `1 / ohms[b]`. */
+const VALUE_G = 4;
+/** `-(1 / ohms[b])`. */
+const VALUE_MINUS_G = 5;
+// Right-hand-side steps.
+const RHS_SET_EMF = 0;
+const RHS_SET_AMPS = 1;
+const RHS_ADD_AMPS = 2;
+const RHS_ADD_MINUS_AMPS = 3;
+
+/** A recorded stamping: what `buildSymbolic` turns into a pattern, a slot map and a program. */
+interface StampProgram {
+  readonly rows: Int32Array;
+  readonly cols: Int32Array;
+  readonly codes: Uint8Array;
+  readonly branches: Int32Array;
+  readonly rhsTargets: Int32Array;
+  readonly rhsCodes: Uint8Array;
+  readonly rhsBranches: Int32Array;
+}
+
+function grow(array: Int32Array): Int32Array<ArrayBuffer> {
+  const grown = new Int32Array(2 * array.length);
+  grown.set(array);
+  return grown;
+}
+
+/**
+ * A cheap fingerprint of an island's branch ends (Math.imul is exact), so a symbolic factorisation
+ * cached under a `topologyHash` that another netlist reuses is refused rather than misapplied.
+ */
+function endsChecksum(netlist: Netlist, island: NetlistIsland): number {
+  let h = island.nodes.length;
+  for (const index of island.branches) {
+    const branch = netlist.branches[index];
+    h = (Math.imul(h, 31) + branch.a) | 0;
+    h = (Math.imul(h, 31) + branch.b) | 0;
+  }
+  return h;
+}
+
+/**
+ * Solves netlists' DC islands. Reuse one solver: its LU storage, index maps and factorisation cache
+ * grow to the largest system seen and are then reused, so a steady-state solve allocates nothing.
+ * Reuse never changes a result: every solve is a pure function of the netlist and the values (and,
+ * for `solveNonlinear`, the hook and the warm start), whatever the solver solved before.
  */
 export class DcSolver {
+  /** Islands with at least this many unknowns go to sparse LU. */
+  readonly sparseMinUnknowns: number;
+  /** The factorisation cache (sparse islands' symbolic factorisations, by `topologyHash`). */
+  readonly cache: FactorisationCache;
   private readonly lu = new DenseLu();
+  /** The sparse kernels and workspace; `sparse.replays` and `.fresh` count numeric factorisations. */
+  readonly sparse = new SparseLu();
   /** Node → its unknown in the current island, or −1 for the reference. */
   private nodeUnknown = new Int32Array(0);
   /** Branch → its current unknown in the current island, or −1. */
@@ -135,10 +263,45 @@ export class DcSolver {
   /** Node → the smallest node of its conductive component in the current island. */
   private comp = new Int32Array(0);
   private rhs = new Float64Array(0);
-  /** The current island's matrix and order, and its reference node's component. */
+  /** The current island's dense matrix and order, and its reference node's component. */
   private a: Float64Array = new Float64Array(0);
   private n = 0;
   private referenceRoot = -1;
+  /** How `add` writes: into the dense matrix, or recording the stamp program. */
+  private mode = MODE_DENSE;
+  // Record mode: every `add` call's (row, column, value code, branch), and every right-hand-side op.
+  private tripletRow = new Int32Array(256);
+  private tripletCol = new Int32Array(256);
+  private callCode = new Uint8Array(256);
+  private callBranch = new Int32Array(256);
+  private calls = 0;
+  private rhsTarget = new Int32Array(64);
+  private rhsCode = new Uint8Array(64);
+  private rhsBranch = new Int32Array(64);
+  private rhsCalls = 0;
+  /** The sparse matrix's values, aligned with the current symbolic factorisation's pattern. */
+  private sparseValues = new Float64Array(0);
+  /** The current island's stamp codes, for the cache's mode signature. */
+  private signature = new Uint8Array(0);
+  // Outer loop: the iterate, the previous step and the previous iteration's values.
+  private iterate: DcSolution | null = null;
+  private previousStep = new Float64Array(0);
+  private savedStamps = new Uint8Array(0);
+  private savedOhms = new Float64Array(0);
+  private savedEmf = new Float64Array(0);
+  private savedAmps = new Float64Array(0);
+  /** Outer loop: each branch's current resolution, and each node's sum of its branches' terms. */
+  private branchResolution = new Float64Array(0);
+  private nodeResolution = new Float64Array(0);
+
+  constructor(options: DcSolverOptions = {}) {
+    const threshold = options.sparseMinUnknowns ?? SPARSE_MIN_UNKNOWNS.value;
+    if (!Number.isInteger(threshold) || threshold < 1) {
+      throw new RangeError(`DcSolver: sparseMinUnknowns must be an integer ≥ 1, got ${threshold}`);
+    }
+    this.sparseMinUnknowns = threshold;
+    this.cache = options.cache ?? new FactorisationCache();
+  }
 
   /**
    * Solves every `dc` and `empty` island of `netlist` with `values`, into `out` if it fits (else a
@@ -146,6 +309,215 @@ export class DcSolver {
    * value or a stamp that doesn't suit its element kind (a programming error).
    */
   solve(netlist: Netlist, values: DcBranchValues, out?: DcSolution): DcSolution {
+    const solution = this.prepare(netlist, values, out);
+    for (const island of netlist.islands) this.solveIsland(netlist, island, values, solution);
+    return solution;
+  }
+
+  /**
+   * Solves `netlist` with a nonlinear outer loop (F2.2 part 3), island by island. For each DC island:
+   *
+   * 1. the iterate x starts at the warm start's island (if usable), else there is none;
+   * 2. each iteration calls `hook(island, x, values)` (with `null` for no iterate), then solves the
+   *    island linearly, giving x̃;
+   * 3. it has converged when every node voltage of x̃ is within `OUTER_LOOP_RELTOL` (relative) plus
+   *    `OUTER_LOOP_VNTOL` of x, and every branch current within `OUTER_LOOP_RELTOL` plus
+   *    `OUTER_LOOP_ABSTOL` plus that branch's own current resolution (`currentResolution`: the floor
+   *    policy's 32 ε |y| (|Va| + |Vb|) term, per branch: no linear solve resolves a current better, so
+   *    successive solves differ by that much noise); or when x is exactly the last x̃ and the hook left
+   *    every value unchanged (a fixed point: a linear island takes one solve);
+   * 4. otherwise x ← x + α (x̃ − x). The damping α starts at 1, halves (down to
+   *    `OUTER_LOOP_MIN_DAMPING`) whenever a step reverses the previous one's direction or is larger (an
+   *    oscillation), and doubles back (up to 1) when a step shrinks in the same direction;
+   * 5. after `maxIterations` solves without converging the island is flagged `ISLAND_FLAG_NON_CONVERGED`.
+   *
+   * The solution is always the last linear solve x̃, never a damped blend, so every row of its system
+   * holds for the values the hook set last. `iterations` counts the island's linear solves. `values`
+   * is a working buffer: it is left holding the hook's last values. A singular solve ends the loop.
+   */
+  solveNonlinear(netlist: Netlist, values: DcBranchValues, options: DcNonlinearOptions, out?: DcSolution): DcSolution {
+    const maxIterations = options.maxIterations ?? OUTER_LOOP_MAX_ITERATIONS.value;
+    if (!Number.isInteger(maxIterations) || maxIterations < 1) {
+      throw new RangeError(`DcSolver: maxIterations must be an integer ≥ 1, got ${maxIterations}`);
+    }
+    const solution = this.prepare(netlist, values, out);
+    const iterate = this.prepareIterate(netlist);
+    const branchCount = netlist.branches.length;
+    if (this.savedStamps.length < branchCount) {
+      this.savedStamps = new Uint8Array(branchCount);
+      this.savedOhms = new Float64Array(branchCount);
+      this.savedEmf = new Float64Array(branchCount);
+      this.savedAmps = new Float64Array(branchCount);
+    }
+    if (this.branchResolution.length < branchCount) this.branchResolution = new Float64Array(branchCount);
+    if (this.nodeResolution.length < netlist.nodes.length) this.nodeResolution = new Float64Array(netlist.nodes.length);
+    const stepLength = 2 * (netlist.nodes.length + branchCount);
+    if (this.previousStep.length < stepLength) this.previousStep = new Float64Array(stepLength);
+    const given = options.warmStart ?? null;
+    const warm = given !== null && given.topologyHash === netlist.topologyHash && fits(given, netlist) ? given : null;
+    for (const island of netlist.islands) {
+      const dc = island.kind === 'dc' || island.kind === 'empty';
+      if (!dc) {
+        this.solveIsland(netlist, island, values, solution);
+        continue;
+      }
+      const record = warm === null ? null : warm.islands[island.index];
+      const warmIsland = record !== null && record.solved && (record.flags & ISLAND_FLAG_SINGULAR) === 0;
+      if (warm !== null && warmIsland) this.copyIsland(netlist, island, warm, iterate);
+      this.iterateIsland(netlist, island, values, solution, iterate, warmIsland, options.hook, maxIterations);
+    }
+    return solution;
+  }
+
+  private iterateIsland(
+    netlist: Netlist,
+    island: NetlistIsland,
+    values: DcBranchValues,
+    solution: DcSolution,
+    iterate: DcSolution,
+    warm: boolean,
+    hook: DcIterationHook,
+    maxIterations: number,
+  ): void {
+    const result = solution.islands[island.index];
+    let haveIterate = warm;
+    // Whether the iterate is exactly the last linear solve (so unchanged values mean a fixed point).
+    let iterateIsLastSolve = false;
+    let alpha = 1;
+    let havePreviousStep = false;
+    let previousNorm = 0;
+    let solves = 0;
+    let converged = false;
+    const minDamping = OUTER_LOOP_MIN_DAMPING.value;
+    for (;;) {
+      hook(island, haveIterate ? iterate : null, values);
+      if (iterateIsLastSolve && this.valuesUnchanged(island, values)) {
+        converged = true;
+        break;
+      }
+      if (solves >= maxIterations) {
+        // Out of iterations: put back the values of the last solve, so the solution's rows hold for
+        // `values` as left.
+        this.restoreValues(island, values);
+        break;
+      }
+      this.saveValues(island, values);
+      this.solveIsland(netlist, island, values, solution);
+      solves++;
+      if ((result.flags & ISLAND_FLAG_SINGULAR) !== 0) {
+        converged = true;
+        break;
+      }
+      if (!haveIterate) {
+        this.copyIsland(netlist, island, solution, iterate);
+        haveIterate = true;
+        iterateIsLastSolve = true;
+        continue;
+      }
+      // The step x̃ − x, its size and its direction against the previous step.
+      const step = this.previousStep;
+      let within = true;
+      let norm = 0;
+      let dot = 0;
+      let s = 0;
+      const vntol = OUTER_LOOP_VNTOL.value;
+      // A current is resolved only to its own rounding (see `currentResolution`): below that,
+      // successive solves differ by noise, so the loop must not demand more. Per branch, never
+      // island-wide: an island-wide sum grows with the island and swamps a small current.
+      this.currentResolution(netlist, island, values, solution);
+      const abstol = OUTER_LOOP_ABSTOL.value;
+      const resolution = this.branchResolution;
+      const reltol = OUTER_LOOP_RELTOL.value;
+      for (const node of island.nodes) {
+        const next = solution.nodes[2 * node];
+        const now = iterate.nodes[2 * node];
+        const d = next - now;
+        if (Math.abs(d) > reltol * Math.max(Math.abs(next), Math.abs(now)) + vntol) within = false;
+        if (havePreviousStep) dot += d * step[s];
+        step[s++] = d;
+        norm = Math.max(norm, Math.abs(d));
+      }
+      for (const index of island.branches) {
+        const next = solution.branches[2 * index];
+        const now = iterate.branches[2 * index];
+        const d = next - now;
+        const allowed = reltol * Math.max(Math.abs(next), Math.abs(now)) + abstol + resolution[index];
+        if (Math.abs(d) > allowed) within = false;
+        if (havePreviousStep) dot += d * step[s];
+        step[s++] = d;
+        norm = Math.max(norm, Math.abs(d));
+      }
+      if (within) {
+        converged = true;
+        break;
+      }
+      if (havePreviousStep) {
+        // An oscillation (the step reverses or grows) halves the damping; a step that shrinks in
+        // the same direction doubles it back towards 1, so a far-off start isn't crawled back from.
+        if (dot < 0 || norm > previousNorm) {
+          if (alpha > minDamping) alpha = alpha / 2;
+        } else if (norm < previousNorm && alpha < 1) {
+          alpha = alpha * 2;
+        }
+      }
+      havePreviousStep = true;
+      previousNorm = norm;
+      if (alpha === 1) {
+        this.copyIsland(netlist, island, solution, iterate);
+        iterateIsLastSolve = true;
+      } else {
+        s = 0;
+        for (const node of island.nodes) iterate.nodes[2 * node] += alpha * step[s++];
+        for (const index of island.branches) iterate.branches[2 * index] += alpha * step[s++];
+        copyRecord(result, iterate.islands[island.index]);
+        iterateIsLastSolve = false;
+      }
+    }
+    result.iterations = solves;
+    if (!converged) result.flags |= ISLAND_FLAG_NON_CONVERGED;
+  }
+
+  /**
+   * Fills `branchResolution` with each island branch's current resolution on `solution`: how finely
+   * any linear solve fixes that current, so how far apart two solves of nearly the same system may
+   * put it (the floor policy's per-branch rounding term, 2 · 16 ε |y| (|Va| + |Vb|)):
+   *
+   * - a resistor: its own term, from its end voltages and its conductance;
+   * - a voltage-mode source: its current comes out of the KCL rows at its two ends, so the terms of
+   *   every resistive branch (and gmin) at those nodes, plus its own if it has a series resistance;
+   * - a current source: 0 (its current is exactly `amps`).
+   */
+  private currentResolution(
+    netlist: Netlist,
+    island: NetlistIsland,
+    values: DcBranchValues,
+    solution: DcSolution,
+  ): void {
+    const nodes = solution.nodes;
+    const nodeTerm = this.nodeResolution;
+    const out = this.branchResolution;
+    const scale = 32 * Number.EPSILON;
+    for (const node of island.nodes) nodeTerm[node] = scale * GMIN_S.value * Math.abs(nodes[2 * node]);
+    for (const index of island.branches) {
+      out[index] = 0;
+      if (values.stamps[index] !== DC_STAMP_RESISTOR) continue;
+      const branch = netlist.branches[index];
+      const term = (scale * (Math.abs(nodes[2 * branch.a]) + Math.abs(nodes[2 * branch.b]))) / values.ohms[index];
+      out[index] = term;
+      nodeTerm[branch.a] += term;
+      if (branch.b !== branch.a) nodeTerm[branch.b] += term;
+    }
+    for (const index of island.branches) {
+      if (values.stamps[index] !== DC_STAMP_VSOURCE) continue;
+      const branch = netlist.branches[index];
+      const ohms = values.ohms[index];
+      const own = ohms > 0 ? (scale * (Math.abs(nodes[2 * branch.a]) + Math.abs(nodes[2 * branch.b]))) / ohms : 0;
+      out[index] = nodeTerm[branch.a] + (branch.b !== branch.a ? nodeTerm[branch.b] : 0) + own;
+    }
+  }
+
+  /** Sizes the per-netlist scratch, checks the values and returns the solution to write into. */
+  private prepare(netlist: Netlist, values: DcBranchValues, out?: DcSolution): DcSolution {
     if (values.count !== netlist.branches.length) {
       throw new RangeError(`DcSolver: ${values.count} values for ${netlist.branches.length} branches`);
     }
@@ -156,10 +528,62 @@ export class DcSolver {
       this.parent = new Int32Array(netlist.nodes.length);
       this.comp = new Int32Array(netlist.nodes.length);
     }
-    if (this.branchUnknown.length < netlist.branches.length)
+    if (this.branchUnknown.length < netlist.branches.length) {
       this.branchUnknown = new Int32Array(netlist.branches.length);
-    for (const island of netlist.islands) this.solveIsland(netlist, island, values, solution);
+      this.signature = new Uint8Array(netlist.branches.length);
+    }
     return solution;
+  }
+
+  private prepareIterate(netlist: Netlist): DcSolution {
+    if (this.iterate === null || !fits(this.iterate, netlist)) this.iterate = createDcSolution(netlist);
+    this.iterate.topologyHash = netlist.topologyHash;
+    return this.iterate;
+  }
+
+  /** Copies an island's node voltages and branch currents from `from` into `to`. */
+  private copyIsland(netlist: Netlist, island: NetlistIsland, from: DcSolution, to: DcSolution): void {
+    for (const node of island.nodes) {
+      to.nodes[2 * node] = from.nodes[2 * node];
+      to.nodes[2 * node + 1] = from.nodes[2 * node + 1];
+    }
+    for (const index of island.branches) {
+      to.branches[2 * index] = from.branches[2 * index];
+      to.branches[2 * index + 1] = from.branches[2 * index + 1];
+    }
+    copyRecord(from.islands[island.index], to.islands[island.index]);
+  }
+
+  private restoreValues(island: NetlistIsland, values: DcBranchValues): void {
+    for (const index of island.branches) {
+      values.stamps[index] = this.savedStamps[index];
+      values.ohms[index] = this.savedOhms[index];
+      values.emfV[index] = this.savedEmf[index];
+      values.amps[index] = this.savedAmps[index];
+    }
+  }
+
+  private saveValues(island: NetlistIsland, values: DcBranchValues): void {
+    for (const index of island.branches) {
+      this.savedStamps[index] = values.stamps[index];
+      this.savedOhms[index] = values.ohms[index];
+      this.savedEmf[index] = values.emfV[index];
+      this.savedAmps[index] = values.amps[index];
+    }
+  }
+
+  private valuesUnchanged(island: NetlistIsland, values: DcBranchValues): boolean {
+    for (const index of island.branches) {
+      if (
+        this.savedStamps[index] !== values.stamps[index] ||
+        !Object.is(this.savedOhms[index], values.ohms[index]) ||
+        !Object.is(this.savedEmf[index], values.emfV[index]) ||
+        !Object.is(this.savedAmps[index], values.amps[index])
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private solveIsland(netlist: Netlist, island: NetlistIsland, values: DcBranchValues, solution: DcSolution): void {
@@ -200,83 +624,40 @@ export class DcSolver {
       return;
     }
 
-    this.conductiveComponents(netlist, island, values);
-    const comp = this.comp;
-    const a = this.lu.begin(n);
     if (this.rhs.length < n) this.rhs = new Float64Array(n);
     const rhs = this.rhs;
     rhs.fill(0, 0, n);
-    this.a = a;
     this.n = n;
-    this.referenceRoot = comp[reference];
-    const gmin = GMIN_S.value;
-    for (const node of island.nodes) {
-      const i = nodeUnknown[node];
-      if (i < 0) continue;
-      const root = comp[node];
-      if (root === this.referenceRoot) {
-        a[i * n + i] += gmin;
-      } else {
-        // Floating: V = c + u with c in the representative's column, so gmin · V puts gmin on c and
-        // on u (u_rep ≡ 0), in the member's own row and in the component's sum row.
-        const r = nodeUnknown[root];
-        if (node !== root) {
-          a[i * n + r] += gmin;
-          a[i * n + i] += gmin;
-          a[r * n + i] += gmin;
-        }
-        a[r * n + r] += gmin;
-      }
-    }
-    for (const index of island.branches) {
-      const branch = netlist.branches[index];
-      const stamp = values.stamps[index];
-      const k = branchUnknown[index];
-      if (k >= 0) {
-        // KCL: the source's current I leaves `a` and enters `b`.
-        if (branch.a !== branch.b) {
-          this.kclEntry(branch.a, branch.b, k, 1);
-          this.kclEntry(branch.b, branch.a, k, -1);
-        }
-        if (stamp === DC_STAMP_VSOURCE) {
-          // Vb − Va + R·I = E (a difference, so a floating component's common mode cancels).
-          if (branch.a !== branch.b) {
-            const cb = this.diffColumn(branch.b);
-            const ca = this.diffColumn(branch.a);
-            if (cb >= 0) a[k * n + cb] += 1;
-            if (ca >= 0) a[k * n + ca] -= 1;
-          }
-          a[k * n + k] = values.ohms[index];
-          rhs[k] = values.emfV[index];
-        } else {
-          // Current limit: I = amps.
-          a[k * n + k] = 1;
-          rhs[k] = values.amps[index];
-        }
-      } else if (branch.a !== branch.b) {
-        if (stamp === DC_STAMP_RESISTOR) {
-          const g = 1 / values.ohms[index];
-          const ca = this.diffColumn(branch.a);
-          const cb = this.diffColumn(branch.b);
-          this.kclEntry(branch.a, branch.b, ca, g);
-          this.kclEntry(branch.b, branch.a, cb, g);
-          this.kclEntry(branch.a, branch.b, cb, -g);
-          this.kclEntry(branch.b, branch.a, ca, -g);
-        } else {
-          // A current source on a resistor element: amps leave `a` and enter `b`.
-          const amps = values.amps[index];
-          this.kclRhs(branch.a, branch.b, -amps);
-          this.kclRhs(branch.b, branch.a, amps);
-        }
-      }
-    }
 
-    if (!this.lu.factor()) {
+    let factored: boolean;
+    if (n < this.sparseMinUnknowns) {
+      this.conductiveComponents(netlist, island, values);
+      this.referenceRoot = this.comp[reference];
+      this.mode = MODE_DENSE;
+      this.a = this.lu.begin(n);
+      this.stamp(netlist, island, values);
+      factored = this.lu.factor();
+      if (factored) this.lu.solve(rhs);
+    } else {
+      const symbolic = this.symbolic(netlist, island, values, n, reference);
+      // Numeric assembly by the recorded stamp program: the same additions, into the same entries,
+      // in the same order as `stamp`, without its branching (see `buildSymbolic`).
+      this.assemble(symbolic, values, rhs);
+      factored = this.sparse.factor(
+        symbolic.pattern,
+        this.sparseValues,
+        symbolic.order,
+        PIVOT_THRESHOLD.value,
+        symbolic.factors,
+      );
+      if (factored) this.sparse.solve(symbolic.factors, rhs);
+    }
+    if (!factored) {
       this.singular(netlist, island, solution, result);
       return;
     }
-    this.lu.solve(rhs);
 
+    const comp = this.comp;
     const nodes = solution.nodes;
     const branches = solution.branches;
     let ok = true;
@@ -311,6 +692,212 @@ export class DcSolver {
       branches[2 * index + 1] = 0;
     }
     if (!ok) this.singular(netlist, island, solution, result);
+  }
+
+  /**
+   * The island's symbolic factorisation for its current stamp modes: from the cache, or built by
+   * stamping once in record mode (the pattern and slot map) and ordering with AMD, then cached.
+   */
+  private symbolic(
+    netlist: Netlist,
+    island: NetlistIsland,
+    values: DcBranchValues,
+    n: number,
+    reference: number,
+  ): IslandSymbolic {
+    const signature = this.signature;
+    const count = island.branches.length;
+    for (let i = 0; i < count; i++) signature[i] = values.stamps[island.branches[i]];
+    const ends = endsChecksum(netlist, island);
+    const cached = this.cache.find(netlist.topologyHash, island.index, signature, count);
+    if (cached !== undefined) {
+      if (cached.unknowns !== n) {
+        throw new Error(
+          `DcSolver: island ${island.index} has ${n} unknowns but its cached symbolic factorisation ${cached.unknowns}: two netlists share topologyHash ${netlist.topologyHash}`,
+        );
+      }
+      if (cached.ends !== ends) {
+        throw new Error(
+          `DcSolver: island ${island.index}'s branch ends differ from its cached symbolic factorisation: a stale or mismatched topologyHash ${netlist.topologyHash}`,
+        );
+      }
+      // The conductive components are a function of the topology and the stamp modes: restore them.
+      const comp = this.comp;
+      const nodes = island.nodes;
+      for (let i = 0; i < nodes.length; i++) comp[nodes[i]] = cached.comp[i];
+      this.referenceRoot = comp[reference];
+      return cached;
+    }
+    this.conductiveComponents(netlist, island, values);
+    this.referenceRoot = this.comp[reference];
+    this.mode = MODE_RECORD;
+    this.calls = 0;
+    this.rhsCalls = 0;
+    this.stamp(netlist, island, values);
+    const comp = Int32Array.from(island.nodes, (node) => this.comp[node]);
+    const built = buildSymbolic(n, this.program(), signature.slice(0, count), comp, ends);
+    this.cache.store(netlist.topologyHash, island.index, built);
+    return built;
+  }
+
+  /** The stamp program recorded in record mode, copied out of the growable buffers. */
+  private program(): StampProgram {
+    return {
+      rows: this.tripletRow.slice(0, this.calls),
+      cols: this.tripletCol.slice(0, this.calls),
+      codes: this.callCode.slice(0, this.calls),
+      branches: this.callBranch.slice(0, this.calls),
+      rhsTargets: this.rhsTarget.slice(0, this.rhsCalls),
+      rhsCodes: this.rhsCode.slice(0, this.rhsCalls),
+      rhsBranches: this.rhsBranch.slice(0, this.rhsCalls),
+    };
+  }
+
+  /** Fills the sparse values and the right-hand side from `symbolic`'s stamp program. */
+  private assemble(symbolic: IslandSymbolic, values: DcBranchValues, rhs: Float64Array): void {
+    const nnz = symbolic.pattern.colPtr[symbolic.unknowns];
+    if (this.sparseValues.length < nnz) this.sparseValues = new Float64Array(nnz);
+    const out = this.sparseValues;
+    out.fill(0, 0, nnz);
+    rhs.fill(0, 0, symbolic.unknowns);
+    const { slots, codes, branches } = symbolic;
+    const ohms = values.ohms;
+    const gmin = GMIN_S.value;
+    for (let c = 0; c < slots.length; c++) {
+      const code = codes[c];
+      let v: number;
+      if (code === VALUE_GMIN) v = gmin;
+      else if (code === VALUE_ONE) v = 1;
+      else if (code === VALUE_MINUS_ONE) v = -1;
+      else if (code === VALUE_OHMS) v = ohms[branches[c]];
+      else if (code === VALUE_G) v = 1 / ohms[branches[c]];
+      else v = -(1 / ohms[branches[c]]);
+      out[slots[c]] += v;
+    }
+    const { rhsTargets, rhsCodes, rhsBranches } = symbolic;
+    for (let r = 0; r < rhsTargets.length; r++) {
+      const code = rhsCodes[r];
+      const b = rhsBranches[r];
+      const t = rhsTargets[r];
+      if (code === RHS_SET_EMF) rhs[t] = values.emfV[b];
+      else if (code === RHS_SET_AMPS) rhs[t] = values.amps[b];
+      else if (code === RHS_ADD_AMPS) rhs[t] += values.amps[b];
+      else rhs[t] += -values.amps[b];
+    }
+  }
+
+  /**
+   * Adds `value` to entry (row, col) of the current island's matrix: into the dense matrix, or, in
+   * record mode, as a step of the stamp program (`code` and `branch` say how to recompute `value`
+   * from the branch values, exactly as computed here).
+   */
+  private add(row: number, col: number, value: number, code: number, branch: number): void {
+    if (this.mode === MODE_DENSE) {
+      this.a[row * this.n + col] += value;
+      return;
+    }
+    const c = this.calls++;
+    if (c >= this.tripletRow.length) {
+      this.tripletRow = grow(this.tripletRow);
+      this.tripletCol = grow(this.tripletCol);
+      this.callBranch = grow(this.callBranch);
+      const codes = new Uint8Array(2 * this.callCode.length);
+      codes.set(this.callCode);
+      this.callCode = codes;
+    }
+    this.tripletRow[c] = row;
+    this.tripletCol[c] = col;
+    this.callCode[c] = code;
+    this.callBranch[c] = branch;
+  }
+
+  /** Sets or adds a right-hand-side entry, recording it in record mode (as `add`). */
+  private rhsOp(target: number, value: number, code: number, branch: number): void {
+    if (code === RHS_SET_EMF || code === RHS_SET_AMPS) this.rhs[target] = value;
+    else this.rhs[target] += value;
+    if (this.mode !== MODE_RECORD) return;
+    const r = this.rhsCalls++;
+    if (r >= this.rhsTarget.length) {
+      this.rhsTarget = grow(this.rhsTarget);
+      this.rhsBranch = grow(this.rhsBranch);
+      const codes = new Uint8Array(2 * this.rhsCode.length);
+      codes.set(this.rhsCode);
+      this.rhsCode = codes;
+    }
+    this.rhsTarget[r] = target;
+    this.rhsCode[r] = code;
+    this.rhsBranch[r] = branch;
+  }
+
+  /**
+   * Stamps the current island's matrix (through `add`, in a fixed order that depends only on the
+   * topology and the stamp modes) and right-hand side.
+   */
+  private stamp(netlist: Netlist, island: NetlistIsland, values: DcBranchValues): void {
+    const nodeUnknown = this.nodeUnknown;
+    const branchUnknown = this.branchUnknown;
+    const comp = this.comp;
+    const gmin = GMIN_S.value;
+    for (const node of island.nodes) {
+      const i = nodeUnknown[node];
+      if (i < 0) continue;
+      const root = comp[node];
+      if (root === this.referenceRoot) {
+        this.add(i, i, gmin, VALUE_GMIN, -1);
+      } else {
+        // Floating: V = c + u with c in the representative's column, so gmin · V puts gmin on c and
+        // on u (u_rep ≡ 0), in the member's own row and in the component's sum row.
+        const r = nodeUnknown[root];
+        if (node !== root) {
+          this.add(i, r, gmin, VALUE_GMIN, -1);
+          this.add(i, i, gmin, VALUE_GMIN, -1);
+          this.add(r, i, gmin, VALUE_GMIN, -1);
+        }
+        this.add(r, r, gmin, VALUE_GMIN, -1);
+      }
+    }
+    for (const index of island.branches) {
+      const branch = netlist.branches[index];
+      const stamp = values.stamps[index];
+      const k = branchUnknown[index];
+      if (k >= 0) {
+        // KCL: the source's current I leaves `a` and enters `b`.
+        if (branch.a !== branch.b) {
+          this.kclEntry(branch.a, branch.b, k, 1, VALUE_ONE, index);
+          this.kclEntry(branch.b, branch.a, k, -1, VALUE_MINUS_ONE, index);
+        }
+        if (stamp === DC_STAMP_VSOURCE) {
+          // Vb − Va + R·I = E (a difference, so a floating component's common mode cancels).
+          if (branch.a !== branch.b) {
+            const cb = this.diffColumn(branch.b);
+            const ca = this.diffColumn(branch.a);
+            if (cb >= 0) this.add(k, cb, 1, VALUE_ONE, index);
+            if (ca >= 0) this.add(k, ca, -1, VALUE_MINUS_ONE, index);
+          }
+          this.add(k, k, values.ohms[index], VALUE_OHMS, index);
+          this.rhsOp(k, values.emfV[index], RHS_SET_EMF, index);
+        } else {
+          // Current limit: I = amps.
+          this.add(k, k, 1, VALUE_ONE, index);
+          this.rhsOp(k, values.amps[index], RHS_SET_AMPS, index);
+        }
+      } else if (branch.a !== branch.b) {
+        if (stamp === DC_STAMP_RESISTOR) {
+          const g = 1 / values.ohms[index];
+          const ca = this.diffColumn(branch.a);
+          const cb = this.diffColumn(branch.b);
+          this.kclEntry(branch.a, branch.b, ca, g, VALUE_G, index);
+          this.kclEntry(branch.b, branch.a, cb, g, VALUE_G, index);
+          this.kclEntry(branch.a, branch.b, cb, -g, VALUE_MINUS_G, index);
+          this.kclEntry(branch.b, branch.a, ca, -g, VALUE_MINUS_G, index);
+        } else {
+          // A current source on a resistor element: amps leave `a` and enter `b`.
+          const amps = values.amps[index];
+          this.kclRhs(branch.a, branch.b, -amps, RHS_ADD_MINUS_AMPS, index);
+          this.kclRhs(branch.b, branch.a, amps, RHS_ADD_AMPS, index);
+        }
+      }
+    }
   }
 
   /** Whether the island's zero-ohm voltage sources close a loop (a self-loop included). */
@@ -356,18 +943,16 @@ export class DcSolver {
    * contribution also goes there when its branch leaves the component, and not at all when it stays
    * inside (where it cancels exactly in the sum). The reference's row and column don't exist.
    */
-  private kclEntry(x: number, other: number, col: number, value: number): void {
+  private kclEntry(x: number, other: number, col: number, value: number, code: number, branch: number): void {
     const ix = this.nodeUnknown[x];
     if (col < 0 || ix < 0) return;
-    const a = this.a;
-    const n = this.n;
     const root = this.comp[x];
     if (root === this.referenceRoot) {
-      a[ix * n + col] += value;
+      this.add(ix, col, value, code, branch);
       return;
     }
-    if (x !== root) a[ix * n + col] += value;
-    if (this.comp[other] !== root) a[this.nodeUnknown[root] * n + col] += value;
+    if (x !== root) this.add(ix, col, value, code, branch);
+    if (this.comp[other] !== root) this.add(this.nodeUnknown[root], col, value, code, branch);
   }
 
   /**
@@ -387,17 +972,16 @@ export class DcSolver {
   }
 
   /** As `kclEntry`, for a current injected into the right-hand side. */
-  private kclRhs(x: number, other: number, value: number): void {
+  private kclRhs(x: number, other: number, value: number, code: number, branch: number): void {
     const ix = this.nodeUnknown[x];
     if (ix < 0) return;
-    const rhs = this.rhs;
     const root = this.comp[x];
     if (root === this.referenceRoot) {
-      rhs[ix] += value;
+      this.rhsOp(ix, value, code, branch);
       return;
     }
-    if (x !== root) rhs[ix] += value;
-    if (this.comp[other] !== root) rhs[this.nodeUnknown[root]] += value;
+    if (x !== root) this.rhsOp(ix, value, code, branch);
+    if (this.comp[other] !== root) this.rhsOp(this.nodeUnknown[root], value, code, branch);
   }
 
   private singular(netlist: Netlist, island: NetlistIsland, solution: DcSolution, result: DcIslandResult): void {
@@ -415,6 +999,77 @@ export class DcSolver {
       solution.branches[2 * index + 1] = 0;
     }
   }
+}
+
+/**
+ * Builds a symbolic factorisation from a recorded stamping: the CSC pattern (rows ascending in each
+ * column, duplicates merged), each call's slot in it, the AMD order, and the stamp program itself
+ * (each call's value code and branch, and the right-hand-side steps), which `assemble` replays in
+ * call order, so every entry sums the same terms in the same order as `stamp` would.
+ * Two stable bucket passes (by row, then by column) sort the calls without comparisons.
+ */
+function buildSymbolic(
+  n: number,
+  program: StampProgram,
+  signature: Uint8Array,
+  comp: Int32Array,
+  ends: number,
+): IslandSymbolic {
+  const { rows, cols } = program;
+  const calls = rows.length;
+  // Pass 1: calls bucketed by row (stable).
+  const rowStart = new Int32Array(n + 1);
+  for (let c = 0; c < calls; c++) rowStart[rows[c] + 1]++;
+  for (let i = 0; i < n; i++) rowStart[i + 1] += rowStart[i];
+  const byRow = new Int32Array(calls);
+  const rowFill = rowStart.slice(0, n);
+  for (let c = 0; c < calls; c++) byRow[rowFill[rows[c]]++] = c;
+  // Pass 2: those, bucketed by column (stable), so rows ascend within each column.
+  const colStart = new Int32Array(n + 1);
+  for (let c = 0; c < calls; c++) colStart[cols[c] + 1]++;
+  for (let j = 0; j < n; j++) colStart[j + 1] += colStart[j];
+  const sorted = new Int32Array(calls);
+  const colFill = colStart.slice(0, n);
+  for (let t = 0; t < calls; t++) {
+    const c = byRow[t];
+    sorted[colFill[cols[c]]++] = c;
+  }
+  // Merge duplicates into slots.
+  const colPtr = new Int32Array(n + 1);
+  const rowIdxAll = new Int32Array(calls);
+  const slots = new Int32Array(calls);
+  let nnz = 0;
+  for (let j = 0; j < n; j++) {
+    colPtr[j] = nnz;
+    let lastRow = -1;
+    for (let t = colStart[j]; t < colStart[j + 1]; t++) {
+      const c = sorted[t];
+      const r = rows[c];
+      if (r !== lastRow) {
+        rowIdxAll[nnz++] = r;
+        lastRow = r;
+      }
+      slots[c] = nnz - 1;
+    }
+  }
+  colPtr[n] = nnz;
+  const rowIdx = rowIdxAll.slice(0, nnz);
+  const pattern = { n, colPtr, rowIdx };
+  return {
+    unknowns: n,
+    signature,
+    pattern,
+    slots,
+    order: amdOrder(n, colPtr, rowIdx),
+    factors: new SparseFactors(),
+    codes: program.codes,
+    branches: program.branches,
+    rhsTargets: program.rhsTargets,
+    rhsCodes: program.rhsCodes,
+    rhsBranches: program.rhsBranches,
+    comp,
+    ends,
+  };
 }
 
 /** Solves `netlist`'s DC islands with a fresh solver: a convenience for scripts and tests. */

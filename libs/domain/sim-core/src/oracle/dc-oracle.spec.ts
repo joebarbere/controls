@@ -18,18 +18,27 @@ import { type OracleCircuitResult, parseOracleResults } from './results';
  * own residual checks (KCL and the source rows, `testing/mna.ts`) run on the same solution: a residual
  * check against ngspice's rounded numbers isn't meaningful (ADR 0012). The corpus's own staleness and
  * consistency checks are `corpus.spec.ts`.
+ *
+ * It runs twice (F2.2 part 3): with the default solver, where the corpus's 2–30-node circuits stay
+ * on dense LU (below `SPARSE_MIN_UNKNOWNS`), and with every island forced onto sparse LU, so the
+ * oracle holds whichever path a circuit takes.
  */
+
+const PATHS = [
+  { name: 'default (dense below SPARSE_MIN_UNKNOWNS)', options: {} },
+  { name: 'forced sparse', options: { sparseMinUnknowns: 1 } },
+] as const;
 
 const circuits = oracleCorpus('dc');
 const results = parseOracleResults(
   readFileSync(join(import.meta.dirname, '../../oracle', oracleResultsPath('dc')), 'utf8'),
 );
 
-describe('sim-core against the DC oracle corpus (F2.2 part 1)', () => {
+describe.each(PATHS)('sim-core against the DC oracle corpus, $name', ({ options }) => {
   /** Every DC circuit adapted and solved once, with one reused solver (as the engine will). */
   const solved: { netlist: Netlist; values: DcBranchValues; solution: DcSolution }[] = [];
   beforeAll(() => {
-    const solver = new DcSolver();
+    const solver = new DcSolver(options);
     for (const circuit of circuits) {
       const { netlist, values } = oracleDcInput(circuit);
       solved.push({ netlist, values, solution: solver.solve(netlist, values) });

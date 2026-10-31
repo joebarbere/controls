@@ -27,7 +27,7 @@
       "executor": "nx:run-commands",
       "dependsOn": ["build"],
       "cache": false,
-      "options": { "command": "node dist/apps/sim-cli/main.mjs bench" }
+      "options": { "command": "node dist/apps/sim-cli/main.mjs bench --report dist/apps/sim-cli/bench-report.json" }
     },
     "typecheck": {
       "executor": "nx:run-commands",

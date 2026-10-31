@@ -31,6 +31,11 @@ jobs:
       - uses: ./.github/actions/setup
       - name: pnpm verify (== local)
         run: pnpm verify
+      # Prints the bench report `pnpm verify`'s bench target wrote (Nx hides a passing task's output),
+      # so every OS's timings are in the log. It checks nothing: verify stays == local.
+      - name: sim bench report
+        if: always()
+        run: node -e "const f='dist/apps/sim-cli/bench-report.json';const fs=require('fs');console.log(fs.existsSync(f)?fs.readFileSync(f,'utf8'):'no bench report (the bench target did not run)')"
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Web harness e2e

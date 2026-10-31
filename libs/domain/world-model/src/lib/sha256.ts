@@ -25,74 +25,98 @@ export const SHA256_H0: readonly number[] = [
   0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-function rotr(x: number, n: number): number {
-  return (x >>> n) | (x << (32 - n));
+const K = Int32Array.from(SHA256_K);
+
+/**
+ * Section 6.2.2's compression of the 64-byte block at `offset` of `bytes` into `h`, on int32 words
+ * (`| 0` is addition modulo 2^32, as `>>> 0` is, in another representation) with the rotations
+ * inlined: the bits are the standard's, only the arithmetic's JavaScript form is faster.
+ */
+function compress(h: Int32Array, w: Int32Array, bytes: Uint8Array, offset: number): void {
+  // 1. Message schedule (big-endian words).
+  for (let t = 0; t < 16; t++) {
+    const i = offset + 4 * t;
+    w[t] = (bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3];
+  }
+  for (let t = 16; t < 64; t++) {
+    const x = w[t - 15];
+    const y = w[t - 2];
+    const sigma0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+    const sigma1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+    w[t] = (sigma1 + w[t - 7] + sigma0 + w[t - 16]) | 0;
+  }
+  // 2. Working variables.
+  let a = h[0];
+  let b = h[1];
+  let c = h[2];
+  let d = h[3];
+  let e = h[4];
+  let f = h[5];
+  let g = h[6];
+  let hh = h[7];
+  // 3. Compression.
+  for (let t = 0; t < 64; t++) {
+    const bigSigma1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+    const ch = (e & f) ^ (~e & g);
+    const t1 = (hh + bigSigma1 + ch + K[t] + w[t]) | 0;
+    const bigSigma0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+    const maj = (a & b) ^ (a & c) ^ (b & c);
+    const t2 = (bigSigma0 + maj) | 0;
+    hh = g;
+    g = f;
+    f = e;
+    e = (d + t1) | 0;
+    d = c;
+    c = b;
+    b = a;
+    a = (t1 + t2) | 0;
+  }
+  // 4. Intermediate hash value.
+  h[0] = (h[0] + a) | 0;
+  h[1] = (h[1] + b) | 0;
+  h[2] = (h[2] + c) | 0;
+  h[3] = (h[3] + d) | 0;
+  h[4] = (h[4] + e) | 0;
+  h[5] = (h[5] + f) | 0;
+  h[6] = (h[6] + g) | 0;
+  h[7] = (h[7] + hh) | 0;
 }
 
 /** Section 6.2.2: hashes `message` and returns the 32-byte digest. */
 export function sha256(message: Uint8Array): Uint8Array {
-  // Section 5.1.1: append a 1 bit, pad with zeros to 56 mod 64 bytes, then the 64-bit big-endian bit length.
-  const paddedLength = Math.ceil((message.length + 9) / 64) * 64;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(message);
-  padded[message.length] = 0x80;
-  const view = new DataView(padded.buffer);
+  const h = Int32Array.from(SHA256_H0);
+  const w = new Int32Array(64);
+  // The whole blocks straight from the message; only the tail is copied to be padded.
+  const whole = message.length - (message.length % 64);
+  for (let offset = 0; offset < whole; offset += 64) compress(h, w, message, offset);
+  // Section 5.1.1: append a 1 bit, pad with zeros to 56 mod 64 bytes, then the 64-bit big-endian
+  // bit length: one or two more blocks.
+  const rest = message.length - whole;
+  const tail = new Uint8Array(rest + 9 <= 64 ? 64 : 128);
+  tail.set(message.subarray(whole));
+  tail[rest] = 0x80;
   const bits = message.length * 8;
-  view.setUint32(paddedLength - 8, Math.floor(bits / 0x1_0000_0000));
-  view.setUint32(paddedLength - 4, bits >>> 0);
-
-  const h = Uint32Array.from(SHA256_H0);
-  const w = new Uint32Array(64);
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    // 1. Message schedule.
-    for (let t = 0; t < 16; t++) w[t] = view.getUint32(offset + t * 4);
-    for (let t = 16; t < 64; t++) {
-      const x = w[t - 15];
-      const y = w[t - 2];
-      const sigma0 = rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3);
-      const sigma1 = rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10);
-      w[t] = (sigma1 + w[t - 7] + sigma0 + w[t - 16]) >>> 0;
-    }
-    // 2. Working variables.
-    let a = h[0];
-    let b = h[1];
-    let c = h[2];
-    let d = h[3];
-    let e = h[4];
-    let f = h[5];
-    let g = h[6];
-    let hh = h[7];
-    // 3. Compression.
-    for (let t = 0; t < 64; t++) {
-      const bigSigma1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-      const ch = (e & f) ^ (~e & g);
-      const t1 = (hh + bigSigma1 + ch + SHA256_K[t] + w[t]) >>> 0;
-      const bigSigma0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const t2 = (bigSigma0 + maj) >>> 0;
-      hh = g;
-      g = f;
-      f = e;
-      e = (d + t1) >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (t1 + t2) >>> 0;
-    }
-    // 4. Intermediate hash value.
-    h[0] = (h[0] + a) >>> 0;
-    h[1] = (h[1] + b) >>> 0;
-    h[2] = (h[2] + c) >>> 0;
-    h[3] = (h[3] + d) >>> 0;
-    h[4] = (h[4] + e) >>> 0;
-    h[5] = (h[5] + f) >>> 0;
-    h[6] = (h[6] + g) >>> 0;
-    h[7] = (h[7] + hh) >>> 0;
-  }
+  const high = Math.floor(bits / 0x1_0000_0000);
+  const low = bits >>> 0;
+  const end = tail.length;
+  tail[end - 8] = high >>> 24;
+  tail[end - 7] = (high >>> 16) & 0xff;
+  tail[end - 6] = (high >>> 8) & 0xff;
+  tail[end - 5] = high & 0xff;
+  tail[end - 4] = low >>> 24;
+  tail[end - 3] = (low >>> 16) & 0xff;
+  tail[end - 2] = (low >>> 8) & 0xff;
+  tail[end - 1] = low & 0xff;
+  for (let offset = 0; offset < end; offset += 64) compress(h, w, tail, offset);
 
   const digest = new Uint8Array(32);
-  const out = new DataView(digest.buffer);
-  h.forEach((word, i) => out.setUint32(i * 4, word));
+  for (let i = 0; i < 8; i++) {
+    const word = h[i];
+    digest[4 * i] = word >>> 24;
+    digest[4 * i + 1] = (word >>> 16) & 0xff;
+    digest[4 * i + 2] = (word >>> 8) & 0xff;
+    digest[4 * i + 3] = word & 0xff;
+  }
   return digest;
 }
 
