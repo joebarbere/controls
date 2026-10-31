@@ -16,6 +16,7 @@ const SCENARIOS = [
   { name: 'sim-step', commands: 7 },
   { name: 'sources', commands: 10 },
   { name: 'mains', commands: 4 },
+  { name: 'bench-lamp', commands: 10 },
 ] as const;
 
 const golden = (name: string) =>

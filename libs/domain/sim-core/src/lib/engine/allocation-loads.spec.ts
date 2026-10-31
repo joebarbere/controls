@@ -23,6 +23,16 @@ const WARM_UP_STEPS = 100_000;
 const LAMP_GATE = 1;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
+/**
+ * The measurement settles before it counts, by `allocation.spec.ts`'s rule (#66): windows continue
+ * until the last `SETTLED_WINDOWS` lie within `SETTLED_SPREAD` B/step of each other, then the gate
+ * takes the median of the last `WINDOWS` (never more than `MAX_WINDOWS_FACTOR` × `WINDOWS` in all). A
+ * steady allocation settles at once and is measured in full; only a falling sequence (tier-up still
+ * finishing) keeps it going. Keep the constants equal to that file's.
+ */
+const SETTLED_WINDOWS = 4;
+const SETTLED_SPREAD = 2;
+const MAX_WINDOWS_FACTOR = 3;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
 const SAMPLING_INTERVAL = 128;
 
@@ -99,8 +109,8 @@ interface Allocation {
 
 /**
  * Bytes allocated per step by `source` into `load` through two leads, or shorted by one lead (`load`
- * null): the layers' work every step and a cadence solve every 10th. The median of eight 10 000-step
- * windows after the warm-up: a per-step allocation raises every window, while a window that catches
+ * null): the layers' work every step and a cadence solve every 10th. The median of the last eight 10 000-step
+ * windows once they have settled (see `SETTLED_WINDOWS`), after the warm-up: a per-step allocation raises every window, while a window that catches
  * a late tier-up or a short-lived slower regime is one of a few the median ignores. Never the
  * smallest window: measured by heap growth, single windows read as low as -48 B/step, and the
  * smallest of ten hid a planted 8 B/step.
@@ -139,12 +149,22 @@ function allocatedPerStep(
     if (result.logged) engine.applied(result.entry, bus.state);
   }
   engine.advanceTo(warmUpSteps);
-  const windows: number[] = [];
-  const sites = new Map<string, number>();
-  for (let w = 0; w < windowCount; w++) {
+  const all: number[] = [];
+  const perWindow: Map<string, number>[] = [];
+  const settledCount = Math.min(SETTLED_WINDOWS, windowCount);
+  const settled = () => {
+    const last = all.slice(-settledCount);
+    return Math.max(...last) - Math.min(...last) <= SETTLED_SPREAD;
+  };
+  while (all.length < windowCount || (!settled() && all.length < MAX_WINDOWS_FACTOR * windowCount)) {
     const sample = sampledBytes(engine, WINDOW_STEPS);
-    windows.push(sample.bytes / WINDOW_STEPS);
-    for (const [site, bytes] of sample.sites) sites.set(site, (sites.get(site) ?? 0) + bytes);
+    all.push(sample.bytes / WINDOW_STEPS);
+    perWindow.push(sample.sites);
+  }
+  const windows = all.slice(-windowCount);
+  const sites = new Map<string, number>();
+  for (const sample of perWindow.slice(-windowCount)) {
+    for (const [site, bytes] of sample) sites.set(site, (sites.get(site) ?? 0) + bytes);
   }
   const steps = windowCount * WINDOW_STEPS;
   const top = [...sites]
@@ -153,7 +173,7 @@ function allocatedPerStep(
     .map(([site, bytes]) => `  ${(bytes / steps).toFixed(2)} B/step  ${site}`);
   return {
     perStep: median(windows),
-    report: `windows (B/step): ${windows.map((w) => w.toFixed(2)).join(' ')}\ntop sites:\n${top.join('\n')}`,
+    report: `windows (B/step, the gate's last ${windowCount} of ${all.length}): ${all.map((w) => w.toFixed(2)).join(' ')}\ntop sites (those windows):\n${top.join('\n')}`,
   };
 }
 

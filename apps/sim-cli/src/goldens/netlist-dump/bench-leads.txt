@@ -13,4 +13,4 @@ branch 2 c1 resistor lead 1 -> 2 island 0 resistanceOhm=0.04094815541017536
 branch 3 c2 resistor lead 2 -> 3 island 0 resistanceOhm=0.04094815541017536
 branch 4 c3 resistor lead 4 -> 0 island 0 resistanceOhm=0.04094815541017536
 solution tick 0
-solve island 0 unmodelled flags none iterations 0 reference none unknowns 0 band none unvalued 1
+solve island 0 solved flags none iterations 1 reference 0 unknowns 5 band none

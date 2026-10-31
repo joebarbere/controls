@@ -13,11 +13,11 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * `apps/game-e2e/src/netlist-dump.spec.ts` asserts the same files byte for byte from the game's
  * console (the sim worker's export, dumped on the page's main thread in Chromium). A golden moves
  * when the scenario, the netlist compiler, the solution record or a nominal band changes: re-pin it
- * with `pnpm nx test sim-cli -u` and review the diff. F2.5's `bench-lamp` scenario adds its golden
- * when it lands.
+ * with `pnpm nx test sim-cli -u` and review the diff. F2.5's `bench-lamp` scenario has its golden too
+ * (the lamp out, its island solved).
  */
 
-const SCENARIOS = ['bench-leads', 'sim-step', 'sources', 'mains'] as const;
+const SCENARIOS = ['bench-leads', 'sim-step', 'sources', 'mains', 'bench-lamp'] as const;
 const goldenPath = (scenario: string) => join(import.meta.dirname, 'goldens/netlist-dump', `${scenario}.txt`);
 const scenarioPath = (scenario: string) => join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios', `${scenario}.console`);
 
