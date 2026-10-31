@@ -86,6 +86,8 @@ for volts and amps alike (each against the maximum of the same quantity: voltage
 
 **Two floors, two roles.** This floor bounds sim-core's disagreement with a reference that carries about 3e-9 of its own noise. #46's floor policy (F2.2 part 1) bounds sim-core's _own_ residuals (KCL, power balance) in its property tests. They are different checks, and neither replaces the other.
 
+**Values, on a well-conditioned corpus** (decided by `test-engineer`, 2026-10-30). The comparison checks sim-core's node voltages and branch currents against ngspice's **values** only, on a corpus kept well conditioned: the 0.1 Ω and 10 mΩ minimum resistances, and no near-ideal voltage-source loops. sim-core's own residual checks (KCL and the source rows) run alongside it on sim-core's solution, because a residual check against ngspice's rounded numbers isn't meaningful.
+
 **Measured margin** (the test-engineer review's tools: exact rational solutions, and a float64 MNA solver with partial pivoting emulating sim-core, run on the regenerated corpus): the emulated solver against ngspice stays at **1.1e-3 of the allowance or less** (DC: 1.06e-3 for voltages, 4.7e-4 for currents; AC: 1.8e-5 and 5.0e-4). ngspice against the exact solution is at the same level. On the first corpus the review measured up to 0.03 of the allowance.
 
 When F2.2 part 1 lands: run the DC comparison, record the worst observed error per parameter here, and tighten or confirm each (never past the golden bound); then mark this ADR Accepted for DC, and again for AC with part 2.
