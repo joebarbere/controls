@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 2 (Circuit engine) in progress, kickoff 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Kickoff done 2026-10-30: ADR 0011 sim worker contract and ADR 0013 world document v2 accepted; world v2, test-lead and `device.operate` commands and catalogue v1 landed. F2.1 (netlist compiler) landed. Next: F2.2 part 1 (dense DC MNA). Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) in progress, kickoff 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Kickoff done 2026-10-30: ADR 0011 sim worker contract and ADR 0013 world document v2 accepted; world v2, test-lead and `device.operate` commands and catalogue v1 landed. F2.1 (netlist compiler) and F2.2 part 1 (dense DC MNA) landed. Next: F2.7 (oracle harness and bench gate) and F2.3a (sim clock and engine loop), then F2.2 parts 2 and 3. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

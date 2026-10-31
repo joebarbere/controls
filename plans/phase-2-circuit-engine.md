@@ -301,14 +301,22 @@ _Done 2026-10-30 ([simulation architecture](../docs/architecture/simulation.md),
 
 Acceptance, **part 1: dense DC**:
 
-- [ ] Real MNA with the ground node eliminated. Stamps: resistor, voltage source with internal resistance, and current source.
-- [ ] `gmin` from every node to ground. Its value has a `source` explaining its numerical role; it is not an electrical rating.
-- [ ] Dense LU with partial pivoting on preallocated `Float64Array`s. A singular island is flagged `singular` and never produces NaN.
-- [ ] **Golden fixtures,** each with its derivation written in the fixture file: a divider, a Wheatstone bridge, a battery with internal R into a load, two unequal batteries in parallel, and a floating island under `gmin`.
-- [ ] **fast-check properties:**
+- [x] Real MNA with the ground node eliminated. Stamps: resistor, voltage source with internal resistance, and current source.
+- [x] `gmin` from every node to ground. Its value has a `source` explaining its numerical role; it is not an electrical rating.
+- [x] Dense LU with partial pivoting on preallocated `Float64Array`s. A singular island is flagged `singular` and never produces NaN.
+- [x] **Golden fixtures,** each with its derivation written in the fixture file: a divider, a Wheatstone bridge, a battery with internal R into a load, two unequal batteries in parallel, and a floating island under `gmin`.
+- [x] **fast-check properties:**
   - KCL holds at every node within `1e-9 · max|I| + 1e-12 A`;
   - source power equals dissipated power, `gmin` losses included, within `1e-9` relative;
   - linearity and superposition hold.
+
+_Part 1 done 2026-10-30, pending the `test-engineer` and `electrical-realism-reviewer` reviews ([simulation architecture](../docs/architecture/simulation.md#the-dc-solver-f22-part-1), [simulation caveats](../docs/caveats/simulation.md)). Notes:_
+
+- _"Ground" is each island's own reference node (F2.1's review note): the negative end of its first `vsource` element, else its smallest node. `gmin` is `GMIN_S`, 1e-12 S, from every node to that reference; F2.7's decks match it with ngspice's `rshunt`._
+- _A current source is a stamp mode (`isource`), not a new netlist element kind: no P2 device is one, and a supply in current limit (part 3) is a `vsource` element stamped as one. The element kinds, the unknowns and so the matrix layout stay a function of `topologyHash`._
+- _Singular is decided structurally (a loop of zero-ohm sources), with a numerical backstop. A planted fault showed the numerical check alone misses about 3 in 4 such loops inside resistive meshes._
+- _Power balance uses 1e-9 relative plus the KCL floor carried through Tellegen's theorem (1e-12 A × Σ|V|), which only matters on islands where nothing but `gmin` carries current. The property circuits keep resistances at 0.1 Ω and up, because below that a branch current's own rounding, g · ulp(V), exceeds the 1e-12 A KCL floor; parts 2 and 3 (low-impedance AC plant) need a decision on that floor (caveats)._
+- _Branch values come from `dcBranchValues`: a hook (F2.4's EMF against state of charge, F2.5's R(T)), else per-kind defaults (a lead's resistance; a battery's nominal EMF behind its internal resistance, a placeholder until F2.4)._
 
 Acceptance, **part 2: complex phasor** (needs F2.7):
 
@@ -557,7 +565,7 @@ Numbers are assigned in the order the ADRs land.
 | —       | ADR 0011 sim worker contract (agent team)         | ✅ Accepted    |
 | —       | World document v2 + leads + catalogue v1          | ✅ Done        |
 | F2.1    | Netlist compiler                                  | ✅ Done        |
-| F2.2    | DC + phasor MNA (parts 1–3)                       | ⬜ Not started |
+| F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Part 1 done |
 | F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started |
 | F2.4    | Power sources                                     | ⬜ Not started |
