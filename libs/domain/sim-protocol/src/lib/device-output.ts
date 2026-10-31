@@ -77,7 +77,8 @@ const status = (offset: number): DeviceOutputField => u8Enum('status', offset, R
  * Each device-model PR registers its kind's schema here and bumps `SIM_PROTOCOL_VERSION`; sim-core's
  * `BUILTIN_DEVICE_OUTPUTS` (what the models write) must equal it exactly, which a sim-core spec
  * checks. F2.4 (protocol 3): the battery, the bench supply and the DIN PSU. The AC services publish
- * no record. F2.5 (protocol 4): the incandescent lamp, the resistor and the heater.
+ * no record. F2.5 (protocol 4): the incandescent lamp, the resistor and the heater, the fuse and the
+ * thermal-magnetic breaker.
  */
 export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
   battery: Object.freeze({
@@ -139,6 +140,27 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
     kind: 'heater',
     recordBytes: 32,
     fields: Object.freeze([f64('voltageV', 0, 'V'), f64('currentA', 8, 'A'), f64('powerW', 16, 'W'), status(24)]),
+  }),
+  fuse: Object.freeze({
+    kind: 'fuse',
+    recordBytes: 24,
+    fields: Object.freeze([
+      f64('currentA', 0, 'A'),
+      f64('meltFraction', 8, null),
+      u8Enum('state', 16, ['intact', 'blown']),
+      status(17),
+    ]),
+  }),
+  'breaker.thermalMagnetic': Object.freeze({
+    kind: 'breaker.thermalMagnetic',
+    recordBytes: 32,
+    fields: Object.freeze([
+      f64('currentA', 0, 'A'),
+      f64('thermalFraction', 8, null),
+      f64('magneticPickupA', 16, 'A'),
+      u8Enum('state', 24, ['off', 'on', 'tripped']),
+      status(25),
+    ]),
   }),
 });
 

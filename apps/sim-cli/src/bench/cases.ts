@@ -12,6 +12,7 @@ import {
   NetlistCompiler,
   SimEngine,
 } from '@controls/sim-core';
+import { materialiseWorld } from '@controls/sim-protocol';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -126,7 +127,10 @@ let tickEngine: SimEngine | null = null;
  */
 function tickMixWorld(): World {
   if (tickMix === null) {
-    const game = createGame({ seed: 1 });
+    // Built on the commanded world alone (no engine following each command: the engine re-solving a
+    // growing netlist after each of 2,250 commands took seconds), then one engine started on the
+    // whole plant and run to TICK_MIX_START. All the commands are at tick 0, so the state is the same.
+    const game = createGame({ seed: 1, engine: false });
     const lead = { id: 'lead.quillfern-test-1m', version: 1 };
     const at = { x: 0, y: 0, z: 0 };
     for (let k = 0; k < TICK_MIX_LOOPS; k++) {
@@ -142,8 +146,10 @@ function tickMixWorld(): World {
       game.execOrThrow('lead.connect', { ref: lead, a: end(2, 'load'), b: end(3, 'a') });
       game.execOrThrow('lead.connect', { ref: lead, a: end(3, 'b'), b: end(0, 'neg') });
     }
+    const engine = SimEngine.start(game.world() as World);
+    engine.advanceTo(TICK_MIX_START);
     game.advanceTo(TICK_MIX_START);
-    tickMix = game.materialisedWorld() as World;
+    tickMix = materialiseWorld(game.world() as World, engine.exportState());
   }
   return tickMix;
 }
