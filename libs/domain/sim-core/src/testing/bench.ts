@@ -81,7 +81,7 @@ const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y
 const testSource = (covers: string[]) => [{ id: 'test', kind: 'game-design', citation: 'game-design: test', covers }];
 const base = { brand: 'Testbrand', modelName: 'T-1', controls: [], extensions: {} };
 
-const TEST_DOCUMENTS: readonly unknown[] = [
+export const TEST_DOCUMENTS: readonly unknown[] = [
   {
     ...base,
     ...FUSE,

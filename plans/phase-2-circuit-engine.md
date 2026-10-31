@@ -409,27 +409,38 @@ _Part 3 done 2026-10-30, except the re-solve gate; `test-engineer` review pendin
 
 Acceptance:
 
-- [ ] **`SimEngine.advanceTo(tick)`** steps at a fixed 1 tick = 1 ms. Each tick runs the layers in a fixed order:
+- [x] **`SimEngine.advanceTo(tick)`** steps at a fixed 1 tick = 1 ms. Each tick runs the layers in a fixed order:
   - discrete (empty in P2; P6 fills it);
   - continuous (filament temperature, battery state of charge);
   - protection (fuse I²t, breaker thermal and magnetic, PSU hiccup).
 
   The electrical layer runs on every topology change and every 10 ticks. A protection trip changes the topology and is re-solved within the same tick.
 
-- [ ] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`.
-- [ ] **`CommandBus.advanceTo(tick)`:** unlogged, with no history change. A property test shows every world change's `apply`/`invert` preserves `tick`.
-- [ ] **`replayEntries`** advances the engine to each entry's tick, then to `endTick`. v1 logs replay unchanged (a property test on the P1 fixtures). A `tick` lower than the current one is still an error.
-- [ ] **Scripting API:**
+- [ ] No per-tick allocation in the hot path: struct-of-arrays, preallocated. Per-device tolerances come from `deriveStream(world.seed, entityStreamKey(id))`. _**Not yet met** (#52 review, measured with `GCProfiler`): struct-of-arrays banks, preallocated buffers and indexed loops are in, and tolerances are seeded, but a step still allocates about 21 bytes on the DC path (21.2 under coverage, 20.9–21.5 without, over 80 runs of a battery and a thermal load) and 15–31 on the AC path (14.8 under coverage, 30.5–31.3 without): about 200 bytes per cadence solve, 32 of them inside `DcSolver.solveNonlinear` (F2.2's code), plus the phasor solve's share on AC and a few in the layer. `engine.spec.ts` gates the DC path below 24 bytes per step and the AC path below 36, so neither can grow; a planted 64-byte allocation per step fails both. The DC gate's headroom is about 11 %: if a deliberate change lands near it, re-measure (80 runs, with and without coverage) rather than raise it. Getting to zero needs the solver's allocation found and removed (F2.2's owner) and the engine's remaining per-solve allocation traced._
+- [x] **`CommandBus.advanceTo(tick)`:** unlogged, with no history change. A property test shows every world change's `apply`/`invert` preserves `tick`.
+- [x] **`replayEntries`** advances the engine to each entry's tick, then to `endTick`. v1 logs replay unchanged (a property test on the P1 fixtures). A `tick` lower than the current one is still an error.
+- [x] **Scripting API:**
   - `game.advance(ticks)` and `game.advanceTo(tick)`;
-  - `game.probe(a, b)`, now implemented: an **ideal, non-loading** voltage difference between two terminals, given as `"<entityId>:<terminalId>"`. It returns DC volts, or AC RMS and phase. It is a script and test query, not a player instrument (DMMs are P5). `NotAvailableError` stays for `tag` (P10);
+  - `game.probe(a, b)`, now implemented: an **ideal, non-loading** voltage difference between two terminals, given as `"<entityId>:<terminalId>"`. It returns DC volts, or AC RMS and phase. It is a script and test query, not a player instrument (DMMs are P5). `NotAvailableError` stays for `tag` (P10). _AC since the rebase onto #51: the engine solves AC islands after DC into the same record at the region frequency (60 Hz, `regionProfile(world.regionId)`), and `probe` returns the RMS magnitude and the phasor; the phase angle is computed in the scripting API with `Math.atan2`, display only, never hashed (D6)._
   - `game.snapshot()` (codec bytes) and `game.on('sim')`.
-- [ ] **Singular islands are surfaced, never silent** (`electrical-realism-reviewer`, #46). An island with `ISLAND_FLAG_SINGULAR` raises the `singular` sim event and a diagnostic (`game.on('sim')`, the inspector and the console, F2.3b and F2.6); its zeros are never presented as a 0 V reading. `game.probe` refuses or flags a probe on a singular island, and a probe across two islands reports a floating reading (their voltages aren't comparable), never a difference of two references.
-- [ ] **`engineCompatible(manifest, build)`** (D8, narrow v0 compatibility): pure and tested in `scripting-api`. Same `simEngineVersion` and `catalogVersion` → verify the log; both 0 (a migrated P1 save) → verify, falling back to `restarted` (`engine-changed`) on failure, never a refusal; any other mismatch, a single 0 included → `engine-changed` without verifying.
-- [ ] **Sim commands.** `sim.step {ticks}`, `sim.setSpeed {speed: 0|1|10|60}` and `sim.pause` are declared in domain code; they are logged and don't change the world. A headless host implements `sim.step` by advancing, so a `.console` file can step time both in `sim-cli` and in the game.
-- [ ] **Determinism:**
+- [x] **Singular islands are surfaced, never silent** (`electrical-realism-reviewer`, #46). An island with `ISLAND_FLAG_SINGULAR` raises the `singular` sim event and a diagnostic (`game.on('sim')`, the inspector and the console, F2.3b and F2.6); its zeros are never presented as a 0 V reading. `game.probe` refuses or flags a probe on a singular island, and a probe across two islands reports a floating reading (their voltages aren't comparable), never a difference of two references.
+- [x] **`engineCompatible(manifest, build)`** (D8, narrow v0 compatibility): pure and tested in `scripting-api`. Same `simEngineVersion` and `catalogVersion` → verify the log; both 0 (a migrated P1 save) → verify, falling back to `restarted` (`engine-changed`) on failure, never a refusal; any other mismatch, a single 0 included → `engine-changed` without verifying.
+- [x] **Sim commands.** `sim.step {ticks}`, `sim.setSpeed {speed: 0|1|10|60}` and `sim.resume {}` are declared in domain code; they are logged and don't change the world. There is no `sim.pause`: `P` toggles `sim.setSpeed {speed: 0}` and `sim.resume` (ADR 0011, R2). A headless host implements `sim.step` by advancing, so a `.console` file can step time both in `sim-cli` and in the game.
+- [x] **Determinism:**
   - the same seed and log give byte-identical snapshots over 10 s of sim time on the bench demo, across two runs and a replay;
   - saving at T, loading and advancing to T2 equals an uninterrupted run (property test);
   - D6's Node-vs-Chromium snapshot golden: `apps/game-e2e` runs the engine in the page, `sim-cli` runs it in Node, and the bytes match.
+
+_Done 2026-10-31 ([simulation architecture](../docs/architecture/simulation.md#the-engine-loop-f23a), [simulation caveats](../docs/caveats/simulation.md)); `save-format-guardian` and `test-engineer` reviews pending. Notes:_
+
+- _**Device models plug in as banks** (`SimDeviceModel`, `engine/device-model.ts`): struct-of-arrays per model kind, rebuilt from each device's sim bag at every topology change, with optional DC value, outer-loop, layer and record hooks. No built-in kind has one yet, so the hooks are proven with synthetic test models (`@controls/sim-core/testing`: a self-heating load, an I²t fuse, a resistance that never settles, an ideal twin source, layer-order probes). The battery keeps its placeholder EMF (F2.4); **the lamp has no filament model, so an island holding one is `unmodelled`**: not solved, recorded with 0 iterations and zeros, never a reading (F2.5)._
+- _**The bench demo for the determinism criteria** is the synthetic engine bench (battery, switch, self-heating load, I²t fuse: the load heats and the fuse blows within 10 s) and, with the real catalogue, `apps/sim-cli/scenarios/sim-step.console` (a battery shorted through two leads by a switch, an unwired lamp, `sim.step 1234`). `bench-lamp.console` comes with F2.5's lamp._
+- _**`SIM_ENGINE_VERSION` is 3** (D8; 2 is #51's sparse pivoting): saves and `world.hash` now hold the materialised solution record, so engine-1 and engine-2 saves load as `engine-changed`. Only goldens of worlds with a netlist moved (`BENCH_LEADS_HASH`); props-only worlds export `sim: null` and kept theirs._
+- _**The game runs the engine in-process until F2.3b** (ADR 0011, "Implementation notes"), so the in-game console's `sim.step` works and the D6 golden runs in the page through the console's `run`._
+- _The per-tick bench case (`tick-device-mix`: 750 devices, layers only) is gated at §4.5's 0.3 ms: 0.015 ms median on an AMD Ryzen 5 5600X._
+- _**Load verification is bounded** (#52 review): a save's log is replayed to verify it only if it spans at most `MAX_VERIFY_TICKS` (10 000 ticks, 10 s of sim time; deterministic, never the wall clock). Past it the log restarts as `too-long-to-verify` (never refused, an info toast). The bound comes from `sim bench`'s `plant-advance-1000-ticks` (45 ms per 1,000 ticks of the 2,000-node plant locally, about 0.15 ms per tick on the slowest CI runner), for verification under about 2 s. So in practice only short sessions are verified for now._
+- _**Open user decision (#52 review): should long logs be rebased or checkpointed so verification stays bounded?** For example a materialised checkpoint world every N ticks (ADR 0013's rebase caveat), verifying only the tail; or a bound in work (ticks × netlist size) rather than ticks. **Default until decided:** skip verification and restart the log past `MAX_VERIFY_TICKS`._
+- _**The D6 golden moves to the bench lamp at F2.5:** `sim-step.console` is a stand-in with no device model; F2.5 re-pins the Node-vs-Chromium snapshot golden on `bench-lamp.console`, whose lamp runs `dmath` (the first transcendental, where V8 builds could differ)._
 
 ### F2.3b Sim worker, snapshot transport and time control
 
@@ -459,6 +470,10 @@ Acceptance:
   - with `?sab=0` (the fallback), the hash is the same;
   - `desktop-e2e` shows the worker running under `app://`, with `crossOriginIsolated === true` inside it and no `securitypolicyviolation`.
 - [ ] The main-thread cost of reading a snapshot each frame is measured and recorded in the rendering architecture page.
+- [ ] **Load verification stays bounded and the loading UI responsive** (#52 review): the worker's replay start honours `MAX_VERIFY_TICKS` exactly as the headless `gameFromSave` does (same deterministic bound, same `too-long-to-verify` restart), and verifying never blocks the page (the worker does it; the UI shows "Checking save").
+- [ ] **`islandStatus(kind, flags, iterations)`**, a pure function exported from `sim-protocol` (`solved`, `singular`, `nonConverged`, `unmodelled`, `mixed`), so the inspector, overlays and HUD read an island's status from a snapshot exactly as `SimEngine.islands()` does (#52 review).
+- [ ] **The dirty model moves to `hashAt`**: `SaveGames.isDirty` takes its baseline from the game's own hash at adopt time, not the level's, or an untouched sandbox counts as dirty once a level ships a netlist (the engine materialises a solution at start).
+- [ ] **`Session.hash` is deleted, not adapted** (ADR 0011 §9.4); nothing in F2.3b is built on `Session.world().tick` or `Session.hash`: read `SimHost.simTick` and `SimHost.hashAt()`.
 
 ### F2.4 Power sources
 
@@ -524,6 +539,7 @@ Acceptance:
   - `lightOutputRel` lies inside its band, and opening the switch takes it to 0;
   - the snapshot and world hashes are pinned in the spec, the game-e2e driver and the scripting caveats, together.
 - [ ] **Lamp rendering:** emissive intensity follows `lightOutputRel` through the documented display curve. The scene-graph snapshot records it, and a change calls `invalidate()`.
+- [ ] **A lamp on an unsolved island is not "dark = 0 W"** (#52 review): when its island isn't `solved` (0 iterations: unmodelled, AC pending, mixed; or singular, or non-converged), the record's values are no reading, and the renderer and inspector show the lamp as unknown or unsettled by a written validity rule, never as an off lamp drawing 0 W.
 
 ### F2.6 Debug tools
 
@@ -538,6 +554,8 @@ Acceptance:
 - [ ] **Netlist inspector:** a docked panel listing islands, nodes (with their member terminals) and branches, with live V and I at up to 10 Hz. It is keyboard-navigable, and selecting a node highlights its terminals in 3D (view state only).
 - [ ] **`netlist.dump`:** a read-only console command, like `world.hash`. It prints `formatNetlist` plus the island diagnostics, gives the same text headless and in the game, and is golden-tested on the bench demo.
 - [ ] **E2E:** the inspector's lamp-branch current equals the value derived from `game.probe`, within display rounding.
+- [ ] **Band 0 means "no scale"**, not the first bin of some scale: an island in band 0 (`none`, every island until F2.4's sources choose one) gets no overlay colour (#52 review).
+- [ ] **The HUD's "last solve" keys off `islandCount > 0`**: with no islands the snapshot holds no solution and writes `lastSolveTick` 0, which is not a solve at tick 0 (#52 review).
 
 ### F2.7 Oracle harness and performance gate
 
@@ -564,6 +582,7 @@ _Harness landed 2026-10-30 ([ADR 0012](../docs/decisions/0012-oracle-corpus.md),
 - _**DC comparison on** (after #46): `oracleDcInput` adapts each circuit to a `Netlist` plus `DcBranchValues`; `DcSolver`'s values match ngspice's on all 500 DC circuits, worst 1.06e-3 of the allowance for volts (`dc-0170`) and 4.6e-4 for amps (`dc-0152`), with sim-core's own KCL and source rows holding; the reference node is 0 for every circuit; the decks' gmin is `GMIN_S.value`. A planted 1e-5 resistor-stamp error and a flipped isource sign both fail it. **AC comparison on** (F2.2 part 2): `oracleAcInput` adapts each AC circuit (R, L and C as `resistor` elements with their AC stamp); `AcSolver`'s values match ngspice's on all 500, worst 1.8e-5 of the allowance for volts (`ac-0007`) and 5.0e-4 for amps (`ac-0057`), with sim-core's own complex KCL and source rows holding, on both LU paths._
 - _**Bench:** the seeded 2,000-node plant (8 feeders, 2,607 branches) and the report-only compile cases run in `verify`; the 2 ms re-solve and 0.3 ms per-tick budgets are listed as pending. Measured on a Ryzen 5 5600X: one topology change (`plant-recompile-switch`) is 1.2–1.3 ms (1.7–2.8 ms under heavy load), about two thirds of the 2 ms re-solve budget before any solve. F2.2 part 3 must measure compile and solve together on this plant and raise it if the budget is at risk._
 - _`gmin` is stamped in the decks as explicit resistors on the circuit nodes, not `.options rshunt`, which would also shunt the decks' internal sense and source nodes (ADR 0012)._
+- _**The per-tick case is on** (F2.3a): `tick-device-mix`, one step's discrete, continuous and protection layers on 250 battery–fuse–load loops of synthetic test devices, gated at §4.5's 0.3 ms (0.015 ms median locally). It moves to the real device models as F2.4 and F2.5 land._
 
 ## ADRs to write in P2
 
@@ -642,7 +661,7 @@ Numbers are assigned in the order the ADRs land.
 | —       | World document v2 + leads + catalogue v1          | ✅ Done                                       |
 | F2.1    | Netlist compiler                                  | ✅ Done                                       |
 | F2.2    | DC + phasor MNA (parts 1–3)                       | 🟡 Parts 1–3 done (re-solve gate pending, 3b) |
-| F2.3a   | Sim clock and engine loop (headless)              | ⬜ Not started                                |
+| F2.3a   | Sim clock and engine loop (headless)              | ✅ Done (reviews pending)                     |
 | F2.3b   | Sim worker, snapshot transport, time control      | ⬜ Not started                                |
 | F2.4    | Power sources                                     | ⬜ Not started                                |
 | F2.5    | First loads and switching (bench demo)            | ⬜ Not started                                |

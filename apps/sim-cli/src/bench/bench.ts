@@ -20,6 +20,11 @@ export interface BenchCase {
   prepare?(): void;
   /** The workload. Returns a checksum of its result, which must be the same on every run. */
   run(): string;
+  /**
+   * Untimed, right after each run: more of the result's checksum, joined to `run`'s (a digest of
+   * state that would cost time to form inside the timed run, so idle work can't pass as real work).
+   */
+  checksum?(): string;
 }
 
 export interface BenchCaseResult {
@@ -74,9 +79,10 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     throw new RangeError(`bench case "${benchCase.name}": runs must be a positive integer`);
   }
   const checksums = new Set<string>();
+  const full = (checksum: string) => (benchCase.checksum ? `${checksum}|${benchCase.checksum()}` : checksum);
   for (let i = 0; i < benchCase.warmup; i++) {
     benchCase.prepare?.();
-    checksums.add(benchCase.run());
+    checksums.add(full(benchCase.run()));
   }
   const durations: number[] = [];
   for (let i = 0; i < benchCase.runs; i++) {
@@ -84,7 +90,7 @@ export function runBenchCase(benchCase: BenchCase, now: () => number): BenchCase
     const start = now();
     const checksum = benchCase.run();
     durations.push(now() - start);
-    checksums.add(checksum);
+    checksums.add(full(checksum));
   }
   const medianMs = median(durations);
   const deterministic = checksums.size === 1;

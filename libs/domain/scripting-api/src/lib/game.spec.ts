@@ -122,10 +122,14 @@ describe('createGame', () => {
     expect(game.isEnabled('edit.undo', { 'history.canUndo': false })).toBe(true);
   });
 
-  it('reserves probe (P2) and tag (P10) and throws NotAvailableError', () => {
+  it('reserves tag (P10) and throws NotAvailableError; a game without an engine has no sim queries', () => {
     const game = createGame({ seed: 1 });
-    expect(() => game.probe('X1:3', 'X1:4')).toThrow(NotAvailableError);
-    expect(() => game.probe('X1:3', 'X1:4')).toThrow('game.probe() is reserved and not available until P2');
+    const still = createGame({ seed: 1, engine: false });
+    expect(() => still.probe('1:a', '1:b')).toThrow(NotAvailableError);
+    expect(() => still.probe('1:a', '1:b')).toThrow('game.probe() needs the sim engine');
+    expect(() => still.snapshot()).toThrow(NotAvailableError);
+    expect(() => still.snapshotHash()).toThrow(NotAvailableError);
+    expect(() => still.islands()).toThrow(NotAvailableError);
     let thrown: unknown;
     try {
       game.tag('PLC1:Motor.Run');

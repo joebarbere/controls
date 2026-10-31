@@ -1,6 +1,9 @@
 import { CtrlWriteError, migrateWorld, readCtrl, type World } from '@controls/save-format';
 import {
+  BUILD_ENGINE_VERSIONS,
   createGame,
+  ENGINE_CHANGED_MESSAGE,
+  engineCompatible,
   formatConsoleScriptError,
   type Game,
   gameFromSave,
@@ -322,13 +325,20 @@ async function replay(path: string, label: string): Promise<string> {
 function replaySave(bytes: Uint8Array, label: string): string {
   const read = readCtrl(bytes);
   if (!read.ok) throw new Failure(`${label}: ${read.error.message}`);
-  if (read.value.replayLog === null) throw new Failure(`${label}: has no replay.log (use "sim hash")`);
+  // A save from another sim engine or catalogue isn't expected to reproduce its world (D8): every
+  // failure below says so, and how to load or hash it instead.
+  const { manifest } = read.value;
+  const note =
+    engineCompatible(manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed'
+      ? ` (written by sim engine ${manifest.simEngineVersion}, catalogue ${manifest.catalogVersion}; this build is engine ${BUILD_ENGINE_VERSIONS.simEngineVersion}, catalogue ${BUILD_ENGINE_VERSIONS.catalogVersion}: ${ENGINE_CHANGED_MESSAGE} Load it as the game does with "sim run <empty.console> --world ${label}", or hash its saved world with "sim hash ${label}")`
+      : '';
+  if (read.value.replayLog === null) throw new Failure(`${label}: has no replay.log (use "sim hash")${note}`);
   const result = replayLogGame(read.value.replayLog);
-  if (!result.ok) throw new Failure(`${label}: replay.log: ${result.error.message}`);
+  if (!result.ok) throw new Failure(`${label}: replay.log: ${result.error.message}${note}`);
   const replayed = result.game.hash();
   const saved = worldHash(read.value.world);
   if (replayed !== saved) {
-    throw new Failure(`${label}: replay.log replays to ${replayed}, but world.json hashes to ${saved}`);
+    throw new Failure(`${label}: replay.log replays to ${replayed}, but world.json hashes to ${saved}${note}`);
   }
   return replayed;
 }

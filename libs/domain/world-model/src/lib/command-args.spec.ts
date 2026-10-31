@@ -36,7 +36,9 @@ describe('exported command argument JSON Schema', () => {
       .filter((def) => def.logged !== false)
       .map((def) => def.id);
     const ids = Object.keys(schemas).map((file) => file.replace(/\.args\.schema\.json$/, ''));
-    expect(ids).toStrictEqual([...logged, 'sim.resume', 'sim.setSpeed', 'sim.step'].sort());
+    expect(ids).toStrictEqual([...logged].sort());
+    // The sim time commands are registered (F2.3a), so the registry's list covers them.
+    expect(logged).toEqual(expect.arrayContaining(['sim.resume', 'sim.setSpeed', 'sim.step']));
     expect(ids).toContain('lead.connect');
     expect(ids).toContain('lead.disconnect');
     expect(ids).toContain('device.operate');

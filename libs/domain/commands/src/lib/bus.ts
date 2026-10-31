@@ -64,6 +64,11 @@ export interface CommandBusOptions<S> {
    * (`commandStreamKey(seq)`) stays put (ADR 0011 §3, `ReplayLogV2.firstSeq`).
    */
   readonly firstSeq?: number;
+  /**
+   * A copy of `state` at sim tick `tick`, everything else unchanged (for a world, `{ ...world, tick }`).
+   * Needed by {@link CommandBus.advanceTo}; a bus without it can't move time (ADR 0011 §3).
+   */
+  withTick?(state: S, tick: number): S;
 }
 
 /** Reported at most this many argument issues per error. */
@@ -113,6 +118,7 @@ export class CommandBus<S> {
   private readonly listeners = new Set<ExecutedListener<S>>();
   private readonly tickOf: (state: S) => number;
   private readonly markAssisted: ((state: S) => S) | undefined;
+  private readonly withTick: ((state: S, tick: number) => S) | undefined;
   /** The `seq` of `entries[0]`: `entries[i].seq === firstSeq + i`. */
   readonly firstSeq: number;
 
@@ -123,7 +129,28 @@ export class CommandBus<S> {
     this.current = options.initialState;
     this.tickOf = options.tickOf;
     this.markAssisted = options.markAssisted;
+    this.withTick = options.withTick;
     this.firstSeq = firstSeq;
+  }
+
+  /** Whether this bus can move time ({@link advanceTo}): it was built with `withTick`. */
+  get canAdvance(): boolean {
+    return this.withTick !== undefined;
+  }
+
+  /**
+   * Moves the state to sim tick `tick` (ADR 0011 §3): time passing is not a command. Unlogged, it
+   * takes no `seq`, leaves the undo and redo stacks alone and fires no `executed` event. A no-op for
+   * the current tick. Throws a `RangeError` for a tick that isn't a safe integer or is below the
+   * current one (time never runs backwards), and an `Error` on a bus built without `withTick`.
+   */
+  advanceTo(tick: number): void {
+    if (!Number.isSafeInteger(tick)) throw new RangeError(`advanceTo needs a safe integer tick, got ${tick}`);
+    const current = this.currentTick();
+    if (tick < current) throw new RangeError(`advanceTo(${tick}) is before the current tick ${current}`);
+    if (this.withTick === undefined) throw new Error('This bus was built without withTick, so it cannot move time');
+    if (tick === current) return;
+    this.current = this.withTick(this.current, tick);
   }
 
   /** The `seq` the next logged command gets: `firstSeq` + the entries logged so far. The one source of `seq`s. */

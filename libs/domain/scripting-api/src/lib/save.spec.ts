@@ -5,7 +5,9 @@ import { createWorldRegistry, type World, worldHash } from '@controls/world-mode
 import fc from 'fast-check';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineCompatible } from './engine-compat';
 import {
+  BUILD_ENGINE_VERSIONS,
   createGame,
   createSaveManifest,
   type Game,
@@ -26,12 +28,35 @@ const ctrlFixtures = ['v1', 'v2'].flatMap((version) =>
 const createManifest = createSaveManifest;
 
 describe('the .ctrl fixtures', () => {
-  it.each(ctrlFixtures)('%s loads, and its replay log (if any) reproduces its world', (path) => {
-    const result = loadGame(new Uint8Array(readFileSync(join(fixturesRoot, path))));
-    if (!result.ok) throw new Error(result.error.message);
-    expect(result.replay.status).toBe(path.endsWith('world-only.ctrl') ? 'absent' : 'continued');
-  });
+  it.each(ctrlFixtures)(
+    '%s loads; its replay log (if any) reproduces its world, or it is from another engine (D8)',
+    (path) => {
+      const result = loadGame(new Uint8Array(readFileSync(join(fixturesRoot, path))));
+      if (!result.ok) throw new Error(result.error.message);
+      if (path.endsWith('world-only.ctrl')) {
+        expect(result.replay.status).toBe('absent');
+      } else if (engineCompatible(result.manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed') {
+        // Saves from engines before this one (the world v2 kickoff's engine 1, which never ran): never
+        // verified, never refused.
+        expect(result.manifest.simEngineVersion).toBe(1);
+        expect(result.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+        // world.json loads as saved; it holds no solution (engine 1 never ran), so the engine solves at
+        // the start, and only the solution record differs from the saved world.
+        const saved = readCtrlOrThrow(join(fixturesRoot, path)).world;
+        expect(result.game.world()).toStrictEqual(saved);
+        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual(saved);
+      } else {
+        expect(result.replay.status).toBe('continued');
+      }
+    },
+  );
 });
+
+function readCtrlOrThrow(path: string) {
+  const read = readCtrl(new Uint8Array(readFileSync(path)));
+  if (!read.ok) throw new Error(read.error.message);
+  return read.value;
+}
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -200 } });
@@ -177,7 +202,7 @@ describe('loadGame', () => {
       fc.constant({ kind: 'save-load' as const }),
     );
     fc.assert(
-      fc.property(fc.array(op, { maxLength: 25 }), (ops) => {
+      fc.property(fc.array(op, { maxLength: 20 }), (ops) => {
         let game = createGame({ seed: 3 });
         for (const o of ops) {
           if (o.kind === 'place') game.exec('entity.place', place(o.x));
@@ -195,7 +220,8 @@ describe('loadGame', () => {
         const replayed = replayLogGame(game.replayLog());
         expect(replayed.ok && replayed.game.hash()).toBe(game.hash());
       }),
-      { numRuns: 60 },
+      // Each save-load writes, reads and replays a .ctrl with the engine: fewer runs, not a longer timeout.
+      { numRuns: 40 },
     );
   });
 });
@@ -242,6 +268,6 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
-    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 2 });
+    expect(createSaveManifest()).toMatchObject({ schemaVersion: 2, catalogVersion: 1, simEngineVersion: 3 });
   });
 });

@@ -371,6 +371,54 @@ The floor policy (plan F2.2) with complex magnitudes, in `src/testing/ac.ts`: KC
 - **The AC oracle** (`oracle/ac-oracle.spec.ts`), on both paths: below.
 - **Generator health** floors, and 12 planted faults, all killed (listed in the PR).
 
+## The engine loop (F2.3a)
+
+`SimEngine` (`sim-core` `engine/`) is the sim clock: it follows a world bus deterministically ([ADR 0011](../decisions/0011-sim-worker-contract.md) §2–§4, §9.6). The same engine is the scripting API's time host headless (`sim-cli`, every domain test) and, until F2.3b moves it to the sim worker, runs in-process in the game's session.
+
+```mermaid
+flowchart TB
+    subgraph host["Time host (scripting API Game)"]
+      EXEC["exec(id, args)"] --> BUS["CommandBus&lt;World&gt;<br/>run → change, log entry at tick t"]
+      BUS -->|"applied(entry, world)"| APPLY
+      EXEC -->|"sim.step {ticks}: after logging"| ADV
+      ADVAPI["advance(n) / advanceTo(t)"] --> ADV["engine.advanceTo(t) then bus.advanceTo(t)<br/>(unlogged, no history change)"]
+    end
+    subgraph engine["SimEngine"]
+      APPLY["recompile (NetlistCompiler, live sim bags)<br/>netlist changed? solve at t"] --> STATE
+      ADV --> STEP
+      STEP["step t → t+1"] --> S1{"t mod 10 = 0<br/>and not solved at t?"}
+      S1 -->|yes| SOLVE["electrical layer: fill values (banks, defaults, else unmodelled)<br/>DcSolver.solveNonlinear (warm start = solution record),<br/>then AcSolver at the region frequency, into the same record"]
+      S1 -->|no| L
+      SOLVE --> L["discrete → continuous → protection<br/>(every bank, model-kind order)"]
+      L --> S2{"a layer changed<br/>the topology?"}
+      S2 -->|yes| TRIP["recompile, solve at t+1 (same step)<br/>event at t+1"]
+      S2 -->|no| STATE
+      TRIP --> STATE["state at t+1: banks (struct-of-arrays), solution record, events"]
+    end
+    STATE --> EXPORT["exportState(): sim bags + solution record"]
+    EXPORT --> MAT["materialiseWorld(busWorld, export)<br/>(sim-protocol)"]
+    MAT --> HASH["world.hash, Game.save"]
+    STATE --> SNAP["encodeSnapshot → hashed bytes<br/>game.snapshot(), snapshotHash"]
+```
+
+**Time.** Ticks are integers, 1 tick = 1 ms (`TICK_S`). The state at tick T is the state after every command logged at T, before step T's cadence solve. `advanceTo(target)` runs steps T … target − 1. The electrical layer runs at every multiple of `SOLVE_INTERVAL_TICKS` (10, absolute ticks) that nothing has solved at yet, after any command that changes the netlist (topology or a value: a move solves nothing), and in the same step as a layer's topology change (a fuse blowing at step t is solved at t + 1, before the state at t + 1 is observable). Every solve is a pure function of the netlist, the banks' values and the warm start, which is the solution record itself.
+
+**Commands and time.** `CommandBus.advanceTo(tick)` moves the bus's state without logging, taking a `seq` or touching the history (ADR 0011 §3). `replayEntries(bus, entries, { time, endTick })` advances the time host and the bus to each entry's tick, runs it, calls `time.applied(entry, state)`, and finally advances to `endTick`; an earlier tick is still `tick-mismatch`. In the scripting API, `Game.exec` hands every logged entry to the engine and carries out `sim.step` by advancing once it is logged; on replay a step moves nothing, and the next entry's tick (or `endTick`) carries its effect. `sim.setSpeed` and `sim.resume` are no-ops headless (pacing is F2.3b's).
+
+**Device models are banks** (`SimDeviceModel` in `engine/device-model.ts`). For each model kind with netlisted devices the engine builds one bank: preallocated struct-of-arrays state, plus optional hooks: a DC value per branch, the outer loop's per-iteration value, the discrete, continuous and protection layers (each over the whole bank, so a tick makes no per-device calls or allocations) and an output record. Banks are rebuilt at every topology change, because branch indices move, from each device's **sim bag**, which must therefore hold every value that affects the future. A device that leaves keeps its bag as a **tombstone** if its id can't be reused (it was deleted: undoing the delete restores a blown fuse blown) and drops it if its `entity.place` was undone. Per-device randomness (a tolerance) comes only from `deriveStream(world.seed, entityStreamKey(id))`. In F2.3a no built-in kind has a bank: the battery keeps its placeholder EMF from `DC_DEFAULT_VALUES` (F2.4), and the lamp has no filament model (F2.5), so a branch nothing can value leaves its island **unmodelled**: solved with a placeholder only to keep the solver going, then zeroed and recorded with 0 iterations.
+
+**Honest results.** `islands()` gives each island's status: `solved`, `singular`, `nonConverged`, `unmodelled` or `mixed`; only `solved` values are readings, and the status follows from the netlist and the solution record alone, so a loaded engine says the same. `probe(a, b)` (ideal, non-loading) returns DC volts V(a) − V(b) on a solved DC island, and on an AC island the phasor V(a) − V(b) with its RMS magnitude (`rmsVolts`, what a meter shows by default) at the region frequency, `floating` for terminals on different islands (never a difference of two references), and `singular`, `unsettled` or `unsolved` otherwise. Island flags raise `singular` and `nonConverged` sim events on their rising edge; across a topology change a flag rises only if none of the island's entities was in an island with it before. Layer events (`blown`, …) are stamped at the end of their step.
+
+**AC islands** (since #51's phasor solver): every solve runs `DcSolver.solveNonlinear`, which zeroes the islands it doesn't solve, then `AcSolver.solve` into the same record, which writes only `ac` islands, at `regionProfile(world.regionId).frequencyHz` (60 Hz for NEC; the world's `regionId` is the region). A bank's `acValue` gives an AC branch's phasor value, else `AC_DEFAULT_VALUES` (a lead's resistance), else the island is unmodelled, as in DC. AC islands are linear in P2 (no outer loop). A phase angle needs `atan2`, which D6 keeps out of `sim-core`: the engine's probe returns the phasor and its magnitude, and the scripting API adds a display-only `phaseDeg` that never reaches a snapshot, a save or `world.hash`. Mixed islands stay unsolved (no converters in P2).
+
+**State and saves.** `exportState()` is every netlisted device's whole sim bag plus the solution record (`null` for an empty netlist). `materialiseWorld` (`sim-protocol`) writes exactly those bags and `WorldV2.sim` into the bus world; everything else is the bus world's. `SimEngine.start(world)` continues from a materialised world: with `sim: null` it solves at the world's tick, with a record it checks `topologyHash` and the sizes against the compiled netlist and adopts it, or throws `SimStartError` (`start-failed`), never re-solving silently. A save at any tick, loaded and run on, equals the uninterrupted run (a property, step by step, through JSON and through `.ctrl` bytes).
+
+**The snapshot** (`sim-protocol`, ADR 0011 §5): `encodeSnapshot` writes one slot from the engine's preallocated arrays with little-endian `DataView` stores, every reserved byte zero; the hashed region is bytes 8 onwards (the tick, the counts, the flags, the raw topology hash, then nodes, branches, islands and device records). `game.snapshot()` returns those bytes, `snapshotHash` their SHA-256. An unsolved island's entry has 0 iterations, 0 unknowns and no reference node. Device records are written from the bags and the solution, never from per-step caches, so a snapshot is a pure function of the export. The seqlock transport, the descriptor and `SnapshotView` are F2.3b's.
+
+**Load and D8.** `engineCompatible(manifest, build)` decides whether a save's log is verified: the same engine and catalogue verify; a migrated P1 save (both 0) verifies but restarts as `engine-changed` on failure; any other mismatch restarts as `engine-changed` without replaying. `SIM_ENGINE_VERSION` is 3 since this feature materialised the solution record (2 was #51's sparse pivoting).
+
+**Measured** (built bundle, AMD Ryzen 5 5600X, Node 24): one step of the layers on 750 synthetic devices (`tick-device-mix`, gated at §4.5's 0.3 ms) takes about 0.015 ms median.
+
 ## The oracle corpus (F2.7)
 
 The solvers are checked against ngspice on a checked-in corpus ([ADR 0012](../decisions/0012-oracle-corpus.md), decision D5). One intermediate representation feeds both sides, so they can't describe different circuits:
@@ -403,7 +451,7 @@ flowchart LR
 | `plant-recompile-switch`        | One topology change: open a feeder's root switch (an untimed `prepare` closes it first)                                      | None of its own: part of the re-solve (reported) |
 | `plant-resolve-topology-change` | The same change, then the values and the sparse solve of all 8 islands, with the factorisation cache warm (both states seen) | 2 ms (spec §4.5): reported, gate pending (below) |
 | `plant-resolve-new-topology`    | The same, with the cache cleared in `prepare`: every symbolic factorisation is rebuilt                                       | None in the spec (reported)                      |
-| per tick (pending)              | Discrete + continuous + protection layers                                                                                    | 0.3 ms (spec §4.5), switched on by F2.3a         |
+| `tick-device-mix`               | One step's discrete, continuous and protection layers on 250 battery–fuse–load loops (750 devices), no solve (F2.3a)         | 0.3 ms (spec §4.5), gated                        |
 
 Each case reports its median and p90 in the JSON. Budgets gate on the median. Nx hides a passing task's output, so the `bench` target also writes the report to `dist/apps/sim-cli/bench-report.json` (`sim bench --report <file>`), and a CI step after `pnpm verify` prints it on every OS. That step only prints, so `verify` still equals CI.
 
@@ -418,5 +466,6 @@ Alone, the warm case meets the 2 ms budget with 0.5 ms to spare. Beside `pnpm ve
 
 - **AC sources and loads** (F2.4, F2.5): the utility and three-phase sources and AC loads reach the phasor solver through `AcValueHook`; an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **The re-solve gate** (spec §4.5's 2 ms): reported now; the recompile optimisation and the calibrated gate follow (plan F2.2 part 3b).
-- **Engine loop** (F2.3a): the tick layers, and calling `NetlistCompiler.compile` on each command and topology event with the engine's sim state.
+- **Device models** (F2.4, F2.5): the battery's state of charge, the supplies, the lamp's filament, the fuse and breaker. The engine's hooks exist (above); the built-in kinds have no bank yet.
+- **The sim worker** (F2.3b): the seqlock transport, the descriptor, pacing and `SimHost`; until then the game runs the engine in-process.
 - **Topology descriptor** (F2.3b): built from `Netlist.nodes`, `branches`, `islands` and `devices`, adding each island's reference node and nominal band.

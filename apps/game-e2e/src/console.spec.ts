@@ -27,7 +27,7 @@ const PALETTE_PLACE_UNDO_HASH = '34a83dc825c1e6b934132ca1f766a36f895c173ecfbc732
  * The bench-leads scenario (P2 kickoff, world v2: test leads and `device.operate`): the same literal
  * as BENCH_LEADS_HASH in `apps/sim-cli/src/bench-leads.spec.ts`. Change both together.
  */
-const BENCH_LEADS_HASH = '1825e8bac7eeddaeedd7adeca6a69db204ec65c7dac0d6ab22df5a693c92cead';
+const BENCH_LEADS_HASH = 'b212424590e020f911d20c71041d7f78f66dc2596a7cb7167f77b4e8cd4e6b45';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';

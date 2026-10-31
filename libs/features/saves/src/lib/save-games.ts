@@ -9,6 +9,12 @@ import { worldHash } from '@controls/world-model';
 import { loadErrorReason, saveIoCodeOf, saveIoReason } from './messages';
 import { REPLAY_MISMATCH_POLICY, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
 
+/**
+ * Restart reasons that mean the log wasn't checked, not that it failed: never refused, an info toast
+ * with the scripting API's own message (`ENGINE_CHANGED_MESSAGE`, `TOO_LONG_TO_VERIFY_MESSAGE`).
+ */
+const UNVERIFIED: ReadonlySet<string> = new Set(['engine-changed', 'too-long-to-verify']);
+
 /** The name offered for a game that hasn't been saved under one yet (always a valid `SaveName`). */
 export function suggestedSaveName(seed: number): SaveName {
   return `Sandbox ${seed >>> 0}`;
@@ -387,7 +393,13 @@ export class SaveGames {
     }
     const loaded = loadGame(bytes, { registry: this.session.registry });
     if (!loaded.ok) return { ok: false, reason: loadErrorReason(loaded.error) };
-    if (loaded.replay.status === 'restarted' && this.replayPolicy === 'refuse') {
+    // A save from another engine version, or one too long to verify, is never refused: its log simply
+    // isn't verified (D8, `MAX_VERIFY_TICKS`).
+    if (
+      loaded.replay.status === 'restarted' &&
+      !UNVERIFIED.has(loaded.replay.reason) &&
+      this.replayPolicy === 'refuse'
+    ) {
       return { ok: false, reason: 'Its replay log doesn’t match its world.' };
     }
     return { ok: true, loaded };
@@ -407,7 +419,10 @@ export class SaveGames {
     this.setLastPlayed(lastPlayedOf(entry));
     this.notifications.notify(`Loaded ${quoted(entry.name)}.`, { level: 'success' });
     if (loaded.replay.status === 'restarted') {
-      this.notifications.notify(REPLAY_RESTARTED_MESSAGE, { level: 'warning' });
+      const unverified = UNVERIFIED.has(loaded.replay.reason);
+      this.notifications.notify(unverified ? loaded.replay.message : REPLAY_RESTARTED_MESSAGE, {
+        level: unverified ? 'info' : 'warning',
+      });
     }
     for (const listener of [...this.loadedListeners]) listener();
     return true;

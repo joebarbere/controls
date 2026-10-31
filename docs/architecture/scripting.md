@@ -97,6 +97,12 @@ sequenceDiagram
 
 **The phase-acceptance scenario.** `scenarios/phase-acceptance.{console,ts}` is the one scenario the P1 phase acceptance runs on all four drivers: place a box and a crate on the workshop backplate, drag the box onto DIN rail 1, delete the crate, then undo, redo and undo again. `apps/game-e2e/src/phase-acceptance.spec.ts` drives it with the mouse (undo and redo on the keyboard), with the palette alone through its generated argument forms, and with the in-game console's `run` of the file; `apps/sim-cli/src/phase-acceptance.spec.ts` runs the snapping script and the console file through `sim run`, replays the script's log and a save of the run. Every driver must log exactly the file's command ids and reach `PHASE_ACCEPTANCE_HASH`.
 
+## The sim in the scripting API (F2.3a)
+
+A `Game` owns an in-process `SimEngine` (`@controls/sim-core`) as its time host (ADR 0011 §3, §11): `exec` hands each logged entry to it (`applied`), and carries out `sim.step` by advancing once it is logged; `advance` and `advanceTo` move the engine, then the bus (`CommandBus.advanceTo`). `hash()` and `save()` write the engine's export into the world with `materialiseWorld` (`@controls/sim-protocol`); `world()` stays the commanded world. `probe`, `islands`, `snapshot` and `snapshotHash` read the engine, and `on('sim')` delivers its events after each `exec` or `advance`. `createGame({ engine: false })` gives a game without one (the commanded world only; the sim queries throw `NotAvailableError`).
+
+Loading verifies a save's log with an engine replaying it from its initial world, unless `engineCompatible(manifest, build)` (D8) says the save is from another engine or catalogue: then `world.json` loads as saved and a new log starts (`engine-changed`). The engine refusing a world at start (`SimStartError`) is the load error `start-failed`.
+
 ## Reserved queries
 
-`game.probe(from, to)` (P2, meter probes on the as-built circuit) and `game.tag(path)` (P10, PLC tags) are in the `Game` type now and throw `NotAvailableError` (`code: 'not-available'`). Reserving them in the type keeps the names stable and gives a script a precise error instead of `is not a function`; implementing them later only widens their return type.
+`game.tag(path)` (P10, PLC tags) is in the `Game` type now and throws `NotAvailableError` (`code: 'not-available'`). Reserving it keeps the name stable and gives a script a precise error instead of `is not a function`. `game.probe` was reserved the same way until F2.3a implemented it.

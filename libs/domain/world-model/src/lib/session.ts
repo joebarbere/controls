@@ -4,6 +4,8 @@ import {
   editCommands,
   type ReplayError,
   replayEntries,
+  type ReplayTime,
+  simCommands,
   viewCommands,
   viewportCommands,
 } from '@controls/commands';
@@ -22,8 +24,9 @@ export interface WorldRegistryOptions {
 
 /**
  * A registry holding every command a replay log can contain: the world commands (`entity.*`,
- * `lead.*`, `device.operate`), `edit.undo` /
- * `edit.redo` and the declared view commands (including the viewport's `view.mode` / `view.focus`).
+ * `lead.*`, `device.operate`), `edit.undo` / `edit.redo`, the declared view commands (including the
+ * viewport's `view.mode` / `view.focus`) and the sim time commands (`sim.setSpeed`, `sim.resume`,
+ * `sim.step`, F2.3a).
  * Headless replay, the sim worker's mirror bus and the UI all start from this, so they agree on every
  * id and argument schema. Hosts may register more commands on top.
  */
@@ -35,12 +38,14 @@ export function createWorldRegistry(options: WorldRegistryOptions = {}): Command
     .registerAll(deviceCommands(catalog))
     .registerAll(editCommands<World>())
     .registerAll(viewCommands<World>())
-    .registerAll(viewportCommands<World>());
+    .registerAll(viewportCommands<World>())
+    .registerAll(simCommands<World>());
 }
 
 /**
  * A command bus over a world document, starting with an empty history and an empty log whose first
  * entry gets `firstSeq` (default 0; a bus continuing a rebased or restarted log starts at its next seq).
+ * It can move time (`advanceTo`, ADR 0011 §3): `{ ...world, tick }`, everything else kept.
  */
 export function createWorldBus(
   world: World,
@@ -52,6 +57,7 @@ export function createWorldBus(
     initialState: world,
     tickOf: (w) => w.tick,
     markAssisted: (w) => (w.assisted ? w : { ...w, assisted: true }),
+    withTick: (w, tick) => ({ ...w, tick }),
     firstSeq: options.firstSeq ?? 0,
   });
 }
@@ -69,13 +75,20 @@ export type WorldReplayResult =
   | { readonly ok: false; readonly error: ReplayError };
 
 /**
- * Replays a (validated) replay log from its initial world through a fresh bus and returns the
- * resulting world and its `world.hash`, which equals the live session's (ADR 0006). The bus is
- * returned so a loaded session can continue the same log with the same history.
+ * Replays a (validated) replay log from its initial world through a fresh bus, advancing to each
+ * entry's tick and then to the log's `endTick` (ADR 0011 §3), and returns the resulting world and its
+ * `world.hash`. The bus is returned so a loaded session can continue the same log with the same
+ * history. With `time` (the sim engine) the engine follows the replay; without it this is the
+ * commanded world only, whose `sim` bags and solution record are the initial world's (inert), so
+ * its hash equals the live session's only where no sim state was materialised.
  */
-export function replayLog(log: ReplayLog, registry: CommandRegistry<World> = createWorldRegistry()): WorldReplayResult {
+export function replayLog(
+  log: ReplayLog,
+  registry: CommandRegistry<World> = createWorldRegistry(),
+  options: { readonly time?: ReplayTime<World> } = {},
+): WorldReplayResult {
   const bus = createWorldBus(log.initialWorld, registry, { firstSeq: log.firstSeq });
-  const result = replayEntries(bus, log.entries);
+  const result = replayEntries(bus, log.entries, { time: options.time, endTick: log.endTick });
   if (!result.ok) return result;
   return { ok: true, world: bus.state, hash: worldHash(bus.state), bus };
 }

@@ -77,6 +77,16 @@ Settings are versioned separately (`settingsVersion`):
 | 1               | 0.2.0       | First version (F1.8a): graphics, audio, controls and keybinding overrides, palette recents, console history, display, gameplay defaults, workspace layout, autosave, tool belt.                                                                                                                    |
 | 2               | 0.2.0       | Adds `saves.lastPlayed` (a manual save by name, an autosave slot, or `null`) for Continue ([ADR 0009](decisions/0009-save-io-boundary.md#continue-and-the-last-played-save)). v1 migrates with `lastPlayed: null`. Bumped rather than edited in place so settings written since F1.1 keep loading. |
 
+### Sim engine (`simEngineVersion`)
+
+`SIM_ENGINE_VERSION` (`@controls/sim-core`), written into every save's manifest (decision D8, [ADR 0013](decisions/0013-world-document-v2.md)), is bumped whenever snapshot or world goldens are re-pinned for numeric reasons. A save from another engine version loads `world.json` as saved with a new replay log (`engine-changed`), never refused. Saves migrated from P1 carry 0.
+
+| simEngineVersion | App version     | Change                                                                                                                                                                                                            |
+| ---------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1                | 0.3.0 (planned) | The world v2 kickoff: the field exists, no engine ran, every save's `sim` is `null`.                                                                                                                              |
+| 2                | 0.3.0 (planned) | #51 (F2.2 part 2): sparse LU uses plain partial pivoting (`PIVOT_THRESHOLD` 1), which moved the sparse solver pins.                                                                                               |
+| 3                | 0.3.0 (planned) | F2.3a, the engine loop: saves and `world.hash` hold the materialised solution record, so a world with a non-empty netlist hashes differently from what engine 1 or 2 wrote for the same log (`BENCH_LEADS_HASH`). |
+
 ### Device catalogue (`catalogVersion`)
 
 The device catalogue (`content/devices/*.json`, loaded by `@controls/catalog`) is introduced in P2. Like a schema version, a catalogue version may still change until the release that ships it and is frozen from then on. Saves written before the catalogue existed carry `catalogVersion` 0.
