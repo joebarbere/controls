@@ -186,7 +186,7 @@ describe('NetlistInspector', () => {
     // The inrush: 6.16 A at the switch's tick, settling; a gap (no reading) breaks the line.
     trace.push([0, 6.16, 10, 2.1, 20, Number.NaN, 30, 0.6, 1500, 0.432]);
     await fixture.whenStable();
-    const summary = 'Peak 6.16 A at 0.000 s; now 432 mA at 1.500 s.';
+    const summary = 'Peak 6.16 A at 0.000 s; last solve at 1.500 s: 432 mA.';
     expect(within(panel).getByTestId('trace-summary').textContent?.trim()).toBe(summary);
     const plot = within(panel).getByTestId('trace-plot');
     expect(plot.querySelectorAll('polyline')).toHaveLength(2);

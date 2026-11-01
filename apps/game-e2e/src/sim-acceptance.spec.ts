@@ -183,7 +183,9 @@ for (const { transport, query } of [
     const tail = lit.filter(([t]) => t >= 1400).map(([, v]) => v);
     expect((Math.max(...tail) - Math.min(...tail)) / settled).toBeLessThan(1e-3);
     // And the plot says so.
-    await expect(inspector.getByTestId('trace-summary')).toHaveText(/^Peak [0-9.]+ A at 0\.000 s; now [0-9.]+ mA at /);
+    await expect(inspector.getByTestId('trace-summary')).toHaveText(
+      /^Peak [0-9.]+ A at 0\.000 s; last solve at [0-9.]+ s: [0-9.]+ mA\.$/,
+    );
 
     // E again opens it: the lamp goes out.
     await page.keyboard.press('Backquote');

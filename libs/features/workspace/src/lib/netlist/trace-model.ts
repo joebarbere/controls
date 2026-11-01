@@ -2,15 +2,16 @@ import { formatQuantity } from './netlist-model';
 
 /*
  * The trace plot's model (plan F2.6), framework-free: a trace's (tick, value) samples laid out as
- * SVG polylines in a fixed box, with the axis ranges and a text summary. `NaN` (no reading) breaks
- * the line, never draws as 0.
+ * SVG polylines in a fixed box, with the axis ranges and a text summary. Drawn sample-and-hold (a
+ * step at each solve: between solves the engine holds its solution). `NaN` (no reading) breaks the
+ * line, never draws as 0.
  */
 
 /** The plot box, in SVG user units. */
 export const PLOT = Object.freeze({ width: 280, height: 96 });
 
 export interface TraceLayout {
-  /** One `points` string per unbroken run of readings. */
+  /** One `points` string per unbroken run of readings, stepped (sample and hold). */
   readonly lines: readonly string[];
   /** The time axis, in s of sim time (1 tick = 1 ms). */
   readonly t0: number;
@@ -38,6 +39,7 @@ export function layoutTrace(samples: Float64Array): TraceLayout {
   const span = Math.max(1, tick1 - tick0);
   const lines: string[] = [];
   let run: string[] = [];
+  let heldY = 0;
   for (let i = 0; i < n; i++) {
     const v = samples[2 * i + 1];
     if (!Number.isFinite(v)) {
@@ -47,7 +49,10 @@ export function layoutTrace(samples: Float64Array): TraceLayout {
     }
     const x = ((samples[2 * i] - tick0) / span) * PLOT.width;
     const y = PLOT.height - (Math.max(0, v) / max) * PLOT.height;
+    // Sample and hold: a solve's value holds until the next solve, so the line steps at each solve.
+    if (run.length > 0) run.push(`${round(x)},${heldY}`);
     run.push(`${round(x)},${round(y)}`);
+    heldY = round(y);
   }
   if (run.length > 0) lines.push(run.join(' '));
   return {
@@ -66,7 +71,7 @@ export function describeTrace(layout: TraceLayout, unit: string): string {
   const now = Number.isFinite(layout.latest.value) ? formatQuantity(layout.latest.value, unit) : 'no reading';
   const peak =
     layout.peak === null ? 'no reading' : `${formatQuantity(layout.peak.value, unit)} at ${seconds(layout.peak.t)}`;
-  return `Peak ${peak}; now ${now} at ${seconds(layout.latest.t)}.`;
+  return `Peak ${peak}; last solve at ${seconds(layout.latest.t)}: ${now}.`;
 }
 
 /** A time in s to the millisecond (a tick). */
