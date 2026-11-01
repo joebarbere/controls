@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 2 (Circuit engine) in progress, kickoff 2026-10-29. Version 0.2.0** (P1 shipped as v0.2.0 on 2026-10-29). Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); kickoff decisions D1–D6 taken, P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer` created. Kickoff done 2026-10-30: ADR 0011 sim worker contract and ADR 0013 world document v2 accepted; world v2, test-lead and `device.operate` commands and catalogue v1 landed. F2.1 (netlist compiler), F2.2 parts 1–3b (dense DC, sparse LU and cache, phasor MNA, recompile optimisation and the calibrated re-solve gate), F2.3a (sim clock and engine loop), F2.4 (power sources) and the F2.7 oracle harness (DC and AC comparisons on) landed; F2.3b (the sim worker, snapshot transport and time control) is in review as a four-PR stack. Next: F2.3b's merge, then F2.5. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) complete pending the manual WebGPU check (the user's, on a real GPU); version 0.2.0.** Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer`. Landed: world v2 and catalogue v1, F2.1–F2.6 (netlist, DC/AC MNA, engine loop, sim worker, sources, loads, protection, overlays, inspector, traces) and the phase-acceptance E2E. **Next: v0.3.0 release** (`/release minor`, needs the user). Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

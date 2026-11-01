@@ -1,6 +1,6 @@
 # Phase 2: Circuit engine and power sources ("First light")
 
-**Release:** v0.3.0 · **Status:** 🚧 In progress (kickoff 2026-10-29, done 2026-10-30) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
+**Release:** v0.3.0 · **Status:** ✅ Complete pending the manual WebGPU check (kickoff 2026-10-29, kickoff done 2026-10-30, features and acceptance 2026-10-31) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
 
 ## Goal
 
@@ -19,23 +19,34 @@ The player-facing proof is a battery, an SPST switch and an incandescent lamp on
 
 ## Phase acceptance
 
-- [ ] Hand-calculated golden fixtures agree with `sim-core` within **0.5 %**. Most linear ones are much tighter; each fixture states its tolerance. The ngspice oracle corpus passes at the tolerance fixed in ADR 0012.
-- [ ] The §4.5 budgets are met and enforced by `sim-cli bench` inside `pnpm verify`:
+_Audited 2026-10-31 (the acceptance PR). Evidence for each item is linked; every test cited runs in `pnpm verify` or the web/desktop e2e suites._
+
+- [x] Hand-calculated golden fixtures agree with `sim-core` within **0.5 %**. Most linear ones are much tighter; each fixture states its tolerance. The ngspice oracle corpus passes at the tolerance fixed in ADR 0012.
+  - _Goldens: `libs/domain/sim-core/src/testing/dc-goldens.ts` and `ac-goldens.ts` (each with its hand calculation and `tolerance`: 1e-9, a few checks 1e-8), run by `mna/golden.spec.ts` and `mna/ac-golden.spec.ts`; the device goldens (battery, supplies, services, lamp, fuse, breaker) state their 0.5 % bounds in their specs under `devices/`._
+  - _Oracle: `src/oracle/dc-oracle.spec.ts` and `ac-oracle.spec.ts` over the 500 + 500 circuit corpus in `libs/domain/sim-core/oracle/`, at [ADR 0012](../docs/decisions/0012-oracle-tolerance.md)'s tolerance: worst 1.06e-3 (DC volts) and 5.0e-4 (AC amps) of the allowance, a margin asserted ≥ 10×._
+- [x] The §4.5 budgets are met and enforced by `sim-cli bench` inside `pnpm verify`:
   - a seeded synthetic 2,000-node plant re-solves in under 2 ms after a topology change;
   - discrete + continuous + protection work stays under 0.3 ms per tick.
-- [ ] **Determinism.** Each of these gives byte-identical snapshots:
+  - _`pnpm verify` runs `nx run-many -t bench` (`apps/sim-cli` `bench`, exit non-zero over budget). The re-solve gate is calibrated per run (F2.2 part 3b: ratio 0.58–0.85 on the three CI runners); `tick-device-mix` is gated at 0.3 ms (0.053 ms median, 1,000 real devices)._
+- [x] **Determinism.** Each of these gives byte-identical snapshots:
   - the same seed and log run twice headless;
   - a replay of that log;
   - the sim worker in Chromium (web harness) compared with `sim-cli` in Node.
 
   Also, saving at tick T, loading and advancing to T2 gives the same `world.hash` and snapshot as running straight to T2.
+  - _Twice and replayed: `apps/sim-cli/src/bench-lamp.spec.ts` ("gives byte-identical snapshots over 10 s of sim time, across two runs and a replay") and `sim-core` `engine/properties.spec.ts` ("replaying the session's log with the engine as time host reaches the same snapshot bytes and events")._
+  - _Chromium vs Node: `apps/game-e2e/src/bench-lamp.spec.ts`, `sim-engine.spec.ts` and `sim-acceptance.spec.ts` reach the snapshot and world hashes `sim-cli` pins in Node, both transports; `apps/desktop-e2e/src/bench-lamp.spec.ts` in Electron. The worker against the headless engine byte for byte: `libs/sim-worker/src/lib/runner.spec.ts` ("same snapshot bytes and materialised hash after any session, either transport, any slicing", property)._
+  - _Save at T → load → T2: `libs/domain/scripting-api/src/lib/sim.spec.ts` ("saving at T, loading and advancing to T2 equals running straight to T2", property through `.ctrl` bytes) and `sim-core` `engine/properties.spec.ts` ("saving at T, loading and running on to T2 equals the uninterrupted run, step by step, events included"); the checked-in `bench-lamp` save reloads into the same future (`apps/sim-cli/src/bench-lamp.spec.ts`)._
 
 - [ ] **In-game demo.** In the workshop, a battery, an SPST switch and an incandescent lamp sit on the bench, joined by test leads. Closing the switch lights the lamp; opening it puts the lamp out. The lamp's brightness follows the solved light output, and the current trace shows the cold-filament inrush.
-  - `apps/game-e2e` drives the demo with the console and the keyboard.
-  - `apps/sim-cli/scenarios/bench-lamp.console` reaches the same pinned hashes.
-  - A manual WebGPU check on a real GPU confirms the lamp and the overlays (a P1 follow-up).
-- [ ] Every new device model and electrical constant has a `source`, and an `electrical-realism-reviewer` sign-off is recorded in its PR.
+  - [x] `apps/game-e2e` drives the demo with the console and the keyboard. _`apps/game-e2e/src/sim-acceptance.spec.ts`, both transports: the console places the devices and leads and opens the netlist inspector, T on the lamp's branch starts its trace, E on the selected switch closes it, `sim.step 1500`: the lamp is drawn above its rated level; the trace the UI received peaks at the switch's tick at 14.3× the settled current (6.16 A against 0.432 A; the lamp's `inrush-band` source gives 10–15×). E again and `sim.step 500`: the lamp is drawn dark and its traced current is 0 A. Traces sample every solve in the worker (ADR 0011 "Implementation notes (F2.6 traces)"); `libs/sim-worker/src/lib/traces.spec.ts` matches the headless engine's per-tick current bit for bit, peak included, under four publish timings._
+  - [x] `apps/sim-cli/scenarios/bench-lamp.console` reaches the same pinned hashes. _The E2E asserts `BENCH_LAMP_LIT_HASH` / `BENCH_LAMP_LIT_SNAPSHOT_HASH` after the close and `BENCH_LAMP_HASH` / `BENCH_LAMP_SNAPSHOT_HASH` after the open, the literals `apps/sim-cli/src/bench-lamp.spec.ts` pins in Node; `pnpm --silent sim run apps/sim-cli/scenarios/bench-lamp.console --world content/levels/workshop.json` prints them._
+  - [ ] A manual WebGPU check on a real GPU confirms the lamp and the overlays (a P1 follow-up). **The user's.** _Procedure: `pnpm start` (or `pnpm start:web` in Chrome with WebGPU) on a machine with a real GPU; confirm the HUD says WebGPU (not WebGL2); New sandbox (seed 0); in the console paste the six setup lines of `bench-lamp.console`, run `device.operate 2 closed true` and `sim.step 1500`; check the lamp glows; `view.overlay voltage true` and `view.overlay current true` (resume with Shift+1 to see the arrows move); `view.netlistInspector`, T on `Branch … e3.filament`; then `device.operate 2 closed false` and `sim.step 500`: the lamp goes dark. Note the GPU, OS and browser here._
+- [x] Every new device model and electrical constant has a `source`, and an `electrical-realism-reviewer` sign-off is recorded in its PR.
+  - _Sources: the catalogue refuses a parameter, size or terminal layout without one (`libs/domain/catalog/src/lib/catalog.ts`); engine constants are `SourcedConstant`s._
+  - _Sign-offs: #54 and #55 recorded conditional sign-offs (R1–R4) in their bodies; #62 and #63 addressed the review in the PR (this plan, F2.5) but their bodies still read "pending"; #68 and #72 were pending. The acceptance re-review (2026-10-31, recorded in the acceptance PR's body) approved #54, #55, #62 and #63 (R1–R4 confirmed in code), and #68 and #72 with notes: #68's 12 V and 24 V nominals are written in both `overlay-scale.ts` and `bands.ts` (a follow-up: one source, or a spec that they agree); #72's unrated-beside-rated rule is already documented in `bands.ts`._
 - [ ] `pnpm verify` is green on all three OSes. Every new dependency, and any adapted MIT/BSD code, has a `THIRD_PARTY_NOTICES.md` row.
+  - _No dependency was added since v0.2.0 (`git diff v0.2.0..HEAD -- package.json pnpm-lock.yaml` changes only the `verify` script), and no adapted MIT/BSD code landed, so `THIRD_PARTY_NOTICES.md` needs no row. Three-OS `pnpm verify`: the acceptance PR's CI._
 
 ## Kickoff (before F2.x PRs)
 

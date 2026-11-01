@@ -725,9 +725,32 @@ flowchart TD
 
 The bench supply has no band: it is adjustable from 0 to 30 V, so no fixed scale is honest. A nameplate that matches no band (a 6 V battery) is `none`, never the nearest band. The DC nominals carry a `source` (`DC_BAND_NOMINALS`); the AC ones are the region profile's nominal systems. The overlays' full scale for each band (4/3 of nominal, a game-design choice) is the renderer's (`docs/architecture/rendering.md`).
 
+## Traces (F2.6)
+
+A trace is a watched quantity sampled by the worker at **every electrical solve**, so it has the engine's resolution where a snapshot (published at most at the wall-clock publish rate) does not: the bench lamp's inrush peak is the switch's own command solve at its tick, then about 270 continuous re-solves as the filament heats. ADR 0011 §4 and its "Implementation notes (F2.6 traces)" fix the contract; no protocol bump (the messages were in protocol 1).
+
+```mermaid
+sequenceDiagram
+    participant UI as NetlistInspector (T on a branch)
+    participant H as SimHost.watch → TraceBuffer
+    participant W as SimWorkerRunner
+    participant E as SimEngine
+    UI->>H: watch({kind: 'branch', element})
+    H->>W: watch {id, target}
+    W->>E: onSolve = sample
+    E-->>W: onSolve(tick) after each cadence / command / layer / continuous solve
+    W->>W: push (tick, branchAmps(element)) — NaN when no reading
+    W->>H: trace {id, samples: Float64Array} (with each publish, before its slot)
+    H->>H: ring of 8,192 pairs; version at ≤ 10 Hz (trailing)
+    H-->>UI: TracePlot redraws (1 Hz under reduced motion)
+```
+
+- **Reading, not computing:** `SimEngine.branchAmps(element)` is |I| from the held solution with `NetlistReadout`'s rule, and `NaN` when the element isn't in this netlist or its island isn't solved. The observer never writes to the engine, so snapshots, hashes and events are the same watched or not (`traces.spec.ts`).
+- **Independent of timing:** batches are cut by publishes, which the wall clock throttles, but the concatenated samples are identical under every publish timing and both transports. A replay start's history (ticks ≤ `endTick`) is dropped, as its events are.
+- **The host** clears a trace on a new worker (new game, load, restart) and watches it again there. `__controlsSession.traces()` gives e2e specs what the UI received.
+
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
 - **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
-- **Traces** (F2.6): the worker records `watch`/`unwatch` but sends no `trace` batches yet.
 - **Fuse and breaker recipes** (renderer): the fuse and the breaker have engine models but no procedural recipe yet, so they draw as unknown objects.

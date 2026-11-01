@@ -4,7 +4,7 @@
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29; Phase 2 (circuit engine) is in progress.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
+> **Status: Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29; Phase 2 (circuit engine) is complete pending a manual WebGPU check, and ships as v0.3.0.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
 
 ## Features
 
@@ -42,7 +42,7 @@ What exists today (Phases 0 and 1, and Phase 2 so far):
 - Procedural 3D models of the bench battery, the bench supply and the DIN-rail supply, sized from their catalogue entries and labelled with their fictional brands.
 - The lamp glows with its solved light output; a lamp whose circuit isn't solved is shown as unknown, never as an off lamp.
 - Debug overlays (sandbox and dev builds): `view.overlay voltage|current` colours leads and terminals by voltage on a fixed scale per nominal system, or animates current along the leads (direction for DC, magnitude for AC), with a text legend; unsolved circuits show "no reading", never 0 V, and reduced motion keeps the arrows still.
-- Netlist inspector (sandbox and dev builds): `view.netlistInspector` docks a keyboard-navigable tree of every circuit's nodes (with their terminals) and branches in the side panel, with live voltage and current up to ten times a second and each circuit's status and voltage class; selecting a node highlights its terminals in 3D.
+- Netlist inspector (sandbox and dev builds): `view.netlistInspector` docks a keyboard-navigable tree of every circuit's nodes (with their terminals) and branches in the side panel, with live voltage and current up to ten times a second and each circuit's status and voltage class; selecting a node highlights its terminals in 3D. T on a branch draws a live trace of its current, sampled at every solve, so the lamp's cold-filament inrush shows (a text summary of peak and latest; still under reduced motion).
 - Integer-millimetre snap maths for DIN rails (17.5 mm modules), the backplate grid, wall studs and bench tops, with a cited source for every real-world dimension. It lives in the world model and reads the level's fixtures, so scripts snap exactly like the mouse.
 
 ### Simulation

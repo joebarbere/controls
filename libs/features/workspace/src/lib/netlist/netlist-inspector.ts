@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,8 +9,9 @@ import {
   type Signal,
   signal,
 } from '@angular/core';
-import { SimHost } from '@controls/feature-session';
+import { SimHost, type SimTrace } from '@controls/feature-session';
 import { type DescriptorTerminalRef, PANEL_SAMPLE_HZ } from '@controls/sim-protocol';
+import { Button } from '@controls/ui';
 import {
   buildNetlistTree,
   NO_READING,
@@ -18,6 +20,10 @@ import {
   type NetlistValues,
   sameNetlistValues,
 } from './netlist-model';
+import { TracePlot } from './trace-plot';
+
+/** The trace's redraw rate under `prefers-reduced-motion`: a still plot, updated once a second. */
+export const REDUCED_MOTION_TRACE_HZ = 1;
 
 /**
  * The netlist inspector (plan F2.6): a tree of the sim's islands, their nodes (with member terminals)
@@ -33,9 +39,13 @@ import {
  *   expands or goes to the first child, Left collapses or goes to the parent. The focused row is the
  *   selection; a selected node's terminals are {@link highlighted} (the workspace passes them to the
  *   renderer: view state only).
+ * - **Trace** (ADR 0011 §4): T on a branch row, or the Trace button for the selected branch, starts a
+ *   live trace of its current, sampled by the worker at every electrical solve (the lamp's inrush is
+ *   in it), drawn below the tree; again stops it. One trace at a time; view state, never logged.
  */
 @Component({
   selector: 'ctl-netlist-inspector',
+  imports: [Button, TracePlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { 'data-testid': 'netlist-inspector' },
   template: `
@@ -65,6 +75,8 @@ import {
             [attr.aria-posinset]="item.posInSet"
             [attr.aria-expanded]="item.expandable ? !collapsed().has(item.key) : null"
             [attr.aria-selected]="item.key === selected()"
+            [attr.aria-keyshortcuts]="item.kind === 'branch' ? 'T' : null"
+            [attr.data-traced]="item.key === traced()?.key ? '' : null"
             [attr.tabindex]="item.key === tabStop() ? 0 : -1"
             [attr.data-autofocus]="item.key === tabStop() ? '' : null"
             (focus)="selected.set(item.key)"
@@ -76,6 +88,27 @@ import {
           </li>
         }
       </ul>
+      <section class="trace" aria-labelledby="ctl-trace-title" data-testid="netlist-trace">
+        <div class="trace-head">
+          <h4 id="ctl-trace-title" class="trace-title">
+            {{ traced() ? 'Trace · ' + traced()!.label : 'Trace' }}
+          </h4>
+          <button
+            ctlButton="ghost"
+            type="button"
+            data-testid="trace-toggle"
+            [disabled]="!traced() && !selectedBranch()"
+            (click)="toggleTrace(buttonStops() ? null : selectedBranch())"
+          >
+            {{ buttonStops() ? 'Stop trace' : 'Trace selected branch' }}
+          </button>
+        </div>
+        @if (traced(); as t) {
+          <ctl-trace-plot [trace]="t.trace" [label]="t.label + ' current'" unit="A" />
+        } @else {
+          <p class="ctl-hint">Select a branch and press T to trace its current.</p>
+        }
+      </section>
     }
   `,
   styles: `
@@ -124,6 +157,23 @@ import {
     .value {
       white-space: nowrap;
     }
+    .row[data-traced] .label::after {
+      content: ' · traced';
+      color: var(--ctl-accent);
+    }
+    .trace {
+      margin-top: var(--ctl-space-2);
+    }
+    .trace-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--ctl-space-2);
+    }
+    .trace-title {
+      margin: 0;
+      font-size: 0.9rem;
+    }
     .value.unknown {
       color: var(--ctl-fg-muted);
       font-style: italic;
@@ -132,12 +182,17 @@ import {
 })
 export class NetlistInspector {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly sample = inject(SimHost).select<NetlistValues | null>(netlistSampler(), {
+  private readonly sim = inject(SimHost);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly view = inject(DOCUMENT).defaultView;
+  private readonly sample = this.sim.select<NetlistValues | null>(netlistSampler(), {
     initial: null,
     hz: PANEL_SAMPLE_HZ,
     equal: sameNetlistValues,
-    destroyRef: inject(DestroyRef),
+    destroyRef: this.destroyRef,
   });
+  /** The traced branch (its row key and label) and its live trace, or `null`. */
+  readonly traced = signal<{ readonly key: string; readonly label: string; readonly trace: SimTrace } | null>(null);
   protected readonly noReading = NO_READING;
   /** The latest sample's display strings, or `null` before the first snapshot (or after a reset). */
   readonly values: Signal<NetlistValues | null> = this.sample;
@@ -175,6 +230,40 @@ export class NetlistInspector {
     const item = this.tree().find((i) => i.key === key);
     return item?.kind === 'node' ? item.members : null;
   });
+
+  /** The selected row if it is a branch. */
+  protected readonly selectedBranch = computed(() => {
+    const key = this.selected();
+    const item = this.tree().find((i) => i.key === key);
+    return item?.kind === 'branch' ? item : null;
+  });
+
+  /** The Trace button stops the trace: nothing else is selected to trace, or the selection is what is traced. */
+  protected readonly buttonStops = computed(() => {
+    const traced = this.traced();
+    const branch = this.selectedBranch();
+    return traced !== null && (branch === null || branch.key === traced.key);
+  });
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.traced()?.trace.stop());
+  }
+
+  /** Starts a trace of `item`'s current (a branch row), or stops the current trace if it is that one (or none). */
+  toggleTrace(item: NetlistTreeItem | null): void {
+    const current = this.traced();
+    current?.trace.stop();
+    this.traced.set(null);
+    if (item === null || item.kind !== 'branch' || current?.key === item.key) return;
+    const branch = this.descriptor()?.branches[item.index];
+    if (branch === undefined) return;
+    const reduced = this.view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const trace = this.sim.watch(
+      { kind: 'branch', element: branch.element },
+      { hz: reduced ? REDUCED_MOTION_TRACE_HZ : PANEL_SAMPLE_HZ },
+    );
+    this.traced.set({ key: item.key, label: item.label.replace(/:.*$/, ''), trace });
+  }
 
   protected valueOf(item: NetlistTreeItem): string {
     const v = this.values();
@@ -231,6 +320,11 @@ export class NetlistInspector {
       case 'Enter':
       case ' ':
         if (item.expandable) this.setCollapsed(item.key, expanded);
+        break;
+      case 't':
+      case 'T':
+        if (item.kind !== 'branch') return;
+        this.toggleTrace(item);
         break;
       default:
         return;

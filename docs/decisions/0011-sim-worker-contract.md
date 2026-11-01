@@ -781,7 +781,7 @@ F2.3b implemented the transport and the worker (part 1) and `SimHost` with the s
 - **A replay start runs through the inbox** (§4, §10): the worker starts the engine on the log's initial world, then queues each entry as a `command` and a final `advance` to `endTick`, so a long crash-restart log is sliced and published like live play. Its sim events are dropped, as headless replays drop them. Main validates the log first (commanded state only), and decides the `MAX_VERIFY_TICKS` bound before it ever sends a replay start.
 - **Mirror checks are `replayEntries`'** (§1): each `command` runs through `replayEntries(bus, [entry], {time: engine})`, so `seq`, tick, args and refusals are checked exactly as on a replay; any failure is `desync` with the entry's `seq`.
 - **`release`, `watch`, `unwatch` and `stop` are handled on receipt**, out of the inbox: none depends on the engine's progress, and a queued `release` would starve the fallback's pool behind a long `advance`.
-- **Traces are F2.6's.** The worker records watches but sends no `trace` batches yet; the message schema is in place.
+- **Traces are F2.6's.** The worker records watches but sends no `trace` batches yet; the message schema is in place. _(Done in F2.6: "Implementation notes (F2.6 traces)" below.)_
 - **The reader's private copy is double-buffered**, so a slot held back for its descriptor never disturbs the current view (§6.2 "return current"). A slot of a generation older than both held descriptors is ignored; one of the previous generation is still shown (the descriptor of a new generation arrives before its first slot, so the latest slot may still be the old generation's).
 - **Test-only sizing:** the worker's environment takes `maxSlotBytes` and `minSlotBytes` overrides, used by specs to provoke `capacity` and a buffer growth cheaply. The game uses the constants.
 - **`SimHost` binds the session's game** (`bind({ tick, advanceTo, world })`) rather than owning it: `Session` creates each game with `time: simHost.time` and binds it on every start or adopt. Pacing advances the game through that binding, so the bus and the worker move together.
@@ -813,6 +813,16 @@ F2.6 implemented §9.2's overlays (`renderer-engineer`). Where the text above le
 - **Band names are the join** (§5.3): the renderer resolves `NOMINAL_BANDS[band]` by name to a voltage scale (`dc12`, `dc24`, `ac120-240`, `ac208y120`, `ac480y277`); index 0 (`none`) and an unknown name are no scale. Appending a band remains a protocol bump (§12); a renderer spec fails until the name has a scale.
 - **The current scale is one for every band** (logarithmic, 1 mA to 100 A): current follows the load, not the supply. Band 0 still shows current.
 - **AC shows magnitude only:** AC and mixed islands get no direction (`branchDirection` 0).
+
+## Implementation notes (F2.6 traces)
+
+F2.6 implemented §4's traces (phase 2 acceptance, `sim-engine-engineer` and `angular-ui-engineer`). Where §4 left a point open, the implementation pinned it down as follows. The message union is unchanged (`watch`, `unwatch` and `trace` were in it from protocol 1), and nothing hashed changes, so `SIM_PROTOCOL_VERSION` stays 5 and the fingerprint pin is untouched.
+
+- **Sampled at every electrical solve, in the engine's own step.** `SimEngine.onSolve(tick)` is called after each cadence, command, layer and continuous solve (not the start's), so a solve that a later one in the same step supersedes is sampled too: the trace holds every value a per-tick snapshot shows, and more. The observer only reads the engine; with no watch it is `null` and costs nothing.
+- **What is sampled.** A `branch` target is |I| in A through the branch its `ElementRef` compiled to in the current netlist (`SimEngine.branchAmps`, a complex magnitude for AC: `NetlistReadout`'s rule, so the trace and the inspector agree). A `device` target is that numeric field of the device's record. **`NaN` is no reading**: the element isn't in this generation's netlist, its island isn't solved, or the field isn't numeric. Never 0.
+- **The first sample is the solution held** when the watch arrives (at its solve tick), so a paused sim's trace starts with a value. Samples at or before a replay start's `endTick` are dropped, as its events are: a restarted or verified worker's history is not news.
+- **Batched with publishes.** Each watch's samples since its last batch go out as one `trace` (a transferred `Float64Array` of (tick, value) pairs) just before the publish's slot, so throttling changes how the samples are cut into batches, never which samples or their order (`libs/sim-worker/src/lib/traces.spec.ts`, under four publish timings and both transports).
+- **The host** (`SimHost.watch(target, {capacity, hz})` → `SimTrace`) keeps the newest `TRACE_CAPACITY` (8,192) samples in a ring and changes the trace's `version` signal at most at the panel rate, with a trailing change. A new worker (a new game, a load, a restart) is a new timeline: the samples are cleared and the watch is sent again to it. The e2e hook `__controlsSession.traces()` returns what the host received.
 
 ## Resolved in review
 

@@ -34,7 +34,15 @@ import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue 
 import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
-import type { IslandKind, Netlist, NetlistBranch, NetlistIsland, StateBag, TerminalRef } from '../netlist/types';
+import type {
+  ElementRef,
+  IslandKind,
+  Netlist,
+  NetlistBranch,
+  NetlistIsland,
+  StateBag,
+  TerminalRef,
+} from '../netlist/types';
 
 export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
@@ -248,6 +256,9 @@ const KIND_CODES: Readonly<Record<IslandKind, number>> = {
 };
 
 const terminalKey = (ref: TerminalRef): string => `${ref.entity}:${ref.terminal}`;
+/** An element as `netlist.dump` names it: `e3.filament`, `c2`. */
+const elementKey = (ref: ElementRef): string =>
+  ref.kind === 'entity' ? `e${ref.entity}.${ref.part}` : `c${ref.connection}`;
 
 /** The headless sim engine. Start it with {@link SimEngine.start}. */
 export class SimEngine {
@@ -261,6 +272,14 @@ export class SimEngine {
   };
   /** The options it was started with (an engine for the same world, such as `netlistDump`'s, takes them). */
   readonly options: SimEngineOptions;
+  /**
+   * Called after every electrical solve, with the solve's tick (cadence, command, layer, continuous;
+   * not the start's): the sim worker samples watched quantities here for traces (ADR 0011 §4, F2.6).
+   * View state only: an observer reads the engine, it never changes what the engine computes.
+   */
+  onSolve: ((tick: number) => void) | null = null;
+  /** {@link branchAmps}' element lookup, for one netlist (rebuilt lazily when the netlist changes). */
+  private branchIndex: { readonly netlist: Netlist; readonly byKey: Map<string, number> } | null = null;
   private readonly catalog: Catalog;
   private readonly deviceModels: Readonly<Record<string, SimDeviceModel>>;
   private readonly compiler: NetlistCompiler;
@@ -628,6 +647,26 @@ export class SimEngine {
     }
   }
 
+  /**
+   * |I| in A through the branch `element` compiled to, in the solution the engine holds (a complex
+   * magnitude for AC: `NetlistReadout`'s rule, so a trace and the inspector agree), or `NaN` when it
+   * is no reading: no such branch in this netlist, or its island isn't solved (ADR 0011 §5.3).
+   */
+  branchAmps(element: ElementRef): number {
+    const netlist = this.current;
+    if (this.branchIndex?.netlist !== netlist) {
+      const byKey = new Map<string, number>();
+      netlist.branches.forEach((branch, index) => byKey.set(elementKey(branch.element), index));
+      this.branchIndex = { netlist, byKey };
+    }
+    const index = this.branchIndex.byKey.get(elementKey(element));
+    if (index === undefined || !this.solved) return Number.NaN;
+    if (!this.readable(netlist.branches[index].island)) return Number.NaN;
+    const re = this.solution.branches[2 * index];
+    const im = this.solution.branches[2 * index + 1];
+    return Math.sqrt(re * re + im * im);
+  }
+
   // --- the loop -------------------------------------------------------------------------------
 
   private step(t: number): void {
@@ -814,6 +853,7 @@ export class SimEngine {
       if ((rising & ISLAND_FLAG_NON_CONVERGED) !== 0) this.emit('nonConverged', null, entities, {}, tick);
       this.previousFlags[island.index] = flags;
     }
+    if (why !== 'start') this.onSolve?.(tick);
   }
 
   /** Every DC island's branch values: a bank's, else the kind's default, else a placeholder (unmodelled). */

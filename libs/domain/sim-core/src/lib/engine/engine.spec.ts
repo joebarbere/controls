@@ -731,6 +731,29 @@ describe('SimEngine: the warm start, readability and revisions', () => {
     expect(host.materialised().entities[2].sim['tempK']).toBe(THERMAL_PARAMS.ambientK);
   });
 
+  it("branchAmps reads a branch's |I| from the held solution, NaN when it is no reading; onSolve sees every solve (F2.6 traces)", () => {
+    const host = Host.fresh().run(droopLoop);
+    const index = host.engine.netlist.branches.findIndex((b) => b.element.kind === 'connection');
+    const element = host.engine.netlist.branches[index].element;
+    const record = host.engine.exportState().solution?.branches as number[];
+    expect(host.engine.branchAmps(element)).toBe(Math.abs(record[2 * index]));
+    expect(host.engine.branchAmps({ kind: 'connection', connection: 99 })).toBeNaN();
+    const ticks: number[] = [];
+    host.engine.onSolve = (tick) => ticks.push(tick);
+    host.advanceTo(31);
+    expect(ticks).toEqual([10, 20, 30]); // the cadence solves
+    host.engine.onSolve = null;
+    // A non-converged island is no reading.
+    const flip = Host.fresh().run([
+      ['entity.place', { ref: BATTERY, positionMm: origin }],
+      ['entity.place', { ref: FLIP, positionMm: origin }],
+      ['lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') }],
+      ['lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(1, 'neg') }],
+    ]);
+    expect(flip.engine.branchAmps({ kind: 'connection', connection: 1 })).toBeNaN();
+    expect(Host.fresh().engine.branchAmps({ kind: 'connection', connection: 1 })).toBeNaN(); // empty netlist
+  });
+
   it('advancing bumps the revision (the cache key of hashes and exports)', () => {
     const host = Host.fresh().run(ENGINE_BENCH);
     const revision = host.engine.revision;

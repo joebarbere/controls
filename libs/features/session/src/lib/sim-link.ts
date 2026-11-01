@@ -15,6 +15,7 @@ import {
   SnapshotReader,
   type SnapshotView,
   type TopologyDescriptor,
+  type WatchTarget,
 } from '@controls/sim-protocol';
 
 /*
@@ -61,6 +62,8 @@ export interface SimLinkEvents {
   snapshot(link: SimLink, view: SnapshotView): void;
   descriptor(link: SimLink, descriptor: TopologyDescriptor): void;
   events(link: SimLink, events: readonly SimEvent[]): void;
+  /** A `trace` batch: (tick, value) pairs for watch `id` (F2.6). */
+  trace(link: SimLink, id: number, samples: Float64Array): void;
   failed(link: SimLink, failure: SimFailure): void;
   /** The worker was terminated (disposed, failed or retired and settled). */
   closed(link: SimLink): void;
@@ -151,6 +154,15 @@ export class SimLink {
     if (!this.alive || tick <= this.lastAdvance) return;
     this.lastAdvance = tick;
     this.worker.postMessage({ type: 'advance', tick }, []);
+  }
+
+  /** Starts a trace of `target` (view state: never logged, never changes the engine). */
+  watch(id: number, target: WatchTarget): void {
+    if (this.alive) this.worker.postMessage({ type: 'watch', id, target }, []);
+  }
+
+  unwatch(id: number): void {
+    if (this.alive) this.worker.postMessage({ type: 'unwatch', id }, []);
   }
 
   command(entry: ReplayEntry): void {
@@ -299,7 +311,8 @@ export class SimLink {
         if (delivering) this.events.events(this, message.events);
         return;
       case 'trace':
-        return; // F2.6
+        if (delivering) this.events.trace(this, message.id, message.samples);
+        return;
       case 'state':
         this.answer(message.id, { tick: message.tick, export: message.export, snapshotHash: message.snapshotHash });
         return;

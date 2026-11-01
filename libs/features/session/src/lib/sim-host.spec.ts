@@ -544,3 +544,54 @@ describe('SimHost: queries and disposal', () => {
     expect(views.at(-1)).not.toBeNull();
   });
 });
+
+describe('SimHost: traces (ADR 0011 §4, plan F2.6)', () => {
+  const lampBranch = { kind: 'branch', element: { kind: 'entity', entity: 3, part: 'filament' } } as const;
+  const watches = (worker: { received: readonly { type: string; [key: string]: unknown }[] }) =>
+    worker.received.filter((m) => m.type === 'watch' || m.type === 'unwatch').map((m) => `${m.type} ${m['id']}`);
+
+  it('watches on the worker, appends its batches, and changes version at the panel rate with a trailing change', async () => {
+    const { host, fakes, start, clock } = setup();
+    start();
+    await settle();
+    const trace = host.watch(lampBranch);
+    expect(watches(fakes.workers[0])).toEqual([`watch ${trace.id}`]);
+    const v0 = trace.version();
+    fakes.workers[0].sendRaw({ type: 'trace', id: trace.id, samples: new Float64Array([0, 6.1, 10, 3.2]) });
+    await settle();
+    expect([...trace.samples()]).toEqual([0, 6.1, 10, 3.2]);
+    expect(trace.version()).toBe(v0 + 1);
+    // A second batch within the panel interval: held for the trailing change, never lost.
+    fakes.workers[0].sendRaw({ type: 'trace', id: trace.id, samples: new Float64Array([20, 1.1]) });
+    await settle();
+    expect(trace.version()).toBe(v0 + 1);
+    await clock.advance(100);
+    expect(trace.version()).toBe(v0 + 2);
+    expect([...trace.samples()]).toEqual([0, 6.1, 10, 3.2, 20, 1.1]);
+    // A batch for a watch the host doesn't hold is ignored; the e2e hook lists what the UI received.
+    fakes.workers[0].sendRaw({ type: 'trace', id: 999, samples: new Float64Array([1, 1]) });
+    await settle();
+    expect(host.traceSamples()).toEqual([{ id: trace.id, target: lampBranch, samples: [0, 6.1, 10, 3.2, 20, 1.1] }]);
+  });
+
+  it('starts afresh on a new worker, watched again there, and unwatches on stop', async () => {
+    const { host, fakes, start } = setup();
+    start();
+    await settle();
+    const trace = host.watch(lampBranch, { capacity: 2 });
+    fakes.workers[0].sendRaw({ type: 'trace', id: trace.id, samples: new Float64Array([0, 1, 10, 2, 20, 3]) });
+    await settle();
+    expect([...trace.samples()]).toEqual([10, 2, 20, 3]); // the newest `capacity`, oldest first
+    start(); // a new game: a new timeline
+    await settle();
+    expect(trace.samples()).toHaveLength(0);
+    expect(watches(fakes.workers[1])).toEqual([`watch ${trace.id}`]);
+    // The retired worker's late batch is never shown.
+    fakes.workers[0].sendRaw({ type: 'trace', id: trace.id, samples: new Float64Array([30, 4]) });
+    await settle();
+    expect(trace.samples()).toHaveLength(0);
+    trace.stop();
+    expect(watches(fakes.workers[1])).toEqual([`watch ${trace.id}`, `unwatch ${trace.id}`]);
+    expect(host.traceSamples()).toEqual([]);
+  });
+});
