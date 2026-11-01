@@ -195,7 +195,7 @@ The design follows `docs/research/2026-10-circuit-simulation.md`. It reimplement
 - **Faults are stamps**: bolted short (about 1 mΩ), arcing fault (0.5–2 Ω, nonlinear), ground fault, open, high-resistance joint, lost neutral, open ground (which leaves the chassis floating at line voltage, so a shock hazard).
 - **Instruments are devices too.** A DMM in V mode stamps a 10 MΩ input impedance, which produces ghost voltage. LoZ mode stamps about 3 kΩ. A clamp meter reads the vector sum of the branch currents it encloses.
 - **Optional "scope bench" (post-P11):** a true transient simulation of a small isolated subcircuit using @spice-ts/core (MIT) for waveform lessons. It never runs in the main loop.
-- **Performance budget:** a 2,000-node plant re-solves in under 2 ms after a topology change, and the per-tick discrete + continuous + protection work stays under 0.3 ms. `sim-cli bench` enforces both in CI.
+- **Performance budget:** a 2,000-node plant re-solves in under 2 ms after a topology change, and the per-tick discrete + continuous + protection work stays under 0.3 ms. `sim-cli bench` enforces both in CI. The 2 ms re-solve gate is calibrated run for run: each timed re-solve is scaled by a paired run of a fixed calibration workload, and the median of those scaled times is held to 2 ms on the reference machine (decided 2026-10-31; see the P2 plan, F2.2 part 3b).
 
 ### 4.6 Command system: one registry, four surfaces
 
