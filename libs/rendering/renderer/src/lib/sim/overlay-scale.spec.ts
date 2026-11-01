@@ -1,4 +1,6 @@
 import { BUILTIN_CATALOG, NEC_REGION } from '@controls/catalog';
+// Spec only: the renderer never imports sim-core at run time (it stays off the main thread's bundle).
+import { DC_BAND_NOMINALS } from '@controls/sim-core';
 import { NOMINAL_BANDS } from '@controls/sim-protocol';
 import {
   arrowCount,
@@ -69,6 +71,21 @@ describe('voltage scales', () => {
     const psu = BUILTIN_CATALOG.device({ id: 'supply.railwick-din-24v-5a', version: 1 });
     expect(battery?.model.params['nominalVoltageV']).toBe(VOLTAGE_SCALES['dc12'].nominalV.value);
     expect(psu?.model.params['ratedVoltageV']).toBe(VOLTAGE_SCALES['dc24'].nominalV.value);
+  });
+
+  it("the DC bands' nominals are sim-core's, which choose the band (one value written twice: #75 realism review)", () => {
+    for (const band of ['dc12', 'dc24'] as const) {
+      const nominal = VOLTAGE_SCALES[band].nominalV;
+      expect({ band, volts: nominal.value, unit: nominal.unit, kind: nominal.kind }).toEqual({
+        band,
+        volts: DC_BAND_NOMINALS[band].value,
+        unit: DC_BAND_NOMINALS[band].unit,
+        kind: DC_BAND_NOMINALS[band].kind,
+      });
+    }
+    // Every DC scale has a sim-core nominal, and the other way round.
+    const dcScales = Object.values(VOLTAGE_SCALES).filter((s) => s.kind === 'dc');
+    expect(dcScales.map((s) => s.band).sort()).toEqual(Object.keys(DC_BAND_NOMINALS).sort());
   });
 });
 
