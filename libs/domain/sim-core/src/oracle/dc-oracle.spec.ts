@@ -84,8 +84,9 @@ describe.each(PATHS)('sim-core against the DC oracle corpus, $name', ({ options 
     });
     expect(failures).toStrictEqual([]);
     // ADR 0012 records these: the worst share of the allowance used, for volts and for amps.
-    expect(worst.node.ratio).toBeLessThan(1);
-    expect(worst.branch.ratio).toBeLessThan(1);
+    // A margin of at least 10× on both quantities, as the AC comparison asserts (measured: 1.06e-3 and 4.6e-4).
+    expect(worst.node.ratio, worst.node.circuit).toBeLessThan(0.1);
+    expect(worst.branch.ratio, worst.branch.circuit).toBeLessThan(0.1);
   });
 });
 

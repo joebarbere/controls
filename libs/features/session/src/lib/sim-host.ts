@@ -23,6 +23,7 @@ import {
   STATE_QUERY_TIMEOUT_MS,
   type TopologyDescriptor,
   WATCHDOG_MS,
+  type WatchTarget,
 } from '@controls/sim-protocol';
 import { type World, worldHash } from '@controls/world-model';
 import {
@@ -33,7 +34,9 @@ import {
   SimQueryRejection,
   type SimStateReply,
 } from './sim-link';
+import { type SimTrace, type SimTraceOptions, TraceBuffer } from './sim-trace';
 
+export { type SimTrace, type SimTraceOptions, TRACE_CAPACITY } from './sim-trace';
 export { type SimClock, type SimFailure, SimQueryRejection, type SimStateReply } from './sim-link';
 
 /*
@@ -150,6 +153,8 @@ export class SimHost {
   private readonly eventListeners = new Set<(events: readonly SimEvent[]) => void>();
   private tickWaiters: TickWaiter[] = [];
   private readonly selections = new Set<() => void>();
+  private readonly traces = new Map<number, TraceBuffer>();
+  private nextWatch = 1;
 
   private readonly phaseState = signal<'none' | 'starting' | 'ready' | 'crashed' | 'unavailable'>('none');
   private readonly speedState = signal(0);
@@ -506,6 +511,26 @@ export class SimHost {
     return Object.assign(value.asReadonly(), { stale: stale.asReadonly() });
   }
 
+  /**
+   * A live trace of `target` (ADR 0011 §4, plan F2.6): the worker samples it at every electrical
+   * solve. View state: never logged, never changes the engine. It follows the game across workers (a
+   * load or a restart starts it afresh) until `stop()` or `destroyRef`'s destruction.
+   */
+  watch(target: WatchTarget, options: SimTraceOptions & { readonly destroyRef?: DestroyRef } = {}): SimTrace {
+    const trace = new TraceBuffer(this.nextWatch++, target, this.clock, options, (t) => {
+      if (this.traces.delete(t.id)) this.link?.unwatch(t.id);
+    });
+    this.traces.set(trace.id, trace);
+    this.link?.watch(trace.id, target);
+    options.destroyRef?.onDestroy(() => trace.stop());
+    return trace;
+  }
+
+  /** Every live trace's target and samples (the e2e hook reads what the UI received). */
+  traceSamples(): { readonly id: number; readonly target: WatchTarget; readonly samples: number[] }[] {
+    return [...this.traces.values()].map((t) => ({ id: t.id, target: t.target, samples: [...t.samples()] }));
+  }
+
   // --- internals: links -----------------------------------------------------------------------
 
   private open(start: SimStart): SimLink | null {
@@ -518,6 +543,9 @@ export class SimHost {
       },
       events: (link, list) => {
         if (link === this.link) for (const listener of [...this.eventListeners]) listener(list);
+      },
+      trace: (link, id, samples) => {
+        if (link === this.link) this.traces.get(id)?.append(samples);
       },
       failed: (link, failure) => this.linkFailed(link, failure),
       closed: (link) => this.links.delete(link),
@@ -546,6 +574,13 @@ export class SimHost {
     this.rejectWaiters('superseded');
     this.phaseState.set(next === null ? phaseWithout : 'starting');
     for (const listener of [...this.listeners]) listener(null);
+    if (next !== old) {
+      // A new worker is a new timeline: the traces start afresh, watched again on it.
+      for (const trace of this.traces.values()) {
+        trace.clear();
+        next?.watch(trace.id, trace.target);
+      }
+    }
     if (next?.phase === 'ready') {
       this.linkReady(next);
       if (next.reader.current !== null) this.linkSnapshot(next, next.reader.current);
@@ -726,6 +761,7 @@ export class SimHost {
     this.replace(null);
     for (const link of [...this.links]) link.dispose('superseded');
     for (const dispose of [...this.selections]) dispose();
+    for (const trace of [...this.traces.values()]) trace.stop();
     this.stopPacing();
     this.clearSample();
     this.listeners.clear();

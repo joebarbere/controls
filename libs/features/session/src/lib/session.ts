@@ -332,6 +332,7 @@ export class Session {
       simPacing: () => this.sim.pacingScheduled,
       simStats: () => this.sim.stats(),
       entries: () => this.entries(),
+      traces: () => this.sim.traceSamples(),
       hashWorld: (json: unknown) => {
         const result = hashWorldDocument(json);
         return result.ok ? result.hash : null;

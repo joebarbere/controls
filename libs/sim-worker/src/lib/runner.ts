@@ -101,6 +101,9 @@ export class SimWorkerRunner {
   /** A forced publish found no free buffer (fallback): sent when one comes back. */
   private forcedPending = false;
   private readonly watches = new Map<number, WatchTarget>();
+  /** Per watch: (tick, value) pairs sampled since its last `trace` batch (ADR 0011 §4, F2.6). */
+  private readonly traceSamples = new Map<number, number[]>();
+  private readonly sampleTraces = (tick: number): void => this.sample(tick);
   /** Events at or before this tick are a replay start's history, not news: dropped. */
   private quietThrough = -1;
   /**
@@ -125,7 +128,7 @@ export class SimWorkerRunner {
     return this.phase;
   }
 
-  /** The watched targets (view state for F2.6's traces; never affects the engine). */
+  /** The watched targets (view state for traces; never affects the engine). */
   get watched(): ReadonlyMap<number, WatchTarget> {
     return this.watches;
   }
@@ -149,10 +152,12 @@ export class SimWorkerRunner {
         if (this.forcedPending) this.schedulePump();
         return;
       case 'watch':
-        this.watches.set(message.id, message.target);
+        this.watch(message.id, message.target);
         return;
       case 'unwatch':
         this.watches.delete(message.id);
+        this.traceSamples.delete(message.id);
+        if (this.watches.size === 0 && this.engine !== null) this.engine.onSolve = null;
         return;
       case 'stop':
         this.phase = 'stopped';
@@ -422,6 +427,7 @@ export class SimWorkerRunner {
       return; // `dirty` stays set: the next publish (or the idle one) shows it
     }
     this.flushEvents();
+    this.flushTraces();
     if (this.writer !== null) {
       this.writer.publish((slot, slotSeq) => engine.encodeInto(slot, slotSeq));
     } else {
@@ -438,6 +444,46 @@ export class SimWorkerRunner {
     this.lastPublishedSolve = engine.lastSolveTick;
     this.dirty = false;
     this.forcedPending = false;
+  }
+
+  // --- traces (ADR 0011 §4, F2.6) -------------------------------------------------------------
+
+  /**
+   * Starts sampling `target` at every solve. Its first sample is the solution the engine holds now
+   * (so a paused sim's trace starts with a value), unless that is a replay start's history.
+   */
+  private watch(id: number, target: WatchTarget): void {
+    const engine = this.engine as SimEngine;
+    this.watches.set(id, target);
+    const samples: number[] = [];
+    this.traceSamples.set(id, samples);
+    engine.onSolve = this.sampleTraces;
+    const tick = engine.lastSolveTick;
+    if (tick >= 0 && engine.tick > this.quietThrough) samples.push(tick, this.valueOf(target));
+  }
+
+  /** One solve's samples, at its tick: view state, read from the engine, never written to it. */
+  private sample(tick: number): void {
+    if (tick <= this.quietThrough) return; // a replay start's history, as with events
+    for (const [id, target] of this.watches) this.traceSamples.get(id)?.push(tick, this.valueOf(target));
+  }
+
+  /** A watched quantity now: a branch's |I| or a device record's numeric field; `NaN` when it is no reading. */
+  private valueOf(target: WatchTarget): number {
+    const engine = this.engine as SimEngine;
+    if (target.kind === 'branch') return engine.branchAmps(target.element);
+    const value = engine.deviceRecord(target.entity)?.values[target.field];
+    return typeof value === 'number' ? value : Number.NaN;
+  }
+
+  /** Posts each watch's samples since its last batch (with a publish, before its slot). */
+  private flushTraces(): void {
+    for (const [id, pending] of this.traceSamples) {
+      if (pending.length === 0) continue;
+      const samples = Float64Array.from(pending);
+      pending.length = 0;
+      this.port.post({ type: 'trace', id, samples }, [samples.buffer]);
+    }
   }
 
   /** The unhashed diagnostics area (shared mode only: the fallback has no buffer to hold it). */
