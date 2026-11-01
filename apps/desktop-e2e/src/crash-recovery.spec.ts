@@ -87,6 +87,7 @@ test('a renderer crash reloads the window, and Continue resumes the latest autos
     const slot = join(profile, 'saves', 'autosave', 'slot-1.ctrl');
     // The autosave and the pointer to it are on disk: no quit flush runs for a crash.
     await expect.poll(() => existsSync(slot)).toBe(true);
+    // This poll passes with or without the debounce; save-games.spec.ts pins the immediate write.
     const settingsFile = join(profile, 'settings.json');
     await expect
       .poll(() => existsSync(settingsFile) && JSON.parse(readFileSync(settingsFile, 'utf8')).saves?.lastPlayed)
@@ -160,10 +161,18 @@ test('a crash loop stops reloading at the limit and asks: Retry reloads, Quit qu
     const gone = () => app.evaluateMain?.(() => (globalThis as unknown as Record<string, number>)['__gone']);
     let crashes = 0;
 
-    /** Crashes as soon as each reload has a live renderer again, `CRASH_LOOP_LIMIT` times. */
+    /** Crashes as soon as each reload is running the game again, `CRASH_LOOP_LIMIT` times. */
     const crashLoop = async () => {
       for (let i = 0; i < CRASH_LOOP_LIMIT; i++) {
         await expect.poll(() => isCrashed(app)).toBe(false);
+        await expect
+          .poll(() =>
+            inPage(
+              app,
+              "document.readyState === 'complete' && !!document.querySelector('nav[aria-labelledby=\"ctl-main-menu-title\"]')",
+            ),
+          )
+          .toBe(true);
         await crashRenderer(app);
         await expect.poll(gone).toBe(++crashes);
       }

@@ -14,6 +14,11 @@ const RENDERER_ROOT = join(__dirname, 'renderer');
 const flushCoordinator = new FlushCoordinator();
 const quitGuard = new QuitGuard(app, () => BrowserWindow.getAllWindows(), flushCoordinator);
 
+// Set on the first `before-quit` (QuitGuard always goes on to quit after its flush): a renderer that
+// crashes while the app quits is not reloaded.
+let quitting = false;
+app.on('before-quit', () => (quitting = true));
+
 // Must run before `ready`: makes app:// a standard, secure origin (fetch, CORS, workers, code cache).
 protocol.registerSchemesAsPrivileged([
   {
@@ -98,7 +103,7 @@ function watchRenderer(window: BrowserWindow): void {
   const contents = window.webContents;
   const webContentsId = contents.id;
   const recovery = new RendererRecovery({
-    isGone: () => window.isDestroyed() || contents.isDestroyed(),
+    isGone: () => quitting || window.isDestroyed() || contents.isDestroyed(),
     reloadForRecovery: () => {
       ipc?.forgetWindow(webContentsId); // the old page's save handles die with it
       contents.loadURL(RECOVERY_URL).catch(() => undefined); // a crash during the load is reported again
