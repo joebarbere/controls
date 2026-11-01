@@ -84,6 +84,10 @@ describe('App', () => {
     }
   });
 
+  // jsdom parses its built-in user-agent stylesheet on the first getComputedStyle in the process (about
+  // 0.7 s on a slow runner). Paid here, once, rather than inside whichever test happens to run first.
+  beforeAll(() => void window.getComputedStyle(document.body));
+
   /**
    * The main menu's items. Scoped to the menu so a query names its eight buttons, not every button in
    * the page: name matching runs before the hidden filter, so an unscoped query also computes the names
@@ -98,6 +102,16 @@ describe('App', () => {
     return { fixture, user: userEvent.setup() };
   }
 
+  /** New sandbox, then Start with the dialog's fresh seed, from the keyboard (the menu focuses New sandbox). */
+  async function startPlaying(fixture: { whenStable(): Promise<unknown> }, user: ReturnType<typeof userEvent.setup>) {
+    await user.keyboard('{Enter}'); // New sandbox
+    await fixture.whenStable();
+    await user.keyboard('{Enter}'); // Start
+    await fixture.whenStable();
+  }
+
+  const canvas = () => document.querySelector('ctl-viewport canvas');
+
   it('boots to the main menu over the viewport, with the about box values available', async () => {
     const { fixture } = await setup();
     const el = fixture.nativeElement as HTMLElement;
@@ -109,34 +123,40 @@ describe('App', () => {
     expect(el.querySelector('[data-testid="about-platform"]')?.textContent).toContain('Electron 45.0.0');
   });
 
-  it('runs New sandbox, Escape to the menu, Resume, all from the keyboard', async () => {
+  // The menu ↔ workspace round trips are one flow per test, so each fits a slow CI runner (ui caveats).
+  it('starts New sandbox from the keyboard into the workspace, with the canvas focused', async () => {
     const { fixture, user } = await setup();
-    const canvas = () => document.querySelector('ctl-viewport canvas');
-    await user.keyboard('{Enter}'); // New sandbox
-    await fixture.whenStable();
-    await user.keyboard('{Enter}'); // Start, with the dialog's fresh seed
-    await fixture.whenStable();
+    await startPlaying(fixture, user);
     expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
     expect(document.activeElement).toBe(canvas()); // the canvas is the single viewport focus target
     expect(screen.getByRole('region', { name: '3D viewport' }).hasAttribute('tabindex')).toBe(false);
     expect(screen.getByRole('region', { name: 'Status' }).textContent).toContain('Work');
     expect(screen.getByRole('region', { name: 'Inspector' })).toBeTruthy();
+  });
 
-    const menuButton = screen.getByRole('button', { name: 'Menu' }); // the same element each time the toolbar shows
-    menuButton.focus();
+  it('Escape from a workspace control opens the menu at Resume, and Escape resumes to the canvas', async () => {
+    const { fixture, user } = await setup();
+    await startPlaying(fixture, user);
+    screen.getByRole('separator', { name: 'Resize inspector' }).focus(); // focus off the canvas
     await user.keyboard('{Escape}');
     await fixture.whenStable();
     expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'Resume' }));
 
     await user.keyboard('{Escape}');
     await fixture.whenStable();
+    expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
     expect(document.activeElement).toBe(canvas());
+  });
 
-    expect(menuButton.isConnected).toBe(true); // reused, not a stale node from before the menu
-    await user.click(menuButton);
+  it('the Menu button opens the menu, and Enter on Resume returns to the canvas', async () => {
+    const { fixture, user } = await setup();
+    await startPlaying(fixture, user);
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
     await fixture.whenStable();
-    await user.keyboard('{Enter}'); // Resume
+    expect(screen.getByRole('navigation', { name: 'Controls' })).toBeTruthy();
+    await user.keyboard('{Enter}'); // Resume, focused when the menu opens
     await fixture.whenStable();
+    expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
     expect(document.activeElement).toBe(canvas());
   });
 
@@ -261,14 +281,9 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: 'About Controls' })).toBeTruthy();
   });
 
-  it('persists a layout change in settings and confirms Reset layout with a notification', async () => {
+  it('persists a layout change in settings', async () => {
     const { fixture, user } = await setup();
-    await user.click(mainMenu().getByRole('button', { name: 'New sandbox' }));
-    await fixture.whenStable();
-    await user.click(
-      within(screen.getByRole('dialog', { name: 'New sandbox' })).getByRole('button', { name: 'Start' }),
-    );
-    await fixture.whenStable();
+    await startPlaying(fixture, user);
     screen.getByRole('separator', { name: 'Resize inspector' }).focus();
     await user.keyboard('{ArrowLeft}');
     await fixture.whenStable();
@@ -279,6 +294,20 @@ describe('App', () => {
       inspector: { size: 336, collapsed: false },
       bottom: { size: 200, collapsed: false },
     });
+  });
+
+  it('Reset layout puts back the default layout and confirms with a notification', async () => {
+    const changed = {
+      kind: 'split-panes',
+      version: 1,
+      inspector: { size: 336, collapsed: false },
+      bottom: { size: 200, collapsed: false },
+    };
+    settings = new MemorySettingsService({ ...defaultSettings(), workspace: { layout: changed } });
+    const { fixture, user } = await setup();
+    await TestBed.inject(SettingsStore).loaded;
+    await startPlaying(fixture, user);
+    expect(screen.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow')).toBe('336');
     await user.click(screen.getByRole('button', { name: 'Reset layout' }));
     await fixture.whenStable();
     expect(screen.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow')).toBe('320');
@@ -330,28 +359,20 @@ describe('App', () => {
   describe('saves (F1.8b)', () => {
     const PLACE = { ref: { id: 'prop.crate', version: 1 }, positionMm: { x: 100, y: 0, z: -200 } };
 
-    async function startPlaying(fixture: { whenStable(): Promise<unknown> }, user: ReturnType<typeof userEvent.setup>) {
-      await user.keyboard('{Enter}'); // New sandbox
-      await fixture.whenStable();
-      await user.keyboard('{Enter}'); // Start
-      await fixture.whenStable();
-    }
-
     // Escape from the viewport, the player's way to the menu (the viewport consumes it only to cancel
     // or deselect). These were one test; split, each stays well inside 5 s on a slow CI runner (ui caveats).
     it('autosaves a changed game on the way to the menu, and not an untouched one', async () => {
       const { fixture, user } = await setup();
       const session = TestBed.inject(Session);
       await startPlaying(fixture, user);
-      const canvas = document.querySelector('ctl-viewport canvas');
-      expect(document.activeElement).toBe(canvas);
+      expect(document.activeElement).toBe(canvas());
       await user.keyboard('{Escape}'); // an untouched new sandbox: no autosave
       await fixture.whenStable();
       expect(screen.getByRole('navigation', { name: 'Controls' })).toBeTruthy();
       expect(io.calls).not.toContain('write');
       await user.keyboard('{Escape}'); // resume
       await fixture.whenStable();
-      expect(document.activeElement).toBe(canvas);
+      expect(document.activeElement).toBe(canvas());
 
       session.exec('entity.place', PLACE);
       await user.keyboard('{Escape}');
