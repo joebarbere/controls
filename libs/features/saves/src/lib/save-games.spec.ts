@@ -282,6 +282,18 @@ describe('SaveGames', () => {
     ]);
   });
 
+  it('stores the pointer to an autosave at once, with no quit flush (a renderer crash skips it)', async () => {
+    const { saves, session, storedPointer } = setup();
+    await TestBed.inject(SettingsStore).loaded;
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(10));
+    expect(await saves.autosave()).toBe(true);
+    // No relaunch, no flush and no debounce wait: the reloaded page's Continue reads this.
+    await vi.waitFor(async () => expect(await storedPointer()).toEqual({ kind: 'autosave', slot: 1 }), {
+      timeout: 200,
+    });
+  });
+
   it('autosaves only a game with unsaved changes, and only when enabled', async () => {
     const { io, saves, session } = setup();
     session.newSandbox({ seed: 3 });

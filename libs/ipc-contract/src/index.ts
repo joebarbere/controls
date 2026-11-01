@@ -4,3 +4,4 @@ export * from './lib/bridge';
 export * from './lib/settings';
 export * from './lib/lifecycle';
 export * from './lib/saves';
+export * from './lib/recovery';

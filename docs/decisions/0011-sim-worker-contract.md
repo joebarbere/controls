@@ -565,7 +565,8 @@ stateDiagram-v2
   - the world and the log are untouched, and world commands keep running on main;
   - **`sim.restart`** (unlogged, registered by the host next to `file.*`, not in the headless registry, `when: sim.status == 'crashed'`) starts a new worker and reader with `start {kind: 'replay', log}`: the session's replay log with `endTick` = the current tick. The worker replays deterministically to that tick (it rebuilds a superset of the live undo stacks, which is harmless by ADR 0007's argument) and resumes paused. If it fails again, the sim stays stopped;
   - saving is refused until then (§9.5).
-- **A renderer process crash** is main's `render-process-gone` path (reload with a crash-loop limit), a separate P2 PR. The latest good autosave is the recovery point.
+- **A renderer process crash** is main's `render-process-gone` path (reload with a crash-loop limit). The latest good autosave is the recovery point.
+  - _Implementation note (renderer crash recovery PR):_ main reloads the same `WebContents` at `app://game/index.html?recovered=renderer-crash`; 3 crashes within 60 s stop the reloading behind a native Retry or Quit box, and `unresponsive` offers Wait or Reload (a forced crash). Main writes no save on this path. The menu shows a notice and focuses Continue, which resumes `settings.saves.lastPlayed`, the slot the last autosave wrote; that pointer is now written without the settings debounce, since a crash skips the quit flush. The sim worker dies with the renderer and is started again by the load, as for any Continue. See [UI shell](../architecture/ui-shell.md#renderer-crash-recovery) and the [Electron caveats](../caveats/electron.md).
 - **Protocol check:** `init.protocol !== SIM_PROTOCOL_VERSION` in the worker gives `error protocol-mismatch`. The host moves to `unavailable`, shows "simulation unavailable" and doesn't retry.
 
 ### 11. Headless parity (`sim-cli`)

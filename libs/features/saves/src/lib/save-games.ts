@@ -520,10 +520,15 @@ export class SaveGames {
     this.setLastPlayed(lastPlayedOf(written));
   }
 
-  /** Updates `settings.saves.lastPlayed`, only if it changed (loading the same save again writes nothing). */
+  /**
+   * Updates `settings.saves.lastPlayed`, only if it changed (loading the same save again writes
+   * nothing), and writes it at once rather than after the settings debounce: a renderer crash skips
+   * the quit flush, and the reloaded page's Continue must find the save just written (ADR 0011 §10).
+   */
   private setLastPlayed(lastPlayed: LastPlayedSave | null): void {
     if (samePointer(this.settings.settings().saves.lastPlayed, lastPlayed)) return;
     this.settings.update('saves', { lastPlayed });
+    void this.settings.flush();
   }
 
   private requireGame(): boolean {

@@ -1,7 +1,9 @@
-import { app, BrowserWindow, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, net, protocol, session, shell } from 'electron';
+import { rendererCrashRecoveryUrl } from '@controls/ipc-contract';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { APP_ENTRY_URL, APP_HOST, APP_ORIGIN, APP_SCHEME, resolveAppPath, SECURITY_HEADERS } from './app-protocol';
+import { RendererRecovery } from './crash-recovery';
 import { FlushCoordinator, QuitGuard } from './flush-before-quit';
 import { registerIpcHandlers, type RegisteredIpc } from './ipc';
 import { startAutoUpdate } from './updater';
@@ -79,7 +81,66 @@ function createWindow(): void {
   const webContentsId = window.webContents.id;
   window.webContents.once('destroyed', () => ipc?.forgetWindow(webContentsId)); // its save handles die with it
   window.once('ready-to-show', () => window.show());
+  watchRenderer(window);
   void window.loadURL(APP_ENTRY_URL);
+}
+
+/** After a renderer crash the page reloads here and offers Continue from the latest autosave (ADR 0011 §10). */
+const RECOVERY_URL = rendererCrashRecoveryUrl(APP_ENTRY_URL);
+
+/**
+ * Renderer crash recovery: reload on `render-process-gone`, up to the crash-loop limit, then Retry or
+ * Quit; Wait or Reload when the page stops responding. `dialog.showMessageBox` is looked up on each
+ * call, so desktop-e2e can stub it in the dev build. Main writes nothing here: the autosaves on disk
+ * are the recovery point.
+ */
+function watchRenderer(window: BrowserWindow): void {
+  const contents = window.webContents;
+  const webContentsId = contents.id;
+  const recovery = new RendererRecovery({
+    isGone: () => window.isDestroyed() || contents.isDestroyed(),
+    reloadForRecovery: () => {
+      ipc?.forgetWindow(webContentsId); // the old page's save handles die with it
+      contents.loadURL(RECOVERY_URL).catch(() => undefined); // a crash during the load is reported again
+    },
+    askAfterCrashLoop: async () => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'error',
+        title: 'Controls',
+        message: 'Controls keeps stopping unexpectedly.',
+        detail:
+          'The game window stopped several times in a short time, so it was not restarted again. ' +
+          'Your saves are untouched. Retry restarts the window; Quit closes Controls.',
+        buttons: ['Retry', 'Quit'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      return response === 0 ? 'retry' : 'quit';
+    },
+    askWhenUnresponsive: async (signal) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'warning',
+        title: 'Controls',
+        message: 'Controls is not responding.',
+        detail: 'Wait gives it more time. Reload restarts the window; you can then continue from your latest autosave.',
+        buttons: ['Wait', 'Reload'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+        signal,
+      });
+      return response === 1 ? 'reload' : 'wait';
+    },
+    killRenderer: () => contents.forcefullyCrashRenderer(),
+    quit: () => app.quit(),
+    log: (message) => console.warn(`[controls] ${message}`),
+  });
+  contents.on('render-process-gone', (_event, details) =>
+    recovery.onRenderProcessGone(details.reason, details.exitCode),
+  );
+  contents.on('unresponsive', () => recovery.onUnresponsive());
+  contents.on('responsive', () => recovery.onResponsive());
 }
 
 // Isolated profile (tests, side-by-side dev builds): separate userData means a separate

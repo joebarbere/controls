@@ -20,6 +20,7 @@ import { PLATFORM } from './platform.token';
 
 describe('App', () => {
   const quit = vi.fn();
+  let recovered = false;
   let settings: MemorySettingsService;
   const flushes = new Set<PendingWritesFlush>();
   let io: MemorySaveIo;
@@ -37,6 +38,9 @@ describe('App', () => {
       return settings;
     },
     canQuit: true,
+    get recoveredFromCrash() {
+      return recovered;
+    },
     quit,
     lifecycle: {
       onBeforeQuit: (flush) => (flushes.add(flush), () => void flushes.delete(flush)),
@@ -52,6 +56,7 @@ describe('App', () => {
   beforeEach(async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined); // jsdom has no WebGL/WebGPU
     quit.mockReset();
+    recovered = false;
     flushes.clear();
     settings = new MemorySettingsService();
     io = new MemorySaveIo();
@@ -426,6 +431,26 @@ describe('App', () => {
       expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
       expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
       expect(TestBed.inject(Session).canUndo()).toBe(false);
+    });
+
+    it('after a renderer crash, the menu focuses Continue, which resumes the autosave; the notice then goes', async () => {
+      recovered = true;
+      const game = createGame({ seed: 7 });
+      game.exec('entity.place', PLACE);
+      io.seed({ kind: 'autosave', name: 'Autosave 1', slot: 1 }, game.save());
+      const { fixture, user } = await setup();
+      await TestBed.inject(SaveGames).ready;
+      await fixture.whenStable();
+      expect(document.getElementById('ctl-main-menu-recovery')?.getAttribute('role')).toBe('alert');
+      expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'Continue' }));
+      await user.keyboard('{Enter}');
+      await waitFor(async () => expect(await TestBed.inject(Session).hashAt()).toBe(game.hash()));
+      await fixture.whenStable();
+      expect(io.names()).toEqual(['Autosave 1']); // nothing written on the way
+      await user.keyboard('{Escape}'); // back to the menu: the notice was for the start-up only
+      await fixture.whenStable();
+      expect(screen.getByRole('navigation', { name: 'Controls' })).toBeTruthy();
+      expect(document.getElementById('ctl-main-menu-recovery')).toBeNull();
     });
 
     it('Load opens the save list from the menu; Escape returns focus to Load', async () => {

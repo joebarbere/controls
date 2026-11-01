@@ -20,6 +20,8 @@ export interface LaunchedControls {
    * e.g. to stub `dialog`. Dev build only, like {@link closeWindow}.
    */
   readonly evaluateMain?: ElectronApplication['evaluate'];
+  /** Resolves when the app process exits on its own (e.g. Quit from a native dialog). Dev build only. */
+  readonly exited?: Promise<void>;
 }
 
 function chromiumArgs(): string[] {
@@ -70,8 +72,14 @@ export async function launchControls(options: LaunchOptions = {}): Promise<Launc
       args: [join(workspaceRoot, 'dist/apps/desktop'), ...chromiumArgs()],
       env: env(userDataDir),
     });
+    const main = app.process();
+    const exited = new Promise<void>((resolve) => {
+      if (main.exitCode !== null || main.signalCode !== null) resolve();
+      else main.once('exit', () => resolve());
+    });
     return {
       window: captureConsole(await app.firstWindow()),
+      exited,
       close: async () => {
         await app.close();
         cleanUp();
