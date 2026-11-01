@@ -282,6 +282,23 @@ describe('SaveGames', () => {
     ]);
   });
 
+  it('stores the pointer to an autosave at once, with no quit flush (a renderer crash skips it)', async () => {
+    const { saves, session, storedPointer } = setup();
+    await TestBed.inject(SettingsStore).loaded;
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(10));
+    // The clock never moves: a write left to the settings debounce (SAVE_DEBOUNCE_MS) would never run.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      expect(await saves.autosave()).toBe(true);
+      for (let i = 0; i < 10; i++) await Promise.resolve(); // settle the settings write's microtasks
+      // No relaunch, no flush and no debounce wait: the reloaded page's Continue reads this.
+      expect(await storedPointer()).toEqual({ kind: 'autosave', slot: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('autosaves only a game with unsaved changes, and only when enabled', async () => {
     const { io, saves, session } = setup();
     session.newSandbox({ seed: 3 });

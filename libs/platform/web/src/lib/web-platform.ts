@@ -80,6 +80,8 @@ export class WebPlatform implements Platform {
   readonly kind = 'web' as const;
   /** Browsers only let a script close windows it opened, so the harness has no Quit. */
   readonly canQuit = false;
+  /** Crash recovery is the desktop host's (main reloads the window); not available in the browser harness. */
+  readonly recoveredFromCrash = false;
   readonly settings: SettingsService = new WebSettingsService();
   readonly lifecycle: AppLifecycle = new WebAppLifecycle();
   /** Saves in the origin-private file system; Open uploads, Save As downloads (ADR 0009). */

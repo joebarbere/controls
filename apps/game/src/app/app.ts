@@ -82,6 +82,7 @@ import { SimEventToasts } from './sim-event-toasts';
         [sessionActive]="shell.sessionActive()"
         [canQuit]="platform.canQuit"
         [canContinue]="saves.canContinue()"
+        [recovered]="recovered()"
         (resumeGame)="resume()"
         (saveGame)="shell.openDialog('save')"
         (newSandbox)="newSandbox()"
@@ -141,6 +142,11 @@ export class App {
   protected readonly backend = signal<string>('starting…');
   /** SharedArrayBuffer (sim worker snapshots) needs cross-origin isolation — see docs/caveats/electron.md. */
   protected readonly isolated = globalThis.crossOriginIsolated === true;
+  /**
+   * Main reloaded the page after a renderer crash (ADR 0011 §10): the menu says so and focuses
+   * Continue, which resumes the latest autosave. Cleared once a game starts or loads.
+   */
+  protected readonly recovered = signal(this.platform.recoveredFromCrash);
   private readonly workspace = viewChild(Workspace);
   /** The panel layout, decoded from the opaque `settings.workspace.layout` (defaults if unrecognised). */
   protected readonly layout = computed(() => parseWorkspaceLayout(this.settings.settings().workspace.layout));
@@ -206,6 +212,7 @@ export class App {
 
   /** A game started or loaded: the workspace, with the viewport focused. */
   private enterGame(): void {
+    this.recovered.set(false); // the notice was about the game before the crash
     this.toolBelt.clear(); // the tool belt's active slot belongs to the old session
     this.shell.enterGame();
     this.focusViewportAfterRender();

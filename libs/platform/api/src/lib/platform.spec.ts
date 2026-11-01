@@ -19,6 +19,7 @@ describe('Platform', () => {
         save: async () => undefined,
       },
       canQuit: false,
+      recoveredFromCrash: false,
       quit: () => undefined,
       lifecycle: NOOP_LIFECYCLE,
       files: {

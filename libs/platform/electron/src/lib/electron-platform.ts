@@ -3,6 +3,7 @@ import {
   BRIDGE_KEY,
   fallbackReasonFor,
   FlushRequestSchema,
+  isRendererCrashRecovery,
   SettingsGetResponseSchema,
   type AppInfo,
   type ControlsBridge,
@@ -80,12 +81,19 @@ export class ElectronAppLifecycle implements AppLifecycle {
 export class ElectronPlatform implements Platform {
   readonly kind = 'electron' as const;
   readonly canQuit = true;
+  /** Main reloaded the window at the recovery URL after `render-process-gone` (see `isRendererCrashRecovery`). */
+  readonly recoveredFromCrash: boolean;
   readonly settings: SettingsService;
   readonly lifecycle: AppLifecycle;
   readonly files: FileService;
   readonly dialogs: DialogService;
 
-  constructor(private readonly bridge: ControlsBridge) {
+  /** `search` defaults to the page's `location.search`. */
+  constructor(
+    private readonly bridge: ControlsBridge,
+    search: string = globalThis.location?.search ?? '',
+  ) {
+    this.recoveredFromCrash = isRendererCrashRecovery(search);
     this.settings = new ElectronSettingsService(bridge);
     this.lifecycle = new ElectronAppLifecycle(bridge);
     this.files = new ElectronFileService(bridge);

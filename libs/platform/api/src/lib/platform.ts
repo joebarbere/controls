@@ -17,6 +17,12 @@ export interface Platform {
   readonly canQuit: boolean;
   /** Ends the app. Flushes registered with {@link AppLifecycle.onBeforeQuit} run first. */
   quit(): void;
+  /**
+   * The host restarted this page after its renderer process crashed (ADR 0011 §10), so the menu
+   * offers Continue from the latest autosave. Electron: main reloads with the recovery query. The
+   * web harness has no such host: always `false` (a browser shows its own crash page).
+   */
+  readonly recoveredFromCrash: boolean;
   /** Flush-before-quit hooks for features with buffered writes (settings now, autosave from F1.8b). */
   readonly lifecycle: AppLifecycle;
   /** Saves in the host's save directory, behind opaque handles (ADR 0009). */

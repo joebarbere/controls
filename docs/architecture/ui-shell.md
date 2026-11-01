@@ -296,6 +296,27 @@ sequenceDiagram
 - **Web harness:** `WebAppLifecycle` runs the flushes on `pagehide`. The browser doesn't wait for promises, so each flush is called synchronously (`runFlushes`), which is enough for the `localStorage` write.
 - **Notifications:** info and success auto-dismiss after 8 s; warnings and errors stay until dismissed. Expiry pauses while the pointer or keyboard focus is in the stack. Each toast has a Dismiss button, Escape dismisses the focused toast, and focus then moves to the next toast or back to where it came from.
 
+### Renderer crash recovery
+
+When the window's renderer process dies, main reloads it and the menu offers Continue from the latest autosave ([ADR 0011 §10](../decisions/0011-sim-worker-contract.md#10-lifecycle)). Main writes nothing on the way: the recovery point is what the save directory already holds.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live: window loaded
+    live --> reloading: render-process-gone (not clean-exit), under the limit
+    reloading --> live: loadURL app://game/index.html?recovered=renderer-crash
+    live --> asking: 3rd crash within 60 s
+    asking --> reloading: Retry (count reset)
+    asking --> [*]: Quit (app.quit)
+    live --> hung: unresponsive
+    hung --> live: Wait, or responsive (box closes)
+    hung --> reloading: Reload (forcefullyCrashRenderer, counts as a crash)
+```
+
+- **Main:** `RendererRecovery` and `CrashLoopLimiter` (`apps/desktop/src/crash-recovery.ts`, electron-free). The crash-loop and not-responding prompts are native message boxes, which the OS makes accessible. The old page's save handles are dropped on reload.
+- **Renderer:** `Platform.recoveredFromCrash` (`true` on the recovery URL in Electron, always `false` in the web harness) → `App.recovered` → `MainMenu`'s `recovered` input: a `role="alert"` notice, Continue focused and described by it. The notice goes once a game starts or loads.
+- **Continue** resumes `settings.saves.lastPlayed`, which each autosave points at the slot it wrote; `SaveGames` writes that pointer at once (no debounce), because a crash skips the quit flush.
+
 ## Related
 
 - [ADR 0005 Docking workspace](../decisions/0005-docking-workspace.md) · [UI caveats](../caveats/ui.md) · [Architecture overview](overview.md)

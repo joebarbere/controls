@@ -1,4 +1,13 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, ElementRef, inject, input, output } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 import { Button } from '@controls/ui';
 
 /**
@@ -10,6 +19,9 @@ import { Button } from '@controls/ui';
  * played (F1.8b); with no saves it stays focusable but `aria-disabled`, with the reason, so keyboard and
  * screen-reader users can still discover it. Load lists the saves (and can open a file), so it is
  * always available.
+ *
+ * After a renderer crash (`recovered`, ADR 0011 §10) the menu says so in an alert above the items and
+ * focuses Continue instead, which then resumes the latest autosave.
  */
 @Component({
   selector: 'ctl-main-menu',
@@ -20,6 +32,11 @@ import { Button } from '@controls/ui';
     <nav class="menu" aria-labelledby="ctl-main-menu-title">
       <h1 id="ctl-main-menu-title" class="title">Controls</h1>
       <p class="tagline">From electrician to controls engineer.</p>
+      @if (recovered()) {
+        <p id="ctl-main-menu-recovery" class="recovery" role="alert">
+          Controls stopped unexpectedly and was restarted. Continue resumes your latest autosave.
+        </p>
+      }
       <ul class="items">
         @if (sessionActive()) {
           <li><button ctlButton="primary" type="button" (click)="resumeGame.emit()">Resume</button></li>
@@ -38,7 +55,8 @@ import { Button } from '@controls/ui';
             ctlButton
             type="button"
             [attr.aria-disabled]="canContinue() ? null : 'true'"
-            [attr.aria-describedby]="canContinue() ? null : 'ctl-main-menu-saves'"
+            [attr.aria-describedby]="continueDescription()"
+            data-item="continue"
             (click)="canContinue() && continueGame.emit()"
           >
             Continue
@@ -84,6 +102,12 @@ import { Button } from '@controls/ui';
       margin: 0 0 var(--ctl-space-4);
       color: var(--ctl-fg-muted);
     }
+    .recovery {
+      margin: 0;
+      padding: var(--ctl-space-2) var(--ctl-space-3);
+      border-left: 3px solid var(--ctl-danger);
+      background: var(--ctl-surface);
+    }
     .items {
       display: grid;
       gap: var(--ctl-space-2);
@@ -106,6 +130,8 @@ export class MainMenu {
   readonly canQuit = input(false);
   /** There is a save to continue from (F1.8b). */
   readonly canContinue = input(false);
+  /** The host restarted the page after a renderer crash: show the notice and focus Continue. */
+  readonly recovered = input(false);
   readonly resumeGame = output<void>();
   readonly saveGame = output<void>();
   readonly newSandbox = output<void>();
@@ -117,8 +143,19 @@ export class MainMenu {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
+  /** Continue is described by the recovery notice and, with no saves, by the reason it is unavailable. */
+  protected readonly continueDescription = computed(
+    () =>
+      [this.recovered() ? 'ctl-main-menu-recovery' : null, this.canContinue() ? null : 'ctl-main-menu-saves']
+        .filter((id) => id !== null)
+        .join(' ') || null,
+  );
+
   constructor() {
-    afterNextRender(() => this.items()[0]?.focus());
+    afterNextRender(() => {
+      const items = this.items();
+      (this.recovered() ? items.find((b) => b.dataset['item'] === 'continue') : items[0])?.focus();
+    });
   }
 
   protected onKeydown(event: KeyboardEvent): void {

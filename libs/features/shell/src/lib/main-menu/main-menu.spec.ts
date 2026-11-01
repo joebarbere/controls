@@ -12,6 +12,7 @@ import { MainMenu } from './main-menu';
     [sessionActive]="session()"
     [canQuit]="canQuit()"
     [canContinue]="canContinue()"
+    [recovered]="recovered()"
     (resumeGame)="log.push('resume')"
     (saveGame)="log.push('save')"
     (newSandbox)="log.push('new')"
@@ -26,6 +27,7 @@ class Host {
   readonly session = signal(false);
   readonly canQuit = signal(true);
   readonly canContinue = signal(false);
+  readonly recovered = signal(false);
   readonly log: string[] = [];
 }
 
@@ -74,6 +76,31 @@ describe('MainMenu', () => {
     expect(document.activeElement).toBe(button);
     await user.keyboard('{Enter}');
     expect(host.log).toEqual(['continue']);
+  });
+
+  it('after a renderer crash, says so in an alert and focuses Continue, described by the notice', async () => {
+    const { host, user } = await setup((h) => {
+      h.recovered.set(true);
+      h.canContinue.set(true);
+    });
+    const notice = screen.getByRole('alert');
+    expect(notice.textContent).toContain('Controls stopped unexpectedly and was restarted.');
+    const button = screen.getByRole('button', { name: 'Continue', description: /latest autosave/ });
+    expect(document.activeElement).toBe(button);
+    await user.keyboard('{Enter}');
+    expect(host.log).toEqual(['continue']);
+  });
+
+  it('after a renderer crash with no saves, Continue is described by both the notice and the reason', async () => {
+    await setup((h) => h.recovered.set(true));
+    const button = screen.getByRole('button', { name: 'Continue' });
+    expect(button.getAttribute('aria-describedby')).toBe('ctl-main-menu-recovery ctl-main-menu-saves');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('shows no recovery notice normally', async () => {
+    await setup();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('emits each action from the keyboard', async () => {

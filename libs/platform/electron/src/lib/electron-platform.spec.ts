@@ -177,3 +177,12 @@ describe('ElectronSettingsService', () => {
     await expect(new ElectronPlatform(refusing).settings.save(defaultSettings())).rejects.toThrow('refused');
   });
 });
+
+describe('ElectronPlatform.recoveredFromCrash', () => {
+  it('is true only on the recovery URL main loads after a renderer crash', () => {
+    expect(new ElectronPlatform(bridge(), '?recovered=renderer-crash').recoveredFromCrash).toBe(true);
+    expect(new ElectronPlatform(bridge(), '').recoveredFromCrash).toBe(false);
+    expect(new ElectronPlatform(bridge(), '?recovered=yes').recoveredFromCrash).toBe(false);
+    expect(new ElectronPlatform(bridge()).recoveredFromCrash).toBe(false); // no `location` in Node: not recovered
+  });
+});
