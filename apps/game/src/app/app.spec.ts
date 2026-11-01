@@ -337,24 +337,45 @@ describe('App', () => {
       await fixture.whenStable();
     }
 
-    it('autosaves a changed game on the way to the menu, then saves it by name from the menu', async () => {
+    // Escape from the viewport, the player's way to the menu (the viewport consumes it only to cancel
+    // or deselect). These were one test; split, each stays well inside 5 s on a slow CI runner (ui caveats).
+    it('autosaves a changed game on the way to the menu, and not an untouched one', async () => {
       const { fixture, user } = await setup();
       const session = TestBed.inject(Session);
       await startPlaying(fixture, user);
-      const menuButton = screen.getByRole('button', { name: 'Menu' }); // the same element each time the toolbar shows
-      menuButton.focus();
+      const canvas = document.querySelector('ctl-viewport canvas');
+      expect(document.activeElement).toBe(canvas);
       await user.keyboard('{Escape}'); // an untouched new sandbox: no autosave
       await fixture.whenStable();
+      expect(screen.getByRole('navigation', { name: 'Controls' })).toBeTruthy();
       expect(io.calls).not.toContain('write');
       await user.keyboard('{Escape}'); // resume
       await fixture.whenStable();
+      expect(document.activeElement).toBe(canvas);
 
       session.exec('entity.place', PLACE);
-      menuButton.focus();
-      expect(document.activeElement).toBe(menuButton); // reused, not a stale node from before the menu
       await user.keyboard('{Escape}');
       await fixture.whenStable();
       await waitFor(() => expect(io.names()).toEqual(['Autosave 1']));
+      const saves = TestBed.inject(SaveGames);
+      expect(saves.saveName()).toBeNull(); // an autosave doesn't name the game
+
+      await user.keyboard('{Escape}'); // resume, then back with nothing changed since the autosave
+      await fixture.whenStable();
+      await user.keyboard('{Escape}');
+      await fixture.whenStable();
+      // Saves run one at a time, so this resolves after the menu's own autosave has decided.
+      await expect(saves.autosave()).resolves.toBe(false);
+      expect(io.names()).toEqual(['Autosave 1']);
+    });
+
+    it('saves a changed game by name from the menu', async () => {
+      const { fixture, user } = await setup();
+      const session = TestBed.inject(Session);
+      await startPlaying(fixture, user);
+      session.exec('entity.place', PLACE);
+      await user.keyboard('{Escape}'); // to the menu (autosaving on the way)
+      await fixture.whenStable();
 
       const saveButton = mainMenu().getByRole('button', { name: 'Save game' });
       await user.click(saveButton);
