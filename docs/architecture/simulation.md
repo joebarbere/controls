@@ -37,15 +37,16 @@ flowchart LR
 
 Each placed entity contributes a **fragment**: its sorted terminals, the groups of terminals it joins ideally, and its elements. A fragment comes from the model kind's `DeviceNetlistModel.topology({ params, state, sim })` in `DEVICE_NETLIST_MODELS`; a test checks every placed kind in `MODEL_KINDS` has one. The model says only what the netlist needs: which terminals are joined, which elements sit between which terminals, and when. Stamps and electrical behaviour belong to the device models of F2.4 and F2.5.
 
-| Model kind                | Topology                                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `battery`                 | One `vsource` element `cell`, `neg` → `pos`, a DC source                                                |
-| `lamp.incandescent`       | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank                   |
-| `resistor`, `heater`      | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                                      |
-| `switch.spst`             | Closed: an ideal join of `a` and `b`, no element. Open: nothing                                         |
-| `fuse`                    | Intact: one `resistor` element `link`, `a` → `b`. Blown (sim `blown`): nothing (F2.5)                   |
-| `breaker.thermalMagnetic` | Handle `on` and not `tripped`: one `resistor` element `pole`, `line` → `load`. Otherwise nothing (F2.5) |
-| `lead` (connection)       | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K)                |
+| Model kind                | Topology                                                                                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `battery`                 | One `vsource` element `cell`, `neg` → `pos`, a DC source                                                                                                                                             |
+| `lamp.incandescent`       | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank                                                                                                                |
+| `resistor`, `heater`      | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                                                                                                                                   |
+| `switch.spst`             | Closed: an ideal join of `a` and `b`, no element. Open: nothing                                                                                                                                      |
+| `fuse`                    | Intact: one `resistor` element `link`, `a` → `b`. Blown (sim `blown`): nothing (F2.5)                                                                                                                |
+| `breaker.thermalMagnetic` | Handle `on` and not `tripped`: one `resistor` element `pole`, `line` → `load`. Otherwise nothing (F2.5)                                                                                              |
+| `lead` (connection)       | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K)                                                                                                             |
+| `conductor` (connection)  | One `resistor` branch, `a` → `b`: `conductorResistanceOhm` over the cut length at T₀ (20 °C) plus each end's as-made contact resistance (ideal until F3.3); absent while an end is free (`unlanded`) |
 
 A model that changes topology on a sim-owned event lists those keys in `simTopologyKeys` (the fuse lists `blown`, the breaker `tripped`). It is shown only those keys, never the rest of the engine's state. The other P2 kinds list none. A protective device compiles to a branch while closed, never to an ideal join, because its current is what heats it.
 

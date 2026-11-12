@@ -154,7 +154,7 @@ export const TEST_DOCUMENTS: readonly unknown[] = [
 /** The built-in catalogue plus the synthetic entries. */
 export const TEST_CATALOG: Catalog = catalogOrThrow(
   BUILTIN_CATALOG.version,
-  [...BUILTIN_CATALOG.devices, ...TEST_DOCUMENTS],
+  { devices: [...BUILTIN_CATALOG.devices, ...TEST_DOCUMENTS], tables: BUILTIN_CATALOG.tables },
   TEST_MODEL_KINDS,
 );
 

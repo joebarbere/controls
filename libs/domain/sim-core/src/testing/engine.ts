@@ -343,7 +343,7 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
 /** The built-in catalogue, `bench.ts`'s test entries and the engine's. */
 export const ENGINE_TEST_CATALOG: Catalog = catalogOrThrow(
   BUILTIN_CATALOG.version,
-  [...BUILTIN_CATALOG.devices, ...TEST_DOCUMENTS, ...ENGINE_DOCUMENTS],
+  { devices: [...BUILTIN_CATALOG.devices, ...TEST_DOCUMENTS, ...ENGINE_DOCUMENTS], tables: BUILTIN_CATALOG.tables },
   ENGINE_MODEL_KINDS,
 );
 

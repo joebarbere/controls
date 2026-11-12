@@ -23,6 +23,8 @@ import { ENGINE_TEST_CATALOG, GENERATOR } from '../../testing/engine';
 import { MODEL_KINDS } from '@controls/catalog';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
+import { free, SPLIT_PHASE, THHN_14_SOLID, wireArgs, wiredBus } from '../../testing/wired';
+import { WIRING_TEST_CATALOG } from '@controls/world-model/testing';
 
 /**
  * Golden topology hashes of the bench lamp. They are persisted in every save's `WorldV2.sim` and in
@@ -33,7 +35,10 @@ import { BREAKER, FUSE_1A } from '../../testing/protection';
 const BENCH_LAMP_CLOSED_TOPOLOGY = '79811fe207820438f90b52e9eebe0ee9d98596c279976850c7835531a0a158e5';
 const BENCH_LAMP_OPEN_TOPOLOGY = '31b0bfb84ceceab420f34bd6f171ec539bea579edc8fef584210ecb295272fad';
 
-/** One golden per built-in netlist model kind (a lone device; for the lead, one between two lamps). */
+/**
+ * One golden per built-in netlist model kind (a lone device; for the lead, one between two lamps; for
+ * the conductor, one from the split-phase service's L1 to the breaker's line screw).
+ */
 const MODEL_KIND_TOPOLOGY = {
   battery: 'fc48b347b0a7328f4f20bd4a3db030c7cbefbdfb00b941d135c858618d66c9ae',
   lampIncandescent: '10e8b4bf4f56b063d68df2b6300d831d965740e0b1acdf41e1271e8ec4b545a4',
@@ -50,6 +55,7 @@ const MODEL_KIND_TOPOLOGY = {
   fuse: '9975e3f8e468d687727f59704b75a1cfa902b355e65d44854f60e0c817c28c50',
   breakerOff: '5b7e7d973bfcf376679cee1f29d5d298fc67ae0b5c0f5b3949f9d0df5ec5708e',
   breakerOn: 'ba3697d37256b7b5a65e4a8670c99ff69d36a30b6c3945d61c403707730efab7',
+  conductor: '6d6c6e344f3d62db57a9b512402123349f268ae2bf69fb99c42e908675d805ca',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -69,6 +75,7 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   fuse: 'fuse',
   breakerOff: 'breaker.thermalMagnetic',
   breakerOn: 'breaker.thermalMagnetic',
+  conductor: 'conductor',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -203,6 +210,19 @@ describe('topologyHash', () => {
         run(bus, 'entity.place', { ref: BREAKER, positionMm: origin });
         run(bus, 'device.operate', { id: 1, control: 'on', value: true });
         return compileNetlist(bus.state, BUILTIN_CATALOG).topologyHash;
+      })(),
+      // F3.1: one 2 m 14 AWG THHN conductor from the split-phase service's L1 to the breaker's line
+      // screw (landed with wire.add over the wiring test catalogue, which has the cutter).
+      conductor: (() => {
+        const bus = wiredBus();
+        run(bus, 'entity.place', { ref: SPLIT_PHASE, positionMm: origin });
+        run(bus, 'entity.place', { ref: BREAKER, positionMm: { x: 1050, y: 300, z: 100 } });
+        run(
+          bus,
+          'wire.add',
+          wireArgs(THHN_14_SOLID, [1, 'l1'], [2, 'line'], [free(50, 500, 300), free(1070, 500, 300)], 2000),
+        );
+        return compileNetlist(bus.state, WIRING_TEST_CATALOG).topologyHash;
       })(),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });

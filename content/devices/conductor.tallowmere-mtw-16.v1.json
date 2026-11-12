@@ -1,0 +1,103 @@
+{
+  "id": "conductor.tallowmere-mtw-16",
+  "version": 1,
+  "title": "16 AWG stranded copper MTW machine tool wire",
+  "brand": "Tallowmere",
+  "modelName": "TM-MTW-16",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 16,
+    "stranding": "stranded",
+    "strandCount": 26,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "mtw"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      },
+      {
+        "base": "blue",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "orange",
+        "stripe": null
+      },
+      {
+        "base": "yellow",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": "yellow"
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "mtw-construction",
+      "kind": "real-world",
+      "citation": "Typical published construction of 16 AWG Type MTW machine tool wire (a US maker's public MTW/TEW specification sheet, read; no ampacity column; listed to UL 1063, cited by number): flexible stranded bare copper, 26 strands, under a single 30 mil (0.762 mm) PVC wall. The single-layer construction is the pinned insulation row mtw (90 °C dry, 60 °C wet). Paraphrased; no table copied.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.insulation",
+        "conductor.strandCount",
+        "conductor.insulationThicknessMm"
+      ]
+    },
+    {
+      "id": "mtw-colours",
+      "kind": "game-design",
+      "citation": "game-design: a control-panel palette (black, red, blue, white, orange, yellow, green, and green with a yellow tracer). Makers offer about a dozen MTW colours without the sheets read naming them.",
+      "covers": ["conductor.colours"]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as public THHN/THWN-2 and MTW sheets state for the conductor (concentric-stranded per ASTM B8; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

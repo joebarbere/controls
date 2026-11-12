@@ -49,7 +49,7 @@ describe('nominal bands', () => {
     // Every catalogue entry (built-in and test) that compiles to a source element, placed alone.
     const kinds = new Set<string>();
     for (const device of [...BUILTIN_CATALOG.devices, ...engineTestOptions().catalog.devices]) {
-      if (device.category === 'lead') continue;
+      if (device.category === 'lead' || device.category === 'conductor') continue;
       const netlist = engineAfter([place({ id: device.id, version: device.version })]).netlist;
       for (const branch of netlist.branches) if (branch.source !== null) kinds.add(branch.model);
     }

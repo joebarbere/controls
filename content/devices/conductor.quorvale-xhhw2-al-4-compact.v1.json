@@ -1,0 +1,70 @@
+{
+  "id": "conductor.quorvale-xhhw2-al-4-compact",
+  "version": 1,
+  "title": "4 AWG compact-stranded aluminium XHHW-2 building wire",
+  "brand": "Quorvale",
+  "modelName": "QV-XA-4",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 4,
+    "stranding": "stranded",
+    "strandCount": 7,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "aluminiumAa8000"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "xhhw2"
+    },
+    "insulationThicknessMm": 1.14,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "xhhw2-al-construction",
+      "kind": "real-world",
+      "citation": "Typical published construction of 4 AWG aluminium XHHW-2 (a cable maker's public AA-8000 XHHW-2 datasheet, read; no ampacity column; listed to UL 44, cited by number): compact-stranded Class B AA-8000-series aluminium alloy, 7 strands, under a single cross-linked polyethylene (XLPE) wall of 1.14 mm, made in black. Rated 90 °C wet or dry: the pinned insulation row xhhw2. Aluminium building wire starts at 12 AWG (NFPA 70-2023 Art. 310.3(A), by number). Paraphrased; no table copied.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "aluminium-conductor",
+      "kind": "real-world",
+      "citation": "AA-8000-series aluminium alloy (ASTM B800, cited by number, paywalled, not read) at an assumed minimum 61.0 % IACS: the pinned materials row aluminiumAa8000 (NBS Handbook 109). Not 'EC-grade'. The area comes from the AWG definition (AWG_GAUGES) for compact strands too.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

@@ -180,6 +180,12 @@ export const ConductorSpec = z
     insulation: TableRef.nullable(),
     /** Insulation wall thickness (mm), product data per entry; `null` for a bare conductor. */
     insulationThicknessMm: FiniteNumber.positive().nullable(),
+    /**
+     * Wall thickness of the outer jacket layer over the insulation (mm, the nylon on THHN), product
+     * data per entry; `null` exactly when the pinned insulation row has no jacket layer (or the
+     * conductor is bare). The thermal model's second cylinder (ADR 0018 §3.2).
+     */
+    jacketThicknessMm: FiniteNumber.positive().nullable(),
     /** The colours it is made in (`unavailable-colour` for others); a bare conductor is exactly `bare`. */
     colours: z.array(ConductorColour).min(1).max(32),
   })
@@ -188,6 +194,9 @@ export const ConductorSpec = z
   })
   .refine((c) => (c.insulation === null) === (c.insulationThicknessMm === null), {
     message: 'insulationThicknessMm is null exactly when the conductor is bare',
+  })
+  .refine((c) => c.insulation !== null || c.jacketThicknessMm === null, {
+    message: 'a bare conductor has no jacket layer: jacketThicknessMm must be null',
   });
 export type ConductorSpec = z.infer<typeof ConductorSpec>;
 

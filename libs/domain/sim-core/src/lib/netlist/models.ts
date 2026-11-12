@@ -1,5 +1,5 @@
-import type { BatteryParams, LampIncandescentParams, LeadParams } from '@controls/catalog';
-import { leadResistanceOhm } from '@controls/catalog';
+import type { BatteryParams, Catalog, DeviceDefinition, LampIncandescentParams, LeadParams } from '@controls/catalog';
+import { conductorPhysics, conductorResistanceOhm, leadResistanceOhm } from '@controls/catalog';
 import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
 import {
   benchSupplyNetlistModel,
@@ -65,11 +65,26 @@ export interface DeviceNetlistModel {
   topology(input: DeviceTopologyInput): DeviceTopology;
 }
 
-/** The netlist model of a connection kind (a test lead; wires from P3): one element, `a` to `b`. */
+/** What a connection's netlist model reads (ADR 0015, ADR 0018 §1): static data only. */
+export interface ConnectionElementInput {
+  /** The catalogue entry's `model.params`, already validated against the kind's schema. */
+  readonly params: Readonly<Record<string, number>>;
+  /** The catalogue entry (a conductor's `conductor` block). */
+  readonly device: DeviceDefinition;
+  /** The catalogue, for the entry's pinned table rows. */
+  readonly catalog: Catalog;
+  /** The connection's cut length (integer mm, `ConnectionV3.lengthMm`), or `null` for a lead. */
+  readonly lengthMm: number | null;
+}
+
+/** The netlist model of a connection kind (a test lead, a conductor): one element, `a` to `b`. */
 export interface ConnectionNetlistModel {
   readonly kind: string;
-  /** Pure, from the catalogue entry's params. Exactly one branch per connection (ADR 0011 §7). */
-  element(params: Readonly<Record<string, number>>): {
+  /**
+   * Pure, from the entry and the connection's static data. Exactly one branch per connection
+   * (ADR 0011 §7). The compiler calls it again whenever the connection object changes.
+   */
+  element(input: ConnectionElementInput): {
     readonly kind: ElementKind;
     readonly values: Readonly<Record<string, number>>;
   };
@@ -150,10 +165,46 @@ const switchSpst: DeviceNetlistModel = {
  */
 const lead: ConnectionNetlistModel = {
   kind: 'lead',
-  element: (params) => ({
+  element: ({ params }) => ({
     kind: 'resistor',
     values: { resistanceOhm: leadResistanceOhm(params as LeadParams, LEAD_CONDUCTOR_TEMPERATURE_K.value) },
   }),
+};
+
+/**
+ * A conductor (F3.1, ADR 0018 §1): one resistor branch whose static value is the conductor's
+ * resistance at its material's reference temperature T₀ (`conductorResistanceOhm` over the cut length)
+ * plus each end's as-made contact resistance. Values:
+ *
+ * - `conductorOhm`: R_cond(T₀) = ρ₀ · k_lay · L / A;
+ * - `endAContactOhm`, `endBContactOhm`: each end's as-made contact resistance. **0 (ideal) until F3.3
+ *   part 1**, which adds the method spec's `contactOhm` and the termination-quality model (ADR 0018 §4);
+ * - `resistanceOhm`: their sum, the value the DC and AC solvers stamp. From F3.6 the connection bank
+ *   stamps the solve-time value instead (R(T), degradation, the end regimes).
+ *
+ * No thermal state yet (F3.6): a conductor sits at T₀ = 20 °C, the game's ambient. A conductor with a
+ * free end never reaches here (the compiler leaves it out, `unlanded`).
+ */
+const conductor: ConnectionNetlistModel = {
+  kind: 'conductor',
+  element: ({ device, catalog, lengthMm }) => {
+    const physics = conductorPhysics(catalog, device);
+    if (physics === undefined || lengthMm === null) {
+      throw new Error(`conductor model: ${device.id}@${device.version} needs conductor data and a cut length`);
+    }
+    const conductorOhm = conductorResistanceOhm(physics, lengthMm, physics.referenceTemperatureK);
+    const endAContactOhm = 0;
+    const endBContactOhm = 0;
+    return {
+      kind: 'resistor',
+      values: {
+        conductorOhm,
+        endAContactOhm,
+        endBContactOhm,
+        resistanceOhm: conductorOhm + endAContactOhm + endBContactOhm,
+      },
+    };
+  },
 };
 
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
@@ -173,7 +224,10 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
 });
 
 /** The connection netlist models, by model kind. A test checks every connection kind in `MODEL_KINDS` has one. */
-export const CONNECTION_NETLIST_MODELS: Readonly<Record<string, ConnectionNetlistModel>> = Object.freeze({ lead });
+export const CONNECTION_NETLIST_MODELS: Readonly<Record<string, ConnectionNetlistModel>> = Object.freeze({
+  conductor,
+  lead,
+});
 
 /** The models a compiler uses: the built-in ones by default, synthetic ones in tests. */
 export interface NetlistModels {

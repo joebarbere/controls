@@ -411,7 +411,12 @@ export class NetlistCompiler {
     else if (!model) result = { ok: false, reason: 'no-model' };
     else {
       const device = this.catalog.device(connection.ref) as NonNullable<ReturnType<Catalog['device']>>;
-      const element = model.element(device.model.params);
+      const element = model.element({
+        params: device.model.params,
+        device,
+        catalog: this.catalog,
+        lengthMm: connection.lengthMm,
+      });
       result = {
         ok: true,
         model: kind.kind,

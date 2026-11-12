@@ -1,0 +1,111 @@
+{
+  "id": "conductor.tallowmere-thhn-8-stranded",
+  "version": 1,
+  "title": "8 AWG stranded copper THHN/THWN-2 building wire",
+  "brand": "Tallowmere",
+  "modelName": "TM-THHN-8X",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 8,
+    "stranding": "stranded",
+    "strandCount": 19,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": 0.127,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      },
+      {
+        "base": "blue",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": null
+      },
+      {
+        "base": "yellow",
+        "stripe": null
+      },
+      {
+        "base": "orange",
+        "stripe": null
+      },
+      {
+        "base": "brown",
+        "stripe": null
+      },
+      {
+        "base": "grey",
+        "stripe": null
+      },
+      {
+        "base": "purple",
+        "stripe": null
+      },
+      {
+        "base": "pink",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "thhn-construction",
+      "kind": "real-world",
+      "citation": "Typical published construction of 8 AWG THHN/THWN-2 (a US maker's public specification sheet, revised 02/2026, read; it carries no ampacity column; listed to UL 83, cited by number): made 19-strand from 8 AWG to 4/0; this size has a 30 mil PVC wall (0.762 mm) under a 5 mil nylon covering (0.127 mm), rounded from mils; colour-coded black, white, red, blue, green, yellow, orange, brown, grey, purple and pink (the sheet's tan has no colour id), most colours on all sizes. Rated 90 °C dry (THHN) and wet (THWN-2): the pinned insulation row thhnThwn2. Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as public THHN/THWN-2 and MTW sheets state for the conductor (concentric-stranded per ASTM B8; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

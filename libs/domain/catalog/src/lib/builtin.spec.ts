@@ -20,6 +20,8 @@ const read = (dir: string) => {
 };
 const devices = read('devices');
 const tables = read('tables');
+/** The P2 entries (catalogue 1's, version 1 in catalogue 2); F3.1's conductors are checked in conductors.spec.ts. */
+const p2Devices = BUILTIN_CATALOG.devices.filter((d) => d.model.kind !== 'conductor');
 
 describe('the built-in catalogue (content/devices, content/tables)', () => {
   it('is catalogue version 2 and every file is a valid entry or table', () => {
@@ -91,12 +93,15 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
       for (const m of d.mounts) expect(m.widthMm).toBeLessThanOrEqual(d.sizeMm?.widthMm ?? 0);
   });
 
-  it('no P2 entry is an enclosure or a conductor', () => {
-    expect(BUILTIN_CATALOG.devices.filter((d) => d.enclosure !== null || d.conductor !== null)).toStrictEqual([]);
+  it('no entry is an enclosure yet; only the conductor kind’s entries carry conductor data', () => {
+    expect(BUILTIN_CATALOG.devices.filter((d) => d.enclosure !== null)).toStrictEqual([]);
+    expect(
+      BUILTIN_CATALOG.devices.filter((d) => (d.conductor !== null) !== (d.model.kind === 'conductor')),
+    ).toStrictEqual([]);
   });
 
   it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection and one test lead (plan P2)', () => {
-    expect(BUILTIN_CATALOG.devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
+    expect(p2Devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
       ['battery.ferrovane-12v-7ah', 'battery'],
       ['breaker.saltmere-1p-15a', 'breaker.thermalMagnetic'],
       ['fuse.emberlyn-5x20-fa-1a', 'fuse'],
@@ -114,7 +119,7 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
   });
 
   it('uses fictional brands only (realism charter), one per maker (the utility serves three services)', () => {
-    const brands = BUILTIN_CATALOG.devices.map((d) => d.brand);
+    const brands = p2Devices.map((d) => d.brand);
     expect(brands).toStrictEqual([
       'Ferrovane',
       'Saltmere',

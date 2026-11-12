@@ -166,10 +166,11 @@ export type AcDefaultValue = (branch: NetlistBranch, values: AcBranchValues) => 
 /**
  * Defaults by model kind, for branches no hook sets: a `lead`'s `resistanceOhm` (resistivity × length
  * ÷ area, F2.1), its resistance at 60 Hz too (P2's leads are short enough that their inductance and
- * skin effect are ignored, as in DC). Sources and loads come from their device models' hooks (F2.4,
+ * skin effect are ignored, as in DC), and a `conductor`'s (F3.1; purely resistive on AC, ADR 0015). Sources and loads come from their device models' hooks (F2.4,
  * F2.5).
  */
 export const AC_DEFAULT_VALUES: Readonly<Record<string, AcDefaultValue>> = Object.freeze({
+  conductor: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   lead: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   resistor: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   heater: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),

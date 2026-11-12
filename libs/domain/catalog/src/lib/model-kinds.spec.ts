@@ -13,10 +13,11 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, keyed by their own name', () => {
+  it('lists the P2 kinds and F3.1’s conductor, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.thermalMagnetic',
+      'conductor',
       'fuse',
       'generator.portable',
       'heater',
@@ -50,6 +51,19 @@ describe('MODEL_KINDS', () => {
       fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       heater: {},
+      // F3.1: the conductor kind shares the lead's ten connection sim keys (ADR 0015, ADR 0016).
+      conductor: {
+        conductorTempK: 'sim number null',
+        endADegradation: 'sim number 1',
+        endAState: 'sim enum ok',
+        endATempK: 'sim number null',
+        endATerminationId: 'sim number null',
+        endBDegradation: 'sim number 1',
+        endBState: 'sim enum ok',
+        endBTempK: 'sim number null',
+        endBTerminationId: 'sim number null',
+        insulationDamaged: 'sim boolean false',
+      },
       'lamp.incandescent': { filamentTempK: 'sim number null' },
       // ADR 0015: the connection sim keys (world v3's ConnectionV3.sim), provisional until v0.4.0.
       lead: {
@@ -130,6 +144,21 @@ describe('MODEL_KINDS', () => {
       const [a, b] = [lead.keys[`endA${name}`], lead.keys[`endB${name}`]];
       expect([b.owner, b.type, b.initial, b.values]).toStrictEqual([a.owner, a.type, a.initial, a.values]);
     }
+  });
+
+  it('the conductor kind (F3.1) is a conductor connection kind on the same ten keys; its only param is the lay factor', () => {
+    const conductor = MODEL_KINDS['conductor'];
+    expect([conductor.placement, conductor.requires, conductor.terminals]).toStrictEqual([
+      'connection',
+      'conductor',
+      [],
+    ]);
+    expect(conductor.keys).toBe(CONNECTION_SIM_KEYS);
+    expect(conductor.params.safeParse({ layFactor: 1 }).success).toBe(true);
+    expect(conductor.params.safeParse({ layFactor: 1.02 }).success).toBe(true);
+    expect(conductor.params.safeParse({ layFactor: 0.99 }).success).toBe(false);
+    expect(conductor.params.safeParse({ layFactor: 1.2 }).success).toBe(false);
+    expect(conductor.params.safeParse({ layFactor: 1, resistivityOhmM: 1.7e-8 }).success).toBe(false);
   });
 
   it('modelKind looks up own kinds only', () => {

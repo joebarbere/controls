@@ -65,6 +65,7 @@ function conductor(id: string, overrides: Record<string, unknown> = {}): Record<
       material: copper,
       insulation: thhn,
       insulationThicknessMm: 0.4,
+      jacketThicknessMm: 0.1,
       colours: [
         { base: 'black', stripe: null },
         { base: 'white', stripe: null },
@@ -88,6 +89,7 @@ function bareConductor(): Record<string, unknown> {
       material: copper,
       insulation: null,
       insulationThicknessMm: null,
+      jacketThicknessMm: null,
       colours: [{ base: 'bare', stripe: null }],
     },
   });
@@ -333,6 +335,33 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(
       messages({ devices: [conductor('conductor.test-14', { conductor: null }), bareConductor(), box()] }).join(),
     ).toContain('Conductor data goes with conductor kinds');
+  });
+
+  it('conductor layers (F3.1): a jacket thickness exactly with a jacket layer, an outer radius at most 8 × the metal’s', () => {
+    const noJacket = conductor('conductor.test-14');
+    (noJacket['conductor'] as Record<string, unknown>)['jacketThicknessMm'] = null;
+    expect(messages({ devices: [noJacket, bareConductor(), box()] }).join()).toContain(
+      'thhnThwn2 has a jacket layer: give its thickness',
+    );
+    const mtwJacket = conductor('conductor.test-14');
+    (mtwJacket['conductor'] as Record<string, unknown>)['insulation'] = { ...thhn, key: 'mtw' };
+    expect(messages({ devices: [mtwJacket, bareConductor(), box()] }).join()).toContain(
+      'mtw is a single layer: jacketThicknessMm must be null',
+    );
+    const bareJacket = bareConductor();
+    (bareJacket['conductor'] as Record<string, unknown>)['jacketThicknessMm'] = 0.1;
+    expect(messages({ devices: [conductor('conductor.test-14'), bareJacket, box()] }).join()).toContain(
+      'a bare conductor has no jacket layer',
+    );
+    // 14 AWG: r₀ = 1.62773 / 2 = 0.813865 mm; 8 r₀ = 6.51092 mm, so a 5.7 mm wall (+ 0.1 mm jacket) is over.
+    const thick = conductor('conductor.test-14');
+    (thick['conductor'] as Record<string, unknown>)['insulationThicknessMm'] = 5.7;
+    expect(messages({ devices: [thick, bareConductor(), box()] }).join()).toContain(
+      "The insulation's outer radius is above 8× the conductor's",
+    );
+    const justInside = conductor('conductor.test-14');
+    (justInside['conductor'] as Record<string, unknown>)['insulationThicknessMm'] = 5.5;
+    expect(messages({ devices: [justInside, bareConductor(), box()] })).toStrictEqual([]);
   });
 
   it('enclosure data: registered mount and entry types, at most 32 entries, unique ids, a perpendicular frame', () => {

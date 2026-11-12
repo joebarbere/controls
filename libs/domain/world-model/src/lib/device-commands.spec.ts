@@ -150,7 +150,11 @@ describe('device.operate', () => {
       sources: [{ id: 's', kind: 'game-design', citation: 'test', covers: ['sizeMm', 'terminals'] }],
       extensions: {},
     };
-    const catalog = catalogOrThrow(1, [...BUILTIN_CATALOG.devices, supply], kinds);
+    const catalog = catalogOrThrow(
+      1,
+      { devices: [...BUILTIN_CATALOG.devices, supply], tables: BUILTIN_CATALOG.tables },
+      kinds,
+    );
     const bus = createWorldBus(createWorldWithSeed(), createWorldRegistry({ catalog }));
     bus.exec('entity.place', { ref: { id: 'supply.test-bench', version: 1 }, positionMm: origin });
     expect(bus.state.entities[0].state).toStrictEqual({ handle: 'off', setpointV: 0 });

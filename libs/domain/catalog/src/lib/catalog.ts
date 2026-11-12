@@ -2,12 +2,14 @@ import { type CatalogRef, type DeviceStateValue, summariseIssues, type Validatio
 import type * as z from 'zod';
 import {
   type ConductorColour,
+  type ConductorSpec,
   type DeviceControl,
   DeviceDefinition,
   type EnclosureSpec,
   type TerminalMethodSpec,
 } from './device';
 import { AccessoryDefinition, CableDefinition, ToolDefinition } from './families';
+import { gaugeRow } from './gauge';
 import { type ModelKindDef, MODEL_KINDS, type StateKeyDef } from './model-kinds';
 import {
   ACCESSORY_PREFIX,
@@ -92,6 +94,12 @@ const byIdThenVersion = (a: { id: string; version: number }, b: { id: string; ve
   a.id < b.id ? -1 : a.id > b.id ? 1 : a.version - b.version;
 
 type Add = (path: string, message: string) => void;
+
+/**
+ * The largest outer-insulation radius over conductor radius a conductor entry may have (ADR 0018
+ * §3.2, numerical): the engine's `lnRatio` is pinned against `Math.log` up to 8.
+ */
+export const MAX_INSULATION_RADIUS_RATIO = 8;
 
 /** The fields of a termination method spec that need a source (`terminals.<id>.methods.<method>.<field>`). */
 const METHOD_SOURCED_FIELDS = [
@@ -440,6 +448,7 @@ function checkConductor(device: DeviceDefinition, kind: ModelKindDef, context: C
   if (conductor === null) return;
   checkRow(conductor.material, 'materials', 'conductor.material', context, add);
   if (conductor.insulation !== null) checkRow(conductor.insulation, 'insulation', 'conductor.insulation', context, add);
+  checkConductorLayers(conductor, context, add);
   const seen = new Set<string>();
   conductor.colours.forEach((colour, index) => {
     const path = `conductor.colours[${index}]`;
@@ -452,6 +461,36 @@ function checkConductor(device: DeviceDefinition, kind: ModelKindDef, context: C
   });
   if (conductor.insulation === null && !conductor.colours.every((c) => c.base === 'bare' && c.stripe === null)) {
     add('conductor.colours', 'An uninsulated conductor is made in "bare" only');
+  }
+}
+
+/**
+ * The insulation layers the thermal model reads (ADR 0018 §3.2): a jacket thickness exactly when the
+ * pinned insulation row has a jacket layer, and an outer radius at most {@link MAX_INSULATION_RADIUS_RATIO}
+ * times the conductor's (the range where the engine's `lnRatio` is pinned).
+ */
+function checkConductorLayers(conductor: ConductorSpec, context: Context, add: Add): void {
+  const row = conductor.insulation === null ? undefined : context.resolveRow(conductor.insulation);
+  if (row !== undefined && conductor.insulation?.table === 'insulation') {
+    const jacketLayer = row['jacketThermalConductivityWPerMK'] !== null;
+    if (jacketLayer !== (conductor.jacketThicknessMm !== null)) {
+      add(
+        'conductor.jacketThicknessMm',
+        jacketLayer
+          ? `${conductor.insulation.key} has a jacket layer: give its thickness`
+          : `${conductor.insulation.key} is a single layer: jacketThicknessMm must be null`,
+      );
+    }
+  }
+  const gauge = gaugeRow(conductor.awg);
+  if (gauge === undefined) return;
+  const r0 = gauge.diameterMm / 2;
+  const outer = r0 + (conductor.insulationThicknessMm ?? 0) + (conductor.jacketThicknessMm ?? 0);
+  if (outer > MAX_INSULATION_RADIUS_RATIO * r0) {
+    add(
+      'conductor.insulationThicknessMm',
+      `The insulation's outer radius is above ${MAX_INSULATION_RADIUS_RATIO}× the conductor's`,
+    );
   }
 }
 
@@ -516,6 +555,7 @@ export function requiredDevicePaths(device: DeviceDefinition): string[] {
       'conductor.colours',
     );
     if (conductor.insulationThicknessMm !== null) required.push('conductor.insulationThicknessMm');
+    if (conductor.jacketThicknessMm !== null) required.push('conductor.jacketThicknessMm');
   }
   return required;
 }
