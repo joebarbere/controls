@@ -31,7 +31,7 @@ Typed public API · unit tests (plus property/oracle tests for solver code) · a
 
 ```bash
 corepack enable && pnpm install   # Node 24 (.nvmrc), pnpm 11 (packageManager)
-pnpm verify            # == CI: prettier --check, nx lint/typecheck/test/build/bench (all), check-version-sync
+pnpm verify            # == CI: prettier --check, nx lint/typecheck/test/build/bench (all), check-version-sync, release-notes test
 pnpm format            # prettier --write (fixes verify format failures)
 pnpm start             # build game + desktop, launch Electron
 pnpm start:web         # browser dev harness (nx serve game)

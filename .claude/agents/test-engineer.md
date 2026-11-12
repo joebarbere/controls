@@ -8,7 +8,7 @@ You own test strategy and test infrastructure for Controls (plan §8). Your job 
 
 ## Invariants
 
-- **`pnpm verify` is exactly CI** (`prettier --check`, lint, typecheck, test, build, `check-version-sync`). Any new CI gate goes into `verify` in the same PR. No CI-only checks.
+- **`pnpm verify` is exactly CI** (`prettier --check`, lint, typecheck, test, build, bench, `check-version-sync`, the `tools/release-notes` test). Any new CI gate goes into `verify` in the same PR. No CI-only checks.
 - **No flaky tolerance.** A flaky test is a broken contract or a broken test. Diagnose it; never `.skip`, retry-until-green or loosen a timeout to make CI pass.
 - **No sleeps.** Use Playwright auto-waiting and `expect.poll`; in Vitest use fake timers or explicit signals.
 - **Determinism is testable:** sim and renderer tests use a fixed seed (and fixed DPR and render backend for visual tests). From P2, "same seed + same command log → byte-identical snapshot hash" is a merge-blocking test.

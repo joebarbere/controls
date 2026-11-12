@@ -9,6 +9,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - **A smaller game download** (P2 follow-up). The game's initial bundle is 1.88 MB instead of 2.24 MB (brotli 441 kB instead of 491 kB), back under its 2 MB budget, and the sim worker is 307 kB instead of 664 kB (brotli 82 kB instead of 134 kB). Every file now imports zod as a namespace (`import * as z from 'zod'`): the named `z` export defeated esbuild's tree-shaking and bundled all of zod, every locale included. A lint rule rejects the named and default zod imports everywhere, with probes in `apps/sim-cli/src/lint-determinism.spec.ts`. No behaviour change.
+- **Release notes on the draft are now filled in automatically** (P2 release follow-up; [releasing guide](docs/guides/releasing.md)). A new `draft` job in `release.yml` creates the draft GitHub Release before any installer is uploaded. Its notes are the version's `CHANGELOG.md` section, and its title is `vX.Y.Z — Phase N: Name` for a phase release or `vX.Y.Z` for a patch. Before this, the draft had an empty body and the bare version as its title, and both were filled in by hand (v0.1.0–v0.3.0). It also stops the three packaging jobs from racing to create the release, which could make duplicate drafts. A CI rehearsal shows the notes in the job summary and creates nothing.
+- Developer (release notes): `tools/release-notes.mjs` (dependency-free: the section without its heading or link-reference lines, repo-relative links made absolute at the tag, `--title`, fails on a missing or empty section or one over GitHub's 125,000-character limit) and `tools/release-notes.test.mjs`. `pnpm verify` now ends with `node --test tools/release-notes.test.mjs`.
+
+### Documentation
+
+- Release caveats from packaging v0.3.0:
+  - `asar extract-file` writes into the current directory (it overwrote the root `package.json`), so extract into a scratch directory.
+  - A failed deb build leaves `resources/package-type` set to `deb` in `linux-unpacked`, so delete `dist/release` before packaging again.
+  - Fedora hosts need `libxcrypt-compat` and `rpm-build` for local deb and rpm builds.
+  - The main agent, not `release-engineer`, pushes `main` and the tag after the user's explicit yes. The `/release` skill and the releasing guide now describe that flow.
+- Electron caveats: the unnamed fuse that `@electron/fuses` 1.8.0 (bundled with electron-builder 26) reports as `undefined is Enabled` is Electron 45's **WasmTrapHandlers**. It stays at its default, on: turning it off only adds WebAssembly bounds checks and isn't a hardening measure. Read the Fuses with `pnpm dlx @electron/fuses@2.1.3 read`, which names all nine. No dependency changed: electron-builder 26 can't set this fuse, so it waits for electron-builder 27.
 
 ## [0.3.0] - 2026-11-11
 
