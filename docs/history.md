@@ -54,7 +54,7 @@ The roadmap is defined in [`controls-development-plan.md`](../controls-developme
 
 ## Phase 2: Circuit engine and power sources
 
-**Kickoff 2026-10-29, completed 2026-10-31; the manual WebGPU and overlay frame-time checks passed 2026-11-11; released as v0.3.0 on 2026-11-11 (draft release).** Plan: [`plans/phase-2-circuit-engine.md`](../plans/phase-2-circuit-engine.md).
+**Kickoff 2026-10-29, completed 2026-10-31; the manual WebGPU and overlay frame-time checks passed 2026-11-11; released as v0.3.0 on 2026-11-11 ([published](https://github.com/joebarbere/controls/releases/tag/v0.3.0)).** Plan: [`plans/phase-2-circuit-engine.md`](../plans/phase-2-circuit-engine.md).
 
 - **Kickoff** created `sim-engine-engineer` and the read-only `electrical-realism-reviewer`, amended the spec to v1.3 (commands reach the worker by `postMessage`; the ngspice oracle is a checked-in corpus) and settled decisions D1–D8: the main thread owns the world and the clock and the worker follows deterministically, commands record intent and the sim resolves their effect, a minimal device catalogue now, cross-runtime float determinism by IEEE-exact operations plus `dmath` (ADR 0014, still deferred: no model has needed a transcendental), and narrow engine/catalogue compatibility on load. The agent team (sim, renderer, UI, Electron, save format) agreed the worker contract first ([ADR 0011](decisions/0011-sim-worker-contract.md)). World document v2 (`schemaVersion` 2, [ADR 0013](decisions/0013-world-document-v2.md)) and catalogue v1 landed before any solver read a connection.
 - **Delivered:** the netlist compiler from the as-built world (test leads; incremental, `topologyHash`-keyed); DC MNA with dense and sparse (Gilbert–Peierls, AMD) LU and a factorisation cache, and interleaved complex phasor MNA at 60 Hz; the 1 kHz engine loop with its discrete, continuous and protection layers; the sim worker with a seqlock `SharedArrayBuffer` snapshot and a `postMessage` fallback, time control (pause, 1×, 10×, 60×, step) and the crash/watchdog model; sources (a lead-acid battery with state of charge, a CV/CC bench supply, a hiccuping DIN-rail PSU, split-phase and three-phase utility services behind transformer impedance, a generator stub), loads (a tungsten-filament lamp, a resistor, a heater), an SPST switch, a two-body cartridge fuse and a thermal-magnetic breaker, every value with a `source`; voltage and current overlays on nominal bands, `netlist.dump`, and the netlist inspector with a live current trace.
@@ -72,7 +72,7 @@ The roadmap is defined in [`controls-development-plan.md`](../controls-developme
 | ------- | ---------- | ----- | ------------------------------------------------- |
 | 0.1.0   | 2026-10-26 | P0    | Walking skeleton (published 2026-10-29)           |
 | 0.2.0   | 2026-10-29 | P1    | Game shell: sandbox, commands, cameras, save/load |
-| 0.3.0   | 2026-11-11 | P2    | Circuit engine and power sources (draft release)  |
+| 0.3.0   | 2026-11-11 | P2    | Circuit engine and power sources                  |
 
 ### Save format (`schemaVersion`)
 

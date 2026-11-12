@@ -1,6 +1,6 @@
 # Phase 2: Circuit engine and power sources ("First light")
 
-**Release:** v0.3.0 · **Status:** ✅ Complete pending the manual WebGPU check (kickoff 2026-10-29, kickoff done 2026-10-30, features and acceptance 2026-10-31) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
+**Release:** v0.3.0 · **Status:** ✅ Shipped as v0.3.0, published 2026-11-11 (kickoff 2026-10-29, kickoff done 2026-10-30, features and acceptance 2026-10-31, manual checks and lamp-cooling fix 2026-11-11) · **Spec:** [plan §6 P2](../controls-development-plan.md#p2--circuit-engine-and-power-sources-v030)
 
 ## Goal
 
@@ -797,7 +797,7 @@ Numbers are assigned in the order the ADRs land.
 
 ## Close-out
 
-1. [ ] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P2 narrative, `schemaVersion` 2 and `catalogVersion` 1.
+1. [x] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P2 narrative, `schemaVersion` 2 and `catalogVersion` 1.
 2. [x] `version-keeper`: `0.2.0 → 0.3.0`.
-3. [ ] `release-engineer`: package, smoke test (new sandbox, the bench demo lights the lamp, save and load mid-sim), tag on confirmation, check the draft. The user publishes.
-4. [ ] Mark P2 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P3 kickoff writes `plans/phase-3-*.md` and creates `content-designer`. P3 must keep test leads working alongside `wire.*` (world v3).
+3. [x] `release-engineer`: package, smoke test (new sandbox, the bench demo lights the lamp, save and load mid-sim), tag on confirmation, check the draft. The user publishes. _Done 2026-11-11: AppImage and desktop-e2e against the packaged app on Linux (17 pass, 11 dev-only skips), Fuses checked, save and load mid-sim checked with a scratch spec (to be made permanent); `release.yml` green on all three OSes, 12 assets, `latest*.yml` checked; the user published [v0.3.0](https://github.com/joebarbere/controls/releases/tag/v0.3.0)._
+4. [x] Mark P2 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P3 kickoff writes `plans/phase-3-*.md` and creates `content-designer`. P3 must keep test leads working alongside `wire.*` (world v3).
