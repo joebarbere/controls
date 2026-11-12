@@ -47,6 +47,14 @@
   pointer-events: none;
 }
 
+.overlay-bottom {
+  position: absolute;
+  bottom: var(--ctl-space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .v-split {
   grid-area: vsplit;
 }

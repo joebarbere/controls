@@ -75,19 +75,22 @@ Never store a diameter, an area, a resistance or an ampacity: they are derived (
 
 Fictional, one per maker. Add new ones here in the PR that uses them.
 
-| Brand          | Makes                                            |
-| -------------- | ------------------------------------------------ |
-| Brindlecore    | Bench DC supply                                  |
-| Emberlyn       | Cartridge fuse                                   |
-| Ferrovane      | Sealed lead-acid battery                         |
-| Hearthvale     | Heater element                                   |
-| Larkmoor Power | Utility services (one brand for the utility)     |
-| Lumivane       | Incandescent lamps                               |
-| Orrinwood      | Power resistor                                   |
-| Quillfern      | Test leads                                       |
-| Quorvale       | Aluminium building wire (XHHW-2)                 |
-| Railwick       | DIN-rail power supply                            |
-| Saltmere       | Circuit breaker                                  |
-| Tallowmere     | Copper building wire (THHN/THWN-2) and MTW       |
-| Tessaline      | Toggle switch                                    |
-| Testbrand      | Test-only fixtures in specs, never in `content/` |
+| Brand          | Makes                                             |
+| -------------- | ------------------------------------------------- |
+| Brindlecore    | Bench DC supply                                   |
+| Calderyn       | Torque screwdrivers                               |
+| Emberlyn       | Cartridge fuse                                    |
+| Ferrovane      | Sealed lead-acid battery                          |
+| Hearthvale     | Heater element                                    |
+| Larkmoor Power | Utility services (one brand for the utility)      |
+| Lumivane       | Incandescent lamps                                |
+| Orrinwood      | Power resistor                                    |
+| Penmarrow      | Label printers                                    |
+| Quillfern      | Test leads                                        |
+| Quorvale       | Aluminium building wire (XHHW-2)                  |
+| Railwick       | DIN-rail power supply                             |
+| Saltmere       | Circuit breaker                                   |
+| Tallowmere     | Copper building wire (THHN/THWN-2) and MTW        |
+| Tessaline      | Toggle switch                                     |
+| Testbrand      | Test-only fixtures in specs, never in `content/`  |
+| Veltmark       | Hand tools (strippers, cutters, drivers, crimper) |

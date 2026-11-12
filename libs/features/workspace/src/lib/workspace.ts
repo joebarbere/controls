@@ -35,7 +35,7 @@ type PanelId = keyof WorkspaceLayout;
  * console host), separated by keyboard-operable splitters (ADR 0005).
  *
  * Content slots: `[ctlWorkspaceToolbar]` (start of the toolbar), `[ctlViewportOverlay]` (HUD over
- * the viewport), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders). The
+ * the viewport, top left), `[ctlViewportBottom]` (the tool belt, bottom centre), `[ctlInspector]` and `[ctlBottomPanel]` (panel bodies, with placeholders). The
  * `console.toggle` command opens the bottom panel and focuses its `[data-autofocus]` element;
  * `view.netlistInspector` (F2.6) shows the netlist inspector in the side panel the same way, and
  * passes the node it has selected to the renderer's terminal highlight (view state only).
@@ -84,6 +84,7 @@ type PanelId = keyof WorkspaceLayout;
     <section #viewportPane class="viewport-pane" aria-label="3D viewport">
       <ctl-viewport (backendChange)="backendChange.emit($event)" />
       <div class="overlay"><ng-content select="[ctlViewportOverlay]" /></div>
+      <div class="overlay-bottom"><ng-content select="[ctlViewportBottom]" /></div>
     </section>
     @if (chrome()) {
       <ctl-splitter

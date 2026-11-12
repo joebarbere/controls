@@ -1,0 +1,22 @@
+{
+  "id": "tool.veltmark-dc-8",
+  "version": 1,
+  "title": "Diagonal cutters, 8 in",
+  "brand": "Veltmark",
+  "modelName": "DC-8",
+  "kind": "cutter",
+  "capabilities": [{ "step": "cut", "maxAwg": 8 }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "sources": [
+    {
+      "id": "diagonal-cutter-capacity",
+      "kind": "game-design",
+      "citation": "game-design: unverified product-class figure. Diagonal cutting nippers are specified in ISO 5749 (cited by number); makers of 180-200 mm (7-8 in) high-leverage models commonly quote a soft-wire cutting capacity of roughly 3 to 4 mm. Solid 8 AWG copper is 3.26 mm across (the AWG formula, NBS Handbook 100 section 2) and 6 AWG is 4.11 mm, so cut is capped at 8 AWG, rounded down for play.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

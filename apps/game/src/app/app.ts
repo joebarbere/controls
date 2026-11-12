@@ -20,12 +20,13 @@ import {
   NotificationService,
   Notifications,
   ShellState,
+  ToolBeltBar,
 } from '@controls/feature-shell';
 import { CommandPalette } from '@controls/feature-palette';
 import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
 import { KeybindingService, Session, type SimCrash, SimControls, ToolBelt } from '@controls/feature-session';
 import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
-import { parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
+import { ActiveTool, parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
 import { PLATFORM } from './platform.token';
 import { SimEventToasts } from './sim-event-toasts';
@@ -51,6 +52,7 @@ import { SimEventToasts } from './sim-event-toasts';
     LoadGameDialog,
     SaveGameDialog,
     SimControls,
+    ToolBeltBar,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
@@ -70,11 +72,19 @@ import { SimEventToasts } from './sim-event-toasts';
           <ctl-hud
             [mode]="viewState()?.mode ?? 'work'"
             [selection]="viewState()?.selected?.label ?? null"
-            [tool]="toolLabel()"
+            [tool]="activeTool.label()"
             [assisted]="session.world().assisted"
           />
           <ctl-sim-controls />
         </ng-container>
+      }
+      @if (!shell.menuOpen()) {
+        <ctl-tool-belt-bar
+          ctlViewportBottom
+          [slots]="activeTool.slots()"
+          [active]="activeTool.activeSlot()"
+          (selectSlot)="selectSlot($event)"
+        />
       }
     </ctl-workspace>
     @if (shell.menuOpen()) {
@@ -130,13 +140,11 @@ export class App {
    */
   protected readonly saves = inject(SaveGames);
   private readonly toolBelt = inject(ToolBelt);
-  /** The active tool-belt slot and the prop it holds (settings `toolBelt.slots`), for the HUD. */
-  protected readonly toolLabel = computed(() => {
-    const slot = this.toolBelt.activeSlot();
-    if (slot === null) return null;
-    const ref = this.settings.settings().toolBelt.slots[slot - 1];
-    return `${slot}: ${ref ? propLabel(ref.id) : 'Empty'}`;
-  });
+  /**
+   * What the active tool-belt slot holds (F3.4 part 1), for the HUD and the belt bar. Injected here so
+   * its `toolbelt.kind` and `toolbelt.tool` context keys are published from start-up.
+   */
+  protected readonly activeTool = inject(ActiveTool);
   protected readonly notifications = inject(NotificationService);
   protected readonly info = resource({ loader: () => this.platform.getAppInfo() });
   protected readonly backend = signal<string>('starting…');
@@ -229,6 +237,11 @@ export class App {
     void this.saves.autosave();
   }
 
+  /** A tool-belt bar button: the same `toolbelt.select` view command as the number keys (F3.4 part 1). */
+  protected selectSlot(slot: number): void {
+    void this.session.exec('toolbelt.select', { slot });
+  }
+
   protected dialogOpenChange(open: boolean): void {
     if (!open) this.shell.closeDialog();
   }
@@ -249,10 +262,4 @@ export class App {
   private focusViewportAfterRender(): void {
     afterNextRender(() => this.workspace()?.focusViewport(), { injector: this.injector });
   }
-}
-
-/** `prop.crate` → `Crate` (built-in props until the catalogue brings display names). */
-function propLabel(id: string): string {
-  const name = id.slice(id.lastIndexOf('.') + 1);
-  return name.charAt(0).toUpperCase() + name.slice(1);
 }

@@ -1,0 +1,22 @@
+{
+  "id": "tool.veltmark-sd-2",
+  "version": 1,
+  "title": "Screwdriver, #2 Phillips / 1/4 in slotted",
+  "brand": "Veltmark",
+  "modelName": "SD-2",
+  "kind": "screwdriver",
+  "capabilities": [{ "step": "drive", "maxAwg": null }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "sources": [
+    {
+      "id": "plain-screwdriver",
+      "kind": "game-design",
+      "citation": "game-design: a plain two-tip screwdriver of the kind every electrician carries (tip forms per ISO 8764 and ISO 2380, cited by number). It drives a terminal screw but has no torque setting, so the torque it applies is a seeded spread around the terminal's marked value (plan D8, ADR 0015), and it opens knockouts, pryouts and box clamps (the ENTRY_TYPES registry). No size limit: driving a screw doesn't depend on the conductor.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

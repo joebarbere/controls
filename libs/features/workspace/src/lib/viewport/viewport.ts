@@ -26,7 +26,6 @@ import {
   VIEWPORT_FOCUSED_KEY,
 } from '@controls/commands';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
-import { SettingsStore } from '@controls/feature-settings';
 import {
   inputBindingsFrom,
   ViewportRenderer,
@@ -43,6 +42,7 @@ import {
   SELECTION_TOGGLE_VALUE_KEY,
   selectionToggle,
 } from '@controls/world-model';
+import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
 import { OverlayLegend } from './overlay-legend';
 import { connectViewportOverlays } from './viewport-overlays';
@@ -62,7 +62,7 @@ const TEST_HOOK = '__controlsViewport';
  * HUD and the crosshair (walk mode, or a ghost aimed by the reticle) stay here.
  *
  * **World and gestures:** the renderer draws `Session.world()` (it syncs by entity id and never
- * mutates it) and arms placement with the active tool-belt prop (settings `toolBelt.slots`). Its
+ * mutates it) and arms placement with the active tool-belt slot when it is placeable (`ActiveTool`). Its
  * gesture intents become exactly one Command each, through `Session.exec`: a click or Enter on a
  * snapped spot is `entity.place`, dropping a dragged (or `M`-picked) entity is `entity.move`, and
  * Escape while placing puts the tool away without a command. Delete is the `entity.delete.selection`
@@ -202,12 +202,13 @@ export class Viewport {
   private readonly keys = inject(KeybindingService);
   private readonly bindings = computed(() => inputBindingsFrom(this.keys.inputBindings()));
   private readonly toolBelt = inject(ToolBelt);
-  private readonly settings = inject(SettingsStore);
-  /** The prop in the active tool-belt slot: what placement places. `null` when no slot or an empty one. */
-  readonly activeProp = computed<CatalogRef | null>(() => {
-    const slot = this.toolBelt.activeSlot();
-    return slot === null ? null : (this.settings.settings().toolBelt.slots[slot - 1] ?? null);
-  });
+  private readonly activeTool = inject(ActiveTool);
+  /**
+   * What placement places: the active tool-belt slot's ref when it is placeable (a prop or an entity
+   * device). `null` with no slot, an empty one, or a tool or spool slot, which arms its flow and never
+   * placement (F3.4 part 1).
+   */
+  readonly activeProp = computed<CatalogRef | null>(() => this.activeTool.placeable());
   /** The canvas's accessible name, naming the current keys of each input action and view binding. */
   protected readonly label = computed(() => {
     const binding = (id: string) => {
@@ -219,7 +220,7 @@ export class Viewport {
     return (
       `3D workspace. Click to select. ${key('selectPrevious')} and ${key('selectNext')} cycle selection, ` +
       `${binding(VIEW_FOCUS_SELECTION_BINDING)} focuses it, ${binding(VIEW_MODE_WALK_BINDING)} toggles walk and work mode, ${walk} walk. ` +
-      `Number keys pick a prop; click or ${key('commitPlacement')} places it at the pointer or the centre. ` +
+      `Number keys pick a tool-belt slot; a prop is placed with a click or ${key('commitPlacement')} at the pointer or the centre, a tool is held. ` +
       `Drag an object, or ${key('moveSelection')} then ${key('commitPlacement')}, to move it; ` +
       `${binding(DEVICE_OPERATE_SELECTION_BINDING)} or a double-click operates a selected switch; ` +
       `${binding(ENTITY_DELETE_SELECTION_BINDING)} deletes it; Escape cancels.`

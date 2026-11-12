@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { KEY_PLATFORM, KeybindingService, Session, SimHost, ToolBelt } from '@controls/feature-session';
 import { type LampOutputs, type ViewportIntent, ViewportRenderer, type ViewportState } from '@controls/renderer';
 import type { SnapshotView } from '@controls/sim-protocol';
+import { SettingsStore } from '@controls/feature-settings';
 import { fakeView, lampDescriptor, writeLamp } from './lamp-feed.fakes';
 import { Viewport } from './viewport';
 
@@ -29,7 +30,7 @@ describe('Viewport', () => {
     const canvas = (fixture.nativeElement as HTMLElement).querySelector('canvas') as HTMLCanvasElement;
     expect(canvas.getAttribute('aria-label')).toBe(
       '3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, W A S D walk. ' +
-        'Number keys pick a prop; click or Enter places it at the pointer or the centre. ' +
+        'Number keys pick a tool-belt slot; a prop is placed with a click or Enter at the pointer or the centre, a tool is held. ' +
         'Drag an object, or M then Enter, to move it; E or a double-click operates a selected switch; ' +
         'Delete deletes it; Escape cancels.',
     );
@@ -48,6 +49,21 @@ describe('Viewport', () => {
     expect(fixture.componentInstance.activeProp()).toEqual({ id: 'prop.crate', version: 1 });
     session.exec('toolbelt.select', { slot: 9 }); // an empty slot
     expect(fixture.componentInstance.activeProp()).toBeNull();
+  });
+
+  it('never arms placement from a tool slot: a tool arms its flow (F3.4 part 1)', async () => {
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    const store = TestBed.inject(SettingsStore);
+    const slots = [...store.settings().toolBelt.slots];
+    slots[3] = { id: 'tool.veltmark-ws-1018', version: 1 };
+    store.update('toolBelt', { slots });
+    TestBed.inject(Session).exec('toolbelt.select', { slot: 4 });
+    expect(fixture.componentInstance.activeProp()).toBeNull();
+    // Swapping the slot's contents for a prop arms placement without selecting again.
+    slots[3] = { id: 'prop.box', version: 1 };
+    store.update('toolBelt', { slots });
+    expect(fixture.componentInstance.activeProp()).toEqual({ id: 'prop.box', version: 1 });
   });
 
   it('turns each gesture commit into exactly one Command; a cancelled placement into none', async () => {

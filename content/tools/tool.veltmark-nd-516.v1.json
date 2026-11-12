@@ -1,0 +1,22 @@
+{
+  "id": "tool.veltmark-nd-516",
+  "version": 1,
+  "title": "Nut driver, 5/16 in",
+  "brand": "Veltmark",
+  "modelName": "ND-516",
+  "kind": "nutDriver",
+  "capabilities": [{ "step": "drive", "maxAwg": null }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "sources": [
+    {
+      "id": "nut-driver",
+      "kind": "game-design",
+      "citation": "game-design: a hex nut driver for hex-washer-head screws (box and panel hardware, ground screws). It drives screws with no torque setting, like a plain screwdriver; the 5/16 in size is a name for the player, not a modelled value.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

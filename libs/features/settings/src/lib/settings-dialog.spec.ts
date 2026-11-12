@@ -67,6 +67,36 @@ describe('SettingsDialog', () => {
     expect(store.settings().autosave).toEqual({ enabled: true, intervalSeconds: 300, slotCount: 3 });
   });
 
+  it('puts props and tools on the tool belt, one labelled picker per slot (F3.4 part 1)', async () => {
+    const { fixture, store, user, dialog } = await setup();
+    const belt = within(dialog).getByRole('group', { name: 'Tool belt' });
+    const slot = (n: number) => within(belt).getByRole('combobox', { name: `Slot ${n}` }) as HTMLSelectElement;
+    expect(slot(2).value).toBe('prop.crate@1');
+    expect(slot(4).value).toBe('');
+    // Select by value (jsdom doesn't trim option text; see the UI caveats).
+    await user.selectOptions(slot(4), 'tool.veltmark-ws-1018@1');
+    await user.selectOptions(slot(1), '');
+    await fixture.whenStable();
+    expect(store.settings().toolBelt.slots.slice(0, 4)).toStrictEqual([
+      null,
+      { id: 'prop.crate', version: 1 },
+      { id: 'prop.spool', version: 1 },
+      { id: 'tool.veltmark-ws-1018', version: 1 },
+    ]);
+    expect(slot(4).selectedOptions[0]?.textContent?.trim()).toBe(
+      'Wire strippers, 10–18 AWG solid / 12–20 AWG stranded',
+    );
+    expect(within(slot(4)).getByRole('group', { name: 'Tools' })).toBeTruthy();
+
+    // A stored ref the picker doesn't offer is still shown, not a blank select.
+    const slots = [...store.settings().toolBelt.slots];
+    slots[8] = { id: 'lamp.lumivane-12v-5w', version: 1 };
+    store.update('toolBelt', { slots });
+    await fixture.whenStable();
+    expect(slot(9).value).toBe('lamp.lumivane-12v-5w@1');
+    expect(slot(9).selectedOptions[0]?.textContent?.trim()).not.toBe('');
+  });
+
   it('edits each section through labelled controls', async () => {
     const { fixture, store, user, dialog } = await setup();
     await user.click(within(dialog).getByRole('radio', { name: 'WebGL2 only' }));

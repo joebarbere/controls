@@ -16,7 +16,10 @@ import {
   SMOKE_RUNS,
 } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
-import { BENCH_CASES, PENDING_BENCH_CASES } from './cases';
+import { WATCHDOG_MS } from '@controls/sim-protocol';
+import { CABLE_ADD_BENCH_CONDUCTORS, cableAddBench } from './cable-add';
+import { BENCH_CASES, CABLE_ADD_BUDGET_MS, PENDING_BENCH_CASES } from './cases';
+import { buildPlant } from './plant';
 
 /** A fake clock: each run of a case takes the next duration from the list (ms). */
 function steppingClock(durations: readonly number[]): () => number {
@@ -322,6 +325,21 @@ describe('the shipped bench cases', () => {
     }
   });
 
+  it('gate the worst single command at a tenth of WATCHDOG_MS: one cable.add of the 16-conductor bench assembly', () => {
+    expect(CABLE_ADD_BUDGET_MS).toBe(WATCHDOG_MS / 10);
+    const gate = BENCH_CASES.find((c) => c.name === 'cable-add-worst-command');
+    expect(gate).toMatchObject({ budgetMs: CABLE_ADD_BUDGET_MS });
+    expect(gate?.calibration).toBeUndefined();
+    // Two runs from the same prepared state agree: the cable, 16 more connections, the same re-solve.
+    gate?.prepare?.();
+    const first = gate?.run();
+    gate?.prepare?.();
+    expect(gate?.run()).toBe(first);
+    const rig = cableAddBench(buildPlant().world);
+    expect(rig.conductors).toBe(CABLE_ADD_BENCH_CONDUCTORS);
+    expect(first?.startsWith(`1:${rig.world.connections.length + CABLE_ADD_BENCH_CONDUCTORS}:`)).toBe(true);
+  });
+
   it('gate the re-solve at spec §4.5’s 2 ms, scaled by the calibration loop; nothing else is calibrated', () => {
     const calibrated = BENCH_CASES.filter((c) => c.calibration !== undefined);
     expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([['plant-resolve-topology-change', 2]]);
@@ -339,9 +357,9 @@ describe('the pending bench cases (P3 kickoff step 6)', () => {
       // Spec §4.5: per tick, and the calibrated re-solve on a wired plant.
       ['tick-wired-plant', 0.3, 'F3.6 part 1'],
       ['plant-resolve-topology-change-wired', 2, 'F3.6 part 1'],
-      // No spec budget: ADR 0017 fixes one from measurement; the single-command gate sits under WATCHDOG_MS.
+      // No spec budget: ADR 0017 fixes one from measurement. (F3.4 part 1 moved the single-command gate,
+      // cable-add-worst-command, into BENCH_CASES.)
       ['route-bake-500-wires', null, 'F3.2 part 1'],
-      ['cable-add-worst-command', null, 'F3.4 part 1'],
     ]);
     for (const c of PENDING_BENCH_CASES) {
       expect(c.note).not.toBe('');

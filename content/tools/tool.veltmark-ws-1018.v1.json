@@ -1,0 +1,43 @@
+{
+  "id": "tool.veltmark-ws-1018",
+  "version": 1,
+  "title": "Wire strippers, 10–18 AWG solid / 12–20 AWG stranded",
+  "brand": "Veltmark",
+  "modelName": "WS-1018",
+  "kind": "stripper",
+  "capabilities": [
+    { "step": "strip", "maxAwg": 10 },
+    { "step": "cut", "maxAwg": 10 },
+    { "step": "stripJacket", "maxAwg": 12 }
+  ],
+  "holes": [
+    { "id": "sol10", "awg": 10, "stranding": "solid" },
+    { "id": "sol12", "awg": 12, "stranding": "solid" },
+    { "id": "sol14", "awg": 14, "stranding": "solid" },
+    { "id": "sol16", "awg": 16, "stranding": "solid" },
+    { "id": "sol18", "awg": 18, "stranding": "solid" },
+    { "id": "str12", "awg": 12, "stranding": "stranded" },
+    { "id": "str14", "awg": 14, "stranding": "stranded" },
+    { "id": "str16", "awg": 16, "stranding": "stranded" },
+    { "id": "str18", "awg": 18, "stranding": "stranded" },
+    { "id": "str20", "awg": 20, "stranding": "stranded" }
+  ],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "sources": [
+    {
+      "id": "stripper-hole-pattern",
+      "kind": "game-design",
+      "citation": "game-design: unverified product-class pattern, for electrical-realism-reviewer to check against makers' catalogues. US electricians' wire strippers are commonly marked 10-18 AWG solid on one side of the jaws and 12-20 AWG stranded on the other: each physical hole carries a solid size and the stranded size one step smaller, because a stranded conductor is wider than a solid one of the same AWG. Modelled as one hole per marking (ten ids, stable save format), so a conductor stripped in a hole marked for another size or stranding nicks (plan D8).",
+      "covers": ["holes"]
+    },
+    {
+      "id": "stripper-jaws-and-nm-slot",
+      "kind": "game-design",
+      "citation": "game-design: unverified product-class features. Strippers of this class have cutting edges between the pivot and the holes (a cut capability up to 10 AWG, the largest hole), and some models add a slot that splits the outer jacket of 14/2 and 12/2 non-metallic sheathed cable (stripJacket up to 12 AWG conductors). The strip capability reaches the largest marked hole, 10 AWG.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}
