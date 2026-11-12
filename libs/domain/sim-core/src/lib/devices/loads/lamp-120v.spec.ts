@@ -1,6 +1,6 @@
 import { BUILTIN_CATALOG, type HeaterParams, type LampIncandescentParams } from '@controls/catalog';
 import { AC_SOURCE, SPST } from '../../../testing/bench';
-import { AC_SOURCE_OHMS, BUSBAR } from '../../../testing/engine';
+import { AC_SOURCE_OHMS, BUSBAR, RHEOSTAT } from '../../../testing/engine';
 import { SourceHost } from '../../../testing/sources';
 import { LAMP_AMBIENT_K, LAMP_CONDUCTION_FRACTION, lampConductionFraction, lampResistanceOhm } from './lamp';
 import { tungstenResistivity } from './tungsten';
@@ -160,6 +160,34 @@ describe('the D12 loads in the engine, on the test 120 V source (0.1 Ω)', () =>
     const ratio = (peak['currentA'] as number) / (r['currentA'] as number);
     expect(ratio).toBeGreaterThanOrEqual(10);
     expect(ratio).toBeLessThanOrEqual(15);
+  });
+
+  it('light follows the published relation, L ∝ V^3.4, within 1 % from 75 % to 115 % of rated voltage', () => {
+    // Two test sources in series (240 V behind 0.2 Ω) through a rheostat, set from the hand estimate
+    // R_s = R(v) · (2 / v − 1) with R(v) ≈ 240 · v^0.4, so the lamp sees about v × 120 V.
+    for (const [v, ohms] of [
+      [0.75, 355.3],
+      [0.875, 292.4],
+      [1, 240],
+      [1.15, 187.5],
+    ]) {
+      const host = new SourceHost();
+      host.place(AC_SOURCE);
+      host.place(AC_SOURCE);
+      host.place(RHEOSTAT);
+      host.place(LAMP_REF);
+      const link = (a: number, ta: string, b: number, tb: string) =>
+        host.exec('lead.connect', { ref: BUSBAR, a: { entity: a, terminal: ta }, b: { entity: b, terminal: tb } });
+      link(1, 'l', 2, 'n');
+      link(2, 'l', 3, 'a');
+      link(3, 'b', 4, 'a');
+      link(4, 'b', 1, 'n');
+      const r = host.operate(3, 'ohms', ohms).advance(3000).record(4);
+      const ratio = (r['voltageV'] as number) / 120;
+      expect(Math.abs(ratio - v)).toBeLessThan(0.03);
+      // f = 0.05 is where the model's curve fits best (the reviewer measured within 0.7 %).
+      expect(rel(r['lightOutputRel'] as number, Math.pow(ratio, 3.4))).toBeLessThan(0.01);
+    }
   });
 
   it('cools with its own f = 0.05: the engine follows the ODE with the entry’s fraction, not the default 0.1', () => {

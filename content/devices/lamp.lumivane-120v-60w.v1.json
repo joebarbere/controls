@@ -116,7 +116,7 @@
     {
       "id": "filament-temperature",
       "kind": "real-world",
-      "citation": "L. L. Holladay, \"Proportion of energy radiated by incandescent solids in various spectral regions\", J. Opt. Soc. Am. 17 (1928), pp. 329–342, Table 5 (read 2026-11-12), paraphrased: regular gas-filled tungsten lamps of 50 W and 75 W run their filaments at a maximum of about 2685 K and 2735 K; a 60 W lamp interpolates to about 2705 K, and 2700 K is taken (the rounding is game-design). With tungsten's resistivity (Jones and Langmuir, 1927) it gives a cold resistance of 240 × 5.4849 / 81.095 = 16.23 Ω at 20 °C, 1/14.79 of the hot one, where the cold-start inrush comes from.",
+      "citation": "L. L. Holladay, \"Proportion of energy radiated by incandescent solids in various spectral regions\", J. Opt. Soc. Am. 17 (1928), pp. 329–342, Table 5 (read 2026-11-12; its gas-filled rows were not independently verified by the realism review, which found them plausible), paraphrased: regular gas-filled tungsten lamps of 50 W and 75 W run their filaments at a maximum of about 2685 K and 2735 K; a 60 W lamp interpolates to about 2705 K, and 2700 K is taken (the rounding is game-design). With tungsten's resistivity (Jones and Langmuir, 1927) it gives a cold resistance of 240 × 5.4849 / 81.095 = 16.23 Ω at 20 °C, 1/14.79 of the hot one, where the cold-start inrush comes from.",
       "covers": ["model.params.filamentRatedTempK"]
     },
     {
@@ -128,7 +128,7 @@
     {
       "id": "filament-time-constant",
       "kind": "real-world",
-      "citation": "Physics estimate (P3 decision D17, the τ ≈ 30 ms the realism review recommended in P2), recomputed in lamp-120v.spec.ts: a straight tungsten wire that radiates 95 % of 60 W at 2700 K with a total emissivity of about 0.317 (Holladay 1928, Table 3: 0.311 at 2600 K, 0.323 at 2800 K) and has 240 Ω there (ρ = 81.095 µΩ·cm, Jones and Langmuir) is about 43 µm × 440 mm, 12.5 mg at 19.3 g/cm³; with tungsten's heat capacity at 2700 K (36.19 J/(mol·K), NIST-JANAF table for crystalline tungsten, read 2026-11-12; 0.197 J/(g·K)) that is 2.46 mJ/K against a loss slope of 0.0857 W/K, τ ≈ 29 ms. A coiled filament's self-shading lengthens the wire and raises it (about 33 ms if 90 % of its surface radiates freely). 30 ms is taken; the model's heat capacity is then 2.57 mJ/K.",
+      "citation": "Physics estimate (P3 decision D17, the τ ≈ 30 ms the realism review recommended in P2), recomputed in lamp-120v.spec.ts: a straight tungsten wire that radiates 95 % of 60 W at 2700 K with a total emissivity of about 0.317 (Holladay 1928, Table 3: 0.311 at 2600 K, 0.323 at 2800 K; not independently verified by the realism review, plausible) and has 240 Ω there (ρ = 81.095 µΩ·cm, Jones and Langmuir) is about 43 µm × 440 mm, 12.5 mg at 19.3 g/cm³; with tungsten's heat capacity at 2700 K (36.19 J/(mol·K), NIST-JANAF table for crystalline tungsten, read 2026-11-12; 0.197 J/(g·K)) that is 2.46 mJ/K against a loss slope of 0.0857 W/K, τ ≈ 29 ms. A coiled filament's self-shading lengthens the wire and raises it (about 33 ms if 90 % of its surface radiates freely). 30 ms is taken; the model's heat capacity is then 2.57 mJ/K.",
       "covers": ["model.params.thermalTimeConstantMs"]
     },
     {
@@ -145,8 +145,8 @@
     },
     {
       "id": "holder-terminal-torque",
-      "kind": "real-world",
-      "citation": "Makers' product pages for medium-base keyless incandescent lampholders with terminal screws give a terminal-screw torque range of 14 to 18 lb·in (1.6 to 2.0 N·m) (read 2026-11-12, paraphrased, not one vendor's). The fictional holder is marked 1.8 N·m (about 16 lb·in), inside it; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "kind": "game-design",
+      "citation": "game-design anchored to a published figure: one lampholder maker's product pages (several of its medium-base incandescent lampholders with terminal screws) give a terminal-screw torque range of 14 to 18 lb·in (1.6 to 2.0 N·m) (read 2026-11-12, paraphrased, the maker not named). That range is applied here as game-design: the fictional holder is marked 1.8 N·m (about 16 lb·in), inside it; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": ["terminals.*.methods.screw.torqueNm"]
     },
     {

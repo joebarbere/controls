@@ -107,7 +107,7 @@
     {
       "id": "space-heater-class",
       "kind": "real-world",
-      "citation": "The 120 V 1500 W resistance space-heater element, the usual top rating of NEC-region 120 V portable and small fixed heaters (makers' published ratings, typical figures, paraphrased, not one vendor's). Its resistance is V² / P = 14400 / 1500 = 9.6 Ω and its rated current P / V = 12.5 A. A nickel-chromium element's resistance rises only a few percent from cold to hot (a temperature coefficient of about 1e-4 per kelvin), so it is taken as constant at the rated (hot) value.",
+      "citation": "The 120 V 1500 W resistance space-heater element, the usual top rating of NEC-region 120 V portable and small fixed heaters (makers' published ratings, typical figures, paraphrased, not one vendor's). Its resistance is V² / P = 14400 / 1500 = 9.6 Ω and its rated current P / V = 12.5 A. An 80/20 nickel-chromium element's resistance rises about 5 to 8 % from 20 °C to its working temperature; it is taken as constant at the rated (hot) value, an abstraction (the cold element draws that much more for its first moments).",
       "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
     },
     {
@@ -119,7 +119,7 @@
     {
       "id": "heater-terminal-class",
       "kind": "game-design",
-      "citation": "game-design: the element's two terminals are pressure-plate screw clamps, marked for one copper conductor of 14 to 10 AWG, solid or stranded (two fit, and the second makes a worse termination, D8), not for aluminium; the plate grips 8 mm of a 10 ± 2 mm strip, so every in-tolerance strip seats fully. The marked torque, 1.8 N·m (about 16 lb·in), is chosen inside the 14 to 18 lb·in range makers give for wiring-device terminal screws (read for the 120 V lamp's holder); it is not a published heater figure. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number); no UL 486A-B torque table is used. Not modelled on a product.",
+      "citation": "game-design: the element's two terminals are pressure-plate screw clamps, marked for one copper conductor of 14 to 10 AWG, solid or stranded (two fit, and the second makes a worse termination, D8), not for aluminium; the plate grips 8 mm of a 10 ± 2 mm strip, so every in-tolerance strip seats fully. The marked torque, 1.8 N·m (about 16 lb·in), is chosen inside the 14 to 18 lb·in range one maker publishes for lampholder terminal screws (read for the 120 V lamp's holder) and applied here as game-design; it is not a published heater figure. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number); no UL 486A-B torque table is used. Not modelled on a product.",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
