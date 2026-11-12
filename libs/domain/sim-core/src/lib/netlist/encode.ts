@@ -20,6 +20,8 @@ const MAX_ITEM_BYTES = 2 * 256 + 4 * 8 + 3;
 export class TopologyWriter {
   private buffer = new Uint8Array(0);
   private length = 0;
+  /** Where the last `encode`'s node section ends (its branch count starts): see `encodeBranches`. */
+  nodesEnd = 0;
 
   /** The canonical bytes of `nodes` and `branches`: a view of the buffer, valid until the next call. */
   encode(nodes: readonly NetlistNode[], branches: readonly NetlistBranch[]): Uint8Array {
@@ -38,6 +40,24 @@ export class TopologyWriter {
         this.ascii(member.terminal);
       }
     }
+    this.nodesEnd = this.length;
+    this.writeBranches(branches);
+    return this.buffer.subarray(0, this.length);
+  }
+
+  /**
+   * The canonical bytes of the last `encode`'s nodes with `branches` instead: only the branch section is
+   * rewritten (F3.6 part 2's toggle path, whose nodes are unchanged). Valid only while the buffer holds
+   * an encoding of the same nodes.
+   */
+  encodeBranches(branches: readonly NetlistBranch[]): Uint8Array {
+    this.length = this.nodesEnd;
+    this.reserve(32 * branches.length + 16);
+    this.writeBranches(branches);
+    return this.buffer.subarray(0, this.length);
+  }
+
+  private writeBranches(branches: readonly NetlistBranch[]): void {
     this.reserve(8);
     this.varint(branches.length);
     for (const branch of branches) {
@@ -57,7 +77,6 @@ export class TopologyWriter {
       this.varint(branch.a);
       this.varint(branch.b);
     }
-    return this.buffer.subarray(0, this.length);
   }
 
   /** Makes room for `extra` more bytes, keeping what was written. The buffer only grows. */

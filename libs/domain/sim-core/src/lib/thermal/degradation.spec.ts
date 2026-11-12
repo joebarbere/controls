@@ -689,6 +689,20 @@ describe('the end states in the engine (ADR 0018 §12, goldens 5, 10–12)', () 
     );
   });
 
+  it("the engine's toggle-path netlist and snapshot equal a full compile's and a fresh start's at every bucket", () => {
+    // The engine recompiles each open/close through the compiler's open-toggle path (same world, one
+    // end's state changed); a fresh engine on the materialised world compiles it from scratch.
+    const host = loop(1000);
+    for (let tick = 101; tick <= 3001; tick += 100) {
+      host.advanceTo(tick);
+      const world = host.materialised();
+      const full = compileNetlist(world, BUILTIN_CATALOG);
+      expect(host.engine.netlist).toStrictEqual(full);
+      const fresh = SimEngine.start(world, host.options);
+      expect(fresh.snapshot()).toStrictEqual(host.engine.snapshot());
+    }
+  });
+
   it('an intermittent end opens and closes the circuit in whole 100-tick buckets (the heater current follows)', () => {
     const host = loop(1000);
     const first = deriveStream(5, `${terminationStreamKey(1)}:intermittent`).nextU32();

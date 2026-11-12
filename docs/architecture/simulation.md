@@ -818,7 +818,8 @@ stateDiagram-v2
 - **Limits and the failure rule.** No node reports above its metal's melting point (`materials.meltingPointK`, or the lead's `meltingPointK`): a hot spot reaching it burns open (D raised to 1 Ω / R_made); a conductor node reaching it fuses the connection (a conductor: both landed ends burned open; a lead: both end states `intermittentOpen`, the one non-initial lead end state). `insulationDamaged` is set, sticky, at the insulation's rating + 40 K on the conductor node or a conductor's hot spot (a lead's rating is its `insulationRatedTempK`). The fusing current is anchored to Preece and reads 24–34 % high because R(T) is clamped at 200 °C.
 - **Detections.** `terminationOverheat` (a hot spot crossing T_a + 100 K upwards) and `insulationDamaged` go into a preallocated ring (`SimEngine.takeConnectionDetections()`); publishing them as events is protocol 7 (F3.6 part 3).
 - **The bad-termination scenario** (`apps/sim-cli/scenarios/bad-termination.console`, ADR 0018 §7): a 20 %-torque breaker screw on 14 AWG THHN at 11.8 A settles 90.8 K above its conductor with 81.5× a good end's drop, every expectation derived from the built current.
-- **Budget.** `intermittent-toggle-wired`: one end opening on the wired plant (a structural recompile, the bank's sync and the solve), under the calibrated 2 ms re-solve gate.
+- **Budget.** `intermittent-toggle-wired`: one end opening on the wired plant (the compiler's open-toggle path, the bank's sync and a linear solve copying the untouched islands), under the calibrated 2 ms re-solve gate.
+- **The open-toggle path.** A recompile of the same world whose only change is an end opening or closing skips the world walk and the terminal partition: `NetlistCompiler` re-assembles branches and islands from the previous netlist and resumes the topology hash after the unchanged node section. The result equals a from-scratch compile exactly (property-tested).
 
 ## Not yet
 

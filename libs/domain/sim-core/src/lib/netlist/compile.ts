@@ -1,6 +1,6 @@
 import { type Catalog, type DeviceDefinition, MAX_TERMINAL_METHODS, type TerminalMethodSpec } from '@controls/catalog';
 import { isBuiltinPropRef, type World } from '@controls/save-format';
-import { toHex, sha256 } from '@controls/world-model';
+import { sha256, sha256Finish, sha256Prefix, toHex } from '@controls/world-model';
 import { TopologyWriter } from './encode';
 import {
   BUILTIN_NETLIST_MODELS,
@@ -267,6 +267,25 @@ export class NetlistCompiler {
   /** Conductor ends landed per (plant terminal, method), `terminal × MAX_TERMINAL_METHODS + method`. */
   private counts = new Int32Array(0);
   readonly stats: NetlistCompilerStats = { structural: 0, valuesOnly: 0, unchanged: 0 };
+  /**
+   * The open-toggle path's record of the last full compile (F3.6 part 2, see `toggleOnly`): its world,
+   * its entities with sim topology keys and their entries, its entity diagnostics and entity branch
+   * count, and per connection in id order its entry, plant terminals, structure-list position, state
+   * (`SLOT_ABSENT` for a fixed reason, `SLOT_PRESENT`, `SLOT_OPEN`) and fixed absence reason.
+   * Meaningful only while `lastWorld` is set (a full compile sets it last, so one that throws leaves none).
+   */
+  private lastWorld: World | null = null;
+  private readonly simEntities: Entity[] = [];
+  private readonly simEntries: EntityCacheEntry[] = [];
+  private lastEntityDiagnostics: readonly NetlistDiagnostic[] = [];
+  private deviceBranchCount = 0;
+  private readonly slotEntry: ConnectionCacheEntry[] = [];
+  private readonly slotReason: (AbsentConnectionReason | null)[] = [];
+  private slotA = new Int32Array(0);
+  private slotB = new Int32Array(0);
+  private slotKeyPos = new Int32Array(0);
+  private slotState = new Uint8Array(0);
+  private slotCount = 0;
 
   constructor(
     private readonly catalog: Catalog,
@@ -280,9 +299,17 @@ export class NetlistCompiler {
    * `compileNetlist(world, catalog, options)` exactly, whatever was compiled before.
    */
   compile(world: World, options: CompileOptions = {}): Netlist {
+    if (this.previous !== null && world === this.lastWorld) {
+      const toggled = this.toggleOnly(options);
+      if (toggled !== null) return toggled;
+    }
     const epoch = ++this.epoch;
     const previous = this.previous;
     this.previous = null;
+    this.lastWorld = null;
+    this.simEntities.length = 0;
+    this.simEntries.length = 0;
+    let deviceBranchCount = 0;
     const structure = this.structure;
     let length = 0;
     let same = previous !== null;
@@ -310,6 +337,11 @@ export class NetlistCompiler {
         entry.base = terminalCount;
         devices.push({ entity: entity.id, parts: entry.result.parts, base: terminalCount });
         terminalCount += entry.result.parts.fragment.terminals.length;
+        deviceBranchCount += entry.result.parts.fragment.elements.length;
+        if (entry.model !== undefined && entry.model.simTopologyKeys.length > 0) {
+          this.simEntities.push(entity);
+          this.simEntries.push(entry);
+        }
       } else if (entry.result.diagnostic) {
         entityDiagnostics.push(entry.result.diagnostic);
       }
@@ -332,6 +364,17 @@ export class NetlistCompiler {
       entries[i] = cached;
     }
     const connections: PlacedConnection[] = [];
+    const slotCount = entries.length;
+    if (this.slotState.length < slotCount) {
+      const size = Math.max(slotCount, 2 * this.slotState.length);
+      this.slotA = new Int32Array(size);
+      this.slotB = new Int32Array(size);
+      this.slotKeyPos = new Int32Array(size);
+      this.slotState = new Uint8Array(size);
+    }
+    this.slotEntry.length = slotCount;
+    this.slotReason.length = slotCount;
+    let slot = 0;
     for (const cached of entries) {
       const connection = cached.connection;
       const result = cached.result;
@@ -357,6 +400,12 @@ export class NetlistCompiler {
       record(connection.id);
       record(a);
       record(b);
+      this.slotEntry[slot] = cached;
+      this.slotA[slot] = a;
+      this.slotB[slot] = b;
+      this.slotKeyPos[slot] = length;
+      this.slotState[slot] = reason === null ? SLOT_PRESENT : reason === 'intermittent-open' ? SLOT_OPEN : SLOT_ABSENT;
+      this.slotReason[slot++] = reason === 'intermittent-open' ? null : reason;
       if (reason !== null || !result.ok) {
         const absentReason = reason as AbsentConnectionReason;
         record(ABSENT_KEYS[absentReason]);
@@ -375,18 +424,91 @@ export class NetlistCompiler {
     prune(this.entityCache, entities.length, epoch);
     prune(this.connectionCache, sortedConnections.length, epoch);
 
+    this.slotCount = slotCount;
+    this.deviceBranchCount = deviceBranchCount;
+    this.lastEntityDiagnostics = entityDiagnostics;
+
     // Same structure as last time: the partition, islands, devices, hash and diagnostics are unchanged.
     if (same) {
       const netlist = withValues(previous as Netlist, devices, connections);
       if (netlist === previous) this.stats.unchanged++;
       else this.stats.valuesOnly++;
       this.previous = netlist;
+      this.lastWorld = world;
       return netlist;
     }
 
     this.stats.structural++;
     const diagnostics = [...entityDiagnostics, ...connectionDiagnostics];
     const netlist = assemble(devices, terminalCount, connections, diagnostics, this.scratch);
+    this.previous = netlist;
+    this.lastWorld = world;
+    return netlist;
+  }
+
+  /**
+   * The open-toggle path (F3.6 part 2, perf only): a compile of the **same world object** as the last
+   * full compile, whose entities' sim topology views are unchanged, can differ from it only in which
+   * connections have an open end (ADR 0015: the only connection sim state the compiler reads). Then the
+   * partition, the devices, every entity and connection entry, the landed counts and every connection's
+   * plant terminals are the last compile's, so this re-evaluates only the open ends: no change returns
+   * the previous netlist (as the full path's unchanged case does), and a change updates the structure
+   * list in place and re-assembles the branches and islands from the previous netlist
+   * (`reassemble`), without re-walking the world or re-partitioning the terminals. Returns `null` when
+   * an entity's sim view changed (a blown fuse, a tripped breaker): the full path takes it. The result
+   * equals a full compile's exactly (property-tested, with its `topologyHash`).
+   */
+  private toggleOnly(options: CompileOptions): Netlist | null {
+    const previous = this.previous as Netlist;
+    for (let k = 0; k < this.simEntities.length; k++) {
+      const entity = this.simEntities[k];
+      const entry = this.simEntries[k];
+      const model = entry.model as DeviceNetlistModel;
+      if (simKeyOf(model, simTopologyView(model, options.sim?.(entity.id) ?? entity.sim)) !== entry.simKey) return null;
+    }
+    const states = this.slotState;
+    let changed = false;
+    for (let s = 0; s < this.slotCount; s++) {
+      const state = states[s];
+      if (state === SLOT_ABSENT) continue;
+      const entry = this.slotEntry[s];
+      const connection = entry.connection;
+      const model = (entry.result as Extract<ConnectionKindResult, { ok: true }>).model;
+      const now = openEnd(model, options.connectionSim?.(connection.id) ?? connection.sim) ? SLOT_OPEN : SLOT_PRESENT;
+      if (now === state) continue;
+      changed = true;
+      states[s] = now;
+      this.structure[this.slotKeyPos[s]] =
+        now === SLOT_OPEN
+          ? ABSENT_KEYS['intermittent-open']
+          : this.connectionElement(entry, entry.result as Extract<ConnectionKindResult, { ok: true }>, this.counts)
+              .structureKey;
+    }
+    if (!changed) {
+      this.stats.unchanged++;
+      return previous;
+    }
+    const connections: PlacedConnection[] = [];
+    const diagnostics: NetlistDiagnostic[] = [...this.lastEntityDiagnostics];
+    for (let s = 0; s < this.slotCount; s++) {
+      const entry = this.slotEntry[s];
+      const id = entry.connection.id;
+      const state = states[s];
+      if (state === SLOT_PRESENT) {
+        const result = entry.result as Extract<ConnectionKindResult, { ok: true }>;
+        connections.push({
+          id,
+          result: this.connectionElement(entry, result, this.counts),
+          a: this.slotA[s],
+          b: this.slotB[s],
+        });
+      } else {
+        const reason = state === SLOT_OPEN ? 'intermittent-open' : (this.slotReason[s] as AbsentConnectionReason);
+        diagnostics.push({ code: 'absent-connection', connection: id, reason });
+      }
+    }
+    this.stats.structural++;
+    const netlist = reassemble(previous, this.deviceBranchCount, connections, diagnostics, this.scratch);
     this.previous = netlist;
     return netlist;
   }
@@ -575,6 +697,11 @@ export class NetlistCompiler {
   }
 }
 
+/** A connection slot's state in the open-toggle path's record (`toggleOnly`). */
+const SLOT_ABSENT = 0;
+const SLOT_PRESENT = 1;
+const SLOT_OPEN = 2;
+
 const NO_METHODS: readonly (readonly TerminalMethodSpec[])[] = Object.freeze([]);
 const NO_SPECS: readonly TerminalMethodSpec[] = Object.freeze([]);
 
@@ -759,6 +886,12 @@ class AssembleScratch {
   endB = new Int32Array(0);
   islandOfRoot = new Int32Array(0);
   islandOfNode = new Int32Array(0);
+  /**
+   * The SHA-256 midstate of the writer's node section (whole blocks only) and how many bytes it covers,
+   * for `reassemble`; `null` after every full `assemble` (its nodes may differ).
+   */
+  nodesState: Int32Array | null = null;
+  nodesStateBytes = 0;
 }
 
 function assemble(
@@ -868,12 +1001,135 @@ function assemble(
     return { index: i, kind, nodes: n, branches: islandBranches[i] };
   });
   const deviceList: NetlistDevice[] = devices.map(({ entity, parts }) => ({ entity, kind: parts.fragment.kind }));
+  scratch.nodesState = null;
   return {
     nodes,
     branches,
     islands,
     devices: deviceList,
     topologyHash: toHex(sha256(scratch.writer.encode(nodes, branches))),
+    diagnostics,
+  };
+}
+
+/**
+ * `assemble`'s result for the previous netlist's partition with another set of connection branches
+ * (`toggleOnly`, F3.6 part 2): the nodes' members, the entity branches and every connection's plant
+ * terminals are the previous compile's, so only the branch list, the islands (re-partitioned over the
+ * new branches, numbered by their smallest node as `assemble` numbers them) and the hash are redone.
+ * Node and branch objects whose fields didn't change are reused. `scratch.nodeOfTerminal` still maps
+ * plant terminals to nodes: only `assemble` writes it, and the partition is unchanged since.
+ */
+function reassemble(
+  previous: Netlist,
+  deviceBranchCount: number,
+  connections: readonly PlacedConnection[],
+  diagnostics: NetlistDiagnostic[],
+  scratch: AssembleScratch,
+): Netlist {
+  const nodeCount = previous.nodes.length;
+  const branchCount = deviceBranchCount + connections.length;
+  const endA = (scratch.endA = atLeast(scratch.endA, branchCount));
+  const endB = (scratch.endB = atLeast(scratch.endB, branchCount));
+  const before = previous.branches;
+  for (let i = 0; i < deviceBranchCount; i++) {
+    endA[i] = before[i].a;
+    endB[i] = before[i].b;
+  }
+  const nodeOfTerminal = scratch.nodeOfTerminal;
+  for (let j = 0; j < connections.length; j++) {
+    endA[deviceBranchCount + j] = nodeOfTerminal[connections[j].a];
+    endB[deviceBranchCount + j] = nodeOfTerminal[connections[j].b];
+  }
+
+  // Islands, exactly as `assemble` builds them.
+  const nodeSets = scratch.nodeSets;
+  nodeSets.reset(nodeCount);
+  for (let i = 0; i < branchCount; i++) nodeSets.union(endA[i], endB[i]);
+  const islandOfRoot = (scratch.islandOfRoot = atLeast(scratch.islandOfRoot, nodeCount));
+  islandOfRoot.fill(-1, 0, nodeCount);
+  const islandOfNode = (scratch.islandOfNode = atLeast(scratch.islandOfNode, nodeCount));
+  const islandNodes: number[][] = [];
+  for (let node = 0; node < nodeCount; node++) {
+    const root = nodeSets.find(node);
+    if (islandOfRoot[root] < 0) {
+      islandOfRoot[root] = islandNodes.length;
+      islandNodes.push([]);
+    }
+    islandOfNode[node] = islandOfRoot[root];
+    islandNodes[islandOfRoot[root]].push(node);
+  }
+
+  const nodes: NetlistNode[] = new Array<NetlistNode>(nodeCount);
+  for (let i = 0; i < nodeCount; i++) {
+    const old = previous.nodes[i];
+    nodes[i] = old.island === islandOfNode[i] ? old : { index: i, island: islandOfNode[i], members: old.members };
+  }
+  const islandBranches: number[][] = islandNodes.map(() => []);
+  const hasDc = new Uint8Array(islandNodes.length);
+  const hasAc = new Uint8Array(islandNodes.length);
+  const branches: NetlistBranch[] = new Array<NetlistBranch>(branchCount);
+  for (let i = 0; i < deviceBranchCount; i++) {
+    const old = before[i];
+    const island = islandOfNode[endA[i]];
+    islandBranches[island].push(i);
+    if (old.source === 'dc') hasDc[island] = 1;
+    else if (old.source === 'ac') hasAc[island] = 1;
+    branches[i] = old.island === island ? old : { ...old, island };
+  }
+  let p = deviceBranchCount;
+  for (let j = 0; j < connections.length; j++) {
+    const { id, result } = connections[j];
+    const i = deviceBranchCount + j;
+    const island = islandOfNode[endA[i]];
+    islandBranches[island].push(i);
+    // The previous branch of the same connection, if it had one (both lists ascend by connection id).
+    let old: NetlistBranch | null = null;
+    while (p < before.length) {
+      const element = before[p].element;
+      const at = element.kind === 'connection' ? element.connection : -1;
+      if (at > id) break;
+      p++;
+      if (at === id) {
+        old = before[p - 1];
+        break;
+      }
+    }
+    branches[i] =
+      old !== null && old.index === i && old.island === island && old.values === result.values
+        ? old
+        : {
+            index: i,
+            element: result.elementRef,
+            kind: result.kind,
+            model: result.model,
+            source: null,
+            a: endA[i],
+            b: endB[i],
+            island,
+            values: result.values,
+          };
+  }
+
+  const islands: NetlistIsland[] = islandNodes.map((n, i) => {
+    const kind: IslandKind = hasDc[i] && hasAc[i] ? 'mixed' : hasDc[i] ? 'dc' : hasAc[i] ? 'ac' : 'empty';
+    if (kind === 'mixed') diagnostics.push({ code: 'mixed-island', island: i });
+    return { index: i, kind, nodes: n, branches: islandBranches[i] };
+  });
+  // The node section is the previous encoding's: rewrite only the branches, and resume the hash from
+  // the node section's midstate (computed once per partition).
+  const bytes = scratch.writer.encodeBranches(branches);
+  if (scratch.nodesState === null) {
+    const [state, covered] = sha256Prefix(bytes, scratch.writer.nodesEnd);
+    scratch.nodesState = state;
+    scratch.nodesStateBytes = covered;
+  }
+  return {
+    nodes,
+    branches,
+    islands,
+    devices: previous.devices,
+    topologyHash: toHex(sha256Finish(scratch.nodesState, bytes, scratch.nodesStateBytes)),
     diagnostics,
   };
 }

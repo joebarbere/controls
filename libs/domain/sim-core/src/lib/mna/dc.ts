@@ -177,6 +177,27 @@ export interface DcSolverOptions {
   readonly sparseMinUnknowns?: number;
   /** The factorisation cache, which may be shared between solvers; a private one by default. */
   readonly cache?: FactorisationCache;
+  /**
+   * Let `solve` (the linear solve, never `solveNonlinear`) copy an island's result from its last call
+   * when the island is unchanged: the same nodes, and branch for branch the same element, kind, model,
+   * source, ends and values (bit for bit), whatever the branches' indices. A linear island's solve is
+   * a pure function of exactly those, so the copy is bit-identical to solving it again; only a
+   * topology change elsewhere in the netlist (one connection opening, F3.6 part 2) is saved. Off by
+   * default.
+   */
+  readonly reuseUnchangedIslands?: boolean;
+}
+
+/** What `solve` keeps of its last call when it reuses unchanged islands: the netlist, its values and results. */
+interface IslandMemo {
+  netlist: Netlist;
+  nodes: Float64Array;
+  branches: Float64Array;
+  records: DcIslandResult[];
+  stamps: Uint8Array;
+  ohms: Float64Array;
+  emfV: Float64Array;
+  amps: Float64Array;
 }
 
 const MODE_DENSE = 0;
@@ -260,7 +281,13 @@ export class DcSolver {
   private branchResolution = new Float64Array(0);
   private nodeResolution = new Float64Array(0);
 
+  private readonly reuseIslands: boolean;
+  private memo: IslandMemo | null = null;
+  /** Islands `solve` copied from its last call instead of solving (tests and diagnostics only). */
+  reusedIslands = 0;
+
   constructor(options: DcSolverOptions = {}) {
+    this.reuseIslands = options.reuseUnchangedIslands === true;
     const threshold = options.sparseMinUnknowns ?? SPARSE_MIN_UNKNOWNS.value;
     if (!Number.isInteger(threshold) || threshold < 1) {
       throw new RangeError(`DcSolver: sparseMinUnknowns must be an integer ≥ 1, got ${threshold}`);
@@ -276,11 +303,120 @@ export class DcSolver {
    */
   solve(netlist: Netlist, values: DcBranchValues, out?: DcSolution): DcSolution {
     const solution = this.prepare(netlist, values, out);
+    const memo = this.reuseIslands ? this.memo : null;
     for (let ii = 0; ii < netlist.islands.length; ii++) {
       const island = netlist.islands[ii];
+      if (memo !== null && this.reuseIsland(netlist, island, values, memo, solution)) {
+        this.reusedIslands++;
+        continue;
+      }
       this.solveIsland(netlist, island, values, solution);
     }
+    if (this.reuseIslands) this.remember(netlist, values, solution);
     return solution;
+  }
+
+  /**
+   * Copies `island`'s result from `memo` into `solution` if the island is unchanged since (see
+   * `DcSolverOptions.reuseUnchangedIslands`), and says whether it did. Allocates nothing.
+   */
+  private reuseIsland(
+    netlist: Netlist,
+    island: NetlistIsland,
+    values: DcBranchValues,
+    memo: IslandMemo,
+    solution: DcSolution,
+  ): boolean {
+    const before = memo.netlist;
+    const first = island.nodes[0];
+    if (first >= before.nodes.length) return false;
+    const old = before.islands[before.nodes[first].island];
+    const nodes = island.nodes;
+    const branches = island.branches;
+    if (old.kind !== island.kind || old.nodes.length !== nodes.length || old.branches.length !== branches.length) {
+      return false;
+    }
+    for (let i = 0; i < nodes.length; i++) if (old.nodes[i] !== nodes[i]) return false;
+    for (let i = 0; i < branches.length; i++) {
+      const index = branches[i];
+      const was = old.branches[i];
+      const branch = netlist.branches[index];
+      const other = before.branches[was];
+      if (
+        branch.kind !== other.kind ||
+        branch.model !== other.model ||
+        branch.source !== other.source ||
+        branch.a !== other.a ||
+        branch.b !== other.b ||
+        values.stamps[index] !== memo.stamps[was] ||
+        !Object.is(values.ohms[index], memo.ohms[was]) ||
+        !Object.is(values.emfV[index], memo.emfV[was]) ||
+        !Object.is(values.amps[index], memo.amps[was])
+      ) {
+        return false;
+      }
+      const element = branch.element;
+      const otherElement = other.element;
+      if (element !== otherElement) {
+        if (element.kind === 'entity') {
+          if (
+            otherElement.kind !== 'entity' ||
+            element.entity !== otherElement.entity ||
+            element.part !== otherElement.part
+          ) {
+            return false;
+          }
+        } else if (otherElement.kind !== 'connection' || element.connection !== otherElement.connection) {
+          return false;
+        }
+      }
+    }
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      solution.nodes[2 * node] = memo.nodes[2 * node];
+      solution.nodes[2 * node + 1] = memo.nodes[2 * node + 1];
+    }
+    for (let i = 0; i < branches.length; i++) {
+      const index = branches[i];
+      const was = old.branches[i];
+      solution.branches[2 * index] = memo.branches[2 * was];
+      solution.branches[2 * index + 1] = memo.branches[2 * was + 1];
+    }
+    copyRecord(memo.records[old.index], solution.islands[island.index]);
+    return true;
+  }
+
+  /** Keeps a copy of this call's netlist, values and results for the next `solve` to reuse from. */
+  private remember(netlist: Netlist, values: DcBranchValues, solution: DcSolution): void {
+    const branchCount = netlist.branches.length;
+    let memo = this.memo;
+    if (memo === null || memo.stamps.length < branchCount || memo.nodes.length < solution.nodes.length) {
+      const nodes = Math.max(solution.nodes.length, memo?.nodes.length ?? 0);
+      const branches = Math.max(branchCount, memo?.stamps.length ?? 0);
+      memo = this.memo = {
+        netlist,
+        nodes: new Float64Array(nodes),
+        branches: new Float64Array(2 * branches),
+        records: memo?.records ?? [],
+        stamps: new Uint8Array(branches),
+        ohms: new Float64Array(branches),
+        emfV: new Float64Array(branches),
+        amps: new Float64Array(branches),
+      };
+    }
+    memo.netlist = netlist;
+    memo.nodes.set(solution.nodes);
+    memo.branches.set(solution.branches);
+    memo.stamps.set(values.stamps.subarray(0, branchCount));
+    memo.ohms.set(values.ohms.subarray(0, branchCount));
+    memo.emfV.set(values.emfV.subarray(0, branchCount));
+    memo.amps.set(values.amps.subarray(0, branchCount));
+    const records = memo.records;
+    for (let i = 0; i < solution.islands.length; i++) {
+      if (i === records.length)
+        records.push({ solved: false, referenceNode: -1, unknowns: 0, flags: 0, iterations: 0 });
+      copyRecord(solution.islands[i], records[i]);
+    }
   }
 
   /**
