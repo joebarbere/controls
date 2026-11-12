@@ -75,8 +75,9 @@ export type ConsoleParseResult =
  * Longest console line accepted (UTF-16 code units). Sized to admit the largest legal `wire.add` and
  * `wire.pull` of ADR 0015 (a route of `MAX_ROUTE_WAYPOINTS` = 1 024 waypoints, every id, string and
  * number at its schema maximum) as `formatConsoleLine` writes them. The largest is `wire.pull` at
- * 348 617 characters (a bore waypoint with a 64-character fixture id and a tool ref is about 340
- * characters, × 1 024); `max-line.spec.ts` builds both and checks they round-trip. 384 KiB leaves
+ * 348 608 characters (a bore waypoint with a 64-character fixture id and a tool ref is about 340
+ * characters, × 1 024); `world-model`'s `wiring/console-line.spec.ts` builds both from the real
+ * argument schemas (P3 PR 8) and checks they fit and round-trip. 384 KiB leaves
  * about 13 % for spacing a person (or a script) adds inside JSON words. Lines longer than the
  * settings history cap (2 000) still run but are not kept in `console.history`.
  */

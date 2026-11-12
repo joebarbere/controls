@@ -245,14 +245,16 @@ function field(
 
   const union = unionMembers(schema, id);
   if (union !== null) {
-    const nonNull = union.filter((m) => !isNullSchema(m));
+    // Members are resolved first, so a nullable named scalar (`LabelText.nullable()`, a `$ref`) is one too.
+    const resolved = union.map((m) => resolve(m, defs, id, refs)).filter((m) => !isNullSchema(m.schema));
+    const nonNull = resolved.map((m) => m.schema);
     const hasNull = nonNull.length < union.length;
     const types = scalarUnion(nonNull);
     if (types !== null && nonNull.length > 1) return { ...base, kind: 'scalar', types, nullable: hasNull };
     // A nullable scalar (`z.int().nullable()`, `z.string().nullable()`): the member, with the wrapper's hints.
     if (hasNull && nonNull.length === 1 && isPlainScalar(nonNull[0])) {
       const outer = Object.fromEntries(OUTER_KEYWORDS.filter((k) => k in schema).map((k) => [k, schema[k]]));
-      return field(key, id, { ...nonNull[0], ...outer }, required, defs, refs, true);
+      return field(key, id, { ...nonNull[0], ...outer }, required, defs, resolved[0].refs, true);
     }
     if (ref !== undefined) throw new Unsupported(id, 'references must be integers');
     return choiceField(base, union, defs, refs);

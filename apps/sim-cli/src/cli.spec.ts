@@ -410,6 +410,7 @@ describe('script import boundary', () => {
       '@controls/sim-protocol',
       '@controls/units',
       '@controls/world-model',
+      '@controls/world-model/testing',
     ]);
     for (const ok of ['./x', '../y', '/abs/z', '@controls/world-model', 'zod', 'zod/v4']) {
       expect(isAllowedImport(ok, aliases)).toBe(true);

@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "route": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "title": "Waypoint",
+        "$ref": "#/$defs/WaypointV3"
+      },
+      "title": "Route"
+    },
+    "lengthMm": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000,
+      "title": "Length (mm)"
+    },
+    "conductors": {
+      "minItems": 1,
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "description": "A conductor in the catalogue (conductor.…)",
+            "title": "Conductor",
+            "$ref": "#/$defs/CatalogRef"
+          },
+          "colour": {
+            "title": "Colour",
+            "$ref": "#/$defs/ConductorColourV3"
+          }
+        },
+        "required": [
+          "ref",
+          "colour"
+        ],
+        "additionalProperties": false,
+        "title": "Conductor"
+      },
+      "title": "Conductors"
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A tool in the catalogue (tool.…)",
+      "title": "Fish tape",
+      "$ref": "#/$defs/CatalogRef"
+    }
+  },
+  "required": [
+    "route",
+    "lengthMm",
+    "conductors",
+    "tool"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "FixtureIdV1": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Lower-case words joined by single hyphens, at most 64 characters."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "WaypointV3": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "free",
+            "duct",
+            "conduit",
+            "staple",
+            "bore"
+          ]
+        },
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FixtureIdV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "positionMm",
+        "entity",
+        "fixture",
+        "tool"
+      ],
+      "additionalProperties": false
+    },
+    "ColourId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row of the catalogue colour table: lower camelCase, at most 32."
+    },
+    "ConductorColourV3": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/ColourId"
+        },
+        "stripe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColourId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "base",
+        "stripe"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "title": "Arguments of wire.pull"
+}

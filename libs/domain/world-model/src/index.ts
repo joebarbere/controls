@@ -13,3 +13,5 @@ export * from './lib/fixtures';
 export * from './lib/level';
 export * from './lib/snap';
 export * from './lib/routing';
+export * from './lib/termination';
+export * from './lib/wiring';

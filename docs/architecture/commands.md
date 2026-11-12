@@ -91,6 +91,39 @@ flowchart LR
 | `lead.disconnect` | `id`                                                   | removes the connection; `nextConnectionId` unchanged               | reinserts it, same id, in sorted order                |
 | `device.operate`  | `id`, `control`, `value` (boolean, number or text)     | sets the commanded state key `control` (never reads the `sim` bag) | restores the previous `state` bag                     |
 
+World v3 adds the wiring commands (P3 PR 8, [ADR 0015](../decisions/0015-world-document-v3.md#commands); `world-model/src/lib/wiring/`). Every one is undoable, restores every id and counter on undo, checks its tools by capability and never reads sim-owned state:
+
+| Id                    | Args                                                                            | Apply                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `wire.add`            | `ref`, `a`, `b` (a landed end or `null`), `route`, `lengthMm`, `colour`, `tool` | a conductor with id `nextConnectionId`, a termination id per landed end (`a` then `b`), resolved and stored |
+| `wire.delete`         | `id`                                                                            | removes a single conductor (`in-cable` for a cable's)                                                       |
+| `wire.reroute`        | `id`, `route`                                                                   | a new route, the same cut length (`too-short` if it doesn't reach)                                          |
+| `wire.land`           | `id`, `end`, `at` (`{ entity, terminal, termination }`)                         | lands a free end with the next termination id; its rest waypoint becomes the terminal point                 |
+| `wire.unland`         | `id`, `end`                                                                     | frees the end; a rest waypoint where the terminal was                                                       |
+| `wire.label`          | `id`, `text` (or `null`), `tool`                                                | sets the sleeve marker                                                                                      |
+| `wire.pull`           | `route` (through conduit), `lengthMm`, `conductors` (1–16), `tool`              | one free conductor per entry, ids in order                                                                  |
+| `cable.add`           | `ref`, `a`, `b` (an entry or `null`), `route`, `lengthMm`, `tailsMm`, `tool`    | a cable with id `nextCableId` and one free conductor per assembly conductor                                 |
+| `cable.strip`         | `id`, `end`, `jacketMm`, `tool`                                                 | strips more jacket at that end (never less, never past the tail)                                            |
+| `cable.delete`        | `id`                                                                            | removes the cable and its conductors                                                                        |
+| `cable.reroute`       | `id`, `route`                                                                   | a new route between the same entries, the same cut length                                                   |
+| `cable.label`         | `id`, `text` (or `null`), `tool`                                                | sets the cable's label                                                                                      |
+| `enclosure.openEntry` | `id`, `entry`, `tool`                                                           | sets the entry's bit in the enclosure's `openEntries`                                                       |
+| `entity.label`        | `id`, `text` (or `null`), `tool`                                                | sets the device's label                                                                                     |
+
+```mermaid
+flowchart LR
+  args["logged args"] --> tool["checkTool (capability, capacity)"]
+  args --> route["checkRoute (rest waypoints, hosts, conduit)"]
+  args --> land["checkLanding (terminal, method, gauge, room, steps)"]
+  land --> resolve["resolveTermination (termination:id:step streams)"]
+  route --> geometry["checkGeometry (distinct points, routeFloorMm, route-collides)"]
+  resolve --> change["apply / invert (counters restored on undo)"]
+  geometry --> change
+  tool --> change
+```
+
+`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry`.
+
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 
 ## View commands

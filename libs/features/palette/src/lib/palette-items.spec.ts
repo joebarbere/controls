@@ -11,8 +11,15 @@ describe('paletteItems', () => {
   it('lists every command except the palette itself, enabled first, then by category and title', () => {
     const items = paletteItems(registry, idle, '', []);
     expect(ids(items)).toEqual([
+      'cable.add', // Cable, by title: Add, Delete, Label, Reroute a cable, Strip a cable jacket
+      'cable.delete',
+      'cable.label',
+      'cable.reroute',
+      'cable.strip',
       'device.operate',
+      'enclosure.openEntry',
       'entity.delete',
+      'entity.label',
       'entity.move',
       'entity.place',
       'entity.rotate',
@@ -22,6 +29,13 @@ describe('paletteItems', () => {
       'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',
       'view.mode',
+      'wire.add', // Wire, by title: Add, Delete, Label a wire, Land a wire end, Pull, Reroute, Unland
+      'wire.delete',
+      'wire.label',
+      'wire.land',
+      'wire.pull',
+      'wire.reroute',
+      'wire.unland',
       'edit.redo',
       'edit.undo',
       'sim.resume', // disabled here: no game (session.active); Sim, by title
@@ -45,7 +59,7 @@ describe('paletteItems', () => {
 
   it('puts recents first, most recent first, when there is no query', () => {
     const items = paletteItems(registry, idle, '', ['view.resetLayout', 'entity.move', 'unknown.command']);
-    expect(ids(items).slice(0, 3)).toEqual(['view.resetLayout', 'entity.move', 'device.operate']);
+    expect(ids(items).slice(0, 3)).toEqual(['view.resetLayout', 'entity.move', 'cable.add']);
     expect(items[0].recentRank).toBe(0);
     expect(items[2].recentRank).toBe(-1);
   });
@@ -54,6 +68,7 @@ describe('paletteItems', () => {
     expect(ids(paletteItems(registry, idle, 'place', []))[0]).toBe('entity.place');
     expect(ids(paletteItems(registry, idle, 'obj', [])).sort()).toEqual([
       'entity.delete',
+      'entity.label',
       'entity.move',
       'entity.place',
       'entity.rotate',

@@ -22,6 +22,7 @@
       "@controls/units": ["./libs/domain/units/src/index.ts"],
       "@controls/save-format": ["./libs/domain/save-format/src/index.ts"],
       "@controls/save-format/testing": ["./libs/domain/save-format/src/testing/arbitraries.ts"],
+      "@controls/world-model/testing": ["./libs/domain/world-model/src/testing/index.ts"],
       "@controls/commands": ["./libs/domain/commands/src/index.ts"],
       "@controls/world-model": ["./libs/domain/world-model/src/index.ts"],
       "@controls/scripting-api": ["./libs/domain/scripting-api/src/index.ts"],

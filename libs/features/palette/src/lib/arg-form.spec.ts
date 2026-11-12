@@ -513,12 +513,34 @@ describe('every registered command', () => {
       .map(([id, f]) => `${id}:${f.id}`);
     expect(ids).toEqual([
       'device.operate:id',
+      'enclosure.openEntry:id',
       'entity.delete:id',
+      'entity.label:id',
       'entity.move:id',
       'entity.rotate:id',
       'lead.connect:a.entity',
       'lead.connect:b.entity',
+      'wire.land:at.entity',
     ]);
+  });
+
+  it('labels list items of the world v3 commands (route waypoints, pulled conductors) and offers connection and cable refs', () => {
+    const registry = createWorldRegistry();
+    const form = (id: string) => {
+      const command = registry.get(id);
+      if (!command) throw new Error(`${id} missing`);
+      return formOf(command.args);
+    };
+    const list = (id: string, key: string) => form(id).fields.find((f) => f.key === key) as ListField;
+    expect(list('wire.add', 'route')).toMatchObject({ kind: 'list', itemLabel: 'Waypoint' });
+    expect(list('cable.reroute', 'route')).toMatchObject({ kind: 'list', itemLabel: 'Waypoint' });
+    expect(list('wire.pull', 'conductors')).toMatchObject({ kind: 'list', itemLabel: 'Conductor' });
+    const refs = (id: string) =>
+      allFields(form(id).fields)
+        .filter((f) => f.kind === 'number' && f.ref !== null)
+        .map((f) => `${f.id}:${(f as NumberField).ref}`);
+    expect(refs('wire.unland')).toEqual(['id:connection']);
+    expect(refs('cable.strip')).toEqual(['id:cable']);
   });
 
   it('entity.place fills its default orientation', () => {

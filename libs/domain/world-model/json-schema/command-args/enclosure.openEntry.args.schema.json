@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Enclosure"
+    },
+    "entry": {
+      "description": "An entry id of the enclosure's catalogue entry (ko1, top)",
+      "title": "Entry",
+      "$ref": "#/$defs/EntryId"
+    },
+    "tool": {
+      "description": "A tool in the catalogue (tool.…)",
+      "title": "Tool",
+      "$ref": "#/$defs/CatalogRef"
+    }
+  },
+  "required": [
+    "id",
+    "entry",
+    "tool"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "EntryId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "An enclosure entry id within one catalogue entry."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    }
+  },
+  "title": "Arguments of enclosure.openEntry"
+}

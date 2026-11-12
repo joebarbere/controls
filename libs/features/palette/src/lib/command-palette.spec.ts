@@ -207,7 +207,7 @@ describe('CommandPalette', () => {
     session.exec('entity.place', { ref: crate, positionMm: { x: 0, y: 0, z: 0 } });
     session.setContext(SELECTION_ENTITY_ID_KEY, 1);
     await open();
-    await user.keyboard('delete{Enter}');
+    await user.keyboard('delete object{Enter}');
     await stable();
     const entity = screen.getByRole('combobox', { name: 'Entity' });
     expect(entity).toHaveProperty('value', '1');
@@ -220,7 +220,7 @@ describe('CommandPalette', () => {
   it('reopens on the command with the message when the command is refused', async () => {
     const { user, stable, open, session } = await setup();
     await open();
-    await user.keyboard('delete{Enter}');
+    await user.keyboard('delete object{Enter}');
     await stable();
     // No entities, so no suggestion list: a plain text field.
     await user.type(screen.getByRole('textbox', { name: 'Entity' }), '9');

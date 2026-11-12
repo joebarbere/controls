@@ -11,7 +11,8 @@ import { WORKSPACE_ROOT } from './script-loader';
  *   except src/lib/pacing/, and apps/sim-cli except src/bench/clock.ts (P2 kickoff step 6);
  * - D6 (plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1): no engine-dependent
  *   Math functions or `**` in sim-core source, nor (P3 decisions D5 and D13, kickoff step 6) in
- *   libs/domain/world-model/src/lib/routing/ (`Math.sqrt` is allowed);
+ *   libs/domain/world-model/src/lib/routing/ (`Math.sqrt` is allowed), nor (P3 PR 8, ADR 0015) in
+ *   libs/domain/world-model/src/lib/termination/ (a stored termination outcome);
  * - no Node built-ins in domain or sim-worker source.
  */
 
@@ -181,6 +182,30 @@ describe('D6 in world-model routing (P3 decisions D5 and D13)', () => {
       expect(await restrictions('export const x = [Math.exp(1), 2 ** 0.5];', file)).toEqual([]);
     },
   );
+});
+
+describe('D6 in world-model termination and wiring (ADR 0015)', () => {
+  // A termination's outcome is stored in the world and hashed, so resolveTermination is held to D6.
+  const TERMINATION_SOURCE = 'libs/domain/world-model/src/lib/termination/probe.ts';
+  const TERMINATION_SPEC = 'libs/domain/world-model/src/lib/termination/probe.spec.ts';
+
+  it.each(D6_FUNCTIONS)('rejects Math.%s in termination source', async (fn) => {
+    expect(await restrictions(`export const x = Math.${fn}(0.5, 0.5);`, TERMINATION_SOURCE)).toEqual([
+      `no-restricted-properties: Math.${fn}() is engine-dependent and banned in world-model termination source`,
+    ]);
+  });
+
+  it('covers world-model wiring source too (its geometry decides which logged commands replay)', async () => {
+    expect(await restrictions('export const x = 2 ** 3;', 'libs/domain/world-model/src/lib/wiring/probe.ts')).toEqual([
+      'no-restricted-syntax: The ** operator is engine-dependent (it is Math.pow) and banned in world-model wiring source',
+    ]);
+  });
+
+  it('allows Math.sqrt, keeps the determinism lint, and exempts specs', async () => {
+    expect(await restrictions('export const x = Math.min(Math.sqrt(2), 1);', TERMINATION_SOURCE)).toEqual([]);
+    expect(await restrictions(WALL_CLOCK, TERMINATION_SOURCE)).toEqual(WALL_CLOCK_ERRORS);
+    expect(await restrictions('export const x = 2 ** 0.5;', TERMINATION_SPEC)).toEqual([]);
+  });
 });
 
 describe('determinism lint in libs/sim-worker', () => {

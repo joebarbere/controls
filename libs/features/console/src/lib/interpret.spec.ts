@@ -28,7 +28,7 @@ describe('resolveConsoleLine', () => {
   it('maps JSON words, nullable objects and console shorthand through the shared mapping', () => {
     const wires = createWorldRegistry().register(
       defineCommand({
-        id: 'wire.add',
+        id: 'test.add',
         title: 'Add wire',
         category: 'Wiring',
         args: z.strictObject({
@@ -39,20 +39,20 @@ describe('resolveConsoleLine', () => {
         run: () => succeed<World>(),
       }),
     );
-    expect(resolveConsoleLine(wires, 'wire.add --route [{"x":1}] --a null')).toEqual({
+    expect(resolveConsoleLine(wires, 'test.add --route [{"x":1}] --a null')).toEqual({
       kind: 'command',
-      id: 'wire.add',
+      id: 'test.add',
       args: { route: [{ x: 1 }], a: null },
       cheat: false,
     });
-    expect(resolveConsoleLine(wires, 'wire.add --route auto')).toMatchObject({ kind: 'error', column: 10 });
-    const shorthand = (id: string, path: string) => id === 'wire.add' && path === 'route';
-    expect(resolveConsoleLine(wires, 'wire.add --route auto', shorthand)).toMatchObject({
+    expect(resolveConsoleLine(wires, 'test.add --route auto')).toMatchObject({ kind: 'error', column: 10 });
+    const shorthand = (id: string, path: string) => id === 'test.add' && path === 'route';
+    expect(resolveConsoleLine(wires, 'test.add --route auto', shorthand)).toMatchObject({
       kind: 'command',
       args: { route: 'auto' },
     });
-    const help = consoleHelp(wires, 'wire.add');
-    expect(help.ok && help.lines).toEqual(expect.arrayContaining(['Usage: wire.add <route> <a> --a.entity <number>']));
+    const help = consoleHelp(wires, 'test.add');
+    expect(help.ok && help.lines).toEqual(expect.arrayContaining(['Usage: test.add <route> <a> --a.entity <number>']));
     expect(help.ok && help.lines.join('\n')).toMatch(/--route\s+JSON; required; or positional #1/);
     expect(help.ok && help.lines.join('\n')).toMatch(/--a\s+JSON\|null; required; or positional #2/);
   });

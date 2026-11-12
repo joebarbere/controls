@@ -6,10 +6,11 @@ import { worldHash } from './hash';
 import { createWorldBus, createWorldRegistry } from './session';
 
 /*
- * The existing commands on world v3 (ADR 0015, P3 PR 7). No new command lands here (the wire, cable
- * and enclosure commands are P3 PR 8); `entity.place` gains `mountedOn` (default `null`), and the
- * commands refuse what would leave a v3 world invalid until PR 8 refines it (mount checks, sliding
- * along a mount, unlanding on delete). Test leads behave exactly as in v2.
+ * The existing commands on world v3 (ADR 0015, P3 PR 7, refined by PR 8): `entity.place` takes
+ * `mountedOn` (default `null`, checked against the mount since PR 8: `mounting.spec.ts`), occupied
+ * enclosures refuse move, rotate and delete, mounted devices refuse rotation and slide only along
+ * their mount, and a wired entity refuses move and rotate but unlands its conductors when deleted.
+ * Test leads behave exactly as in v2.
  */
 
 /** Entities: 1 split-phase, 2 box (`ko1` open, a cable in it), 3 DIN panel, 4 breaker on its rail, 5 battery. */
@@ -30,7 +31,7 @@ describe('entity.place with mountedOn (ADR 0015)', () => {
     expect(checkWorldReferences(bus.state, WIRING_TEST_CATALOG)).toStrictEqual([]);
   });
 
-  it('refuses a mount until the world v3 commands land, after checking the host and the mount', () => {
+  it('checks the host and the mount before anything else', () => {
     const bus = wiredBus();
     const before = bus.state;
     const place = (ref: object, mountedOn: object) =>
@@ -39,13 +40,13 @@ describe('entity.place with mountedOn (ADR 0015)', () => {
     expect(place(BREAKER, { entity: 3, mount: 'rail-9' })).toMatchObject(refused('unknown-mount'));
     expect(place(BREAKER, { entity: 1, mount: 'rail-1' })).toMatchObject(refused('unknown-mount'));
     expect(place(BATTERY, { entity: 3, mount: 'rail-1' })).toMatchObject(refused('mount-mismatch'));
-    expect(place(BREAKER, { entity: 3, mount: 'rail-1' })).toMatchObject(refused('mounting-unavailable'));
+    expect(place(BREAKER, { entity: 3, mount: 'rail-1' })).toMatchObject(refused('off-mount'));
     expect(bus.state).toBe(before);
     expect(bus.entries).toHaveLength(0);
   });
 });
 
-describe('the entity commands keep a v3 world valid (until P3 PR 8 refines them)', () => {
+describe('the entity commands keep a v3 world valid', () => {
   it('an entity something is mounted on, a cable enters or a route is hosted by is occupied', () => {
     const bus = wiredBus();
     for (const id of [3, 2]) {
@@ -57,11 +58,11 @@ describe('the entity commands keep a v3 world valid (until P3 PR 8 refines them)
     }
   });
 
-  it('a mounted device can be neither moved nor rotated; deleting it is fine once unwired', () => {
+  it('a mounted device can be neither rotated nor moved off its mount; deleting it is fine once unwired', () => {
     const doc = wiredWorldDoc();
     doc.connections.splice(0, 1); // the conductor landed on the breaker
     const bus = createWorldBus(World.parse(doc), createWorldRegistry({ catalog: WIRING_TEST_CATALOG }));
-    expect(bus.exec('entity.move', { id: 4, positionMm: at(0, 0, 0) })).toMatchObject(refused('mounted'));
+    expect(bus.exec('entity.move', { id: 4, positionMm: at(0, 0, 0) })).toMatchObject(refused('off-mount'));
     expect(bus.exec('entity.rotate', { id: 4, deltaMdeg: { yaw: 0, pitch: 0, roll: 90_000 } })).toMatchObject(
       refused('mounted'),
     );
@@ -75,13 +76,22 @@ describe('the entity commands keep a v3 world valid (until P3 PR 8 refines them)
     expect(bus.exec('entity.delete', { id: 3 }).ok).toBe(true);
   });
 
-  it('an entity with a landed conductor end is wired: no move, rotate or delete', () => {
+  it('an entity with a landed conductor end is wired: no move or rotate; deleting it unlands the ends', () => {
     const bus = wiredBus();
     expect(bus.exec('entity.move', { id: 1, positionMm: at(0, 0, 0) })).toMatchObject(refused('wired'));
     expect(bus.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 90_000, pitch: 0, roll: 0 } })).toMatchObject(
       refused('wired'),
     );
-    expect(bus.exec('entity.delete', { id: 1 })).toMatchObject(refused('wired'));
+    const before = bus.state;
+    expect(bus.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    const [single, inCable] = bus.state.connections;
+    // The single conductor gets a rest waypoint where L1's screw was; the cable conductor just comes free.
+    expect(single).toMatchObject({ id: 1, a: null, route: [{ kind: 'free', positionMm: at(50, 1150, -1800) }, {}] });
+    expect(inCable).toMatchObject({ id: 2, a: null, route: null });
+    expect(World.safeParse(bus.state).success).toBe(true);
+    expect(checkWorldReferences(bus.state, WIRING_TEST_CATALOG)).toStrictEqual([]);
+    expect(bus.exec('edit.undo').ok).toBe(true);
+    expect(bus.state).toStrictEqual(before);
   });
 
   it('test leads behave as in v2: deleting an entity removes its leads, and undo restores them', () => {
