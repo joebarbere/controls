@@ -672,7 +672,9 @@ export class ConnectionThermalBank {
       const rPerM = rPerM0[i] * (1 + alpha * (Math.min(tc, tLin[i]) - t0Of[i]));
       let next = tc + dt * invC[i] * (i2 * rPerM - g * (tc - ta));
       const melt = meltOf[i];
-      if (next >= melt) {
+      // `!(next < melt)` and not `next >= melt`: a step that overflows (an absurd current, I² = +∞) or
+      // gives NaN fuses too, so no temperature, and so no stamp, is ever non-finite.
+      if (!(next < melt)) {
         // Fused (F3.6 part 2): the node is held at its melting point, and the connection opens for good.
         next = melt;
         this.fuse(i);
@@ -715,8 +717,9 @@ export class ConnectionThermalBank {
         // Degradation (ADR 0018 §5): only above the onset, never reversed.
         const excess = th - ONSET_K;
         let dNext = excess > 0 ? d + dt * DEGRADE_RATE * rateMult[e] * excess : d;
-        if (next >= melt) {
-          // Burned open at the metal's melting point (§5); the node is held there.
+        if (!(next < melt)) {
+          // Burned open at the metal's melting point (§5); the node is held there (an overflowed or NaN
+          // step included, as for the conductor node).
           next = melt;
           const open = BURNED_OHM / rMade[e];
           if (open > dNext) dNext = open;
@@ -969,8 +972,11 @@ export class ConnectionThermalBank {
           ? (line.lead.resistivityOhmM * (line.lead.lengthMm / 1000)) / line.lead.conductorAreaM2
           : conductorResistanceOhm(line.line, connection.lengthMm ?? 1000, line.t0);
       const loaded = live >= 0 ? previous.tc[live] : (num(bag ?? undefined, 'conductorTempK') ?? AMBIENT);
-      // Never above the melting point (a save from engine 7 before part 2 may hold more).
-      const tc = loaded > line.meltK ? line.meltK : loaded;
+      // Within [ambient, melting point]: a save from engine 7 before part 2 may hold more than the
+      // melting point, and a schema-valid but absurd bag less than ambient, where the linear α model
+      // gives a negative resistance (below about 39 K for copper) and an overflowing current a −∞ step.
+      // Nothing the engine writes is outside it (never below ambient without a sink, ADR 0018 §12).
+      const tc = clampNodeK(loaded, line.meltK);
       this.tc[i] = tc;
       this.insulationDamaged[i] =
         live >= 0 ? previous.insulationDamaged[live] : bag?.['insulationDamaged'] === true ? 1 : 0;
@@ -1059,7 +1065,7 @@ export class ConnectionThermalBank {
       if (spec !== null && physics !== null) {
         this.hot[e] = 1;
         const th = temp ?? tc;
-        this.th[e] = th > line.meltK ? line.meltK : th;
+        this.th[e] = clampNodeK(th, line.meltK);
         this.gTerm[e] = spec.heatPathWPerK;
         this.invCh[e] = 1 / spec.hotSpotHeatCapacityJPerK;
         const landedCount = landed.get(`${end.entity}:${end.terminal}:${termination.method}`) ?? 1;
@@ -1175,6 +1181,11 @@ const TOPOLOGY_VIEWS: readonly ConnectionTopologyView[] = Object.freeze(
     Object.freeze({ endAState: CONNECTION_END_STATES[k >> 2], endBState: CONNECTION_END_STATES[k & 3] }),
   ),
 );
+
+/** A loaded node temperature (K) clamped into [ambient, `meltK`] (rebuild only; see `rebuild`). */
+function clampNodeK(t: number, meltK: number): number {
+  return t > meltK ? meltK : t < AMBIENT ? AMBIENT : t;
+}
 
 /** `asMadeContactInto`'s output slot at a rebuild (read at once). */
 const SCRATCH_PARTS: ContactParts = { constrictionOhm: 0, filmOhm: 0 };

@@ -534,6 +534,54 @@ describe('detections (ADR 0018 §6, goldens 7 and 8)', () => {
   });
 });
 
+describe('finite whatever the inputs (the #106 CI counterexample)', () => {
+  it('stamps (DC and AC) and bags stay finite for any accepted bag and any current, +∞ and NaN included', () => {
+    const temp = fc.oneof(fc.constantFrom(1e-300, 1, 293.15, 1e6, 1e300), fc.double({ min: 1, max: 1e7, noNaN: true }));
+    const amps = fc.oneof(
+      fc.constantFrom(0, 1e-300, 1e150, 1e300, Number.POSITIVE_INFINITY, Number.NaN),
+      fc.double({ min: 0, max: 1e6, noNaN: true }),
+    );
+    fc.assert(
+      fc.property(
+        temp,
+        temp,
+        fc.oneof(fc.constantFrom(1, 1e6, 1e300, Number.MAX_VALUE), fc.double({ min: 1, max: 1e4, noNaN: true })),
+        amps,
+        amps,
+        fc.integer({ min: 1, max: 30 }),
+        (tc, th, d, conductorAmps, leadAmps, steps) => {
+          const r = rig(
+            benchWorld(0.8, { conductorTempK: tc, endATempK: th, endADegradation: d, endATerminationId: 1 }),
+          );
+          r.setAmps(1, conductorAmps);
+          r.setAmps(2, leadAmps);
+          r.step(steps);
+          for (const id of [1, 2]) {
+            const i = r.bank.indexOf(id);
+            for (const at of [0, 1, 12.5, conductorAmps]) {
+              if (Number.isFinite(at))
+                expect(Number.isFinite(r.bank.resistanceOhm(i, at)), `${id} at ${at} A`).toBe(true);
+            }
+            for (const v of Object.values(r.bag(id))) if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+            expect(r.bag(id)['conductorTempK'] as number).toBeLessThanOrEqual(CU_MELT_K);
+          }
+        },
+      ),
+      {
+        numRuns: 150,
+        examples: [
+          // A loaded conductor at 1e-300 K (schema-valid) with I² = +∞: a negative R(T) made a −∞ step.
+          [1e-300, 1, 1, Number.POSITIVE_INFINITY, 0, 1],
+          // A NaN current (never a reading, but the bank must not pass it on).
+          [293.15, 293.15, 1, Number.NaN, Number.NaN, 3],
+          // An overflowing current on both, from the hottest accepted start.
+          [1e300, 1e300, Number.MAX_VALUE, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, 30],
+        ],
+      },
+    );
+  });
+});
+
 describe('the fusing rule (F3.6 part 2)', () => {
   const ta = TA;
   /** The steady current at which the model's conductor node reaches `tK` in free air (ADR 0018 §3.5 inversion). */
