@@ -6,11 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Tests (P2 close-out): **saving and loading mid-sim is a permanent desktop E2E** (`apps/desktop-e2e/src/saves.spec.ts`, on the dev and packaged builds), replacing the release smoke's scratch spec. It lights the bench lamp (1.5 s of sim time, `BENCH_LAMP_LIT_HASH`), saves from the menu, starts another sandbox, loads the save, checks the lit hash and the sim time (0:00:01.500) again, then opens the switch and runs on to `BENCH_LAMP_HASH` at 0:00:02.000. The desktop bench-lamp hashes and scenario lines now live once in `apps/desktop-e2e/src/game.ts`.
+
 ### Changed
 
 - **A smaller game download** (P2 follow-up). The game's initial bundle is 1.88 MB instead of 2.24 MB (brotli 441 kB instead of 491 kB), back under its 2 MB budget, and the sim worker is 307 kB instead of 664 kB (brotli 82 kB instead of 134 kB). Every file now imports zod as a namespace (`import * as z from 'zod'`): the named `z` export defeated esbuild's tree-shaking and bundled all of zod, every locale included. A lint rule rejects the named and default zod imports everywhere, with probes in `apps/sim-cli/src/lint-determinism.spec.ts`. No behaviour change.
 - **Release notes on the draft are now filled in automatically** (P2 release follow-up; [releasing guide](docs/guides/releasing.md)). A new `draft` job in `release.yml` creates the draft GitHub Release before any installer is uploaded. Its notes are the version's `CHANGELOG.md` section, and its title is `vX.Y.Z — Phase N: Name` for a phase release or `vX.Y.Z` for a patch. Before this, the draft had an empty body and the bare version as its title, and both were filled in by hand (v0.1.0–v0.3.0). It also stops the three packaging jobs from racing to create the release, which could make duplicate drafts. A CI rehearsal shows the notes in the job summary and creates nothing.
 - Developer (release notes): `tools/release-notes.mjs` (dependency-free: the section without its heading or link-reference lines, repo-relative links made absolute at the tag, `--title`, fails on a missing or empty section or one over GitHub's 125,000-character limit) and `tools/release-notes.test.mjs`. `pnpm verify` now ends with `node --test tools/release-notes.test.mjs`.
+
+### Fixed
+
+- Tests: **the bench-lamp web E2E no longer selects the switch before the viewport has drawn it** (a macOS CI failure on PR #80, all three attempts, `sab=0` transport). The setup loop waited for each console line with `toHaveText(/: ok/)`, which the previous line's output already matched, so it never waited for a render; the viewport draws the world from an Angular effect a change detection after the command, and on a busy runner `__controlsViewport.select('entity-2')` ran first and returned false. Setup lines now wait for their own `: ok (log #n)` and then for the renderer to list the devices (`apps/game-e2e/src/support/console.ts`); `sim-acceptance.spec.ts` had the same loop and is fixed too. Reproduced locally by delaying the page's zero-delay timers and animation frames.
 
 ### Documentation
 

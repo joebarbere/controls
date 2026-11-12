@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -130,10 +131,7 @@ for (const { transport, query } of [
     await openConsole(page);
     const setup = setupLines();
     expect(setup).toHaveLength(6);
-    for (const line of setup) {
-      await typeLine(page, line);
-      await expect(lastOutput(page)).toHaveText(/: ok/);
-    }
+    for (const [seq, line] of setup.entries()) await runLogged(page, line, seq);
     await typeLine(page, 'view.netlistInspector');
     const inspector = page.getByRole('region', { name: 'Inspector' });
     const tree = inspector.getByRole('tree', { name: 'Netlist' });
@@ -153,6 +151,7 @@ for (const { transport, query } of [
     // E on the selected switch closes it.
     await page.keyboard.press('Backquote'); // the console closes
     await canvas.focus();
+    await expectDrawn(page, ['entity-2']); // the renderer draws the world a change detection later
     expect(await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.select('entity-2'))).toBe(true);
     await expect(viewport).toHaveAttribute('data-selected', 'entity-2');
     await pressE(page, canvas, 0, true);

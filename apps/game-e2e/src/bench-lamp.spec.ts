@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -136,7 +137,10 @@ function scenario(): { lines: string[]; setup: string[] } {
   };
 }
 
-/** Starts a sandbox and types the scenario's setup (three devices, three leads) into the console. */
+/**
+ * Starts a sandbox, types the scenario's setup (three devices, three leads) into the console, and
+ * waits until the renderer draws the three devices (the hook can select them only then).
+ */
 async function benchSetup(page: Page, query: string): Promise<{ viewport: Locator; canvas: Locator }> {
   await page.goto(`/?e2e=1&renderer=webgl2${query}`);
   await startSandbox(page);
@@ -147,10 +151,8 @@ async function benchSetup(page: Page, query: string): Promise<{ viewport: Locato
   const { setup } = scenario();
   expect(setup).toHaveLength(6);
   await openConsole(page);
-  for (const line of setup) {
-    await typeLine(page, line);
-    await expect(lastOutput(page)).toHaveText(/: ok/);
-  }
+  for (const [seq, line] of setup.entries()) await runLogged(page, line, seq);
+  await expectDrawn(page, ['entity-1', 'entity-2', 'entity-3']);
   return { viewport, canvas };
 }
 
@@ -246,8 +248,7 @@ test('the lamp warms up on screen while time runs, with no command after the res
   test.slow();
   const { canvas } = await benchSetup(page, '');
   // Closed while paused (a new game starts paused): solved, the filament still cold, drawn dark.
-  await typeLine(page, 'device.operate 2 closed true');
-  await expect(lastOutput(page)).toHaveText(/: ok/);
+  await runLogged(page, 'device.operate 2 closed true', 6);
   await expect
     .poll(() => drawn(page))
     .toMatchObject({ lamp: { status: 'solved', level: 0 }, switch: { closed: true } });

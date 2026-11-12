@@ -2,12 +2,13 @@ import { expect, test } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hashAfter, newSandbox, PLACE } from './game';
+import { BENCH_LAMP_HASH, BENCH_LAMP_LIT_HASH, benchLampScenario, hashAfter, newSandbox, PLACE } from './game';
 import { createProfile, launchControls, removeProfile, type LaunchedControls } from './launch';
 
 /**
  * F1.8b: save I/O over the real bridge, against the real main process and file system (ADR 0009,
- * part 2), and saving and loading a game through the UI (part 3). One launch for the file, so it
+ * part 2), and saving and loading a game through the UI (part 3), also mid-sim (the P2 bench lamp,
+ * lit, saved and loaded, then run on to its pinned hashes). One launch for the file, so it
  * also runs against a packaged build (the release smoke procedure); the dialog test stubs
  * Electron's `dialog` through the Node inspector, so it runs on the dev build only.
  */
@@ -190,5 +191,42 @@ test.describe.serial('desktop saves', () => {
     await expect(load).toBeHidden();
     await expect(window.getByText('Loaded “Desktop E2E”.')).toBeVisible();
     expect(await hashAfter(window)).toBe(saved);
+  });
+
+  test('saves mid-sim with the bench lamp lit, loads it into another sandbox and runs on to the same hashes (P2)', async () => {
+    test.slow(); // 2000 ticks of the filament model in the sim worker, on a CI runner
+    const { window } = running();
+    const menu = window.getByRole('navigation', { name: 'Controls' });
+    const simTime = window.getByTestId('sim-time');
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await newSandbox(window, 0);
+    const { lit, out } = benchLampScenario();
+    expect(await hashAfter(window, ...lit)).toBe(BENCH_LAMP_LIT_HASH);
+    await expect(simTime).toHaveText('0:00:01.500');
+
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await menu.getByRole('button', { name: 'Save game' }).click();
+    await expect(window.getByRole('textbox', { name: 'Save name' })).toBeFocused();
+    await window.keyboard.insertText('Bench lamp lit');
+    await window.keyboard.press('Enter');
+    await expect(window.getByText('Saved “Bench lamp lit”.')).toBeVisible();
+    expect(readdirSync(join(profile, 'saves'))).toContain('Bench lamp lit.ctrl');
+
+    // Another game in between, so the load has to replace a running sim worker and its world.
+    await newSandbox(window, 1);
+    expect(await hashAfter(window)).not.toBe(BENCH_LAMP_LIT_HASH);
+    await expect(simTime).toHaveText('0:00:00.000');
+
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await menu.getByRole('button', { name: 'Load' }).click();
+    const load = window.getByRole('dialog', { name: 'Load game' });
+    await load.getByRole('button', { name: 'Bench lamp lit', exact: true }).click();
+    await expect(load).toBeHidden();
+    await expect(window.getByText('Loaded “Bench lamp lit”.')).toBeVisible();
+    // The save resumes where it was taken: mid-sim, lit, and on to the same dark hash as a straight run.
+    expect(await hashAfter(window)).toBe(BENCH_LAMP_LIT_HASH);
+    await expect(simTime).toHaveText('0:00:01.500');
+    expect(await hashAfter(window, ...out)).toBe(BENCH_LAMP_HASH);
+    await expect(simTime).toHaveText('0:00:02.000');
   });
 });
