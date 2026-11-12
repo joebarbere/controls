@@ -95,6 +95,9 @@ const SimEventSchema = z.strictObject({
   kind: z.enum(SIM_EVENT_KINDS),
   entity: z.int().min(1).nullable(),
   entities: z.array(z.int().min(1)),
+  /** Protocol 7: the connection of a connection event, else null. */
+  connection: z.int().min(1).nullable(),
+  end: z.enum(['a', 'b']).nullable(),
   detail: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
 });
 

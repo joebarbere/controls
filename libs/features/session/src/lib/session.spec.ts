@@ -224,6 +224,7 @@ describe('Session', () => {
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),
+      wireInfo: (id: number) => session.wireInfoAt(id),
     };
     expect(await runConsoleScript(target, script)).toMatchObject({ ok: true, executed: 5 });
     expect(await runConsoleScript(game, script)).toMatchObject({ ok: true, executed: 5 });
@@ -254,6 +255,7 @@ describe('Session', () => {
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),
+      wireInfo: (id: number) => session.wireInfoAt(id),
     };
     expect(await runConsoleScript(target, script)).toMatchObject({ ok: true, executed: 7 });
     expect(await runConsoleScript(game, script)).toMatchObject({ ok: true, executed: 7 });
@@ -289,6 +291,7 @@ describe('Session', () => {
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),
+      wireInfo: (id: number) => session.wireInfoAt(id),
     };
     const inGame = await runConsoleScript(target, script);
     const headless = await runConsoleScript(game, script);

@@ -66,6 +66,12 @@ export interface SnapshotSource {
   readonly deviceDataBytes: number;
   /** Writes every device record into `[offset, offset + deviceDataBytes)`, which arrives zeroed. */
   writeDevices(view: DataView, offset: number): void;
+  /** Protocol 7: connection records, one per connection in the thermal bank. */
+  readonly connectionCount: number;
+  /** A multiple of 8. */
+  readonly connectionDataBytes: number;
+  /** Writes every connection record into `[offset, offset + connectionDataBytes)`, which arrives zeroed. */
+  writeConnections(view: DataView, offset: number): void;
 }
 
 /** A value the snapshot can't hold (non-finite, out of range): an engine bug, never a world error. */
@@ -78,7 +84,13 @@ export class SnapshotEncodeError extends Error {
 
 /** The bytes a slot for `source` needs. */
 export function snapshotSlotBytes(source: SnapshotSource): number {
-  return slotBytesFor(source.nodeCount, source.branchCount, source.islandCount, source.deviceDataBytes);
+  return slotBytesFor(
+    source.nodeCount,
+    source.branchCount,
+    source.islandCount,
+    source.deviceDataBytes,
+    source.connectionDataBytes,
+  );
 }
 
 function u32(name: string, value: number): number {
@@ -119,6 +131,9 @@ export function encodeSnapshot(source: SnapshotSource, slot: Uint8Array, slotSeq
   const used = snapshotSlotBytes(source);
   if (slot.byteLength < used) throw new RangeError(`the slot holds ${slot.byteLength} bytes; ${used} are needed`);
   if (source.deviceDataBytes % 8 !== 0) throw new SnapshotEncodeError('deviceDataBytes must be a multiple of 8');
+  if (source.connectionDataBytes % 8 !== 0) {
+    throw new SnapshotEncodeError('connectionDataBytes must be a multiple of 8');
+  }
   // Never the seqlock word (bytes 0–3): the writer has made it odd for this publish, and zeroing it
   // would make it even (complete) while the slot is half written, so a lapped reader would accept it.
   slot.fill(0, SLOT_OFFSETS.slotSeq + 4, used);
@@ -135,6 +150,8 @@ export function encodeSnapshot(source: SnapshotSource, slot: Uint8Array, slotSeq
   view.setUint32(o.deviceDataBytes, source.deviceDataBytes, true);
   writeHashBytes(view, o.topologyHash, source.topologyHash);
   view.setUint32(o.payloadBytes, used - SLOT_HEADER_BYTES, true);
+  view.setUint32(o.connectionCount, u32('connectionCount', source.connectionCount), true);
+  view.setUint32(o.connectionDataBytes, source.connectionDataBytes, true);
 
   let at = SLOT_HEADER_BYTES;
   for (let i = 0; i < 2 * source.nodeCount; i++, at += 8)
@@ -175,6 +192,8 @@ export function encodeSnapshot(source: SnapshotSource, slot: Uint8Array, slotSeq
   }
   view.setUint32(o.flags, flags, true);
   if (source.deviceDataBytes > 0) source.writeDevices(view, at);
+  at += source.deviceDataBytes;
+  if (source.connectionDataBytes > 0) source.writeConnections(view, at);
   return used;
 }
 
@@ -220,6 +239,10 @@ export interface DecodedSnapshot {
   readonly deviceCount: number;
   /** The device section's bytes (a copy). */
   readonly devices: Uint8Array;
+  /** Protocol 7: the connection records' count. */
+  readonly connectionCount: number;
+  /** The connection section's bytes (a copy). */
+  readonly connections: Uint8Array;
 }
 
 /** Thrown by {@link decodeSnapshot} for bytes that aren't a well-formed snapshot. */
@@ -245,8 +268,13 @@ export function decodeSnapshot(hashed: Uint8Array): DecodedSnapshot {
   const branchCount = view.getUint32(at(o.branchCount), true);
   const islandCount = view.getUint32(at(o.islandCount), true);
   const deviceDataBytes = view.getUint32(at(o.deviceDataBytes), true);
+  const connectionDataBytes = view.getUint32(at(o.connectionDataBytes), true);
   const payload = view.getUint32(at(o.payloadBytes), true);
-  const expected = slotBytesFor(nodeCount, branchCount, islandCount, deviceDataBytes) - SLOT_HEADER_BYTES;
+  const expected =
+    slotBytesFor(nodeCount, branchCount, islandCount, deviceDataBytes, connectionDataBytes) - SLOT_HEADER_BYTES;
+  if (deviceDataBytes % 8 !== 0 || connectionDataBytes % 8 !== 0) {
+    throw new SnapshotDecodeError('a record section is not a multiple of 8 bytes');
+  }
   if (payload !== expected || hashed.byteLength !== SLOT_HEADER_BYTES - SLOT_HASHED_START + payload) {
     throw new SnapshotDecodeError("the payload length doesn't match the counts");
   }
@@ -286,5 +314,7 @@ export function decodeSnapshot(hashed: Uint8Array): DecodedSnapshot {
     islands,
     deviceCount: view.getUint32(at(o.deviceCount), true),
     devices: hashed.slice(offset, offset + deviceDataBytes),
+    connectionCount: view.getUint32(at(o.connectionCount), true),
+    connections: hashed.slice(offset + deviceDataBytes, offset + deviceDataBytes + connectionDataBytes),
   };
 }

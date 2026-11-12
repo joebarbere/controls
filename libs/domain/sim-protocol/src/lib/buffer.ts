@@ -60,8 +60,11 @@ export const DIAG_OFFSETS = Object.freeze({
 /** The diagnostics fields by name (what `sim.stats` and the dev HUD show). Never hashed or saved. */
 export type SimDiagnostics = { -readonly [K in keyof typeof DIAG_OFFSETS]: number };
 
-/** The smallest slot the worker allocates (ADR 0011 §7): 1 024 nodes, 2 048 branches, 256 islands, 64 KiB of records. */
-export const MIN_SLOT_BYTES = align64(slotBytesFor(1024, 2048, 256, 64 * 1024));
+/**
+ * The smallest slot the worker allocates (ADR 0011 §7): 1 024 nodes, 2 048 branches, 256 islands,
+ * 64 KiB of device records and (protocol 7) 1 024 connection records of 104 bytes.
+ */
+export const MIN_SLOT_BYTES = align64(slotBytesFor(1024, 2048, 256, 64 * 1024, 1024 * 104));
 
 /** Rounds `n` up to a multiple of 64. */
 export function align64(n: number): number {

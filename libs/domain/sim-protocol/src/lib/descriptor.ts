@@ -47,6 +47,20 @@ export const TopologyDescriptorSchema = z.strictObject({
   devices: z.array(z.strictObject({ entity: EntityId, kind: z.string().min(1).max(64), recordOffset: Count })),
   /** Every kind used in `devices`. */
   schemas: z.record(z.string(), DeviceOutputSchemaSchema),
+  /**
+   * Protocol 7: connection ascending, one per connection in the thermal bank (netlisted or not);
+   * `recordOffset` within the connection section; `branch` −1 when not netlisted.
+   */
+  connections: z.array(
+    z.strictObject({
+      connection: EntityId,
+      kind: z.string().min(1).max(64),
+      recordOffset: Count,
+      branch: z.int().min(-1),
+    }),
+  ),
+  /** Every kind used in `connections`. */
+  connectionSchemas: z.record(z.string(), DeviceOutputSchemaSchema),
 });
 
 export type DescriptorTerminalRef = z.infer<typeof TerminalRefSchema>;
@@ -67,11 +81,33 @@ export interface TopologyDescriptor {
   readonly islands: readonly { readonly kind: 'empty' | 'dc' | 'ac' | 'mixed'; readonly nodes: readonly number[] }[];
   readonly devices: readonly { readonly entity: number; readonly kind: string; readonly recordOffset: number }[];
   readonly schemas: Readonly<Record<string, DeviceOutputSchema>>;
+  /**
+   * Protocol 7 (ADR 0011 amendment, F3.6 part 3): one per connection in the thermal bank, connection
+   * ascending; `recordOffset` is within the slot's connection section, `branch` −1 when not netlisted.
+   * The generation follows the bank's membership as well as the topology.
+   */
+  readonly connections: readonly DescriptorConnection[];
+  /** Every kind used in `connections`. */
+  readonly connectionSchemas: Readonly<Record<string, DeviceOutputSchema>>;
 }
 
-/** A resolved device field: where to read it in a slot's device section, and how. */
+/** One connection record's place in the descriptor (protocol 7). */
+export interface DescriptorConnection {
+  readonly connection: number;
+  /** The catalogue model kind (`conductor`, `lead`): readers join by (id, kind). */
+  readonly kind: string;
+  /** The record's byte offset within the connection section. */
+  readonly recordOffset: number;
+  /** The connection's branch in this generation's netlist, or −1 (not netlisted: its record says `open`). */
+  readonly branch: number;
+}
+
+/**
+ * A resolved record field: where to read it in a slot's device section (`SnapshotView.read`), or for
+ * a connection field its connection section (`SnapshotView.readConnection`), and how.
+ */
 export interface FieldRef {
-  /** The byte offset within the device section (record offset + field offset). */
+  /** The byte offset within its section (record offset + field offset). */
   readonly offset: number;
   readonly type: DeviceOutputFieldType;
   readonly field: DeviceOutputField;
@@ -85,9 +121,11 @@ const indexes = new WeakMap<TopologyDescriptor, DescriptorIndex>();
  */
 export class DescriptorIndex {
   private readonly devices = new Map<number, TopologyDescriptor['devices'][number]>();
+  private readonly connections = new Map<number, DescriptorConnection>();
 
   private constructor(readonly descriptor: TopologyDescriptor) {
     for (const device of descriptor.devices) this.devices.set(device.entity, device);
+    for (const connection of descriptor.connections) this.connections.set(connection.connection, connection);
   }
 
   static of(descriptor: TopologyDescriptor): DescriptorIndex {
@@ -108,5 +146,24 @@ export class DescriptorIndex {
       : undefined;
     const field = schema?.fields.find((f) => f.name === name);
     return field === undefined ? null : { offset: device.recordOffset + field.offset, type: field.type, field };
+  }
+
+  /** Connection `connection`'s entry, or `undefined` (not in the thermal bank this generation). */
+  connection(connection: number): DescriptorConnection | undefined {
+    return this.connections.get(connection);
+  }
+
+  /**
+   * The field `name` of connection `connection`'s record (protocol 7), read with
+   * `SnapshotView.readConnection`, or `null` if the connection has no record this generation, its
+   * kind isn't `kind` (when given), or its schema has no such field.
+   */
+  connectionField(connection: number, name: string, kind?: string): FieldRef | null {
+    const entry = this.connections.get(connection);
+    if (entry === undefined || (kind !== undefined && entry.kind !== kind)) return null;
+    const schemas = this.descriptor.connectionSchemas;
+    const schema = Object.prototype.hasOwnProperty.call(schemas, entry.kind) ? schemas[entry.kind] : undefined;
+    const field = schema?.fields.find((f) => f.name === name);
+    return field === undefined ? null : { offset: entry.recordOffset + field.offset, type: field.type, field };
   }
 }

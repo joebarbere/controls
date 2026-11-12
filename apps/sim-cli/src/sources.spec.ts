@@ -33,7 +33,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * any fixture.
  */
 export const SOURCES_HASH = '22f018df2fb7e6bbedc44fef3ecf2d03ff88c9b2d2d0e4b8730f13dc4db0a66d';
-export const SOURCES_SNAPSHOT_HASH = '0c1f995ef683e9446e52f5fa8398ba54c4ba46cada225485d5bdd50ae32e6e43';
+export const SOURCES_SNAPSHOT_HASH = 'b6d6e33e0eb79cd6266fa9c1493135c2f3a8beef0512c8578007f197e3852e98';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sources.console');

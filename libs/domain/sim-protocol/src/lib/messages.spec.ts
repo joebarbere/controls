@@ -1,4 +1,5 @@
 import { createReplayLog, createWorld } from '@controls/save-format';
+import { CONNECTION_OUTPUT_SCHEMAS } from './connection-output';
 import { DescriptorIndex, type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
 import {
   ISLAND_FLAG_NON_CONVERGED,
@@ -34,6 +35,11 @@ const descriptor: TopologyDescriptor = {
     { entity: 1, kind: 'battery', recordOffset: 0 },
     { entity: 4, kind: 'lamp.incandescent', recordOffset: 32 },
   ],
+  connections: [
+    { connection: 2, kind: 'lead', recordOffset: 0, branch: 0 },
+    { connection: 5, kind: 'conductor', recordOffset: 104, branch: -1 },
+  ],
+  connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'], conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
   schemas: {
     battery: {
       kind: 'battery',
@@ -93,7 +99,24 @@ describe('the message protocol', () => {
       { type: 'topology', descriptor, buffer: null },
       { type: 'topology', descriptor, buffer: shared },
       { type: 'snapshot', buffer: new ArrayBuffer(16) },
-      { type: 'events', events: [{ tick: 3, kind: 'blown', entity: 4, entities: [], detail: {} }] },
+      {
+        type: 'events',
+        events: [{ tick: 3, kind: 'blown', entity: 4, entities: [], connection: null, end: null, detail: {} }],
+      },
+      {
+        type: 'events',
+        events: [
+          {
+            tick: 3,
+            kind: 'terminationOverheat',
+            entity: null,
+            entities: [],
+            connection: 7,
+            end: 'b',
+            detail: { temperatureK: 393.5 },
+          },
+        ],
+      },
       { type: 'trace', id: 1, samples: new Float64Array(4) },
       { type: 'state', id: 1, tick: 0, export: exported, snapshotHash: '0'.repeat(64) },
       { type: 'snapshotBytes', id: 2, tick: 0, bytes: new ArrayBuffer(88) },
@@ -105,7 +128,20 @@ describe('the message protocol', () => {
     for (const bad of [
       { type: 'ready', protocol: 1, transport: 'sab', isolated: true, buffer: new ArrayBuffer(8), tick: 0 },
       { type: 'topology', descriptor: { ...descriptor, topologyHash: 'XYZ' }, buffer: null },
-      { type: 'events', events: [{ tick: 3, kind: 'exploded', entity: 4, entities: [], detail: {} }] },
+      {
+        type: 'events',
+        events: [{ tick: 3, kind: 'exploded', entity: 4, entities: [], connection: null, end: null, detail: {} }],
+      },
+      { type: 'events', events: [{ tick: 3, kind: 'blown', entity: 4, entities: [], detail: {} }] },
+      {
+        type: 'events',
+        events: [{ tick: 3, kind: 'blown', entity: 4, entities: [], connection: null, end: 'c', detail: {} }],
+      },
+      {
+        type: 'topology',
+        descriptor: { ...descriptor, connections: [{ connection: 2, kind: 'lead', recordOffset: 0, branch: -2 }] },
+        buffer: null,
+      },
       { type: 'trace', id: 1, samples: [1, 2] },
       { type: 'state', id: 1, tick: 0, export: { ...exported, tick: -1 }, snapshotHash: '0'.repeat(64) },
       { type: 'error', code: 'oops', message: 'x', seq: null, tick: null, reason: null },
@@ -141,6 +177,19 @@ describe('the topology descriptor', () => {
     expect(index.field(9, 'terminalV')).toBeNull();
     const orphan = { ...descriptor, devices: [{ entity: 7, kind: 'toString', recordOffset: 0 }] };
     expect(DescriptorIndex.of(orphan).field(7, 'x')).toBeNull();
+  });
+
+  it('looks connection record fields up by connection and kind (protocol 7)', () => {
+    const index = DescriptorIndex.of(descriptor);
+    expect(index.connection(5)).toStrictEqual({ connection: 5, kind: 'conductor', recordOffset: 104, branch: -1 });
+    expect(index.connection(3)).toBeUndefined();
+    expect(index.connectionField(5, 'endADropV')).toMatchObject({ offset: 104 + 16, type: 'f64' });
+    expect(index.connectionField(2, 'status', 'lead')).toMatchObject({ offset: 99, type: 'u8' });
+    expect(index.connectionField(2, 'status', 'conductor')).toBeNull(); // joined by (id, kind)
+    expect(index.connectionField(2, 'nope')).toBeNull();
+    expect(index.connectionField(9, 'currentA')).toBeNull();
+    const orphan = { ...descriptor, connections: [{ connection: 7, kind: 'toString', recordOffset: 0, branch: -1 }] };
+    expect(DescriptorIndex.of(orphan).connectionField(7, 'currentA')).toBeNull();
   });
 });
 

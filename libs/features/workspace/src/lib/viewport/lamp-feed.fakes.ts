@@ -26,6 +26,8 @@ export function lampDescriptor(
     islands: [],
     devices,
     schemas: Object.fromEntries(kinds.map((k) => [k, DEVICE_OUTPUT_SCHEMAS[k]])),
+    connections: [],
+    connectionSchemas: {},
   };
 }
 

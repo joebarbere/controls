@@ -1,7 +1,21 @@
+import {
+  CONNECTION_OUTPUT_FIELDS,
+  CONNECTION_OUTPUT_SCHEMAS,
+  CONNECTION_RECORD_BYTES,
+  CONNECTION_RECORD_STATUS_VALUES,
+} from './connection-output';
 import type { TopologyDescriptor } from './descriptor';
 import { fakeSnapshotView } from './fake-snapshot';
 import { ISLAND_FLAG_NON_CONVERGED, ISLAND_FLAG_SINGULAR, SIM_PROTOCOL_VERSION } from './layout';
-import { NetlistReadout, READING_NONE, READING_SOLVED, READING_STATUSES, readingStatusCode } from './netlist-readout';
+import {
+  CONNECTION_VALUE_COUNT,
+  CONNECTION_VALUE_INDEX,
+  NetlistReadout,
+  READING_NONE,
+  READING_SOLVED,
+  READING_STATUSES,
+  readingStatusCode,
+} from './netlist-readout';
 
 /**
  * A bench of four islands: a DC battery loop (nodes 0–2, two leads and the battery), an AC island
@@ -46,7 +60,31 @@ const descriptor = (): TopologyDescriptor => ({
   ],
   devices: [],
   schemas: {},
+  // Protocol 7: the three leads' records, then an unlanded conductor's (not netlisted).
+  connections: [
+    { connection: 1, kind: 'lead', recordOffset: 0, branch: 1 },
+    { connection: 2, kind: 'lead', recordOffset: 104, branch: 2 },
+    { connection: 3, kind: 'lead', recordOffset: 208, branch: 3 },
+    { connection: 9, kind: 'conductor', recordOffset: 312, branch: -1 },
+  ],
+  connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'], conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
 });
+
+/** Connection record bytes: per record, `values` by field name (u8 fields by code). */
+function connectionBytes(records: readonly Readonly<Record<string, number>>[]): Uint8Array {
+  const bytes = new Uint8Array(records.length * CONNECTION_RECORD_BYTES);
+  const view = new DataView(bytes.buffer);
+  records.forEach((record, i) => {
+    for (const [name, value] of Object.entries(record)) {
+      const field = CONNECTION_OUTPUT_FIELDS.find((f) => f.name === name);
+      if (field === undefined) throw new Error(`no field ${name}`);
+      const at = i * CONNECTION_RECORD_BYTES + field.offset;
+      if (field.type === 'f64') view.setFloat64(at, value, true);
+      else view.setUint8(at, value);
+    }
+  });
+  return bytes;
+}
 
 describe('NetlistReadout', () => {
   const d = descriptor();
@@ -212,5 +250,90 @@ describe('fakeSnapshotView', () => {
     expect(
       view.read({ offset: 4, type: 'u8', field: { name: 'x', type: 'u8', offset: 4, unit: null, values: null } }),
     ).toBe(9);
+  });
+});
+
+describe('NetlistReadout connection records (protocol 7)', () => {
+  const d = descriptor();
+  const readout = NetlistReadout.of(d);
+  const at = (c: number, name: string) => c * CONNECTION_VALUE_COUNT + CONNECTION_VALUE_INDEX[name];
+
+  it('joins connections to their records, and reads every field of every record allocation-free', () => {
+    expect(readout.recordOfConnection(3)).toBe(2);
+    expect(readout.recordOfConnection(9)).toBe(3);
+    expect(readout.recordOfConnection(4)).toBe(-1);
+    const view = fakeSnapshotView({
+      descriptor: d,
+      connections: connectionBytes([
+        { currentA: 2, conductorDropV: 0.25, conductorResistanceOhm: 0.125, conductorTempK: 300, status: 1 },
+        { currentA: 2, conductorDropV: 0.5, conductorTempK: 301, status: 1 },
+        { currentA: 5, conductorTempK: 302, status: 1 },
+        {
+          conductorResistanceOhm: 0.02,
+          endAContactOhm: 0.0005,
+          conductorTempK: 295,
+          endATempK: 296,
+          endAState: 1,
+          endBState: 0,
+          insulationDamaged: 1,
+          status: 4,
+        },
+      ]),
+    });
+    const reading = readout.createReading();
+    readout.read(view, reading);
+    expect([...reading.connectionStatus].map((code) => CONNECTION_RECORD_STATUS_VALUES[code])).toStrictEqual([
+      'solved',
+      'solved',
+      'solved',
+      'open',
+    ]);
+    expect(reading.connectionValues[at(0, 'conductorDropV')]).toBe(0.25);
+    expect(reading.connectionValues[at(1, 'conductorTempK')]).toBe(301);
+    expect(reading.connectionValues[at(2, 'currentA')]).toBe(5);
+    expect(reading.connectionValues[at(3, 'endAContactOhm')]).toBe(0.0005);
+    expect(reading.connectionValues[at(3, 'endAState')]).toBe(1);
+    expect(reading.connectionValues[at(3, 'insulationDamaged')]).toBe(1);
+    // A re-read with no connection section clears the previous values (never a stale reading).
+    readout.read(fakeSnapshotView({ descriptor: d }), reading);
+    expect(reading.connectionValues.every((v) => v === 0)).toBe(true);
+    expect([...reading.connectionStatus]).toStrictEqual([0, 0, 0, 0]);
+  });
+
+  it('reads a kind whose schema is not the protocol layout field by field: shifted (aligned) and misaligned', () => {
+    for (const shift of [8, 4]) {
+      const fields = CONNECTION_OUTPUT_FIELDS.map((f) => ({ ...f, offset: f.offset + shift }));
+      const shifted: TopologyDescriptor = {
+        ...d,
+        connections: [{ connection: 1, kind: 'lead', recordOffset: 0, branch: 1 }],
+        connectionSchemas: { lead: { kind: 'lead', recordBytes: 112, fields } },
+      };
+      const bytes = new Uint8Array(112);
+      const view = new DataView(bytes.buffer);
+      view.setFloat64(shift + CONNECTION_OUTPUT_FIELDS[0].offset, 3.25, true); // currentA
+      view.setFloat64(shift + CONNECTION_OUTPUT_FIELDS[9].offset, 301.5, true); // conductorTempK
+      view.setUint8(shift + CONNECTION_OUTPUT_FIELDS[15].offset, 1); // status solved
+      const r = NetlistReadout.of(shifted);
+      const reading = r.createReading();
+      r.read(fakeSnapshotView({ descriptor: shifted, connections: bytes }), reading);
+      expect(reading.connectionValues[at(0, 'currentA')]).toBe(3.25);
+      expect(reading.connectionValues[at(0, 'conductorTempK')]).toBe(301.5);
+      expect(reading.connectionStatus[0]).toBe(1);
+    }
+  });
+
+  it('reads nothing for a connection whose kind has no schema in the descriptor (joined by kind)', () => {
+    const orphan: TopologyDescriptor = {
+      ...d,
+      connections: [{ connection: 1, kind: 'toString', recordOffset: 0, branch: 1 }],
+    };
+    const r = NetlistReadout.of(orphan);
+    const reading = r.createReading();
+    r.read(
+      fakeSnapshotView({ descriptor: orphan, connections: connectionBytes([{ currentA: 3, status: 1 }]) }),
+      reading,
+    );
+    expect(reading.connectionStatus[0]).toBe(0);
+    expect(reading.connectionValues[at(0, 'currentA')]).toBe(0);
   });
 });

@@ -53,11 +53,13 @@ function source(o: {
   branches?: readonly number[];
   islands?: readonly { kind: number; flags: number; iterations: number; reference: number; band: number }[];
   devices?: readonly number[];
+  connections?: readonly number[];
 }): SnapshotSource {
   const nodes = o.nodes ?? [0, 0, 12, 0];
   const branches = o.branches ?? [0.5, 0];
   const islands = o.islands ?? [{ kind: ISLAND_KIND_DC, flags: 0, iterations: 1, reference: 0, band: 0 }];
   const devices = o.devices ?? [];
+  const connections = o.connections ?? [];
   return {
     topologyGeneration: o.generation ?? 0,
     tick: o.tick ?? 10,
@@ -79,6 +81,11 @@ function source(o: {
     writeDevices(view, offset) {
       devices.forEach((value, i) => view.setFloat64(offset + 8 * i, value, true));
     },
+    connectionCount: connections.length,
+    connectionDataBytes: 8 * connections.length,
+    writeConnections(view, offset) {
+      connections.forEach((value, i) => view.setFloat64(offset + 8 * i, value, true));
+    },
   };
 }
 
@@ -98,6 +105,8 @@ function descriptor(generation: number, devices = 0): TopologyDescriptor {
     islands: [],
     devices: Array.from({ length: devices }, (_, i) => ({ entity: i + 1, kind: 'test.value', recordOffset: 8 * i })),
     schemas: devices > 0 ? { 'test.value': schema } : {},
+    connections: [],
+    connectionSchemas: {},
   };
 }
 
@@ -375,6 +384,49 @@ describe('the seqlock reader (ADR 0011 §6.2)', () => {
     expect(view.read(ref(12, 'u8'))).toBe(0xf9);
   });
 
+  it('reads connection records after the device section (protocol 7): one field, all fields, and one record', () => {
+    const s = source({ devices: [1, 2], connections: [7.5, -2] });
+    const d: TopologyDescriptor = {
+      ...descriptor(0, 2),
+      connections: [
+        { connection: 3, kind: 'test.value', recordOffset: 0, branch: -1 },
+        { connection: 4, kind: 'test.value', recordOffset: 8, branch: -1 },
+      ],
+      connectionSchemas: { 'test.value': descriptor(0, 1).schemas['test.value'] },
+    };
+    const view = snapshotViewFromBytes(hashed(s), d);
+    expect(view.connectionCount).toBe(2);
+    const index = DescriptorIndex.of(d);
+    const refs = [index.connectionField(4, 'value') as FieldRef, index.connectionField(3, 'value') as FieldRef];
+    expect(refs.map((r) => view.readConnection(r))).toStrictEqual([-2, 7.5]);
+    const out = new Float64Array(2);
+    view.readConnectionAll(refs, out);
+    expect([...out]).toStrictEqual([-2, 7.5]);
+    for (const aligned of [true, false]) {
+      const plan = {
+        offsets: Uint32Array.from([8, 0, 0, 0]),
+        types: Uint8Array.from([0, 0, 3, 4]),
+        aligned,
+        records: null,
+      };
+      const batch = new Float64Array(4).fill(Number.NaN);
+      view.readConnectionValues(plan, batch);
+      expect([...batch]).toStrictEqual([-2, 7.5, 0, 0]); // f64, f64, u8 (7.5's low byte), none
+    }
+    // u32 and i32 too (the bytes of 7.5 = 0x401E000000000000, little-endian).
+    const ints = { offsets: Uint32Array.from([4, 4]), types: Uint8Array.from([1, 2]), aligned: true, records: null };
+    const pair = new Float64Array(2);
+    view.readConnectionValues(ints, pair);
+    expect([...pair]).toStrictEqual([0x401e0000, 0x401e0000]);
+    const u8 = {
+      offset: 0,
+      type: 'u8' as const,
+      field: { name: 'x', type: 'u8' as const, offset: 0, unit: null, values: null },
+    };
+    expect(view.readConnection(u8)).toBe(0); // 7.5's low byte
+    expect(view.read(index.field(2, 'value') as FieldRef)).toBe(2); // the devices are unaffected
+  });
+
   it('keeps the seqlock word odd for the whole encode of a publish (ADR 0011 §6.1)', () => {
     const s = { ...source({ devices: [1, 2] }) };
     const { buffer, writer } = rig(s);
@@ -642,6 +694,7 @@ function writerThread(): string {
           islandCount: 1, islandKinds: one(1), islandFlags: one(0), islandIterations: one(1),
           islandReferences: one(0), islandUnknowns: one(3), islandBands: one(0),
           deviceCount: 0, deviceDataBytes: 0, writeDevices: () => undefined,
+          connectionCount: 0, connectionDataBytes: 0, writeConnections: () => undefined,
         }, slot, seq);
       });
     }

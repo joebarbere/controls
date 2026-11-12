@@ -3,7 +3,7 @@ import { DestroyRef, inject, Injectable, InjectionToken, type Signal, signal } f
 import { SIM_STEP_COMMAND } from '@controls/commands';
 import type { ReplayEntry, ReplayLog } from '@controls/save-format';
 import type { TimeHost } from '@controls/scripting-api';
-import { netlistDump } from '@controls/sim-core';
+import { netlistDump, wireInfo } from '@controls/sim-core';
 import {
   materialiseWorld,
   MAX_LEAD_WALL_MS,
@@ -340,6 +340,19 @@ export class SimHost {
     // (`entry.ts` builds the runner with no `engine` options), so the dump's engine
     // compiles the same netlist and values as the one that exported the world.
     return { tick: captured.tick, text: netlistDump(world) };
+  }
+
+  /**
+   * The `wire.info <id>` text at the bus's current tick T (F3.6 part 3), as {@link netlistDumpAt}: the
+   * world captured now, materialised with the worker's export at T, and `sim-core`'s pure `wireInfo`
+   * on the main thread (an engine started from it writes the record the worker's engine wrote:
+   * records are a function of the export), so it is byte for byte what `sim-cli` prints. Rejects as
+   * {@link hashAt} does.
+   */
+  async wireInfoAt(id: number): Promise<{ readonly tick: number; readonly text: string }> {
+    const captured = this.capture();
+    const world = await captured.world;
+    return { tick: captured.tick, text: wireInfo(world, id) };
   }
 
   /**

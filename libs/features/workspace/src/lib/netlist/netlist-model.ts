@@ -1,4 +1,8 @@
 import {
+  CONNECTION_RECORD_END_STATES,
+  CONNECTION_RECORD_STATUS_VALUES,
+  CONNECTION_VALUE_COUNT,
+  CONNECTION_VALUE_INDEX,
   type DescriptorElementRef,
   type DescriptorTerminalRef,
   NetlistReadout,
@@ -18,7 +22,10 @@ import {
  *   elements, `a -> b` ends;
  * - the **values**: one display string per island, node and branch, read through `NetlistReadout`
  *   (the overlays' readout, so both agree on what is a reading). An island that isn't `solved`, and a
- *   node of an island with no reference, read "no reading", never 0 V or 0 A.
+ *   node of an island with no reference, read "no reading", never 0 V or 0 A;
+ * - per **connection branch** (a lead's or a wire's, protocol 7, F3.6 part 3), a detail line from its
+ *   connection record: the conductor's drop and temperature and each landed end's drop, hot-spot
+ *   temperature and any non-`ok` state (`connectionDetail`). Records only, never `connection.sim`.
  */
 
 /** What a value cell shows when there is no reading (the validity rule, ADR 0011 §5.3). */
@@ -187,11 +194,47 @@ export interface NetlistValues {
   readonly nodes: readonly string[];
   /** `391 mA, a -> b` (DC direction against the branch's ends), `2.00 A` (AC) or {@link NO_READING}. */
   readonly branches: readonly string[];
+  /**
+   * Per branch: a connection branch's record detail (`drop 201 mV · 303 K · a 300 mV 394 K · b 6.10 mV
+   * 302 K`), or `null` for a device's element or a connection with no record.
+   */
+  readonly connections: readonly (string | null)[];
+}
+
+/**
+ * Connection `c`'s record in `reading` (an index into the descriptor's `connections`) as one detail
+ * line: the conductor's drop (or "no reading" unless the record is solved; `open` when not netlisted)
+ * and temperature, then each end that has a termination node: its drop, its hot-spot temperature and
+ * its state when not `ok`. An end whose state is `none` (a lead's clip, a free end) is left out, never
+ * shown as 0 K.
+ */
+export function connectionDetail(reading: NetlistReading, c: number): string {
+  const at = c * CONNECTION_VALUE_COUNT;
+  const v = (name: string) => reading.connectionValues[at + CONNECTION_VALUE_INDEX[name]];
+  const status = CONNECTION_RECORD_STATUS_VALUES[reading.connectionStatus[c]] ?? 'unsolved';
+  const solved = status === 'solved';
+  const drop = (name: string) => (solved ? formatQuantity(v(name), 'V') : NO_READING);
+  const parts = [
+    status === 'open' ? 'open' : `drop ${drop('conductorDropV')}`,
+    formatQuantity(v('conductorTempK'), 'K'),
+  ];
+  for (const side of ['A', 'B'] as const) {
+    const state = CONNECTION_RECORD_END_STATES[v(`end${side}State`)] ?? 'none';
+    if (state === 'none') continue;
+    const end = [side.toLowerCase()];
+    if (status !== 'open') end.push(drop(`end${side}DropV`));
+    end.push(formatQuantity(v(`end${side}TempK`), 'K'));
+    if (state !== 'ok') end.push(state);
+    parts.push(end.join(' '));
+  }
+  if (v('insulationDamaged') === 1) parts.push('insulation damaged');
+  return parts.join(' · ');
 }
 
 /** The display strings of a reading (allocates: call it at the panel rate, never per snapshot). */
 export function netlistValues(reading: NetlistReading): NetlistValues {
   const { descriptor } = reading;
+  const readout = NetlistReadout.of(descriptor);
   const solved = (island: number) => reading.islandStatus[island] === READING_SOLVED;
   return {
     descriptor,
@@ -210,6 +253,11 @@ export function netlistValues(reading: NetlistReading): NetlistValues {
       const direction = reading.branchDirection[i];
       return direction === 0 ? amps : `${amps}, ${direction > 0 ? 'a -> b' : 'b -> a'}`;
     }),
+    connections: descriptor.branches.map((b) => {
+      if (b.element.kind !== 'connection') return null;
+      const c = readout.recordOfConnection(b.element.connection);
+      return c < 0 ? null : connectionDetail(reading, c);
+    }),
   };
 }
 
@@ -217,10 +265,15 @@ export function netlistValues(reading: NetlistReading): NetlistValues {
 export function sameNetlistValues(a: NetlistValues | null, b: NetlistValues | null): boolean {
   if (a === b) return true;
   if (a === null || b === null || a.descriptor !== b.descriptor || a.tick !== b.tick) return false;
-  return same(a.islands, b.islands) && same(a.nodes, b.nodes) && same(a.branches, b.branches);
+  return (
+    same(a.islands, b.islands) &&
+    same(a.nodes, b.nodes) &&
+    same(a.branches, b.branches) &&
+    same(a.connections, b.connections)
+  );
 }
 
-function same(a: readonly string[], b: readonly string[]): boolean {
+function same(a: readonly (string | null)[], b: readonly (string | null)[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;

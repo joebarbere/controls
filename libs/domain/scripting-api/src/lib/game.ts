@@ -32,8 +32,10 @@ import {
   type SourcedConstant,
   netlistDump,
   SimEngine,
+  type SimConnectionRecord,
   type SimEngineOptions,
   type SimDeviceRecord,
+  wireInfo,
   type SimIslandInfo,
   SimProbeError,
   SimStartError,
@@ -252,6 +254,14 @@ export interface Game {
    * Throws {@link NotAvailableError} in the game (use `Session.netlistDumpAt()`).
    */
   netlistDump(): string;
+  /**
+   * The `wire.info <id>` text of the materialised world (F3.6 part 3, plan D16): connection `id`'s
+   * length and its protocol 7 record (current, resistance at temperature, conductor and end drops,
+   * temperatures, end states, insulation), as the console prints it, ending with a newline. Read-only
+   * and never logged, like {@link netlistDump}; the game's console prints the same bytes from the sim
+   * worker's export. Throws {@link NotAvailableError} in the game (use `Session.wireInfoAt(id)`).
+   */
+  wireInfo(id: number): string;
   /** The current sim tick (1 tick = 1 ms). */
   tick(): number;
   /**
@@ -281,6 +291,15 @@ export interface Game {
    * record (not netlisted, or a kind that publishes none). A script and test query.
    */
   device(id: number): SimDeviceRecord | null;
+  /**
+   * Connection `id`'s record at this tick (F3.6 part 3, protocol 7), decoded: what the snapshot's
+   * connection section holds for it, field by field, enums by name (`game.connection(2).values.endADropV`),
+   * with its branch (−1 when not netlisted). Its `status` says whether the solved fields (current,
+   * drops, end voltages) are a reading (`solved`), or exactly 0 (`open`: not netlisted); an end whose
+   * state is `none` has no temperature or contact. `null` for a connection outside the thermal bank (no
+   * such connection, or a kind the catalogue doesn't know). A script and test query (plan D16).
+   */
+  connection(id: number): SimConnectionRecord | null;
   /** The snapshot at this tick: the hashed bytes of its slot (ADR 0011 §5, §11), a fresh copy. */
   snapshot(): Uint8Array;
   /** SHA-256 of {@link snapshot}'s bytes, lower-case hex (`snapshotHash`, ADR 0011 §5.2). */
@@ -501,6 +520,10 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
       if (time !== undefined && time.exportState === undefined) throw new NotAvailableError('netlistDump', 'worker');
       return netlistDump(materialisedWorld(), engine?.options);
     },
+    wireInfo(id) {
+      if (time !== undefined && time.exportState === undefined) throw new NotAvailableError('wireInfo', 'worker');
+      return wireInfo(materialisedWorld(), id, engine?.options);
+    },
     tick: () => bus.currentTick(),
     advance(ticks) {
       if (!Number.isSafeInteger(ticks) || ticks < 0)
@@ -527,6 +550,7 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     },
     islands: () => needEngine('islands').islands(),
     device: (id) => needEngine('device').deviceRecord(id),
+    connection: (id) => needEngine('connection').connectionRecord(id),
     snapshot: () => needEngine('snapshot').snapshot(),
     snapshotHash: () => needEngine('snapshotHash').snapshotHash(),
     entries: () => bus.entries,

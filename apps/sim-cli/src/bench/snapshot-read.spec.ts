@@ -33,7 +33,10 @@ describe('the snapshot read rig', () => {
     plain.read();
     // Every node is at (1.5, 1.5) V like its reference node: 0 V. Every branch carries (0.25, 0.25) A,
     // |I| = 0.25 √2, from a to b (the rig's islands are DC).
-    expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25), 9);
+    // Protocol 7: every connection record's temperature (300–304 K) and its status (solved, 1).
+    let records = 0;
+    for (let i = 0; i < READ_PLANT.connections; i++) records += 300 + (i % 5) + 1;
+    expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25) + records, 6);
     expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000, 2)).toBeLessThan(
       READ_ALLOCATION_GATE_BYTES,
     );

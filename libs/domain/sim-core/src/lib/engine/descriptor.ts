@@ -9,19 +9,33 @@ export interface DescriptorRecord {
   readonly output: DeviceOutputSchema;
 }
 
+/** One connection record in the snapshot's connection section (protocol 7), as the engine laid it out. */
+export interface DescriptorConnectionRecord {
+  readonly connection: number;
+  /** The byte offset of its record within the connection section. */
+  readonly offset: number;
+  /** Its branch in `netlist`, or −1 (not netlisted). */
+  readonly branch: number;
+  readonly output: DeviceOutputSchema;
+}
+
 /**
  * The topology descriptor of `netlist` (ADR 0011 §7): what a snapshot of this generation's indices
  * mean. Nodes, branches and islands in F2.1's order, each node's members sorted (as the compiler
  * keeps them); devices are the records the engine writes, entity ascending, with the output schema
- * of every kind they use. Plain JSON-compatible data, deep-frozen.
+ * of every kind they use; connections (protocol 7) are the connection records, connection ascending,
+ * with each kind's schema. Plain JSON-compatible data, deep-frozen.
  */
 export function buildTopologyDescriptor(
   netlist: Netlist,
   generation: number,
   records: readonly DescriptorRecord[],
+  connections: readonly DescriptorConnectionRecord[] = [],
 ): TopologyDescriptor {
   const schemas: Record<string, DeviceOutputSchema> = {};
   for (const record of records) schemas[record.output.kind] = record.output;
+  const connectionSchemas: Record<string, DeviceOutputSchema> = {};
+  for (const record of connections) connectionSchemas[record.output.kind] = record.output;
   const descriptor: TopologyDescriptor = {
     protocol: SIM_PROTOCOL_VERSION,
     generation,
@@ -46,6 +60,13 @@ export function buildTopologyDescriptor(
       recordOffset: record.offset,
     })),
     schemas,
+    connections: connections.map((record) => ({
+      connection: record.connection,
+      kind: record.output.kind,
+      recordOffset: record.offset,
+      branch: record.branch,
+    })),
+    connectionSchemas,
   };
   return deepFreeze(descriptor);
 }

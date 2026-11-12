@@ -2,12 +2,13 @@ import { fakeSnapshotView, ISLAND_FLAG_SINGULAR, NetlistReadout } from '@control
 import {
   bandName,
   buildNetlistTree,
+  connectionDetail,
   formatQuantity,
   NO_READING,
   netlistSampler,
   sameNetlistValues,
 } from './netlist-model';
-import { BENCH_BRANCHES, BENCH_NODES, benchDescriptor } from './netlist.fakes';
+import { BENCH_BRANCHES, BENCH_CONNECTIONS, BENCH_NODES, benchDescriptor, connectionRecords } from './netlist.fakes';
 
 describe('formatQuantity', () => {
   it('writes three significant figures with an SI prefix', () => {
@@ -72,6 +73,55 @@ describe('buildNetlistTree', () => {
     const keys = buildNetlistTree(benchDescriptor(1)).map((i) => i.key);
     expect(buildNetlistTree(benchDescriptor(2)).map((i) => i.key)).toEqual(keys);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('connectionDetail (protocol 7)', () => {
+  const descriptor = benchDescriptor();
+  const read = (connections: Uint8Array, islands = [{ band: 1 }, {}]) =>
+    netlistSampler()(
+      fakeSnapshotView({ descriptor, nodes: BENCH_NODES, branches: BENCH_BRANCHES, islands, connections }),
+    );
+
+  it("shows a lead's drop and temperature (its ends have no termination node), on its branch row", () => {
+    const values = read(BENCH_CONNECTIONS);
+    expect(values.connections).toEqual([
+      null, // the battery's cell
+      null, // the lamp's filament
+      'drop 30.0 mV · 293 K',
+      'drop 0 V · 293 K',
+      'drop 16.0 mV · 293 K',
+      null, // the AC island's source
+    ]);
+  });
+
+  it("shows a wire's end drops, hot spots and non-ok states; no reading unless solved; open when not netlisted", () => {
+    const wire = connectionRecords([
+      {
+        conductorDropV: 0.2011,
+        endADropV: 0.300478,
+        endBDropV: 0.0061,
+        conductorTempK: 303.03,
+        endATempK: 393.82,
+        endBTempK: 301.7,
+        endAState: 1,
+        endBState: 3,
+        insulationDamaged: 1,
+        status: 1,
+      },
+      { conductorTempK: 300, endATempK: 310, endAState: 2, status: 2 },
+      { conductorTempK: 300, status: 0 },
+      { conductorTempK: 293.15, endATempK: 293.15, endAState: 1, status: 4 },
+    ]);
+    const values = read(wire);
+    expect(values.connections[2]).toBe(
+      'drop 201 mV · 303 K · a 300 mV 394 K · b 6.10 mV 302 K arcing · insulation damaged',
+    );
+    expect(values.connections[3]).toBe(`drop ${NO_READING} · 300 K · a ${NO_READING} 310 K intermittent`);
+    expect(values.connections[4]).toBe(`drop ${NO_READING} · 300 K`);
+    const reading = NetlistReadout.of(descriptor).createReading();
+    NetlistReadout.of(descriptor).read(fakeSnapshotView({ descriptor, connections: wire }), reading);
+    expect(connectionDetail(reading, 3)).toBe('open · 293 K · a 293 K');
   });
 });
 

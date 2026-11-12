@@ -10,6 +10,8 @@ const event = (kind: SimEvent['kind'], entity: number | null, tick = 0): SimEven
   kind,
   entity,
   entities: [],
+  connection: null,
+  end: null,
   detail: {},
 });
 

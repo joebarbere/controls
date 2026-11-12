@@ -1,7 +1,8 @@
+import { CONNECTION_OUTPUT_FIELDS } from './connection-output';
 import type { TopologyDescriptor } from './descriptor';
 import { islandStatus, type IslandStatus } from './island-status';
 import { ISLAND_KIND_AC, ISLAND_KIND_MIXED } from './layout';
-import type { SnapshotView } from './reader';
+import { type ConnectionReadPlan, READ_F64, READ_I32, READ_NONE, READ_U32, READ_U8, type SnapshotView } from './reader';
 
 /*
  * The netlist readout (plan F2.6): every node's |V| against its island's reference and every branch's
@@ -14,10 +15,38 @@ import type { SnapshotView } from './reader';
  * direction of a DC current is the sign of its real part (positive from the descriptor's end `a` to
  * end `b`). AC has no direction here: a phasor's sign is a phase, not a flow (rendering caveats).
  *
+ * Protocol 7 adds every **connection record** (F3.6 part 3): the descriptor's `connections`, in its
+ * order, each record's fields copied into `connectionValues` in `CONNECTION_OUTPUT_FIELDS` order, so
+ * the overlays and the inspector read drops and temperatures from records, never from `connection.sim`
+ * (ADR 0011's F3.6 part 1 amendment). A record's solved fields are a reading only when its status is
+ * `solved`; with `open` they are exactly 0; an end whose state is `none` has no temperature or contact.
+ *
  * Built once per descriptor (cached by identity, like `DescriptorIndex`); {@link NetlistReadout.read}
  * allocates nothing, so a renderer may call it on every snapshot (`sim bench`'s `overlay-read` case
  * gates it at 0 B per read).
  */
+
+/** The number of values per connection in {@link NetlistReading.connectionValues}. */
+export const CONNECTION_VALUE_COUNT = CONNECTION_OUTPUT_FIELDS.length;
+
+/** Each connection field's index within a connection's values (`CONNECTION_OUTPUT_FIELDS` order). */
+export const CONNECTION_VALUE_INDEX: Readonly<Record<string, number>> = Object.freeze(
+  Object.fromEntries(CONNECTION_OUTPUT_FIELDS.map((field, i) => [field.name, i])),
+);
+const STATUS_INDEX = CONNECTION_VALUE_INDEX['status'];
+/** Whether `kind`'s schema in `descriptor` is `CONNECTION_OUTPUT_FIELDS` exactly (names, types, offsets, order). */
+function isProtocolLayout(descriptor: TopologyDescriptor, kind: string): boolean {
+  if (!Object.prototype.hasOwnProperty.call(descriptor.connectionSchemas, kind)) return false;
+  const fields = descriptor.connectionSchemas[kind].fields;
+  return (
+    fields.length === CONNECTION_OUTPUT_FIELDS.length &&
+    CONNECTION_OUTPUT_FIELDS.every(
+      (f, i) => fields[i].name === f.name && fields[i].type === f.type && fields[i].offset === f.offset,
+    )
+  );
+}
+
+const READ_TYPES: Readonly<Record<string, number>> = { f64: READ_F64, u32: READ_U32, i32: READ_I32, u8: READ_U8 };
 
 /** {@link NetlistReading.islandStatus} codes; 0 is "no reading yet", so a zeroed array is never a reading. */
 export const READING_STATUSES = Object.freeze([
@@ -65,6 +94,16 @@ export interface NetlistReading {
   readonly branchAmps: Float64Array;
   /** Per branch: +1 (from `a` to `b`) or −1 for a DC current with a non-zero real part, else 0 (AC, zero, unsolved). */
   readonly branchDirection: Int8Array;
+  /**
+   * Per descriptor connection (protocol 7): its record's `status` code (`CONNECTION_RECORD_STATUS_VALUES`;
+   * 0 `unsolved` until read, and for a connection whose kind's schema the readout doesn't know).
+   */
+  readonly connectionStatus: Uint8Array;
+  /**
+   * Per descriptor connection, {@link CONNECTION_VALUE_COUNT} values in `CONNECTION_OUTPUT_FIELDS`
+   * order (`CONNECTION_VALUE_INDEX`); u8 enums as their codes.
+   */
+  readonly connectionValues: Float64Array;
   /** The snapshot's tick, when read. */
   tick: number;
 }
@@ -77,8 +116,50 @@ export class NetlistReadout {
   private readonly branchIsland: Uint32Array;
   private readonly nodesByTerminal = new Map<number, Map<string, number>>();
   private readonly branchesByConnection = new Map<number, number>();
+  private readonly recordsByConnection = new Map<number, number>();
+  /**
+   * Every connection record's every field, in `connectionValues` order: the batched read's plan,
+   * resolved once per descriptor (a connection whose kind has no complete schema reads as zeros).
+   */
+  private readonly connectionPlan: ConnectionReadPlan;
 
   private constructor(readonly descriptor: TopologyDescriptor) {
+    const byKind = new Map<string, readonly { offset: number; type: number }[] | null>();
+    const fieldsOf = (kind: string) => {
+      let fields = byKind.get(kind);
+      if (fields === undefined) {
+        const schema = Object.prototype.hasOwnProperty.call(descriptor.connectionSchemas, kind)
+          ? descriptor.connectionSchemas[kind]
+          : undefined;
+        const resolved = CONNECTION_OUTPUT_FIELDS.map((wanted) => {
+          const field = schema?.fields.find((f) => f.name === wanted.name && f.type === wanted.type);
+          return field === undefined ? null : { offset: field.offset, type: READ_TYPES[field.type] };
+        });
+        fields = resolved.every((r) => r !== null) ? (resolved as { offset: number; type: number }[]) : null;
+        byKind.set(kind, fields);
+      }
+      return fields;
+    };
+    const n = descriptor.connections.length * CONNECTION_VALUE_COUNT;
+    const offsets = new Uint32Array(n);
+    const types = new Uint8Array(n).fill(READ_NONE);
+    descriptor.connections.forEach((c, index) => {
+      this.recordsByConnection.set(c.connection, index);
+      const fields = fieldsOf(c.kind);
+      if (fields === null) return;
+      fields.forEach((field, i) => {
+        offsets[index * CONNECTION_VALUE_COUNT + i] = c.recordOffset + field.offset;
+        types[index * CONNECTION_VALUE_COUNT + i] = field.type;
+      });
+    });
+    let aligned = true;
+    for (let k = 0; k < n; k++) if (types[k] === READ_F64 && (offsets[k] & 7) !== 0) aligned = false;
+    // The fast path: every kind's schema is the protocol layout itself, every record 8-aligned.
+    const canonical =
+      aligned &&
+      descriptor.connections.every((c) => (c.recordOffset & 7) === 0 && isProtocolLayout(descriptor, c.kind));
+    const records = canonical ? Uint32Array.from(descriptor.connections, (c) => c.recordOffset) : null;
+    this.connectionPlan = { offsets, types, aligned, records };
     this.nodeIsland = Uint32Array.from(descriptor.nodes, (n) => n.island);
     this.branchIsland = Uint32Array.from(descriptor.branches, (b) => b.island);
     descriptor.nodes.forEach((node, index) => {
@@ -110,6 +191,11 @@ export class NetlistReadout {
     return this.branchesByConnection.get(connection) ?? -1;
   }
 
+  /** The index of connection `connection`'s record in the descriptor's `connections` (and a reading's arrays), or −1. */
+  recordOfConnection(connection: number): number {
+    return this.recordsByConnection.get(connection) ?? -1;
+  }
+
   /** The island of node `node`. */
   islandOfNode(node: number): number {
     return this.nodeIsland[node];
@@ -133,6 +219,8 @@ export class NetlistReadout {
       nodeVolts: new Float64Array(d.nodes.length),
       branchAmps: new Float64Array(d.branches.length),
       branchDirection: new Int8Array(d.branches.length),
+      connectionStatus: new Uint8Array(d.connections.length),
+      connectionValues: new Float64Array(d.connections.length * CONNECTION_VALUE_COUNT),
       tick: 0,
     };
   }
@@ -178,5 +266,15 @@ export class NetlistReadout {
       out.branchAmps[b] = Math.sqrt(re * re + im * im);
       out.branchDirection[b] = out.islandAc[island] === 1 || re === 0 ? 0 : re > 0 ? 1 : -1;
     }
+    const values = out.connectionValues;
+    const connections = out.connectionStatus.length;
+    if (view.connectionCount !== connections) {
+      // Never in practice (the counts are the descriptor's): no record is a reading.
+      out.connectionStatus.fill(0);
+      values.fill(0);
+      return;
+    }
+    view.readConnectionValues(this.connectionPlan, values);
+    for (let c = 0; c < connections; c++) out.connectionStatus[c] = values[c * CONNECTION_VALUE_COUNT + STATUS_INDEX];
   }
 }

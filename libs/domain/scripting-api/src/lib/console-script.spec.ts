@@ -181,6 +181,7 @@ describe('console shorthand (expandConsoleArgs, ADR 0015)', () => {
     exec: (id, args) => game.exec(id, args),
     hash: () => game.hash(),
     netlistDump: () => game.netlistDump(),
+    wireInfo: (id: number) => game.wireInfo(id),
     expanders,
   });
   const place = (x: string) =>

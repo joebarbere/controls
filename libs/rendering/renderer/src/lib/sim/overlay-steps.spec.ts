@@ -51,6 +51,8 @@ const descriptor = (kind: 'dc' | 'ac' | 'mixed' = 'dc'): TopologyDescriptor => (
   ],
   devices: [],
   schemas: {},
+  connections: [],
+  connectionSchemas: {},
 });
 
 const items: OverlayItems = {

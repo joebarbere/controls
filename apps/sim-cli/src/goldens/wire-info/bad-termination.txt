@@ -1,0 +1,16 @@
+wire.info 2 tick 600000
+conductor 2 conductor.tallowmere-thhn-14-solid@1 length 1979 mm
+status solved
+current 11.8059 A
+conductor R 0.0170339 Ω at 303.033 K, drop 0.2011 V
+end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V, conductor side 119.28 V
+end b ok, contact 0.000516818 Ω at 301.709 K, drop 0.00610151 V, conductor side 119.078 V
+insulation intact
+wire.info 3 tick 600000
+lead 3 lead.quillfern-test-1m@1 length 1000 mm
+status solved
+current 11.8059 A
+conductor R 0.042916 Ω at 317.052 K, drop 0.506662 V
+end a none
+end b none
+insulation intact

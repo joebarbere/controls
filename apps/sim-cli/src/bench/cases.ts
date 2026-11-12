@@ -208,8 +208,9 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
 
 /**
  * F2.6: the overlays' per-snapshot read, the snapshot read above plus `NetlistReadout.read` over the
- * whole netlist (1,000 node voltages against their references, 1,500 branch currents, 50 islands).
- * Reported, not time-gated, like the read it extends; gated on allocating nothing.
+ * whole netlist (1,000 node voltages against their references, 1,500 branch currents, 50 islands)
+ * and, since protocol 7 (F3.6 part 3), every field of 2,000 connection records. Reported, not
+ * time-gated, like the read it extends; gated on allocating nothing.
  */
 export const OVERLAY_READ_CASE: BenchCase = {
   name: 'overlay-read-500-devices',

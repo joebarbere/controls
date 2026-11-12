@@ -44,6 +44,7 @@ function target(game: Game): ConsoleTarget {
     exec: (id, args) => game.exec(id, args),
     hash: () => game.hash(),
     netlistDump: () => game.netlistDump(),
+    wireInfo: (id: number) => game.wireInfo(id),
   };
 }
 

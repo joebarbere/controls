@@ -126,6 +126,8 @@ const benchDescriptor = (): TopologyDescriptor => ({
   ],
   devices: [],
   schemas: {},
+  connections: [],
+  connectionSchemas: {},
 });
 
 const benchSnapshot = (descriptor: TopologyDescriptor, island0: FakeIsland = {}, amps = 50, volts = 11.5) =>

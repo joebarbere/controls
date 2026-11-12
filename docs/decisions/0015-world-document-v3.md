@@ -416,6 +416,8 @@ Listed here so the persisted keys and the published fields are designed together
 - About 208 KB of records at 2,000 conductors: the overlay and snapshot read cases in `sim bench` include them.
 - The overlays recolour the conductor meshes from these records and their branches; their own lead segments stay for leads only (D15).
 
+_Finalised (F3.6 part 3, headless) by the [ADR 0011 amendment](0011-sim-worker-contract.md#amendment-protocol-7-connection-records-and-connection-events-f36-part-3), pending `renderer-engineer` and `angular-ui-engineer`: the fields above unchanged; the records in their own slot section after the devices (header bytes 84–91 hold their count and bytes); the descriptor's kinds in a separate `connectionSchemas`; a lead's clips inside its `conductorResistanceOhm` and its end voltages its terminals'; the "stamped" resistances evaluated from the state at the snapshot's tick (a record must be a function of the export), within the 1 % re-solve rule of the stamp; `open` records written for every non-netlisted member; and the two connection events with `SimEvent.connection` and `end`._
+
 ### Sizes
 
 A conductor with ten waypoints is about 1 KB of JSON; 2 000 conductors with their bags are about 3 MB, inside `world.json`'s 16 MiB cap, and a `wire.add` log entry is about 1 KB, so `replay.log`'s 32 MiB holds about 30 000 of them. A checkpointed save's `replay.log` holds a materialised world as its `initialWorld` (D19), so it is about the size of `world.json` plus its tail. No cap changes.
