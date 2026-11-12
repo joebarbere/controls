@@ -728,8 +728,8 @@ export const BUILTIN_CABLE_DOCUMENTS: readonly unknown[] = [
     },
     "colour": "black",
     "thicknessMm": 0.762,
-    "widthMm": 14.6,
-    "heightMm": 14.6
+    "widthMm": 14.61,
+    "heightMm": 14.61
   },
   "sources": [
     {

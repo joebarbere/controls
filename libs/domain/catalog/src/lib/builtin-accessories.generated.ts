@@ -213,7 +213,7 @@ export const BUILTIN_ACCESSORY_DOCUMENTS: readonly unknown[] = [
   "version": 1,
   "title": "Insulated fork terminal, 16–14 AWG (blue), #8 stud",
   "brand": "Thimbleby",
-  "modelName": "TF-1614-8",
+  "modelName": "TK-1614-8",
   "kind": "forkLug",
   "awgRange": {
     "smallest": 16,
@@ -270,7 +270,7 @@ export const BUILTIN_ACCESSORY_DOCUMENTS: readonly unknown[] = [
   "version": 1,
   "title": "Insulated fork terminal, 22–18 AWG (red), #8 stud",
   "brand": "Thimbleby",
-  "modelName": "TF-2218-8",
+  "modelName": "TK-2218-8",
   "kind": "forkLug",
   "awgRange": {
     "smallest": 22,
@@ -327,7 +327,7 @@ export const BUILTIN_ACCESSORY_DOCUMENTS: readonly unknown[] = [
   "version": 1,
   "title": "Insulated fork terminal, 12–10 AWG (yellow), #10 stud",
   "brand": "Thimbleby",
-  "modelName": "TF-1210-10",
+  "modelName": "TK-1210-10",
   "kind": "forkLug",
   "awgRange": {
     "smallest": 12,
