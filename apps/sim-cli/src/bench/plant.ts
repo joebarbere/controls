@@ -1,4 +1,4 @@
-import { type EntityV2, type ConnectionV2, World } from '@controls/save-format';
+import { type ConnectionV3, type EntityV3, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { deriveStream } from '@controls/world-model';
 
 /*
@@ -56,11 +56,11 @@ interface Unit {
 /** Builds the plant. Pure: the same seed gives the same world. */
 export function buildPlant(seed: number = PLANT_SEED): Plant {
   const rng = deriveStream(seed, 'bench:plant');
-  const entities: EntityV2[] = [];
-  const connections: ConnectionV2[] = [];
+  const entities: EntityV3[] = [];
+  const connections: ConnectionV3[] = [];
   let openSwitches = 0;
   let ties = 0;
-  const place = (ref: { id: string; version: number }, state: EntityV2['state'] = {}): number => {
+  const place = (ref: { id: string; version: number }, state: EntityV3['state'] = {}): number => {
     const id = entities.length + 1;
     const position = { x: (id % 100) * 200, y: 0, z: Math.floor(id / 100) * 200 };
     entities.push({
@@ -69,6 +69,8 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
       transform: { positionMm: position, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
       state,
       sim: {},
+      mountedOn: null,
+      label: null,
       extensions: {},
     });
     return id;
@@ -77,8 +79,15 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
     connections.push({
       id: connections.length + 1,
       ref: LEAD,
-      a: { entity: a, terminal: at },
-      b: { entity: b, terminal: bt },
+      a: { entity: a, terminal: at, termination: null },
+      b: { entity: b, terminal: bt, termination: null },
+      cable: null,
+      route: null,
+      lengthMm: null,
+      colour: null,
+      label: null,
+      state: {},
+      sim: { ...LEAD_SIM_BAG_V3 },
       extensions: {},
     });
 
@@ -139,17 +148,20 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
   const switches = entities.filter((entity) => entity.ref.id === SWITCH.id);
   const lamps = entities.filter((entity) => entity.ref.id === LAMP.id).length;
   const world = World.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     seed,
     tick: 0,
     nextEntityId: entities.length + 1,
     nextConnectionId: connections.length + 1,
+    nextCableId: 1,
+    nextTerminationId: 1,
     regionId: 'nec',
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
     entities,
     connections,
+    cables: [],
     sim: null,
     extensions: {},
   });

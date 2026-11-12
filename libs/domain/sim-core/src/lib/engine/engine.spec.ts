@@ -10,7 +10,7 @@ import {
   SIM_PROTOCOL_VERSION,
 } from '@controls/sim-protocol';
 import {
-  checkWorldDevices,
+  checkWorldReferences,
   createWorldBus,
   createWorldRegistry,
   deriveStream,
@@ -534,7 +534,7 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
     ]);
     expect(world.entities[2].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
     expect(world.entities[0].sim['stateOfCharge']).toBeLessThan(1);
-    expect(checkWorldDevices(world, ENGINE_TEST_CATALOG)).toStrictEqual([]);
+    expect(checkWorldReferences(world, ENGINE_TEST_CATALOG)).toStrictEqual([]);
     expect(World.safeParse(world).success).toBe(true);
     expect(world.sim?.lastSolveTick).toBe(70);
   });

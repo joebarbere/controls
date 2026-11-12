@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
@@ -94,5 +95,17 @@ describe('the checkpoint scenario (P3 D19)', () => {
     const empty = join(dir, 'empty.console');
     await writeFile(empty, '');
     expect(sim('run', empty, '--world', save)).toMatchObject({ status: 0, stderr: '', stdout: [hash] });
+  });
+
+  it('its checked-in save (world v3, this engine and catalogue) is the rebased log and loads continued', async () => {
+    // fixtures/v3/ctrl/checkpoint-engine-6-catalog-2.ctrl, written by the `--save` line in the scenario's
+    // header (the world v3 PR's checkpointed fixture); frozen like every .ctrl fixture.
+    const game = await scenarioGame();
+    const bytes = new Uint8Array(await readFile(currentFixture('checkpoint')));
+    expect(savedLog(bytes)).toMatchObject({ firstSeq: 12, initialWorld: { tick: 20_000 }, endTick: 25_000 });
+    const loaded = loadGame(bytes);
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.game.hash()).toBe(game.hash());
   });
 });

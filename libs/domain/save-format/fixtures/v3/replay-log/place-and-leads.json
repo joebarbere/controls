@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 3,
+  "initialWorld": {
+    "schemaVersion": 3,
+    "seed": 11,
+    "tick": 0,
+    "nextEntityId": 1,
+    "nextConnectionId": 1,
+    "nextCableId": 1,
+    "nextTerminationId": 1,
+    "regionId": "nec",
+    "difficulty": "apprentice",
+    "assisted": false,
+    "fixtures": [],
+    "entities": [],
+    "connections": [],
+    "cables": [],
+    "sim": null,
+    "extensions": {}
+  },
+  "firstSeq": 0,
+  "entries": [
+    {
+      "seq": 0,
+      "tick": 0,
+      "id": "entity.place",
+      "args": {
+        "ref": {
+          "id": "battery.ferrovane-12v-7ah",
+          "version": 1
+        },
+        "positionMm": {
+          "x": 900,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        },
+        "mountedOn": null
+      }
+    },
+    {
+      "seq": 1,
+      "tick": 0,
+      "id": "entity.place",
+      "args": {
+        "ref": {
+          "id": "lamp.lumivane-12v-5w",
+          "version": 1
+        },
+        "positionMm": {
+          "x": 1300,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        },
+        "mountedOn": null
+      }
+    },
+    {
+      "seq": 2,
+      "tick": 0,
+      "id": "lead.connect",
+      "args": {
+        "ref": {
+          "id": "lead.quillfern-test-1m",
+          "version": 1
+        },
+        "a": {
+          "entity": 1,
+          "terminal": "pos"
+        },
+        "b": {
+          "entity": 2,
+          "terminal": "a"
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "tick": 250,
+      "id": "sim.step",
+      "args": {
+        "ticks": 1000
+      }
+    },
+    {
+      "seq": 4,
+      "tick": 1250,
+      "id": "lead.disconnect",
+      "args": {
+        "id": 1
+      }
+    },
+    {
+      "seq": 5,
+      "tick": 1250,
+      "id": "edit.undo",
+      "args": {}
+    }
+  ],
+  "endTick": 1500
+}

@@ -50,7 +50,7 @@ describe('createGame', () => {
       seq: 0,
       tick: 0,
       id: 'entity.place',
-      args: { ...place(1), orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+      args: { ...place(1), orientationMdeg: { yaw: 0, pitch: 0, roll: 0 }, mountedOn: null },
     });
     expect(game.execOrThrow('view.resetLayout')).toMatchObject({ seq: 1, args: {} });
     let thrown: unknown;

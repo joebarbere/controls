@@ -223,3 +223,46 @@ export const SemVer = z
   .string()
   .max(64)
   .regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+
+/*
+ * World v3 primitives (ADR 0015, P3). New names, so no published version changes. They are the source
+ * of truth for the persisted grammar of the catalogue ids a save names: `@controls/catalog` re-exports
+ * them (ADR 0016) instead of defining its own copies.
+ */
+
+/** Lower camelCase, at most 32 characters: colour, termination-method, table and table-key ids. */
+export const CAMEL_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,31}$/;
+
+const camelId = (id: string, description: string) =>
+  z.string().max(32).regex(CAMEL_ID_PATTERN).meta({ id, description });
+const terminalGrammar = (id: string, description: string) =>
+  z.string().max(32).regex(TERMINAL_ID_PATTERN).meta({ id, description });
+
+/** A row of the catalogue colour table (`black`, `white`, `green`, `bare`); the table is append-only. */
+export const ColourId = camelId('ColourId', 'A row of the catalogue colour table: lower camelCase, at most 32.');
+/** A termination method in `@controls/catalog`'s `TERMINATION_METHODS` registry (`screw`, `springCage`). */
+export const TerminationMethodId = camelId('TerminationMethodId', 'A termination method id: lower camelCase.');
+/** A mount of an enclosure catalogue entry, unique within the entry (TerminalId's grammar). */
+export const MountId = terminalGrammar('MountId', 'A mount id within one catalogue entry (TerminalId grammar).');
+/** A cable entry of an enclosure catalogue entry, unique within the entry (TerminalId's grammar). */
+export const EntryId = terminalGrammar('EntryId', 'An enclosure entry id within one catalogue entry.');
+/** A strip hole of a tool entry, unique within it (TerminalId's grammar). */
+export const HoleId = terminalGrammar('HoleId', 'A stripping hole id within one tool entry.');
+/** A crimp die of a tool entry, unique within it (TerminalId's grammar). */
+export const DieId = terminalGrammar(
+  'DieId',
+  'A crimp die id within one tool entry; accessories list the die ids that crimp them.',
+);
+
+/**
+ * Printed label text (a device's `TB1`, a wire's sleeve marker): printable ASCII 0x20–0x7E, 1 to 32
+ * characters, no leading or trailing space, so every label renders in the one bundled font and
+ * survives every encoder (ADR 0015).
+ */
+export const LABEL_TEXT_PATTERN = /^[\x21-\x7e](?:[\x20-\x7e]{0,30}[\x21-\x7e])?$/;
+
+export const LabelText = z.string().max(32).regex(LABEL_TEXT_PATTERN).meta({
+  id: 'LabelText',
+  description: 'Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space.',
+});
+export type LabelText = z.infer<typeof LabelText>;

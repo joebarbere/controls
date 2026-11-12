@@ -1,5 +1,5 @@
-import { createWorld, World } from '@controls/save-format';
-import { checkWorldDevices } from './devices';
+import { createWorld, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
+import { checkWorldReferences } from './devices';
 import { worldHash } from './hash';
 import { findConnection, findConnectionIndex, joins } from './lead-commands';
 import { createWorldBus } from './session';
@@ -25,12 +25,11 @@ describe('lead.connect', () => {
     const bus = bench();
     const result = bus.exec('lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') });
     expect(result).toMatchObject({ ok: true, entry: { id: 'lead.connect' } });
-    expect(bus.state.connections).toStrictEqual([
-      { id: 1, ref: LEAD, a: end(1, 'pos'), b: end(2, 'a'), extensions: {} },
-    ]);
+    // A lead-shaped world v3 connection with the lead kind's initial bags (ADR 0015).
+    expect(bus.state.connections).toStrictEqual([leadOf(1, end(1, 'pos'), end(2, 'a'))]);
     expect(bus.state.nextConnectionId).toBe(2);
     expect(World.safeParse(bus.state).success).toBe(true);
-    expect(checkWorldDevices(bus.state)).toStrictEqual([]);
+    expect(checkWorldReferences(bus.state)).toStrictEqual([]);
   });
 
   it('undo removes the lead and restores the counter; redo brings it back with the same id', () => {
@@ -128,16 +127,32 @@ describe('lead.disconnect', () => {
   });
 });
 
+/** A lead-shaped world v3 connection between two terminals. */
+const leadOf = (id: number, a: { entity: number; terminal: string }, b: { entity: number; terminal: string }) => ({
+  id,
+  ref: LEAD,
+  a: { ...a, termination: null },
+  b: { ...b, termination: null },
+  cable: null,
+  route: null,
+  lengthMm: null,
+  colour: null,
+  label: null,
+  state: {},
+  sim: { ...LEAD_SIM_BAG_V3 },
+  extensions: {},
+});
+
 describe('lead helpers', () => {
   it('findConnectionIndex is a binary search over sorted ids', () => {
-    const connections = [1, 3, 4, 9].map((id) => ({ id, ref: LEAD, a: end(1, 'a'), b: end(2, 'a'), extensions: {} }));
+    const connections = [1, 3, 4, 9].map((id) => leadOf(id, end(1, 'a'), end(2, 'a')));
     expect([1, 3, 4, 9, 2, 10, 0].map((id) => findConnectionIndex(connections, id))).toStrictEqual([
       0, 1, 2, 3, -1, -1, -1,
     ]);
   });
 
   it('joins matches either direction only', () => {
-    const c = { id: 1, ref: LEAD, a: end(1, 'a'), b: end(2, 'b'), extensions: {} };
+    const c = leadOf(1, end(1, 'a'), end(2, 'b'));
     expect(joins(c, end(1, 'a'), end(2, 'b'))).toBe(true);
     expect(joins(c, end(2, 'b'), end(1, 'a'))).toBe(true);
     expect(joins(c, end(1, 'a'), end(2, 'a'))).toBe(false);

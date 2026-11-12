@@ -1,6 +1,6 @@
 import { ARG_REF_KEYWORD, defaultBindingDecls, defineCommand, Keymap, NoArgs, succeed } from '@controls/commands';
 import * as z from 'zod';
-import { createWorld, migrateReplayLog, ReplayLog, World } from '@controls/save-format';
+import { createWorld, LEAD_SIM_BAG_V3, migrateReplayLog, ReplayLog, World } from '@controls/save-format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -26,6 +26,8 @@ function entity(id: number, x = 0): Entity {
     transform: { positionMm: { x, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
     state: {},
     sim: {},
+    mountedOn: null,
+    label: null,
     extensions: {},
   };
 }
@@ -40,7 +42,12 @@ describe('entity.place', () => {
     expect(bus.exec('entity.place', { ref: crate, positionMm: { x: 5, y: 6, z: -7 } })).toMatchObject({
       ok: true,
       entry: {
-        args: { ref: crate, positionMm: { x: 5, y: 6, z: -7 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+        args: {
+          ref: crate,
+          positionMm: { x: 5, y: 6, z: -7 },
+          orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+          mountedOn: null,
+        },
       },
     });
     expect(bus.state.nextEntityId).toBe(10);
@@ -51,6 +58,8 @@ describe('entity.place', () => {
       transform: { positionMm: { x: 5, y: 6, z: -7 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
       state: {},
       sim: {},
+      mountedOn: null,
+      label: null,
       extensions: {},
     });
     expect(World.safeParse(bus.state).success).toBe(true);
@@ -291,6 +300,8 @@ describe('world registry, replay log and cheats', () => {
         transform: { positionMm: { x: 150, y: 0, z: -200 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
         state: {},
         sim: {},
+        mountedOn: null,
+        label: null,
         extensions: {},
       },
     ]);
@@ -301,7 +312,7 @@ describe('world registry, replay log and cheats', () => {
 
   it('reports a log that no longer replays', () => {
     const log = ReplayLog.parse({
-      schemaVersion: 2,
+      schemaVersion: 3,
       initialWorld: createWorld({ seed: 0 }),
       firstSeq: 0,
       entries: [{ seq: 0, tick: 0, id: 'entity.delete', args: { id: 1 } }],
@@ -353,8 +364,15 @@ describe('world v2: devices and connections (ADR 0013)', () => {
   const lead = (id: number, a: [number, string], b: [number, string]) => ({
     id,
     ref: testLead,
-    a: { entity: a[0], terminal: a[1] },
-    b: { entity: b[0], terminal: b[1] },
+    a: { entity: a[0], terminal: a[1], termination: null },
+    b: { entity: b[0], terminal: b[1], termination: null },
+    cable: null,
+    route: null,
+    lengthMm: null,
+    colour: null,
+    label: null,
+    state: {},
+    sim: { ...LEAD_SIM_BAG_V3 },
     extensions: {},
   });
 

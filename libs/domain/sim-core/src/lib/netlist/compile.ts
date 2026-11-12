@@ -198,6 +198,7 @@ const ABSENT_KEYS: Readonly<Record<AbsentConnectionReason, string>> = {
   'no-model': 'absent no-model',
   'absent-end': 'absent absent-end',
   'unknown-terminal': 'absent unknown-terminal',
+  unlanded: 'absent unlanded',
 };
 
 const byId = <T extends { readonly id: number }>(items: readonly T[]): readonly T[] => {
@@ -281,16 +282,21 @@ export class NetlistCompiler {
       let reason: AbsentConnectionReason | null = null;
       let a = -1;
       let b = -1;
+      const endA = connection.a;
+      const endB = connection.b;
       if (!result.ok) {
         reason = result.reason;
+      } else if (endA === null || endB === null) {
+        // World v3 (ADR 0015): a connection with a free end is wired to nothing, so it isn't netlisted.
+        reason = 'unlanded';
       } else {
         if (cached.aEntry === null || cached.aEntry.epoch !== epoch) {
-          cached.aEntry = this.currentEntry(connection.a.entity, epoch);
-          cached.aTerminal = terminalOf(cached.aEntry, connection.a.terminal);
+          cached.aEntry = this.currentEntry(endA.entity, epoch);
+          cached.aTerminal = terminalOf(cached.aEntry, endA.terminal);
         }
         if (cached.bEntry === null || cached.bEntry.epoch !== epoch) {
-          cached.bEntry = this.currentEntry(connection.b.entity, epoch);
-          cached.bTerminal = terminalOf(cached.bEntry, connection.b.terminal);
+          cached.bEntry = this.currentEntry(endB.entity, epoch);
+          cached.bTerminal = terminalOf(cached.bEntry, endB.terminal);
         }
         a = plantTerminal(cached.aEntry, cached.aTerminal);
         b = plantTerminal(cached.bEntry, cached.bTerminal);

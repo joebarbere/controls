@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 3,
+  "seed": 0,
+  "tick": 0,
+  "nextEntityId": 1,
+  "nextConnectionId": 1,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "entities": [],
+  "connections": [],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

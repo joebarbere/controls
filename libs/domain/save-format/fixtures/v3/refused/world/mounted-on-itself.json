@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 3,
+  "seed": 20261111,
+  "tick": 125000,
+  "nextEntityId": 4,
+  "nextConnectionId": 2,
+  "nextCableId": 1,
+  "nextTerminationId": 3,
+  "regionId": "nec",
+  "difficulty": "journeyman",
+  "assisted": false,
+  "fixtures": [
+    {
+      "id": "stud-wall",
+      "ref": {
+        "id": "prop.stud-wall",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -2500,
+          "y": -1200,
+          "z": -21
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "utility.larkmoor-split-phase-25kva",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 900,
+          "z": -2000
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": "SVC",
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "breaker.saltmere-1p-15a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1000,
+          "y": 1200,
+          "z": -2000
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "thermal": 0.43750000000000006,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 2,
+        "mount": "rail-1"
+      },
+      "label": "CB1",
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "duct.fixture-25x40",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 500,
+          "y": 1400,
+          "z": -1900
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "conductor.fixture-thhn-14",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "l1",
+        "termination": {
+          "id": 1,
+          "method": "screw",
+          "auto": false,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0.0625,
+          "torqueNm": 0.8,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 2,
+        "terminal": "line",
+        "termination": {
+          "id": 2,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 4,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 50,
+            "y": 1400,
+            "z": -1800
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 500,
+            "y": 1400,
+            "z": -1900
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "staple",
+          "positionMm": {
+            "x": 900,
+            "y": 1400,
+            "z": -1980
+          },
+          "entity": null,
+          "fixture": "stud-wall",
+          "tool": null
+        }
+      ],
+      "lengthMm": 1650,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": "L1",
+      "state": {},
+      "sim": {
+        "conductorTempK": 318.4672039181518,
+        "endADegradation": 1.3725490196078431,
+        "endAState": "intermittentClosed",
+        "endATempK": 351.09375000000006,
+        "endATerminationId": 1,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": 321.3,
+        "endBTerminationId": 2,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    }
+  ],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

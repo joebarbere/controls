@@ -14,6 +14,7 @@ import {
 } from './documents';
 import { readCtrl, writeCtrl } from './container/ctrl';
 import type { Migrator } from './migrate';
+import { LABEL_TEXT_PATTERN } from './primitives';
 import type * as z from 'zod';
 
 /*
@@ -153,6 +154,41 @@ describe('fixtures', () => {
       const result = c.kind.migrator.migrate(c.json);
       expect(result.ok && result.value, c.file).toStrictEqual(c.json);
     }
+  });
+});
+
+/** `fixtures/v3/refused/<kind>/*.json`, with the message each must be refused with (one rule each, ADR 0015). */
+const REFUSED_V3: Record<string, string> = {
+  'world/cable-tails-not-shorter-than-cable.json': "A cable's tails are shorter than its length",
+  'world/conductor-in-missing-cable.json': 'A conductor names a cable that exists',
+  'world/free-end-without-rest-waypoint.json': 'A free end b rests on a last waypoint of kind free',
+  'world/label-with-trailing-space.json': `Invalid string: must match pattern ${String(LABEL_TEXT_PATTERN)}`,
+  'world/landed-conductor-without-termination.json': 'A landed conductor end has a termination',
+  'world/lead-with-a-route.json':
+    'A connection without lengthMm is a lead: no cable, route, colour or label, two clip ends',
+  'world/mounted-on-itself.json': 'An entity is not mounted on itself',
+  'world/repeated-waypoint.json': 'Consecutive waypoints must be distinct',
+  'world/stripe-equals-base.json': 'A stripe must differ from the base colour',
+  'world/termination-id-not-below-counter.json': 'Termination id must be below nextTerminationId',
+  'world/termination-id-repeated.json': 'Termination ids must be unique in the world',
+  'world/waypoint-host-missing.json': 'A waypoint host must exist',
+};
+
+describe('v3 fixtures that must not load as they are', () => {
+  const dir = join(fixturesRoot, 'v3/refused');
+  const files = readdirSync(dir).flatMap((kind) => readdirSync(join(dir, kind)).map((name) => `${kind}/${name}`));
+
+  it('every refused fixture is listed with its rule', () => {
+    expect(files.sort()).toStrictEqual(Object.keys(REFUSED_V3).sort());
+  });
+
+  it.each(Object.entries(REFUSED_V3))('refused/%s is refused (%s)', (file, message) => {
+    const migrator = file.startsWith('world/') ? worldMigrator : replayLogMigrator;
+    const result = migrator.migrate(JSON.parse(readFileSync(join(dir, file), 'utf8')));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('invalid');
+    expect(result.error.kind === 'invalid' && result.error.issues.map((i) => i.message)).toContain(message);
   });
 });
 

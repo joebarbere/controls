@@ -38,7 +38,7 @@ export default function benchLeads(game: Game): void {
   if (noSuchControl.ok) throw new Error('a lamp has no controls');
 
   const world = game.world();
-  const leads = world.connections.map((c) => `${c.id}:${c.a.entity}.${c.a.terminal}-${c.b.entity}.${c.b.terminal}`);
+  const leads = world.connections.map((c) => `${c.id}:${c.a?.entity}.${c.a?.terminal}-${c.b?.entity}.${c.b?.terminal}`);
   if (leads.join() !== '1:1.pos-2.a,2:2.b-3.a,3:3.b-1.neg') throw new Error(`unexpected leads [${leads.join()}]`);
   if (world.entities[1].state['closed'] !== true) throw new Error('the switch should be closed');
   if (game.entries().length !== 11) throw new Error('unexpected replay log');

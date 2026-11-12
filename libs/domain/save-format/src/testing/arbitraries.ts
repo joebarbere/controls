@@ -304,6 +304,253 @@ export const rawManifestV2Arb = fc
   .tuple(rawManifestV1Arb, fc.oneof(fc.nat({ max: 1000 }), fc.constant(-0)))
   .map(([v1, simEngineVersion]) => ({ ...v1, schemaVersion: 2 as const, simEngineVersion }));
 
+/** A raw manifest that `ManifestV3` accepts (v2's, at schemaVersion 3). */
+export const rawManifestV3Arb = rawManifestV2Arb.map((v2) => ({ ...v2, schemaVersion: 3 as const }));
+
+/*
+ * World v3 (ADR 0015). Raw material is drawn first and then fixed up by plain functions into a valid
+ * document (sorted ids, unique termination ids, rest waypoints, distinct consecutive points, tails
+ * shorter than the cable), so every rule of `WorldV3` holds by construction while the values stay
+ * arbitrary: -0, subnormals, 17-digit floats, every waypoint kind, nullable everything.
+ */
+
+/** Printable-ASCII label text, no leading or trailing space. */
+export const labelTextArb = fc.stringMatching(/^[!-~](?:[ -~]{0,8}[!-~])?$/);
+const colourIdArb = fc.constantFrom('bare', 'black', 'white', 'red', 'green', 'yellow', 'blue', 'grey');
+/** A conductor colour; a stripe never equals its base. */
+export const conductorColourArb = fc
+  .tuple(colourIdArb, fc.option(colourIdArb, { nil: null }))
+  .map(([base, stripe]) => ({ base, stripe: stripe === base ? null : stripe }));
+const methodIdArb = fc.constantFrom('screw', 'springCage', 'backStab', 'twistOn');
+const nonNegativeArb = fc.oneof(fc.double({ min: 0, max: 1e6, noNaN: true }), fc.constant(-0), fc.constant(5e-324));
+const terminationBodyArb = fc.record({
+  method: methodIdArb,
+  auto: fc.boolean(),
+  stripLengthMm: fc.oneof(fc.integer({ min: 0, max: 1000 }), fc.constant(-0)),
+  nickedStrandFraction: unitArb,
+  torqueNm: fc.option(nonNegativeArb, { nil: null }),
+  accessory: fc.option(fc.record({ ref: catalogRefArb, crimpQuality: unitArb }), { nil: null }),
+});
+type TerminationBody = typeof terminationBodyArb extends fc.Arbitrary<infer T> ? T : never;
+const endRawArb = fc.option(fc.record({ pick: fc.nat(), terminal: terminalIdArb, termination: terminationBodyArb }), {
+  nil: null,
+});
+type EndRaw = typeof endRawArb extends fc.Arbitrary<infer T> ? T : never;
+const positionArb = fc.record({ x: coordinateArb, y: coordinateArb, z: coordinateArb });
+const waypointRawArb = fc.record({
+  kind: fc.constantFrom('free', 'duct', 'conduit', 'staple', 'bore'),
+  positionMm: positionArb,
+  pick: fc.nat(),
+  onFixture: fc.boolean(),
+  tool: catalogRefArb,
+});
+type WaypointRaw = typeof waypointRawArb extends fc.Arbitrary<infer T> ? T : never;
+const routeRawArb = fc.array(waypointRawArb, { maxLength: 5 });
+const conductorRawArb = fc.record({
+  ref: catalogRefArb,
+  a: endRawArb,
+  b: endRawArb,
+  route: routeRawArb,
+  lengthMm: fc.integer({ min: 1, max: 1_000_000 }),
+  colour: conductorColourArb,
+  label: fc.option(labelTextArb, { nil: null }),
+  bags: bagPairArb,
+  extensions: jsonObjectArb,
+});
+type ConductorRaw = typeof conductorRawArb extends fc.Arbitrary<infer T> ? T : never;
+const cableEndRawArb = fc.option(fc.record({ pick: fc.nat(), entry: terminalIdArb }), { nil: null });
+const cableRawArb = fc.record({
+  ref: catalogRefArb,
+  a: cableEndRawArb,
+  b: cableEndRawArb,
+  route: routeRawArb,
+  extraMm: fc.integer({ min: 1, max: 100_000 }),
+  tailsMm: fc.record({ a: fc.integer({ min: 0, max: 2000 }), b: fc.integer({ min: 0, max: 2000 }) }),
+  strip: fc.record({ a: fc.nat(), b: fc.nat() }),
+  label: fc.option(labelTextArb, { nil: null }),
+  extensions: jsonObjectArb,
+  conductors: fc.array(conductorRawArb, { minLength: 1, maxLength: 3 }),
+});
+type CableRaw = typeof cableRawArb extends fc.Arbitrary<infer T> ? T : never;
+const mountRawArb = fc.option(fc.record({ pick: fc.nat(), mount: terminalIdArb }), { nil: null });
+
+type Position = { x: number; y: number; z: number };
+const samePosition = (p: Position, q: Position) => p.x === q.x && p.y === q.y && p.z === q.z;
+/** A position next to `p`, never equal to it (inside the ±10 km bound). */
+const nudge = (p: Position): Position => ({ ...p, x: p.x >= MAX_COORDINATE_MM ? p.x - 1 : p.x + 1 });
+
+/** A valid route from raw waypoints: hosts that exist, rest waypoints for free ends, distinct neighbours, ≥ 2 points. */
+function buildRoute(
+  raws: readonly WaypointRaw[],
+  ends: { a: boolean; b: boolean },
+  entityIds: readonly number[],
+  fixtureIds: readonly string[],
+) {
+  const route = raws.map((raw) => {
+    const useFixture = (raw.onFixture || entityIds.length === 0) && fixtureIds.length > 0;
+    const kind = raw.kind !== 'free' && entityIds.length === 0 && fixtureIds.length === 0 ? 'free' : raw.kind;
+    return {
+      kind,
+      positionMm: raw.positionMm,
+      entity: kind === 'free' || useFixture ? null : entityIds[raw.pick % entityIds.length],
+      fixture: kind !== 'free' && useFixture ? fixtureIds[raw.pick % fixtureIds.length] : null,
+      tool: kind === 'bore' ? raw.tool : null,
+    };
+  });
+  const free = (positionMm: Position) => ({
+    kind: 'free' as const,
+    positionMm,
+    entity: null,
+    fixture: null,
+    tool: null,
+  });
+  if (!ends.a && route[0]?.kind !== 'free') route.unshift(free(route[0]?.positionMm ?? { x: 0, y: 0, z: 0 }));
+  if (!ends.b && route.at(-1)?.kind !== 'free') route.push(free(route.at(-1)?.positionMm ?? { x: 0, y: 0, z: 0 }));
+  while (route.length + (ends.a ? 1 : 0) + (ends.b ? 1 : 0) < 2) route.push(free({ x: 0, y: 0, z: 0 }));
+  for (let i = 1; i < route.length; i++) {
+    if (samePosition(route[i - 1].positionMm, route[i].positionMm)) {
+      route[i] = { ...route[i], positionMm: nudge(route[i - 1].positionMm) };
+    }
+  }
+  return route;
+}
+
+/**
+ * A raw world document that `WorldV3` accepts: v2's world (its connections as test leads) plus mounted
+ * and labelled entities, conductors with their own routes and terminations, and cables with their
+ * conductors, landed, half-landed or free.
+ */
+export const rawWorldV3Arb = rawWorldV2Arb
+  .chain((v2) =>
+    fc.record({
+      v2: fc.constant(v2),
+      mounts: fc.array(mountRawArb, { minLength: v2.entities.length, maxLength: v2.entities.length }),
+      labels: fc.array(fc.option(labelTextArb, { nil: null }), {
+        minLength: v2.entities.length,
+        maxLength: v2.entities.length,
+      }),
+      leadBags: fc.array(bagPairArb, { minLength: v2.connections.length, maxLength: v2.connections.length }),
+      conductors: fc.array(conductorRawArb, { maxLength: 3 }),
+      cables: fc.array(cableRawArb, { maxLength: 2 }),
+      gaps: fc.tuple(fc.nat({ max: 3 }), fc.nat({ max: 3 }), fc.nat({ max: 3 })),
+    }),
+  )
+  .map(({ v2, mounts, labels, leadBags, conductors, cables, gaps }) => {
+    const v2Entities = v2.entities as readonly (typeof v2.entities)[number][];
+    const entityIds = v2Entities.map((e) => e.id);
+    const fixtureIds = (v2.fixtures as readonly { id: string }[]).map((f) => f.id);
+    let nextTermination = 1;
+    const termination = (body: TerminationBody) => ({ id: nextTermination++, ...body });
+    const end = (raw: EndRaw) =>
+      raw === null || entityIds.length === 0
+        ? null
+        : {
+            entity: entityIds[raw.pick % entityIds.length],
+            terminal: raw.terminal,
+            termination: termination(raw.termination),
+          };
+    const conductor = (raw: ConductorRaw, cable: { id: number; conductor: number; lengthMm: number } | null) => {
+      const a = end(raw.a);
+      let b = end(raw.b);
+      if (a !== null && b !== null && a.entity === b.entity && a.terminal === b.terminal) {
+        b = { ...b, terminal: `${b.terminal}x` };
+      }
+      return {
+        ref: raw.ref,
+        a,
+        b,
+        cable: cable === null ? null : { id: cable.id, conductor: cable.conductor },
+        route: cable === null ? buildRoute(raw.route, { a: a !== null, b: b !== null }, entityIds, fixtureIds) : null,
+        lengthMm: cable === null ? raw.lengthMm : cable.lengthMm,
+        colour: raw.colour,
+        label: raw.label,
+        state: raw.bags[0],
+        sim: raw.bags[1],
+        extensions: raw.extensions,
+      };
+    };
+    const leads = (v2.connections as readonly (typeof v2.connections)[number][]).map((c, index) => ({
+      ref: c.ref,
+      a: { ...c.a, termination: null },
+      b: { ...c.b, termination: null },
+      cable: null,
+      route: null,
+      lengthMm: null,
+      colour: null,
+      label: null,
+      state: leadBags[index][0],
+      sim: leadBags[index][1],
+      extensions: c.extensions,
+    }));
+    const single = conductors.map((raw) => conductor(raw, null));
+    const cableEnd = (raw: CableRaw['a']) =>
+      raw === null || entityIds.length === 0
+        ? null
+        : { entity: entityIds[raw.pick % entityIds.length], entry: raw.entry };
+    const builtCables = cables.map((raw: CableRaw, index) => {
+      const id = index + 1;
+      const a = cableEnd(raw.a);
+      let b = cableEnd(raw.b);
+      if (a !== null && b !== null && a.entity === b.entity && a.entry === b.entry) b = { ...b, entry: `${b.entry}x` };
+      const lengthMm = raw.tailsMm.a + raw.tailsMm.b + raw.extraMm;
+      return {
+        cable: {
+          id,
+          ref: raw.ref,
+          a,
+          b,
+          route: buildRoute(raw.route, { a: a !== null, b: b !== null }, entityIds, fixtureIds),
+          lengthMm,
+          tailsMm: raw.tailsMm,
+          jacketStripMm: { a: raw.strip.a % (raw.tailsMm.a + 1), b: raw.strip.b % (raw.tailsMm.b + 1) },
+          label: raw.label,
+          extensions: raw.extensions,
+        },
+        conductors: raw.conductors.map((c, i) => conductor(c, { id, conductor: i, lengthMm })),
+      };
+    });
+    const connections = [...leads, ...single, ...builtCables.flatMap((c) => c.conductors)].map((c, index) => ({
+      id: index + 1,
+      ...c,
+    }));
+    return {
+      ...v2,
+      schemaVersion: 3 as const,
+      nextConnectionId: connections.length + 1 + gaps[0],
+      nextCableId: builtCables.length + 1 + gaps[1],
+      nextTerminationId: nextTermination + gaps[2],
+      entities: v2Entities.map((entity, index) => {
+        const mount = mounts[index];
+        return {
+          ...entity,
+          // Only on an entity earlier in the list, so mounting never forms a cycle.
+          mountedOn:
+            mount === null || index === 0 ? null : { entity: entityIds[mount.pick % index], mount: mount.mount },
+          label: labels[index],
+        };
+      }),
+      connections,
+      cables: builtCables.map((c) => c.cable),
+    };
+  });
+
+/** A raw replay log that `ReplayLogV3` accepts. */
+export const rawReplayLogV3Arb = fc
+  .record({
+    initialWorld: rawWorldV3Arb,
+    firstSeq: fc.oneof(fc.constant(0), fc.nat({ max: 1_000_000 })),
+    steps: fc.array(fc.record({ dt: fc.nat({ max: 3 }), id: commandIdArb, args: jsonObjectArb }), { maxLength: 6 }),
+    tail: fc.nat({ max: 10_000 }),
+  })
+  .map(({ initialWorld, firstSeq, steps, tail }) => {
+    let tick = initialWorld.tick;
+    const entries = steps.map((step, index) => {
+      tick += step.dt;
+      return { seq: firstSeq + index, tick, id: step.id, args: step.args };
+    });
+    return { schemaVersion: 3 as const, initialWorld, firstSeq, entries, endTick: tick + tail };
+  });
+
 /** Bytes that start with the PNG signature (the container checks the signature, not the image). */
 export const pngBytesArb = fc
   .uint8Array({ maxLength: 64 })

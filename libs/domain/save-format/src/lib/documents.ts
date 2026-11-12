@@ -8,8 +8,12 @@ import { ReplayLogV1 } from './v1/replay-log';
 import { WorldV1 } from './v1/world';
 import { manifestV1ToV2, replayLogV1ToV2, worldV1ToV2 } from './v2/from-v1';
 import { ManifestV2 } from './v2/manifest';
-import { ReplayEntryV2, ReplayLogV2 } from './v2/replay-log';
+import { ReplayLogV2 } from './v2/replay-log';
 import { WorldV2 } from './v2/world';
+import { manifestV2ToV3, replayLogV2ToV3, worldV2ToV3 } from './v3/from-v2';
+import { ManifestV3 } from './v3/manifest';
+import { ReplayEntryV3, ReplayLogV3 } from './v3/replay-log';
+import { WorldV3 } from './v3/world';
 
 /*
  * The current version of each document, and the migration chains that reach it. When a version is
@@ -18,32 +22,35 @@ import { WorldV2 } from './v2/world';
  */
 
 /** The save format's `schemaVersion` (shared by `manifest.json`, `world.json` and `replay.log`). */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /** The settings document's `settingsVersion` (independent of `schemaVersion`). */
 export const CURRENT_SETTINGS_VERSION = 2;
 
 /** The current world document schema. `world-model` infers its types from this. */
-export const World = WorldV2;
-export type World = WorldV2;
-export const Manifest = ManifestV2;
-export type Manifest = ManifestV2;
-export const ReplayLog = ReplayLogV2;
-export type ReplayLog = ReplayLogV2;
+export const World = WorldV3;
+export type World = WorldV3;
+export const Manifest = ManifestV3;
+export type Manifest = ManifestV3;
+export const ReplayLog = ReplayLogV3;
+export type ReplayLog = ReplayLogV3;
 /** One replay-log entry at the current version. `@controls/commands` validates every logged entry with it. */
-export const ReplayEntry = ReplayEntryV2;
-export type ReplayEntry = ReplayEntryV2;
+export const ReplayEntry = ReplayEntryV3;
+export type ReplayEntry = ReplayEntryV3;
 export const Settings = SettingsV2;
 export type Settings = SettingsV2;
 
 export const worldMigrator = migrationChain('world document', 'schemaVersion', WorldV1)
   .then(WorldV2, worldV1ToV2)
+  .then(WorldV3, worldV2ToV3)
   .build();
 export const manifestMigrator = migrationChain('save manifest', 'schemaVersion', ManifestV1)
   .then(ManifestV2, manifestV1ToV2)
+  .then(ManifestV3, manifestV2ToV3)
   .build();
 export const replayLogMigrator = migrationChain('replay log', 'schemaVersion', ReplayLogV1)
   .then(ReplayLogV2, replayLogV1ToV2)
+  .then(ReplayLogV3, replayLogV2ToV3)
   .build();
 export const settingsMigrator = migrationChain('settings', 'settingsVersion', SettingsV1)
   .then(SettingsV2, settingsV1ToV2)
@@ -88,7 +95,7 @@ export interface NewWorldOptions {
 }
 
 /**
- * An empty world (no fixtures, entities or connections, never solved) at the current schema version.
+ * An empty world (no fixtures, entities, connections or cables, never solved) at the current schema version.
  * Validated, so an out-of-range seed throws. A level such as the workshop is a world document with
  * fixtures.
  */
@@ -99,12 +106,15 @@ export function createWorld(options: NewWorldOptions): World {
     tick: 0,
     nextEntityId: 1,
     nextConnectionId: 1,
+    nextCableId: 1,
+    nextTerminationId: 1,
     regionId: options.regionId ?? 'nec',
     difficulty: options.difficulty ?? 'apprentice',
     assisted: false,
     fixtures: [],
     entities: [],
     connections: [],
+    cables: [],
     sim: null,
     extensions: {},
   });

@@ -15,12 +15,44 @@
         "roll": 0
       },
       "$ref": "#/$defs/OrientationMdegV1"
+    },
+    "mountedOn": {
+      "default": null,
+      "title": "Mounted on",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "entity": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "x-controls-ref": "entity",
+              "title": "Enclosure"
+            },
+            "mount": {
+              "description": "A mount id of the enclosure's catalogue entry (rail-1, yoke)",
+              "title": "Mount",
+              "$ref": "#/$defs/MountId"
+            }
+          },
+          "required": [
+            "entity",
+            "mount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
     "ref",
     "positionMm",
-    "orientationMdeg"
+    "orientationMdeg",
+    "mountedOn"
   ],
   "additionalProperties": false,
   "$defs": {
@@ -98,6 +130,12 @@
       ],
       "additionalProperties": false,
       "description": "Intrinsic Y-X-Z (yaw, pitch, roll) angles in integer millidegrees, each in [0, 360000)."
+    },
+    "MountId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A mount id within one catalogue entry (TerminalId grammar)."
     }
   },
   "title": "Arguments of entity.place"

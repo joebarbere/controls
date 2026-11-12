@@ -177,7 +177,7 @@ describe('KeybindingService', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(session.world().entities).toEqual([]);
     expect(session.entries().map((e) => [e.id, e.args])).toEqual([
-      ['entity.place', { ...place, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } }],
+      ['entity.place', { ...place, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 }, mountedOn: null }],
       ['entity.delete', { id: 1 }],
     ]);
   });

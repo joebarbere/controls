@@ -77,10 +77,13 @@ describe('v1 → v2 migration', () => {
 
   it('the chains reach v2 from v1 through the migrators', () => {
     for (const migrator of [worldMigrator, manifestMigrator, replayLogMigrator]) {
-      expect(migrator.currentVersion).toBe(2);
+      expect(migrator.currentVersion).toBeGreaterThanOrEqual(2);
       expect(migrator.schemaFor(1)).toBeDefined();
       expect(migrator.schemaFor(2)).toBeDefined();
-      expect(migrator.schemaFor(3)).toBeUndefined();
     }
+    expect(worldMigrator.schemaFor(1)).toBe(WorldV1);
+    expect(worldMigrator.schemaFor(2)).toBe(WorldV2);
+    expect(manifestMigrator.schemaFor(2)).toBe(ManifestV2);
+    expect(replayLogMigrator.schemaFor(2)).toBe(ReplayLogV2);
   });
 });

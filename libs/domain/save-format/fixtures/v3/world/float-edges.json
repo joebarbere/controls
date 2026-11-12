@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 3,
+  "seed": 4294967295,
+  "tick": 1099511627776,
+  "nextEntityId": 3,
+  "nextConnectionId": 3,
+  "nextCableId": 1,
+  "nextTerminationId": 2,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "battery.ferrovane-12v-7ah",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 800,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "stateOfCharge": 0.30000000000000004
+      },
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "device.fixture-terminal-block",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1000,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "trim": -1.7976931348623157e308
+      },
+      "sim": {
+        "heat": 5e-324
+      },
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "pos",
+        "termination": null
+      },
+      "b": {
+        "entity": 2,
+        "terminal": "1",
+        "termination": null
+      },
+      "cable": null,
+      "route": null,
+      "lengthMm": null,
+      "colour": null,
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": 293.15000000000003,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "conductor.fixture-mtw-18",
+        "version": 1
+      },
+      "a": {
+        "entity": 2,
+        "terminal": "2",
+        "termination": {
+          "id": 1,
+          "method": "springCage",
+          "auto": false,
+          "stripLengthMm": 10,
+          "nickedStrandFraction": 5e-324,
+          "torqueNm": null,
+          "accessory": {
+            "ref": {
+              "id": "ferrule.fixture-18",
+              "version": 1
+            },
+            "crimpQuality": 0.9999999999999999
+          }
+        }
+      },
+      "b": null,
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 1100,
+            "y": -300,
+            "z": 400
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 1100,
+            "y": -250,
+            "z": 400
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1000000,
+      "colour": {
+        "base": "green",
+        "stripe": "yellow"
+      },
+      "label": "~PE 1",
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1.0000000000000002,
+        "endAState": "ok",
+        "endATempK": 2.2250738585072014e-308,
+        "endATerminationId": 1,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {
+        "mod.example.note": "kept as it is"
+      }
+    }
+  ],
+  "cables": [],
+  "sim": {
+    "lastSolveTick": 1099511627769,
+    "topologyHash": "c0ffee0000000000000000000000000000000000000000000000000000000000",
+    "nodes": [0.1, 0.2, 0.30000000000000004, 5e-324, -1.7976931348623157e308, 0],
+    "branches": [123.45678901234568, -2.5e-17],
+    "islands": [
+      {
+        "flags": 0,
+        "iterations": 3
+      }
+    ]
+  },
+  "extensions": {}
+}

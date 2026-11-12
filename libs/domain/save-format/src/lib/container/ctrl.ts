@@ -19,7 +19,7 @@ import { extractZipEntry, readZipDirectory, writeZip, type ZipEntry, type ZipErr
  * clock, no framework. The Electron main process (or the web harness) stores the bytes.
  */
 
-/** Entry names of a schemaVersion 1 or 2 container (v2 adds no entries). */
+/** Entry names of a schemaVersion 1, 2 or 3 container (v2 and v3 add no entries). */
 export const CTRL_ENTRY = {
   manifest: 'manifest.json',
   world: 'world.json',
@@ -28,8 +28,8 @@ export const CTRL_ENTRY = {
 } as const;
 
 /**
- * Directories reserved for later documents (prints P6, PLC programs P10, HMI screens P12). A v1 or
- * v2 container may hold them as empty directory entries; any file inside them is refused until the
+ * Directories reserved for later documents (prints P6, PLC programs P10, HMI screens P12). A v1 to
+ * v3 container may hold them as empty directory entries; any file inside them is refused until the
  * schemaVersion that defines it.
  */
 export const CTRL_RESERVED_DIRECTORIES: readonly string[] = ['hmi/', 'plc/', 'prints/'];

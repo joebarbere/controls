@@ -1,5 +1,16 @@
 import fc from 'fast-check';
-import { commandStreamKey, deriveStream, entityStreamKey, hashStreamKey, mix32, Sfc32, STREAM_WARMUP } from './prng';
+import {
+  cableStreamKey,
+  commandStreamKey,
+  connectionStreamKey,
+  deriveStream,
+  entityStreamKey,
+  hashStreamKey,
+  mix32,
+  Sfc32,
+  STREAM_WARMUP,
+  terminationStreamKey,
+} from './prng';
 
 const take = (rng: Sfc32, n: number) => Array.from({ length: n }, () => rng.nextU32());
 
@@ -166,5 +177,10 @@ describe('deriveStream', () => {
   it('formats the documented stream keys', () => {
     expect(commandStreamKey(7)).toBe('command:7');
     expect(entityStreamKey(3)).toBe('entity:3');
+    // World v3 (ADR 0015), frozen with schemaVersion 3 at v0.4.0.
+    expect(connectionStreamKey(12)).toBe('connection:12');
+    expect(cableStreamKey(4)).toBe('cable:4');
+    expect(terminationStreamKey(9)).toBe('termination:9');
+    expect(`${terminationStreamKey(9)}:clamp`).toBe('termination:9:clamp');
   });
 });

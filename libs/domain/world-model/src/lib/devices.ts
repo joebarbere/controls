@@ -1,78 +1,322 @@
-import { BUILTIN_CATALOG, type Catalog, checkBags, checkControlValue } from '@controls/catalog';
-import { isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
+import {
+  BUILTIN_CATALOG,
+  type Catalog,
+  checkBags,
+  checkControlValue,
+  type DeviceDefinition,
+  type ModelKindDef,
+  TERMINATION_METHODS,
+} from '@controls/catalog';
+import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
 import { findEntity } from './entity-commands';
-import type { Entity, World } from './types';
+import { coversChord, routeFloorMm } from './routing/floor';
+import { entityPointMm, isAxisAligned } from './snap/quarter-turn';
+import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
 
 /*
- * The load-time device check (ADR 0011 §10 step 1, ADR 0013): the world schema checks each state
- * bag's generic shape; this checks every bag, and every connection, against the device catalogue.
- * A failure is the load error `invalid-device-state`. Run on every world that enters a game: a
- * loaded save (`loadGame`), a level (`loadLevel`) and `createGame({ world })`.
+ * The load-time reference check (ADR 0011 §10 step 1, ADR 0013, ADR 0015): the world schema checks
+ * shapes and the references inside the document; this checks the world against the catalogue. A
+ * failure is the load error `invalid-device-state`. Run on every world that enters a game: a loaded
+ * save (`loadGame`, `Session.prepareLoad`), a level (`loadLevel`) and `createGame({ world })`.
  *
- * - An entity whose ref resolves to a catalogue device has exactly its model kind's keys in each bag,
- *   each valid for its key (`checkBags`), and each control's value inside the entry's control range
- *   (`checkControlValue`, the check `device.operate` applies).
- * - A built-in prop (`prop.*` at version 1) has no device state: both bags are empty.
- * - A ref the catalogue doesn't know (a mod's device, a later catalogue's) is left alone: its bags
- *   round-trip untouched like `extensions`, and the netlist compiler treats it as absent.
- * - A connection's ref, if the catalogue knows it, is a connection kind (a lead); each end's
- *   terminal exists on its entity's device. An end on a built-in prop is refused (props have no
- *   terminals); an end on an unknown device is left alone.
+ * **A ref the catalogue doesn't know is left alone** (a mod's device, a later catalogue's): its bags,
+ * connections and cables round-trip untouched like `extensions`, it is never netlisted, and no check
+ * below that needs its catalogue data runs on it. Geometry checks run only where the catalogue gives
+ * the geometry (a known device's terminals, mounts and entries).
+ *
+ * Entities:
+ * - a catalogue device has exactly its model kind's keys in each bag, each valid (`checkBags`), and
+ *   each control's value inside the entry's control range (`checkControlValue`, as `device.operate`);
+ * - a built-in prop (`prop.*` at version 1) has no device state: both bags are empty;
+ * - an enclosure's `openEntries` has no bit at or above its catalogue entry's number of entries;
+ * - `mountedOn` names a mount the host's catalogue entry has, of a type the device declares it fits,
+ *   and both are axis-aligned.
+ *
+ * Connections:
+ * - the ref is a connection kind, lead-shaped exactly when the kind isn't a conductor kind, with
+ *   exactly its kind's bag keys (a lead's end keys at their initial values: clips have no
+ *   termination node);
+ * - each landed end's terminal exists (props have none); a termination's method is one of that
+ *   terminal's methods, and its accessory (if the catalogue knows it) is an accessory the method takes;
+ * - a conductor's colour is in the colour table and one its entry is made in;
+ * - a bore waypoint's tool (if known) is a tool that can bore; a hosted waypoint's known host and a
+ *   known device with a landed end are axis-aligned;
+ * - a conductor landed at both ends is at least as long as the straight line between them
+ *   (`lengthMm² ≥ Δx² + Δy² + Δz²`, exact integers).
+ *
+ * Cables:
+ * - the ref is a cable assembly, with one conductor per assembly conductor, each of the assembly's
+ *   conductor entry and colour;
+ * - each end is an open entry of an enclosure with room for it (`maxCables`), axis-aligned;
+ * - the cut length covers the route's floor plus both tails (`routeFloorMm` through the entry points
+ *   and waypoints, ADR 0015).
+ *
+ * Tool hole and die ids aren't stored in the world (they are `wire.add`/`wire.land` arguments), so
+ * they are checked by those commands, not here.
  */
 
-/** At most this many device issues are reported. */
+/** At most this many issues are reported. */
 const MAX_ISSUES = 20;
 
-/** Every way `world`'s device state and connections disagree with `catalog`. Empty when they agree. Never echoes values. */
-export function checkWorldDevices(world: World, catalog: Catalog = BUILTIN_CATALOG): ValidationIssue[] {
+const sameRef = (a: CatalogRef, b: CatalogRef): boolean => a.id === b.id && a.version === b.version;
+
+/**
+ * Every way `world` disagrees with `catalog` (device state, connections, cables, mounts). Empty when
+ * they agree. Never echoes values.
+ */
+export function checkWorldReferences(world: World, catalog: Catalog = BUILTIN_CATALOG): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  world.entities.forEach((entity, index) => {
-    const at = `entities[${index}]`;
-    if (isBuiltinPropRef(entity.ref)) {
-      for (const bag of ['state', 'sim'] as const) {
-        if (Object.keys(entity[bag]).length > 0) {
-          issues.push({ path: `${at}.${bag}`, message: 'A built-in prop has no device state' });
+  const add = (path: string, message: string) => issues.push({ path, message });
+  world.entities.forEach((entity, index) => checkEntity(world, entity, `entities[${index}]`, catalog, add));
+  world.connections.forEach((connection, index) =>
+    checkConnection(world, connection, `connections[${index}]`, catalog, add),
+  );
+  world.cables.forEach((cable, index) => checkCable(world, cable, `cables[${index}]`, catalog, add));
+  return issues.slice(0, MAX_ISSUES);
+}
+
+type Add = (path: string, message: string) => void;
+
+function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog, add: Add): void {
+  if (isBuiltinPropRef(entity.ref)) {
+    for (const bag of ['state', 'sim'] as const) {
+      if (Object.keys(entity[bag]).length > 0) add(`${at}.${bag}`, 'A built-in prop has no device state');
+    }
+    return;
+  }
+  const kind = catalog.kindOf(entity.ref);
+  if (!kind) return;
+  if (kind.placement !== 'entity') {
+    add(`${at}.ref`, `${kind.kind} is a connection kind, not a placed device`);
+    return;
+  }
+  for (const issue of checkBags(kind, entity.state, entity.sim)) add(`${at}.${issue.path}`, issue.message);
+  // Each control's commanded value must be one `device.operate` could have set: a key's schema is
+  // per kind (a setpoint ≥ 0), the control's range per entry (0–30 V), so a crafted save could
+  // otherwise load a 1e9 V setpoint (F2.4 save-format review). Keys `checkBags` refused are skipped.
+  const device = catalog.device(entity.ref) as DeviceDefinition;
+  for (const control of device.controls) {
+    const value = entity.state[control.id];
+    if (value === undefined || !kind.keys[control.id]?.schema.safeParse(value).success) continue;
+    const check = checkControlValue(control, kind, value);
+    if (!check.ok) add(`${at}.state.${control.id}`, check.message);
+  }
+  // An enclosure's open entries are a bit set over its catalogue entries (ADR 0015): no bit beyond them.
+  const openEntries = entity.state['openEntries'];
+  if (device.enclosure !== null && typeof openEntries === 'number' && Number.isInteger(openEntries)) {
+    if (Math.floor(openEntries / 2 ** device.enclosure.entries.length) !== 0) {
+      add(`${at}.state.openEntries`, 'Opens an entry the enclosure does not have');
+    }
+  }
+  if (entity.mountedOn !== null) {
+    const host = findEntity(world, entity.mountedOn.entity) as Entity; // the schema guarantees it exists
+    const hostDevice = catalog.device(host.ref);
+    if (!hostDevice) return;
+    const mount = hostDevice.enclosure?.mounts.find((m) => m.id === entity.mountedOn?.mount);
+    if (!mount) {
+      add(`${at}.mountedOn.mount`, "Not a mount of the host's catalogue entry");
+      return;
+    }
+    if (!device.mounts.some((m) => m.type === mount.type)) {
+      add(`${at}.mountedOn.mount`, "The device does not fit that mount's type");
+    }
+    if (!isAxisAligned(host.transform.orientationMdeg) || !isAxisAligned(entity.transform.orientationMdeg)) {
+      add(`${at}.mountedOn`, 'A mounted device and its host are axis-aligned');
+    }
+  }
+}
+
+/** Whether the catalogue says `kind` is a conductor kind (a connection with conductor data). */
+const isConductorKind = (kind: ModelKindDef): boolean => kind.requires === 'conductor';
+
+function checkConnection(world: World, connection: Connection, at: string, catalog: Catalog, add: Add): void {
+  const kind = catalog.kindOf(connection.ref);
+  if (kind) {
+    if (kind.placement !== 'connection') {
+      add(`${at}.ref`, `${kind.kind} is not a connection kind`);
+    } else {
+      const leadShaped = connection.lengthMm === null;
+      if (leadShaped === isConductorKind(kind)) {
+        add(`${at}.ref`, leadShaped ? 'A conductor kind is never lead-shaped' : 'A lead kind is always lead-shaped');
+      }
+      for (const issue of checkBags(kind, connection.state, connection.sim)) add(`${at}.${issue.path}`, issue.message);
+      if (leadShaped) {
+        // A lead's clips have no termination node: its end keys stay at their initial values (ADR 0015).
+        for (const [name, def] of Object.entries(kind.keys)) {
+          const value = connection.sim[name];
+          if (name.startsWith('end') && def.owner === 'sim' && value !== undefined && value !== def.initial) {
+            add(`${at}.sim.${name}`, "A lead's end keys stay at their initial values");
+          }
         }
       }
-      return;
     }
-    const kind = catalog.kindOf(entity.ref);
-    if (!kind) return;
-    if (kind.placement !== 'entity') {
-      issues.push({ path: `${at}.ref`, message: `${kind.kind} is a connection kind, not a placed device` });
-      return;
+  }
+  const points: (PositionMm | null)[] = [];
+  for (const end of ['a', 'b'] as const) {
+    const value = connection[end];
+    if (value === null) continue;
+    points.push(checkEnd(world, value, `${at}.${end}`, catalog, add));
+  }
+  const conductor = kind && isConductorKind(kind) ? catalog.device(connection.ref)?.conductor : undefined;
+  if (connection.colour !== null) {
+    const { base, stripe } = connection.colour;
+    for (const [id, path] of [
+      [base, 'base'],
+      [stripe, 'stripe'],
+    ] as const) {
+      if (id !== null && conductor && !catalog.colour(id)) add(`${at}.colour.${path}`, 'Not in the colour table');
     }
-    for (const issue of checkBags(kind, entity.state, entity.sim)) {
-      issues.push({ path: `${at}.${issue.path}`, message: issue.message });
+    if (conductor && !conductor.colours.some((c) => c.base === base && c.stripe === stripe)) {
+      add(`${at}.colour`, 'The conductor entry is not made in that colour');
     }
-    // Each control's commanded value must be one `device.operate` could have set: a key's schema is
-    // per kind (a setpoint ≥ 0), the control's range per entry (0–30 V), so a crafted save could
-    // otherwise load a 1e9 V setpoint (F2.4 save-format review). Keys `checkBags` refused are skipped.
-    const device = catalog.device(entity.ref);
-    for (const control of device?.controls ?? []) {
-      const value = entity.state[control.id];
-      if (value === undefined || !kind.keys[control.id]?.schema.safeParse(value).success) continue;
-      const check = checkControlValue(control, kind, value);
-      if (!check.ok) issues.push({ path: `${at}.state.${control.id}`, message: check.message });
+  }
+  checkRouteReferences(world, connection.route ?? [], `${at}.route`, catalog, add);
+  const [pa, pb] = points;
+  if (connection.lengthMm !== null && pa && pb && !coversChord(connection.lengthMm, pa, pb)) {
+    add(`${at}.lengthMm`, 'Shorter than the straight line between its landed ends');
+  }
+}
+
+/**
+ * Checks one landed connection end against its device; returns the end's world point (the method's
+ * entry point for a termination, the terminal's position for a clip) when the catalogue gives it.
+ */
+function checkEnd(world: World, end: ConnectionEnd, at: string, catalog: Catalog, add: Add): PositionMm | null {
+  const entity = findEntity(world, end.entity) as Entity; // the schema guarantees it exists
+  const problem = terminalProblem(entity, end.terminal, catalog);
+  if (problem === 'prop') add(`${at}.terminal`, 'A built-in prop has no terminals');
+  else if (problem === 'unknown-terminal') add(`${at}.terminal`, "Not a terminal of the entity's device");
+  const device = catalog.device(entity.ref);
+  const terminal = device?.terminals.find((t) => t.id === end.terminal);
+  if (!terminal) return null;
+  const termination = end.termination;
+  let offset = terminal.positionMm;
+  if (termination !== null) {
+    const spec = terminal.methods.find((m) => m.method === termination.method);
+    if (!spec) {
+      add(`${at}.termination.method`, 'Not a termination method of that terminal');
+      return null;
     }
-  });
-  world.connections.forEach((connection, index) => {
-    const at = `connections[${index}]`;
-    const kind = catalog.kindOf(connection.ref);
-    if (kind && kind.placement !== 'connection') {
-      issues.push({ path: `${at}.ref`, message: `${kind.kind} is not a connection kind` });
+    offset = spec.entryMm;
+    if (termination.accessory !== null) {
+      const ref = termination.accessory.ref;
+      const family = catalog.family(ref);
+      if (family !== undefined && family !== 'accessory') {
+        add(`${at}.termination.accessory.ref`, 'Not an accessory');
+      } else {
+        const accessory = catalog.accessory(ref);
+        const method = Object.prototype.hasOwnProperty.call(TERMINATION_METHODS, spec.method)
+          ? TERMINATION_METHODS[spec.method]
+          : undefined;
+        if (accessory && method && !method.accessories.includes(accessory.kind)) {
+          add(`${at}.termination.accessory.ref`, 'The method takes no accessory of that kind');
+        }
+      }
     }
-    for (const end of ['a', 'b'] as const) {
-      const entity = findEntity(world, connection[end].entity) as Entity; // the schema guarantees it exists
-      const problem = terminalProblem(entity, connection[end].terminal, catalog);
-      if (problem === 'prop') {
-        issues.push({ path: `${at}.${end}.terminal`, message: 'A built-in prop has no terminals' });
-      } else if (problem === 'unknown-terminal') {
-        issues.push({ path: `${at}.${end}.terminal`, message: "Not a terminal of the entity's device" });
+  }
+  if (!isAxisAligned(entity.transform.orientationMdeg)) {
+    if (termination !== null) add(`${at}.entity`, 'A conductor lands only on an axis-aligned device');
+    return null;
+  }
+  return entityPointMm(entity.transform, offset);
+}
+
+/** A route's tools and hosts against the catalogue. */
+function checkRouteReferences(
+  world: World,
+  route: readonly NonNullable<Connection['route']>[number][],
+  at: string,
+  catalog: Catalog,
+  add: Add,
+): void {
+  route.forEach((waypoint, index) => {
+    if (waypoint.tool !== null) {
+      const family = catalog.family(waypoint.tool);
+      if (family !== undefined && family !== 'tool') add(`${at}[${index}].tool`, 'Not a tool');
+      const tool = catalog.tool(waypoint.tool);
+      if (tool && !tool.capabilities.some((c) => c.step === 'bore')) {
+        add(`${at}[${index}].tool`, 'The tool cannot bore');
+      }
+    }
+    if (waypoint.entity !== null) {
+      const host = findEntity(world, waypoint.entity) as Entity; // the schema guarantees it exists
+      if (catalog.device(host.ref) && !isAxisAligned(host.transform.orientationMdeg)) {
+        add(`${at}[${index}].entity`, 'A hosted waypoint is on an axis-aligned entity');
       }
     }
   });
-  return issues.slice(0, MAX_ISSUES);
+}
+
+function checkCable(world: World, cable: Cable, at: string, catalog: Catalog, add: Add): void {
+  const family = catalog.family(cable.ref);
+  if (family !== undefined && family !== 'cable') add(`${at}.ref`, 'Not a cable assembly');
+  const assembly = catalog.cable(cable.ref);
+  if (assembly) {
+    const conductors = world.connections.filter((c) => c.cable?.id === cable.id);
+    if (conductors.length !== assembly.conductors.length) {
+      add(`${at}.ref`, 'One conductor per conductor of the assembly');
+    }
+    for (const connection of conductors) {
+      const spec = assembly.conductors[connection.cable?.conductor ?? -1];
+      if (!spec) continue;
+      const path = `connections[${world.connections.indexOf(connection)}]`;
+      if (!sameRef(connection.ref, spec.conductor)) add(`${path}.ref`, "Not the assembly's conductor entry");
+      const colour = connection.colour;
+      if (colour === null || colour.base !== spec.colour.base || colour.stripe !== spec.colour.stripe) {
+        add(`${path}.colour`, "Not the assembly conductor's colour");
+      }
+    }
+  }
+  const points: PositionMm[] = [];
+  let geometryKnown = true;
+  const endPoint = (end: 'a' | 'b'): void => {
+    const value = cable[end];
+    if (value === null) return;
+    const entity = findEntity(world, value.entity) as Entity; // the schema guarantees it exists
+    const device = catalog.device(entity.ref);
+    if (!device) {
+      geometryKnown = false;
+      return;
+    }
+    const entryIndex = device.enclosure?.entries.findIndex((e) => e.id === value.entry) ?? -1;
+    if (device.enclosure === null) {
+      add(`${at}.${end}.entity`, 'Not an enclosure');
+      geometryKnown = false;
+      return;
+    }
+    if (entryIndex < 0) {
+      add(`${at}.${end}.entry`, 'Not an entry of the enclosure');
+      geometryKnown = false;
+      return;
+    }
+    const entry = device.enclosure.entries[entryIndex];
+    const open = entity.state['openEntries'];
+    if (typeof open !== 'number' || Math.floor(open / 2 ** entryIndex) % 2 !== 1) {
+      add(`${at}.${end}.entry`, 'The entry is not open');
+    }
+    const using = world.cables.reduce(
+      (count, c) =>
+        count +
+        (['a', 'b'] as const).filter((e) => c[e]?.entity === value.entity && c[e]?.entry === value.entry).length,
+      0,
+    );
+    if (using > entry.maxCables) add(`${at}.${end}.entry`, 'More cables than the entry takes');
+    const point = entityPointMm(entity.transform, entry.positionMm);
+    if (point === null) {
+      add(`${at}.${end}.entity`, 'A cable enters only an axis-aligned enclosure');
+      geometryKnown = false;
+      return;
+    }
+    if (end === 'a') points.unshift(point);
+    else points.push(point);
+  };
+  points.push(...cable.route.map((w) => w.positionMm));
+  endPoint('a');
+  endPoint('b');
+  checkRouteReferences(world, cable.route, `${at}.route`, catalog, add);
+  if (geometryKnown && routeFloorMm(points) + cable.tailsMm.a + cable.tailsMm.b > cable.lengthMm) {
+    add(`${at}.lengthMm`, 'Shorter than its route and tails');
+  }
 }
 
 /**

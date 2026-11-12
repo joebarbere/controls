@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawReplayLogV2Arb } from '../../testing/arbitraries';
-import { createReplayLog, createWorld, migrateReplayLog } from '../documents';
+import { migrateReplayLog } from '../documents';
+import { replayLogV2ToV3 } from '../v3/from-v2';
 import { ReplayLogV2 } from './replay-log';
 
 const entry = (seq: number, tick = 0, id = 'entity.place', args: Record<string, never> = {}) => ({
@@ -10,9 +11,26 @@ const entry = (seq: number, tick = 0, id = 'entity.place', args: Record<string, 
   args,
 });
 
+/** `createWorld({ seed: 1 })` as it was at schemaVersion 2. */
+const EMPTY_WORLD_V2 = {
+  schemaVersion: 2,
+  seed: 1,
+  tick: 0,
+  nextEntityId: 1,
+  nextConnectionId: 1,
+  regionId: 'nec',
+  difficulty: 'apprentice',
+  assisted: false,
+  fixtures: [],
+  entities: [],
+  connections: [],
+  sim: null,
+  extensions: {},
+};
+
 const log = (entries: unknown[], options: { initialTick?: number; firstSeq?: number; endTick?: number } = {}) => ({
   schemaVersion: 2,
-  initialWorld: { ...createWorld({ seed: 1 }), tick: options.initialTick ?? 0 },
+  initialWorld: { ...EMPTY_WORLD_V2, tick: options.initialTick ?? 0 },
   firstSeq: options.firstSeq ?? 0,
   entries,
   endTick: options.endTick ?? (entries.at(-1) as { tick?: number } | undefined)?.tick ?? options.initialTick ?? 0,
@@ -24,21 +42,6 @@ const messages = (input: unknown) => {
 };
 
 describe('ReplayLogV2', () => {
-  it('createReplayLog starts an empty log at seq 0 that ends at the initial tick', () => {
-    const initialWorld = { ...createWorld({ seed: 9 }), tick: 40 };
-    expect(createReplayLog(initialWorld)).toStrictEqual({
-      schemaVersion: 2,
-      initialWorld,
-      firstSeq: 0,
-      entries: [],
-      endTick: 40,
-    });
-    const entries = [entry(5, 41, 'view.resetLayout')];
-    expect(createReplayLog(initialWorld, entries, { firstSeq: 5 })).toMatchObject({ firstSeq: 5, endTick: 41 });
-    expect(createReplayLog(initialWorld, entries, { firstSeq: 5, endTick: 90 }).endTick).toBe(90);
-    expect(() => createReplayLog(initialWorld, entries)).toThrow(); // seq 5 is not firstSeq 0
-  });
-
   it('entries count up from firstSeq without gaps', () => {
     expect(messages(log([entry(0), entry(1)]))).toStrictEqual([]);
     expect(messages(log([entry(7), entry(8)], { firstSeq: 7 }))).toStrictEqual([]);
@@ -81,7 +84,11 @@ describe('ReplayLogV2', () => {
         assertNoNegativeZero(parsed);
         const text = JSON.stringify(parsed);
         expect(ReplayLogV2.parse(JSON.parse(text))).toStrictEqual(parsed);
-        expect(migrateReplayLog(JSON.parse(text))).toStrictEqual({ ok: true, value: parsed, fromVersion: 2 });
+        expect(migrateReplayLog(JSON.parse(text))).toStrictEqual({
+          ok: true,
+          value: replayLogV2ToV3(parsed),
+          fromVersion: 2,
+        });
       }),
       { numRuns: 50 },
     );

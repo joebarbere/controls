@@ -27,10 +27,18 @@ import { snapshotHash } from './snapshot';
  * too. Protocol 5 itself did not change, so its pin was replaced once (from `a0d9c021…a092`, the
  * names-only fingerprint) rather than bumping the version. Widening the coverage again is the same
  * kind of change; changing the contract never is.
+ *
+ * **The second definition change (world v3, P3 PR 7, 2026-11-11):** the save-format schemas were
+ * meant to enter by name only, but `z.toJSONSchema` still emitted their registered sub-schemas
+ * (`EntityV2`, `ConnectionV2`, …) as `$defs` of the message schemas, so world v3 moved the fingerprint
+ * without any change to the protocol. Save-format `$ref`s are now inlined by name and `$defs` that no
+ * protocol field reaches are pruned, so a `schemaVersion` bump can never move it again (checked when
+ * the change was made: the messages built on the v2 and the v3 schemas give the same fingerprint).
+ * Protocol 5's pin was replaced once (from `82368a1d…5e6b`) rather than bumping the version, as #75's was.
  */
 
 const PINNED: Readonly<Record<number, string>> = {
-  5: '82368a1db218fb1bbd70b2d9bf3dd0a6d021215060f2b8205574c18d8e9d5e6b',
+  5: '94d71fbbe3b973e30eee08c40bdd40b2ad2a4bfc9af0a50d6a831ec40eda43a6',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */
@@ -55,15 +63,17 @@ function protocolContract(): unknown {
     [SimSolutionV2, 'SimSolutionV2'],
   ]);
   const messageSchemas = (union: z.ZodType) =>
-    z.toJSONSchema(union, {
-      unrepresentable: 'any',
-      override: (ctx) => {
-        const name = saveFormat.get(ctx.zodSchema);
-        if (name === undefined) return;
-        for (const key of Object.keys(ctx.jsonSchema)) delete (ctx.jsonSchema as Record<string, unknown>)[key];
-        (ctx.jsonSchema as Record<string, unknown>)['x-save-format'] = name;
-      },
-    });
+    reachableDefsOnly(
+      z.toJSONSchema(union, {
+        unrepresentable: 'any',
+        override: (ctx) => {
+          const name = saveFormat.get(ctx.zodSchema);
+          if (name === undefined) return;
+          for (const key of Object.keys(ctx.jsonSchema)) delete (ctx.jsonSchema as Record<string, unknown>)[key];
+          (ctx.jsonSchema as Record<string, unknown>)['x-save-format'] = name;
+        },
+      }) as Record<string, unknown>,
+    );
   return {
     layout: constants(layout as unknown as Record<string, unknown>),
     buffer: constants(buffer as unknown as Record<string, unknown>),
@@ -79,6 +89,48 @@ function protocolContract(): unknown {
     startReasons: SimStartReason.options,
     descriptor: z.toJSONSchema(TopologyDescriptorSchema),
   };
+}
+
+/**
+ * `schema` with save format by name only: a `$ref` to a save-format schema (a `$defs` entry that is
+ * just `{ "x-save-format": name }`) is replaced by that entry, so the def's versioned name
+ * (`ReplayEntryV3`) never enters, and only the `$defs` some protocol field still reaches are kept. A
+ * save-format schema replaced by its name otherwise leaves its registered sub-schemas behind as
+ * unreferenced `$defs`; they are save format, versioned by `schemaVersion`, not protocol.
+ */
+function reachableDefsOnly(schema: Record<string, unknown>): Record<string, unknown> {
+  const defs = (schema['$defs'] ?? {}) as Record<string, Record<string, unknown>>;
+  const root = Object.fromEntries(Object.entries(schema).filter(([key]) => key !== '$defs'));
+  const isSaveFormat = (def: Record<string, unknown> | undefined) =>
+    def !== undefined && Object.keys(def).length === 1 && typeof def['x-save-format'] === 'string';
+  const reached = new Set<string>();
+  const pending: string[] = [];
+  const rewrite = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(rewrite);
+    if (node === null || typeof node !== 'object') return node;
+    const ref = (node as Record<string, unknown>)['$ref'];
+    if (typeof ref === 'string' && ref.startsWith('#/$defs/')) {
+      const name = ref.slice('#/$defs/'.length);
+      if (isSaveFormat(defs[name])) return { ...defs[name], ...withoutRef(node as Record<string, unknown>) };
+      if (!reached.has(name) && Object.prototype.hasOwnProperty.call(defs, name)) {
+        reached.add(name);
+        pending.push(name);
+      }
+    }
+    return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, rewrite(child)]));
+  };
+  const out = rewrite(root) as Record<string, unknown>;
+  const kept: Record<string, unknown> = {};
+  while (pending.length > 0) {
+    const name = pending.pop() as string;
+    kept[name] = rewrite(defs[name]);
+  }
+  return Object.keys(kept).length === 0 ? out : { ...out, $defs: kept };
+}
+
+/** A schema node's own keywords besides `$ref` (a `title` or `description` next to it). */
+function withoutRef(node: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(node).filter(([key]) => key !== '$ref'));
 }
 
 function canonical(value: unknown): string {
@@ -137,6 +189,10 @@ describe('the protocol fingerprint (ADR 0011 §12)', () => {
     expect(host).toContain('"x-save-format":"ReplayLog"');
     expect(worker).toContain('"x-save-format":"SimSolutionV2"');
     expect(host).not.toContain('nextConnectionId');
+    // …and none of its sub-schemas leaks in through `$defs` (world v3 review): only what a protocol field reaches.
+    for (const leaked of ['EntityV', 'ConnectionV', 'FixtureV', 'ReplayEntryV', 'TerminationV']) {
+      expect(host + worker, leaked).not.toContain(leaked);
+    }
     // A field added to a message moves it.
     const base = fingerprint();
     const c = JSON.parse(JSON.stringify(contract)) as Record<string, Record<string, { properties: object }[]>>;

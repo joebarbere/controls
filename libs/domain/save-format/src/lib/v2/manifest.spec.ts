@@ -1,25 +1,21 @@
-import { APP_VERSION } from '@controls/units';
 import fc from 'fast-check';
 import { rawManifestV2Arb } from '../../testing/arbitraries';
-import { createManifest, migrateManifest } from '../documents';
+import { migrateManifest } from '../documents';
 import { CTRL_FORMAT } from '../v1/manifest';
+import { manifestV2ToV3 } from '../v3/from-v2';
 import { ManifestV2 } from './manifest';
 
 describe('ManifestV2', () => {
-  it('createManifest records this build’s APP_VERSION, schemaVersion 2 and the given catalogue and engine', () => {
-    expect(createManifest({ catalogVersion: 1, simEngineVersion: 3 })).toStrictEqual({
+  it('requires simEngineVersion: a non-negative integer', () => {
+    const good = {
       format: CTRL_FORMAT,
       schemaVersion: 2,
-      appVersion: APP_VERSION,
+      appVersion: '0.3.0',
       catalogVersion: 1,
-      simEngineVersion: 3,
+      simEngineVersion: 1,
       extensions: {},
-    });
-    expect(() => createManifest({ catalogVersion: 1, simEngineVersion: -1 })).toThrow();
-  });
-
-  it('requires simEngineVersion: a non-negative integer', () => {
-    const good = createManifest({ catalogVersion: 1, simEngineVersion: 1 });
+    };
+    expect(ManifestV2.safeParse(good).success).toBe(true);
     expect(ManifestV2.safeParse({ ...good, simEngineVersion: 1.5 }).success).toBe(false);
     const missing: Record<string, unknown> = { ...good };
     delete missing['simEngineVersion'];
@@ -33,7 +29,7 @@ describe('ManifestV2', () => {
         const manifest = ManifestV2.parse(raw);
         expect(migrateManifest(JSON.parse(JSON.stringify(manifest)))).toStrictEqual({
           ok: true,
-          value: manifest,
+          value: manifestV2ToV3(manifest),
           fromVersion: 2,
         });
       }),

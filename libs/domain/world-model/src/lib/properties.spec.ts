@@ -1,7 +1,7 @@
 import type { CommandBus } from '@controls/commands';
 import { createWorld, migrateReplayLog, World } from '@controls/save-format';
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { catalogRefArb, deepFreeze, rawWorldV2Arb } from '@controls/save-format/testing';
+import { catalogRefArb, deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
 import { worldHash } from './hash';
@@ -106,13 +106,13 @@ const deleteTargetArb = fc.record({
 
 function deleteTarget(world: World, target: { withLeads: boolean; pick: number }): number {
   const linked = world.entities.filter((e) =>
-    world.connections.some((c) => c.a.entity === e.id || c.b.entity === e.id),
+    world.connections.some((c) => c.a?.entity === e.id || c.b?.entity === e.id),
   );
   if (target.withLeads && linked.length > 0) return linked[target.pick % linked.length].id;
   const pool = world.entities;
   return target.pick < pool.length ? pool[target.pick].id : world.nextEntityId + target.pick;
 }
-const worldArb = rawWorldV2Arb.map((raw) => World.parse(raw));
+const worldArb = rawWorldV3Arb.map((raw) => World.parse(raw));
 
 function pickId(bus: CommandBus<World>, index: number): number {
   const entities = bus.state.entities;
@@ -364,7 +364,7 @@ describe('world command properties', () => {
         const before = bus.state;
         const id = deleteTarget(before, target);
         if (!bus.exec('entity.delete', { id }).ok) return; // a missing id: refused, nothing to check
-        const touches = (c: World['connections'][number]) => c.a.entity === id || c.b.entity === id;
+        const touches = (c: World['connections'][number]) => c.a?.entity === id || c.b?.entity === id;
         const kept = before.connections.filter((c) => !touches(c));
         // No connection is left with an end on the deleted entity, and every other one is kept as it was.
         expect(bus.state.connections).toStrictEqual(kept);
@@ -384,7 +384,7 @@ describe('world command properties', () => {
       const bus = createWorldBus(initial);
       ops.forEach((op) => run(bus, op));
       const id = deleteTarget(bus.state, target);
-      return bus.state.connections.some((c) => c.a.entity === id || c.b.entity === id);
+      return bus.state.connections.some((c) => c.a?.entity === id || c.b?.entity === id);
     }).length;
     expect(withLeads / samples.length).toBeGreaterThanOrEqual(0.4);
   });

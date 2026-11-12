@@ -7,6 +7,9 @@ import { WorldV1 } from './v1/world';
 import { ManifestV2 } from './v2/manifest';
 import { ReplayLogV2 } from './v2/replay-log';
 import { WorldV2 } from './v2/world';
+import { ManifestV3 } from './v3/manifest';
+import { ReplayLogV3 } from './v3/replay-log';
+import { WorldV3 } from './v3/world';
 
 /**
  * JSON Schema (draft 2020-12) generated from the Zod schemas, for docs, mods and external tools. Zod
@@ -23,6 +26,9 @@ export function jsonSchemas(): Record<string, Record<string, unknown>> {
     'manifest.v2.schema.json': generate(ManifestV2),
     'world.v2.schema.json': generate(WorldV2),
     'replay-log.v2.schema.json': generate(ReplayLogV2),
+    'manifest.v3.schema.json': generate(ManifestV3),
+    'world.v3.schema.json': generate(WorldV3),
+    'replay-log.v3.schema.json': generate(ReplayLogV3),
     'settings.v1.schema.json': generate(SettingsV1),
     'settings.v2.schema.json': generate(SettingsV2),
   };
