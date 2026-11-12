@@ -15,3 +15,4 @@ export * from './lib/snap';
 export * from './lib/routing';
 export * from './lib/termination';
 export * from './lib/wiring';
+export * from './lib/tools';

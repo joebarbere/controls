@@ -13,6 +13,7 @@ import * as z from 'zod';
 import { Awg, AwgRange } from './gauge';
 import {
   Axis,
+  DriveType,
   ColourId,
   ConductorStranding,
   EntryId,
@@ -72,6 +73,11 @@ export const TerminalMethodSpec = z
     stripLengthMm: z.strictObject({ nominal: Int.min(1).max(100), tolerance: Int.min(0).max(50) }),
     /** The marked tightening torque (N·m) of a clamp-torque method; `null` for every other method. */
     torqueNm: FiniteNumber.positive().nullable(),
+    /**
+     * The screw's drive types (F3.4 part 1, ADR 0016 amendment): non-empty exactly for a clamp-torque
+     * method, whose driver must fit one (`wrong-drive`); empty (the default) for every other method.
+     */
+    drives: z.array(DriveType).max(5),
     /** Whether the method is rated for aluminium conductors (CO/ALR, AL/CU). */
     alRated: z.boolean(),
     /** Where the conductor enters the terminal, in the device's own frame (integer mm). */
@@ -81,6 +87,7 @@ export const TerminalMethodSpec = z
   })
   .refine((m) => m.maxConductors >= m.ratedConductors, { message: 'maxConductors must be at least ratedConductors' })
   .refine((m) => new Set(m.stranding).size === m.stranding.length, { message: 'stranding values must be unique' })
+  .refine((m) => new Set(m.drives).size === m.drives.length, { message: 'drives must be unique' })
   .refine((m) => m.stripLengthMm.tolerance < m.stripLengthMm.nominal, {
     message: 'the strip-length tolerance must be below the nominal length',
   });

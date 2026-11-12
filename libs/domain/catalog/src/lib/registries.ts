@@ -90,6 +90,63 @@ export const ToolKind = z.enum([
 ]);
 export type ToolKind = z.infer<typeof ToolKind>;
 
+/** Screw drive (head) types (ADR 0016 amendment, F3.4 part 1): what a driver's tip fits and a screw's head takes. */
+export const DRIVE_TYPE_IDS = ['slotted', 'phillips', 'pozidriv', 'square', 'hex'] as const;
+export const DriveType = z.enum(DRIVE_TYPE_IDS);
+export type DriveType = z.infer<typeof DriveType>;
+
+export interface DriveTypeDef extends Provenance {
+  readonly id: DriveType;
+}
+
+/**
+ * Drive types (F3.4 part 1, an ADR 0016 amendment). A command that turns a screw (a clamp-torque
+ * termination, an entry opened with `drive`) needs the tool's `drives` to share one with the screw's
+ * (`wrong-drive`). **Sizes are names, not modelled** (game-design): a tool with `phillips` fits every
+ * Phillips screw, so a #1 tip on a #2 screw isn't a mistake the game can show yet.
+ */
+export const DRIVE_TYPES: Readonly<Record<DriveType, DriveTypeDef>> = Object.freeze({
+  slotted: {
+    id: 'slotted',
+    description: 'A straight slot, driven by a flat blade.',
+    kind: 'real-world',
+    source: 'Slotted screwdriver tips are specified in ISO 2380 (cited by number); sizes are names here (game-design).',
+  },
+  phillips: {
+    id: 'phillips',
+    description: 'A cross recess (Type H), driven by a Phillips tip.',
+    kind: 'real-world',
+    source:
+      'Cross-recess (Phillips) tips are specified in ISO 8764 (cited by number); sizes are names here (game-design).',
+  },
+  pozidriv: {
+    id: 'pozidriv',
+    description: 'A cross recess with extra ribs (Type Z), common on DIN-rail terminal screws.',
+    kind: 'real-world',
+    source:
+      'Type Z cross-recess (Pozidriv) tips are specified in ISO 8764 (cited by number); sizes are names here (game-design).',
+  },
+  square: {
+    id: 'square',
+    description: 'A square socket (Robertson), common with a slot on North American breaker and panel screws.',
+    kind: 'real-world',
+    source:
+      'Square-socket (Robertson) drives are common practice on North American electrical screws, often combined with a slot; sizes are names here (game-design).',
+  },
+  hex: {
+    id: 'hex',
+    description: 'An external hex head (a hex-washer-head screw), driven by a nut driver.',
+    kind: 'real-world',
+    source:
+      'Hex-washer-head screws are driven by a nut driver of the head’s size (common practice); sizes are names here (game-design).',
+  },
+} satisfies Record<DriveType, DriveTypeDef>);
+
+/** Whether two drive lists share a type: a tool with `tool` fits a screw with `screw`. */
+export function drivesFit(tool: readonly DriveType[], screw: readonly DriveType[]): boolean {
+  return tool.some((d) => screw.includes(d));
+}
+
 /** Accessory kinds (family `accessory`, crimped onto a conductor end). */
 export const AccessoryKind = z.enum(['ferrule', 'ringLug', 'forkLug']);
 export type AccessoryKind = z.infer<typeof AccessoryKind>;
@@ -222,6 +279,8 @@ export interface EntryTypeDef extends Provenance {
   readonly id: string;
   /** The tool capabilities that open an entry of this type (`enclosure.openEntry` accepts a tool with any one). */
   readonly opens: readonly ToolStep[];
+  /** A tool opening it by `drive` needs one of these drive types (`wrong-drive`); empty when `drive` doesn't open it. */
+  readonly drives: readonly DriveType[];
 }
 
 /** Enclosure entry types (ADR 0015): how a cable gets into an enclosure, and what opens the way. */
@@ -229,6 +288,7 @@ export const ENTRY_TYPES: Readonly<Record<string, EntryTypeDef>> = Object.freeze
   knockout: {
     id: 'knockout',
     opens: ['drive', 'openEntry'],
+    drives: ['slotted'],
     description: 'A pre-scored knockout in a metal box, sized for a conduit trade size.',
     kind: 'game-design',
     source:
@@ -237,6 +297,7 @@ export const ENTRY_TYPES: Readonly<Record<string, EntryTypeDef>> = Object.freeze
   pryout: {
     id: 'pryout',
     opens: ['drive'],
+    drives: ['slotted'],
     description: 'A pryout (twist-out) for a cable clamp, pried out with a screwdriver.',
     kind: 'game-design',
     source:
@@ -245,6 +306,7 @@ export const ENTRY_TYPES: Readonly<Record<string, EntryTypeDef>> = Object.freeze
   clamp: {
     id: 'clamp',
     opens: ['drive'],
+    drives: ['slotted'],
     description: 'A built-in cable clamp or knock-in tab of a non-metallic box, pushed open with a screwdriver.',
     kind: 'game-design',
     source:
@@ -253,6 +315,7 @@ export const ENTRY_TYPES: Readonly<Record<string, EntryTypeDef>> = Object.freeze
   drillSite: {
     id: 'drillSite',
     opens: ['bore', 'openEntry'],
+    drives: [],
     description: 'A place on a blank enclosure wall where a hole may be drilled, sawn or punched.',
     kind: 'game-design',
     source:

@@ -161,9 +161,32 @@ sequenceDiagram
 - `KeybindingService` (`feature-session`) owns the one document `keydown` listener for commands. It builds its keymap from the registry (`defaultBindingDecls`) and the player's overrides, which `apps/game` stores in settings with `provideKeybindingOverridesFromSettings()` (`feature-settings`). Without that provider the overrides live in memory.
 - The **viewport** pushes `KeybindingService.inputBindings()` into the renderer, names the current keys in the canvas's accessible name, and sets the `viewport.focused` context key while the canvas has focus.
 - **Settings → Key bindings…** opens a sibling dialog (`ctl-keybindings-dialog`) with one table per category. **Change** captures the next key press (Escape cancels, Tab leaves); **Unbind**, **Reset** and **Reset all bindings** act at once. Conflicts and ignored stored bindings are shown in the row and wired to the Change button with `aria-describedby`; a polite status region announces each change. Inactive buttons are `aria-disabled`, so focus never falls out of the dialog.
-- The **HUD** shows the active tool-belt slot and the prop it holds (settings `toolBelt.slots`).
+- The **HUD** shows the active tool-belt slot and what it holds (settings `toolBelt.slots`), by its catalogue or prop title (`4: Wire strippers, …`, `2: Crate`).
 - **Time controls** (F2.3b, ADR 0011 §13): `ctl-sim-controls` (`feature-session`) sits under the HUD in the viewport overlay (both projected through one `ng-container ctlViewportOverlay`). It shows `SimHost.simTick` (the latest snapshot's tick, never the bus world's), the requested speed as one native radio group that runs `sim.setSpeed`, the achieved speed while running, "Falling behind" and "Catching up", and a polite live region that announces only transitions. The keys are bindings on the sim commands: `P` is `sim.setSpeed.pause` (`!sim.paused`) and `sim.resume` (`sim.paused`), two disjoint `when`s; `Shift+1–3` are `sim.setSpeed.x1/x10/x60`; `Period` and `Shift+Period` are `sim.step.short` (10 ticks) and `sim.step.long` (1 000). All need `session.active && sim.status != 'crashed'`.
-- The **viewport** places the active slot's prop (F1.7): it arms the renderer's ghost with it, runs one `entity.place` per click or Enter, and calls `ToolBelt.clear()` (UI state, not a command) when Escape cancels placement. It also applies `view.mode` / `view.focus` and publishes the `mode` and `selection.*` context keys that the V, F and Delete bindings use ([rendering](rendering.md#placement-and-moves)).
+- The **viewport** places the active slot's prop when the slot is placeable (F1.7): it arms the renderer's ghost with it, runs one `entity.place` per click or Enter, and calls `ToolBelt.clear()` (UI state, not a command) when Escape cancels placement. It also applies `view.mode` / `view.focus` and publishes the `mode` and `selection.*` context keys that the V, F and Delete bindings use ([rendering](rendering.md#placement-and-moves)).
+
+### Tools on the belt (F3.4 part 1)
+
+```mermaid
+flowchart LR
+    SET["Settings → Tool belt<br/>9 pickers: props, tools"] -->|SettingsStore| SLOTS["settings toolBelt.slots<br/>CatalogRef | null × 9"]
+    KEYS["Keys 1–9 · palette · console"] -->|exec toolbelt.select| TB["ToolBelt<br/>(feature-session): active slot"]
+    BAR["ctl-tool-belt-bar<br/>(feature-shell): toolbar"] -->|selectSlot → exec toolbelt.select| TB
+    TB --> AT["ActiveTool<br/>(feature-workspace)"]
+    SLOTS --> AT
+    WM["world-model belt rules<br/>beltSlotKind · beltSlotTitle · defaultTool"] --> AT
+    AT -->|placeable| VP["Viewport: arms placement"]
+    AT -->|label| HUD["HUD: Tool"]
+    AT -->|slots, active| BAR
+    AT -->|toolbelt.kind, toolbelt.tool| CTX["context keys (when)"]
+    AT -->|toolFor step, awg| PROMPTS["prompts (F3.3 part 2), palette"]
+```
+
+- **A slot holds a `CatalogRef`** (settings `toolBelt.slots`, unchanged since settings v1: no `settingsVersion` bump). What it means is decided by what the ref resolves to, through `beltSlotKind` in `@controls/world-model` (`lib/tools/tool-belt.ts`): a built-in prop or an entity device is **placeable**, a `tool.*` entry is a **tool**, a conductor, cable or lead is a **spool**, `null` is **empty**, anything else **unknown**. A tool or spool slot arms its flow (the wiring flows arrive with F3.2 part 3 and F3.3 part 2) and **never placement**; only a placeable slot arms the viewport's ghost.
+- **`ActiveTool`** (`feature-workspace`) joins `ToolBelt`'s active slot with the belt, so the HUD, the bar and the viewport read one answer: `slots()`, `active()`, `placeable()`, `tool()` (the `ToolDefinition`), `label()` (the HUD line). It publishes `toolbelt.kind` and `toolbelt.tool` (the tool's kind) as context keys, so a flow's commands can bind on a `when`. `App` injects it at start-up.
+- **The default-tool rule** is `defaultTool(catalog, belt, step, awg)` in world-model, exposed to the UI as `ActiveTool.toolFor(step, awg)`: a tool the player didn't pick is the first tool on the belt (slot order) whose capability for the step reaches the conductor size, else the first catalogue tool with it by id (newest version of that id). It returns where the tool came from, and a surface always shows it (`describeDefaultTool`: `Torque screwdriver, 1–5 N·m (belt slot 5)` or `… (not on the belt)`), never picks silently.
+- **The belt bar** (`ctl-tool-belt-bar`, `feature-shell`, presentational) sits at the bottom centre of the viewport (the workspace's `[ctlViewportBottom]` slot). It is an ARIA `toolbar` named "Tool belt": nine buttons whose accessible names start with their visible number (`4: Wire strippers, … (tool)`), `aria-pressed` on the active slot, one tab stop (roving `tabindex` on the active slot, else slot 1), Left/Right/Home/End to move focus without choosing, Enter/Space or a click to choose. Choosing emits `selectSlot`, and `App` runs the same `toolbelt.select` view command as the number keys.
+- **Settings → Tool belt** has one labelled native `<select>` per slot: Empty, the props, then the tools (`beltChoices`), plus a stored ref the picker doesn't offer, so it is never shown blank. Restore defaults keeps the belt.
 
 ## Command palette (F1.3)
 

@@ -102,7 +102,7 @@ export const SettingsV1 = z
       intervalSeconds: Int.min(60).max(3600),
     }),
     toolBelt: z.strictObject({
-      /** Slots 1-9 in order; `null` is an empty slot. In P1 a slot holds a placeable prop. */
+      /** Slots 1-9 in order; `null` is an empty slot. A slot holds a placeable prop or device, a tool, or a spool (P3). */
       slots: z.array(CatalogRef.nullable()).length(TOOL_BELT_SLOTS),
     }),
     extensions: Extensions,

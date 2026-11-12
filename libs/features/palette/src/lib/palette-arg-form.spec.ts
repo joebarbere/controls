@@ -82,7 +82,10 @@ describe('PaletteArgForm', () => {
       fixture.destroy();
       document.body.replaceChildren();
     }
-  });
+    // Generous: it mounts the form of every registered command (P3 added 14 wiring commands with
+    // nested and list fields), and jsdom's role queries are slow; the 5 s default timed out twice on
+    // CI's macOS runner (#99, #100) while every project's tests ran in parallel with coverage.
+  }, 60_000);
 
   it('shows a scalar union (device.operate value) as one text field with a typing hint', async () => {
     const form = formOf(z.strictObject({ value: z.union([z.boolean(), z.number(), z.string()]) }));

@@ -190,6 +190,20 @@
                     }
                   ]
                 },
+                "drives": {
+                  "maxItems": 5,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "slotted",
+                      "phillips",
+                      "pozidriv",
+                      "square",
+                      "hex"
+                    ]
+                  }
+                },
                 "alRated": {
                   "type": "boolean"
                 },
@@ -239,6 +253,7 @@
                 "stranding",
                 "stripLengthMm",
                 "torqueNm",
+                "drives",
                 "alRated",
                 "entryMm",
                 "exitAxis"

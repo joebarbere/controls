@@ -1,5 +1,6 @@
-import { BUILTIN_CATALOG } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import type { World } from '@controls/save-format';
+import { WATCHDOG_MS } from '@controls/sim-protocol';
 import { createGame } from '@controls/scripting-api';
 import {
   compileNetlist,
@@ -13,6 +14,7 @@ import {
   SimEngine,
 } from '@controls/sim-core';
 import { materialiseWorld } from '@controls/sim-protocol';
+import { cableAddBench, type CableAddBench } from './cable-add';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -94,8 +96,8 @@ interface Resolver {
 }
 let warmResolver: Resolver | null = null;
 let coldResolver: Resolver | null = null;
-const newResolver = (): Resolver => ({
-  compiler: new NetlistCompiler(BUILTIN_CATALOG),
+const newResolver = (catalog: Catalog = BUILTIN_CATALOG): Resolver => ({
+  compiler: new NetlistCompiler(catalog),
   solver: new DcSolver(),
   values: undefined,
 });
@@ -232,6 +234,49 @@ export const OVERLAY_READ_CASE: BenchCase = {
   },
 };
 
+/**
+ * The single-command gate's budget (plan F3.4 part 1, the P2 backlog item "bound the cost of a single
+ * command"): a tenth of `WATCHDOG_MS`. The spec asks only that the worst single command stay well under
+ * the watchdog (a command that took longer would look like a hung worker); a tenth leaves the CI
+ * runners' 5× spread (UI caveats) a 2× margin below the watchdog. Not calibrated: it is a ceiling,
+ * not a performance target.
+ */
+export const CABLE_ADD_BUDGET_MS = WATCHDOG_MS / 10;
+
+let cableBench: CableAddBench | null = null;
+let cableResolver: Resolver | null = null;
+let cableBus: ReturnType<CableAddBench['bus']> | null = null;
+
+/**
+ * F3.4 part 1's single-command gate, on a **bench-only synthetic assembly** (no real cable exists
+ * before F3.1 part 2): one `cable.add` of a 16-conductor assembly (`MAX` conductors an assembly may
+ * have, `CableDefinition`) between two boxes beside the 2,000-node plant, then the netlist recompile and
+ * solve that follow it. `cable.add` lands no terminations (ADR 0015: a cable's conductors are free at
+ * its entries until `wire.land`), so "auto terminations" don't apply to it; its new conductors are
+ * free-ended, so the recompile records 16 absent connections and re-solves the plant. Replace the
+ * synthetic assembly with the largest real one when F3.1 part 2 lands.
+ */
+export const CABLE_ADD_CASE: BenchCase = {
+  name: 'cable-add-worst-command',
+  warmup: 5,
+  runs: 21,
+  budgetMs: CABLE_ADD_BUDGET_MS,
+  prepare: () => {
+    cableBench ??= cableAddBench(plantWorlds().closed);
+    // A fresh bus each run (untimed), and the compiler and solver warm on the world before the cable.
+    cableBus = cableBench.bus();
+    cableResolver ??= newResolver(cableBench.catalog);
+    resolve(cableResolver, cableBus.state);
+  },
+  run: () => {
+    const bus = cableBus as NonNullable<typeof cableBus>;
+    const result = bus.exec('cable.add', (cableBench as CableAddBench).args);
+    if (!result.ok) throw new Error(`cable-add-worst-command: ${result.error.message}`);
+    const cable = bus.state.cables.length;
+    return `${cable}:${bus.state.connections.length}:${resolve(cableResolver as Resolver, bus.state)}`;
+  },
+};
+
 export const BENCH_CASES: readonly BenchCase[] = [
   {
     // A from-scratch compile, as on a load or a session start: a new compiler, no cached fragments.
@@ -331,6 +376,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
   },
   SNAPSHOT_READ_CASE,
   OVERLAY_READ_CASE,
+  CABLE_ADD_CASE,
 ];
 
 let plantEngine: SimEngine | null = null;
@@ -370,11 +416,5 @@ export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
     budgetMs: null,
     enabledBy: 'F3.2 part 1',
     note: 'The analytic domain bake (D5) of 500 routed wires; ADR 0017 fixes its budget from measurement.',
-  },
-  {
-    name: 'cable-add-worst-command',
-    budgetMs: null,
-    enabledBy: 'F3.4 part 1',
-    note: 'One cable.add of the largest assembly with auto terminations plus its re-solve on the 2,000-node plant; must stay well under WATCHDOG_MS (3,000 ms), budget fixed by that PR.',
   },
 ];

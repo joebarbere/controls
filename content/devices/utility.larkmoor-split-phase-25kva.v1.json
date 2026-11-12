@@ -34,6 +34,7 @@
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": ["slotted", "square"],
           "alRated": true,
           "entryMm": {
             "x": 50,
@@ -67,6 +68,7 @@
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": ["slotted", "square"],
           "alRated": true,
           "entryMm": {
             "x": 250,
@@ -100,6 +102,7 @@
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": ["slotted", "square"],
           "alRated": true,
           "entryMm": {
             "x": 150,
@@ -148,6 +151,12 @@
       "kind": "game-design",
       "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
       "covers": ["terminals.*.methods.screw"]
+    },
+    {
+      "id": "service-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: the stand-in service terminals take the same slotted and square combination head as the branch breaker (the D12 stand-in for P4's load centre).",
+      "covers": ["terminals.*.methods.screw.drives"]
     }
   ],
   "extensions": {}

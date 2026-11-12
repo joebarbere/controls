@@ -2,7 +2,16 @@ import { CatalogId, CatalogRef, Extensions, FiniteNumber, Int, SafeString } from
 import * as z from 'zod';
 import { ConductorColour } from './device';
 import { Awg, AwgRange } from './gauge';
-import { AccessoryKind, ColourId, ConductorStranding, DieId, HoleId, ToolKind, ToolStep } from './registries';
+import {
+  AccessoryKind,
+  ColourId,
+  ConductorStranding,
+  DieId,
+  DriveType,
+  HoleId,
+  ToolKind,
+  ToolStep,
+} from './registries';
 import { CatalogSource } from './sources';
 import { TableRef } from './tables';
 
@@ -129,9 +138,15 @@ export const ToolDefinition = z
     torque: ToolTorque.nullable(),
     /** The hole a bit or saw makes (mm); non-null exactly when it can `bore` (one entry per size). */
     boreDiameterMm: FiniteNumber.positive().nullable(),
+    /**
+     * The screw drive types its tip or socket fits (F3.4 part 1, ADR 0016 amendment); non-empty exactly
+     * when it can `drive`. Sizes are names, not modelled.
+     */
+    drives: z.array(DriveType).max(5),
     sources: z.array(CatalogSource).min(1),
     extensions: Extensions,
   })
+  .refine((t) => new Set(t.drives).size === t.drives.length, { message: 'drives must be unique' })
   .meta({
     title: 'Controls tool, catalogue format v2',
     description:

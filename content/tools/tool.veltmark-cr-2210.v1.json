@@ -1,0 +1,33 @@
+{
+  "id": "tool.veltmark-cr-2210",
+  "version": 1,
+  "title": "Crimper for insulated terminals, 22–10 AWG",
+  "brand": "Veltmark",
+  "modelName": "CR-2210",
+  "kind": "crimper",
+  "capabilities": [{ "step": "crimp", "maxAwg": 10 }],
+  "holes": [],
+  "dies": [
+    { "id": "red", "label": "Red 22–18", "awgRange": { "smallest": 22, "largest": 18 } },
+    { "id": "blue", "label": "Blue 16–14", "awgRange": { "smallest": 16, "largest": 14 } },
+    { "id": "yellow", "label": "Yellow 12–10", "awgRange": { "smallest": 12, "largest": 10 } }
+  ],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "sources": [
+    {
+      "id": "insulated-terminal-colour-code",
+      "kind": "real-world",
+      "citation": "Pre-insulated ring, fork and butt terminals are colour-coded across makers (typical published figures, paraphrased, not one vendor's): red for 22-18 AWG (some makers mark red 22-16), blue for 16-14 AWG and yellow for 12-10 AWG, and ratcheting crimpers of this class carry matching coloured die nests. The die ids are the colours (stable save format); crimp connectors are listed to UL 486A-B (cited by number only).",
+      "covers": ["dies"]
+    },
+    {
+      "id": "crimper-capability",
+      "kind": "game-design",
+      "citation": "game-design: the crimp capability reaches the largest die, 10 AWG.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

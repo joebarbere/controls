@@ -5,6 +5,7 @@ import {
   CUTTER,
   freeAt,
   LABELLER,
+  NUT_DRIVER,
   PUNCH,
   SCREWDRIVER,
   STRIPPER,
@@ -127,6 +128,13 @@ describe('enclosure.openEntry', () => {
       refused('wrong-tool'),
     );
     expect(bus.exec('enclosure.openEntry', { id: 6, entry: 'ko1', tool: WIRE })).toMatchObject(refused('unknown-tool'));
+    // A nut driver can drive, but a knockout or a clamp tab needs a blade (`slotted`, F3.4).
+    expect(bus.exec('enclosure.openEntry', { id: 6, entry: 'ko1', tool: NUT_DRIVER })).toMatchObject(
+      refused('wrong-drive'),
+    );
+    expect(bus.exec('enclosure.openEntry', { id: 6, entry: 'top', tool: NUT_DRIVER })).toMatchObject(
+      refused('wrong-drive'),
+    );
     expect(bus.exec('enclosure.openEntry', { id: 6, entry: 'nope', tool: PUNCH })).toMatchObject(
       refused('unknown-entry'),
     );

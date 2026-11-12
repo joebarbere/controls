@@ -14,11 +14,11 @@ import * as z from 'zod';
  *
  * The paths an entry needs (`requiredSourcePaths` in `catalog.ts`):
  *
- * - devices: `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>`,
+ * - devices: `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`drives` too),
  *   `fits.<mountType>` (what the device mounts on), `mounts.<id>`, `entries.<id>` and
  *   `interiorVolumeMm3` (an enclosure), `conductor.<field>` (a conductor product);
  * - cables: `conductors.<index>`, `jacket.<field>`;
- * - tools: `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`;
+ * - tools: `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`;
  * - accessories: `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`;
  * - tables: `rows.<key>.<field>` for each sourced field.
  */

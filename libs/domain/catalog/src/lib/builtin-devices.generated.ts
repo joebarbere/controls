@@ -129,6 +129,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": [
+            "slotted",
+            "square"
+          ],
           "alRated": true,
           "entryMm": {
             "x": 20,
@@ -165,6 +169,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": [
+            "slotted",
+            "square"
+          ],
           "alRated": true,
           "entryMm": {
             "x": 20,
@@ -279,6 +287,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: the breaker's base clips onto a 35 mm DIN rail (IEC 60715) and takes its full 40 mm base width along the rail (D12's demo puts it on a DIN mount). A real one-pole DIN-rail breaker is one module, about 17.5 to 18 mm wide; the base's width is kept so the entry's size is unchanged. Its terminals follow the panelboard branch-breaker class (a CU/AL load screw at 4.0 N·m), not the DIN-rail (UL 489 box-terminal) class. A real DIN-rail breaker is one module of about 18 mm per pole; a future entry version may take that.",
       "covers": [
         "fits.din35"
+      ]
+    },
+    {
+      "id": "breaker-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and square (Robertson) combination head, as on many North American branch-breaker and panel screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
       ]
     }
   ],
@@ -3105,6 +3121,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 1
           },
           "torqueNm": 0.5,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
           "alRated": false,
           "entryMm": {
             "x": 12,
@@ -3142,6 +3162,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 1
           },
           "torqueNm": 0.5,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
           "alRated": false,
           "entryMm": {
             "x": 28,
@@ -3246,6 +3270,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "The class clips onto a 35 mm DIN rail (IEC 60715) and takes its body width, about 40 mm (the din-psu-120w-class source), along the rail.",
       "covers": [
         "fits.din35"
+      ]
+    },
+    {
+      "id": "din-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. DIN-rail power supplies commonly have slotted and Pozidriv combination terminal screws (common practice for IEC-style terminals, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
       ]
     }
   ],
@@ -3547,6 +3579,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": [
+            "slotted",
+            "square"
+          ],
           "alRated": true,
           "entryMm": {
             "x": 50,
@@ -3583,6 +3619,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": [
+            "slotted",
+            "square"
+          ],
           "alRated": true,
           "entryMm": {
             "x": 250,
@@ -3619,6 +3659,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": [
+            "slotted",
+            "square"
+          ],
           "alRated": true,
           "entryMm": {
             "x": 150,
@@ -3677,6 +3721,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
       "covers": [
         "terminals.*.methods.screw"
+      ]
+    },
+    {
+      "id": "service-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: the stand-in service terminals take the same slotted and square combination head as the branch breaker (the D12 stand-in for P4's load centre).",
+      "covers": [
+        "terminals.*.methods.screw.drives"
       ]
     }
   ],

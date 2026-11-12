@@ -1,0 +1,28 @@
+{
+  "id": "tool.penmarrow-lp-12",
+  "version": 1,
+  "title": "Label printer, 12 mm tape",
+  "brand": "Penmarrow",
+  "modelName": "LP-12",
+  "kind": "labelMaker",
+  "capabilities": [
+    {
+      "step": "label",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "sources": [
+    {
+      "id": "label-printer",
+      "kind": "game-design",
+      "citation": "game-design: a handheld label printer for wire, cable and device labels (wire markers and panel labels are common practice). It prints the label text a command carries and nothing else; the tape width is a name, not a modelled value.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

@@ -34,6 +34,7 @@
             "tolerance": 1
           },
           "torqueNm": 0.5,
+          "drives": ["slotted", "pozidriv"],
           "alRated": false,
           "entryMm": {
             "x": 12,
@@ -67,6 +68,7 @@
             "tolerance": 1
           },
           "torqueNm": 0.5,
+          "drives": ["slotted", "pozidriv"],
           "alRated": false,
           "entryMm": {
             "x": 28,
@@ -157,6 +159,12 @@
       "kind": "real-world",
       "citation": "The class clips onto a 35 mm DIN rail (IEC 60715) and takes its body width, about 40 mm (the din-psu-120w-class source), along the rail.",
       "covers": ["fits.din35"]
+    },
+    {
+      "id": "din-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. DIN-rail power supplies commonly have slotted and Pozidriv combination terminal screws (common practice for IEC-style terminals, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
     }
   ],
   "extensions": {}

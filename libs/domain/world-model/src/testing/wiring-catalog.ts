@@ -14,7 +14,7 @@ import * as z from 'zod';
  * built-in devices plus a synthetic conductor kind (14 AWG solid, 14 AWG stranded, 10 AWG solid and a
  * bare 14), a 1-gang box and a DIN panel (enclosure kinds), a DIN terminal block with spring-cage and
  * screw methods, a 14/2-with-ground cable assembly, a hand-tool set (cutter, stripper, screwdriver,
- * torque driver, crimper, label maker, fish tape, knockout punch, drill bit), a ferrule and a ring
+ * torque driver, hex nut driver, crimper, label maker, fish tape, knockout punch, drill bit), a ferrule and a ring
  * lug. Nothing here is a real product and every number is `game-design: test`; the real conductors,
  * cables, enclosures and tools arrive with F3.1, F3.4 and F3.5.
  */
@@ -112,6 +112,7 @@ const screw = {
   stranding: ['solid', 'stranded'],
   stripLengthMm: { nominal: 13, tolerance: 2 },
   torqueNm: 1.4,
+  drives: ['slotted', 'phillips'],
   alRated: false,
   entryMm: { x: 10, y: 0, z: 5 },
   exitAxis: '+z',
@@ -191,6 +192,7 @@ const block = {
           stranding: ['solid', 'strandedFerrule'],
           stripLengthMm: { nominal: 10, tolerance: 1 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 5, y: 60, z: 30 },
           exitAxis: '+y',
@@ -210,6 +212,7 @@ const block = {
           stranding: ['solid', 'stranded', 'strandedFerrule'],
           stripLengthMm: { nominal: 8, tolerance: 1 },
           torqueNm: 0.8,
+          drives: ['slotted', 'phillips'],
           alRated: false,
           entryMm: { x: 15, y: 60, z: 30 },
           exitAxis: '+y',
@@ -222,6 +225,7 @@ const block = {
           stranding: ['solid', 'strandedFerrule'],
           stripLengthMm: { nominal: 10, tolerance: 1 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 15, y: 60, z: 40 },
           exitAxis: '+y',
@@ -234,6 +238,7 @@ const block = {
           stranding: ['solid', 'stranded'],
           stripLengthMm: { nominal: 13, tolerance: 2 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 15, y: 60, z: 44 },
           exitAxis: '+y',
@@ -329,6 +334,7 @@ const bit = {
   capabilities: [{ step: 'bore', maxAwg: null }],
   holes: [],
   dies: [],
+  drives: [],
   torque: null,
   boreDiameterMm: 19,
   sources: source(['capabilities', 'boreDiameterMm']),
@@ -336,7 +342,7 @@ const bit = {
 };
 
 const tool = (id: string, kind: string, capabilities: object[], extra: Record<string, unknown> = {}) => {
-  const fields = { holes: [], dies: [], torque: null, boreDiameterMm: null, ...extra };
+  const fields = { holes: [], dies: [], drives: [], torque: null, boreDiameterMm: null, ...extra };
   const covers = ['capabilities', ...Object.keys(extra)];
   return {
     id,
@@ -364,9 +370,10 @@ const tools = [
       { id: 'h16st', awg: 16, stranding: 'stranded' },
     ],
   }),
-  tool('tool.test-screwdriver', 'screwdriver', [can('drive')]),
+  tool('tool.test-screwdriver', 'screwdriver', [can('drive')], { drives: ['slotted', 'phillips'] }),
   tool('tool.test-torque', 'torqueDriver', [can('drive'), can('torque')], {
     torque: { minNm: 0.5, maxNm: 6, accuracyFraction: 0.06 },
+    drives: ['slotted', 'phillips'],
   }),
   tool('tool.test-crimper', 'crimper', [can('crimp', 10)], {
     dies: [
@@ -374,6 +381,7 @@ const tools = [
       { id: 'sq-10', label: '12-10', awgRange: { smallest: 12, largest: 10 } },
     ],
   }),
+  tool('tool.test-nutdriver', 'nutDriver', [can('drive')], { drives: ['hex'] }),
   tool('tool.test-labeller', 'labelMaker', [can('label')]),
   tool('tool.test-fishtape', 'fishTape', [can('pull', 10)]),
   tool('tool.test-punch', 'knockoutPunch', [can('openEntry')]),

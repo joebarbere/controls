@@ -30,6 +30,7 @@ export const CRIMPER = { id: 'tool.test-crimper', version: 1 };
 export const LABELLER = { id: 'tool.test-labeller', version: 1 };
 export const FISH_TAPE = { id: 'tool.test-fishtape', version: 1 };
 export const PUNCH = { id: 'tool.test-punch', version: 1 };
+export const NUT_DRIVER = { id: 'tool.test-nutdriver', version: 1 };
 
 export type Doc = Record<string, unknown> & {
   entities: Record<string, unknown>[];

@@ -22,11 +22,16 @@ const devices = read('devices');
 const tables = read('tables');
 /** The P2 entries (catalogue 1's, version 1 in catalogue 2); F3.1's conductors are checked in conductors.spec.ts. */
 const p2Devices = BUILTIN_CATALOG.devices.filter((d) => d.model.kind !== 'conductor');
+const tools = read('tools');
 
-describe('the built-in catalogue (content/devices, content/tables)', () => {
+describe('the built-in catalogue (content/devices, content/tables, content/tools)', () => {
   it('is catalogue version 2 and every file is a valid entry or table', () => {
     expect(CATALOG_VERSION).toBe(2);
-    const result = parseCatalog(CATALOG_VERSION, { devices: devices.documents, tables: tables.documents });
+    const result = parseCatalog(CATALOG_VERSION, {
+      devices: devices.documents,
+      tools: tools.documents,
+      tables: tables.documents,
+    });
     expect(result.ok ? 'ok' : result.issues).toBe('ok');
     expect(BUILTIN_CATALOG.version).toBe(CATALOG_VERSION);
   });
@@ -34,6 +39,7 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
   it('names each file <id>.v<version>.json (tables <table>.v<version>.json)', () => {
     expect(devices.names).toStrictEqual(BUILTIN_CATALOG.devices.map((d) => `${d.id}.v${d.version}.json`));
     expect(tables.names).toStrictEqual(BUILTIN_CATALOG.tables.map((t) => `${t.table}.v${t.version}.json`));
+    expect(tools.names).toStrictEqual(BUILTIN_CATALOG.tools.map((t) => `${t.id}.v${t.version}.json`));
   });
 
   it('holds the P3 tables: materials, insulation and colours, version 1 each', () => {
@@ -43,7 +49,6 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
       'materials@1',
     ]);
     expect(BUILTIN_CATALOG.cables).toStrictEqual([]);
-    expect(BUILTIN_CATALOG.tools).toStrictEqual([]);
     expect(BUILTIN_CATALOG.accessories).toStrictEqual([]);
   });
 
@@ -70,6 +75,7 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
     expect(breaker?.terminals[0].methods[0]).toMatchObject({
       awgRange: { smallest: 14, largest: 10 },
       torqueNm: 4,
+      drives: ['slotted', 'square'],
       alRated: true,
       ratedConductors: 1,
       maxConductors: 2,
@@ -78,6 +84,7 @@ describe('the built-in catalogue (content/devices, content/tables)', () => {
     expect(psu?.terminals[0].methods[0]).toMatchObject({
       awgRange: { smallest: 24, largest: 12 },
       torqueNm: 0.5,
+      drives: ['slotted', 'pozidriv'],
       alRated: false,
       stranding: ['solid', 'stranded', 'strandedFerrule'],
     });

@@ -378,6 +378,14 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
       }
       if (seen.has(spec.method)) add(path, 'A terminal lists each method once');
       seen.add(spec.method);
+      if (method.clampTorque !== spec.drives.length > 0) {
+        add(
+          path,
+          method.clampTorque
+            ? `A ${spec.method} method needs the drive types of its screw (drives)`
+            : `A ${spec.method} method has no screw: drives must be empty`,
+        );
+      }
       if (method.clampTorque !== (spec.torqueNm !== null)) {
         add(
           path,
@@ -564,6 +572,7 @@ function methodPaths(terminal: string, spec: TerminalMethodSpec): string[] {
   const base = `terminals.${terminal}.methods.${spec.method}`;
   const fields: string[] = [...METHOD_SOURCED_FIELDS];
   if (spec.torqueNm !== null) fields.push('torqueNm');
+  if (spec.drives.length > 0) fields.push('drives');
   return fields.map((field) => `${base}.${field}`);
 }
 
@@ -607,6 +616,7 @@ function checkTool(tool: ToolDefinition, add: Add): void {
     [can('crimp'), tool.dies.length > 0, 'A tool has dies exactly when it can crimp'],
     [can('torque'), tool.torque !== null, 'A tool has a torque range exactly when it can torque'],
     [can('bore'), tool.boreDiameterMm !== null, 'A tool has a bore diameter exactly when it can bore'],
+    [can('drive'), tool.drives.length > 0, 'A tool has drive types exactly when it can drive'],
   ];
   for (const [capable, has, message] of consistent) if (capable !== has) add('capabilities', message);
   const holeIds = tool.holes.map((h) => h.id);
@@ -619,6 +629,7 @@ function checkTool(tool: ToolDefinition, add: Add): void {
     ...dieIds.map((id) => `dies.${id}`),
     ...(tool.torque !== null ? ['torque'] : []),
     ...(tool.boreDiameterMm !== null ? ['boreDiameterMm'] : []),
+    ...(tool.drives.length > 0 ? ['drives'] : []),
   ];
   for (const issue of checkCoverage(tool.sources, required)) add(issue.path, issue.message);
 }

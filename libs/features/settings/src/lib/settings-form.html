@@ -212,6 +212,31 @@
     </p>
   </fieldset>
 
+  <fieldset aria-describedby="ctl-set-belt-hint">
+    <legend>Tool belt</legend>
+    @for (slot of beltSlots(); track slot.slot) {
+    <label class="ctl-field"
+      >Slot {{ slot.slot }}
+      <select class="ctl-select" (change)="setBeltSlot(slot.slot, $event)">
+        <option value="" [selected]="slot.value === ''">Empty</option>
+        @for (group of beltGroups; track group.label) {
+        <optgroup [label]="group.label">
+          @for (choice of group.choices; track choice.value) {
+          <option [value]="choice.value" [selected]="slot.value === choice.value">{{ choice.title }}</option>
+          }
+        </optgroup>
+        } @if (slot.other) {
+        <option [value]="slot.value" selected>{{ slot.other }}</option>
+        }
+      </select>
+    </label>
+    }
+    <p id="ctl-set-belt-hint" class="ctl-hint">
+      Number keys 1 to 9 pick a slot in the workspace. A prop is placed with a click; a tool is held and named in the
+      status panel.
+    </p>
+  </fieldset>
+
   <fieldset>
     <legend>Region</legend>
     <label class="ctl-field"

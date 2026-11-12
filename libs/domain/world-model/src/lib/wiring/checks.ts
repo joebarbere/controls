@@ -4,6 +4,8 @@ import {
   type Catalog,
   type ConductorSpec,
   type DeviceDefinition,
+  type DriveType,
+  drivesFit,
   type ModelKindDef,
   type TerminalMethodSpec,
   terminationMethod,
@@ -85,6 +87,16 @@ export function checkTool(
     return fail('beyond-tool-capacity', `${tool.title} doesn't reach a ${awg} AWG conductor`);
   }
   return ok(tool);
+}
+
+/**
+ * `wrong-drive` unless `tool`'s drive types share one with the screw's (F3.4 part 1, ADR 0015
+ * implementation notes): a nut driver can't turn a slotted terminal screw. `null` when it fits.
+ */
+export function checkDrive(tool: ToolDefinition, screw: readonly DriveType[], what: string): CommandFailure | null {
+  if (drivesFit(tool.drives, screw)) return null;
+  const has = tool.drives.length > 0 ? tool.drives.join(', ') : 'no drive';
+  return fail('wrong-drive', `${tool.title} (${has}) doesn't fit ${what} (${screw.join(' or ')})`);
 }
 
 /** A conductor entry: its connection kind and its conductor data. */
@@ -421,8 +433,8 @@ function checkGauge(
 /**
  * Each step's tool (ADR 0015, "Tools travel inside the termination"): a stripper that can `strip` the
  * conductor and has the hole (`unknown-hole`); a crimper that can `crimp` it and has the die
- * (`unknown-die`); for a clamp-torque method a driver that can `drive` (`wrong-tool` with none), whose
- * torque setting is given exactly when it can `torque` and lies inside its range
+ * (`unknown-die`); for a clamp-torque method a driver that can `drive` (`wrong-tool` with none) and
+ * fits the screw's drive types (`wrong-drive`), whose torque setting is given exactly when it can `torque` and lies inside its range
  * (`beyond-tool-capacity`); for any other method no clamp tool or setting (`wrong-tool`).
  */
 function checkSteps(
@@ -455,6 +467,8 @@ function checkSteps(
   if (clampRef === null) return fail('wrong-tool', `A ${spec.method} termination needs a driver`);
   const driver = checkTool(catalog, clampRef, 'drive', conductor.awg);
   if (!driver.ok) return driver;
+  const misfit = checkDrive(driver.value, spec.drives, `the terminal screw`);
+  if (misfit) return misfit;
   const range = driver.value.torque;
   if (range === null && torqueNm !== null) {
     return fail('wrong-tool', `${driver.value.title} has no torque setting: use a torque driver`);

@@ -10,6 +10,7 @@ import {
   freeAt,
   L1_TO_LINE_ROUTE,
   LABELLER,
+  NUT_DRIVER,
   LEAD,
   LUG,
   screwTermination,
@@ -168,7 +169,7 @@ describe('wire.add', () => {
     );
   });
 
-  it('checks every tool step: capability, capacity, hole, die, torque setting and range', () => {
+  it('checks every tool step: capability, capacity, hole, die, drive type, torque setting and range', () => {
     const bus = wiringBench('journeyman');
     const land = (termination: object, extra: Record<string, unknown> = {}) =>
       bus.exec('wire.add', autoWireArgs({ a: { entity: 1, terminal: 'l1', termination }, b: null, ...extra }));
@@ -183,6 +184,8 @@ describe('wire.add', () => {
       ['wrong-tool', { ...ok, clamp: { tool: SCREWDRIVER, torqueNm: 4 } }],
       ['wrong-tool', { ...ok, clamp: { tool: TORQUE, torqueNm: null } }],
       ['beyond-tool-capacity', { ...ok, clamp: { tool: TORQUE, torqueNm: 7 } }],
+      // A hex nut driver can drive, but its socket doesn't fit the slotted/square terminal screw (F3.4).
+      ['wrong-drive', { ...ok, clamp: { tool: NUT_DRIVER, torqueNm: null } }],
       ['wrong-accessory', { ...ok, accessory: { ref: WIRE, tool: CRIMPER, die: 'sq-14' } }],
       ['wrong-accessory', { ...ok, accessory: { ref: FERRULE, tool: CRIMPER, die: 'sq-14' } }], // solid 14 in a ferrule
     ];

@@ -1,0 +1,38 @@
+{
+  "id": "tool.calderyn-ts-03",
+  "version": 1,
+  "title": "Torque screwdriver, 0.3–1.2 N·m",
+  "brand": "Calderyn",
+  "modelName": "TS-03",
+  "kind": "torqueDriver",
+  "capabilities": [
+    { "step": "drive", "maxAwg": null },
+    { "step": "torque", "maxAwg": null }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": { "minNm": 0.3, "maxNm": 1.2, "accuracyFraction": 0.06 },
+  "boreDiameterMm": null,
+  "drives": ["slotted", "phillips", "pozidriv", "square"],
+  "sources": [
+    {
+      "id": "torque-driver-capabilities",
+      "kind": "game-design",
+      "citation": "game-design: an adjustable torque screwdriver drives a screw and slips at its setting, so it has drive and torque, with no conductor size limit. The torque a terminal needs comes from the device's own marking (NFPA 70-2023 Art. 110.14(D), cited by number), never from a torque table.",
+      "covers": ["capabilities"]
+    },
+    {
+      "id": "low-range-torque-driver-class",
+      "kind": "real-world",
+      "citation": "ISO 6789-1:2017 Type II Class D (cited by number), plus or minus 6 % from the lowest marked value to the maximum. Low-range adjustable torque screwdrivers for terminal screws are made in about 0.3-1.2 N·m, and one maker's datasheet reads 0.1-1.2 N·m at plus or minus 6 %, tested to ISO 6789-2:2017 (typical published figures, paraphrased, not one vendor's).",
+      "covers": ["torque"]
+    },
+    {
+      "id": "torque-driver-bits",
+      "kind": "game-design",
+      "citation": "game-design: its 1/4 in hex bit holder (hex-shank bits, ISO 1173 cited by number) takes slotted, cross-recess (Phillips and Pozidriv) and square bits, all assumed in the kit; bit sizes are names.",
+      "covers": ["drives"]
+    }
+  ],
+  "extensions": {}
+}

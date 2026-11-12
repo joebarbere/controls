@@ -1,0 +1,23 @@
+{
+  "id": "tool.veltmark-dc-8",
+  "version": 1,
+  "title": "High-leverage diagonal cutters, 8 in",
+  "brand": "Veltmark",
+  "modelName": "DC-8",
+  "kind": "cutter",
+  "capabilities": [{ "step": "cut", "maxAwg": 8 }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "sources": [
+    {
+      "id": "diagonal-cutter-capacity",
+      "kind": "game-design",
+      "citation": "game-design: unverified product-class figure. Diagonal cutting nippers are specified in ISO 5749 (cited by number); makers of 180-200 mm (7-8 in) high-leverage models state cutting capacities for medium-hard, hard and piano wire (a few millimetres, smallest for piano wire), and soft copper cuts more easily than any of them. The cut is capped at 8 AWG solid copper, 3.26 mm across (the AWG formula, NBS Handbook 100 section 2), a figure chosen for play inside that class.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

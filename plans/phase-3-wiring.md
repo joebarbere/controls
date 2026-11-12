@@ -183,9 +183,9 @@ Owners `sim-engine-engineer` (contact model), `content-designer` (termination sp
 
 Owners `content-designer` (tool entries), `angular-ui-engineer` (tool belt, tool UI, minigame), `renderer-engineer` (tool cursors), main agent (commands). Two parts.
 
-- [ ] **Part 1:** tool entries in `content/tools/` (wire strippers with gauge holes and an NM slot, diagonal cutters, screwdriver, torque screwdriver with range and accuracy, crimper with a die set, nut driver, label maker), sourced, fictional brands; the tool belt holds tool refs, the HUD shows the active tool, and the active tool selects what a click does; tool-gated commands check their tool kind (`wrong-tool`); a plain screwdriver's torque has a seeded spread (D8), the torque driver's comes from its stated accuracy.
+- [x] **Part 1:** tool entries in `content/tools/` (wire strippers with gauge holes and an NM slot, diagonal cutters, screwdriver, torque screwdriver with range and accuracy, crimper with a die set, nut driver, label maker), sourced, fictional brands; the tool belt holds tool refs, the HUD shows the active tool, and the active tool selects what a click does; tool-gated commands check their tool kind (`wrong-tool`); a plain screwdriver's torque has a seeded spread (D8), the torque driver's comes from its stated accuracy. _Done:_ nine tools in `content/tools/` (Veltmark general strippers `sol*`/`str*` holes with cut, NM cable stripper with stripJacket, 8 in cutters, screwdriver, nut driver, crimper with `red`/`blue`/`yellow` dies; Calderyn 0.3–1.2 and 1–5 N·m ±6 % torque screwdrivers; Penmarrow label printer), reviewed by `electrical-realism-reviewer` (verified values `real-world`); drive types (`DRIVE_TYPES`, `wrong-drive`, ADR 0016 amendment); belt slots hold any `CatalogRef` and what they arm follows `beltSlotKind` (a tool or spool never arms placement); `ActiveTool` feeds the HUD, the new belt bar (a keyboard toolbar) and the viewport; the default-tool rule is world-model's `defaultTool`; Settings → Tool belt edits the slots. The capability checks (`wrong-tool`, `beyond-tool-capacity`) and the torque spread and accuracy shipped with PR 8 (`checkTool`, `resolveTermination`); the active tool selecting what a click does waits for the wiring flows (F3.2 part 3, F3.3 part 2), which bind on the `toolbelt.kind` / `toolbelt.tool` context keys.
 - [ ] **Part 2:** drill and hole saw (bores through studs as route waypoints, custom entries on enclosures) and a knockout punch; the fish tape minigame to pull conductors through conduit, logging `wire.pull {conduit, conductors, tool}` on success only (D10), keyboard-playable, reduced motion respected, skippable at Trainee. E2E: one conduit pull with the keyboard.
-- [ ] A single-command cost gate: `cable-add-worst-command` (the largest assembly with auto terminations, plus its re-solve on the 2,000-node plant) stays well under `WATCHDOG_MS` (the P2 backlog item "bound the cost of a single command").
+- [x] A single-command cost gate: `cable-add-worst-command` (the largest assembly with auto terminations, plus its re-solve on the 2,000-node plant) stays well under `WATCHDOG_MS` (the P2 backlog item "bound the cost of a single command"). _Done:_ a real `sim bench` case on a bench-only synthetic 16-conductor assembly (no real cable before F3.1 part 2), gated at `WATCHDOG_MS / 10` = 300 ms; median about 2 ms locally. `cable.add` lands no terminations, so "auto terminations" don't apply to it.
 
 ### F3.5 Enclosures and mounting
 
@@ -266,7 +266,7 @@ ADR 0014 (`dmath`) stays reserved and deferred; P3's maths needs only `Math.sqrt
 | 14  | `feat(world-model)`: F3.2 part 1, ADR 0017                                                                                                                                                                                                                                            | `renderer-engineer` (`save-format-guardian`, `test-engineer`)                | 12         |
 | 15  | `feat(renderer)`: F3.2 part 2                                                                                                                                                                                                                                                         | `renderer-engineer`                                                          | 14         |
 | 16  | `feat(renderer, workspace)`: F3.2 part 3                                                                                                                                                                                                                                              | `renderer-engineer` + `angular-ui-engineer`                                  | 15         |
-| 17  | `feat(catalog, workspace)`: F3.4 part 1, single-command gate                                                                                                                                                                                                                          | `content-designer` + `angular-ui-engineer` + main (realism)                  | 6, 8       |
+| 17  | ✅ `feat(catalog, workspace)`: F3.4 part 1, single-command gate                                                                                                                                                                                                                       | `content-designer` + `angular-ui-engineer` + main (realism)                  | 6, 8       |
 | 18  | `feat(workspace)`: F3.3 part 2                                                                                                                                                                                                                                                        | `angular-ui-engineer`                                                        | 13, 16, 17 |
 | 19  | `feat(renderer, workspace)`: F3.2 part 4                                                                                                                                                                                                                                              | `renderer-engineer` + `angular-ui-engineer`                                  | 10, 16     |
 | 20  | `feat(workspace)`: F3.4 part 2                                                                                                                                                                                                                                                        | `angular-ui-engineer` + `renderer-engineer`                                  | 17, 19     |
@@ -287,13 +287,13 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 | —       | Replay-log checkpointing                                 | ✅ Done             |
 | —       | ADR 0015 world v3 and wire contract (agent team)         | ✅ Accepted         |
 | —       | Palette and console argument forms (PR 5a)               | ✅ Done             |
-| —       | Catalogue format v2 + `catalogVersion` 2                 | 🚧 In review        |
-| —       | World document v3 + migration                            | 🚧 In review        |
-| —       | World v3 commands                                        | 🚧 In review        |
-| F3.1    | Conductor catalogue (parts 1–2)                          | 🚧 Part 1 in review |
+| —       | Catalogue format v2 + `catalogVersion` 2                 | ✅ Done             |
+| —       | World document v3 + migration                            | ✅ Done             |
+| —       | World v3 commands                                        | ✅ Done             |
+| F3.1    | Conductor catalogue (parts 1–2)                          | 🟡 Part 1 done      |
 | F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started      |
 | F3.3    | Terminations (parts 1–2)                                 | ⬜ Not started      |
-| F3.4    | Hand tools and the tool belt (parts 1–2)                 | ⬜ Not started      |
+| F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🚧 Part 1 in review |
 | F3.5    | Enclosures and mounting (parts 1–2)                      | ⬜ Not started      |
 | F3.6    | Thermal, degradation, readouts (parts 1–3)               | ⬜ Not started      |
 | —       | Frame-time probe (500 devices with wires)                | ⬜ Not started      |
@@ -341,6 +341,7 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 ## Close-out
 
 1. [ ] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P3 narrative, `schemaVersion` 3, `catalogVersion` 2, `simEngineVersion` 7, `SIM_PROTOCOL_VERSION` 6.
+   - Before `/release minor`: `shipped.spec.ts` masks only the v2 fields a frozen document lacks (by its release's `catalogVersion`) and its `Shipped` list gains `tools`, so 0.4.0's frozen list locks methods, drives, holes, dies and tools (save-format-guardian, F3.4 review).
 2. [ ] `version-keeper`: `0.3.0 → 0.4.0`.
 3. [ ] `release-engineer`: package and smoke-test (new sandbox; the lamp circuit lights; save and load mid-heating), tag on the user's confirmation, check the draft. The user publishes.
 4. [ ] Mark P3 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P4 kickoff writes `plans/phase-4-*.md`; P4 builds wall switches, receptacles and the load centre on P3's terminations, uses `mountedOn` and `interiorVolumeMm3` for box fill, and replaces D12's stand-in supply with the service and load centre.
