@@ -46,12 +46,21 @@ export interface StateKeyDef {
 export type Placement =
   /** A placed entity (`entity.place`) with terminals and both state bags. */
   | 'entity'
-  /** A connection between two terminals (`lead.connect`): no entity, no terminals, no state. */
+  /**
+   * A connection between two terminals (`lead.connect`, from world v3 `wire.*`): no entity and no
+   * terminals. Its state bags live on the world v3 `ConnectionV3` (ADR 0015).
+   */
   | 'connection';
 
 export interface ModelKindDef {
   readonly kind: string;
   readonly placement: Placement;
+  /**
+   * The catalogue block every entry of this kind must carry (catalogue v2, ADR 0016): `conductor`
+   * (a connection kind whose entries are conductor products) or `enclosure` (a placed kind whose
+   * entries offer mounts and entries; it declares the commanded `openEntries` key). Absent: neither.
+   */
+  readonly requires?: 'conductor' | 'enclosure';
   /** The terminal ids every device of this kind has, sorted. Empty for connections. */
   readonly terminals: readonly string[];
   /** Validates `model.params` of a catalogue entry (a strict object of numbers). */
@@ -295,6 +304,66 @@ function enumKey<const V extends readonly [string, ...string[]]>(
   return { owner, type: 'enum', schema: z.enum(values), initial, values, description };
 }
 
+/** A connection end's contact state (ADR 0015); `intermittentOpen` takes the connection out of the netlist. */
+export const CONNECTION_END_STATES = ['ok', 'intermittentClosed', 'intermittentOpen', 'arcing'] as const;
+
+const endKeys = (end: 'A' | 'B'): Record<string, StateKeyDef> => ({
+  [`end${end}TempK`]: key(
+    'sim',
+    'number',
+    FiniteNumber.positive().nullable(),
+    null,
+    `End ${end.toLowerCase()}'s termination hot-spot temperature (K); null while the end has no termination node (unlanded, a lead's clip, or not yet simulated).`,
+  ),
+  [`end${end}Degradation`]: key(
+    'sim',
+    'number',
+    FiniteNumber.min(1),
+    1,
+    `Irreversible growth of end ${end.toLowerCase()}'s contact resistance, as a multiple (at least 1) of its as-made value (D8: monotone, never reversed by cooling). Kept while the end is unlanded.`,
+  ),
+  [`end${end}TerminationId`]: key(
+    'sim',
+    'number',
+    Int.min(1).nullable(),
+    null,
+    `The termination id (TerminationV3.id) end ${end.toLowerCase()}'s temperature, degradation and state belong to; a different id resets them. Kept while unlanded.`,
+  ),
+  [`end${end}State`]: enumKey(
+    'sim',
+    CONNECTION_END_STATES,
+    'ok',
+    `End ${end.toLowerCase()}'s contact state. intermittentOpen takes the connection out of the netlist; its phase is a pure function of the seed, the termination's stream and the tick bucket.`,
+  ),
+});
+
+/**
+ * The sim-owned bag of a connection kind (ADR 0015, "Connection state bags and their owners"): ten
+ * keys shared by `lead` and, from F3.1, `conductor`, written only by the engine (`materialiseWorld`)
+ * and persisted in world v3's `ConnectionV3.sim`. A lead's end keys stay at their initial values (its
+ * clips have no termination node). Provisional until v0.4.0 (finalised by ADR 0018); after that a
+ * change is a `schemaVersion` bump. World v2 connections carry no bags, so these keys mean nothing to
+ * a v2 save: they enter saves with world v3.
+ */
+export const CONNECTION_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object.freeze({
+  conductorTempK: key(
+    'sim',
+    'number',
+    FiniteNumber.positive().nullable(),
+    null,
+    "The conductor's lumped temperature (K); null until first simulated (the engine starts it at ambient).",
+  ),
+  ...endKeys('A'),
+  ...endKeys('B'),
+  insulationDamaged: key(
+    'sim',
+    'boolean',
+    z.boolean(),
+    false,
+    "Sticky: set once the conductor passed its insulation's damage temperature (an event and a flag only in P3).",
+  ),
+});
+
 /**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
@@ -418,7 +487,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     placement: 'connection',
     terminals: [],
     params: LeadParams,
-    keys: {},
+    keys: CONNECTION_SIM_KEYS,
     description: 'A test lead: a resistive connection between two terminals, made with lead.connect.',
   },
   resistor: {

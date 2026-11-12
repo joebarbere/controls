@@ -89,17 +89,18 @@ Until a specialist exists, do the work directly and follow the plan section for 
 
 Load the matching file before working in an area. The code tells you what shipped; caveats tell you why. Full index: [`docs/caveats/README.md`](docs/caveats/README.md).
 
-| File                                                         | Load when working on…                                                                                                      |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/caveats/workspace.md`](docs/caveats/workspace.md)     | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags (`type:worker`), D6 lint, `bench`, `pnpm verify`     |
-| [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                              |
-| [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                    |
-| [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log) |
-| [`docs/caveats/commands.md`](docs/caveats/commands.md)       | `commands`, `world-model`, `feature-session`; adding a command; `world.hash`, PRNG, replay determinism                     |
-| [`docs/caveats/rendering.md`](docs/caveats/rendering.md)     | `libs/rendering/renderer`: cameras, BVH picking, selection, snap maths, disposal, viewport host                            |
-| [`docs/caveats/scripting.md`](docs/caveats/scripting.md)     | `scripting-api`, the console-line parser, `apps/sim-cli` and scenarios, changing a command's args shape                    |
-| [`docs/caveats/ui.md`](docs/caveats/ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*`, focus, dialogs, theming, Angular component tests                                |
-| [`docs/caveats/simulation.md`](docs/caveats/simulation.md)   | `sim-core` (netlist compiler, solvers, device models), `sim-protocol`, `sim-worker`, a new model kind, `topologyHash`      |
+| File                                                         | Load when working on…                                                                                                         |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/caveats/workspace.md`](docs/caveats/workspace.md)     | Dependencies, Nx/pnpm/tsconfig/ESLint/Prettier config, new libs, tags (`type:worker`), D6 lint, `bench`, `pnpm verify`        |
+| [`docs/caveats/electron.md`](docs/caveats/electron.md)       | `apps/desktop`, `apps/desktop-e2e`, `platform/electron`, `ipc-contract`, `app://`, CSP, Fuses                                 |
+| [`docs/caveats/release.md`](docs/caveats/release.md)         | Versioning, version sync, electron-builder, `release.yml`, updater, signing, `/release`                                       |
+| [`docs/caveats/save-format.md`](docs/caveats/save-format.md) | `save-format` schemas, migrations, fixtures, settings; world serialisation; command ids/args (persisted in the replay log)    |
+| [`docs/caveats/commands.md`](docs/caveats/commands.md)       | `commands`, `world-model`, `feature-session`; adding a command; `world.hash`, PRNG, replay determinism                        |
+| [`docs/caveats/rendering.md`](docs/caveats/rendering.md)     | `libs/rendering/renderer`: cameras, BVH picking, selection, snap maths, disposal, viewport host                               |
+| [`docs/caveats/scripting.md`](docs/caveats/scripting.md)     | `scripting-api`, the console-line parser, `apps/sim-cli` and scenarios, changing a command's args shape                       |
+| [`docs/caveats/ui.md`](docs/caveats/ui.md)                   | `apps/game`, `libs/ui`, `libs/features/*`, focus, dialogs, theming, Angular component tests                                   |
+| [`docs/caveats/content.md`](docs/caveats/content.md)         | `content/`, the catalogue format (`libs/domain/catalog`): sources and coverage paths, gauges, tables, colours, entry versions |
+| [`docs/caveats/simulation.md`](docs/caveats/simulation.md)   | `sim-core` (netlist compiler, solvers, device models), `sim-protocol`, `sim-worker`, a new model kind, `topologyHash`         |
 
 ## Working with the planning artifacts
 

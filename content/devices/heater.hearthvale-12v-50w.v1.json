@@ -5,12 +5,43 @@
   "brand": "Hearthvale",
   "modelName": "HV-1250",
   "category": "load",
-  "sizeMm": { "widthMm": 90, "heightMm": 50, "depthMm": 40 },
+  "sizeMm": {
+    "widthMm": 90,
+    "heightMm": 50,
+    "depthMm": 40
+  },
   "terminals": [
-    { "id": "a", "label": "1", "positionMm": { "x": 10, "y": 25, "z": 12 } },
-    { "id": "b", "label": "2", "positionMm": { "x": 80, "y": 25, "z": 12 } }
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 10,
+        "y": 25,
+        "z": 12
+      },
+      "methods": []
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 80,
+        "y": 25,
+        "z": 12
+      },
+      "methods": []
+    }
   ],
-  "model": { "kind": "heater", "params": { "ratedVoltageV": 12, "ratedPowerW": 50 } },
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "heater",
+    "params": {
+      "ratedVoltageV": 12,
+      "ratedPowerW": 50
+    }
+  },
   "controls": [],
   "sources": [
     {

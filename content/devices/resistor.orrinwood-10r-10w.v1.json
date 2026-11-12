@@ -5,12 +5,43 @@
   "brand": "Orrinwood",
   "modelName": "OW-10R-10",
   "category": "load",
-  "sizeMm": { "widthMm": 70, "heightMm": 40, "depthMm": 30 },
+  "sizeMm": {
+    "widthMm": 70,
+    "heightMm": 40,
+    "depthMm": 30
+  },
   "terminals": [
-    { "id": "a", "label": "1", "positionMm": { "x": 8, "y": 20, "z": 12 } },
-    { "id": "b", "label": "2", "positionMm": { "x": 62, "y": 20, "z": 12 } }
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 8,
+        "y": 20,
+        "z": 12
+      },
+      "methods": []
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 62,
+        "y": 20,
+        "z": 12
+      },
+      "methods": []
+    }
   ],
-  "model": { "kind": "resistor", "params": { "resistanceOhm": 10, "powerRatingW": 10 } },
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "resistor",
+    "params": {
+      "resistanceOhm": 10,
+      "powerRatingW": 10
+    }
+  },
   "controls": [],
   "sources": [
     {

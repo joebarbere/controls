@@ -82,7 +82,7 @@ describe('engineCompatible (D8, narrow v0 compatibility)', () => {
         else expect(result).toBe('engine-changed');
       }),
     );
-    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: SIM_ENGINE_VERSION, catalogVersion: 1 });
+    expect(BUILD_ENGINE_VERSIONS).toStrictEqual({ simEngineVersion: SIM_ENGINE_VERSION, catalogVersion: 2 });
   });
 });
 

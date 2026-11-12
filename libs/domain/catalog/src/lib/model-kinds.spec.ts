@@ -1,6 +1,14 @@
 import { DEVICE_STATE_KEY_PATTERN, DeviceStateValue } from '@controls/save-format';
 import fc from 'fast-check';
-import { bagSchemas, checkBags, initialBags, MODEL_KINDS, modelKind, stateKeys } from './model-kinds';
+import {
+  bagSchemas,
+  checkBags,
+  CONNECTION_SIM_KEYS,
+  initialBags,
+  MODEL_KINDS,
+  modelKind,
+  stateKeys,
+} from './model-kinds';
 
 const kinds = Object.values(MODEL_KINDS);
 
@@ -43,7 +51,19 @@ describe('MODEL_KINDS', () => {
       'generator.portable': {},
       heater: {},
       'lamp.incandescent': { filamentTempK: 'sim number null' },
-      lead: {},
+      // ADR 0015: the connection sim keys (world v3's ConnectionV3.sim), provisional until v0.4.0.
+      lead: {
+        conductorTempK: 'sim number null',
+        endADegradation: 'sim number 1',
+        endAState: 'sim enum ok',
+        endATempK: 'sim number null',
+        endATerminationId: 'sim number null',
+        endBDegradation: 'sim number 1',
+        endBState: 'sim enum ok',
+        endBTempK: 'sim number null',
+        endBTerminationId: 'sim number null',
+        insulationDamaged: 'sim boolean false',
+      },
       resistor: {},
       'supply.bench': {
         currentLimitA: 'commanded number 1',
@@ -67,8 +87,12 @@ describe('MODEL_KINDS', () => {
         expect(def.values, `${kind.kind}.${name}`).toBe(def.type === 'enum' ? def.values : null);
       }
       if (kind.placement === 'connection') {
+        // A connection has no terminals, and in P3 no commanded keys (ADR 0015: `state` is {}).
         expect(kind.terminals, kind.kind).toStrictEqual([]);
-        expect(kind.keys, kind.kind).toStrictEqual({});
+        expect(stateKeys(kind, 'commanded'), kind.kind).toStrictEqual([]);
+      }
+      if (kind.requires === 'enclosure') {
+        expect(kind.keys['openEntries']?.owner, kind.kind).toBe('commanded');
       }
     }
   });
@@ -92,6 +116,20 @@ describe('MODEL_KINDS', () => {
         }
       }),
     );
+  });
+
+  it('the lead kind holds the ten connection sim keys of ADR 0015, ends A and B alike', () => {
+    const lead = MODEL_KINDS['lead'];
+    expect(lead.keys).toBe(CONNECTION_SIM_KEYS);
+    expect(stateKeys(lead, 'sim')).toHaveLength(10);
+    expect(lead.keys['endAState'].values).toStrictEqual(['ok', 'intermittentClosed', 'intermittentOpen', 'arcing']);
+    expect(lead.keys['endADegradation'].schema.safeParse(0.99).success).toBe(false);
+    expect(lead.keys['endATerminationId'].schema.safeParse(1.5).success).toBe(false);
+    expect(lead.keys['endATerminationId'].schema.safeParse(7).success).toBe(true);
+    for (const name of ['TempK', 'Degradation', 'TerminationId', 'State']) {
+      const [a, b] = [lead.keys[`endA${name}`], lead.keys[`endB${name}`]];
+      expect([b.owner, b.type, b.initial, b.values]).toStrictEqual([a.owner, a.type, a.initial, a.values]);
+    }
   });
 
   it('modelKind looks up own kinds only', () => {

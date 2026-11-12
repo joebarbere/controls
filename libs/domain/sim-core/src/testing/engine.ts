@@ -231,8 +231,17 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
 };
 
 const size = { widthMm: 10, heightMm: 10, depthMm: 10 };
-const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 } });
-const base = { brand: 'Testbrand', modelName: 'T-2', controls: [], extensions: {} };
+/** A clip-only test terminal (catalogue v2: no termination methods). */
+const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 }, methods: [] });
+const base = {
+  brand: 'Testbrand',
+  modelName: 'T-2',
+  mounts: [],
+  enclosure: null,
+  conductor: null,
+  controls: [],
+  extensions: {},
+};
 const sources = (params: string[]) => [
   {
     id: 'test',

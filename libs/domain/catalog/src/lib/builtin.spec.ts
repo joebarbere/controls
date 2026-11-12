@@ -11,22 +11,88 @@ import { parseCatalog } from './catalog';
  * that mirror is stale (regenerate with `pnpm nx test catalog -u`).
  */
 
-const devicesDir = join(import.meta.dirname, '../../../../../content/devices');
-const files = readdirSync(devicesDir)
-  .filter((name) => name.endsWith('.json'))
-  .sort();
-const documents = files.map((name) => JSON.parse(readFileSync(join(devicesDir, name), 'utf8')) as unknown);
+const contentDir = join(import.meta.dirname, '../../../../../content');
+const read = (dir: string) => {
+  const names = readdirSync(join(contentDir, dir))
+    .filter((name) => name.endsWith('.json'))
+    .sort();
+  return { names, documents: names.map((n) => JSON.parse(readFileSync(join(contentDir, dir, n), 'utf8')) as unknown) };
+};
+const devices = read('devices');
+const tables = read('tables');
 
-describe('the built-in catalogue (content/devices)', () => {
-  it('is catalogue version 1 and every file is a valid entry', () => {
-    expect(CATALOG_VERSION).toBe(1);
-    const result = parseCatalog(CATALOG_VERSION, documents);
+describe('the built-in catalogue (content/devices, content/tables)', () => {
+  it('is catalogue version 2 and every file is a valid entry or table', () => {
+    expect(CATALOG_VERSION).toBe(2);
+    const result = parseCatalog(CATALOG_VERSION, { devices: devices.documents, tables: tables.documents });
     expect(result.ok ? 'ok' : result.issues).toBe('ok');
     expect(BUILTIN_CATALOG.version).toBe(CATALOG_VERSION);
   });
 
-  it('names each file <id>.v<version>.json', () => {
-    expect(files).toStrictEqual(BUILTIN_CATALOG.devices.map((d) => `${d.id}.v${d.version}.json`));
+  it('names each file <id>.v<version>.json (tables <table>.v<version>.json)', () => {
+    expect(devices.names).toStrictEqual(BUILTIN_CATALOG.devices.map((d) => `${d.id}.v${d.version}.json`));
+    expect(tables.names).toStrictEqual(BUILTIN_CATALOG.tables.map((t) => `${t.table}.v${t.version}.json`));
+  });
+
+  it('holds the P3 tables: materials, insulation and colours, version 1 each', () => {
+    expect(BUILTIN_CATALOG.tables.map((t) => `${t.table}@${t.version}`)).toStrictEqual([
+      'colours@1',
+      'insulation@1',
+      'materials@1',
+    ]);
+    expect(BUILTIN_CATALOG.cables).toStrictEqual([]);
+    expect(BUILTIN_CATALOG.tools).toStrictEqual([]);
+    expect(BUILTIN_CATALOG.accessories).toStrictEqual([]);
+  });
+
+  it('every P2 entry is still version 1: catalogue v2 only gave them data (ADR 0015)', () => {
+    expect(BUILTIN_CATALOG.devices.every((d) => d.version === 1)).toBe(true);
+  });
+
+  it('termination methods only where a conductor really lands; clip-only elsewhere', () => {
+    const landed = BUILTIN_CATALOG.devices.flatMap((d) =>
+      d.terminals
+        .filter((t) => t.methods.length > 0)
+        .map((t) => `${d.id}:${t.id}:${t.methods.map((m) => m.method).join(',')}`),
+    );
+    expect(landed).toStrictEqual([
+      'breaker.saltmere-1p-15a:line:screw',
+      'breaker.saltmere-1p-15a:load:screw',
+      'supply.railwick-din-24v-5a:neg:screw',
+      'supply.railwick-din-24v-5a:pos:screw',
+      'utility.larkmoor-split-phase-25kva:l1:screw',
+      'utility.larkmoor-split-phase-25kva:l2:screw',
+      'utility.larkmoor-split-phase-25kva:n:screw',
+    ]);
+    const breaker = BUILTIN_CATALOG.device({ id: 'breaker.saltmere-1p-15a', version: 1 });
+    expect(breaker?.terminals[0].methods[0]).toMatchObject({
+      awgRange: { smallest: 14, largest: 10 },
+      torqueNm: 4,
+      alRated: true,
+      ratedConductors: 1,
+      maxConductors: 2,
+    });
+    const psu = BUILTIN_CATALOG.device({ id: 'supply.railwick-din-24v-5a', version: 1 });
+    expect(psu?.terminals[0].methods[0]).toMatchObject({
+      awgRange: { smallest: 24, largest: 12 },
+      torqueNm: 0.5,
+      alRated: false,
+      stranding: ['solid', 'stranded', 'strandedFerrule'],
+    });
+  });
+
+  it('the breaker and the DIN supply fit a DIN rail; nothing else declares a mount', () => {
+    expect(BUILTIN_CATALOG.devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
+      ['breaker.saltmere-1p-15a', [{ type: 'din35', widthMm: 40 }]],
+      ['supply.railwick-din-24v-5a', [{ type: 'din35', widthMm: 40 }]],
+    ]);
+    // A declared width never exceeds the body: the declaration is the footprint along the rail.
+    for (const d of BUILTIN_CATALOG.devices)
+      for (const m of d.mounts) expect(m.widthMm).toBeLessThanOrEqual(d.sizeMm?.widthMm ?? 0);
+  });
+
+  it('no P2 entry is an enclosure or a conductor', () => {
+    expect(BUILTIN_CATALOG.devices.filter((d) => d.enclosure !== null || d.conductor !== null)).toStrictEqual([]);
   });
 
   it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection and one test lead (plan P2)', () => {
@@ -72,6 +138,8 @@ describe('the built-in catalogue (content/devices)', () => {
     expect(BUILTIN_CATALOG.kindOf(ref)).toBe(modelKind('switch.spst'));
     expect(BUILTIN_CATALOG.device({ ...ref, version: 2 })).toBeUndefined();
     expect(BUILTIN_CATALOG.kindOf({ id: 'prop.crate', version: 1 })).toBeUndefined();
+    expect(BUILTIN_CATALOG.family(ref)).toBe('device');
+    expect(BUILTIN_CATALOG.family({ id: 'tool.none', version: 1 })).toBeUndefined();
   });
 
   it('the 18 AWG test lead is about 41 mΩ at 20 °C, derived from resistivity (never a table)', () => {

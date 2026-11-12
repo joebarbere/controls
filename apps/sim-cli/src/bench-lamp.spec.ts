@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import benchLamp from '../scenarios/bench-lamp';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
@@ -31,10 +32,7 @@ export const BENCH_LAMP_SNAPSHOT_HASH = '3fe52bcd091458bce1035c9d27ca8a7f986206b
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
-const fixture = join(
-  WORKSPACE_ROOT,
-  `libs/domain/save-format/fixtures/v2/ctrl/bench-lamp-engine-${SIM_ENGINE_VERSION}.ctrl`,
-);
+const fixture = currentFixture('bench-lamp');
 
 function sim(...argv: string[]): { status: number | null; stdout: string[]; stderr: string } {
   const result = spawnSync(process.execPath, [bundle, ...argv], {

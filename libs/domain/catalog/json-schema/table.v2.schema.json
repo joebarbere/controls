@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "table": {
+      "$ref": "#/$defs/TableName"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "rows": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/TableKey"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "additionalProperties": {}
+      }
+    },
+    "sources": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "real-world",
+              "game-design"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "covers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_-]*)(?:\\.(?:(?:[A-Za-z0-9][A-Za-z0-9_-]*)|\\*))*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "citation",
+          "covers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "table",
+    "version",
+    "title",
+    "rows",
+    "sources",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls catalogue table, catalogue format v2",
+  "description": "One file in content/tables/ (ADR 0016). Zod in @controls/catalog is authoritative; the row shape of each table (materials, insulation, colours) and source coverage are checked by parseCatalog.",
+  "$defs": {
+    "TableName": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A catalogue table name: lower camelCase."
+    },
+    "TableKey": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row key of a catalogue table: lower camelCase."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    }
+  }
+}

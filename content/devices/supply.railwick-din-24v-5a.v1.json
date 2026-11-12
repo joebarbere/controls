@@ -5,11 +5,87 @@
   "brand": "Railwick",
   "modelName": "RW-24-5",
   "category": "source",
-  "sizeMm": { "widthMm": 40, "heightMm": 125, "depthMm": 114 },
+  "sizeMm": {
+    "widthMm": 40,
+    "heightMm": 125,
+    "depthMm": 114
+  },
   "terminals": [
-    { "id": "neg", "label": "V−", "positionMm": { "x": 12, "y": 112, "z": 114 } },
-    { "id": "pos", "label": "V+", "positionMm": { "x": 28, "y": 112, "z": 114 } }
+    {
+      "id": "neg",
+      "label": "V−",
+      "positionMm": {
+        "x": 12,
+        "y": 112,
+        "z": 114
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 24,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 8,
+            "tolerance": 1
+          },
+          "torqueNm": 0.5,
+          "alRated": false,
+          "entryMm": {
+            "x": 12,
+            "y": 125,
+            "z": 110
+          },
+          "exitAxis": "+y"
+        }
+      ]
+    },
+    {
+      "id": "pos",
+      "label": "V+",
+      "positionMm": {
+        "x": 28,
+        "y": 112,
+        "z": 114
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 24,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 8,
+            "tolerance": 1
+          },
+          "torqueNm": 0.5,
+          "alRated": false,
+          "entryMm": {
+            "x": 28,
+            "y": 125,
+            "z": 110
+          },
+          "exitAxis": "+y"
+        }
+      ]
+    }
   ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 40
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "supply.dinPsu",
     "params": {
@@ -51,6 +127,36 @@
       "kind": "game-design",
       "citation": "game-design: the V− and V+ output screw terminals sit on the front face near the top, 16 mm apart; not modelled on a product.",
       "covers": ["terminals"]
+    },
+    {
+      "id": "din-psu-terminal-class",
+      "kind": "real-world",
+      "citation": "The output screw terminals of the 24 V 5 A DIN-rail supply class, from several makers' public datasheets, paraphrased (not one vendor's): copper conductors of about 24 to 12 AWG (some 26 to 14 or 20 to 10), solid, stranded or stranded in a ferrule, a tightening torque of about 0.4 to 0.6 N·m (0.5 N·m is taken) and a strip length of about 7 to 10 mm (8 ± 1 mm is taken). Copper only (not rated for aluminium).",
+      "covers": [
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-counts",
+      "kind": "game-design",
+      "citation": "game-design: one conductor per terminal is the rating; two fit physically and make a worse termination (D8). Not a published figure.",
+      "covers": ["terminals.*.methods.screw.ratedConductors", "terminals.*.methods.screw.maxConductors"]
+    },
+    {
+      "id": "din-psu-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors enter the output terminals from the top face (125 mm) above each screw and leave along +y; not modelled on a product.",
+      "covers": ["terminals.*.methods.screw.entryMm", "terminals.*.methods.screw.exitAxis"]
+    },
+    {
+      "id": "din-psu-din-mount",
+      "kind": "real-world",
+      "citation": "The class clips onto a 35 mm DIN rail (IEC 60715) and takes its body width, about 40 mm (the din-psu-120w-class source), along the rail.",
+      "covers": ["fits.din35"]
     }
   ],
   "extensions": {}

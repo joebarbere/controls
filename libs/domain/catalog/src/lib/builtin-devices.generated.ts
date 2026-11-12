@@ -23,7 +23,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 18,
         "y": 32,
         "z": 98
-      }
+      },
+      "methods": []
     },
     {
       "id": "pos",
@@ -32,9 +33,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 133,
         "y": 32,
         "z": 98
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "battery",
     "params": {
@@ -105,7 +110,34 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 20,
         "y": 80,
         "z": 20
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 20,
+            "y": 90,
+            "z": 20
+          },
+          "exitAxis": "+y"
+        }
+      ]
     },
     {
       "id": "load",
@@ -114,9 +146,44 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 20,
         "y": 10,
         "z": 20
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 20,
+            "y": 0,
+            "z": 20
+          },
+          "exitAxis": "-y"
+        }
+      ]
     }
   ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 40
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "breaker.thermalMagnetic",
     "params": {
@@ -164,6 +231,44 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "sizeMm",
         "terminals"
       ]
+    },
+    {
+      "id": "breaker-terminal-class",
+      "kind": "real-world",
+      "citation": "The screw terminals of 15 A single-pole branch breakers, from several makers' public specification sheets and installation instructions, paraphrased (not one vendor's): marked for copper or aluminium (CU/AL), 14 to 10 AWG (some to 8), solid or stranded, with a marked tightening torque of about 4.0 N·m (35 lb·in) for 14 to 10 AWG. The torque is the fictional breaker's marking; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "breaker-terminal-counts",
+      "kind": "game-design",
+      "citation": "game-design: the fictional breaker is marked for one conductor per terminal (some makers list two of 14 to 10 AWG); two physically fit under the clamp, and a second makes a worse termination (D8). The 13 ± 2 mm strip length is chosen to fill the clamp without exposed copper; it is not a published figure.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.stripLengthMm"
+      ]
+    },
+    {
+      "id": "breaker-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors enter the line terminal from the top face and the load terminal from the bottom face of the 90 mm tall base, leaving along ±y; not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "breaker-din-mount",
+      "kind": "game-design",
+      "citation": "game-design: the breaker's base clips onto a 35 mm DIN rail (IEC 60715) and takes its full 40 mm base width along the rail (D12's demo puts it on a DIN mount). A real one-pole DIN-rail breaker is one module, about 17.5 to 18 mm wide; the base's width is kept so the entry's size is unchanged.",
+      "covers": [
+        "fits.din35"
+      ]
     }
   ],
   "extensions": {}
@@ -188,7 +293,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 8,
         "y": 15,
         "z": 12
-      }
+      },
+      "methods": []
     },
     {
       "id": "b",
@@ -197,9 +303,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 62,
         "y": 15,
         "z": 12
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "fuse",
     "params": {
@@ -272,7 +382,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 10,
         "y": 25,
         "z": 12
-      }
+      },
+      "methods": []
     },
     {
       "id": "b",
@@ -281,9 +392,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 80,
         "y": 25,
         "z": 12
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "heater",
     "params": {
@@ -334,7 +449,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 10,
         "y": 25,
         "z": 12
-      }
+      },
+      "methods": []
     },
     {
       "id": "b",
@@ -343,9 +459,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 40,
         "y": 25,
         "z": 12
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "lamp.incandescent",
     "params": {
@@ -377,7 +497,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "filament-time-constant",
       "kind": "game-design",
-      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds, its inrush decaying over a few tens of milliseconds. 50 ms is taken as the small-signal thermal time constant at the rated point; with the 5 W rating it implies about 0.4 mJ/K of heat capacity, a filament of a couple of milligrams of tungsten.",
+      "citation": "game-design inside published behaviour: a small signal lamp's filament heats and cools in tens of milliseconds, its inrush decaying over a few tens of milliseconds. 50 ms is taken as the small-signal thermal time constant at the rated point. With the engine-6 lamp model it implies a heat capacity of about 0.34 mJ/K, where a physics estimate for a W5W filament gives about 0.17 to 0.27 mJ/K (a time constant of about 24 to 39 ms): 50 ms is at the slow end, kept so the bench demo keeps its meaning (P3 decision D17); the 120 V lamp uses the recalibrated pairing.",
       "covers": [
         "model.params.thermalTimeConstantMs"
       ]
@@ -411,6 +531,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "category": "lead",
   "sizeMm": null,
   "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "lead",
     "params": {
@@ -427,7 +550,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "annealed-copper-standard",
       "kind": "real-world",
-      "citation": "International Annealed Copper Standard (IEC 60028, 1925): annealed copper has a resistivity of 1/58 Ω·mm²/m (1.7241 × 10⁻⁸ Ω·m) at 20 °C (293.15 K), and a temperature coefficient of resistance of 0.00393 per kelvin at 20 °C. The lead's resistance is computed from these (resistivity × length ÷ area, with the temperature coefficient), never taken from a conductor table.",
+      "citation": "International Annealed Copper Standard (adopted by the IEC in 1913, published as IEC 60028, whose 1925 edition is a revision): annealed copper has a resistivity of 1/58 Ω·mm²/m (1.7241 × 10⁻⁸ Ω·m) at 20 °C (293.15 K), and a temperature coefficient of resistance of 0.00393 per kelvin at 20 °C. The lead's resistance is computed from these (resistivity × length ÷ area, with the temperature coefficient), never taken from a conductor table.",
       "covers": [
         "model.params.resistivityOhmM",
         "model.params.temperatureCoefficientPerK",
@@ -481,7 +604,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 8,
         "y": 20,
         "z": 12
-      }
+      },
+      "methods": []
     },
     {
       "id": "b",
@@ -490,9 +614,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 62,
         "y": 20,
         "z": 12
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "resistor",
     "params": {
@@ -543,7 +671,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 56,
         "y": 0,
         "z": 35
-      }
+      },
+      "methods": []
     },
     {
       "id": "pos",
@@ -552,9 +681,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 75,
         "y": 0,
         "z": 35
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "supply.bench",
     "params": {
@@ -631,7 +764,35 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 12,
         "y": 112,
         "z": 114
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 24,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 8,
+            "tolerance": 1
+          },
+          "torqueNm": 0.5,
+          "alRated": false,
+          "entryMm": {
+            "x": 12,
+            "y": 125,
+            "z": 110
+          },
+          "exitAxis": "+y"
+        }
+      ]
     },
     {
       "id": "pos",
@@ -640,9 +801,45 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 28,
         "y": 112,
         "z": 114
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 24,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 8,
+            "tolerance": 1
+          },
+          "torqueNm": 0.5,
+          "alRated": false,
+          "entryMm": {
+            "x": 28,
+            "y": 125,
+            "z": 110
+          },
+          "exitAxis": "+y"
+        }
+      ]
     }
   ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 40
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "supply.dinPsu",
     "params": {
@@ -691,6 +888,44 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "terminals"
       ]
+    },
+    {
+      "id": "din-psu-terminal-class",
+      "kind": "real-world",
+      "citation": "The output screw terminals of the 24 V 5 A DIN-rail supply class, from several makers' public datasheets, paraphrased (not one vendor's): copper conductors of about 24 to 12 AWG (some 26 to 14 or 20 to 10), solid, stranded or stranded in a ferrule, a tightening torque of about 0.4 to 0.6 N·m (0.5 N·m is taken) and a strip length of about 7 to 10 mm (8 ± 1 mm is taken). Copper only (not rated for aluminium).",
+      "covers": [
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-counts",
+      "kind": "game-design",
+      "citation": "game-design: one conductor per terminal is the rating; two fit physically and make a worse termination (D8). Not a published figure.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors enter the output terminals from the top face (125 mm) above each screw and leave along +y; not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "din-psu-din-mount",
+      "kind": "real-world",
+      "citation": "The class clips onto a 35 mm DIN rail (IEC 60715) and takes its body width, about 40 mm (the din-psu-120w-class source), along the rail.",
+      "covers": [
+        "fits.din35"
+      ]
     }
   ],
   "extensions": {}
@@ -715,7 +950,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 10,
         "y": 20,
         "z": 12
-      }
+      },
+      "methods": []
     },
     {
       "id": "b",
@@ -724,9 +960,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 50,
         "y": 20,
         "z": 12
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "switch.spst",
     "params": {}
@@ -771,7 +1011,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 50,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "l2",
@@ -780,7 +1021,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 150,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "l3",
@@ -789,7 +1031,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 250,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "n",
@@ -798,9 +1041,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 350,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "utility.threePhase",
     "params": {
@@ -862,7 +1109,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 50,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "l2",
@@ -871,7 +1119,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 150,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "l3",
@@ -880,7 +1129,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 250,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     },
     {
       "id": "n",
@@ -889,9 +1139,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 350,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "utility.threePhase",
     "params": {
@@ -953,7 +1207,34 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 50,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 50,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
     },
     {
       "id": "l2",
@@ -962,7 +1243,34 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 250,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 250,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
     },
     {
       "id": "n",
@@ -971,9 +1279,39 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "x": 150,
         "y": 250,
         "z": 200
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 150,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "utility.splitPhase",
     "params": {
@@ -1010,6 +1348,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "sizeMm",
         "terminals"
+      ]
+    },
+    {
+      "id": "stand-in-terminals",
+      "kind": "game-design",
+      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so its terminals take a branch circuit the way a 15 A breaker's and a neutral bar's do: one 14 to 10 AWG copper or aluminium conductor each, solid or stranded, a 13 ± 2 mm strip and a 4.0 N·m marked torque (the values of the breaker-terminal class in breaker.saltmere-1p-15a). Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
+      "covers": [
+        "terminals.*.methods.screw"
       ]
     }
   ],

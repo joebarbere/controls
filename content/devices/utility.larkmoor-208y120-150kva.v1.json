@@ -5,16 +5,64 @@
   "brand": "Larkmoor Power",
   "modelName": "LP-3W150",
   "category": "source",
-  "sizeMm": { "widthMm": 400, "heightMm": 300, "depthMm": 200 },
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 300,
+    "depthMm": 200
+  },
   "terminals": [
-    { "id": "l1", "label": "L1", "positionMm": { "x": 50, "y": 250, "z": 200 } },
-    { "id": "l2", "label": "L2", "positionMm": { "x": 150, "y": 250, "z": 200 } },
-    { "id": "l3", "label": "L3", "positionMm": { "x": 250, "y": 250, "z": 200 } },
-    { "id": "n", "label": "N", "positionMm": { "x": 350, "y": 250, "z": 200 } }
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 50,
+        "y": 250,
+        "z": 200
+      },
+      "methods": []
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 150,
+        "y": 250,
+        "z": 200
+      },
+      "methods": []
+    },
+    {
+      "id": "l3",
+      "label": "L3",
+      "positionMm": {
+        "x": 250,
+        "y": 250,
+        "z": 200
+      },
+      "methods": []
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 350,
+        "y": 250,
+        "z": 200
+      },
+      "methods": []
+    }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "utility.threePhase",
-    "params": { "ratedKva": 150, "percentImpedance": 4, "xOverR": 3, "lineToNeutralV": 120 }
+    "params": {
+      "ratedKva": 150,
+      "percentImpedance": 4,
+      "xOverR": 3,
+      "lineToNeutralV": 120
+    }
   },
   "controls": [],
   "sources": [

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "sim": {
+      "type": "object",
+      "properties": {
+        "conductorTempK": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endADegradation": {
+          "type": "number",
+          "minimum": 1
+        },
+        "endAState": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "intermittentClosed",
+            "intermittentOpen",
+            "arcing"
+          ]
+        },
+        "endATempK": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endATerminationId": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endBDegradation": {
+          "type": "number",
+          "minimum": 1
+        },
+        "endBState": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "intermittentClosed",
+            "intermittentOpen",
+            "arcing"
+          ]
+        },
+        "endBTempK": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endBTerminationId": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "insulationDamaged": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "conductorTempK",
+        "endADegradation",
+        "endAState",
+        "endATempK",
+        "endATerminationId",
+        "endBDegradation",
+        "endBState",
+        "endBTempK",
+        "endBTerminationId",
+        "insulationDamaged"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "state",
+    "sim"
+  ],
+  "additionalProperties": false,
+  "title": "Connection state of model kind lead",
+  "description": "ConnectionV3.state (commanded) and ConnectionV3.sim (sim-owned) of a lead connection (ADR 0015). Every key is present; null means absent."
+}

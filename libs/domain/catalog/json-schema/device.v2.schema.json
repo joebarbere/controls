@@ -1,0 +1,886 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "brand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "modelName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "source",
+        "load",
+        "switch",
+        "protection",
+        "lead",
+        "conductor",
+        "enclosure"
+      ]
+    },
+    "sizeMm": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "widthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "heightMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "depthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "widthMm",
+            "heightMm",
+            "depthMm"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "terminals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/TerminalId"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "positionMm": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false
+          },
+          "methods": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "$ref": "#/$defs/TerminationMethodId"
+                },
+                "ratedConductors": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16
+                },
+                "maxConductors": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16
+                },
+                "awgRange": {
+                  "type": "object",
+                  "properties": {
+                    "smallest": {
+                      "$ref": "#/$defs/Awg"
+                    },
+                    "largest": {
+                      "$ref": "#/$defs/Awg"
+                    }
+                  },
+                  "required": [
+                    "smallest",
+                    "largest"
+                  ],
+                  "additionalProperties": false
+                },
+                "stranding": {
+                  "minItems": 1,
+                  "maxItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "solid",
+                      "stranded",
+                      "strandedFerrule"
+                    ]
+                  }
+                },
+                "stripLengthMm": {
+                  "type": "object",
+                  "properties": {
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "tolerance": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 50
+                    }
+                  },
+                  "required": [
+                    "nominal",
+                    "tolerance"
+                  ],
+                  "additionalProperties": false
+                },
+                "torqueNm": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "alRated": {
+                  "type": "boolean"
+                },
+                "entryMm": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "y": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "z": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "z"
+                  ],
+                  "additionalProperties": false
+                },
+                "exitAxis": {
+                  "type": "string",
+                  "enum": [
+                    "+x",
+                    "-x",
+                    "+y",
+                    "-y",
+                    "+z",
+                    "-z"
+                  ]
+                }
+              },
+              "required": [
+                "method",
+                "ratedConductors",
+                "maxConductors",
+                "awgRange",
+                "stranding",
+                "stripLengthMm",
+                "torqueNm",
+                "alRated",
+                "entryMm",
+                "exitAxis"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "positionMm",
+          "methods"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "mounts": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "widthMm": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "type",
+          "widthMm"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "enclosure": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mounts": {
+              "maxItems": 64,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/MountId"
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "positionMm": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "z": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "z"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "axis": {
+                    "type": "string",
+                    "enum": [
+                      "+x",
+                      "-x",
+                      "+y",
+                      "-y",
+                      "+z",
+                      "-z"
+                    ]
+                  },
+                  "facing": {
+                    "type": "string",
+                    "enum": [
+                      "+x",
+                      "-x",
+                      "+y",
+                      "-y",
+                      "+z",
+                      "-z"
+                    ]
+                  },
+                  "extentMm": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "positionMm",
+                  "axis",
+                  "facing",
+                  "extentMm"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "entries": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/EntryId"
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "tradeSize": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "1",
+                          "2",
+                          "1/2",
+                          "3/4",
+                          "1-1/4",
+                          "1-1/2"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxCables": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "internalClamp": {
+                    "type": "boolean"
+                  },
+                  "positionMm": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "z": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "z"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "axis": {
+                    "type": "string",
+                    "enum": [
+                      "+x",
+                      "-x",
+                      "+y",
+                      "-y",
+                      "+z",
+                      "-z"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "tradeSize",
+                  "maxCables",
+                  "internalClamp",
+                  "positionMm",
+                  "axis"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "interiorVolumeMm3": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "mounts",
+            "entries",
+            "interiorVolumeMm3"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conductor": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "awg": {
+              "$ref": "#/$defs/Awg"
+            },
+            "stranding": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "stranded"
+              ]
+            },
+            "strandCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "material": {
+              "$ref": "#/$defs/TableRef"
+            },
+            "insulation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TableRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "insulationThicknessMm": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "colours": {
+              "minItems": 1,
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "base": {
+                    "$ref": "#/$defs/ColourId"
+                  },
+                  "stripe": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/ColourId"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "base",
+                  "stripe"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "awg",
+            "stranding",
+            "strandCount",
+            "material",
+            "insulation",
+            "insulationThicknessMm",
+            "colours"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)*$"
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-zA-Z0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "toggle"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "setpoint"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type",
+              "unit",
+              "min",
+              "max",
+              "step"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "selector"
+              },
+              "options": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                }
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type",
+              "options"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "sources": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "real-world",
+              "game-design"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "covers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_-]*)(?:\\.(?:(?:[A-Za-z0-9][A-Za-z0-9_-]*)|\\*))*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "citation",
+          "covers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "title",
+    "brand",
+    "modelName",
+    "category",
+    "sizeMm",
+    "terminals",
+    "mounts",
+    "enclosure",
+    "conductor",
+    "model",
+    "controls",
+    "sources",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls device catalogue entry, catalogue format v2",
+  "description": "One file in content/devices/ (ADR 0013, ADR 0016). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls), the registries (methods, mount and entry types), the tables, and source coverage.",
+  "$defs": {
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    },
+    "TerminationMethodId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A termination method id: lower camelCase."
+    },
+    "Awg": {
+      "type": "integer",
+      "minimum": -3,
+      "maximum": 40,
+      "description": "An AWG size as an integer designation: 4/0 = -3, 3/0 = -2, 2/0 = -1, 1/0 = 0, then 1 to 40."
+    },
+    "MountId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A mount id within one catalogue entry (TerminalId grammar)."
+    },
+    "EntryId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "An enclosure entry id within one catalogue entry."
+    },
+    "TableRef": {
+      "type": "object",
+      "properties": {
+        "table": {
+          "$ref": "#/$defs/TableName"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "key": {
+          "$ref": "#/$defs/TableKey"
+        }
+      },
+      "required": [
+        "table",
+        "version",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "A pinned catalogue table row: { table, version, key }."
+    },
+    "TableName": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A catalogue table name: lower camelCase."
+    },
+    "TableKey": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row key of a catalogue table: lower camelCase."
+    },
+    "ColourId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row of the catalogue colour table: lower camelCase, at most 32."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    }
+  }
+}

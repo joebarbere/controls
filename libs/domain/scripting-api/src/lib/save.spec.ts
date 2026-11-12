@@ -38,8 +38,12 @@ describe('the .ctrl fixtures', () => {
         expect(result.replay.status).toBe('absent');
       } else if (engineCompatible(result.manifest, BUILD_ENGINE_VERSIONS) === 'engine-changed') {
         // Saves from engines before this one (the world v2 kickoff's engine 1, which never ran, and
-        // F2.3a's engine 3): never verified, never refused.
-        expect(result.manifest.simEngineVersion).toBeLessThan(SIM_ENGINE_VERSION);
+        // F2.3a's engine 3), or from an older catalogue (the engine-6 fixtures are catalogue 1, P3's
+        // build catalogue 2): never verified, never refused.
+        const older =
+          result.manifest.simEngineVersion < SIM_ENGINE_VERSION ||
+          result.manifest.catalogVersion < BUILD_ENGINE_VERSIONS.catalogVersion;
+        expect(older).toBe(true);
         expect(result.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
         // world.json loads as saved, its devices' sim bags included, but never its solution record: another
         // engine's models computed it, so the engine solves again at the save's tick (`sim: null` at the
@@ -291,7 +295,7 @@ describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
     expect(createSaveManifest()).toMatchObject({
       schemaVersion: 2,
-      catalogVersion: 1,
+      catalogVersion: 2,
       simEngineVersion: SIM_ENGINE_VERSION,
     });
   });

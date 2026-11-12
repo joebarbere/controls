@@ -18,7 +18,31 @@
         "x": 20,
         "y": 80,
         "z": 20
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 20,
+            "y": 90,
+            "z": 20
+          },
+          "exitAxis": "+y"
+        }
+      ]
     },
     {
       "id": "load",
@@ -27,9 +51,41 @@
         "x": 20,
         "y": 10,
         "z": 20
-      }
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 20,
+            "y": 0,
+            "z": 20
+          },
+          "exitAxis": "-y"
+        }
+      ]
     }
   ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 40
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "breaker.thermalMagnetic",
     "params": {
@@ -71,6 +127,39 @@
       "kind": "game-design",
       "citation": "game-design: a single-pole breaker on a 40 × 90 mm base, 70 mm tall, with the line terminal at the top and the load terminal at the bottom; standalone (no panel until P4); not modelled on a product.",
       "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "breaker-terminal-class",
+      "kind": "real-world",
+      "citation": "The screw terminals of 15 A single-pole branch breakers, from several makers' public specification sheets and installation instructions, paraphrased (not one vendor's): marked for copper or aluminium (CU/AL), 14 to 10 AWG (some to 8), solid or stranded, with a marked tightening torque of about 4.0 N·m (35 lb·in) for 14 to 10 AWG. The torque is the fictional breaker's marking; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "breaker-terminal-counts",
+      "kind": "game-design",
+      "citation": "game-design: the fictional breaker is marked for one conductor per terminal (some makers list two of 14 to 10 AWG); two physically fit under the clamp, and a second makes a worse termination (D8). The 13 ± 2 mm strip length is chosen to fill the clamp without exposed copper; it is not a published figure.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.stripLengthMm"
+      ]
+    },
+    {
+      "id": "breaker-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors enter the line terminal from the top face and the load terminal from the bottom face of the 90 mm tall base, leaving along ±y; not modelled on a product.",
+      "covers": ["terminals.*.methods.screw.entryMm", "terminals.*.methods.screw.exitAxis"]
+    },
+    {
+      "id": "breaker-din-mount",
+      "kind": "game-design",
+      "citation": "game-design: the breaker's base clips onto a 35 mm DIN rail (IEC 60715) and takes its full 40 mm base width along the rail (D12's demo puts it on a DIN mount). A real one-pole DIN-rail breaker is one module, about 17.5 to 18 mm wide; the base's width is kept so the entry's size is unchanged.",
+      "covers": ["fits.din35"]
     }
   ],
   "extensions": {}

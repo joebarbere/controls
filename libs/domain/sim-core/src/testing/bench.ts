@@ -77,9 +77,18 @@ export const TEST_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
 };
 
 const size = { widthMm: 10, heightMm: 10, depthMm: 10 };
-const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 } });
+/** A clip-only test terminal (catalogue v2: no termination methods). */
+const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 }, methods: [] });
 const testSource = (covers: string[]) => [{ id: 'test', kind: 'game-design', citation: 'game-design: test', covers }];
-const base = { brand: 'Testbrand', modelName: 'T-1', controls: [], extensions: {} };
+const base = {
+  brand: 'Testbrand',
+  modelName: 'T-1',
+  mounts: [],
+  enclosure: null,
+  conductor: null,
+  controls: [],
+  extensions: {},
+};
 
 export const TEST_DOCUMENTS: readonly unknown[] = [
   {

@@ -5,17 +5,54 @@
   "brand": "Brindlecore",
   "modelName": "BX-217",
   "category": "source",
-  "sizeMm": { "widthMm": 130, "heightMm": 270, "depthMm": 160 },
+  "sizeMm": {
+    "widthMm": 130,
+    "heightMm": 270,
+    "depthMm": 160
+  },
   "terminals": [
-    { "id": "neg", "label": "−", "positionMm": { "x": 56, "y": 0, "z": 35 } },
-    { "id": "pos", "label": "+", "positionMm": { "x": 75, "y": 0, "z": 35 } }
+    {
+      "id": "neg",
+      "label": "−",
+      "positionMm": {
+        "x": 56,
+        "y": 0,
+        "z": 35
+      },
+      "methods": []
+    },
+    {
+      "id": "pos",
+      "label": "+",
+      "positionMm": {
+        "x": 75,
+        "y": 0,
+        "z": 35
+      },
+      "methods": []
+    }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "supply.bench",
-    "params": { "maxVoltageV": 30, "maxCurrentA": 5, "outputResistanceOhm": 0.001 }
+    "params": {
+      "maxVoltageV": 30,
+      "maxCurrentA": 5,
+      "outputResistanceOhm": 0.001
+    }
   },
   "controls": [
-    { "id": "setpointV", "label": "Voltage", "type": "setpoint", "unit": "V", "min": 0, "max": 30, "step": 0.01 },
+    {
+      "id": "setpointV",
+      "label": "Voltage",
+      "type": "setpoint",
+      "unit": "V",
+      "min": 0,
+      "max": 30,
+      "step": 0.01
+    },
     {
       "id": "currentLimitA",
       "label": "Current limit",
@@ -25,7 +62,11 @@
       "max": 5,
       "step": 0.001
     },
-    { "id": "outputOn", "label": "Output", "type": "toggle" }
+    {
+      "id": "outputOn",
+      "label": "Output",
+      "type": "toggle"
+    }
   ],
   "sources": [
     {
