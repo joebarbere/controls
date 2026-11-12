@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 2 (Circuit engine) complete pending the manual WebGPU and frame-time checks (the user's) and the lamp-cooling decision; version 0.2.0. Next steps: the P2 plan's "Next steps (recorded 2026-11-04)", then `/release minor`.** Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer`. Landed: world v2 and catalogue v1, F2.1–F2.6 (netlist, DC/AC MNA, engine loop, sim worker, sources, loads, protection, overlays, inspector, traces) and the phase-acceptance E2E. **Next: v0.3.0 release** (`/release minor`, needs the user). Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) complete; version 0.3.0, the v0.3.0 release is being cut (pending the release build and the user publishing the draft).** Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer`. Landed: world v2 and catalogue v1, F2.1–F2.6 (netlist, DC/AC MNA, engine loop, sim worker, sources, loads, protection, overlays, inspector, traces) and the phase-acceptance E2E. **Next:** `release-engineer` packages and tags v0.3.0 on the user's confirmation, then the P2 Close-out and the Phase 3 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 

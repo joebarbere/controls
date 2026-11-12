@@ -798,6 +798,6 @@ Numbers are assigned in the order the ADRs land.
 ## Close-out
 
 1. [ ] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P2 narrative, `schemaVersion` 2 and `catalogVersion` 1.
-2. [ ] `version-keeper`: `0.2.0 → 0.3.0`.
+2. [x] `version-keeper`: `0.2.0 → 0.3.0`.
 3. [ ] `release-engineer`: package, smoke test (new sandbox, the bench demo lights the lamp, save and load mid-sim), tag on confirmation, check the draft. The user publishes.
 4. [ ] Mark P2 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P3 kickoff writes `plans/phase-3-*.md` and creates `content-designer`. P3 must keep test leads working alongside `wire.*` (world v3).

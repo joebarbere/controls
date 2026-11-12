@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
+Phase 2, "First light": the circuit engine and power sources. The simulator runs what is wired. Wire a battery, a switch and a lamp on the bench with test leads, flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. DC and AC circuit solvers run in a worker at 1 kHz; batteries, bench and DIN-rail supplies, utility services, lamps, resistors, heaters, fuses and breakers are modelled. Saves move to `schemaVersion` 2; every 0.2.0 save still loads.
+
 ### Added
 
 - **Recovery from a renderer crash** (P2 follow-up, ADR 0011 §10; [UI shell](docs/architecture/ui-shell.md#renderer-crash-recovery)). If the game window's renderer process crashes, Controls reloads the window and the main menu says so, with Continue focused to resume your latest autosave; nothing is written or overwritten on the way. Three crashes within a minute stop the reloading and ask whether to Retry or Quit, and a window that stops responding asks whether to Wait or Reload. The pointer to your last save is now written at once rather than after the settings debounce, so a crash right after an autosave still continues from it.
@@ -229,6 +233,7 @@ Phase 0, "Hello, panel": the cross-platform walking skeleton. Nothing playable y
 - Documentation skeleton: README, this changelog, the docs hub, architecture overview, caveats, ADRs 0001–0004, glossary, history, new-developer and releasing guides, `THIRD_PARTY_NOTICES.md` and the MIT licence.
 - Claude Code setup: `CLAUDE.md`, the `docs-keeper`, `version-keeper`, `release-engineer`, `electron-platform-engineer` and `test-engineer` agents, and the `/verify`, `/docs-sync` and `/release` skills.
 
-[Unreleased]: https://github.com/joebarbere/controls/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/joebarbere/controls/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/joebarbere/controls/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/joebarbere/controls/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/joebarbere/controls/releases/tag/v0.1.0
