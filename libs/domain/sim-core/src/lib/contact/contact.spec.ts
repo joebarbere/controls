@@ -215,6 +215,9 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
     expect(ohm(end(PLATE, { stripLengthMm: 30 }))).toBe(3e-4);
     // 30 % of the depth is in the loose regime: r_eff = 0.3, 6.7243 mΩ.
     close(ohm(end(PLATE, { stripLengthMm: 3 })), 6.72434164902526e-3, 1e-12);
+    // With a ferrule or lug the clamp grips the accessory: no strip factor, only the crimp (0.05 mΩ).
+    const lug = { ref: { id: 'lug.test-ring-14', version: 1 }, crimpQuality: 1 };
+    close(ohm(end(PLATE, { stripLengthMm: 3, accessory: lug })), 0.35e-3, 1e-12);
   });
 
   it('golden 9: spring cage and back-stab at nominal strip; a twist-on inside its combination', () => {

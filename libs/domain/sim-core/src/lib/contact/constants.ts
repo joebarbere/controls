@@ -72,7 +72,7 @@ export const TERMINAL_RESISTIVITY_OHM_M: SourcedConstant = {
   unit: 'Ω·m',
   kind: 'real-world',
   source:
-    'real-world: the International Annealed Copper Standard defines 100 % IACS as 1/58 Ω·mm²/m at 20 °C (NBS Handbook 100, 1966, read; the materials table’s copper row). Holm: the constriction resistance between two members scales with their mean resistivity (Greenwood 1966, read), so an aluminium conductor (61.0 % IACS, NBS Handbook 109) on a terminal taken as copper gives (ρ_Al + ρ_Cu)/(2ρ_Cu) = 1.31966. The terminal is taken as copper, an abstraction: brass or plated steel would give a smaller ratio.',
+    'real-world: the International Annealed Copper Standard defines 100 % IACS as 1/58 Ω·mm²/m at 20 °C (NBS Handbook 100, 1966, read; the materials table’s copper row). Holm: the constriction resistance between two members scales with their mean resistivity (Greenwood 1966, read), so an aluminium conductor (61.0 % IACS, NBS Handbook 109) on a terminal taken as copper gives (ρ_Al + ρ_Cu)/(2ρ_Cu) = 1.31966. The terminal is taken as copper, an abstraction: brass or plated steel would give a smaller ratio. The factor scales resistivity only: it ignores aluminium’s lower hardness (a larger a-spot at the same force, so a lower resistance) and its oxide film, the dominant real effect, which F3.6’s degradation stands in for.',
 };
 
 /**

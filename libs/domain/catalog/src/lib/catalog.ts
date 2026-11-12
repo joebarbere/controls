@@ -418,6 +418,16 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
         ) {
           add(path, "combination.awg must lie inside the method's awgRange");
         }
+        // The minimum total is checked only once the splice holds minConductors (a splice is built one
+        // conductor at a time). If minConductors of the thinnest size could fall below it, whether a
+        // landing is refused would depend on the order the conductors were landed in, so it may not.
+        const thinnest = gaugeRow(combination.awg.smallest)?.areaUm2 ?? 0;
+        if (combination.totalAreaUm2.min > combination.minConductors * thinnest) {
+          add(
+            path,
+            'combination.totalAreaUm2.min must not exceed minConductors × the thinnest size’s areaUm2 (refusals would depend on landing order)',
+          );
+        }
       }
     });
   }

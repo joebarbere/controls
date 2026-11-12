@@ -767,11 +767,11 @@ flowchart LR
 ```
 
 - **Calibrated, then shaped.** R₀ (`contactOhm`) is a measured good connection (0.3 mΩ for the screw class, NBS BSS 103). Holm's R ∝ F^−½ holds only while the clamp is seated (from 40 % of the marked torque); below, a loose film term rises quadratically to BSS 128's 100 mΩ "loose" class at zero torque. 20 % torque gives 25.47 mΩ, 84.9 × R₀.
-- **The other inputs** scale the clamp ratio: a strip shorter than the clamp depth, more conductors than the clamp is rated for (shared evenly), bare strands under a binding screw (× 0.5). A ferrule or lug adds a crimp on the same seated/loose law (0.05 mΩ when good); nicks divide by the intact share; a non-copper conductor scales by the two members' mean resistivity (aluminium 1.3197 ×). Aluminium on an unrated method only multiplies the degradation rate (F3.6).
+- **The other inputs** scale the clamp ratio: a strip shorter than the clamp depth (bare conductors only; a ferrule or lug is what the clamp grips), more conductors than the clamp is rated for (shared evenly), bare strands under a binding screw (× 0.5). A ferrule or lug adds a crimp on the same seated/loose law (0.05 mΩ when good); nicks divide by the intact share; a non-copper conductor scales by the two members' mean resistivity (aluminium 1.3197 ×). Aluminium on an unrated method only multiplies the degradation rate (F3.6).
 - **Two parts.** The constriction part will follow the metal's temperature in F3.6's connection bank; the film part (loose term and crimp) doesn't.
 - **Counted, not stored.** The compiler counts conductor ends per (terminal, method) on every compile (netlisted or not, never lead clips) and rebuilds a conductor's element when a count or spec changes: a values-only compile, never a topology change.
 - **Twist-on splices** (`splice.twistOn`) are one terminal; each conductor in one gets the nut's R₀ with r = 1. Which combinations may be landed is a command check (`combinationProblem`, ADR 0018 §4.4).
-- **Termination outcomes** come from `resolveTermination` in `world-model` at landing time ([commands](commands.md)): the hole's nicks (capped at its geometric reach), the crimp quality, and the achieved torque (a torque driver within its accuracy; a plain screwdriver uniform in 0.3–1.3 × the mark, so about one landing in ten is loose).
+- **Termination outcomes** come from `resolveTermination` in `world-model` at landing time ([commands](commands.md)): the hole's nicks (capped at its geometric reach), the crimp quality, and the achieved torque (a torque driver within its accuracy; a plain screwdriver uniform in 0.15–1.45 × the mark, so about half land under 80 % and about one in five is loose).
 
 ## Not yet
 

@@ -525,6 +525,11 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(found([{ ...nut, combination: { ...combination, totalAreaUm2: { min: 9, max: 8 } } }])).toContain(
       'totalAreaUm2.min must not exceed its max',
     );
+    // Two of the thinnest (14 AWG) are 4 161 820 µm²: a higher minimum would make refusals order-dependent.
+    expect(
+      found([{ ...nut, combination: { ...combination, totalAreaUm2: { min: 4161821, max: 9926310 } } }]),
+    ).toContain('combination.totalAreaUm2.min must not exceed minConductors');
+    expect(found([nut])).not.toContain('combination.totalAreaUm2.min must not exceed minConductors');
     const covered = box({
       terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [nut] }],
       sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3']),

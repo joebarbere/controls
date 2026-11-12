@@ -367,8 +367,20 @@ export function checkLanding(
     return fail('terminal-full', `Terminal "${at.terminal}" already holds ${spec.maxConductors} by ${spec.method}`);
   }
   // A twist-on splice: the conductors it would hold against its rated combination (ADR 0018 §4.4).
+  // Fails closed: a landed conductor whose entry this catalogue can't size refuses the landing, never
+  // a guessed size. Kept before checkSteps: the refusal order is replay-visible.
   if (spec.combination !== null) {
-    const awgs = landedHere.map((c) => catalog.device(c.ref)?.conductor?.awg ?? conductor.awg);
+    const awgs: number[] = [];
+    for (const c of landedHere) {
+      const awg = catalog.device(c.ref)?.conductor?.awg;
+      if (awg === undefined) {
+        return fail(
+          'combination-out-of-range',
+          `Connection ${c.id} in the splice has no conductor size in this catalogue`,
+        );
+      }
+      awgs.push(awg);
+    }
     awgs.push(conductor.awg);
     const problem = combinationProblem(spec.combination, awgs);
     if (problem !== null) return fail('combination-out-of-range', problem);

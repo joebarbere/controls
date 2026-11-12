@@ -18,7 +18,8 @@ import {
  * resolveTermination (ADR 0015): pure, each step from its own stream, keyed by the termination id.
  * The golden vectors (arguments, seed, termination id → outcome, bit-exact) freeze it at v0.4.0. They
  * were re-pinned by F3.3 part 1 (ADR 0018), which decided the game-design numbers: the geometric nick
- * cap, the under-crimp at 0.25 and 0.3 per AWG step, and the plain screwdriver biased low.
+ * cap, the under-crimp at 0.25 and 0.3 per AWG step, and the plain screwdriver biased low; the
+ * realism review then widened the screwdriver to [0.15, 1.45) × the mark, re-pinning vectors 3, 6, 7.
  */
 
 const catalog = WIRING_TEST_CATALOG;
@@ -82,14 +83,14 @@ describe('resolveTermination', () => {
      * 2. h16st on 14 solid, driver at 0.8: model 2 × 0.15 + 0.05 = 0.35; the cap is the area outside a
      *    16 AWG stranded hole, 1 − (1.3087 × 9/7) / 2.08091 = 0.191405, so the base is 0.191405 and the
      *    spread (× 1.133) is capped back to it: 0.191405 (the old ±25 % spread on 0.35 gave 0.396).
-     * 3. h14s, plain screwdriver: 4 · (0.8 + 0.5 (2u − 1)) with 2u − 1 = −0.16582: 2.8684 N·m (r 0.717).
+     * 3. h14s, plain screwdriver: 4 · (0.8 + 0.65 (2u − 1)) with 2u − 1 = −0.16582: 2.7689 N·m (r 0.692).
      * 4. h14st + ferrule on 14 stranded, die sq-10 (not the ferrule's, 2 AWG steps outside 12–10):
-     *    max(0, 0.25 − 2 × 0.3) = 0, an open crimp; driver at 4 N·m.
+     *    max(0, 0.25 − 2 × 0.3) = 0, a loose crimp (0.05/√0.4 + 100 mΩ ≈ 100.08 mΩ, not open); driver at 4 N·m.
      * 5. spring cage, ferrule on its own die: crimp 1, no torque.
      * 6. h16st + plain screwdriver: nick 0.191405 × (1 − 0.25 + 0.5u) = 0.14435 (u = 0.0083); torque
-     *    4 · (0.8 + 0.5 · (−0.68278)) = 1.8344 N·m (r 0.459, just seated).
-     * 7. h14s + plain screwdriver, seed 7, id 4: 2u − 1 = −0.88684, 4 · (0.8 − 0.44342) = 1.4263 N·m,
-     *    r = 0.3566 < 0.4: a hand-tightened landing in ADR 0018's loose regime (1.65 mΩ, 5.5 × R₀).
+     *    4 · (0.8 + 0.65 · (−0.68278)) = 1.4248 N·m (r 0.356, in the loose regime: 1.65 mΩ).
+     * 7. h14s + plain screwdriver, seed 7, id 4: 2u − 1 = −0.88684, 4 · (0.8 − 0.57645) = 0.8942 N·m,
+     *    r = 0.2236 < 0.4: a hand-tightened landing deep in ADR 0018's loose regime (19.9 mΩ, 66 × R₀).
      */
     const cases = [
       resolveTermination(
@@ -179,7 +180,7 @@ describe('resolveTermination', () => {
     expect(cases.slice(0, 4)).toStrictEqual([
       outcome(1, 0, 3.977147615849972),
       outcome(2, 0.19140458467003085, 0.7955975450575352),
-      outcome(3, 0, 2.8684175543487074),
+      outcome(3, 0, 2.7689428206533195),
       outcome(4, 0, 3.821195868700743, { ref: { id: 'ferrule.test-14', version: 1 }, crimpQuality: 0 }),
     ]);
     expect(cases.slice(4)).toStrictEqual([
@@ -192,8 +193,8 @@ describe('resolveTermination', () => {
         torqueNm: null,
         accessory: { ref: { id: 'ferrule.test-14', version: 1 }, crimpQuality: 1 },
       },
-      outcome(6, 0.14435278128524395, 1.8344474349170925),
-      outcome(4, 0, 1.4263191789388658),
+      outcome(6, 0.14435278128524395, 1.42478166539222),
+      outcome(4, 0, 0.8942149326205255),
     ]);
     expect((cases[6].torqueNm as number) / 4).toBeLessThan(0.4);
   });
@@ -228,8 +229,8 @@ describe('resolveTermination', () => {
     // A 16 AWG solid hole on 14 AWG solid: base min(0.3, cap 0.371) = 0.3, spread [0.75, 1.25).
     const low = plain(lowest);
     expect(low.nickedStrandFraction).toBeCloseTo(0.3 * 0.75, 12);
-    expect(low.torqueNm).toBeCloseTo(4 * 0.3, 12);
-    expect(plain(highest).torqueNm).toBeLessThan(4 * 1.3);
+    expect(low.torqueNm).toBeCloseTo(4 * 0.15, 12);
+    expect(plain(highest).torqueNm).toBeLessThan(4 * 1.45);
     // The top of the spread (0.375) is capped at the hole's geometric reach.
     expect(plain(highest).nickedStrandFraction).toBe(nickCap({ id: 'h', awg: 16, stranding: 'solid' }, solid14));
     const bottom = driver(lowest);
@@ -302,10 +303,11 @@ describe('resolveTermination', () => {
     );
   });
 
-  it('a plain screwdriver is biased low: about 1 in 10 below the seat fraction, about 7 in 10 below the mark', () => {
-    let loose = 0;
-    let under = 0;
-    const n = 2000;
+  it('a plain screwdriver is biased low and wide: about half under 80 %, 27 % under 50 %, 19 % loose, 19 % over 120 %', () => {
+    // Uniform in [0.15, 1.45): P(r < 0.8) = 0.65/1.3 = 0.5, P(r < 0.5) = 0.35/1.3 = 0.269,
+    // P(r < 0.4) = 0.25/1.3 = 0.192, P(r > 1.2) = 0.25/1.3 = 0.192.
+    const below = { seat: 0, half: 0, eighty: 0, over120: 0 };
+    const n = 4000;
     for (let id = 1; id <= n; id++) {
       const outcome = resolveTermination(
         id,
@@ -316,13 +318,16 @@ describe('resolveTermination', () => {
         terminationStreams(11, id),
       );
       const r = (outcome.torqueNm as number) / 4;
-      if (r < 0.4) loose++;
-      if (r < 1) under++;
+      if (r < 0.4) below.seat++;
+      if (r < 0.5) below.half++;
+      if (r < 0.8) below.eighty++;
+      if (r > 1.2) below.over120++;
     }
-    expect(loose / n).toBeGreaterThan(0.07);
-    expect(loose / n).toBeLessThan(0.13);
-    expect(under / n).toBeGreaterThan(0.66);
-    expect(under / n).toBeLessThan(0.74);
+    const near = (count: number, p: number) => expect(Math.abs(count / n - p)).toBeLessThan(0.03);
+    near(below.eighty, 0.5);
+    near(below.half, 0.269);
+    near(below.seat, 0.192);
+    near(below.over120, 0.192);
   });
 
   it('nicks: per gauge step, never past the geometric cap 1 − (d_hole/d_cond)² (stranded 3/√7 wider)', () => {

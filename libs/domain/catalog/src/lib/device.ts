@@ -67,7 +67,7 @@ export const TwistOnCombination = z
     maxConductors: Int.min(1).max(16),
     /** The conductor sizes each landed conductor must lie in (integer AWG designations). */
     awg: AwgRange,
-    /** The landed conductors' total area (integer µm², from `AWG_GAUGES[n].areaUm2`), both ends included. */
+    /** The landed conductors' total area (integer µm², from `AWG_GAUGES[n].areaUm2`), bounds inclusive. */
     totalAreaUm2: z.strictObject({ min: Int.min(0), max: Int.min(1) }),
   })
   .refine((c) => c.minConductors <= c.maxConductors, { message: 'minConductors must not exceed maxConductors' })
@@ -133,6 +133,9 @@ export const TerminalMethodSpec = z
   });
 export type TerminalMethodSpec = z.infer<typeof TerminalMethodSpec>;
 
+/** The most termination methods a terminal lists (catalogue format; the netlist compiler strides its landed counts by it). */
+export const MAX_TERMINAL_METHODS = 8;
+
 /** A terminal: where a lead's clip and, from P3, a conductor lands. */
 export const DeviceTerminal = z.strictObject({
   id: TerminalId,
@@ -141,7 +144,7 @@ export const DeviceTerminal = z.strictObject({
   /** Position in the device's own frame (integer mm), for drawing leads and picking. */
   positionMm: PointMm,
   /** How conductors land on it, in save-format order; empty for a clip-only terminal (`wrong-method`). */
-  methods: z.array(TerminalMethodSpec).max(8),
+  methods: z.array(TerminalMethodSpec).max(MAX_TERMINAL_METHODS),
 });
 export type DeviceTerminal = z.infer<typeof DeviceTerminal>;
 

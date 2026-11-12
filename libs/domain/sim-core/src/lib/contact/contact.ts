@@ -77,15 +77,19 @@ export function torqueRatio(termination: TerminationV3, spec: TerminalMethodSpec
 /**
  * The effective clamp ratio (ADR 0018 §4.3): r × φ_strip × count × spread, multiplied in that order.
  *
- * - φ_strip = min(1, strip length / clamp depth): a short strip clamps insulation, not metal;
+ * - φ_strip = min(1, strip length / clamp depth), for a bare conductor only: a short strip clamps
+ *   insulation, not metal. With a ferrule or lug the clamp grips the accessory, so φ_strip is 1 (a
+ *   short strip inside the barrel is a crimp defect, not modelled: ADR 0018 implementation note 12);
  * - count = rated / n when n conductors share a clamp rated for fewer (shared evenly, an abstraction);
  * - spread = `STRAND_SPREAD_FACTOR` for a bare stranded conductor under a binding screw.
  */
 export function effectiveClampRatio(end: ContactEnd, stranding: ConductorStranding): number {
   const { termination, spec } = end;
   let ratio = torqueRatio(termination, spec);
-  const strip = termination.stripLengthMm / spec.clampDepthMm;
-  if (strip < 1) ratio = ratio * strip;
+  if (termination.accessory === null) {
+    const strip = termination.stripLengthMm / spec.clampDepthMm;
+    if (strip < 1) ratio = ratio * strip;
+  }
   const n = end.landedCount;
   if (n > spec.ratedConductors) ratio = ratio * (spec.ratedConductors / n);
   if (termination.accessory === null && stranding === 'stranded' && spec.clampType === 'bindingScrew') {

@@ -113,6 +113,9 @@ export const AWG_GAUGES: readonly GaugeRow[] = Object.freeze([
   row(25, 0.454666, 0.162359),
   row(26, 0.404892, 0.128756),
   row(27, 0.360567, 0.102108),
+  // 28 and 29: the six-figure areas end in a decimal half. areaMm2 × 1e6 is exactly 80 975.5 for 28
+  // (Math.round takes it up to 80 976) but 64 216.49999… for 29 in binary (down to 64 216), so they round
+  // opposite ways. Deterministic and pinned in gauge.spec.ts; never "fix" one: areaUm2 is save semantics.
   row(28, 0.321094, 0.0809755),
   row(29, 0.285942, 0.0642165),
   row(30, 0.254639, 0.050926),

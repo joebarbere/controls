@@ -1,4 +1,4 @@
-import type { Catalog, DeviceDefinition, TerminalMethodSpec } from '@controls/catalog';
+import { type Catalog, type DeviceDefinition, MAX_TERMINAL_METHODS, type TerminalMethodSpec } from '@controls/catalog';
 import { isBuiltinPropRef, type World } from '@controls/save-format';
 import { toHex, sha256 } from '@controls/world-model';
 import { TopologyWriter } from './encode';
@@ -192,9 +192,6 @@ interface ConnectionCacheEntry {
   elementASpec: TerminalMethodSpec | null;
   elementBSpec: TerminalMethodSpec | null;
 }
-
-/** The most methods a terminal lists (`DeviceTerminal.methods`, catalogue v2): the stride of the landed counts. */
-const MAX_TERMINAL_METHODS = 8;
 
 type Entity = World['entities'][number];
 type Connection = World['connections'][number];

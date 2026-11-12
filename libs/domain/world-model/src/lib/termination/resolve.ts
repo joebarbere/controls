@@ -41,10 +41,11 @@ import { deriveStream, type Sfc32, terminationStreamKey } from '../prng';
  *   conductor lies outside the die's range takes 0.3 more (one size off still seats, three are loose);
  *   an imperfect crimp gets a seeded spread below its base.
  * - **Clamp torque.** A torque driver lands within its stated accuracy of its setting. A plain
- *   screwdriver is **biased low**: uniform in [0.3, 1.3) × the marked torque (mean 0.8), so about one
- *   hand-tightened landing in ten falls below ADR 0018's seat fraction (0.4) and lands in the loose
- *   regime (up to 22× R₀), and about seven in ten are under the mark. The contact model caps the
- *   benefit at the mark.
+ *   screwdriver is **biased low and wide**: uniform in [0.15, 1.45) × the marked torque (mean 0.8),
+ *   a game-design fit to a trade-press summary of a 2009 field study of connections made without a
+ *   torque tool: about half land under 80 % of the mark, about 27 % under 50 %, about 19 % below ADR
+ *   0018's seat fraction (0.4, the loose regime, up to about 130 × R₀ at 0.15) and about 19 % above 120 %. The contact
+ *   model caps the benefit at the mark.
  */
 
 /** A conductor as a termination sees it: its integer AWG designation and how it is made. */
@@ -123,18 +124,24 @@ export const CRIMP_QUALITY_PER_AWG_STEP = 0.3;
 /** game-design: an imperfect crimp's seeded spread, a factor in (1 − s, 1]. */
 export const CRIMP_SPREAD = 0.1;
 /**
- * game-design (ADR 0015 Review asked for a field-study source or game-design; none was vetted): a
- * plain screwdriver's achieved torque is biased low, centred on 0.8 × the marked torque. Hand
- * tightening without a torque readout under-shoots the marked value, which is why NFPA 70-2023 Art.
- * 110.14(D) (cited by number) requires an approved means, typically a torque tool, where a torque is
- * marked; the bias's size is chosen, not measured.
+ * game-design, real-world anchor (ADR 0015 Review asked for a field-study source or game-design): a plain
+ * screwdriver's achieved torque is biased low, centred on 0.8 × the marked torque. Anchor: IAEI
+ * Magazine, "Are you the weakest link?" (July 2011,
+ * https://iaeimagazine.org/2011/july2011/are-you-the-weakest-link/), a trade-press summary of an
+ * unnamed 2009 study of set-screw connections made without a torque wrench: over half under 80 % of
+ * the specified torque, nearly a third under 50 %, about a quarter over 120 %. The original study is
+ * unidentified, so the band below is a game-design fit to that summary, not a measurement. NFPA
+ * 70-2023 Art. 110.14(D) (cited by number) requires an approved tightening means where a torque is
+ * marked.
  */
 export const SCREWDRIVER_TORQUE_MEAN_FRACTION = 0.8;
 /**
- * game-design: a plain screwdriver's spread around its mean, ± 0.5 × the marked torque, so it lands
- * uniformly in [0.3, 1.3) × the mark: one landing in ten below ADR 0018's seat fraction (0.4).
+ * game-design: a plain screwdriver's spread around its mean, ± 0.65 × the marked torque, so it lands
+ * uniformly in [0.15, 1.45) × the mark: about 50 % under 80 %, 27 % under 50 %, 19 % below ADR 0018's
+ * seat fraction (0.4) and 19 % over 120 % (the summary's "about a quarter"; a uniform band can't fit
+ * every quantile).
  */
-export const SCREWDRIVER_TORQUE_SPREAD = 0.5;
+export const SCREWDRIVER_TORQUE_SPREAD = 0.65;
 
 /** The ideal outcome `'auto'` makes: the method at its nominal strip and torque, no nicks, no accessory. */
 export function autoTermination(id: number, spec: TerminalMethodSpec): TerminationV3 {
