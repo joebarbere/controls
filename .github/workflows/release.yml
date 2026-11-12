@@ -1,5 +1,6 @@
-# Tag push (vX.Y.Z) → verify → build installers on all three OSes → upload to a DRAFT GitHub
-# Release. A human (via release-engineer / `/release`) checks the draft and publishes it.
+# Tag push (vX.Y.Z) → verify → create a DRAFT GitHub Release (title and notes from CHANGELOG.md)
+# → build installers on all three OSes → upload into the draft. A human (via release-engineer /
+# `/release`) checks the draft and publishes it.
 name: release
 
 on:
@@ -39,9 +40,58 @@ jobs:
       - name: pnpm verify (== local)
         run: pnpm verify
 
+  # Creates the draft (title and notes from CHANGELOG.md) before any upload, so the three build
+  # jobs find it by tag instead of racing to create one each. electron-builder never edits an
+  # existing release's title or body. On a rehearsal it only extracts the notes (job summary).
+  draft:
+    name: draft release notes
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # gh release create/edit (tag push only)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # gh uses GH_TOKEN
+      # Node only (tools/release-notes.mjs has no dependencies), so no install and no cache.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Notes and title from CHANGELOG.md
+        id: notes
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # A tag push uses the tag (verify checked it matches package.json); a rehearsal uses package.json.
+          if [ "$EVENT" = push ]; then set -- "$REF_NAME"; else set --; fi
+          node tools/release-notes.mjs "$@" > "$RUNNER_TEMP/release-notes.md"
+          title="$(node tools/release-notes.mjs "$@" --title)"
+          echo "title=${title}" >> "$GITHUB_OUTPUT"
+          { echo "## ${title}"; echo; cat "$RUNNER_TEMP/release-notes.md"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Create (or refresh) the draft release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          TITLE: ${{ steps.notes.outputs.title }}
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          state="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          case "$state" in
+            true) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes-file "$notes" ;;
+            false)
+              echo "::error::release ${TAG} is already published; never re-release a published tag"
+              exit 1
+              ;;
+            *) gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TITLE" --notes-file "$notes" ;;
+          esac
+
   build:
     name: package ${{ matrix.os }}
-    needs: verify
+    needs: [verify, draft]
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +99,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     permissions:
-      contents: write # electron-builder --publish always creates/updates the draft release
+      contents: write # electron-builder --publish always uploads into the draft the `draft` job made
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned until the signing decision (plan §9.3)
