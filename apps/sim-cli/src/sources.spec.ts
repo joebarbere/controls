@@ -7,7 +7,14 @@ import { tmpdir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
-import { CTRL_FIXTURE_DIR, currentFixture, currentFixtureName, ENGINE_FIXTURE_PATTERN } from './testing/fixtures';
+import {
+  CTRL_FIXTURE_DIR,
+  ctrlFixtureDir,
+  currentFixture,
+  currentFixtureName,
+  ENGINE_FIXTURE_DIRS,
+  ENGINE_FIXTURE_PATTERN,
+} from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
@@ -15,16 +22,17 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v2/ctrl/sources-engine-6-catalog-2.ctrl` is its save (`-engine-4`,
+ * Node's V8 and Chromium's). `fixtures/v3/ctrl/sources-engine-6-catalog-2.ctrl` is its save (world v3;
+ * the v2 one of the same name is kept and still loads as `continued` after migration; `-engine-4`,
  * `-engine-5` and `-engine-6` are earlier engines' or catalogues', now `engine-changed`), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v2/ctrl/sources-engine-6-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/sources-engine-6-catalog-2.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
  */
-export const SOURCES_HASH = 'df6f7c64ec79a1d3109dcb6e66373db929cae4da711af4810d2e6079261c29b1';
+export const SOURCES_HASH = 'b5c801e8ca9ee16aa1e7360e6837f813b381a37feaf705a02541bce841bd6230';
 export const SOURCES_SNAPSHOT_HASH = 'b63d9ad8c1869275ca0d3f6c8e36e05dc35407c4ef6f7b62b08816d86b924295';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
@@ -103,13 +111,18 @@ describe('the sources scenario (F2.4)', () => {
 });
 
 describe('engine-version collision guard (F2.4 save-format review)', () => {
-  it('every *-engine-N[-catalog-C].ctrl fixture was written by engine N (and catalogue C)', () => {
-    const files = readdirSync(ctrlDir).filter((f) => ENGINE_FIXTURE_PATTERN.test(f));
+  it('every *-engine-N[-catalog-C].ctrl fixture of every schemaVersion was written by engine N (and catalogue C)', () => {
+    const files = ENGINE_FIXTURE_DIRS.flatMap((dir) =>
+      readdirSync(dir)
+        .filter((f) => ENGINE_FIXTURE_PATTERN.test(f))
+        .map((f) => join(dir, f)),
+    );
     expect(files.length).toBeGreaterThan(2);
     for (const file of files) {
-      const read = readCtrl(new Uint8Array(readFileSync(join(ctrlDir, file))));
+      const read = readCtrl(new Uint8Array(readFileSync(file)));
       if (!read.ok) throw new Error(read.error.message);
       const [, engine, catalog] = ENGINE_FIXTURE_PATTERN.exec(file) ?? [];
+      expect(file.startsWith(ctrlFixtureDir(read.value.fromVersion)), file).toBe(true);
       expect(read.value.manifest.simEngineVersion, file).toBe(Number(engine));
       // Before catalogue 2 a fixture's name had no catalogue: those are catalogue 1 or earlier (ADR 0015).
       if (catalog === undefined) expect(read.value.manifest.catalogVersion, file).toBeLessThan(2);
@@ -151,10 +164,28 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
   it.each(['sim-step', 'sources', 'bench-lamp', 'protection'])(
     "this engine's catalogue-1 %s save (0.3.0's catalogue) loads as engine-changed, never refused (ADR 0016)",
     (scenario) => {
-      const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlDir, `${scenario}-engine-6.ctrl`))));
+      const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlFixtureDir(2), `${scenario}-engine-6.ctrl`))));
       if (!loaded.ok) throw new Error(loaded.error.message);
       expect(loaded.manifest.catalogVersion).toBe(1);
       expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+    },
+  );
+
+  it.each(['sim-step', 'sources', 'bench-lamp', 'protection'])(
+    'the world v2 %s save of this engine and catalogue migrates to exactly what this build writes, and loads as continued (ADR 0015)',
+    (scenario) => {
+      const name = currentFixtureName(scenario);
+      const [v2, v3] = [ctrlFixtureDir(2), CTRL_FIXTURE_DIR].map((dir) => {
+        const read = readCtrl(new Uint8Array(readFileSync(join(dir, name))));
+        if (!read.ok) throw new Error(read.error.message);
+        return read.value;
+      });
+      expect(v2.fromVersion).toBe(2);
+      expect(v3.fromVersion).toBe(3);
+      expect({ world: v2.world, replayLog: v2.replayLog }).toStrictEqual({ world: v3.world, replayLog: v3.replayLog });
+      const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlFixtureDir(2), name))));
+      if (!loaded.ok) throw new Error(loaded.error.message);
+      expect(loaded.replay).toStrictEqual({ status: 'continued' });
     },
   );
 

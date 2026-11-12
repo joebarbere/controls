@@ -15,19 +15,19 @@ import { startSandbox as startWorkshop } from './support/sandbox';
  * F1.9 every session starts on the workshop level with seed 0 (`support/sandbox.ts`), the world the
  * sim-cli scenarios start from (`--world content/levels/workshop.json`).
  */
-const CONSOLE_PLACE_UNDO_HASH = 'e79e76822ed39bdf3e033330dffbacd9115b9506ed40663e80c9fac8a0d3c174';
-const FOUR_SURFACE_HASH = 'ebcb3178a334e43d69756cecca28efe0905c95ea1a2b8b628b172b0196635bf4';
+const CONSOLE_PLACE_UNDO_HASH = 'dffa0c299298023206d272b7af834fb1f378903058743c5ec89745e15c60a969';
+const FOUR_SURFACE_HASH = '72cfcb1c4703a62906e100a029e46279241b3487d364ff24fbf6afa8c1b5de99';
 /**
  * The palette path's hash (F1.3): the same literal as PALETTE_PLACE_UNDO_HASH in
  * `apps/game-e2e/src/palette.spec.ts` and `apps/sim-cli/src/palette-place-undo.spec.ts`. Change all
  * three together.
  */
-const PALETTE_PLACE_UNDO_HASH = '34a83dc825c1e6b934132ca1f766a36f895c173ecfbc73274d197058b21ba780';
+const PALETTE_PLACE_UNDO_HASH = '2b6fa876564fdcda8f3ca2bd4c304059b7bc79596cf90ac448ce270367b8a95e';
 /**
  * The bench-leads scenario (P2 kickoff, world v2: test leads and `device.operate`): the same literal
  * as BENCH_LEADS_HASH in `apps/sim-cli/src/bench-leads.spec.ts`. Change both together.
  */
-const BENCH_LEADS_HASH = '562b5681ff82adb4b1576f63cefe8fc1bdbd0f50ba32598ec5b3e9c05d952d26';
+const BENCH_LEADS_HASH = '6c098ca598309986ed4f0dbac91c64a7280ba12c947bf1e3549706fc36f77884';
 
 const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';

@@ -14,7 +14,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash of `content/levels/workshop.json` (seed 0). */
-export const WORKSHOP_HASH = 'e79e76822ed39bdf3e033330dffbacd9115b9506ed40663e80c9fac8a0d3c174';
+export const WORKSHOP_HASH = 'dffa0c299298023206d272b7af834fb1f378903058743c5ec89745e15c60a969';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 

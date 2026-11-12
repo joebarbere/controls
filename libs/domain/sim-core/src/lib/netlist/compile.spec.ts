@@ -1,5 +1,5 @@
 import { BUILTIN_CATALOG, leadResistanceOhm, type LeadParams } from '@controls/catalog';
-import { createWorld, World } from '@controls/save-format';
+import { createWorld, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import {
   AC_SOURCE,
   BATTERY,
@@ -22,6 +22,20 @@ import { compileNetlist, isEmptyNetlist, NetlistCompiler } from './compile';
 import { formatNetlist } from './format';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels } from './models';
 import type { Netlist } from './types';
+
+/** A raw connection `{ ref, a, b }` as world v3 holds a test lead: clip ends, lead-shaped, with the lead's bags. */
+const v3Lead = (c: { ref: object; a: object | null; b: object | null }) => ({
+  cable: null,
+  route: null,
+  lengthMm: null,
+  colour: null,
+  label: null,
+  state: {},
+  sim: { ...LEAD_SIM_BAG_V3 },
+  ...c,
+  a: c.a && { termination: null, ...c.a },
+  b: c.b && { termination: null, ...c.b },
+});
 
 /** The hand-calculated resistance of the built-in 1 m test lead (see the first test). */
 const LEAD_OHM = 0.04094815541017536;
@@ -165,12 +179,14 @@ describe('compileNetlist: what is absent', () => {
         transform: { positionMm: origin, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
         state: {},
         sim: ref === BATTERY ? { stateOfCharge: 1 } : ref === LAMP ? { filamentTempK: null } : {},
+        mountedOn: null,
+        label: null,
         extensions: {},
       })),
       connections: [
         { id: 1, ref: LEAD, a: end(3, 'x'), b: end(1, 'pos') },
         { id: 2, ref: LEAD, a: end(1, 'neg'), b: end(4, 'b') },
-      ].map((c) => ({ ...c, extensions: {} })),
+      ].map((c) => ({ ...v3Lead(c), extensions: {} })),
     });
     const netlist = compile(world);
     expect(netlist.devices.map((d) => d.entity)).toStrictEqual([1, 4]);
@@ -191,15 +207,22 @@ describe('compileNetlist: what is absent', () => {
       ...createWorld({ seed: 1 }),
       nextEntityId: entities.length + 1,
       nextConnectionId: connections.length + 1,
+      nextTerminationId: 10,
       entities: entities.map((ref, i) => ({
         id: i + 1,
         ref,
         transform: { positionMm: origin, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
         state: {},
         sim: {},
+        mountedOn: null,
+        label: null,
         extensions: {},
       })),
-      connections: connections.map((c, i) => ({ id: i + 1, extensions: {}, ...c })),
+      connections: connections.map((c, i) => ({
+        id: i + 1,
+        extensions: {},
+        ...v3Lead(c as Parameters<typeof v3Lead>[0]),
+      })),
     });
 
   it.each([
@@ -210,6 +233,30 @@ describe('compileNetlist: what is absent', () => {
     const netlist = compile(rawWorld([{ ref, a: end(1, terminal), b: end(2, 'a') }]));
     expect(netlist.branches.filter((b) => b.element.kind === 'connection')).toStrictEqual([]);
     expect(netlist.diagnostics).toStrictEqual([{ code: 'absent-connection', connection: 1, reason }]);
+  });
+
+  it('leaves out a connection with a free end (world v3, ADR 0015: unlanded), whatever its kind', () => {
+    const landed = {
+      ...end(1, 'pos'),
+      termination: {
+        id: 1,
+        method: 'screw',
+        auto: true,
+        stripLengthMm: 13,
+        nickedStrandFraction: 0,
+        torqueNm: 1,
+        accessory: null,
+      },
+    };
+    const rest = { kind: 'free', positionMm: { x: 0, y: 0, z: 300 }, entity: null, fixture: null, tool: null };
+    const conductor = { lengthMm: 1000, colour: { base: 'black', stripe: null }, route: [rest] };
+    for (const ref of [LEAD, { id: 'conductor.mod-x', version: 1 }]) {
+      const netlist = compile(rawWorld([{ ref, a: landed, b: null, ...conductor }]));
+      expect(netlist.branches.filter((b) => b.element.kind === 'connection')).toStrictEqual([]);
+      expect(netlist.diagnostics).toStrictEqual([
+        { code: 'absent-connection', connection: 1, reason: ref === LEAD ? 'unlanded' : 'unknown-ref' },
+      ]);
+    }
   });
 
   it('leaves out kinds sim-core has no model for, and connection kinds placed as entities', () => {

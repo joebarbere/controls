@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import type { CommandBus } from '@controls/commands';
 import { World } from '@controls/save-format';
-import { deepFreeze, rawWorldV2Arb } from '@controls/save-format/testing';
+import { deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import {
   AC_SOURCE,
@@ -309,8 +309,8 @@ function checkInvariants(world: World, netlist: Netlist, catalog: Catalog = TEST
       expect(branches).toStrictEqual([]);
     } else {
       expect(branches).toHaveLength(1);
-      expect(branches[0].a).toBe(seen.get(`${connection.a.entity}:${connection.a.terminal}`));
-      expect(branches[0].b).toBe(seen.get(`${connection.b.entity}:${connection.b.terminal}`));
+      expect(branches[0].a).toBe(seen.get(`${connection.a?.entity}:${connection.a?.terminal}`));
+      expect(branches[0].b).toBe(seen.get(`${connection.b?.entity}:${connection.b?.terminal}`));
     }
   }
 
@@ -344,22 +344,25 @@ function checkInvariants(world: World, netlist: Netlist, catalog: Catalog = TEST
  * compiles real circuits, not only absent refs.
  */
 const BUILTIN_DEVICES = [BATTERY, SPST, LAMP];
-const mappedWorldArb = rawWorldV2Arb.map((raw) => {
+const mappedWorldArb = rawWorldV3Arb.map((raw) => {
   const world = World.parse(raw);
   const entities = world.entities.map((e) => (e.id % 4 === 0 ? e : { ...e, ref: BUILTIN_DEVICES[e.id % 3] }));
-  const realTerminal = (end: { entity: number; terminal: string }, salt: number) => {
+  const realTerminal = <E extends { entity: number; terminal: string }>(end: E | null, salt: number): E | null => {
+    if (end === null) return null;
     const entity = entities.find((e) => e.id === end.entity);
     const device = entity && BUILTIN_CATALOG.device(entity.ref);
     return device && salt % 7 !== 0 ? { ...end, terminal: device.terminals[salt % 2].id } : end;
   };
   const connections = world.connections.map((c) => {
+    // Conductors (world v3) keep their arbitrary refs and free ends: unknown or unlanded, never netlisted.
+    if (c.lengthMm !== null) return c;
     const mapped = {
       ...c,
       ref: c.id % 5 === 0 ? c.ref : LEAD,
       a: realTerminal(c.a, c.id),
       b: realTerminal(c.b, c.id + 1),
     };
-    const same = mapped.a.entity === mapped.b.entity && mapped.a.terminal === mapped.b.terminal;
+    const same = mapped.a?.entity === mapped.b?.entity && mapped.a?.terminal === mapped.b?.terminal;
     return same ? { ...mapped, a: c.a, b: c.b } : mapped;
   });
   return World.parse({ ...world, entities, connections });

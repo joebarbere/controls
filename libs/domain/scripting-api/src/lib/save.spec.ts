@@ -112,7 +112,7 @@ describe('Game.save', () => {
         world: game.world(),
         replayLog: game.replayLog(),
         thumbnail: null,
-        fromVersion: 2,
+        fromVersion: 3,
       },
     });
   });
@@ -134,7 +134,7 @@ describe('loadGame', () => {
     const result = loaded(original.save());
     const game = result.game;
     expect(result.replay).toEqual({ status: 'continued' });
-    expect(result.fromVersion).toBe(2);
+    expect(result.fromVersion).toBe(3);
     expect(result.manifest).toStrictEqual(createManifest());
     expect(game.hash()).toBe(original.hash());
     expect(game.world()).toStrictEqual(original.world());
@@ -264,6 +264,8 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
           transform: { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
           state,
           sim: {},
+          mountedOn: null,
+          label: null,
           extensions: {},
         },
       ],
@@ -294,7 +296,7 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
     expect(createSaveManifest()).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       catalogVersion: 2,
       simEngineVersion: SIM_ENGINE_VERSION,
     });

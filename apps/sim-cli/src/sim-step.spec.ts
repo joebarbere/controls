@@ -22,11 +22,14 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * in the snapshot). The D6 golden with a lamp lit is the bench-lamp scenario's (`bench-lamp.spec.ts`).
  */
 
-/** What engine 3 (F2.3a, the battery at its nominal-EMF placeholder) wrote for the same session. */
-const ENGINE_3_HASH = '5ecdc7c40f39240e7dbc4e34103f47c37ab8427faa5f95aa5413da08f036cdf8';
-/** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session. */
-const ENGINE_4_HASH = 'df471c07cfccd0ab4807ceca52700d4176a4953a8b4d84b049a71d952157b48a';
-export const SIM_STEP_HASH = 'e065dd0a3e81636b487a7c49514f4276a7ae70fe146cdf33d1f5cdecb0c74648';
+/**
+ * What engine 3 (F2.3a, the battery at its nominal-EMF placeholder) wrote for the same session: its
+ * `world.json` as this build reads it (migrated to world v3; `5ecdc7c4…cdf8` as world v2).
+ */
+const ENGINE_3_HASH = '0194d4c84ebfeaf505e21f4090f9bde461221017707e9b60db234e6a9a50cc2f';
+/** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session (`df471c07…b48a` as world v2). */
+const ENGINE_4_HASH = '91a543b9cafef2490c5145143114d32e3a78bac5ab80077716528a83ae2741f6';
+export const SIM_STEP_HASH = 'cb71c6a58409adb476b7b25aabd770cdc4240bc29f84e01b32045f4824e7ae3b';
 export const SIM_STEP_SNAPSHOT_HASH = 'eddf0d39a957c7c0f11d95a7f061a26640d747df153c065c8ac33ba0b7c966c7';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
@@ -128,6 +131,7 @@ describe('the sim-step scenario', () => {
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.manifest.simEngineVersion).toBe(4);
     expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+    expect(sim('hash', fixture).stdout).toEqual([ENGINE_4_HASH]);
     expect(loaded.game.hash()).not.toBe(ENGINE_4_HASH);
     expect(loaded.game.materialisedWorld().sim?.islands.map((i) => i.iterations > 0)).toStrictEqual([true, true]);
     expect(sim('replay', fixture)).toMatchObject({ status: 1 });
@@ -141,6 +145,7 @@ describe('the sim-step scenario', () => {
     expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
     // Its devices' state loads as saved, but never engine 3's solution record (12 V placeholder EMF):
     // this engine solves again at the save's tick (F2.4 save-format review), so the hash moves.
+    expect(sim('hash', fixture).stdout).toEqual([ENGINE_3_HASH]);
     expect(loaded.game.hash()).not.toBe(ENGINE_3_HASH);
     expect(loaded.game.materialisedWorld().sim?.lastSolveTick).toBe(1234);
     expect(sim('replay', fixture)).toMatchObject({ status: 1 });

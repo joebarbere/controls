@@ -24,7 +24,7 @@ import {
  * on wall time. Six times the usual deadline (30 s).
  */
 export const START_RETRY_MS = 6 * STATE_QUERY_TIMEOUT_MS;
-import { checkWorldDevices, worldHash } from '@controls/world-model';
+import { checkWorldReferences, worldHash } from '@controls/world-model';
 import type { SimCandidate, SimFailure, SimHost } from './sim-host';
 
 /*
@@ -148,7 +148,7 @@ export async function prepareLoad(
   if (!read.ok) return { ok: false, error: read.error };
   const contents = read.value;
   const { world, replayLog: log, manifest } = contents;
-  const devices = checkWorldDevices(world);
+  const devices = checkWorldReferences(world);
   if (devices.length > 0) {
     return {
       ok: false,

@@ -6,9 +6,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   pngBytesArb,
-  rawManifestV2Arb,
-  rawReplayLogV2Arb,
-  rawWorldV2Arb,
+  rawManifestV3Arb,
+  rawReplayLogV3Arb,
+  rawWorldV3Arb,
   rawZip,
   type RawZipEntry,
   TINY_PNG,
@@ -71,9 +71,10 @@ const createManifest = () => createManifestWith({ catalogVersion: 1, simEngineVe
 /** The golden sample: fixed documents (not `createManifest`, whose `appVersion` moves with every release). */
 function sample(): CtrlInput {
   return {
-    manifest: Manifest.parse(fixture('v2/manifest/basic.json')),
-    world: World.parse(fixture('v2/world/bench-lamp-mid-interval.json')),
-    replayLog: ReplayLog.parse(fixture('v2/replay-log/bench-lamp-mid-interval.json')),
+    manifest: Manifest.parse(fixture('v3/manifest/basic.json')),
+    // A wired world (a routed conductor with hot terminations), at the rebased log's end tick.
+    world: World.parse({ ...(fixture('v3/world/routed-wire-hot-terminations.json') as object), tick: 130_000 }),
+    replayLog: ReplayLog.parse(fixture('v3/replay-log/first-seq-rebased.json')),
     thumbnail: TINY_PNG,
   };
 }
@@ -81,9 +82,11 @@ function sample(): CtrlInput {
 /**
  * SHA-256 of `writeCtrl(sample())`. It moves only if the container's bytes change: the entry layout,
  * the JSON formatting, the ZIP fields or fflate's DEFLATE output (a fflate upgrade can do that;
- * re-pin it and say so in the changelog). Saves written earlier still load either way.
+ * re-pin it and say so in the changelog), or the sample documents themselves (re-pinned once at world
+ * v3, `a9296dc2…4816` → `699609a6…1565`, when the sample moved to v3 fixtures). Saves written earlier
+ * still load either way.
  */
-const GOLDEN_SAMPLE_SHA256 = 'a9296dc2574331a9d0210cf82e9dba419048a76ef0725298df792be90e7d4816';
+const GOLDEN_SAMPLE_SHA256 = '699609a6d9d9242fad9aaadf5eb66fe1c67df8e69678582e8843355999431565';
 
 const text = (value: unknown) => ctrlJson(value);
 const manifestText = () => text(sample().manifest);
@@ -141,7 +144,7 @@ describe('writeCtrl', () => {
     expect(Object.keys(files).sort()).toStrictEqual(['manifest.json', 'replay.log', 'thumbnail.png', 'world.json']);
     const manifest = utf8Decode(files['manifest.json']);
     expect(manifest).toBe(
-      '{\n  "appVersion": "0.3.0",\n  "catalogVersion": 1,\n  "extensions": {},\n  "format": "controls.ctrl",\n  "schemaVersion": 2,\n  "simEngineVersion": 1\n}\n',
+      '{\n  "appVersion": "0.3.0",\n  "catalogVersion": 2,\n  "extensions": {},\n  "format": "controls.ctrl",\n  "schemaVersion": 3,\n  "simEngineVersion": 6\n}\n',
     );
     expect(files['thumbnail.png']).toStrictEqual(TINY_PNG);
   });
@@ -204,7 +207,7 @@ describe('writeCtrl', () => {
   });
 
   it('refuses a document from a future version', () => {
-    const manifest = { ...createManifest(), schemaVersion: 3 } as unknown as Manifest;
+    const manifest = { ...createManifest(), schemaVersion: 4 } as unknown as Manifest;
     expect(() => writeCtrl({ manifest, world: createWorld({ seed: 1 }) })).toThrow(
       expect.objectContaining({ kind: 'invalid-document', entry: 'manifest.json' }),
     );
@@ -216,16 +219,16 @@ describe('readCtrl', () => {
     const input = sample();
     expect(readCtrl(writeCtrl(input))).toStrictEqual({
       ok: true,
-      value: { ...input, fromVersion: 2 },
+      value: { ...input, fromVersion: 3 },
     });
   });
 
   it('round-trips arbitrary valid documents losslessly, and re-writing gives identical bytes', () => {
     fc.assert(
       fc.property(
-        rawManifestV2Arb,
-        rawWorldV2Arb,
-        fc.option(rawReplayLogV2Arb),
+        rawManifestV3Arb,
+        rawWorldV3Arb,
+        fc.option(rawReplayLogV3Arb),
         fc.option(pngBytesArb),
         (manifest, world, log, thumbnail) => {
           if (log !== null) {
@@ -243,7 +246,7 @@ describe('readCtrl', () => {
           // Raw documents (with -0) are accepted and normalised.
           const bytes = writeCtrl({ manifest, world, replayLog: log, thumbnail } as unknown as CtrlInput);
           const read = readCtrl(bytes);
-          expect(read).toStrictEqual({ ok: true, value: { ...input, fromVersion: 2 } });
+          expect(read).toStrictEqual({ ok: true, value: { ...input, fromVersion: 3 } });
           if (!read.ok) return;
           expect(writeCtrl(read.value)).toStrictEqual(bytes);
           expect(JSON.parse(JSON.stringify(read.value.world))).toStrictEqual(read.value.world);
@@ -258,7 +261,7 @@ describe('readCtrl', () => {
   it('reads containers from other ZIP writers (fflate zipSync, extra directory entries)', () => {
     const files = unzipSync(writeCtrl(sample()));
     const other = zipSync({ ...files, 'prints/': new Uint8Array(0), 'plc/': new Uint8Array(0) }, { level: 9 });
-    expect(readCtrl(other)).toStrictEqual({ ok: true, value: { ...sample(), fromVersion: 2 } });
+    expect(readCtrl(other)).toStrictEqual({ ok: true, value: { ...sample(), fromVersion: 3 } });
   });
 
   it('tolerates the empty reserved directories prints/, plc/ and hmi/', () => {
@@ -459,16 +462,16 @@ describe('readCtrl', () => {
   describe('a save from a newer build', () => {
     const newer = (appVersion: unknown) =>
       container(
-        { 'manifest.json': { data: text({ ...sample().manifest, schemaVersion: 3, appVersion }) } },
+        { 'manifest.json': { data: text({ ...sample().manifest, schemaVersion: 4, appVersion }) } },
         // A later version may define entries this build doesn't know: the version is checked first.
         [{ name: 'prints/sheet-1.json', data: '{}' }],
       );
 
     it('is refused with a typed error naming the writer', () => {
       const error = readError(newer('0.9.0'));
-      expect(error).toMatchObject({ kind: 'newer-than-build', found: 3, supported: 2, appVersion: '0.9.0' });
+      expect(error).toMatchObject({ kind: 'newer-than-build', found: 4, supported: 3, appVersion: '0.9.0' });
       expect(error.message).toBe(
-        `This save was written by Controls 0.9.0 (save format 3). This build (${APP_VERSION}) reads save formats up to 2. Update the game to open it.`,
+        `This save was written by Controls 0.9.0 (save format 4). This build (${APP_VERSION}) reads save formats up to 3. Update the game to open it.`,
       );
     });
 
@@ -484,8 +487,8 @@ describe('readCtrl', () => {
     const log = text({ ...sample().replayLog, endTick: (sample().replayLog?.endTick ?? 0) + 1 });
     expect(readError(container({ 'replay.log': { data: log } }))).toMatchObject({
       kind: 'end-tick-mismatch',
-      worldTick: 2147483655,
-      endTick: 2147483656,
+      worldTick: 130_000,
+      endTick: 130_001,
     });
     const world = { ...createWorld({ seed: 1 }), tick: 5 };
     const replayLog = { ...createReplayLog(createWorld({ seed: 1 })), endTick: 4 };
@@ -499,7 +502,7 @@ describe('readCtrl', () => {
     expect(readError(container({ 'world.json': { data: world } }))).toMatchObject({
       kind: 'version-mismatch',
       entry: 'world.json',
-      expected: 2,
+      expected: 3,
       found: 1,
     });
   });

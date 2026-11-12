@@ -100,7 +100,9 @@ export type AbsentConnectionReason =
   /** An end is on an entity that isn't netlisted (a prop, an unknown device, a missing entity). */
   | 'absent-end'
   /** An end names a terminal its device doesn't have. */
-  | 'unknown-terminal';
+  | 'unknown-terminal'
+  /** An end is unlanded, lying free (world v3, ADR 0015): wired to nothing. */
+  | 'unlanded';
 
 /** Something the compiler noticed. Deterministic order: entities, connections, islands, each ascending. */
 export type NetlistDiagnostic =

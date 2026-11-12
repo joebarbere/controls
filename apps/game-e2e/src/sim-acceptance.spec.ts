@@ -23,9 +23,9 @@ import { startSandbox } from './support/sandbox';
  */
 test.use({ viewport: { width: 1280, height: 720 } });
 
-const BENCH_LAMP_LIT_HASH = '2b441a98c5491c67023f5affd3fc2cd7b8d9c9eebfd76ea2c01f7687ae13d0aa';
+const BENCH_LAMP_LIT_HASH = 'bfc2b50e67771ba7f271cf786bb36d7e6cb4a0f3badba4ea6ab5a0140c5b4d4e';
 const BENCH_LAMP_LIT_SNAPSHOT_HASH = '6fac817fc4fc6eb9814d5905f55405d5e79bd75d20f7fc801613d34fe34403ea';
-const BENCH_LAMP_HASH = 'd310d770494403137c676f59f0461e64e975ec1ba6fa5e6fabc459f893177389';
+const BENCH_LAMP_HASH = 'ebad7403589275604ae5bb227245cc8800fd22c5174709a10b3887dabbac3d68';
 const BENCH_LAMP_SNAPSHOT_HASH = '3fe52bcd091458bce1035c9d27ca8a7f986206bb554a93e76139f27e2b9be45a';
 /** The lamp's `inrush-band` source: the inrush is 10 to 15 times the settled current. */
 const INRUSH_BAND = { min: 10, max: 15 };

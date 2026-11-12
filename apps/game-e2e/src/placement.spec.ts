@@ -20,7 +20,7 @@ import { startSandbox } from './support/sandbox';
  * F1.9: every test starts New sandbox with seed 0 (the workshop level, `support/sandbox.ts`); the
  * sim-cli side runs with `--world content/levels/workshop.json`.
  */
-const MOUSE_HASH = 'faf3a246446022054772827756be8025060960da1a58856e12cb14fcafb50439';
+const MOUSE_HASH = 'a32cce12867b89c4f739629bf37d5bec2d3d74063d4d0e860e05676cbbca0ab3';
 
 interface Hooks {
   __controlsViewport?: {

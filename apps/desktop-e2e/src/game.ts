@@ -12,8 +12,8 @@ export const PLACE =
  * under Node and `apps/game-e2e/src/bench-lamp.spec.ts` in Chromium (engine 6). Change all of them
  * together, never one: a difference in Electron is float drift between V8 builds, not a golden to re-pin.
  */
-export const BENCH_LAMP_LIT_HASH = '2b441a98c5491c67023f5affd3fc2cd7b8d9c9eebfd76ea2c01f7687ae13d0aa';
-export const BENCH_LAMP_HASH = 'd310d770494403137c676f59f0461e64e975ec1ba6fa5e6fabc459f893177389';
+export const BENCH_LAMP_LIT_HASH = 'bfc2b50e67771ba7f271cf786bb36d7e6cb4a0f3badba4ea6ab5a0140c5b4d4e';
+export const BENCH_LAMP_HASH = 'ebad7403589275604ae5bb227245cc8800fd22c5174709a10b3887dabbac3d68';
 
 /**
  * `apps/sim-cli/scenarios/bench-lamp.console`, comments stripped, split at its `world.hash` lines:

@@ -1,0 +1,994 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 3
+    },
+    "initialWorld": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 3
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextEntityId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nextConnectionId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nextCableId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nextTerminationId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "regionId": {
+          "type": "string",
+          "enum": [
+            "nec"
+          ]
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "trainee",
+            "apprentice",
+            "journeyman",
+            "realistic"
+          ]
+        },
+        "assisted": {
+          "type": "boolean"
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureV1"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityV3"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionV3"
+          }
+        },
+        "cables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CableV3"
+          }
+        },
+        "sim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimSolutionV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "seed",
+        "tick",
+        "nextEntityId",
+        "nextConnectionId",
+        "nextCableId",
+        "nextTerminationId",
+        "regionId",
+        "difficulty",
+        "assisted",
+        "fixtures",
+        "entities",
+        "connections",
+        "cables",
+        "sim",
+        "extensions"
+      ],
+      "additionalProperties": false,
+      "title": "Controls world document, schemaVersion 3",
+      "description": "world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog)."
+    },
+    "firstSeq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReplayEntryV3"
+      }
+    },
+    "endTick": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "initialWorld",
+    "firstSeq",
+    "entries",
+    "endTick"
+  ],
+  "additionalProperties": false,
+  "title": "Controls replay log, schemaVersion 3",
+  "description": "replay.log in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the seq, tick and endTick ordering rules.",
+  "$defs": {
+    "FixtureV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FixtureIdV1"
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "FixtureIdV1": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Lower-case words joined by single hyphens, at most 64 characters."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "TransformV1": {
+      "type": "object",
+      "properties": {
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "orientationMdeg": {
+          "$ref": "#/$defs/OrientationMdegV1"
+        }
+      },
+      "required": [
+        "positionMm",
+        "orientationMdeg"
+      ],
+      "additionalProperties": false
+    },
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "OrientationMdegV1": {
+      "type": "object",
+      "properties": {
+        "yaw": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "pitch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        },
+        "roll": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359999
+        }
+      },
+      "required": [
+        "yaw",
+        "pitch",
+        "roll"
+      ],
+      "additionalProperties": false,
+      "description": "Intrinsic Y-X-Z (yaw, pitch, roll) angles in integer millidegrees, each in [0, 360000)."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    },
+    "EntityV3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "transform": {
+          "$ref": "#/$defs/TransformV1"
+        },
+        "state": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "sim": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "mountedOn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MountedOnV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "transform",
+        "state",
+        "sim",
+        "mountedOn",
+        "label",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceStateBag": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z][a-zA-Z0-9]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/DeviceStateValue"
+      },
+      "description": "Named device state values; keys are lower camelCase (at most 64 characters, at most 64 keys)."
+    },
+    "DeviceStateValue": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 32
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A finite number, a boolean, an enum string of at most 32 characters, or null for absent."
+    },
+    "MountedOnV3": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "mount": {
+          "$ref": "#/$defs/MountId"
+        }
+      },
+      "required": [
+        "entity",
+        "mount"
+      ],
+      "additionalProperties": false
+    },
+    "MountId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A mount id within one catalogue entry (TerminalId grammar)."
+    },
+    "LabelText": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[\\x21-\\x7e](?:[\\x20-\\x7e]{0,30}[\\x21-\\x7e])?$",
+      "description": "Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space."
+    },
+    "ConnectionV3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "a": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionEndV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "b": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionEndV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cable": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "conductor": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "id",
+                "conductor"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "route": {
+          "anyOf": [
+            {
+              "maxItems": 1024,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WaypointV3"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lengthMm": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colour": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConductorColourV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "sim": {
+          "$ref": "#/$defs/DeviceStateBag"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "a",
+        "b",
+        "cable",
+        "route",
+        "lengthMm",
+        "colour",
+        "label",
+        "state",
+        "sim",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "ConnectionEndV3": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalId"
+        },
+        "termination": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TerminationV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "entity",
+        "terminal",
+        "termination"
+      ],
+      "additionalProperties": false
+    },
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    },
+    "TerminationV3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "method": {
+          "$ref": "#/$defs/TerminationMethodId"
+        },
+        "auto": {
+          "type": "boolean"
+        },
+        "stripLengthMm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "nickedStrandFraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "torqueNm": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "accessory": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "$ref": "#/$defs/CatalogRef"
+                },
+                "crimpQuality": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "ref",
+                "crimpQuality"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "auto",
+        "stripLengthMm",
+        "nickedStrandFraction",
+        "torqueNm",
+        "accessory"
+      ],
+      "additionalProperties": false
+    },
+    "TerminationMethodId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A termination method id: lower camelCase."
+    },
+    "WaypointV3": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "free",
+            "duct",
+            "conduit",
+            "staple",
+            "bore"
+          ]
+        },
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FixtureIdV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "positionMm",
+        "entity",
+        "fixture",
+        "tool"
+      ],
+      "additionalProperties": false
+    },
+    "ConductorColourV3": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/ColourId"
+        },
+        "stripe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColourId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "base",
+        "stripe"
+      ],
+      "additionalProperties": false
+    },
+    "ColourId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row of the catalogue colour table: lower camelCase, at most 32."
+    },
+    "CableV3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "a": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CableEndV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "b": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CableEndV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "route": {
+          "maxItems": 1024,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WaypointV3"
+          }
+        },
+        "lengthMm": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "tailsMm": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "additionalProperties": false
+        },
+        "jacketStripMm": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "additionalProperties": false
+        },
+        "label": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "a",
+        "b",
+        "route",
+        "lengthMm",
+        "tailsMm",
+        "jacketStripMm",
+        "label",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "CableEndV3": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "entry": {
+          "$ref": "#/$defs/EntryId"
+        }
+      },
+      "required": [
+        "entity",
+        "entry"
+      ],
+      "additionalProperties": false
+    },
+    "EntryId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "An enclosure entry id within one catalogue entry."
+    },
+    "SimSolutionV2": {
+      "type": "object",
+      "properties": {
+        "lastSolveTick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "topologyHash": {
+          "$ref": "#/$defs/Sha256HexV2"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "islands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "flags": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "iterations": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "flags",
+              "iterations"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "lastSolveTick",
+        "topologyHash",
+        "nodes",
+        "branches",
+        "islands"
+      ],
+      "additionalProperties": false
+    },
+    "Sha256HexV2": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 digest as 64 lower-case hex digits."
+    },
+    "ReplayEntryV3": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$"
+        },
+        "args": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      },
+      "required": [
+        "seq",
+        "tick",
+        "id",
+        "args"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

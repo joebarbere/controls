@@ -570,6 +570,8 @@ export class SimOverlays {
     this.drawnLeads = [];
     let arrowStart = 0;
     for (const c of world.connections) {
+      // Lead segments are for test leads only (D15); conductors are drawn by the wire renderer (F3.2).
+      if (c.lengthMm !== null || c.a === null || c.b === null) continue;
       const start = positions.get(c.a.entity)?.get(c.a.terminal);
       const end = positions.get(c.b.entity)?.get(c.b.terminal);
       if (start === undefined || end === undefined) continue; // an end on an unknown device: not drawn

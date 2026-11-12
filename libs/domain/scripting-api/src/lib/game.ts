@@ -41,7 +41,7 @@ import {
 } from '@controls/sim-core';
 import { materialiseWorld, type SimEvent, type SimStateExport } from '@controls/sim-protocol';
 import {
-  checkWorldDevices,
+  checkWorldReferences,
   createWorldBus,
   createWorldRegistry,
   rebaseReplayLog,
@@ -585,7 +585,7 @@ function startFailedIssues(error: SimStartError): ValidationIssue[] {
 /**
  * Starts a game: an empty world from `seed`, or the given `world`, with a fresh history and an
  * empty replay log, and the sim engine on it. The world is validated, its device state and
- * connections included (`checkWorldDevices`), and frozen; treat it as owned by the game. Throws
+ * connections included (`checkWorldReferences`), and frozen; treat it as owned by the game. Throws
  * {@link GameOptionsError} for an invalid world, an out-of-range seed, a seed that contradicts the
  * world's, or sim state the engine refuses at start (a solution record that doesn't fit the netlist,
  * `start-failed`).
@@ -607,7 +607,7 @@ export function createGame(options: GameOptions): Game {
       throw new GameOptionsError(`seed ${options.seed} contradicts the world's seed ${options.world.seed}`);
     }
     const catalog = options.engine === false ? undefined : options.engine?.catalog;
-    const devices = checkWorldDevices(options.world, catalog);
+    const devices = checkWorldReferences(options.world, catalog);
     if (devices.length > 0) {
       throw new GameOptionsError("The world's device state doesn't match the device catalogue", devices);
     }
@@ -902,7 +902,7 @@ export function gameFromSave(
 ): LoadedGame | { readonly ok: false; readonly error: InvalidDeviceStateError | SimStartFailedError } {
   const { world, replayLog: log, manifest } = contents;
   const catalog = options.engine === false ? undefined : options.engine?.catalog;
-  const devices = checkWorldDevices(world, catalog);
+  const devices = checkWorldReferences(world, catalog);
   if (devices.length > 0) {
     return {
       ok: false,

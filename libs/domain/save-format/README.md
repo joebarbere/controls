@@ -2,7 +2,7 @@
 
 Framework-free domain library (`type:domain`) that owns every persisted document: the Zod schemas are the single source of truth ([ADR 0004](../../../docs/decisions/0004-save-format.md), [ADR 0007](../../../docs/decisions/0007-world-document-v1.md)). Owner: `save-format-guardian`.
 
-- **Documents:** `ManifestV1`, `WorldV1` and `ReplayLogV1` (all `schemaVersion` 1), and `SettingsV1` (`settingsVersion` 1). Current aliases: `World`, `Manifest`, `ReplayLog`, `Settings`. Types are `z.infer`'d; never hand-write a parallel interface.
+- **Documents:** `ManifestV<n>`, `WorldV<n>` and `ReplayLogV<n>` for `schemaVersion` 1, 2 and 3 (v3 current, provisional until v0.4.0: leads and conductors, terminations, cables, routes, `mountedOn`, labels; ADR 0015), and `SettingsV1`/`SettingsV2` (`settingsVersion`). Current aliases: `World`, `Manifest`, `ReplayLog`, `Settings`. The id primitives a save names from the catalogue (`ColourId`, `TerminationMethodId`, `MountId`, `EntryId`, `HoleId`, `DieId`) and `LabelText` are defined here; `@controls/catalog` re-exports them. Types are `z.infer`'d; never hand-write a parallel interface.
 - **Loading untrusted JSON:** `migrateWorld`, `migrateManifest`, `migrateReplayLog`, `migrateSettings` (or `loadSettings`, which falls back to `defaultSettings()`). They never throw and return a typed `LoadError`. Don't call `.parse` on untrusted input directly (see the [caveats](../../../docs/caveats/save-format.md)).
 - **Constructors:** `createWorld`, `createManifest`, `createReplayLog`, `defaultSettings`.
 - **Migrations:** `migrationChain(...).then(V2, v1ToV2).build()` makes a chain total by construction.

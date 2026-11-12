@@ -167,6 +167,8 @@ describe('ViewportRenderer (fake GPU)', () => {
       transform: { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
       state: {},
       sim: {},
+      mountedOn: null,
+      label: null,
       extensions: {},
     };
     viewport.syncWorld({ ...createWorld({ seed: 0 }), nextEntityId: 2, entities: [lamp] });

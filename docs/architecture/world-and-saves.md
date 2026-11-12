@@ -1,28 +1,30 @@
 # World document and saves
 
-> **Status (P2 kickoff):** world v2 has landed (connections, device state bags, the solution record, `firstSeq`/`endTick`; [ADR 0013](../decisions/0013-world-document-v2.md)) with the device catalogue v1. **P1:** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). F1.8b part 3 has landed saving and loading in the game: the unlogged `file.*` commands, the Save game and Load game dialogs, Continue and autosave ([below](#saving-and-loading-in-the-game-f18b-part-3)). Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
+> **Status (P3 PR 7):** world v3 has landed (leads and conductors in one `connections` array, terminations, cables, routes, `mountedOn` and labels, the v2 → v3 migration and the `checkWorldReferences` load check; [ADR 0015](../decisions/0015-world-document-v3.md)); the commands that wire are P3 PR 8. **P2 kickoff:** world v2 landed (connections, device state bags, the solution record, `firstSeq`/`endTick`; [ADR 0013](../decisions/0013-world-document-v2.md)) with the device catalogue v1. **P1:** F1.8a has landed: the v1 document schemas, settings schema, migration framework, fixtures and JSON Schema export in `libs/domain/save-format` (`@controls/save-format`). F1.8b part 1 has landed: the pure `.ctrl` container (`writeCtrl` / `readCtrl`), `Game.save()` and `loadGame()` in `@controls/scripting-api`, and `.ctrl` in `sim-cli`. F1.8b part 2 has landed the platform save I/O ([below](#save-io-f18b), [ADR 0009](../decisions/0009-save-io-boundary.md)). F1.8b part 3 has landed saving and loading in the game: the unlogged `file.*` commands, the Save game and Load game dialogs, Continue and autosave ([below](#saving-and-loading-in-the-game-f18b-part-3)). Decisions: [ADR 0004](../decisions/0004-save-format.md) (container and rules) and [ADR 0007](../decisions/0007-world-document-v1.md) (v1 shape and determinism). Gotchas: [save-format caveats](../caveats/save-format.md). The world's operations, `world.hash` and replay are on the [commands](commands.md) page (F1.2).
 
 ## Documents
 
-A `.ctrl` save is a ZIP of JSON documents that share one `schemaVersion`. Settings are a separate document with their own `settingsVersion`. Catalogue entries are referenced by id and version, never inlined.
+A `.ctrl` save is a ZIP of JSON documents that share one `schemaVersion` (3 since P3 PR 7, provisional until v0.4.0). Settings are a separate document with their own `settingsVersion`. Catalogue entries are referenced by id and version, never inlined.
 
 ```mermaid
 classDiagram
     direction LR
-    class ManifestV2 {
+    class ManifestV3 {
         format = "controls.ctrl"
-        schemaVersion = 2
+        schemaVersion = 3
         appVersion: SemVer
-        catalogVersion: int (1; 0 = before the catalogue)
+        catalogVersion: int (2; 0 = before the catalogue)
         simEngineVersion: int (0 = before the engine)
         extensions
     }
-    class WorldV2 {
-        schemaVersion = 2
+    class WorldV3 {
+        schemaVersion = 3
         seed: uint32
         tick: int (1 tick = 1 ms)
         nextEntityId: int
         nextConnectionId: int
+        nextCableId: int
+        nextTerminationId: int
         regionId: "nec"
         difficulty
         assisted: boolean
@@ -34,25 +36,57 @@ classDiagram
         transform (int mm, int millidegrees)
         extensions
     }
-    class EntityV2 {
+    class EntityV3 {
         id: int (sorted, unique)
         ref: CatalogRef
         transform.positionMm: x, y, z (int mm)
         transform.orientationMdeg: yaw, pitch, roll (int millidegrees)
         state: commanded bag
         sim: sim-owned bag
+        mountedOn: entity, mount | null
+        label: LabelText | null
         extensions
     }
-    class ConnectionV2 {
-        id: int (sorted, unique, from nextConnectionId)
-        ref: CatalogRef (a lead)
-        a: TerminalRef
-        b: TerminalRef
+    class ConnectionV3 {
+        id: int (sorted, from nextConnectionId)
+        ref: CatalogRef (a lead or a conductor)
+        a, b: ConnectionEndV3 | null (null = unlanded)
+        cable: id, conductor index | null
+        route: WaypointV3[] | null
+        lengthMm: int | null (null = a lead)
+        colour: base, stripe | null
+        label: LabelText | null
+        state, sim: bags (ten sim keys)
         extensions
     }
-    class TerminalRef {
+    class ConnectionEndV3 {
         entity: int
-        terminal: "pos"
+        terminal: "l1"
+        termination: TerminationV3 | null (a clip)
+    }
+    class TerminationV3 {
+        id: int (from nextTerminationId)
+        method: "screw"
+        auto: boolean
+        stripLengthMm, nickedStrandFraction
+        torqueNm | null
+        accessory: ref, crimpQuality | null
+    }
+    class CableV3 {
+        id: int (sorted, from nextCableId)
+        ref: CatalogRef (an assembly)
+        a, b: entity, entry | null
+        route: WaypointV3[]
+        lengthMm: int
+        tailsMm, jacketStripMm: a, b
+        label: LabelText | null
+        extensions
+    }
+    class WaypointV3 {
+        kind: free | duct | conduit | staple | bore
+        positionMm: int mm
+        entity | fixture | null (the host)
+        tool: CatalogRef | null (a bore)
     }
     class SimSolutionV2 {
         lastSolveTick: int
@@ -65,13 +99,13 @@ classDiagram
         id: "prop.crate"
         version: 1
     }
-    class ReplayLogV2 {
-        schemaVersion = 2
-        initialWorld: WorldV2
+    class ReplayLogV3 {
+        schemaVersion = 3
+        initialWorld: WorldV3
         firstSeq: int
         endTick: int
     }
-    class ReplayEntryV2 {
+    class ReplayEntryV3 {
         seq: firstSeq, firstSeq + 1…
         tick: non-decreasing
         id: command id
@@ -86,30 +120,49 @@ classDiagram
         saves.lastPlayed (v2)
         extensions
     }
-    WorldV2 "1" *-- "*" FixtureV1 : fixtures
-    WorldV2 "1" *-- "*" EntityV2 : entities
-    WorldV2 "1" *-- "*" ConnectionV2 : connections
-    WorldV2 "1" *-- "0..1" SimSolutionV2 : sim
-    ConnectionV2 *-- TerminalRef : a, b
+    WorldV3 "1" *-- "*" FixtureV1 : fixtures
+    WorldV3 "1" *-- "*" EntityV3 : entities
+    WorldV3 "1" *-- "*" ConnectionV3 : connections
+    WorldV3 "1" *-- "*" CableV3 : cables
+    WorldV3 "1" *-- "0..1" SimSolutionV2 : sim
+    ConnectionV3 *-- ConnectionEndV3 : a, b
+    ConnectionEndV3 *-- TerminationV3 : termination
+    ConnectionV3 *-- WaypointV3 : route
+    CableV3 *-- WaypointV3 : route
+    ConnectionV3 --> CableV3 : cable.id
+    EntityV3 --> EntityV3 : mountedOn
     FixtureV1 --> CatalogRef
-    EntityV2 --> CatalogRef
-    ConnectionV2 --> CatalogRef
-    ReplayLogV2 *-- WorldV2 : initialWorld
-    ReplayLogV2 "1" *-- "*" ReplayEntryV2 : entries
+    EntityV3 --> CatalogRef
+    ConnectionV3 --> CatalogRef
+    CableV3 --> CatalogRef
+    ReplayLogV3 *-- WorldV3 : initialWorld
+    ReplayLogV3 "1" *-- "*" ReplayEntryV3 : entries
     SettingsV2 --> CatalogRef : toolBelt.slots
 ```
 
 | Document                | File in `.ctrl`           | Schema         | Version key       |
 | ----------------------- | ------------------------- | -------------- | ----------------- |
-| Manifest                | `manifest.json`           | `ManifestV2`   | `schemaVersion`   |
-| World                   | `world.json`              | `WorldV2`      | `schemaVersion`   |
-| Replay log              | `replay.log` (optional)   | `ReplayLogV2`  | `schemaVersion`   |
+| Manifest                | `manifest.json`           | `ManifestV3`   | `schemaVersion`   |
+| World                   | `world.json`              | `WorldV3`      | `schemaVersion`   |
+| Replay log              | `replay.log` (optional)   | `ReplayLogV3`  | `schemaVersion`   |
 | Prints, PLC, HMI        | `prints/`, `plc/`, `hmi/` | (P6, P10, P12) | `schemaVersion`   |
 | Settings (not in saves) | settings store (F1.1)     | `SettingsV2`   | `settingsVersion` |
 
 JSON Schema for each document is generated from Zod into `libs/domain/save-format/json-schema/` for docs, mods and tools (every version keeps its file). Zod stays authoritative.
 
 **World v2** (P2, [ADR 0013](../decisions/0013-world-document-v2.md)) adds connections (test leads) with their own id counter, two device state bags on every entity (`state`, commanded; `sim`, written only by the simulator), and the last electrical solution (`sim`). The bags' keys come from each device's model kind and are checked at load (`invalid-device-state`); the world schema checks only their generic shape, so a new device kind needs no bump. The log gains `firstSeq` and `endTick`, and the manifest `simEngineVersion`. v1 migrates with empty bags, no connections and no solution.
+
+**World v3** (P3, [ADR 0015](../decisions/0015-world-document-v3.md), amended by [ADR 0016](../decisions/0016-catalogue-format-v2.md)) carries real wiring. Leads and conductors share `connections` and one id counter: a lead is lead-shaped (no length, route, cable, colour or label; two clip ends), a conductor has a cut length, a colour and either its own route or a place in a cable, and each landed end records its termination (the outcome of the tool steps, never a resistance) under an id from `nextTerminationId`. A null end is unlanded and isn't netlisted. Cables own their conductors (`cable.conductor` is the index in the assembly), with tails and stripped jacket per end; routes are integer-mm waypoints on free air, ducts, conduit, staples or bores. Entities record what they are mounted on and a printed label. Connection `sim` bags hold ten thermal and contact keys (the lead kind's, initial until the thermal bank lands in F3.6). The v2 → v3 step is pure and total: new counters at 1, no cables, unmounted unlabelled entities, every v2 connection a lead with clip ends and the lead's initial bag (a frozen literal), and `mountedOn: null` added to each logged `entity.place`.
+
+```mermaid
+flowchart LR
+    V2["world v2<br/>(leads only)"] -->|"worldV2ToV3 (pure, no catalogue)"| V3["world v3"]
+    V3 --> SCHEMA["WorldV3 schema:<br/>ids under counters, termination ids unique,<br/>lead/conductor shapes, cable conductors 0…n−1,<br/>route hosts, rest waypoints, tails"]
+    SCHEMA --> CHECK["checkWorldReferences (load check):<br/>bag keys, terminals and methods, colours,<br/>mounts, open entries, chord and cable floor<br/>(exact integer, quarter-turn geometry)"]
+    CHECK --> GAME["createGame / loadGame / Session.prepareLoad"]
+```
+
+`world.hash` is still the SHA-256 of the canonical JSON of the whole parsed world, so it covers every new field; every pinned world golden was re-pinned once at world v3 (CHANGELOG). `topologyHash` keeps its encoding: a conductor will be a branch like a lead, and an unlanded connection is absent (`unlanded`).
 
 ## Fixtures and levels (F1.9)
 

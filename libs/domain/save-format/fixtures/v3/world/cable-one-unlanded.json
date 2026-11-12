@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 3,
+  "seed": 7,
+  "tick": 0,
+  "nextEntityId": 3,
+  "nextConnectionId": 4,
+  "nextCableId": 2,
+  "nextTerminationId": 3,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [
+    {
+      "id": "stud-wall",
+      "ref": {
+        "id": "prop.stud-wall",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -2500,
+          "y": -1200,
+          "z": -21
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "utility.larkmoor-split-phase-25kva",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 900,
+          "z": -2000
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "box.fixture-1gang",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1500,
+          "y": 1200,
+          "z": -1990
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "openEntries": 2
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": "J1",
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "conductor.fixture-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "l1",
+        "termination": {
+          "id": 1,
+          "method": "screw",
+          "auto": false,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 4,
+          "accessory": null
+        }
+      },
+      "b": null,
+      "cable": {
+        "id": 1,
+        "conductor": 0
+      },
+      "route": null,
+      "lengthMm": 2800,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": 1,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "conductor.fixture-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "n",
+        "termination": {
+          "id": 2,
+          "method": "screw",
+          "auto": false,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 3.75,
+          "accessory": null
+        }
+      },
+      "b": null,
+      "cable": {
+        "id": 1,
+        "conductor": 1
+      },
+      "route": null,
+      "lengthMm": 2800,
+      "colour": {
+        "base": "white",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": 2,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "conductor.fixture-14-bare",
+        "version": 1
+      },
+      "a": null,
+      "b": null,
+      "cable": {
+        "id": 1,
+        "conductor": 2
+      },
+      "route": null,
+      "lengthMm": 2800,
+      "colour": {
+        "base": "bare",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    }
+  ],
+  "cables": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "cable.fixture-14-2",
+        "version": 1
+      },
+      "a": null,
+      "b": {
+        "entity": 2,
+        "entry": "ko2"
+      },
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 150,
+            "y": 1300,
+            "z": -1800
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "staple",
+          "positionMm": {
+            "x": 800,
+            "y": 1300,
+            "z": -1990
+          },
+          "entity": null,
+          "fixture": "stud-wall",
+          "tool": null
+        }
+      ],
+      "lengthMm": 2800,
+      "tailsMm": {
+        "a": 600,
+        "b": 200
+      },
+      "jacketStripMm": {
+        "a": 450,
+        "b": 0
+      },
+      "label": "W12",
+      "extensions": {}
+    }
+  ],
+  "sim": null,
+  "extensions": {}
+}

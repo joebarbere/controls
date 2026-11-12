@@ -1,4 +1,4 @@
-import { TERMINAL_ID_PATTERN } from '@controls/save-format';
+import { CAMEL_ID_PATTERN } from '@controls/save-format';
 import * as z from 'zod';
 
 /*
@@ -12,36 +12,25 @@ import * as z from 'zod';
  * practice or a standard by number; `game-design` rows say they are an abstraction chosen for play.
  */
 
-/** The grammar of colour, method, table and table-key ids: lower camelCase, at most 32 (ADR 0015). */
-export const CAMEL_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,31}$/;
+/*
+ * ADR 0015's id primitives (`ColourId`, `TerminationMethodId`, `MountId`, `EntryId`, `HoleId`,
+ * `DieId`) and their grammar (`CAMEL_ID_PATTERN`) are defined in `save-format`'s primitives, the
+ * source of truth for persisted grammar (world v3 stores them), and re-exported here (ADR 0016), so
+ * the catalogue and a save can never disagree on what an id may be.
+ */
+export {
+  CAMEL_ID_PATTERN,
+  ColourId,
+  DieId,
+  EntryId,
+  HoleId,
+  MountId,
+  TerminationMethodId,
+} from '@controls/save-format';
 
 const camelId = (id: string, description: string) =>
   z.string().max(32).regex(CAMEL_ID_PATTERN).meta({ id, description });
-const terminalGrammar = (id: string, description: string) =>
-  z.string().max(32).regex(TERMINAL_ID_PATTERN).meta({ id, description });
 
-/*
- * ADR 0015 names these primitives for world v3 (`ColourId`, `TerminationMethodId`, `MountId`,
- * `EntryId`, `HoleId`, `DieId`). Until world v3 lands the catalogue defines them here with exactly
- * the ADR's grammar; world v3 (PR 7) moves them into `save-format`'s primitives, the source of truth
- * for persisted grammar, and this module re-exports those in place of its own copies (ADR 0016).
- */
-
-/** A row of the catalogue colour table (`black`, `white`, `green`, `bare`). */
-export const ColourId = camelId('ColourId', 'A row of the catalogue colour table: lower camelCase, at most 32.');
-/** A termination method in {@link TERMINATION_METHODS}. */
-export const TerminationMethodId = camelId('TerminationMethodId', 'A termination method id: lower camelCase.');
-/** A mount of an enclosure entry, unique within the entry (TerminalId's grammar). */
-export const MountId = terminalGrammar('MountId', 'A mount id within one catalogue entry (TerminalId grammar).');
-/** A cable entry of an enclosure entry, unique within the entry (TerminalId's grammar). */
-export const EntryId = terminalGrammar('EntryId', 'An enclosure entry id within one catalogue entry.');
-/** A strip hole of a tool entry, unique within it (TerminalId's grammar). */
-export const HoleId = terminalGrammar('HoleId', 'A stripping hole id within one tool entry.');
-/** A crimp die of a tool entry, unique within it (TerminalId's grammar). */
-export const DieId = terminalGrammar(
-  'DieId',
-  'A crimp die id within one tool entry; accessories list the die ids that crimp them.',
-);
 /** A table name (`materials`, `insulation`, `colours`). */
 export const TableName = camelId('TableName', 'A catalogue table name: lower camelCase.');
 /** A row key of a table (`copperAnnealed`, `thhnThwn2`). */

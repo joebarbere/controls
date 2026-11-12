@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 3,
+  "seed": 3,
+  "tick": 0,
+  "nextEntityId": 5,
+  "nextConnectionId": 1,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "panel.fixture-din-600",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 1000,
+          "z": -1990
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "openEntries": 0
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": "P1",
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "breaker.saltmere-1p-15a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 60,
+          "y": 1255,
+          "z": -1955
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "thermal": 0,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "rail-1"
+      },
+      "label": "CB1",
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "supply.railwick-din-24v-5a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 100,
+          "y": 1215,
+          "z": -1955
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "mode": "ok",
+        "phaseTicks": 0
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "rail-1"
+      },
+      "label": "PS1",
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "breaker.saltmere-1p-15a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -900,
+          "y": 255,
+          "z": -1955
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "thermal": 0,
+        "tripped": false
+      },
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    }
+  ],
+  "connections": [],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

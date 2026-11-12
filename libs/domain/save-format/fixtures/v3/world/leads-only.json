@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 3,
+  "seed": 7,
+  "tick": 0,
+  "nextEntityId": 4,
+  "nextConnectionId": 4,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [
+    {
+      "id": "bench",
+      "ref": {
+        "id": "prop.bench",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 700,
+          "y": -1200,
+          "z": 80
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "battery.ferrovane-12v-7ah",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 800,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "stateOfCharge": 1
+      },
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "switch.tessaline-spst-toggle",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1100,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "closed": false
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "lamp.lumivane-12v-5w",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1300,
+          "y": -300,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "filamentTempK": null
+      },
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 1,
+        "terminal": "pos",
+        "termination": null
+      },
+      "b": {
+        "entity": 2,
+        "terminal": "a",
+        "termination": null
+      },
+      "cable": null,
+      "route": null,
+      "lengthMm": null,
+      "colour": null,
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 2,
+        "terminal": "b",
+        "termination": null
+      },
+      "b": {
+        "entity": 3,
+        "terminal": "a",
+        "termination": null
+      },
+      "cable": null,
+      "route": null,
+      "lengthMm": null,
+      "colour": null,
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "lead.quillfern-test-1m",
+        "version": 1
+      },
+      "a": {
+        "entity": 3,
+        "terminal": "b",
+        "termination": null
+      },
+      "b": {
+        "entity": 1,
+        "terminal": "neg",
+        "termination": null
+      },
+      "cable": null,
+      "route": null,
+      "lengthMm": null,
+      "colour": null,
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    }
+  ],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

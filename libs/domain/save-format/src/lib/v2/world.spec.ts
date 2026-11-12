@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawWorldV2Arb } from '../../testing/arbitraries';
-import { createWorld, migrateWorld } from '../documents';
+import { migrateWorld } from '../documents';
+import { worldV2ToV3 } from '../v3/from-v2';
 import { WorldV2 } from './world';
 
 const Z = { yaw: 0, pitch: 0, roll: 0 };
@@ -54,15 +55,6 @@ describe('WorldV2', () => {
   it('accepts a world with device state, a connection and a solution record', () => {
     expect(WorldV2.parse(world())).toStrictEqual(world());
     expect(issuesOf(world({ sim: null }))).toStrictEqual([]);
-  });
-
-  it('createWorld builds an empty, never-solved world', () => {
-    expect(createWorld({ seed: 7 })).toStrictEqual(
-      world({ seed: 7, tick: 0, nextEntityId: 1, nextConnectionId: 1, entities: [], connections: [], sim: null }),
-    );
-    expect(createWorld({ seed: 0, difficulty: 'realistic', regionId: 'nec' }).difficulty).toBe('realistic');
-    expect(() => createWorld({ seed: 2 ** 32 })).toThrow();
-    expect(() => createWorld({ seed: -1 })).toThrow();
   });
 
   it('keeps v1’s rules for entities and fixtures', () => {
@@ -148,7 +140,7 @@ describe('WorldV2', () => {
         expect(again).toStrictEqual(w);
         expect(JSON.stringify(again)).toBe(text);
         expect(WorldV2.parse(w)).toStrictEqual(w);
-        expect(migrateWorld(JSON.parse(text))).toStrictEqual({ ok: true, value: w, fromVersion: 2 });
+        expect(migrateWorld(JSON.parse(text))).toStrictEqual({ ok: true, value: worldV2ToV3(w), fromVersion: 2 });
       }),
     );
   });

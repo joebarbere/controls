@@ -12,3 +12,4 @@ export * from './lib/props';
 export * from './lib/fixtures';
 export * from './lib/level';
 export * from './lib/snap';
+export * from './lib/routing';

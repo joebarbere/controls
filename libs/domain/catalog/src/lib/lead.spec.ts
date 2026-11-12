@@ -1,6 +1,7 @@
+import { CURRENT_SCHEMA_VERSION, LEAD_SIM_BAG_V3 } from '@controls/save-format';
 import fc from 'fast-check';
 import { leadConductorResistanceOhm, leadResistanceOhm } from './lead';
-import type { LeadParams } from './model-kinds';
+import { initialBags, type LeadParams, MODEL_KINDS } from './model-kinds';
 
 /** The catalogue's 1 m 18 AWG copper test lead: A from the AWG formula, ρ and α from IACS. */
 const copper: LeadParams = {
@@ -45,5 +46,17 @@ describe('lead resistance (resistivity × length ÷ area, with a temperature coe
         },
       ),
     );
+  });
+});
+
+describe('the v2 → v3 migration’s lead bag (ADR 0015)', () => {
+  it('equals the lead kind’s initial sim bag while schemaVersion 3 is current', () => {
+    // `save-format`'s v2 → v3 step holds the bag as a frozen literal so it never reads the catalogue.
+    // While v3 is the current version the two must agree, or a migrated lead would fail the load
+    // check. Once a later version changes the lead kind's keys, this test moves to that version's
+    // migration (the v3 literal itself never changes).
+    expect(CURRENT_SCHEMA_VERSION).toBe(3);
+    expect(LEAD_SIM_BAG_V3).toStrictEqual(initialBags(MODEL_KINDS['lead']).sim);
+    expect(initialBags(MODEL_KINDS['lead']).state).toStrictEqual({});
   });
 });

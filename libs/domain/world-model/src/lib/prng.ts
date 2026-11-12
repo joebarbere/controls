@@ -125,3 +125,25 @@ export function commandStreamKey(seq: number): string {
 export function entityStreamKey(id: number): string {
   return `entity:${id}`;
 }
+
+/*
+ * World v3 stream keys (ADR 0015, "PRNG stream keys"). Their prefixes differ from `command:` and
+ * `entity:`, so keys never collide across kinds. Frozen with schemaVersion 3 at v0.4.0 (golden strings
+ * in `prng.spec.ts`). Per-purpose streams append a suffix: `termination:<id>:strip`, `:crimp` and
+ * `:clamp` (command time, `resolveTermination`), `:intermittent` and `:arcing` (engine time).
+ */
+
+/** The stream key for a connection's own randomness (manufacturing tolerance), stable for its lifetime. */
+export function connectionStreamKey(id: number): string {
+  return `connection:${id}`;
+}
+
+/** The stream key reserved for a cable's own randomness (no P3 consumer; defined so none can collide). */
+export function cableStreamKey(id: number): string {
+  return `cable:${id}`;
+}
+
+/** The stream key of a termination (`TerminationV3.id`): its draws, whichever surface made it. */
+export function terminationStreamKey(id: number): string {
+  return `termination:${id}`;
+}
