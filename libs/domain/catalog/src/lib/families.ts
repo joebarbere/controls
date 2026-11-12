@@ -142,7 +142,7 @@ export const ToolDefinition = z
      * The screw drive types its tip or socket fits (F3.4 part 1, ADR 0016 amendment); non-empty exactly
      * when it can `drive`. Sizes are names, not modelled.
      */
-    drives: z.array(DriveType).max(5).default([]),
+    drives: z.array(DriveType).max(5),
     sources: z.array(CatalogSource).min(1),
     extensions: Extensions,
   })

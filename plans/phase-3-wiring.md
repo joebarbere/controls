@@ -341,6 +341,7 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 ## Close-out
 
 1. [ ] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P3 narrative, `schemaVersion` 3, `catalogVersion` 2, `simEngineVersion` 7, `SIM_PROTOCOL_VERSION` 6.
+   - Before `/release minor`: `shipped.spec.ts` masks only the v2 fields a frozen document lacks (by its release's `catalogVersion`) and its `Shipped` list gains `tools`, so 0.4.0's frozen list locks methods, drives, holes, dies and tools (save-format-guardian, F3.4 review).
 2. [ ] `version-keeper`: `0.3.0 → 0.4.0`.
 3. [ ] `release-engineer`: package and smoke-test (new sandbox; the lamp circuit lights; save and load mid-heating), tag on the user's confirmation, check the draft. The user publishes.
 4. [ ] Mark P3 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P4 kickoff writes `plans/phase-4-*.md`; P4 builds wall switches, receptacles and the load centre on P3's terminations, uses `mountedOn` and `interiorVolumeMm3` for box fill, and replaces D12's stand-in supply with the service and load centre.

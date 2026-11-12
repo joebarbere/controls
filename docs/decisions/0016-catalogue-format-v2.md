@@ -105,7 +105,7 @@ Added after the `electrical-realism-reviewer` review of the first tools, while c
 
 - **`DRIVE_TYPES`** (`registries.ts`): `slotted` (ISO 2380 by number), `phillips` and `pozidriv` (ISO 8764 by number), `square` (Robertson, practice), `hex` (hex-washer heads, practice). A size is a name, never modelled (game-design).
 - **`ToolDefinition.drives`**: non-empty exactly when the tool can `drive`, coverage path `drives`.
-- **`TerminalMethodSpec.drives`**: non-empty exactly for a clamp-torque method (`screw`), coverage path `terminals.<id>.methods.<method>.drives`. Both fields default to `[]`, so a document without them parses; the check then refuses a driver or screw that lacks them.
+- **`TerminalMethodSpec.drives`**: non-empty exactly for a clamp-torque method (`screw`), coverage path `terminals.<id>.methods.<method>.drives`. Both fields are required and written out (`[]` when empty), like `holes`, `dies` and `methods`; catalogue validation refuses a driver without drive types and a clamp-torque method without its screw's, so a command never sees such an entry.
 - **`EntryTypeDef.drives`**: the tips that open an entry by `drive` (`slotted` for `knockout`, `pryout`, `clamp`; none for `drillSite`).
 - Commands refuse a misfit with `wrong-drive` (ADR 0015 implementation note 16). The P2 entries gain data only (screw drives on the breaker, the DIN supply and the stand-in service), keeping version 1 under the "gaining data keeps the version" rule.
 

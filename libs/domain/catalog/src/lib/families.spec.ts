@@ -223,6 +223,7 @@ function tool(overrides: Record<string, unknown> = {}): Record<string, unknown> 
       { id: 'sol-12', awg: 12, stranding: 'solid' },
     ],
     dies: [],
+    drives: [],
     torque: null,
     boreDiameterMm: null,
     sources: source(['capabilities', 'holes']),

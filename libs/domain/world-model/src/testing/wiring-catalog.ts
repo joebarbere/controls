@@ -192,6 +192,7 @@ const block = {
           stranding: ['solid', 'strandedFerrule'],
           stripLengthMm: { nominal: 10, tolerance: 1 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 5, y: 60, z: 30 },
           exitAxis: '+y',
@@ -224,6 +225,7 @@ const block = {
           stranding: ['solid', 'strandedFerrule'],
           stripLengthMm: { nominal: 10, tolerance: 1 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 15, y: 60, z: 40 },
           exitAxis: '+y',
@@ -236,6 +238,7 @@ const block = {
           stranding: ['solid', 'stranded'],
           stripLengthMm: { nominal: 13, tolerance: 2 },
           torqueNm: null,
+          drives: [],
           alRated: false,
           entryMm: { x: 15, y: 60, z: 44 },
           exitAxis: '+y',
@@ -331,6 +334,7 @@ const bit = {
   capabilities: [{ step: 'bore', maxAwg: null }],
   holes: [],
   dies: [],
+  drives: [],
   torque: null,
   boreDiameterMm: 19,
   sources: source(['capabilities', 'boreDiameterMm']),
@@ -338,7 +342,7 @@ const bit = {
 };
 
 const tool = (id: string, kind: string, capabilities: object[], extra: Record<string, unknown> = {}) => {
-  const fields = { holes: [], dies: [], torque: null, boreDiameterMm: null, ...extra };
+  const fields = { holes: [], dies: [], drives: [], torque: null, boreDiameterMm: null, ...extra };
   const covers = ['capabilities', ...Object.keys(extra)];
   return {
     id,

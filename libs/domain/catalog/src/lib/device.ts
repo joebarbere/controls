@@ -77,7 +77,7 @@ export const TerminalMethodSpec = z
      * The screw's drive types (F3.4 part 1, ADR 0016 amendment): non-empty exactly for a clamp-torque
      * method, whose driver must fit one (`wrong-drive`); empty (the default) for every other method.
      */
-    drives: z.array(DriveType).max(5).default([]),
+    drives: z.array(DriveType).max(5),
     /** Whether the method is rated for aluminium conductors (CO/ALR, AL/CU). */
     alRated: z.boolean(),
     /** Where the conductor enters the terminal, in the device's own frame (integer mm). */

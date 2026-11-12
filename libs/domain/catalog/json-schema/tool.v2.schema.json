@@ -193,7 +193,6 @@
       ]
     },
     "drives": {
-      "default": [],
       "maxItems": 5,
       "type": "array",
       "items": {
