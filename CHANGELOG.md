@@ -29,6 +29,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Documentation
 
+- [ADR 0015](docs/decisions/0015-world-document-v3.md) "World document v3 and the wire contract" (Accepted, P3 kickoff step 3, after the agent-team review by the sim, renderer, UI and content specialists): one `connections` array for test leads and conductors with nullable ends, cables with `nextCableId`, `mountedOn` and entity labels, termination outcomes with their own `nextTerminationId` (so wiring the same circuit by mouse, keyboard or palette reaches the same `world.hash`), integer-mm routes with rest waypoints, `lengthMm` as a logged argument checked against the route, capability-checked tools, the `wire.*`, `cable.*`, `enclosure.openEntry` and `entity.label` commands and their refusals, one netlist branch per landed connection, ten connection `sim` keys, the `termination:`, `connection:` and `cable:` stream keys, the hash scope, the total v2 → v3 migration, what catalogue v2 must keep, and the draft protocol 6 connection records. The phase 3 plan is corrected to match (D5, D8, D10, budgets, a palette and console PR before the commands PR). No code yet.
 - Release caveats from packaging v0.3.0:
   - `asar extract-file` writes into the current directory (it overwrote the root `package.json`), so extract into a scratch directory.
   - A failed deb build leaves `resources/package-type` set to `deb` in `linux-unpacked`, so delete `dist/release` before packaging again.
