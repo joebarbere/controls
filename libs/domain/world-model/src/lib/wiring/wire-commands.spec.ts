@@ -276,7 +276,9 @@ describe('wire.add', () => {
     expect(clip).toMatchObject(refused('wrong-method'));
   });
 
-  it('refuses every twist-on landing until the catalogue has its rated combinations (ADR 0018)', () => {
+  it('checks a twist-on landing against the splice’s rated combination (ADR 0018 §4.4)', () => {
+    // The test splice: two or three of 18–12 AWG, at most 5 000 000 µm² in all. Two 14s (2 × 2 080 910)
+    // fit; a third (6 242 730 in all) is refused on total size, although the count (3) is rated.
     const bus = wiringBench('journeyman');
     const twist = {
       method: 'twistOn',
@@ -284,16 +286,33 @@ describe('wire.add', () => {
       accessory: null,
       clamp: { tool: null, torqueNm: null },
     };
-    const add = bus.exec(
+    const land = (x: number) =>
+      bus.exec(
+        'wire.add',
+        autoWireArgs({
+          a: { entity: 4, terminal: '2', termination: twist },
+          b: null,
+          route: [freeAt(x, 700, 144)],
+          lengthMm: 600,
+        }),
+      );
+    expect(land(1165).ok).toBe(true); // one conductor: below the rated minimum count, still being made
+    expect(land(1166).ok).toBe(true);
+    const third = land(1167);
+    expect(third).toMatchObject(refused('combination-out-of-range'));
+    expect(third.ok ? '' : third.error.message).toContain("above the splice's rated maximum");
+    // A 10 AWG conductor is outside the method's own range first (gauge-out-of-range).
+    const thick = bus.exec(
       'wire.add',
       autoWireArgs({
-        a: { entity: 4, terminal: '2', termination: twist },
+        ref: WIRE_10,
+        a: { entity: 4, terminal: '2', termination: { ...twist, strip: { ...twist.strip, hole: 'h10s' } } },
         b: null,
-        route: [freeAt(1165, 700, 144)],
+        route: [freeAt(1168, 700, 144)],
         lengthMm: 600,
       }),
     );
-    expect(add).toMatchObject(refused('combination-out-of-range'));
+    expect(thick).toMatchObject(refused('gauge-out-of-range'));
   });
 
   it("refuses a gauge outside the terminal's range", () => {

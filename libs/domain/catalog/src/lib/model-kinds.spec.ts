@@ -13,7 +13,7 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor and the F3.5 enclosure kinds, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure kinds and F3.3’s twist-on splice, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.thermalMagnetic',
@@ -26,6 +26,7 @@ describe('MODEL_KINDS', () => {
       'lamp.incandescent',
       'lead',
       'resistor',
+      'splice.twistOn',
       'supply.bench',
       'supply.dinPsu',
       'switch.spst',
@@ -84,6 +85,7 @@ describe('MODEL_KINDS', () => {
         insulationDamaged: 'sim boolean false',
       },
       resistor: {},
+      'splice.twistOn': {},
       'supply.bench': {
         currentLimitA: 'commanded number 1',
         mode: 'sim enum cv',

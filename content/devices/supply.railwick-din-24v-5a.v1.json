@@ -41,7 +41,13 @@
             "y": 125,
             "z": 110
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 7,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
         }
       ]
     },
@@ -75,7 +81,13 @@
             "y": 125,
             "z": 110
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 7,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
         }
       ]
     }
@@ -165,6 +177,24 @@
       "kind": "game-design",
       "citation": "game-design: unverified. DIN-rail power supplies commonly have slotted and Pozidriv combination terminal screws (common practice for IEC-style terminals, not read from one datasheet); the drive type is a name and its size is not modelled.",
       "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "din-psu-terminal-contact",
+      "kind": "game-design",
+      "citation": "game-design: the supply's output terminals take the branch-circuit screw class's contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1). BSS 103 measured wiring-device terminals, not a power supply's box clamps, so applying it here is a game-design choice.",
+      "covers": ["terminals.*.methods.screw.contactOhm"]
+    },
+    {
+      "id": "din-psu-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3), for F3.6's hot-spot node: the heat path takes the screw class's calibrated 0.026 W/K (no better figure for a supply's terminal); the clamp's heat capacity, 0.5 J/K, is a physics estimate for a smaller box clamp, about 1.3 g of brass and steel × about 380 J/(kg·K).",
+      "covers": ["terminals.*.methods.screw.heatPathWPerK", "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"]
+    },
+    {
+      "id": "din-psu-terminal-clamp",
+      "kind": "game-design",
+      "citation": "game-design: the supply's screw terminals are box clamps (a rising cage that closes around the conductor), so bare strands are held (ADR 0018 §4.3); the cage grips 7 mm of conductor, inside the 8 ± 1 mm strip. Not modelled on a product.",
+      "covers": ["terminals.*.methods.screw.clampType", "terminals.*.methods.screw.clampDepthMm"]
     }
   ],
   "extensions": {}

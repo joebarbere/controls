@@ -107,6 +107,12 @@ const screw = {
   alRated: false,
   entryMm: { x: 10, y: 0, z: 5 },
   exitAxis: '+z',
+  clampType: 'bindingScrew',
+  clampDepthMm: 10,
+  contactOhm: 0.0003,
+  heatPathWPerK: 0.026,
+  hotSpotHeatCapacityJPerK: 1.1,
+  combination: null,
 };
 
 function box(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -442,7 +448,95 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(found).toContain(
       '[2] box.test-1gang@1: terminals.ground.methods.screw.torqueNm: Has no source (realism charter: every value has a source)',
     );
-    expect(found.filter((m) => m.includes('terminals.ground.methods.screw.'))).toHaveLength(10); // nine fields and the drives
+    expect(found.filter((m) => m.includes('terminals.ground.methods.screw.'))).toHaveLength(15); // nine fields, the drives and ADR 0018's five clamp fields
+  });
+
+  it('a splice: category "splice" exactly for splice.twistOn, which lands by twistOn only', () => {
+    const devices = (b: Record<string, unknown>) => ({ devices: [conductor('conductor.test-14'), bareConductor(), b] });
+    const nut = {
+      ...screw,
+      method: 'twistOn',
+      clampType: 'twistOn',
+      torqueNm: null,
+      drives: [],
+      ratedConductors: 2,
+      combination: {
+        minConductors: 2,
+        maxConductors: 2,
+        awg: { smallest: 14, largest: 12 },
+        totalAreaUm2: { min: 0, max: 9e6 },
+      },
+    };
+    const splice = (methods: unknown[], category = 'splice') =>
+      box({
+        id: 'splice.test-nut',
+        category,
+        enclosure: null,
+        mounts: [],
+        model: { kind: 'splice.twistOn', params: {} },
+        terminals: [{ id: 'splice', label: 'S', positionMm: { x: 0, y: 0, z: 0 }, methods }],
+        sources: source(['sizeMm', 'terminals', 'terminals.splice.methods']),
+      });
+    expect(messages(devices(splice([nut])))).toStrictEqual([]);
+    expect(messages(devices(splice([nut], 'switch'))).join()).toContain(
+      'Category "splice" goes with the splice.twistOn kind',
+    );
+    expect(messages(devices(splice([nut, { ...screw, clampType: 'pressurePlate' }]))).join()).toContain(
+      'A twist-on splice lands conductors by twistOn only',
+    );
+  });
+
+  it('ADR 0018 §8 clamp fields: the clamp type fits the method, the clamp depth fits the strip, a combination exactly for twistOn', () => {
+    const withMethods = (methods: unknown[]) =>
+      box({ terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods }] });
+    const devices = (b: Record<string, unknown>) => ({ devices: [conductor('conductor.test-14'), bareConductor(), b] });
+    const found = (methods: unknown[]) => messages(devices(withMethods(methods))).join();
+    expect(found([{ ...screw, clampType: 'springCage' }])).toContain(
+      'A screw method holds the conductor by bindingScrew or pressurePlate or boxLug, not springCage',
+    );
+    expect(found([{ ...screw, clampType: 'solder' }])).toContain('clampType');
+    expect(found([{ ...screw, clampDepthMm: 14 }])).toContain('clampDepthMm must not exceed the nominal strip length');
+    expect(found([{ ...screw, contactOhm: 0 }])).toContain('contactOhm');
+    const combination = {
+      minConductors: 2,
+      maxConductors: 3,
+      awg: { smallest: 14, largest: 12 },
+      totalAreaUm2: { min: 4161820, max: 9926310 },
+    };
+    expect(found([{ ...screw, combination }])).toContain('A combination goes with a twistOn method, and only with it');
+    const nut = {
+      ...screw,
+      method: 'twistOn',
+      clampType: 'twistOn',
+      torqueNm: null,
+      drives: [],
+      ratedConductors: 3,
+      maxConductors: 3,
+      combination,
+    };
+    expect(found([{ ...nut, combination: null }])).toContain('A combination goes with a twistOn method');
+    expect(found([{ ...nut, maxConductors: 4 }])).toContain("combination.maxConductors must equal the method's");
+    expect(found([{ ...nut, combination: { ...combination, awg: { smallest: 18, largest: 12 } } }])).toContain(
+      "combination.awg must lie inside the method's awgRange",
+    );
+    expect(found([{ ...nut, combination: { ...combination, minConductors: 4 } }])).toContain(
+      'minConductors must not exceed maxConductors',
+    );
+    expect(found([{ ...nut, combination: { ...combination, totalAreaUm2: { min: 9, max: 8 } } }])).toContain(
+      'totalAreaUm2.min must not exceed its max',
+    );
+    // Two of the thinnest (14 AWG) are 4 161 820 µm²: a higher minimum would make refusals order-dependent.
+    expect(
+      found([{ ...nut, combination: { ...combination, totalAreaUm2: { min: 4161821, max: 9926310 } } }]),
+    ).toContain('combination.totalAreaUm2.min must not exceed minConductors');
+    expect(found([nut])).not.toContain('combination.totalAreaUm2.min must not exceed minConductors');
+    const covered = box({
+      terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [nut] }],
+      sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3']),
+    });
+    expect(messages(devices(covered))).toContain(
+      '[2] box.test-1gang@1: terminals.ground.methods.twistOn.combination: Has no source (realism charter: every value has a source)',
+    );
   });
 
   it('cables: indices in order, pinned conductor entries, matching insulation and colours, a jacket row', () => {

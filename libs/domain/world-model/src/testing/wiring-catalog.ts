@@ -116,6 +116,22 @@ const screw = {
   alRated: false,
   entryMm: { x: 10, y: 0, z: 5 },
   exitAxis: '+z',
+  clampType: 'bindingScrew',
+  clampDepthMm: 10,
+  contactOhm: 0.0003,
+  heatPathWPerK: 0.026,
+  hotSpotHeatCapacityJPerK: 1.1,
+  combination: null,
+};
+
+/** ADR 0018 §8's spring-cage fields (test values: R₀ 0.3 mΩ, within BSS 128's 1.5 mΩ). */
+const cageClamp = {
+  clampType: 'springCage',
+  clampDepthMm: 9,
+  contactOhm: 0.0003,
+  heatPathWPerK: 0.02,
+  hotSpotHeatCapacityJPerK: 0.5,
+  combination: null,
 };
 
 const box = {
@@ -169,7 +185,7 @@ const box = {
   extensions: {},
 };
 
-/** A DIN terminal block: terminal 1 spring-cage only, terminal 2 screw first, then spring-cage, then twist-on (to test its refusal). */
+/** A DIN terminal block: terminal 1 spring-cage only, terminal 2 screw first, then spring-cage, then twist-on (its combination check). */
 const block = {
   id: 'tb.test-2',
   version: 1,
@@ -196,6 +212,7 @@ const block = {
           alRated: false,
           entryMm: { x: 5, y: 60, z: 30 },
           exitAxis: '+y',
+          ...cageClamp,
         },
       ],
     },
@@ -216,6 +233,13 @@ const block = {
           alRated: false,
           entryMm: { x: 15, y: 60, z: 30 },
           exitAxis: '+y',
+          // A binding screw, so a bare stranded conductor splays (ADR 0018 §4.3).
+          clampType: 'bindingScrew',
+          clampDepthMm: 8,
+          contactOhm: 0.0003,
+          heatPathWPerK: 0.026,
+          hotSpotHeatCapacityJPerK: 1.1,
+          combination: null,
         },
         {
           method: 'springCage',
@@ -229,10 +253,11 @@ const block = {
           alRated: false,
           entryMm: { x: 15, y: 60, z: 40 },
           exitAxis: '+y',
+          ...cageClamp,
         },
         {
           method: 'twistOn',
-          ratedConductors: 2,
+          ratedConductors: 3,
           maxConductors: 3,
           awgRange: { smallest: 18, largest: 12 },
           stranding: ['solid', 'stranded'],
@@ -242,6 +267,19 @@ const block = {
           alRated: false,
           entryMm: { x: 15, y: 60, z: 44 },
           exitAxis: '+y',
+          clampType: 'twistOn',
+          clampDepthMm: 13,
+          contactOhm: 0.0005,
+          heatPathWPerK: 0.01,
+          hotSpotHeatCapacityJPerK: 2,
+          // Two or three of 18 to 12 AWG, at least two 18s (1 646 094 µm²) and at most 5 000 000 µm² in
+          // all: two 14s fit (4 161 820), a third doesn't (6 242 730). Test values, not a product.
+          combination: {
+            minConductors: 2,
+            maxConductors: 3,
+            awg: { smallest: 18, largest: 12 },
+            totalAreaUm2: { min: 1646094, max: 5000000 },
+          },
         },
       ],
     },

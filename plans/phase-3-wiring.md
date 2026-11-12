@@ -173,10 +173,10 @@ Owner `renderer-engineer` (domain routing maths and rendering), with `angular-ui
 
 Owners `sim-engine-engineer` (contact model), `content-designer` (termination specs and accessories: ferrules, ring and fork lugs, wire-nut sizes with conductor-combination ranges from public manufacturer data, fictional brands), `angular-ui-engineer` (prompts). ADR 0018. Two parts.
 
-- [ ] **Part 1, headless:** `TerminationArgs` `{ method, stripHoleArea, stripLengthMm, accessory, crimpDie, torqueNm }` → `TerminationV3` (method plus resolved outcome: nicked-strand fraction, achieved torque, clamp area); quality → contact resistance per D8. Hand-calculated goldens: an ideal screw termination at specified torque; 20 % torque; 25 % nicked strands; ferrule versus bare stranded under a screw clamp; an under-crimped lug (wrong die); two conductors under a one-conductor screw; aluminium on a terminal not rated for it (rate multiplier only). Properties: contact R decreases with torque up to the spec; every outcome is a pure function of the arguments and `seq`; `'auto'` equals the ideal termination.
-- [ ] Source or replace `resolveTermination`'s provisional nick, crimp and screwdriver-spread numbers (P3 PR 8, ADR 0015 implementation note 11); cap nicks at min(model, 1 − (d_hole/d_cond)²) (stranded conductors are wider than solid at the same AWG); decide whether hand-tightening is biased low (with ±40 % a plain screwdriver can never reach ADR 0018's loose regime); re-pin the goldens.
-- [ ] Back-stab and spring-cage modelled and tested on test catalogue entries (spring-cage appears on F3.5's terminal blocks; back-stab's first real device is P4's receptacle).
-- [ ] A wire-nut splice: the `splice.twistOn` device kind joins its ports ideally; each conductor end's contact R comes from the wire-nut rating and conductor combination; outside its rated combination it is refused (`combination-out-of-range`).
+- [x] **Part 1, headless:** `TerminationArgs` `{ method, stripHoleArea, stripLengthMm, accessory, crimpDie, torqueNm }` → `TerminationV3` (method plus resolved outcome: nicked-strand fraction, achieved torque, clamp area); quality → contact resistance per D8. Hand-calculated goldens: an ideal screw termination at specified torque; 20 % torque; 25 % nicked strands; ferrule versus bare stranded under a screw clamp; an under-crimped lug (wrong die); two conductors under a one-conductor screw; aluminium on a terminal not rated for it (rate multiplier only). Properties: contact R decreases with torque up to the spec; every outcome is a pure function of the arguments and `seq`; `'auto'` equals the ideal termination.
+- [x] Source or replace `resolveTermination`'s provisional nick, crimp and screwdriver-spread numbers (P3 PR 8, ADR 0015 implementation note 11); cap nicks at min(model, 1 − (d_hole/d_cond)²) (stranded conductors are wider than solid at the same AWG); decide whether hand-tightening is biased low (with ±40 % a plain screwdriver can never reach ADR 0018's loose regime); re-pin the goldens. _Done (F3.3 part 1, ADR 0018 implementation note 8): nicks capped at the geometric reach with stranded diameters 3/√7 × solid; an unlisted die q = 0.25, 0.3 per AWG step; a plain screwdriver uniform in 0.15–1.45 × the mark (fitted to a trade-press summary of a 2009 field study); goldens re-pinned; game-design, approved by `electrical-realism-reviewer` 2026-11-12._
+- [x] Back-stab and spring-cage modelled and tested on test catalogue entries (spring-cage appears on F3.5's terminal blocks; back-stab's first real device is P4's receptacle).
+- [x] A wire-nut splice: the `splice.twistOn` device kind joins its ports ideally; each conductor end's contact R comes from the wire-nut rating and conductor combination; outside its rated combination it is refused (`combination-out-of-range`).
 - [ ] **Part 2, prompts** (D9): one strip-and-ferrule prompt per end and one torque action; difficulty selects automatic, preselected or blank prompts; keyboard-operable and announced; each logs one `wire.land`. A UI spec per difficulty and an E2E at Journeyman.
 
 ### F3.4 Hand tools and the tool belt
@@ -290,24 +290,24 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 
 ## Status
 
-| Feature | Description                                              | Status                           |
-| ------- | -------------------------------------------------------- | -------------------------------- |
-| —       | Kickoff: `content-designer`, decisions, gates, guard e2e | ✅ Done                          |
-| —       | Replay-log checkpointing                                 | ✅ Done                          |
-| —       | ADR 0015 world v3 and wire contract (agent team)         | ✅ Accepted                      |
-| —       | Palette and console argument forms (PR 5a)               | ✅ Done                          |
-| —       | Catalogue format v2 + `catalogVersion` 2                 | ✅ Done                          |
-| —       | World document v3 + migration                            | ✅ Done                          |
-| —       | World v3 commands                                        | ✅ Done                          |
-| F3.1    | Conductor catalogue (parts 1–2)                          | 🟡 Part 1 done, part 2 in review |
-| F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started                   |
-| F3.3    | Terminations (parts 1–2)                                 | ⬜ Not started                   |
-| F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🚧 Part 1 in review              |
-| F3.5    | Enclosures and mounting (parts 1–2)                      | ⬜ Not started                   |
-| F3.6    | Thermal, degradation, readouts (parts 1–3)               | ⬜ Not started                   |
-| —       | Frame-time probe (500 devices with wires)                | ⬜ Not started                   |
-| —       | Phase-acceptance scenarios and E2E                       | ⬜ Not started                   |
-| —       | v0.4.0 release                                           | ⬜ Not started                   |
+| Feature | Description                                              | Status              |
+| ------- | -------------------------------------------------------- | ------------------- |
+| —       | Kickoff: `content-designer`, decisions, gates, guard e2e | ✅ Done             |
+| —       | Replay-log checkpointing                                 | ✅ Done             |
+| —       | ADR 0015 world v3 and wire contract (agent team)         | ✅ Accepted         |
+| —       | Palette and console argument forms (PR 5a)               | ✅ Done             |
+| —       | Catalogue format v2 + `catalogVersion` 2                 | ✅ Done             |
+| —       | World document v3 + migration                            | ✅ Done             |
+| —       | World v3 commands                                        | ✅ Done             |
+| F3.1    | Conductor catalogue (parts 1–2)                          | ✅ Done (parts 1–2) |
+| F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started      |
+| F3.3    | Terminations (parts 1–2)                                 | 🚧 Part 1 in review |
+| F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🟡 Part 1 done      |
+| F3.5    | Enclosures and mounting (parts 1–2)                      | 🟡 Part 1 done      |
+| F3.6    | Thermal, degradation, readouts (parts 1–3)               | ⬜ Not started      |
+| —       | Frame-time probe (500 devices with wires)                | ⬜ Not started      |
+| —       | Phase-acceptance scenarios and E2E                       | ⬜ Not started      |
+| —       | v0.4.0 release                                           | ⬜ Not started      |
 
 ## Open follow-ups
 

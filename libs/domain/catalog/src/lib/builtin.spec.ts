@@ -21,8 +21,11 @@ const read = (dir: string) => {
 const devices = read('devices');
 const tables = read('tables');
 /** The P2 entries (catalogue 1's, version 1 in catalogue 2); F3.1's conductors are checked in conductors.spec.ts. */
-const p2Devices = BUILTIN_CATALOG.devices.filter((d) => d.model.kind !== 'conductor');
 const tools = read('tools');
+const p2Devices = BUILTIN_CATALOG.devices.filter(
+  (d) => d.model.kind !== 'conductor' && d.model.kind !== 'splice.twistOn',
+);
+const splices = BUILTIN_CATALOG.devices.filter((d) => d.model.kind === 'splice.twistOn');
 
 describe('the built-in catalogue (content/devices, content/tables, content/tools)', () => {
   it('is catalogue version 2 and every file is a valid entry or table', () => {
@@ -63,6 +66,9 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     expect(landed).toStrictEqual([
       'breaker.saltmere-1p-15a:line:screw',
       'breaker.saltmere-1p-15a:load:screw',
+      'splice.corvelle-tw-l:splice:twistOn',
+      'splice.corvelle-tw-m:splice:twistOn',
+      'splice.corvelle-tw-s:splice:twistOn',
       'supply.railwick-din-24v-5a:neg:screw',
       'supply.railwick-din-24v-5a:pos:screw',
       'utility.larkmoor-split-phase-25kva:l1:screw',
@@ -160,6 +166,32 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       'Larkmoor Power',
       'Larkmoor Power',
     ]);
+  });
+
+  it('F3.3: three Corvelle twist-on splices, combinations inside their own ranges (ADR 0018 §4.4)', () => {
+    // Areas from AWG_GAUGES.areaUm2: 22 AWG 325 534, 18 AWG 823 047, 14 AWG 2 080 910, 12 AWG 3 308 770.
+    const combination = (n: [number, number], awg: [number, number], area: [number, number]) => ({
+      minConductors: n[0],
+      maxConductors: n[1],
+      awg: { smallest: awg[0], largest: awg[1] },
+      totalAreaUm2: { min: area[0], max: area[1] },
+    });
+    expect(splices.map((d) => [d.id, d.brand, d.category, d.terminals[0].methods[0].combination])).toStrictEqual([
+      ['splice.corvelle-tw-l', 'Corvelle', 'splice', combination([2, 5], [14, 10], [2 * 2080910, 5 * 3308770])],
+      ['splice.corvelle-tw-m', 'Corvelle', 'splice', combination([2, 4], [18, 12], [2 * 823047, 3 * 3308770])],
+      ['splice.corvelle-tw-s', 'Corvelle', 'splice', combination([2, 3], [22, 14], [2 * 325534, 2 * 2080910])],
+    ]);
+    for (const d of splices) {
+      const m = d.terminals[0].methods[0];
+      expect([m.method, m.clampType, m.torqueNm, m.alRated, m.contactOhm]).toStrictEqual([
+        'twistOn',
+        'twistOn',
+        null,
+        false,
+        5e-4,
+      ]);
+      expect(m.ratedConductors).toBe(m.maxConductors);
+    }
   });
 
   it('resolves refs to the entry and its model kind', () => {

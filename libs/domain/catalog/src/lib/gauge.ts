@@ -54,6 +54,13 @@ export interface GaugeRow {
   readonly diameterMm: number;
   /** Cross-sectional area (mm²), π d²/4. */
   readonly areaMm2: number;
+  /**
+   * The same area as an integer in µm² (`areaMm2` × 10⁶, rounded once here), so a twist-on splice's
+   * total-size check is exact integer arithmetic like every other gauge check (ADR 0018 §4.4). **Save
+   * semantics:** a landing's refusal depends on it, so these values are pinned by `gauge.spec.ts` and
+   * never change.
+   */
+  readonly areaUm2: number;
 }
 
 /** How a designation is written: `14`, `1/0` (0), `4/0` (−3). */
@@ -71,7 +78,7 @@ export function parseAwgName(name: string): number | undefined {
 }
 
 const row = (awg: number, diameterMm: number, areaMm2: number): GaugeRow =>
-  Object.freeze({ awg, name: awgName(awg), diameterMm, areaMm2 });
+  Object.freeze({ awg, name: awgName(awg), diameterMm, areaMm2, areaUm2: Math.round(areaMm2 * 1e6) });
 
 /** Every AWG size from 4/0 to 40, in designation order (largest conductor first). */
 export const AWG_GAUGES: readonly GaugeRow[] = Object.freeze([
@@ -106,6 +113,9 @@ export const AWG_GAUGES: readonly GaugeRow[] = Object.freeze([
   row(25, 0.454666, 0.162359),
   row(26, 0.404892, 0.128756),
   row(27, 0.360567, 0.102108),
+  // 28 and 29: the six-figure areas end in a decimal half. areaMm2 × 1e6 is exactly 80 975.5 for 28
+  // (Math.round takes it up to 80 976) but 64 216.49999… for 29 in binary (down to 64 216), so they round
+  // opposite ways. Deterministic and pinned in gauge.spec.ts; never "fix" one: areaUm2 is save semantics.
   row(28, 0.321094, 0.0809755),
   row(29, 0.285942, 0.0642165),
   row(30, 0.254639, 0.050926),

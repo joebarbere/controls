@@ -97,6 +97,7 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | -------------- | ------------------------------------------------- |
 | -------------- | ------------------------------------------------  |
 | Brindlecore    | Bench DC supply                                   |
+| Corvelle       | Twist-on wire connectors (wire nuts)              |
 | Calderyn       | Torque screwdrivers                               |
 | Emberlyn       | Cartridge fuse                                    |
 | Ferrovane      | Sealed lead-acid battery                          |

@@ -169,6 +169,13 @@ export const SwitchSpstParams = z.strictObject({});
 export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
 
 /**
+ * Twist-on splice parameters (F3.3 part 1): none. A wire nut is one splice terminal whose rated
+ * combinations live on its `twistOn` method spec (ADR 0018 §4.4, §8), not in `model.params`.
+ */
+export const SpliceTwistOnParams = z.strictObject({});
+export type SpliceTwistOnParams = z.infer<typeof SpliceTwistOnParams>;
+
+/**
  * Incandescent lamp parameters (F2.5): the rated point and the filament's thermal behaviour. The
  * filament's resistance is R(T) = (V_r² / P_r) · ρ(T) / ρ(T_r) from tungsten's resistivity
  * (`sim-core`'s lamp model), so the cold resistance and the inrush follow from the material.
@@ -567,6 +574,15 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     params: ResistorParams,
     keys: {},
     description: 'A fixed resistor with a power rating; its record says when it is over-rated (no damage model in P2).',
+  },
+  'splice.twistOn': {
+    kind: 'splice.twistOn',
+    placement: 'entity',
+    terminals: ['splice'],
+    params: SpliceTwistOnParams,
+    keys: {},
+    description:
+      'A twist-on wire connector (wire nut): one splice terminal that every conductor landed in it shares, so they meet at one node; each end has its own contact resistance (ADR 0018 §4.4). No state.',
   },
   'supply.bench': {
     kind: 'supply.bench',

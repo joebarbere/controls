@@ -6,3 +6,4 @@ export * from './lib/mna';
 export * from './lib/engine';
 export * from './lib/devices';
 export * from './lib/thermal';
+export * from './lib/contact';

@@ -41,7 +41,13 @@
             "y": 90,
             "z": 20
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -75,7 +81,13 @@
             "y": 0,
             "z": 20
           },
-          "exitAxis": "-y"
+          "exitAxis": "-y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     }
@@ -179,6 +191,24 @@
       "kind": "game-design",
       "citation": "game-design: a slotted and square (Robertson) combination head, as on many North American branch-breaker and panel screws (common practice, not one product); the drive type is a name and its size is not modelled.",
       "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread, nicks, crimps and aluminium (ADR 0018 §4).",
+      "covers": ["terminals.*.methods.screw.contactOhm"]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), for F3.6's hot-spot node: the heat path into the device, 0.026 W/K, is calibrated, not measured: with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the threshold of visible glow (the Draper point, about 525 °C) and about 1000 °C. The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass clamp parts × about 380 J/(kg·K).",
+      "covers": ["terminals.*.methods.screw.heatPathWPerK", "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"]
+    },
+    {
+      "id": "breaker-terminal-clamp",
+      "kind": "game-design",
+      "citation": "game-design: the fictional breaker's wire screws clamp the conductor under a pressure plate (a saddle) rather than wrapping it under a binding head, so bare strands are held (ADR 0018 §4.3); the plate grips 10 mm of conductor, inside the 13 ± 2 mm strip. Not modelled on a product.",
+      "covers": ["terminals.*.methods.screw.clampType", "terminals.*.methods.screw.clampDepthMm"]
     }
   ],
   "extensions": {}

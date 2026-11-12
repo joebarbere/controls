@@ -1,9 +1,12 @@
-import type { Catalog } from '@controls/catalog';
+import { type Catalog, type DeviceDefinition, MAX_TERMINAL_METHODS, type TerminalMethodSpec } from '@controls/catalog';
 import { isBuiltinPropRef, type World } from '@controls/save-format';
 import { toHex, sha256 } from '@controls/world-model';
 import { TopologyWriter } from './encode';
 import {
   BUILTIN_NETLIST_MODELS,
+  CLIP_END,
+  type ConnectionEndInput,
+  type ConnectionNetlistModel,
   type DeviceNetlistModel,
   type ElementSpec,
   type NetlistModels,
@@ -122,6 +125,8 @@ interface EntityCacheEntry {
   readonly model: DeviceNetlistModel | undefined;
   readonly simKey: string;
   readonly result: EntityResult;
+  /** A netlisted entity's termination methods per fragment terminal (sorted terminal ids); empty otherwise. */
+  readonly methods: readonly (readonly TerminalMethodSpec[])[];
   /** The entity's contribution to the topology, without values: equal keys, equal contribution. */
   readonly structureKey: string;
   /**
@@ -134,21 +139,29 @@ interface EntityCacheEntry {
   base: number;
 }
 
-type ConnectionResult =
+/** What a connection's ref resolves to, fixed while the connection object is the same. */
+type ConnectionKindResult =
   | {
       readonly ok: true;
-      readonly model: string;
-      readonly kind: ElementKind;
-      readonly values: Readonly<Record<string, number>>;
-      /** `kind model`, for the change check. */
-      readonly structureKey: string;
+      readonly model: ConnectionNetlistModel;
+      readonly device: DeviceDefinition;
       readonly elementRef: ElementRef;
     }
   | { readonly ok: false; readonly reason: AbsentConnectionReason };
 
+/** A netlisted connection's element, as `assemble` and `withValues` read it. */
+interface ConnectionElementResult {
+  readonly model: string;
+  readonly kind: ElementKind;
+  readonly values: Readonly<Record<string, number>>;
+  /** `kind model`, for the change check. */
+  readonly structureKey: string;
+  readonly elementRef: ElementRef;
+}
+
 interface ConnectionCacheEntry {
   readonly connection: Connection;
-  readonly result: ConnectionResult;
+  readonly result: ConnectionKindResult;
   epoch: number;
   /**
    * End a resolved: the entity's cache entry and the terminal's index in its fragment (-1: unknown).
@@ -158,9 +171,26 @@ interface ConnectionCacheEntry {
    */
   aEntry: EntityCacheEntry | null;
   aTerminal: number;
+  /** End a's termination method: its index in the terminal's methods (-1: none) and its spec. */
+  aMethod: number;
+  aSpec: TerminalMethodSpec | null;
   /** End b, likewise. */
   bEntry: EntityCacheEntry | null;
   bTerminal: number;
+  bMethod: number;
+  bSpec: TerminalMethodSpec | null;
+  /** This compile's landed-count slot of each end (plant terminal × methods + method), or -1. */
+  aSlot: number;
+  bSlot: number;
+  /**
+   * The element built for the landed counts and specs it records (ADR 0015 implementation note 3): it
+   * is rebuilt when either count or spec differs, so a count change is a values-only compile.
+   */
+  element: ConnectionElementResult | null;
+  elementACount: number;
+  elementBCount: number;
+  elementASpec: TerminalMethodSpec | null;
+  elementBSpec: TerminalMethodSpec | null;
 }
 
 type Entity = World['entities'][number];
@@ -176,7 +206,7 @@ interface PlacedDevice {
 /** A netlisted connection, its ends as plant-wide terminal indices. */
 interface PlacedConnection {
   readonly id: number;
-  readonly result: Extract<ConnectionResult, { ok: true }>;
+  readonly result: ConnectionElementResult;
   readonly a: number;
   readonly b: number;
 }
@@ -224,6 +254,10 @@ export class NetlistCompiler {
   private previous: Netlist | null = null;
   /** Buffers `assemble` reuses between structural recompiles. */
   private readonly scratch = new AssembleScratch();
+  /** This compile's connection entries in id order (emptied after each compile). */
+  private readonly entries: ConnectionCacheEntry[] = [];
+  /** Conductor ends landed per (plant terminal, method), `terminal × MAX_TERMINAL_METHODS + method`. */
+  private counts = new Int32Array(0);
   readonly stats: NetlistCompilerStats = { structural: 0, valuesOnly: 0, unchanged: 0 };
 
   constructor(
@@ -273,31 +307,35 @@ export class NetlistCompiler {
       }
     }
 
-    // 2. Connections, resolved against the netlisted entities.
-    const connections: PlacedConnection[] = [];
+    // 2. Connections, resolved against the netlisted entities. First every landed end is resolved and
+    // counted per (terminal, method), netlisted or not; lead clips (no termination) never count
+    // (ADR 0015 implementation note 3). The counts are values: they never reach the structure list.
     const sortedConnections = byId(world.connections);
-    for (const connection of sortedConnections) {
-      const cached = this.connectionEntry(connection, epoch);
+    const entries = this.entries;
+    entries.length = sortedConnections.length;
+    const slots = terminalCount * MAX_TERMINAL_METHODS;
+    const counts = (this.counts = atLeast(this.counts, slots));
+    counts.fill(0, 0, slots);
+    for (let i = 0; i < sortedConnections.length; i++) {
+      const cached = this.connectionEntry(sortedConnections[i], epoch);
+      this.resolveEnds(cached, epoch);
+      if (cached.aSlot >= 0) counts[cached.aSlot]++;
+      if (cached.bSlot >= 0) counts[cached.bSlot]++;
+      entries[i] = cached;
+    }
+    const connections: PlacedConnection[] = [];
+    for (const cached of entries) {
+      const connection = cached.connection;
       const result = cached.result;
       let reason: AbsentConnectionReason | null = null;
       let a = -1;
       let b = -1;
-      const endA = connection.a;
-      const endB = connection.b;
       if (!result.ok) {
         reason = result.reason;
-      } else if (endA === null || endB === null) {
+      } else if (connection.a === null || connection.b === null) {
         // World v3 (ADR 0015): a connection with a free end is wired to nothing, so it isn't netlisted.
         reason = 'unlanded';
       } else {
-        if (cached.aEntry === null || cached.aEntry.epoch !== epoch) {
-          cached.aEntry = this.currentEntry(endA.entity, epoch);
-          cached.aTerminal = terminalOf(cached.aEntry, endA.terminal);
-        }
-        if (cached.bEntry === null || cached.bEntry.epoch !== epoch) {
-          cached.bEntry = this.currentEntry(endB.entity, epoch);
-          cached.bTerminal = terminalOf(cached.bEntry, endB.terminal);
-        }
         a = plantTerminal(cached.aEntry, cached.aTerminal);
         b = plantTerminal(cached.bEntry, cached.bTerminal);
         if (a === ABSENT_END || b === ABSENT_END) reason = 'absent-end';
@@ -312,10 +350,12 @@ export class NetlistCompiler {
         record(ABSENT_KEYS[absentReason]);
         connectionDiagnostics.push({ code: 'absent-connection', connection: connection.id, reason: absentReason });
       } else {
-        record(result.structureKey);
-        connections.push({ id: connection.id, result, a, b });
+        const element = this.connectionElement(cached, result, counts);
+        record(element.structureKey);
+        connections.push({ id: connection.id, result: element, a, b });
       }
     }
+    entries.length = 0;
     if (structure.length !== length) {
       structure.length = length;
       same = false;
@@ -370,6 +410,7 @@ export class NetlistCompiler {
       model: undefined,
       simKey: '',
       result: { netlisted: false, diagnostic },
+      methods: NO_METHODS,
       structureKey: diagnostic === null ? 'prop' : JSON.stringify(diagnostic),
     });
     if (isBuiltinPropRef(entity.ref)) return absent(null);
@@ -387,6 +428,7 @@ export class NetlistCompiler {
       model,
       simKey: simKeyOf(model, sim),
       result: { netlisted: true, parts: deviceParts(entity.id, fragment) },
+      methods: terminals.map((id) => device.terminals.find((t) => t.id === id)?.methods ?? NO_SPECS),
       structureKey: fragmentKey(fragment),
     };
   }
@@ -405,26 +447,13 @@ export class NetlistCompiler {
     }
     const kind = this.catalog.kindOf(connection.ref);
     const model = kind ? ownModel(this.models.connections, kind.kind) : undefined;
-    let result: ConnectionResult;
+    let result: ConnectionKindResult;
     if (!kind) result = { ok: false, reason: 'unknown-ref' };
     else if (kind.placement !== 'connection') result = { ok: false, reason: 'not-a-connection' };
     else if (!model) result = { ok: false, reason: 'no-model' };
     else {
       const device = this.catalog.device(connection.ref) as NonNullable<ReturnType<Catalog['device']>>;
-      const element = model.element({
-        params: device.model.params,
-        device,
-        catalog: this.catalog,
-        lengthMm: connection.lengthMm,
-      });
-      result = {
-        ok: true,
-        model: kind.kind,
-        kind: element.kind,
-        values: sortedValues(element.values),
-        structureKey: `${element.kind} ${kind.kind}`,
-        elementRef: { kind: 'connection', connection: connection.id },
-      };
+      result = { ok: true, model, device, elementRef: { kind: 'connection', connection: connection.id } };
     }
     const entry: ConnectionCacheEntry = {
       connection,
@@ -432,12 +461,124 @@ export class NetlistCompiler {
       epoch,
       aEntry: null,
       aTerminal: -1,
+      aMethod: -1,
+      aSpec: null,
       bEntry: null,
       bTerminal: -1,
+      bMethod: -1,
+      bSpec: null,
+      aSlot: -1,
+      bSlot: -1,
+      element: null,
+      elementACount: -1,
+      elementBCount: -1,
+      elementASpec: null,
+      elementBSpec: null,
     };
     this.connectionCache.set(connection.id, entry);
     return entry;
   }
+
+  /**
+   * Resolves each landed end of `cached` against this compile's entity entries (only ends on entities
+   * whose entries were rebuilt are looked up again) and sets its landed-count slot.
+   */
+  private resolveEnds(cached: ConnectionCacheEntry, epoch: number): void {
+    const { a: endA, b: endB } = cached.connection;
+    cached.aSlot = -1;
+    cached.bSlot = -1;
+    if (endA !== null) {
+      if (cached.aEntry === null || cached.aEntry.epoch !== epoch) {
+        cached.aEntry = this.currentEntry(endA.entity, epoch);
+        cached.aTerminal = terminalOf(cached.aEntry, endA.terminal);
+        cached.aMethod = methodOf(cached.aEntry, cached.aTerminal, endA.termination?.method);
+        cached.aSpec =
+          cached.aMethod < 0 ? null : (cached.aEntry as EntityCacheEntry).methods[cached.aTerminal][cached.aMethod];
+      }
+      cached.aSlot = countSlot(cached.aEntry, cached.aTerminal, cached.aMethod);
+    }
+    if (endB !== null) {
+      if (cached.bEntry === null || cached.bEntry.epoch !== epoch) {
+        cached.bEntry = this.currentEntry(endB.entity, epoch);
+        cached.bTerminal = terminalOf(cached.bEntry, endB.terminal);
+        cached.bMethod = methodOf(cached.bEntry, cached.bTerminal, endB.termination?.method);
+        cached.bSpec =
+          cached.bMethod < 0 ? null : (cached.bEntry as EntityCacheEntry).methods[cached.bTerminal][cached.bMethod];
+      }
+      cached.bSlot = countSlot(cached.bEntry, cached.bTerminal, cached.bMethod);
+    }
+  }
+
+  /**
+   * The element of a netlisted connection for this compile's landed counts: the cached one while the
+   * counts and specs it was built for are unchanged, else rebuilt (a values-only change).
+   */
+  private connectionElement(
+    cached: ConnectionCacheEntry,
+    kind: Extract<ConnectionKindResult, { ok: true }>,
+    counts: Int32Array,
+  ): ConnectionElementResult {
+    const aCount = cached.aSlot < 0 ? 0 : counts[cached.aSlot];
+    const bCount = cached.bSlot < 0 ? 0 : counts[cached.bSlot];
+    const previous = cached.element;
+    if (
+      previous !== null &&
+      cached.elementACount === aCount &&
+      cached.elementBCount === bCount &&
+      cached.elementASpec === cached.aSpec &&
+      cached.elementBSpec === cached.bSpec
+    ) {
+      return previous;
+    }
+    const { connection } = cached;
+    const { device, model } = kind;
+    const end = (
+      termination: ConnectionEndInput['termination'],
+      spec: TerminalMethodSpec | null,
+      landedCount: number,
+    ) => (termination === null ? CLIP_END : { termination, spec, landedCount });
+    const element = model.element({
+      params: device.model.params,
+      device,
+      catalog: this.catalog,
+      lengthMm: connection.lengthMm,
+      ends: {
+        a: end(connection.a?.termination ?? null, cached.aSpec, aCount),
+        b: end(connection.b?.termination ?? null, cached.bSpec, bCount),
+      },
+    });
+    const result: ConnectionElementResult = {
+      model: model.kind,
+      kind: element.kind,
+      values: sortedValues(element.values),
+      structureKey: `${element.kind} ${model.kind}`,
+      elementRef: kind.elementRef,
+    };
+    cached.element = result;
+    cached.elementACount = aCount;
+    cached.elementBCount = bCount;
+    cached.elementASpec = cached.aSpec;
+    cached.elementBSpec = cached.bSpec;
+    return result;
+  }
+}
+
+const NO_METHODS: readonly (readonly TerminalMethodSpec[])[] = Object.freeze([]);
+const NO_SPECS: readonly TerminalMethodSpec[] = Object.freeze([]);
+
+/** The index of `method` in a resolved terminal's methods, or -1 (no termination, unknown terminal or method). */
+function methodOf(entry: EntityCacheEntry | null, terminal: number, method: string | undefined): number {
+  if (entry === null || terminal < 0 || method === undefined) return -1;
+  const methods = entry.methods[terminal];
+  for (let i = 0; i < methods.length; i++) if (methods[i].method === method) return i;
+  return -1;
+}
+
+/** A resolved end's landed-count slot this compile, or -1 when it isn't on a netlisted terminal by a known method. */
+function countSlot(entry: EntityCacheEntry | null, terminal: number, method: number): number {
+  if (method < 0) return -1;
+  const plant = plantTerminal(entry, terminal);
+  return plant < 0 ? -1 : plant * MAX_TERMINAL_METHODS + method;
 }
 
 /**

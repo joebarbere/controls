@@ -9,7 +9,7 @@ import {
   type TerminalMethodSpec,
 } from './device';
 import { AccessoryDefinition, CableDefinition, ToolDefinition } from './families';
-import { gaugeRow } from './gauge';
+import { awgInRange, gaugeRow } from './gauge';
 import { type ModelKindDef, MODEL_KINDS, type StateKeyDef } from './model-kinds';
 import {
   ACCESSORY_PREFIX,
@@ -111,6 +111,11 @@ const METHOD_SOURCED_FIELDS = [
   'alRated',
   'entryMm',
   'exitAxis',
+  'clampType',
+  'clampDepthMm',
+  'contactOhm',
+  'heatPathWPerK',
+  'hotSpotHeatCapacityJPerK',
 ] as const;
 
 /**
@@ -394,6 +399,36 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
             : `A ${spec.method} method has no clamp torque: torqueNm must be null`,
         );
       }
+      if (!method.clampTypes.includes(spec.clampType)) {
+        add(
+          path,
+          `A ${spec.method} method holds the conductor by ${method.clampTypes.join(' or ')}, not ${spec.clampType}`,
+        );
+      }
+      const combination = spec.combination;
+      if ((combination !== null) !== (spec.method === 'twistOn')) {
+        add(path, 'A combination goes with a twistOn method, and only with it (ADR 0018 §4.4)');
+      } else if (combination !== null) {
+        if (combination.maxConductors !== spec.maxConductors) {
+          add(path, "combination.maxConductors must equal the method's maxConductors");
+        }
+        if (
+          !awgInRange(combination.awg.smallest, spec.awgRange) ||
+          !awgInRange(combination.awg.largest, spec.awgRange)
+        ) {
+          add(path, "combination.awg must lie inside the method's awgRange");
+        }
+        // The minimum total is checked only once the splice holds minConductors (a splice is built one
+        // conductor at a time). If minConductors of the thinnest size could fall below it, whether a
+        // landing is refused would depend on the order the conductors were landed in, so it may not.
+        const thinnest = gaugeRow(combination.awg.smallest)?.areaUm2 ?? 0;
+        if (combination.totalAreaUm2.min > combination.minConductors * thinnest) {
+          add(
+            path,
+            'combination.totalAreaUm2.min must not exceed minConductors × the thinnest size’s areaUm2 (refusals would depend on landing order)',
+          );
+        }
+      }
     });
   }
 }
@@ -408,6 +443,15 @@ function checkCategory(device: DeviceDefinition, kind: ModelKindDef, add: Add): 
   }
   if ((device.category === 'enclosure') !== (kind.requires === 'enclosure')) {
     add('category', 'Category "enclosure" goes with enclosure kinds, and only with them');
+  }
+  if ((device.category === 'splice') !== (kind.kind === 'splice.twistOn')) {
+    add('category', 'Category "splice" goes with the splice.twistOn kind, and only with it');
+  }
+  if (
+    kind.kind === 'splice.twistOn' &&
+    !device.terminals.every((t) => t.methods.every((m) => m.method === 'twistOn'))
+  ) {
+    add('terminals', 'A twist-on splice lands conductors by twistOn only (ADR 0018 §4.4)');
   }
 }
 
@@ -573,6 +617,7 @@ function methodPaths(terminal: string, spec: TerminalMethodSpec): string[] {
   const fields: string[] = [...METHOD_SOURCED_FIELDS];
   if (spec.torqueNm !== null) fields.push('torqueNm');
   if (spec.drives.length > 0) fields.push('drives');
+  if (spec.combination !== null) fields.push('combination');
   return fields.map((field) => `${base}.${field}`);
 }
 

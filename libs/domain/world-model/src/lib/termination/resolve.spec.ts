@@ -4,7 +4,9 @@ import {
   autoTermination,
   crimpBase,
   nickBase,
+  nickCap,
   resolveTermination,
+  SCREWDRIVER_TORQUE_MEAN_FRACTION,
   SCREWDRIVER_TORQUE_SPREAD,
   type TerminationArgs,
   type TerminationTools,
@@ -14,8 +16,10 @@ import {
 
 /*
  * resolveTermination (ADR 0015): pure, each step from its own stream, keyed by the termination id.
- * The golden vectors (arguments, seed, termination id → outcome, bit-exact) freeze it at v0.4.0; the
- * game-design numbers are provisional until F3.3 part 1 (ADR 0018), which re-pins them in its PR.
+ * The golden vectors (arguments, seed, termination id → outcome, bit-exact) freeze it at v0.4.0. They
+ * were re-pinned by F3.3 part 1 (ADR 0018), which decided the game-design numbers: the geometric nick
+ * cap, the under-crimp at 0.25 and 0.3 per AWG step, and the plain screwdriver biased low; the
+ * realism review then widened the screwdriver to [0.15, 1.45) × the mark, re-pinning vectors 3, 6, 7.
  */
 
 const catalog = WIRING_TEST_CATALOG;
@@ -44,13 +48,13 @@ function args(
 ): TerminationArgs {
   return { method: 'screw', strip: { tool: ref(stripper), hole, lengthMm: 12 }, accessory, clamp };
 }
-function tools(hole: string, clamp = torque, die: string | null = null): TerminationTools {
+function tools(hole: string, clamp = torque, die: string | null = null, accessory = ferrule): TerminationTools {
   const h = stripper.holes.find((x) => x.id === hole);
   const d = crimper.dies.find((x) => x.id === die);
-  if (!h) throw new Error(hole);
+  if (!h || !accessory) throw new Error(hole);
   return {
     strip: { tool: stripper, hole: h },
-    accessory: d && ferrule ? { accessory: ferrule, tool: crimper, die: d } : null,
+    accessory: d ? { accessory, tool: crimper, die: d } : null,
     clamp,
   };
 }
@@ -72,6 +76,22 @@ describe('resolveTermination', () => {
   });
 
   it('golden vectors (seed, termination id → outcome), bit-exact', () => {
+    /*
+     * Hand calculation (the draws u are each stream's first `nextFloat`; areas from AWG_GAUGES):
+     *
+     * 1. h14s on 14 solid, torque driver at 4 N·m (±6 %): no nick; 4 · (1 + 0.06 (2u − 1)), u = 0.4524.
+     * 2. h16st on 14 solid, driver at 0.8: model 2 × 0.15 + 0.05 = 0.35; the cap is the area outside a
+     *    16 AWG stranded hole, 1 − (1.3087 × 9/7) / 2.08091 = 0.191405, so the base is 0.191405 and the
+     *    spread (× 1.133) is capped back to it: 0.191405 (the old ±25 % spread on 0.35 gave 0.396).
+     * 3. h14s, plain screwdriver: 4 · (0.8 + 0.65 (2u − 1)) with 2u − 1 = −0.16582: 2.7689 N·m (r 0.692).
+     * 4. h14st + ferrule on 14 stranded, die sq-10 (not the ferrule's, 2 AWG steps outside 12–10):
+     *    max(0, 0.25 − 2 × 0.3) = 0, a loose crimp (0.05/√0.4 + 100 mΩ ≈ 100.08 mΩ, not open); driver at 4 N·m.
+     * 5. spring cage, ferrule on its own die: crimp 1, no torque.
+     * 6. h16st + plain screwdriver: nick 0.191405 × (1 − 0.25 + 0.5u) = 0.14435 (u = 0.0083); torque
+     *    4 · (0.8 + 0.65 · (−0.68278)) = 1.4248 N·m (r 0.356, in the loose regime: 1.65 mΩ).
+     * 7. h14s + plain screwdriver, seed 7, id 4: 2u − 1 = −0.88684, 4 · (0.8 − 0.57645) = 0.8942 N·m,
+     *    r = 0.2236 < 0.4: a hand-tightened landing deep in ADR 0018's loose regime (19.9 mΩ, 66 × R₀).
+     */
     const cases = [
       resolveTermination(
         1,
@@ -133,6 +153,15 @@ describe('resolveTermination', () => {
         tools('h16st', screwdriver),
         terminationStreams(7, 6),
       ),
+      // A plain screwdriver that lands below the seat fraction.
+      resolveTermination(
+        4,
+        args('h14s', { tool: ref(screwdriver), torqueNm: null }),
+        screw,
+        solid14,
+        tools('h14s', screwdriver),
+        terminationStreams(7, 4),
+      ),
     );
     const outcome = (
       id: number,
@@ -150,12 +179,9 @@ describe('resolveTermination', () => {
     });
     expect(cases.slice(0, 4)).toStrictEqual([
       outcome(1, 0, 3.977147615849972),
-      outcome(2, 0.39648767961189146, 0.7955975450575352),
-      outcome(3, 0, 3.7347340434789658),
-      outcome(4, 0, 3.821195868700743, {
-        ref: { id: 'ferrule.test-14', version: 1 },
-        crimpQuality: 0.09572002535918725,
-      }),
+      outcome(2, 0.19140458467003085, 0.7955975450575352),
+      outcome(3, 0, 2.7689428206533195),
+      outcome(4, 0, 3.821195868700743, { ref: { id: 'ferrule.test-14', version: 1 }, crimpQuality: 0 }),
     ]);
     expect(cases.slice(4)).toStrictEqual([
       {
@@ -167,8 +193,10 @@ describe('resolveTermination', () => {
         torqueNm: null,
         accessory: { ref: { id: 'ferrule.test-14', version: 1 }, crimpQuality: 1 },
       },
-      outcome(6, 0.26396166809136046, 2.9075579479336735),
+      outcome(6, 0.14435278128524395, 1.42478166539222),
+      outcome(4, 0, 0.8942149326205255),
     ]);
+    expect((cases[6].torqueNm as number) / 4).toBeLessThan(0.4);
   });
 
   it('stays in range at the streams’ extremes (injected draws of 0 and 1 − 2⁻³²)', () => {
@@ -181,32 +209,36 @@ describe('resolveTermination', () => {
     const plain = (u: number) =>
       resolveTermination(
         9,
-        args('h16st', { tool: ref(screwdriver), torqueNm: null }),
+        args('h16s', { tool: ref(screwdriver), torqueNm: null }),
         screw,
         solid14,
-        tools('h16st', screwdriver),
+        { ...tools('h14s', screwdriver), strip: { tool: stripper, hole: { id: 'h16s', awg: 16, stranding: 'solid' } } },
         fixed(u),
       );
+    // An accessory whose list lacks the (in-range) die: an under-crimp at 0.25, with its spread.
+    const unlisted = { ...ferrule, dies: [] };
     const driver = (u: number) =>
       resolveTermination(
         9,
-        args('h14st', { tool: ref(torque), torqueNm: 6 }, { ref: ref(ferrule), tool: ref(crimper), die: 'sq-10' }),
+        args('h14st', { tool: ref(torque), torqueNm: 6 }, { ref: ref(ferrule), tool: ref(crimper), die: 'sq-14' }),
         screw,
         stranded14,
-        tools('h14st', torque, 'sq-10'),
+        tools('h14st', torque, 'sq-14', unlisted),
         fixed(u),
       );
+    // A 16 AWG solid hole on 14 AWG solid: base min(0.3, cap 0.371) = 0.3, spread [0.75, 1.25).
     const low = plain(lowest);
-    expect(low.nickedStrandFraction).toBeCloseTo(0.35 * 0.75, 12); // a 16 AWG stranded hole on 14 AWG solid
-    expect(low.torqueNm).toBeCloseTo(4 * 0.6, 12);
-    expect(plain(highest).torqueNm).toBeLessThan(4 * 1.4);
-    expect(plain(highest).nickedStrandFraction).toBeLessThan(0.35 * 1.25);
+    expect(low.nickedStrandFraction).toBeCloseTo(0.3 * 0.75, 12);
+    expect(low.torqueNm).toBeCloseTo(4 * 0.15, 12);
+    expect(plain(highest).torqueNm).toBeLessThan(4 * 1.45);
+    // The top of the spread (0.375) is capped at the hole's geometric reach.
+    expect(plain(highest).nickedStrandFraction).toBe(nickCap({ id: 'h', awg: 16, stranding: 'solid' }, solid14));
     const bottom = driver(lowest);
     expect(bottom.torqueNm).toBeCloseTo(6 * 0.94, 12);
-    expect(bottom.accessory?.crimpQuality).toBeCloseTo(0.1, 12);
+    expect(bottom.accessory?.crimpQuality).toBeCloseTo(0.25, 12);
     const top = driver(highest);
     expect(top.torqueNm).toBeLessThan(6 * 1.06);
-    expect(top.accessory?.crimpQuality).toBeGreaterThan(0.1 * 0.9); // (1 − s, 1]
+    expect(top.accessory?.crimpQuality).toBeGreaterThan(0.25 * 0.9); // (1 − s, 1]
   });
 
   it('draws each step from its own stream, keyed termination:<id>:<step>', () => {
@@ -235,36 +267,35 @@ describe('resolveTermination', () => {
     expect(b.torqueNm).toBe(a.torqueNm);
   });
 
-  it('properties: pure; outcomes in range; the right hole nicks nothing; a torque driver within its accuracy', () => {
+  it('properties: pure; outcomes in range; nicks never past the hole’s reach; a torque driver within its accuracy', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 0, max: 0xffffffff }),
         fc.integer({ min: 1, max: 1_000_000 }),
         fc.constantFrom('h10s', 'h12s', 'h14s', 'h14st', 'h16st'),
+        fc.constantFrom(solid14, stranded14),
         fc.double({ min: 0.5, max: 6, noNaN: true }),
         fc.boolean(),
-        (seed, id, hole, setting, plain) => {
+        (seed, id, hole, conductor, setting, plain) => {
           const clamp = plain ? { tool: ref(screwdriver), torqueNm: null } : { tool: ref(torque), torqueNm: setting };
+          const t = tools(hole, plain ? screwdriver : torque);
           const run = () =>
-            resolveTermination(
-              id,
-              args(hole, clamp),
-              screw,
-              solid14,
-              tools(hole, plain ? screwdriver : torque),
-              terminationStreams(seed, id),
-            );
+            resolveTermination(id, args(hole, clamp), screw, conductor, t, terminationStreams(seed, id));
           const outcome = run();
           expect(run()).toStrictEqual(outcome);
           expect(outcome.nickedStrandFraction).toBeGreaterThanOrEqual(0);
-          expect(outcome.nickedStrandFraction).toBeLessThanOrEqual(1);
-          if (hole === 'h14s' || hole === 'h12s' || hole === 'h10s') expect(outcome.nickedStrandFraction).toBe(0);
-          const t = outcome.torqueNm as number;
+          expect(outcome.nickedStrandFraction).toBeLessThanOrEqual(nickCap(t.strip.hole, conductor));
+          if (hole === 'h12s' || hole === 'h10s') expect(outcome.nickedStrandFraction).toBe(0);
+          // The stranded 14 hole is wider than a solid 14 conductor: it nicks nothing.
+          if (conductor === solid14 && (hole === 'h14s' || hole === 'h14st')) {
+            expect(outcome.nickedStrandFraction).toBe(0);
+          }
+          const torqueNm = outcome.torqueNm as number;
           if (plain) {
-            expect(t).toBeGreaterThanOrEqual(4 * (1 - SCREWDRIVER_TORQUE_SPREAD));
-            expect(t).toBeLessThan(4 * (1 + SCREWDRIVER_TORQUE_SPREAD));
+            expect(torqueNm).toBeGreaterThanOrEqual(4 * (SCREWDRIVER_TORQUE_MEAN_FRACTION - SCREWDRIVER_TORQUE_SPREAD));
+            expect(torqueNm).toBeLessThan(4 * (SCREWDRIVER_TORQUE_MEAN_FRACTION + SCREWDRIVER_TORQUE_SPREAD));
           } else {
-            expect(Math.abs(t - setting)).toBeLessThanOrEqual(setting * 0.06 + 1e-12);
+            expect(Math.abs(torqueNm - setting)).toBeLessThanOrEqual(setting * 0.06 + 1e-12);
           }
         },
       ),
@@ -272,15 +303,58 @@ describe('resolveTermination', () => {
     );
   });
 
-  it('nicks grow with each gauge step a hole is too small; the right die crimps fully', () => {
+  it('a plain screwdriver is biased low and wide: about half under 80 %, 27 % under 50 %, 19 % loose, 19 % over 120 %', () => {
+    // Uniform in [0.15, 1.45): P(r < 0.8) = 0.65/1.3 = 0.5, P(r < 0.5) = 0.35/1.3 = 0.269,
+    // P(r < 0.4) = 0.25/1.3 = 0.192, P(r > 1.2) = 0.25/1.3 = 0.192.
+    const below = { seat: 0, half: 0, eighty: 0, over120: 0 };
+    const n = 4000;
+    for (let id = 1; id <= n; id++) {
+      const outcome = resolveTermination(
+        id,
+        args('h14s', { tool: ref(screwdriver), torqueNm: null }),
+        screw,
+        solid14,
+        tools('h14s', screwdriver),
+        terminationStreams(11, id),
+      );
+      const r = (outcome.torqueNm as number) / 4;
+      if (r < 0.4) below.seat++;
+      if (r < 0.5) below.half++;
+      if (r < 0.8) below.eighty++;
+      if (r > 1.2) below.over120++;
+    }
+    const near = (count: number, p: number) => expect(Math.abs(count / n - p)).toBeLessThan(0.03);
+    near(below.eighty, 0.5);
+    near(below.half, 0.269);
+    near(below.seat, 0.192);
+    near(below.over120, 0.192);
+  });
+
+  it('nicks: per gauge step, never past the geometric cap 1 − (d_hole/d_cond)² (stranded 3/√7 wider)', () => {
     const hole = (awg: number, stranding: 'solid' | 'stranded') => ({ id: 'h', awg, stranding });
     expect(nickBase(hole(14, 'solid'), solid14)).toBe(0);
     expect(nickBase(hole(12, 'solid'), solid14)).toBe(0);
+    // 16 solid on 14 solid: the model's 0.3 is under the reach 1 − 1.3087/2.08091 = 0.37109.
+    expect(nickCap(hole(16, 'solid'), solid14)).toBeCloseTo(0.3710924547, 9);
     expect(nickBase(hole(16, 'solid'), solid14)).toBeCloseTo(0.3, 12);
-    expect(nickBase(hole(14, 'stranded'), solid14)).toBeCloseTo(0.05, 12);
-    expect(nickBase(hole(40, 'solid'), solid14)).toBe(1);
+    // The 14 stranded hole on 14 solid (physically the 12 solid hole) is wider: nothing (was 0.05).
+    expect(nickCap(hole(14, 'stranded'), solid14)).toBe(0);
+    expect(nickBase(hole(14, 'stranded'), solid14)).toBe(0);
+    // The 14 solid hole on 14 stranded reaches 1 − 7/9 = 0.2222; the mismatch model's 0.05 is under it.
+    expect(nickCap(hole(14, 'solid'), stranded14)).toBeCloseTo(2 / 9, 12);
+    expect(nickBase(hole(14, 'solid'), stranded14)).toBeCloseTo(0.05, 12);
+    // 16 stranded on 14 solid: the model's 0.35 is capped at 1 − (1.3087 × 9/7)/2.08091 = 0.191405.
+    expect(nickBase(hole(16, 'stranded'), solid14)).toBe(0.19140458467003085);
+    // A far-too-small hole is capped at its reach, below 1.
+    expect(nickBase(hole(40, 'solid'), solid14)).toBeCloseTo(1 - 0.00501036 / 2.08091, 12);
+  });
+
+  it('crimps: the right die closes fully; an unlisted die under-crimps at 0.25; 0.3 per AWG step outside the die', () => {
     const die = (id: string, smallest: number, largest: number) => ({ id, label: id, awgRange: { smallest, largest } });
     expect(crimpBase(ferrule, die('sq-14', 16, 14), stranded14)).toBe(1);
-    expect(crimpBase(ferrule, die('sq-10', 12, 10), stranded14)).toBeCloseTo(0.1, 12);
+    expect(crimpBase({ ...ferrule, dies: [] }, die('sq-14', 16, 14), stranded14)).toBe(0.25);
+    expect(crimpBase(ferrule, die('sq-14', 16, 15), stranded14)).toBeCloseTo(0.7, 12);
+    expect(crimpBase(ferrule, die('sq-14', 16, 16), stranded14)).toBeCloseTo(0.4, 12);
+    expect(crimpBase(ferrule, die('sq-10', 12, 10), stranded14)).toBe(0);
   });
 });
