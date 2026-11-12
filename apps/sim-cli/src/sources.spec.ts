@@ -14,10 +14,10 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v2/ctrl/sources-engine-5.ctrl` is its save (`-engine-4` is F2.4's, now `engine-changed`), written by
+ * Node's V8 and Chromium's). `fixtures/v2/ctrl/sources-engine-6.ctrl` is its save (`-engine-4` and `-engine-5` are earlier engines', now `engine-changed`), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v2/ctrl/sources-engine-5.ctrl
+ *     --save libs/domain/save-format/fixtures/v2/ctrl/sources-engine-6.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.

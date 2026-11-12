@@ -23,11 +23,11 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * numeric change also bumps `SIM_ENGINE_VERSION` (D8).
  */
 /** `world.hash` with the lamp lit: 1.5 s after the switch closed. */
-export const BENCH_LAMP_LIT_HASH = 'ed42d957348f2c2f79aad6ed892228a20e59bb543ba3e348399595c37d7b3fbc';
-export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '52010da7436ce267029b58a73aadc43c6e3ddb4ca0db17f1c3a3bf695b9fd517';
+export const BENCH_LAMP_LIT_HASH = '2b441a98c5491c67023f5affd3fc2cd7b8d9c9eebfd76ea2c01f7687ae13d0aa';
+export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '6fac817fc4fc6eb9814d5905f55405d5e79bd75d20f7fc801613d34fe34403ea';
 /** `world.hash` at the end: 0.5 s after the switch opened, the lamp out. */
-export const BENCH_LAMP_HASH = '0b533c942486866c3d8757b94dfdb6c2d891f66ae0401f97a96aac4d1ea6cb28';
-export const BENCH_LAMP_SNAPSHOT_HASH = 'd5bbbaaf731e59d67fd7a1e459504f9198a7d5d563d0ef0f1a52cb7e010ac11f';
+export const BENCH_LAMP_HASH = 'd310d770494403137c676f59f0461e64e975ec1ba6fa5e6fabc459f893177389';
+export const BENCH_LAMP_SNAPSHOT_HASH = '3fe52bcd091458bce1035c9d27ca8a7f986206bb554a93e76139f27e2b9be45a';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -168,7 +168,7 @@ describe('the bench-lamp scenario (F2.5)', () => {
     expect(sim('replay', save, '--expect', BENCH_LAMP_HASH)).toMatchObject({ status: 0, stderr: '' });
   });
 
-  it('its checked-in save (engine 5) loads as continued, replays to the same hashes, and reloads into the same future', async () => {
+  it("its checked-in save (this engine's) loads as continued, replays to the same hashes, and reloads into the same future", async () => {
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });

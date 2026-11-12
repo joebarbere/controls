@@ -7,8 +7,9 @@ import { tungstenResistivity } from './tungsten';
 
 /*
  * The incandescent lamp (plan F2.5): a tungsten filament whose resistance follows its temperature,
- * heated by I²R and cooled by radiation. The filament temperature is the only sim-owned value
- * (`filamentTempK` in the `sim` bag), so a save or a topology change carries it exactly.
+ * heated by I²R and cooled by radiation and by conduction along the filament into its two lead-ins. The
+ * filament temperature is the only sim-owned value (`filamentTempK` in the `sim` bag), so a save or a
+ * topology change carries it exactly.
  *
  * **R(T).** The filament's resistance is its rated (hot) resistance scaled by tungsten's resistivity
  * (`tungsten.ts`, Jones and Langmuir's measurements):
@@ -19,14 +20,23 @@ import { tungstenResistivity } from './tungsten';
  * the bench lamp (12 V, 5 W, T_r = 2700 K) R_r = 28.8 Ω and R(293.15 K) = 1.95 Ω, a cold/hot ratio of
  * 14.8.
  *
- * **The thermal ODE.** With C the filament's heat capacity and k its radiation constant,
+ * **The thermal ODE** (engine 6). With C the filament's heat capacity, k its radiation constant and G
+ * its conductance to the two lead-ins (the end loss),
  *
- *   C · dT/dt = I² · R(T) − k · (T⁴ − T_a⁴),
+ *   C · dT/dt = I² · R(T) − k · (T⁴ − T_a⁴) − G · (T − T_a).
  *
- * where k = P_r / (T_r⁴ − T_a⁴) makes T_r the steady state at the rated power, and C comes from the
- * catalogue's thermal time constant τ (the small-signal time constant at the rated point,
- * C = 4 k T_r³ τ). Integrated by explicit Euler at the 1 ms tick (dt/τ = 0.02 for the bench lamp's
- * 50 ms, so the step is stable and accurate to about a percent). T⁴ is two multiplications (D6).
+ * At the rated point a fraction f (`LAMP_CONDUCTION_FRACTION`) of the rated power leaves by conduction
+ * and the rest by radiation, so T_r is still the steady state at the rated power:
+ *
+ *   k = (1 − f) · P_r / (T_r⁴ − T_a⁴),   G = f · P_r / (T_r − T_a),
+ *
+ * and C comes from the catalogue's thermal time constant τ, the small-signal time constant at the rated
+ * point, where the loss's slope is 4 k T_r³ + G: C = (4 k T_r³ + G) · τ. Hot, radiation's slope is
+ * about 32 times conduction's (bench lamp), so the warm-up barely changes; cooling, radiation's T⁴ dies
+ * away below about 1000 K and conduction takes over, so the bench lamp is within 10 K of ambient about
+ * 7 s after its switch opens (engine 5, radiation alone, took minutes). Integrated by explicit Euler
+ * at the 1 ms tick (dt/τ = 0.02 for the bench lamp's 50 ms, so the step is stable and accurate to
+ * about a percent). T⁴ is two multiplications (D6).
  *
  * **Inrush emerges.** A cold filament is about a fifteenth of its hot resistance, so the first solve
  * after the switch closes draws about fourteen times the steady current; the current then falls as
@@ -34,8 +44,9 @@ import { tungstenResistivity } from './tungsten';
  *
  * **Light output.** Fink and Beaty's published relations for an incandescent lamp near its rated
  * voltage are L ∝ V^3.4 and P ∝ V^1.6, so L ∝ P^(3.4/1.6) = P^(17/8). The model takes P as the power the
- * filament radiates, k (T⁴ − T_a⁴), a function of its temperature alone, so the light follows the
- * filament (dark during the cold inrush, fading as it cools, never following the current):
+ * filament radiates, k (T⁴ − T_a⁴) (the conducted part makes no light), a function of its temperature
+ * alone, so the light follows the filament (dark during the cold inrush, fading as it cools, never
+ * following the current):
  *
  *   lightOutputRel = x^(17/8),   x = (T⁴ − T_a⁴) / (T_r⁴ − T_a⁴),
  *
@@ -55,14 +66,14 @@ import { tungstenResistivity } from './tungsten';
  * reader shows the lamp as unknown or unsettled, never as a dark lamp drawing 0 W.
  *
  * **Abstractions** (for `electrical-realism-reviewer`): a constant emissivity and heat capacity
- * (both rise with temperature in tungsten, which is why the model's steady state gives P ∝ V^1.54
- * where the published fit says 1.6); no conduction loss to the lead-in wires and supports, so a
- * filament cools by radiation alone and approaches ambient slowly (its light falls to 10 % in about
- * 84 ms and below one display step in under half a second, see the spec); no burnout, evaporation or end of life (the temperature is
+ * (both rise with temperature in tungsten); conduction lumped into one linear conductance (really heat
+ * flowing along the filament into its two cooler lead-ins, so the ends cool first);
+ * with both, the model's light follows the published L ∝ V^3.4 within 3 % from 75 % to 115 % of rated
+ * volts. No gas fill (a vacuum lamp), no burnout, evaporation or end of life (the temperature is
  * clamped at the resistivity table's 3600 K, 100 K below tungsten's melting point).
  */
 
-/** The bench's ambient temperature (K): a lamp starts here, and radiates to it. */
+/** The bench's ambient temperature (K): a lamp starts here, and radiates and conducts to it. */
 export const LAMP_AMBIENT_K: SourcedConstant = {
   value: 293.15,
   unit: 'K',
@@ -78,6 +89,18 @@ export const LAMP_MAX_TEMP_K: SourcedConstant = {
   kind: 'game-design',
   source:
     "game-design: the top of the tungsten resistivity table (Jones and Langmuir's 3600 K), about 100 K below tungsten's melting point (3695 K). P2 has no burnout model, so a grossly over-voltaged filament is clamped here rather than extrapolated.",
+};
+
+/**
+ * The fraction of a lamp's rated power lost by conduction (the end loss through its two lead-ins) at its
+ * rated point; the rest is radiated. Sets the conductance G = f · P_r / (T_r − T_a).
+ */
+export const LAMP_CONDUCTION_FRACTION: SourcedConstant = {
+  value: 0.1,
+  unit: '1',
+  kind: 'game-design',
+  source:
+    "game-design inside published behaviour. A filament loses heat by conduction along itself into its two cooler lead-ins as well as by radiation (a small wedge-base lamp's filament hangs between its two lead-ins without separate supports); this end loss is largest for short, thick, low-voltage filaments (I. Langmuir, S. MacLane and K. B. Blodgett, \"The effect of end losses on the characteristics of filaments of tungsten and other materials\", Physical Review 35 (5), 1930, pp. 478–503, doi:10.1103/PhysRev.35.478). For the bench lamp (a 12 V 5 W filament of about 40 µm tungsten wire some 40–50 mm long) a fin-equation estimate puts the end loss through the two lead-ins at a few percent of the input, about 5 % if the leads stayed at ambient. 10 % is taken at the rated point as an upper value; the model's light fits the published L ∝ V^3.4 (Fink and Beaty) best near 5 % and stays within 3 % of it from 75 % to 115 % of rated volts at 10 %. With the bench lamp's 50 ms time constant a switched-off filament is below 600 K in about 1.8 s and within 10 K of ambient in about 7 s; radiation alone (engine 5) took about 6 s and 20 s to reach 600 K and 400 K.",
 };
 
 /** Light output against radiated power: L ∝ P^(3.4/1.6) = P^(17/8). */
@@ -155,8 +178,10 @@ export const LAMP_MODEL: SimDeviceModel = {
     const branch = new Int32Array(n);
     const ratedOhm = new Float64Array(n);
     const rhoRated = new Float64Array(n);
-    // k (W/K⁴) and C (J/K) of the ODE, and the rated radiated power's T⁴ term, T_r⁴ − T_a⁴.
+    // k (W/K⁴), G (W/K) and C (J/K) of the ODE, and the rated radiated power's T⁴ term, T_r⁴ − T_a⁴.
+    const conductionFraction = LAMP_CONDUCTION_FRACTION.value;
     const radiation = new Float64Array(n);
+    const conduction = new Float64Array(n);
     const heatCapacity = new Float64Array(n);
     const ratedSpan4 = new Float64Array(n);
     devices.forEach((d, i) => {
@@ -174,8 +199,9 @@ export const LAMP_MODEL: SimDeviceModel = {
       rhoRated[i] = tungstenResistivity(tr);
       const tr3 = tr * tr * tr;
       ratedSpan4[i] = tr3 * tr - ambient4;
-      radiation[i] = p.ratedPowerW / ratedSpan4[i];
-      heatCapacity[i] = 4 * radiation[i] * tr3 * (p.thermalTimeConstantMs / 1000);
+      radiation[i] = ((1 - conductionFraction) * p.ratedPowerW) / ratedSpan4[i];
+      conduction[i] = (conductionFraction * p.ratedPowerW) / (tr - ambient);
+      heatCapacity[i] = (4 * radiation[i] * tr3 + conduction[i]) * (p.thermalTimeConstantMs / 1000);
     });
     const resistance = (i: number): number => lampResistanceOhm(ratedOhm[i], rhoRated[i], temp[i]);
     const light = (i: number): number => {
@@ -210,7 +236,8 @@ export const LAMP_MODEL: SimDeviceModel = {
           const t = temp[i];
           const r = (ratedOhm[i] * tungstenResistivity(t)) / rhoRated[i];
           const t4 = t * t * t * t;
-          const next = t + (dt * (i2 * r - radiation[i] * (t4 - ambient4))) / heatCapacity[i];
+          const loss = radiation[i] * (t4 - ambient4) + conduction[i] * (t - ambient);
+          const next = t + (dt * (i2 * r - loss)) / heatCapacity[i];
           // Math.min/max, not a ternary: a ternary choosing between a closure constant (a boxed double)
           // and `next` made V8 box `next` into a new heap number every step (16 B/step on the gate).
           const settled = Math.min(maxK, Math.max(ambient, next)) + 0;

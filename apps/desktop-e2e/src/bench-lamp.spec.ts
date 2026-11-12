@@ -10,8 +10,8 @@ import { launchControls } from './launch';
  * bench-lamp.spec.ts` pins under Node, lit and then out. Change all of them together, never one: a
  * difference here is float drift between V8 builds, not a golden to re-pin.
  */
-const BENCH_LAMP_LIT_HASH = 'ed42d957348f2c2f79aad6ed892228a20e59bb543ba3e348399595c37d7b3fbc';
-const BENCH_LAMP_HASH = '0b533c942486866c3d8757b94dfdb6c2d891f66ae0401f97a96aac4d1ea6cb28';
+const BENCH_LAMP_LIT_HASH = '2b441a98c5491c67023f5affd3fc2cd7b8d9c9eebfd76ea2c01f7687ae13d0aa';
+const BENCH_LAMP_HASH = 'd310d770494403137c676f59f0461e64e975ec1ba6fa5e6fabc459f893177389';
 
 test('the bench demo reaches the sim-cli hashes in Electron (D6, F2.5)', async () => {
   test.slow(); // a cold Electron start on CI runners
