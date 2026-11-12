@@ -229,6 +229,8 @@ export class Session {
    */
   saver(timeoutMs?: number): SessionSaver {
     const log = this.game.replayLog();
+    // What the save writes: the log rebased onto the game's latest checkpoint (P3 D19), taken now.
+    const saveLog = this.game.saveLog();
     const captured = this.sim.capture(timeoutMs);
     captured.world.catch(() => undefined); // observed by save() / hash(); never an unhandled rejection
     return {
@@ -238,7 +240,7 @@ export class Session {
       baseline: this.baseline.hash,
       save: async (options = {}) => {
         const world = await captured.world;
-        return { bytes: writeSave(world, log, options), hash: worldHash(world) };
+        return { bytes: writeSave(world, await saveLog, options), hash: worldHash(world) };
       },
       hash: async () => worldHash(await captured.world),
     };

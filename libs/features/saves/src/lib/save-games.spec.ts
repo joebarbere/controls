@@ -13,6 +13,7 @@ import {
   MAX_VERIFY_TICKS,
   TOO_LONG_TO_VERIFY_MESSAGE,
   VERIFY_UNAVAILABLE_MESSAGE,
+  writeSave,
 } from '@controls/scripting-api';
 import { MemorySaveIo } from '../testing/memory-save-io';
 import { REPLAY_MISMATCH_POLICY, type ReplayMismatchPolicy, SAVE_DIALOGS, SAVE_FILES, SaveThumbnails } from './save-io';
@@ -25,7 +26,7 @@ import {
   suggestedSaveName,
 } from './save-games';
 import { AUTOSAVE_MAX_BEHIND_MS, SIM_SETTLE_MS } from '@controls/sim-protocol';
-import { worldHash } from '@controls/world-model';
+import { type World, worldHash } from '@controls/world-model';
 
 const crate = { id: 'prop.crate', version: 1 };
 const place = (x: number) => ({ ref: crate, positionMm: { x, y: 0, z: -20 } });
@@ -248,7 +249,9 @@ describe('SaveGames', () => {
     game.execOrThrow('view.resetLayout');
     game.advance(MAX_VERIFY_TICKS.value + 1);
     const refuse = setup({ policy: 'refuse' });
-    const entry = refuse.io.seed({ kind: 'manual', name: 'Long' }, game.save());
+    // The whole log, as saves wrote it before checkpoints (P3 D19): `game.save()` is rebased and verifies.
+    const whole = writeSave(game.materialisedWorld() as World, game.replayLog());
+    const entry = refuse.io.seed({ kind: 'manual', name: 'Long' }, whole);
     expect(await refuse.saves.load(entry)).toBe(true);
     expect(refuse.toasts()).toEqual(['success: Loaded “Long”.', `info: ${TOO_LONG_TO_VERIFY_MESSAGE}`]);
   });

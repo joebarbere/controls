@@ -99,30 +99,56 @@ export type RebaseResult =
 
 /**
  * Rebases a (validated) replay log onto the world it reaches after its first `count` entries: the
- * result starts from that world (sim bags and solution record included, as the log's own worlds hold
- * them), at `firstSeq + count`, and keeps the rest of the entries and `endTick`. Replaying the
- * rebased log reaches the same world and `world.hash` as replaying the original (ADR 0013), because
- * every change keeps each `sim` bag and `seq`s are unchanged.
+ * result starts from that world, at `firstSeq + count`, and keeps the rest of the entries and
+ * `endTick`. Replaying the rebased log reaches the same world and `world.hash` as replaying the
+ * original (ADR 0013), because every change keeps each `sim` bag and `seq`s are unchanged.
+ *
+ * - **Without `worldAtCut`** the head is replayed and the cut world is the replayed one, whose `sim`
+ *   bags and solution record are the log's own (inert): exact only before the engine has run.
+ * - **With `worldAtCut`** (ADR 0013's materialised rebase: the world at the cut with the engine's
+ *   state written in, what a save's checkpoint holds, P3 D19) the head isn't replayed. The caller
+ *   vouches that it is the world the head reaches, materialised at its tick; that tick must lie
+ *   between the head's last entry (or the log's start) and the tail's first entry (or `endTick`), and
+ *   its seed must be the log's, or the rebase is `out-of-range`.
  *
  * Exact only where no later `edit.undo` or `edit.redo` reaches a change from before the cut, which
- * is always true at a load (the history is cleared then; ADR 0007). The rest is replayed after
- * clearing the history at the cut, and the rebase is refused (`failed`) if it no longer succeeds.
- * Groundwork for the P1 follow-up "the replay log never shrinks" (the cap-triggered rebase is P4).
+ * is always true at a load (the history is cleared then; ADR 0007). The tail is replayed on a cleared
+ * history and the rebase is refused (`failed`) if it no longer succeeds. Undo and redo on an empty
+ * stack fail and are never logged (ADR 0006), and the cleared stacks are always the top part of the
+ * full ones, so an undo or redo that reached across the cut fails there: a rebase that succeeds is
+ * exact. Used by saves (the checkpoint rebase, scripting API) and groundwork for the P1 follow-up
+ * "the replay log never shrinks" (the cap-triggered rebase is P4).
  */
 export function rebaseReplayLog(
   log: ReplayLog,
   count: number,
+  worldAtCut: World | null = null,
   registry: CommandRegistry<World> = createWorldRegistry(),
 ): RebaseResult {
   if (!Number.isInteger(count) || count < 0 || count > log.entries.length) {
     return { ok: false, error: { kind: 'out-of-range', message: `Can't rebase after ${count} entries` } };
   }
-  const bus = createWorldBus(log.initialWorld, registry, { firstSeq: log.firstSeq });
-  const head = replayEntries(bus, log.entries.slice(0, count));
-  if (!head.ok) return head;
-  const initialWorld = bus.state;
-  bus.clearHistory();
   const tail = log.entries.slice(count);
+  let initialWorld: World;
+  let bus: CommandBus<World>;
+  if (worldAtCut !== null) {
+    const earliest = count === 0 ? log.initialWorld.tick : log.entries[count - 1].tick;
+    const latest = tail.length === 0 ? log.endTick : tail[0].tick;
+    if (worldAtCut.seed !== log.initialWorld.seed || worldAtCut.tick < earliest || worldAtCut.tick > latest) {
+      return {
+        ok: false,
+        error: { kind: 'out-of-range', message: `The world at the cut doesn't fit the log after ${count} entries` },
+      };
+    }
+    initialWorld = worldAtCut;
+    bus = createWorldBus(worldAtCut, registry, { firstSeq: log.firstSeq + count });
+  } else {
+    bus = createWorldBus(log.initialWorld, registry, { firstSeq: log.firstSeq });
+    const head = replayEntries(bus, log.entries.slice(0, count));
+    if (!head.ok) return head;
+    initialWorld = bus.state;
+    bus.clearHistory();
+  }
   const rest = replayEntries(bus, tail);
   if (!rest.ok) return rest;
   return {
