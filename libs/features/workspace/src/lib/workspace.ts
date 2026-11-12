@@ -110,7 +110,12 @@ type PanelId = keyof WorkspaceLayout;
         @if (netlistOpen()) {
           <ctl-netlist-inspector />
         } @else {
-          <ng-content select="[ctlInspector]"><p class="ctl-hint">Nothing selected.</p></ng-content>
+          <ng-content select="[ctlInspector]"
+            ><p class="ctl-hint" data-testid="inspector-placeholder">
+              Device properties aren't shown here yet. To see the circuit, run
+              <code>view.netlistInspector</code> in the console, or Toggle netlist inspector in the command palette.
+            </p></ng-content
+          >
         }
       </section>
       <ctl-splitter

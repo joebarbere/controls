@@ -58,6 +58,10 @@ test("the inspector's lamp-branch current equals the game.probe derivation; a no
   const output = page.getByTestId('console-output').locator('.entry');
   await expect(output.last()).toHaveText('Ran 8 commands from lit.console.');
 
+  // Before the command, the side panel says what it does and doesn't show (not "Nothing selected").
+  const placeholder = page.getByRole('region', { name: 'Inspector' }).getByTestId('inspector-placeholder');
+  await expect(placeholder).toContainText('view.netlistInspector');
+
   await expect(input).toBeFocused();
   await page.keyboard.insertText('view.netlistInspector');
   await expect(input).toHaveText('view.netlistInspector');
@@ -69,6 +73,7 @@ test("the inspector's lamp-branch current equals the game.probe derivation; a no
   await expect(inspector.getByTestId('netlist-tick')).toHaveText(`Tick ${golden.tick}`);
   const island = tree.locator('[role="treeitem"][data-kind="island"]').first();
   await expect(island.locator('.value')).toHaveText(/^solved · band dc12$/);
+  await expect(placeholder).toHaveCount(0);
 
   const lampBranch = tree.locator('[role="treeitem"][data-key="b:e3.filament"]');
   await expect(lampBranch.locator('.value')).toHaveText(/^[0-9.]+ [kMmµnp]?A, (a -> b|b -> a)$/);
