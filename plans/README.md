@@ -9,6 +9,7 @@ The development plan is the spec. If a phase plan has to deviate from it, change
 | P0     | [Foundation](phase-0-foundation.md)         | v0.1.0  | ✅ Done    |
 | P1     | [Game shell](phase-1-game-shell.md)         | v0.2.0  | ✅ Done    |
 | P2     | [Circuit engine](phase-2-circuit-engine.md) | v0.3.0  | ✅ Done    |
-| P3–P13 | See plan §6                                 | —       | 📐 Planned |
+| P3     | [Wiring](phase-3-wiring.md)                 | v0.4.0  | 🚧 Kickoff |
+| P4–P13 | See plan §6                                 | —       | 📐 Planned |
 
 **At each phase close-out:** `docs-keeper` sync → `version-keeper` minor bump → `release-engineer` release and installer smoke test, then mark the plan done here and in [`docs/history.md`](../docs/history.md).
