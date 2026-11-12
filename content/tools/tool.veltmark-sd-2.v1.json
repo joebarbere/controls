@@ -10,12 +10,19 @@
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": ["slotted", "phillips"],
   "sources": [
     {
       "id": "plain-screwdriver",
       "kind": "game-design",
-      "citation": "game-design: a plain two-tip screwdriver of the kind every electrician carries (tip forms per ISO 8764 and ISO 2380, cited by number). It drives a terminal screw but has no torque setting, so the torque it applies is a seeded spread around the terminal's marked value (plan D8, ADR 0015), and it opens knockouts, pryouts and box clamps (the ENTRY_TYPES registry). No size limit: driving a screw doesn't depend on the conductor.",
+      "citation": "game-design: a plain screwdriver drives a terminal screw but has no torque setting, so the torque it applies is a seeded spread around the terminal's marked value (plan D8, ADR 0015), and it opens knockouts, pryouts and box clamps (the ENTRY_TYPES registry). No size limit: driving a screw doesn't depend on the conductor.",
       "covers": ["capabilities"]
+    },
+    {
+      "id": "screwdriver-tips",
+      "kind": "real-world",
+      "citation": "A two-tip electrician's screwdriver with a slotted blade (ISO 2380, cited by number; a 1/4 in blade is about 1.2 x 6.5 mm) and a #2 cross-recess tip (ISO 8764, cited by number). Only the tip forms are modelled; their sizes are names.",
+      "covers": ["drives"]
     }
   ],
   "extensions": {}

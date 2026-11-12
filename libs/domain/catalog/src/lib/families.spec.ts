@@ -103,6 +103,7 @@ const screw = {
   stranding: ['solid', 'stranded'],
   stripLengthMm: { nominal: 13, tolerance: 2 },
   torqueNm: 1.4,
+  drives: ['slotted', 'phillips'],
   alRated: false,
   entryMm: { x: 10, y: 0, z: 5 },
   exitAxis: '+z',
@@ -417,6 +418,15 @@ describe('catalogue format v2: the families on test fixtures', () => {
     );
     const cage = { ...screw, method: 'springCage', torqueNm: 1 };
     expect(messages(devices(withMethods([cage]))).join()).toContain('torqueNm must be null');
+    // Drive types (F3.4 part 1): a screw method names its screw's drives; any other method none.
+    expect(messages(devices(withMethods([{ ...screw, drives: [] }]))).join()).toContain(
+      'needs the drive types of its screw',
+    );
+    expect(messages(devices(withMethods([{ ...cage, torqueNm: null }]))).join()).toContain('drives must be empty');
+    expect(messages(devices(withMethods([{ ...screw, drives: ['torx'] }]))).join()).toContain('drives');
+    expect(messages(devices(withMethods([{ ...screw, drives: ['hex', 'hex'] }]))).join()).toContain(
+      'drives must be unique',
+    );
     expect(messages(devices(withMethods([{ ...screw, maxConductors: 0 }]))).join()).toContain('maxConductors');
     expect(messages(devices(withMethods([{ ...screw, awgRange: { smallest: 10, largest: 14 } }]))).join()).toContain(
       'smallest',
@@ -431,7 +441,7 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(found).toContain(
       '[2] box.test-1gang@1: terminals.ground.methods.screw.torqueNm: Has no source (realism charter: every value has a source)',
     );
-    expect(found.filter((m) => m.includes('terminals.ground.methods.screw.'))).toHaveLength(9);
+    expect(found.filter((m) => m.includes('terminals.ground.methods.screw.'))).toHaveLength(10); // nine fields and the drives
   });
 
   it('cables: indices in order, pinned conductor entries, matching insulation and colours, a jacket row', () => {
@@ -491,9 +501,15 @@ describe('catalogue format v2: the families on test fixtures', () => {
       ],
       holes: [],
       torque: { minNm: 0.4, maxNm: 6, accuracyFraction: 0.06 },
-      sources: source(['capabilities', 'torque']),
+      drives: ['slotted', 'square'],
+      sources: source(['capabilities', 'torque', 'drives']),
     });
     expect(messages({ tools: [tool(), driver] })).toStrictEqual([]);
+    expect(messages({ tools: [{ ...driver, drives: [] }] }).join()).toContain('drive types exactly when it can drive');
+    expect(messages({ tools: [tool({ drives: ['hex'] })] }).join()).toContain('drive types exactly when it can drive');
+    expect(messages({ tools: [{ ...driver, sources: source(['capabilities', 'torque']) }] }).join()).toContain(
+      'drives: Has no source',
+    );
   });
 
   it('accessories: a lug has a stud size and a ferrule none', () => {

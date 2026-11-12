@@ -10,12 +10,19 @@
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": ["hex"],
   "sources": [
     {
       "id": "nut-driver",
       "kind": "game-design",
-      "citation": "game-design: a hex nut driver for hex-washer-head screws (box and panel hardware, ground screws). It drives screws with no torque setting, like a plain screwdriver; the 5/16 in size is a name for the player, not a modelled value.",
+      "citation": "game-design: a nut driver drives screws with no torque setting, like a plain screwdriver, and with no conductor size limit.",
       "covers": ["capabilities"]
+    },
+    {
+      "id": "nut-driver-hex",
+      "kind": "real-world",
+      "citation": "A 5/16 in nut driver fits the head of a #10 hex-washer-head screw, common on boxes, panels and ground screws (hex-washer-head dimensions per ASME B18.6.3, cited by number, unverified). Only the hex drive is modelled; the size is a name.",
+      "covers": ["drives"]
     }
   ],
   "extensions": {}

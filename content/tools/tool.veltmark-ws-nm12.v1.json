@@ -1,0 +1,32 @@
+{
+  "id": "tool.veltmark-ws-nm12",
+  "version": 1,
+  "title": "NM cable stripper, 12–14 AWG solid / 14–16 AWG stranded",
+  "brand": "Veltmark",
+  "modelName": "WS-NM12",
+  "kind": "stripper",
+  "capabilities": [
+    { "step": "strip", "maxAwg": 12 },
+    { "step": "stripJacket", "maxAwg": 12 },
+    { "step": "cut", "maxAwg": 12 }
+  ],
+  "holes": [
+    { "id": "sol12", "awg": 12, "stranding": "solid" },
+    { "id": "sol14", "awg": 14, "stranding": "solid" },
+    { "id": "str14", "awg": 14, "stranding": "stranded" },
+    { "id": "str16", "awg": 16, "stranding": "stranded" }
+  ],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "sources": [
+    {
+      "id": "nm-stripper-class",
+      "kind": "real-world",
+      "citation": "Dual-slot strippers for non-metallic sheathed cable are a common class made by several makers (typical published figures, paraphrased, not one vendor's): slots that split the outer jacket of 12/2 and 14/2 cable, conductor holes for 12-14 AWG solid and 14-16 AWG stranded (each stranded marking two AWG numbers smaller than the solid one in the same hole, as on general strippers), and a cutting edge. Hole ids are stable save format.",
+      "covers": ["holes", "capabilities"]
+    }
+  ],
+  "extensions": {}
+}

@@ -75,6 +75,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     expect(breaker?.terminals[0].methods[0]).toMatchObject({
       awgRange: { smallest: 14, largest: 10 },
       torqueNm: 4,
+      drives: ['slotted', 'square'],
       alRated: true,
       ratedConductors: 1,
       maxConductors: 2,
@@ -83,6 +84,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     expect(psu?.terminals[0].methods[0]).toMatchObject({
       awgRange: { smallest: 24, largest: 12 },
       torqueNm: 0.5,
+      drives: ['slotted', 'pozidriv'],
       alRated: false,
       stranding: ['solid', 'stranded', 'strandedFerrule'],
     });

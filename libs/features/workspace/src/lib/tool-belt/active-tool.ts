@@ -1,5 +1,5 @@
 import { computed, DestroyRef, effect, inject, Injectable } from '@angular/core';
-import { BUILTIN_CATALOG, type Catalog, type ToolStep } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog, type DriveType, type ToolStep } from '@controls/catalog';
 import { Session, ToolBelt } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
 import type { CatalogRef } from '@controls/save-format';
@@ -88,10 +88,11 @@ export class ActiveTool {
 
   /**
    * The tool a surface uses for `step` when the player didn't pick one (ADR 0015): the first matching
-   * tool on the belt, else the first catalogue tool with the capability by id. Show it in the prompt
+   * tool on the belt, else the first catalogue tool with the capability by id (and, for a screw, a tip
+   * that fits its `drives`). Show it in the prompt
    * (`describeDefaultTool`), never pick silently.
    */
-  toolFor(step: ToolStep, awg: number | null = null): DefaultTool | null {
-    return defaultTool(this.catalog, this.settings.settings().toolBelt.slots, step, awg);
+  toolFor(step: ToolStep, awg: number | null = null, drives: readonly DriveType[] | null = null): DefaultTool | null {
+    return defaultTool(this.catalog, this.settings.settings().toolBelt.slots, step, awg, drives);
   }
 }

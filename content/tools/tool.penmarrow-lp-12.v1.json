@@ -5,11 +5,17 @@
   "brand": "Penmarrow",
   "modelName": "LP-12",
   "kind": "labelMaker",
-  "capabilities": [{ "step": "label", "maxAwg": null }],
+  "capabilities": [
+    {
+      "step": "label",
+      "maxAwg": null
+    }
+  ],
   "holes": [],
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "label-printer",

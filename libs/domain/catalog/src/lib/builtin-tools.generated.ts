@@ -4,6 +4,65 @@
  */
 export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
 {
+  "id": "tool.calderyn-ts-03",
+  "version": 1,
+  "title": "Torque screwdriver, 0.3–1.2 N·m",
+  "brand": "Calderyn",
+  "modelName": "TS-03",
+  "kind": "torqueDriver",
+  "capabilities": [
+    {
+      "step": "drive",
+      "maxAwg": null
+    },
+    {
+      "step": "torque",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": {
+    "minNm": 0.3,
+    "maxNm": 1.2,
+    "accuracyFraction": 0.06
+  },
+  "boreDiameterMm": null,
+  "drives": [
+    "slotted",
+    "phillips",
+    "pozidriv",
+    "square"
+  ],
+  "sources": [
+    {
+      "id": "torque-driver-capabilities",
+      "kind": "game-design",
+      "citation": "game-design: an adjustable torque screwdriver drives a screw and slips at its setting, so it has drive and torque, with no conductor size limit. The torque a terminal needs comes from the device's own marking (NFPA 70-2023 Art. 110.14(D), cited by number), never from a torque table.",
+      "covers": [
+        "capabilities"
+      ]
+    },
+    {
+      "id": "low-range-torque-driver-class",
+      "kind": "real-world",
+      "citation": "ISO 6789-1:2017 Type II Class D (cited by number), plus or minus 6 % from the lowest marked value to the maximum. Low-range adjustable torque screwdrivers for terminal screws are made in about 0.3-1.2 N·m, and one maker's datasheet reads 0.1-1.2 N·m at plus or minus 6 %, tested to ISO 6789-2:2017 (typical published figures, paraphrased, not one vendor's).",
+      "covers": [
+        "torque"
+      ]
+    },
+    {
+      "id": "torque-driver-bits",
+      "kind": "game-design",
+      "citation": "game-design: its 1/4 in hex bit holder (hex-shank bits, ISO 1173 cited by number) takes slotted, cross-recess (Phillips and Pozidriv) and square bits, all assumed in the kit; bit sizes are names.",
+      "covers": [
+        "drives"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "tool.calderyn-ts-15",
   "version": 1,
   "title": "Torque screwdriver, 1–5 N·m",
@@ -28,6 +87,12 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     "accuracyFraction": 0.06
   },
   "boreDiameterMm": null,
+  "drives": [
+    "slotted",
+    "phillips",
+    "pozidriv",
+    "square"
+  ],
   "sources": [
     {
       "id": "torque-driver-capabilities",
@@ -39,10 +104,18 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "torque-driver-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product-class figures, for electrical-realism-reviewer to check. ISO 6789-1 (cited by number) classes adjustable torque screwdrivers as setting tools, and makers commonly state a permissible deviation of plus or minus 6 % of the setting, verified from 20 % to 100 % of the maximum. A 1-5 N·m range keeps the minimum at 20 % of the maximum and reaches the 4 N·m this game's branch-breaker and stand-in service screws are marked with; the 0.5 N·m DIN supply terminals are below it (a plain screwdriver lands them until a low-range driver is added).",
+      "kind": "real-world",
+      "citation": "ISO 6789-1:2017 (cited by number) classes an adjustable, graduated torque screwdriver as a setting tool, Type II Class D, with a maximum permissible deviation of plus or minus 6 % over its specified range, from its lowest marked value to its maximum. Several makers' adjustable torque screwdrivers of the 1-5 N·m class state plus or minus 6 % to ISO 6789 (typical published figures, paraphrased, not one vendor's).",
       "covers": [
         "torque"
+      ]
+    },
+    {
+      "id": "torque-driver-bits",
+      "kind": "game-design",
+      "citation": "game-design: its 1/4 in hex bit holder (hex-shank bits, ISO 1173 cited by number) takes slotted, cross-recess (Phillips and Pozidriv) and square bits, all assumed in the kit; bit sizes are names.",
+      "covers": [
+        "drives"
       ]
     }
   ],
@@ -65,6 +138,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "label-printer",
@@ -119,11 +193,12 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   ],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "insulated-terminal-colour-code",
-      "kind": "game-design",
-      "citation": "game-design: unverified industry convention, for electrical-realism-reviewer to check. Pre-insulated ring, fork and butt terminals are colour-coded across makers, red for 22-18 AWG, blue for 16-14 AWG and yellow for 12-10 AWG, and ratcheting crimpers for them carry matching coloured die nests. The die ids are the colours (stable save format); crimp connectors are listed to UL 486A-B (cited by number only).",
+      "kind": "real-world",
+      "citation": "Pre-insulated ring, fork and butt terminals are colour-coded across makers (typical published figures, paraphrased, not one vendor's): red for 22-18 AWG (some makers mark red 22-16), blue for 16-14 AWG and yellow for 12-10 AWG, and ratcheting crimpers of this class carry matching coloured die nests. The die ids are the colours (stable save format); crimp connectors are listed to UL 486A-B (cited by number only).",
       "covers": [
         "dies"
       ]
@@ -142,7 +217,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
 {
   "id": "tool.veltmark-dc-8",
   "version": 1,
-  "title": "Diagonal cutters, 8 in",
+  "title": "High-leverage diagonal cutters, 8 in",
   "brand": "Veltmark",
   "modelName": "DC-8",
   "kind": "cutter",
@@ -156,11 +231,12 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "diagonal-cutter-capacity",
       "kind": "game-design",
-      "citation": "game-design: unverified product-class figure. Diagonal cutting nippers are specified in ISO 5749 (cited by number); makers of 180-200 mm (7-8 in) high-leverage models commonly quote a soft-wire cutting capacity of roughly 3 to 4 mm. Solid 8 AWG copper is 3.26 mm across (the AWG formula, NBS Handbook 100 section 2) and 6 AWG is 4.11 mm, so cut is capped at 8 AWG, rounded down for play.",
+      "citation": "game-design: unverified product-class figure. Diagonal cutting nippers are specified in ISO 5749 (cited by number); makers of 180-200 mm (7-8 in) high-leverage models state cutting capacities for medium-hard, hard and piano wire (a few millimetres, smallest for piano wire), and soft copper cuts more easily than any of them. The cut is capped at 8 AWG solid copper, 3.26 mm across (the AWG formula, NBS Handbook 100 section 2), a figure chosen for play inside that class.",
       "covers": [
         "capabilities"
       ]
@@ -185,13 +261,24 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [
+    "hex"
+  ],
   "sources": [
     {
       "id": "nut-driver",
       "kind": "game-design",
-      "citation": "game-design: a hex nut driver for hex-washer-head screws (box and panel hardware, ground screws). It drives screws with no torque setting, like a plain screwdriver; the 5/16 in size is a name for the player, not a modelled value.",
+      "citation": "game-design: a nut driver drives screws with no torque setting, like a plain screwdriver, and with no conductor size limit.",
       "covers": [
         "capabilities"
+      ]
+    },
+    {
+      "id": "nut-driver-hex",
+      "kind": "real-world",
+      "citation": "A 5/16 in nut driver fits the head of a #10 hex-washer-head screw, common on boxes, panels and ground screws (hex-washer-head dimensions per ASME B18.6.3, cited by number, unverified). Only the hex drive is modelled; the size is a name.",
+      "covers": [
+        "drives"
       ]
     }
   ],
@@ -214,13 +301,25 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [
+    "slotted",
+    "phillips"
+  ],
   "sources": [
     {
       "id": "plain-screwdriver",
       "kind": "game-design",
-      "citation": "game-design: a plain two-tip screwdriver of the kind every electrician carries (tip forms per ISO 8764 and ISO 2380, cited by number). It drives a terminal screw but has no torque setting, so the torque it applies is a seeded spread around the terminal's marked value (plan D8, ADR 0015), and it opens knockouts, pryouts and box clamps (the ENTRY_TYPES registry). No size limit: driving a screw doesn't depend on the conductor.",
+      "citation": "game-design: a plain screwdriver drives a terminal screw but has no torque setting, so the torque it applies is a seeded spread around the terminal's marked value (plan D8, ADR 0015), and it opens knockouts, pryouts and box clamps (the ENTRY_TYPES registry). No size limit: driving a screw doesn't depend on the conductor.",
       "covers": [
         "capabilities"
+      ]
+    },
+    {
+      "id": "screwdriver-tips",
+      "kind": "real-world",
+      "citation": "A two-tip electrician's screwdriver with a slotted blade (ISO 2380, cited by number; a 1/4 in blade is about 1.2 x 6.5 mm) and a #2 cross-recess tip (ISO 8764, cited by number). Only the tip forms are modelled; their sizes are names.",
+      "covers": [
+        "drives"
       ]
     }
   ],
@@ -241,10 +340,6 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "step": "cut",
       "maxAwg": 10
-    },
-    {
-      "step": "stripJacket",
-      "maxAwg": 12
     }
   ],
   "holes": [
@@ -302,20 +397,81 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "stripper-hole-pattern",
-      "kind": "game-design",
-      "citation": "game-design: unverified product-class pattern, for electrical-realism-reviewer to check against makers' catalogues. US electricians' wire strippers are commonly marked 10-18 AWG solid on one side of the jaws and 12-20 AWG stranded on the other: each physical hole carries a solid size and the stranded size one step smaller, because a stranded conductor is wider than a solid one of the same AWG. Modelled as one hole per marking (ten ids, stable save format), so a conductor stripped in a hole marked for another size or stranding nicks (plan D8).",
+      "kind": "real-world",
+      "citation": "Electricians' wire strippers marked 10-18 AWG solid on one side of the jaws and 12-20 AWG stranded on the other are a common class made by several makers (typical published markings, paraphrased, not one vendor's). Each physical hole carries a solid size and the stranded size of the next even size, two AWG numbers smaller: a 7-strand concentric conductor of equal area is 3/sqrt(7), about 1.134, times the solid diameter, so stranded 12 AWG is about 2.33 mm across, between solid 11 AWG (2.30 mm) and 10 AWG (2.59 mm), and fits the solid-10 hole (diameters from the AWG formula, NBS Handbook 100 section 2). Modelled as one hole per marking (ten ids, stable save format).",
       "covers": [
         "holes"
       ]
     },
     {
-      "id": "stripper-jaws-and-nm-slot",
+      "id": "stripper-jaws",
       "kind": "game-design",
-      "citation": "game-design: unverified product-class features. Strippers of this class have cutting edges between the pivot and the holes (a cut capability up to 10 AWG, the largest hole), and some models add a slot that splits the outer jacket of 14/2 and 12/2 non-metallic sheathed cable (stripJacket up to 12 AWG conductors). The strip capability reaches the largest marked hole, 10 AWG.",
+      "citation": "game-design: strippers of this class have cutting edges between the pivot and the holes, modelled as a cut capability up to 10 AWG, the largest hole; the strip capability reaches the same largest marked hole.",
       "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.veltmark-ws-nm12",
+  "version": 1,
+  "title": "NM cable stripper, 12–14 AWG solid / 14–16 AWG stranded",
+  "brand": "Veltmark",
+  "modelName": "WS-NM12",
+  "kind": "stripper",
+  "capabilities": [
+    {
+      "step": "strip",
+      "maxAwg": 12
+    },
+    {
+      "step": "stripJacket",
+      "maxAwg": 12
+    },
+    {
+      "step": "cut",
+      "maxAwg": 12
+    }
+  ],
+  "holes": [
+    {
+      "id": "sol12",
+      "awg": 12,
+      "stranding": "solid"
+    },
+    {
+      "id": "sol14",
+      "awg": 14,
+      "stranding": "solid"
+    },
+    {
+      "id": "str14",
+      "awg": 14,
+      "stranding": "stranded"
+    },
+    {
+      "id": "str16",
+      "awg": 16,
+      "stranding": "stranded"
+    }
+  ],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "sources": [
+    {
+      "id": "nm-stripper-class",
+      "kind": "real-world",
+      "citation": "Dual-slot strippers for non-metallic sheathed cable are a common class made by several makers (typical published figures, paraphrased, not one vendor's): slots that split the outer jacket of 12/2 and 14/2 cable, conductor holes for 12-14 AWG solid and 14-16 AWG stranded (each stranded marking two AWG numbers smaller than the solid one in the same hole, as on general strippers), and a cutting edge. Hole ids are stable save format.",
+      "covers": [
+        "holes",
         "capabilities"
       ]
     }

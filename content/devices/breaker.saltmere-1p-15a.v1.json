@@ -34,6 +34,7 @@
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": ["slotted", "square"],
           "alRated": true,
           "entryMm": {
             "x": 20,
@@ -67,6 +68,7 @@
             "tolerance": 2
           },
           "torqueNm": 4,
+          "drives": ["slotted", "square"],
           "alRated": true,
           "entryMm": {
             "x": 20,
@@ -171,6 +173,12 @@
       "kind": "game-design",
       "citation": "game-design: the breaker's base clips onto a 35 mm DIN rail (IEC 60715) and takes its full 40 mm base width along the rail (D12's demo puts it on a DIN mount). A real one-pole DIN-rail breaker is one module, about 17.5 to 18 mm wide; the base's width is kept so the entry's size is unchanged. Its terminals follow the panelboard branch-breaker class (a CU/AL load screw at 4.0 N·m), not the DIN-rail (UL 489 box-terminal) class. A real DIN-rail breaker is one module of about 18 mm per pole; a future entry version may take that.",
       "covers": ["fits.din35"]
+    },
+    {
+      "id": "breaker-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and square (Robertson) combination head, as on many North American branch-breaker and panel screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
     }
   ],
   "extensions": {}

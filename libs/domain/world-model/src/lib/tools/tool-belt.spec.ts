@@ -17,6 +17,8 @@ const STRIPPERS = ref('tool.veltmark-ws-1018');
 const CUTTERS = ref('tool.veltmark-dc-8');
 const SCREWDRIVER = ref('tool.veltmark-sd-2');
 const TORQUE = ref('tool.calderyn-ts-15');
+const LOW_TORQUE = ref('tool.calderyn-ts-03');
+const NUT_DRIVER = ref('tool.veltmark-nd-516');
 const CRIMPER = ref('tool.veltmark-cr-2210');
 const LABELLER = ref('tool.penmarrow-lp-12');
 const EMPTY_BELT = Array.from({ length: 9 }, () => null);
@@ -94,12 +96,30 @@ describe('defaultTool (ADR 0015: the first matching tool on the belt, else the f
 
   it('falls back to the first catalogue tool by id when the belt has none, and says so', () => {
     const drive = defaultTool(BUILTIN_CATALOG, EMPTY_BELT, 'drive');
-    // tool.calderyn-ts-15 sorts before tool.veltmark-nd-516 and tool.veltmark-sd-2.
-    expect(drive).toMatchObject({ ref: TORQUE, slot: null });
-    expect(drive && describeDefaultTool(drive)).toBe('Torque screwdriver, 1–5 N·m (not on the belt)');
+    // tool.calderyn-ts-03 sorts before tool.calderyn-ts-15, tool.veltmark-nd-516 and tool.veltmark-sd-2.
+    expect(drive).toMatchObject({ ref: LOW_TORQUE, slot: null });
+    expect(drive && describeDefaultTool(drive)).toBe('Torque screwdriver, 0.3–1.2 N·m (not on the belt)');
     expect(defaultTool(BUILTIN_CATALOG, [SCREWDRIVER], 'drive')).toMatchObject({ ref: SCREWDRIVER, slot: 1 });
     expect(defaultTool(BUILTIN_CATALOG, EMPTY_BELT, 'label')).toMatchObject({ ref: LABELLER, slot: null });
     expect(defaultTool(BUILTIN_CATALOG, EMPTY_BELT, 'crimp', 12)).toMatchObject({ ref: CRIMPER, slot: null });
+  });
+
+  it('for a screw, takes only a tool whose drive types fit it (a nut driver never turns a slotted screw)', () => {
+    const slotted = ['slotted', 'square'] as const;
+    expect(defaultTool(BUILTIN_CATALOG, [NUT_DRIVER, SCREWDRIVER], 'drive', null, slotted)).toMatchObject({
+      ref: SCREWDRIVER,
+      slot: 2,
+    });
+    expect(defaultTool(BUILTIN_CATALOG, [NUT_DRIVER], 'drive', null, ['hex'])).toMatchObject({
+      ref: NUT_DRIVER,
+      slot: 1,
+    });
+    // Not on the belt: the first catalogue tool by id that fits.
+    expect(defaultTool(BUILTIN_CATALOG, [NUT_DRIVER], 'drive', null, slotted)).toMatchObject({
+      ref: LOW_TORQUE,
+      slot: null,
+    });
+    expect(defaultTool(BUILTIN_CATALOG, EMPTY_BELT, 'drive', null, ['hex'])).toMatchObject({ ref: NUT_DRIVER });
   });
 
   it('skips belt slots that are not tools, unknown or can’t reach the size', () => {
@@ -110,13 +130,14 @@ describe('defaultTool (ADR 0015: the first matching tool on the belt, else the f
   });
 
   it('takes the newest version of the first matching id', () => {
-    const v2 = { ...BUILTIN_CATALOG.tool(TORQUE), version: 2, title: 'Torque screwdriver v2' };
+    // catalog.tools[0] is tool.calderyn-ts-03 (the first id that can torque).
+    const v2 = { ...BUILTIN_CATALOG.tool(LOW_TORQUE), version: 2, title: 'Torque screwdriver v2' };
     const catalog = {
       ...BUILTIN_CATALOG,
-      tools: [BUILTIN_CATALOG.tool(TORQUE), v2, ...BUILTIN_CATALOG.tools.slice(1)],
+      tools: [BUILTIN_CATALOG.tool(LOW_TORQUE), v2, ...BUILTIN_CATALOG.tools.slice(1)],
     };
     const chosen = defaultTool(catalog as typeof BUILTIN_CATALOG, EMPTY_BELT, 'torque');
-    expect(chosen?.ref).toStrictEqual({ id: TORQUE.id, version: 2 });
+    expect(chosen?.ref).toStrictEqual({ id: LOW_TORQUE.id, version: 2 });
   });
 
   it('is the test catalogue’s tools too (the commands’ test fixtures): its stripper is found by capability', () => {
@@ -137,7 +158,7 @@ describe('the built-in tools land a conductor (suggestTermination)', () => {
     });
   });
 
-  it('fall back to a plain driver below the torque screwdriver’s range (the 0.5 N·m DIN supply)', () => {
+  it('torque the DIN supply’s 0.5 N·m screw with the low-range torque screwdriver', () => {
     const supply = BUILTIN_CATALOG.device(ref('supply.railwick-din-24v-5a'));
     const pos = supply?.terminals.find((t) => t.id === 'pos');
     const suggestion = suggestTermination(
@@ -145,8 +166,19 @@ describe('the built-in tools land a conductor (suggestTermination)', () => {
       { awg: 16, stranding: 'stranded' },
       BUILTIN_CATALOG.tools,
     );
-    expect(suggestion?.clamp.torqueNm ?? null).toBeNull();
-    expect(suggestion?.clamp.tool).not.toStrictEqual(TORQUE);
+    expect(suggestion?.clamp).toStrictEqual({ tool: LOW_TORQUE, torqueNm: 0.5 });
+  });
+
+  it('never suggest the nut driver for a terminal screw, even with no other plain driver', () => {
+    const breaker = BUILTIN_CATALOG.device(ref('breaker.saltmere-1p-15a'));
+    const load = breaker?.terminals.find((t) => t.id === 'load');
+    const tools = BUILTIN_CATALOG.tools.filter((t) => t.kind !== 'torqueDriver' && t.id !== SCREWDRIVER.id);
+    expect(suggestTermination(load?.methods ?? [], { awg: 14, stranding: 'solid' }, tools)).toBeNull();
+    const plain = BUILTIN_CATALOG.tools.filter((t) => t.kind !== 'torqueDriver');
+    expect(suggestTermination(load?.methods ?? [], { awg: 14, stranding: 'solid' }, plain)?.clamp).toStrictEqual({
+      tool: SCREWDRIVER,
+      torqueNm: null,
+    });
   });
 });
 

@@ -14,11 +14,12 @@
   ],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "insulated-terminal-colour-code",
-      "kind": "game-design",
-      "citation": "game-design: unverified industry convention, for electrical-realism-reviewer to check. Pre-insulated ring, fork and butt terminals are colour-coded across makers, red for 22-18 AWG, blue for 16-14 AWG and yellow for 12-10 AWG, and ratcheting crimpers for them carry matching coloured die nests. The die ids are the colours (stable save format); crimp connectors are listed to UL 486A-B (cited by number only).",
+      "kind": "real-world",
+      "citation": "Pre-insulated ring, fork and butt terminals are colour-coded across makers (typical published figures, paraphrased, not one vendor's): red for 22-18 AWG (some makers mark red 22-16), blue for 16-14 AWG and yellow for 12-10 AWG, and ratcheting crimpers of this class carry matching coloured die nests. The die ids are the colours (stable save format); crimp connectors are listed to UL 486A-B (cited by number only).",
       "covers": ["dies"]
     },
     {

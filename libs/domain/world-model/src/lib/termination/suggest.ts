@@ -1,6 +1,7 @@
 import {
   type AccessoryDefinition,
   awgInRange,
+  drivesFit,
   type TerminalMethodSpec,
   terminationMethod,
   type ToolDefinition,
@@ -27,7 +28,7 @@ function acceptance(spec: TerminalMethodSpec, conductor: TerminationConductor): 
 
 /**
  * The ideal termination of `conductor` on a terminal with `methods` (in their catalogue order), using
- * the first suitable of `tools` for each step and, where the method needs one, the first fitting
+ * the first suitable of `tools` for each step (a driver whose drive types fit the screw's) and, where the method needs one, the first fitting
  * ferrule of `accessories`; or `null`. The first method that can be completed wins.
  */
 export function suggestTermination(
@@ -74,14 +75,11 @@ export function suggestTermination(
     let clamp: TerminationArgs['clamp'] = { tool: null, torqueNm: null };
     if (method.clampTorque && spec.torqueNm !== null) {
       const torque = spec.torqueNm;
+      const fits = (t: ToolDefinition) => capability(t, 'drive', conductor.awg) && drivesFit(t.drives, spec.drives);
       const torqueDriver = tools.find(
-        (t) =>
-          capability(t, 'drive', conductor.awg) &&
-          t.torque !== null &&
-          torque >= t.torque.minNm &&
-          torque <= t.torque.maxNm,
+        (t) => fits(t) && t.torque !== null && torque >= t.torque.minNm && torque <= t.torque.maxNm,
       );
-      const driver = torqueDriver ?? tools.find((t) => capability(t, 'drive', conductor.awg) && t.torque === null);
+      const driver = torqueDriver ?? tools.find((t) => fits(t) && t.torque === null);
       if (!driver) continue;
       clamp = { tool: { id: driver.id, version: driver.version }, torqueNm: torqueDriver ? torque : null };
     }

@@ -7,8 +7,7 @@
   "kind": "stripper",
   "capabilities": [
     { "step": "strip", "maxAwg": 10 },
-    { "step": "cut", "maxAwg": 10 },
-    { "step": "stripJacket", "maxAwg": 12 }
+    { "step": "cut", "maxAwg": 10 }
   ],
   "holes": [
     { "id": "sol10", "awg": 10, "stranding": "solid" },
@@ -25,17 +24,18 @@
   "dies": [],
   "torque": null,
   "boreDiameterMm": null,
+  "drives": [],
   "sources": [
     {
       "id": "stripper-hole-pattern",
-      "kind": "game-design",
-      "citation": "game-design: unverified product-class pattern, for electrical-realism-reviewer to check against makers' catalogues. US electricians' wire strippers are commonly marked 10-18 AWG solid on one side of the jaws and 12-20 AWG stranded on the other: each physical hole carries a solid size and the stranded size one step smaller, because a stranded conductor is wider than a solid one of the same AWG. Modelled as one hole per marking (ten ids, stable save format), so a conductor stripped in a hole marked for another size or stranding nicks (plan D8).",
+      "kind": "real-world",
+      "citation": "Electricians' wire strippers marked 10-18 AWG solid on one side of the jaws and 12-20 AWG stranded on the other are a common class made by several makers (typical published markings, paraphrased, not one vendor's). Each physical hole carries a solid size and the stranded size of the next even size, two AWG numbers smaller: a 7-strand concentric conductor of equal area is 3/sqrt(7), about 1.134, times the solid diameter, so stranded 12 AWG is about 2.33 mm across, between solid 11 AWG (2.30 mm) and 10 AWG (2.59 mm), and fits the solid-10 hole (diameters from the AWG formula, NBS Handbook 100 section 2). Modelled as one hole per marking (ten ids, stable save format).",
       "covers": ["holes"]
     },
     {
-      "id": "stripper-jaws-and-nm-slot",
+      "id": "stripper-jaws",
       "kind": "game-design",
-      "citation": "game-design: unverified product-class features. Strippers of this class have cutting edges between the pivot and the holes (a cut capability up to 10 AWG, the largest hole), and some models add a slot that splits the outer jacket of 14/2 and 12/2 non-metallic sheathed cable (stripJacket up to 12 AWG conductors). The strip capability reaches the largest marked hole, 10 AWG.",
+      "citation": "game-design: strippers of this class have cutting edges between the pivot and the holes, modelled as a cut capability up to 10 AWG, the largest hole; the strip capability reaches the same largest marked hole.",
       "covers": ["capabilities"]
     }
   ],

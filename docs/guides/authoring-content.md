@@ -40,8 +40,8 @@ One id namespace covers the whole catalogue (ADR 0015); the prefix says the fami
 
 A `covers` path covers itself and everything below it; `*` (not first) matches one segment. The bare `terminals` path is only the terminal layout.
 
-- **Device:** `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`ratedConductors`, `maxConductors`, `awgRange`, `stranding`, `stripLengthMm`, `torqueNm`, `alRated`, `entryMm`, `exitAxis`), `fits.<mountType>`, `mounts.<id>`, `entries.<id>`, `interiorVolumeMm3`, `conductor.<field>`.
-- **Cable:** `conductors.<index>`, `jacket.<field>`. **Tool:** `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`. **Accessory:** `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`.
+- **Device:** `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`ratedConductors`, `maxConductors`, `awgRange`, `stranding`, `stripLengthMm`, `torqueNm`, `drives`, `alRated`, `entryMm`, `exitAxis`), `fits.<mountType>`, `mounts.<id>`, `entries.<id>`, `interiorVolumeMm3`, `conductor.<field>`.
+- **Cable:** `conductors.<index>`, `jacket.<field>`. **Tool:** `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`. **Accessory:** `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`.
 - **Table:** `rows.<key>.<field>`, or `rows.<key>` for a row, or `rows.*.<field>` for a column.
 
 Shortcuts: `terminals.*.methods.screw` covers every field of both terminals' screw specs; split it when the fields have different sources (a real torque, a game-design strip length).
@@ -59,7 +59,7 @@ Never store a diameter, an area, a resistance or an ampacity: they are derived (
 
 - A terminal's `methods` is empty for a clip-only terminal. Give a terminal methods only where a conductor really lands on that product.
 - **Order is save format:** `'auto'` (Trainee) takes the first method.
-- `torqueNm` is the device's **marked** torque, non-null exactly for `screw`. Gauges are integer AWG designations (`awgRange: { smallest: 14, largest: 10 }`; 1/0 = 0 … 4/0 = −3).
+- `torqueNm` is the device's **marked** torque, non-null exactly for `screw`; `drives` (the screw head's drive types from `DRIVE_TYPES`) is non-empty exactly for `screw`. A tool that can `drive` lists the drives its tip fits. Gauges are integer AWG designations (`awgRange: { smallest: 14, largest: 10 }`; 1/0 = 0 … 4/0 = −3).
 - `entryMm` and `exitAxis` are game-design geometry unless the product's drawing is cited.
 
 ## Entry versions

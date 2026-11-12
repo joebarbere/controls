@@ -13,6 +13,7 @@
   "dies": [],
   "torque": { "minNm": 1, "maxNm": 5, "accuracyFraction": 0.06 },
   "boreDiameterMm": null,
+  "drives": ["slotted", "phillips", "pozidriv", "square"],
   "sources": [
     {
       "id": "torque-driver-capabilities",
@@ -22,9 +23,15 @@
     },
     {
       "id": "torque-driver-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product-class figures, for electrical-realism-reviewer to check. ISO 6789-1 (cited by number) classes adjustable torque screwdrivers as setting tools, and makers commonly state a permissible deviation of plus or minus 6 % of the setting, verified from 20 % to 100 % of the maximum. A 1-5 N·m range keeps the minimum at 20 % of the maximum and reaches the 4 N·m this game's branch-breaker and stand-in service screws are marked with; the 0.5 N·m DIN supply terminals are below it (a plain screwdriver lands them until a low-range driver is added).",
+      "kind": "real-world",
+      "citation": "ISO 6789-1:2017 (cited by number) classes an adjustable, graduated torque screwdriver as a setting tool, Type II Class D, with a maximum permissible deviation of plus or minus 6 % over its specified range, from its lowest marked value to its maximum. Several makers' adjustable torque screwdrivers of the 1-5 N·m class state plus or minus 6 % to ISO 6789 (typical published figures, paraphrased, not one vendor's).",
       "covers": ["torque"]
+    },
+    {
+      "id": "torque-driver-bits",
+      "kind": "game-design",
+      "citation": "game-design: its 1/4 in hex bit holder (hex-shank bits, ISO 1173 cited by number) takes slotted, cross-recess (Phillips and Pozidriv) and square bits, all assumed in the kit; bit sizes are names.",
+      "covers": ["drives"]
     }
   ],
   "extensions": {}

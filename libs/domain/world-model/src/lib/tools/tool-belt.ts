@@ -1,4 +1,4 @@
-import type { Catalog, ToolDefinition, ToolStep } from '@controls/catalog';
+import { type Catalog, type DriveType, drivesFit, type ToolDefinition, type ToolStep } from '@controls/catalog';
 import { BUILTIN_PROP_VERSION, BUILTIN_PROPS, builtinProp } from '../props';
 import type { CatalogRef } from '../types';
 
@@ -104,24 +104,29 @@ export interface DefaultTool {
 /**
  * The default-tool rule (ADR 0015): the first tool in `belt` (slot order) that can do `step` for `awg`,
  * else the first catalogue tool that can, by id (the newest version of that id), else `null` when no
- * tool in the catalogue can. `belt` is settings `toolBelt.slots` (index 0 is slot 1).
+ * tool in the catalogue can. `belt` is settings `toolBelt.slots` (index 0 is slot 1). For a step that
+ * turns a screw, pass the screw's `drives`: only a tool whose drive types fit one counts (`wrong-drive`
+ * otherwise).
  */
 export function defaultTool(
   catalog: Catalog,
   belt: readonly (CatalogRef | null)[],
   step: ToolStep,
   awg: number | null = null,
+  drives: readonly DriveType[] | null = null,
 ): DefaultTool | null {
+  const suits = (tool: ToolDefinition) =>
+    toolCan(tool, step, awg) && (drives === null || drivesFit(tool.drives, drives));
   for (let i = 0; i < belt.length; i++) {
     const ref = belt[i];
     const tool = ref && catalog.family(ref) === 'tool' ? catalog.tool(ref) : undefined;
-    if (tool && toolCan(tool, step, awg)) return { tool, ref: { id: tool.id, version: tool.version }, slot: i + 1 };
+    if (tool && suits(tool)) return { tool, ref: { id: tool.id, version: tool.version }, slot: i + 1 };
   }
   // `catalog.tools` is sorted by id, then version: the first matching id, at its newest matching version.
   let found: ToolDefinition | null = null;
   for (const tool of catalog.tools) {
     if (found !== null && tool.id !== found.id) break;
-    if (toolCan(tool, step, awg)) found = tool;
+    if (suits(tool)) found = tool;
   }
   return found && { tool: found, ref: { id: found.id, version: found.version }, slot: null };
 }

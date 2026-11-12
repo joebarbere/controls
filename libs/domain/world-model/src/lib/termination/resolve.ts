@@ -160,6 +160,8 @@ export function resolveTermination(
     accessory = { ref: { ...args.accessory.ref }, crimpQuality };
   }
   // Clamp: a torque driver's accuracy around its setting, or a screwdriver's spread around the spec.
+  // The uniform shape of the draw is game-design: ISO 6789-1 gives only a maximum permissible
+  // deviation (±6 % for Type II Class D), not a distribution.
   let torqueNm: number | null = null;
   const clamped = terminationMethod(spec.method)?.clampTorque === true && spec.torqueNm !== null;
   if (clamped && tools.clamp !== null) {

@@ -99,6 +99,16 @@ The `lead` kind registers ADR 0015's ten sim keys (`conductorTempK`, `endATempK`
 
 `engineCompatible` compares the catalogue version by equality, so the engine-6 `.ctrl` fixtures (catalogue 1) now load as `engine-changed`, never refused. Engine-numbered fixtures written from catalogue 2 on are named **`<scenario>-engine-N-catalog-C.ctrl`**, and `apps/sim-cli`'s collision guard checks both numbers; the current pair (`-engine-6-catalog-2`) must load as `continued` and rebuild from its scenario. No `world.hash` moved: the manifest isn't hashed, and no catalogue value the engine reads changed.
 
+### Amendment (F3.4 part 1): drive types
+
+Added after the `electrical-realism-reviewer` review of the first tools, while catalogue 2 is still provisional (`save-format-guardian` to review):
+
+- **`DRIVE_TYPES`** (`registries.ts`): `slotted` (ISO 2380 by number), `phillips` and `pozidriv` (ISO 8764 by number), `square` (Robertson, practice), `hex` (hex-washer heads, practice). A size is a name, never modelled (game-design).
+- **`ToolDefinition.drives`**: non-empty exactly when the tool can `drive`, coverage path `drives`.
+- **`TerminalMethodSpec.drives`**: non-empty exactly for a clamp-torque method (`screw`), coverage path `terminals.<id>.methods.<method>.drives`. Both fields default to `[]`, so a document without them parses; the check then refuses a driver or screw that lacks them.
+- **`EntryTypeDef.drives`**: the tips that open an entry by `drive` (`slotted` for `knockout`, `pryout`, `clamp`; none for `drillSite`).
+- Commands refuse a misfit with `wrong-drive` (ADR 0015 implementation note 16). The P2 entries gain data only (screw drives on the breaker, the DIN supply and the stand-in service), keeping version 1 under the "gaining data keeps the version" rule.
+
 ## Deviations from the plan and from ADR 0015
 
 1. **Insulation thickness is per conductor entry**, not a table column (the pre-audit's rule; the plan listed "thickness classes" with the insulation data).
