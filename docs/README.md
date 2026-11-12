@@ -7,7 +7,7 @@ flowchart TD
     HUB(["docs/README.md<br/>(you are here)"])
     HUB --> G["guides/<br/>new developer, releasing, scripting, oracle"]
     HUB --> A["architecture/<br/>overview"]
-    HUB --> D["decisions/<br/>ADRs 0001-0013"]
+    HUB --> D["decisions/<br/>ADRs 0001-0015"]
     HUB --> C["caveats/<br/>per-area gotchas"]
     HUB --> GL["glossary.md"]
     HUB --> H["history.md"]
@@ -58,6 +58,7 @@ Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds the
 | [0011 Sim worker contract](decisions/0011-sim-worker-contract.md)         | P2: main-thread clock and bus, mirror bus in the worker, SAB snapshot layout and seqlock, descriptor, fallback, readers                                                            |
 | [0012 Oracle corpus](decisions/0012-oracle-corpus.md)                     | P2 (Accepted for DC and AC): 500 DC + 500 AC ngspice decks and results checked in, staleness check, explicit gmin, 1e-6 relative tolerance, confirmed by the DC and phasor solvers |
 | [0013 World document v2](decisions/0013-world-document-v2.md)             | P2: connections (test leads) and their id rule, commanded and sim state bags, `MODEL_KINDS`, solution record, `firstSeq`/`endTick`, catalogue v1                                   |
+| [0015 World document v3](decisions/0015-world-document-v3.md)             | P3 (Proposed): leads and conductors in one array, cables, terminations, routes and the length rule, mounting, wire commands, stream keys, the v2 → v3 migration                    |
 
 ## Reference
 
