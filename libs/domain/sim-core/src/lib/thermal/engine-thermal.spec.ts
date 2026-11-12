@@ -1,8 +1,13 @@
-import { LEAD_SIM_BAG_V3 } from '@controls/save-format';
+import { LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { BATTERY, LAMP } from '../../testing/bench';
-import { RESISTOR_2_4 } from '../../testing/engine';
+import { engineBus, RESISTOR_2_4 } from '../../testing/engine';
+import { HEATER } from '../../testing/loads';
+
+const LEAD_REF = { id: 'lead.quillfern-test-1m', version: 1 };
+const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
+const NUT = { id: 'splice.corvelle-tw-l', version: 1 };
 import { SourceHost } from '../../testing/sources';
 import { AMBIENT_TEMPERATURE_K } from '../constants';
 
@@ -127,4 +132,105 @@ describe('the connection thermal bank in the engine', () => {
     host.exec('edit.undo');
     expect(leadTemp(host, 2)).toBe(warm);
   });
+
+  it('save and load mid-heating with landed conductors equals the uninterrupted run (end keys through materialise → JSON → migrate)', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 4000 }), fc.integer({ min: 1, max: 4000 }), (cut, more) => {
+        const straight = new SourceHost(engineBus(5, wiredLoopWorld())).advanceTo(cut);
+        const loaded = straight.reload();
+        // The end keys reached the save: landed ends hot, their termination ids, an unlanded end null.
+        const saved = straight.materialised().connections.find((c) => c.id === 2)?.sim ?? {};
+        expect(saved['endATerminationId']).toBe(1);
+        expect(saved['endATempK'] as number).toBeGreaterThan(TA);
+        const free = straight.materialised().connections.find((c) => c.id === 7)?.sim ?? {};
+        expect([free['endATerminationId'], free['endBTempK']]).toStrictEqual([7, null]);
+        straight.advance(more);
+        loaded.advance(more);
+        expect(loaded.engine.snapshotHash()).toBe(straight.engine.snapshotHash());
+        expect(loaded.engine.exportState()).toStrictEqual(straight.engine.exportState());
+        expect(worldHash(loaded.materialised())).toBe(worldHash(straight.materialised()));
+      }),
+      { numRuns: 10 },
+    );
+  });
 });
+
+const THHN_14 = { id: 'conductor.tallowmere-thhn-14-solid', version: 1 };
+
+/**
+ * A battery (1) through a 15 A breaker (2, handle on) into two wire nuts (3, 4) and the 12 V 50 W
+ * heater (5): lead 1 battery + → breaker line; conductor 2 breaker load (screw) → nut 3; conductors 3
+ * and 4 nut 3 → nut 4 in parallel; lead 5 nut 4 → heater a; lead 6 heater b → battery −; conductor 7
+ * landed in nut 4 at one end, free at the other. About 4 A, so the conductors and their ends warm.
+ * Built directly (as the bench plants are), every termination its own id.
+ */
+function wiredLoopWorld(): World {
+  const transform = { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } };
+  const entity = (id: number, ref: { id: string; version: number }, state: Record<string, boolean> = {}) => ({
+    id,
+    ref,
+    transform,
+    state,
+    sim: {},
+    mountedOn: null,
+    label: null,
+    extensions: {},
+  });
+  const termination = (id: number, method: 'screw' | 'twistOn') => ({
+    id,
+    method,
+    auto: false,
+    stripLengthMm: 13,
+    nickedStrandFraction: 0,
+    torqueNm: method === 'screw' ? 4 : null,
+    accessory: null,
+  });
+  const base = { cable: null, label: null, state: {}, sim: { ...LEAD_SIM_BAG_V3 }, extensions: {} };
+  const lead = (id: number, a: [number, string], b: [number, string]) => ({
+    ...base,
+    id,
+    ref: LEAD_REF,
+    a: { entity: a[0], terminal: a[1], termination: null },
+    b: { entity: b[0], terminal: b[1], termination: null },
+    route: null,
+    lengthMm: null,
+    colour: null,
+  });
+  const conductor = (id: number, a: object | null, b: object | null) => ({
+    ...base,
+    id,
+    ref: THHN_14,
+    a,
+    b,
+    route: [{ kind: 'free', positionMm: { x: 0, y: 300, z: 0 }, entity: null, fixture: null, tool: null }],
+    lengthMm: 1500,
+    colour: { base: 'black', stripe: null },
+  });
+  const nut = (entity: number, t: number) => ({ entity, terminal: 'splice', termination: termination(t, 'twistOn') });
+  return World.parse({
+    schemaVersion: 3,
+    seed: 5,
+    tick: 0,
+    nextEntityId: 6,
+    nextConnectionId: 8,
+    nextCableId: 1,
+    nextTerminationId: 8,
+    regionId: 'nec',
+    difficulty: 'apprentice',
+    assisted: false,
+    fixtures: [],
+    entities: [entity(1, BATTERY), entity(2, BREAKER, { on: true }), entity(3, NUT), entity(4, NUT), entity(5, HEATER)],
+    connections: [
+      lead(1, [1, 'pos'], [2, 'line']),
+      conductor(2, { entity: 2, terminal: 'load', termination: termination(1, 'screw') }, nut(3, 2)),
+      conductor(3, nut(3, 3), nut(4, 4)),
+      conductor(4, nut(3, 5), nut(4, 6)),
+      lead(5, [4, 'splice'], [5, 'a']),
+      lead(6, [5, 'b'], [1, 'neg']),
+      conductor(7, nut(4, 7), null),
+    ],
+    cables: [],
+    sim: null,
+    extensions: {},
+  });
+}

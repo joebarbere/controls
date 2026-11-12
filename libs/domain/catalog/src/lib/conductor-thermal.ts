@@ -201,10 +201,12 @@ export function leadThermalLine(params: LeadParams): ThermalLineData {
 }
 
 /**
- * The largest G′ a conductor can have (W/(m·K)), for the conservative time-constant bounds (§3.4): an
- * insulated conductor's surface resistance → 0 leaves 1/R′_ins; a bare one's G′ is taken at the top of
- * its linear-α range, with the ambient at its material's reference temperature (20 °C, the game's
- * ambient; sim-core pins the equality).
+ * The G′ the time-constant bounds use (W/(m·K), §3.4): an insulated conductor's surface resistance → 0
+ * leaves 1/R′_ins, a true upper bound. A bare one's G′ is taken at the top of its linear-α range, with
+ * the ambient at its material's reference temperature (20 °C, the game's ambient; sim-core pins the
+ * equality): **not** a true upper bound, since h keeps rising above T_lin (a bare conductor far past
+ * 200 °C has a shorter τ than this), and it relies on the ambient being T₀. The built-in bare entries
+ * pass with a 45× margin.
  */
 export function maxConductanceToAirWPerMK(thermal: ConductorThermal): number {
   if (thermal.insulationResistanceKMPerW > 0) return 1 / thermal.insulationResistanceKMPerW;

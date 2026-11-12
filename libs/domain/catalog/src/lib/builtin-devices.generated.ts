@@ -4289,7 +4289,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "lead-insulation-wall",
       "kind": "game-design",
-      "citation": "game-design: a 0.8 mm PVC wall, typical of flexible bench test-lead insulation (one layer; the lead's thermal model takes the conductor solid-round at its nominal area).",
+      "citation": "game-design, anchored to the 600 V PVC hookup-wire wall, about 0.8 mm for 18 AWG in manufacturers' public sheets (no single maker): one PVC layer; the lead's thermal model takes the conductor solid-round at its nominal area.",
       "covers": [
         "model.params.insulationThicknessMm"
       ]

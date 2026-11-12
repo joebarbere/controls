@@ -53,12 +53,12 @@ describe('thermal time constants (ADR 0018 §3.4)', () => {
     expect(
       rel(conductorTauMinS(conductorThermal(physics('conductor.tallowmere-thhn-4-0-stranded'))), 69.6),
     ).toBeLessThan(0.005);
-    // Bare 14 AWG: C′ / G′(473.15 K) with ε 0.5, about 45 s.
+    // Bare 14 AWG (D = 1.62773 mm, ε 0.5, no insulation so T_s = T_c): h(473.15 K) = 1.32 (180/D)^¼ + 0.5σ(T² + T_a²)(T + T_a)
+    // = 30.8020 W/(m²·K); G′ = h πD = 0.157511 W/(m·K); C′ = 8890 × 385 × 2.08091e-6 = 7.122227; τ = 45.2173 s.
     const bare = conductorThermal(physics('conductor.sorrelby-bare-14-solid'));
     const g = conductanceToAirWPerMK(bare, 473.15, 293.15);
     expect(conductorTauMinS(bare)).toBe(heatCapacityPerMetre(bare.physics) / g);
-    expect(conductorTauMinS(bare)).toBeGreaterThan(40);
-    expect(conductorTauMinS(bare)).toBeLessThan(50);
+    expect(rel(conductorTauMinS(bare), 45.2173)).toBeLessThan(1e-5);
   });
 
   it("the lead's line: 18 AWG copper solid-round, one 0.8 mm PVC wall, τ_min ≈ 2.35 s", () => {

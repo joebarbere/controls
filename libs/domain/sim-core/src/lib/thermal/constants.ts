@@ -68,7 +68,7 @@ export const CONNECTION_RESOLVE_RELTOL: SourcedConstant = {
   unit: '1',
   kind: 'numerical',
   source:
-    "numerical: the lamp's 1 % rule (LAMP_RESOLVE_RELTOL). Smooth heating moves a conductor's R by far less than 1 % per 10 ms step, so in practice it fires on value steps (part 2's regimes and degradation), not while a conductor warms (ADR 0018 §3.4).",
+    "numerical: the lamp's 1 % rule (LAMP_RESOLVE_RELTOL). Smooth heating moves a conductor's R by far less than 1 % per 10 ms step, so in practice it fires on value steps (part 2's regimes and degradation), not while a conductor warms normally; fast fault heating (a shorted lead at hundreds of amps) re-solves every 3–4 steps (ADR 0018 §3.4).",
 };
 
 /** Below this branch current (A) the connection bank never asks for a re-solve (as `LAMP_RESOLVE_MIN_A`). */

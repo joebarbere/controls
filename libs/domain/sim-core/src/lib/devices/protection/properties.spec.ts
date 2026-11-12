@@ -42,7 +42,7 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
       ticks: fc.oneof(
         { weight: 2, arbitrary: fc.nat({ max: 23 }) },
         { weight: 2, arbitrary: fc.integer({ min: 24, max: 400 }) },
-        { weight: 2, arbitrary: fc.integer({ min: 600, max: 2500 }) },
+        { weight: 2, arbitrary: fc.integer({ min: 600, max: 6000 }) },
       ),
     }),
   },
@@ -209,15 +209,15 @@ describe('protection determinism properties (F2.5 part 2)', () => {
     }
     // Measured on this seed, of 24 (two-body fuse, F2.5 review): 18 cut mid-interval, 11 with a fuse or
     // breaker part-heated, 6 with a blown fuse, 6 with a tripped breaker, 4 that blow or trip after the
-    // reload. Engine 7 (F3.6 part 1: leads heat): 18, 15, 6, 1 and 5. A short through the breaker
-    // starts near 117 A, just under its 8× magnetic band, and its two 18 AWG leads now heat at about
-    // 100 K/s, so the current falls towards 90 A and the bimetal trips later than most samples run;
-    // the tripped-breaker cases are covered by the protection spec's goldens, and here by at least one
-    // sample and the after-reload count.
+    // reload. Engine 7 (F3.6 part 1: leads heat): a short through the breaker starts near 117 A, just
+    // under its 8× magnetic band, and its two 18 AWG leads heat at about 100 K/s, so the current falls
+    // towards 90 A and the bimetal trips later; with the long-advance arm at 600–2500 ticks only 1 of 24
+    // samples held a tripped breaker. The arm now reaches 6000 ticks (same weight), measured: 18, 8, 9,
+    // 6 and 3.
     expect(counts.midInterval).toBeGreaterThan(12);
     expect(counts.heating).toBeGreaterThan(6);
     expect(counts.blown).toBeGreaterThan(3);
-    expect(counts.tripped).toBeGreaterThan(0);
+    expect(counts.tripped).toBeGreaterThan(3);
     expect(counts.eventsAfterReload).toBeGreaterThan(1);
   });
 });
