@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-11-11). P3 PR 6, the catalogue v2 kickoff PR (decision D3). `catalogVersion` 2 stays provisional until v0.4.0 ships, then it is frozen.
 **Review:** `save-format-guardian` and `electrical-realism-reviewer` approved with changes, all applied (see [Review](#review)).
+**Amended by:** [ADR 0018](0018-conductor-and-termination-physics.md) (deviation 8's field list; the termination spec fields that count as electrical).
 **Date:** 2026-11-11 (Phase 3)
 **Sources:** [phase 3 plan](../../plans/phase-3-wiring.md) decisions D3, D6, D10 and D11, the "Catalogue format v2" kickoff section and F3.1; [ADR 0015](0015-world-document-v3.md) ("`catalogVersion` 2", terminal method specs, enclosure entries and mounts, cable assemblies, colours, tool capabilities, accessories, the content-designer review); [ADR 0013](0013-world-document-v2.md) (catalogue v1, `MODEL_KINDS`); [ADR 0004](0004-save-format.md) (saves reference entries); [ADR 0003](0003-licence-policy.md) (no NEC text or tables); the P3 source pre-audit by `electrical-realism-reviewer` (2026-11-11), whose vetted values and must-avoid list this ADR follows
 
@@ -89,7 +90,7 @@ The `lead` kind registers ADR 0015's ten sim keys (`conductorTempK`, `endATempK`
 ### Versioning rules
 
 - **A shipped `(id, version)` resolves in every later catalogue version and keeps its values.** Once a release ships an entry or a table version, it is never deleted and no value in it changes; it may only gain data (next rule). Prose (`title`, a source's `citation`) may be corrected in place: only people read it, and it is in no hash. Any other change is a new entry or table version beside the old, and only new entry versions pin a new table version. `shipped.spec.ts` pins every shipped ref and its values (`libs/domain/catalog/fixtures/shipped/<release>.json`, taken from the release tag; each release appends its own list).
-- **An entry keeps its version when it only gains data** and every existing value is unchanged; behaviour that changes as a result is a `SIM_ENGINE_VERSION` change. From catalogue 2 on, **termination spec values count as electrical** (torque, strip length, counts, gauge range): changing one after v0.4.0 needs a new entry version.
+- **An entry keeps its version when it only gains data** and every existing value is unchanged; behaviour that changes as a result is a `SIM_ENGINE_VERSION` change. From catalogue 2 on, **termination spec values count as electrical** (torque, strip length, counts, gauge range, and ADR 0018's `clampType`, `clampDepthMm`, `contactOhm`, `heatPathWPerK`, `hotSpotHeatCapacityJPerK` and `combination`): changing one after v0.4.0 needs a new entry version.
 - **Colour ids are append-only** across every version of the colour table (load-checked: a later version must hold every id of the one before); display values may change; and every shipped colour table version stays in the catalogue (pinned by `shipped.spec.ts`).
 - **The order of a terminal's methods, an enclosure's entries and a cable's conductors, and the ids of methods, mounts, entries, holes and dies, are save format** once v0.4.0 ships.
 - **`catalogVersion` 2 is provisional until v0.4.0**, like `schemaVersion` 3: later P3 PRs add entries and kinds to it without a bump, and fixtures written under it are replaced in the PR that changes it.
@@ -107,7 +108,7 @@ The `lead` kind registers ADR 0015's ten sim keys (`conductorTempK`, `endATempK`
 5. **The plan's `content/tools/` loader lands now; its directory and mirror land with F3.4 part 1** (the first real tools), as do `content/cables/` (F3.1 part 2) and `content/accessories/` (F3.3 part 1). An empty directory can't be committed, and the mirror test refuses an unlisted one.
 6. **The utility stand-in gets screw terminals now** (game-design), because D12's demo lands NM-B on it.
 7. **Aluminium is the AA-8000-series alloy at 61.0 % IACS**, not "EC-grade" as the plan's kickoff step 8 said (the pre-audit's correction).
-8. **Clamp geometry for the contact model** (screw diameter, nut-factor class, clamp type, contact material, clamp depth), which ADR 0015 assigns to terminal catalogue data, **is added to `TerminalMethodSpec` by ADR 0018** (F3.3 part 1) at entry version 1 while catalogue 2 is provisional: the contact model decides which fields it needs. So is the twist-on connector's combination bounds (count, AWG, total size).
+8. **Clamp geometry for the contact model** (clamp type, clamp depth, contact resistance, heat path, hot-spot heat capacity; the screw diameter, nut-factor class and contact material are not needed, ADR 0018 §4.1), which ADR 0015 assigns to terminal catalogue data, **is added to `TerminalMethodSpec` by ADR 0018** (F3.3 part 1) at entry version 1 while catalogue 2 is provisional: the contact model decides which fields it needs. So is the twist-on connector's combination bounds (count, AWG, total size).
 
 ## Consequences
 
