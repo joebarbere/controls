@@ -34,6 +34,10 @@
     "specificHeatJPerKgK": {
       "type": "number",
       "exclusiveMinimum": 0
+    },
+    "meltingPointK": {
+      "type": "number",
+      "exclusiveMinimum": 0
     }
   },
   "required": [
@@ -44,9 +48,10 @@
     "temperatureCoefficientPerK",
     "linearAlphaMaxK",
     "densityKgM3",
-    "specificHeatJPerKgK"
+    "specificHeatJPerKgK",
+    "meltingPointK"
   ],
   "additionalProperties": false,
   "title": "Row of catalogue table materials",
-  "description": "Conductor metals: resistivity and α at a reference temperature, density, specific heat."
+  "description": "Conductor metals: resistivity and α at a reference temperature, density, specific heat, melting point."
 }

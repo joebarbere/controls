@@ -141,11 +141,16 @@ function checkConnection(world: World, connection: Connection, at: string, catal
       }
       for (const issue of checkBags(kind, connection.state, connection.sim)) add(`${at}.${issue.path}`, issue.message);
       if (leadShaped) {
-        // A lead's clips have no termination node: its end keys stay at their initial values (ADR 0015).
+        // A lead's clips have no termination node: its end keys stay at their initial values (ADR 0015),
+        // except that a fused lead's two end states are both `intermittentOpen` (F3.6 part 2, ADR 0018
+        // implementation notes).
+        const fused =
+          connection.sim['endAState'] === 'intermittentOpen' && connection.sim['endBState'] === 'intermittentOpen';
         for (const [name, def] of Object.entries(kind.keys)) {
           const value = connection.sim[name];
+          if (fused && (name === 'endAState' || name === 'endBState')) continue;
           if (name.startsWith('end') && def.owner === 'sim' && value !== undefined && value !== def.initial) {
-            add(`${at}.sim.${name}`, "A lead's end keys stay at their initial values");
+            add(`${at}.sim.${name}`, "A lead's end keys stay at their initial values (both ends open when fused)");
           }
         }
       }

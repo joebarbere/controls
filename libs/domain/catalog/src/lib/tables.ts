@@ -46,9 +46,17 @@ export const MaterialRow = z
     densityKgM3: positive,
     /** Specific heat capacity near room temperature (J/(kg·K)), taken as constant. */
     specificHeatJPerKgK: positive,
+    /**
+     * The melting point (K): a conductor or termination node that reaches it burns open, and the
+     * engine never reports a node above it (F3.6 part 2, ADR 0018 §5).
+     */
+    meltingPointK: positive,
   })
   .refine((r) => r.linearAlphaMaxK > r.referenceTemperatureK, {
     message: 'linearAlphaMaxK must be above the reference temperature',
+  })
+  .refine((r) => r.meltingPointK > r.linearAlphaMaxK, {
+    message: 'meltingPointK must be above linearAlphaMaxK',
   });
 export type MaterialRow = z.infer<typeof MaterialRow>;
 
@@ -127,9 +135,11 @@ export const TABLE_KINDS: Readonly<Record<string, TableKindDef>> = Object.freeze
       'linearAlphaMaxK',
       'densityKgM3',
       'specificHeatJPerKgK',
+      'meltingPointK',
     ],
     keys: TableKey,
-    description: 'Conductor metals: resistivity and α at a reference temperature, density, specific heat.',
+    description:
+      'Conductor metals: resistivity and α at a reference temperature, density, specific heat, melting point.',
   },
 } satisfies Record<string, TableKindDef>);
 

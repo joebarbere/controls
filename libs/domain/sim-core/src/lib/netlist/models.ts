@@ -106,6 +106,12 @@ export interface ConnectionElementInput {
 export interface ConnectionNetlistModel {
   readonly kind: string;
   /**
+   * The sim-owned keys the compiler reads (ADR 0015, F3.6 part 2): `endAState` and `endBState`, and
+   * only whether one is `intermittentOpen`, which takes the connection out of the netlist. Every other
+   * connection sim value (temperatures, degradation, the other states) is the bank's at solve time.
+   */
+  readonly simTopologyKeys: readonly string[];
+  /**
    * Pure, from the entry and the connection's static data. Exactly one branch per connection
    * (ADR 0011 §7). The compiler calls it again whenever the connection object changes.
    */
@@ -214,8 +220,12 @@ const enclosurePanel: DeviceNetlistModel = {
  * A test lead: a resistance from resistivity × length ÷ area at the bench temperature, plus the clip
  * contact resistance at each end (`leadResistanceOhm`, ADR 0013; never from conductor tables).
  */
+/** The connection sim keys that change a connection's topology (open versus not open). */
+const CONNECTION_TOPOLOGY_KEYS: readonly string[] = Object.freeze(['endAState', 'endBState']);
+
 const lead: ConnectionNetlistModel = {
   kind: 'lead',
+  simTopologyKeys: CONNECTION_TOPOLOGY_KEYS,
   element: ({ params }) => ({
     kind: 'resistor',
     values: { resistanceOhm: leadResistanceOhm(params as LeadParams, AMBIENT_TEMPERATURE_K.value) },
@@ -240,6 +250,7 @@ const lead: ConnectionNetlistModel = {
  */
 const conductor: ConnectionNetlistModel = {
   kind: 'conductor',
+  simTopologyKeys: CONNECTION_TOPOLOGY_KEYS,
   element: ({ device, catalog, lengthMm, ends }) => {
     const physics = conductorPhysics(catalog, device);
     if (physics === undefined || lengthMm === null) {

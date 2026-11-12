@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { createHash } from 'node:crypto';
-import { sha256, SHA256_H0, SHA256_K, sha256Hex, toHex, utf8Encode } from './sha256';
+import { sha256, sha256Finish, SHA256_H0, SHA256_K, sha256Hex, sha256Prefix, toHex, utf8Encode } from './sha256';
 
 /** Integer k-th root of a non-negative bigint (largest r with r^k <= n), by bisection. */
 function integerRoot(n: bigint, k: bigint): bigint {
@@ -133,5 +133,33 @@ describe('toHex', () => {
   it('is lower case and zero-padded', () => {
     expect(toHex(Uint8Array.of(0, 1, 0xab, 0xff))).toBe('0001abff');
     expect(toHex(new Uint8Array(0))).toBe('');
+  });
+});
+
+describe('resuming from a prefix midstate (F3.6 part 2)', () => {
+  it('sha256Finish from sha256Prefix of a message sharing the prefix equals the one-shot hash, and Node’s', () => {
+    fc.assert(
+      fc.property(
+        fc.uint8Array({ maxLength: 700 }),
+        fc.uint8Array({ maxLength: 300 }),
+        fc.uint8Array({ maxLength: 300 }),
+        (prefix, tailA, tailB) => {
+          const a = new Uint8Array([...prefix, ...tailA]);
+          const b = new Uint8Array([...prefix, ...tailB]);
+          const [state, covered] = sha256Prefix(a, prefix.length);
+          expect(covered % 64).toBe(0);
+          expect(covered).toBeLessThanOrEqual(prefix.length);
+          const expected = createHash('sha256').update(b).digest('hex');
+          expect(toHex(sha256Finish(state, b, covered))).toBe(expected);
+          expect(toHex(sha256(b))).toBe(expected);
+          // The state is not modified: reusable.
+          expect(toHex(sha256Finish(state, a, covered))).toBe(createHash('sha256').update(a).digest('hex'));
+        },
+      ),
+    );
+  });
+
+  it('refuses an offset that is not a block boundary', () => {
+    expect(() => sha256Finish(Int32Array.from(SHA256_H0), new Uint8Array(100), 10)).toThrow(RangeError);
   });
 });

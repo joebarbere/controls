@@ -61,6 +61,8 @@ export interface ThermalLineData extends ConductorResistanceData {
   /** The metal's density (kg/m³) and specific heat (J/(kg·K)): C′ = ρ_m · c_p · A (metal only, §3.2). */
   readonly densityKgM3: number;
   readonly specificHeatJPerKgK: number;
+  /** The metal's melting point (K): its nodes burn open there and never read above it (F3.6 part 2). */
+  readonly meltingPointK: number;
   /** The insulation, or `null` for a bare conductor. */
   readonly insulation: ThermalInsulationData | null;
 }
@@ -190,6 +192,7 @@ export function leadThermalLine(params: LeadParams): ThermalLineData {
     diameterM: Math.sqrt((4 * params.conductorAreaM2) / Math.PI),
     densityKgM3: params.densityKgM3,
     specificHeatJPerKgK: params.specificHeatJPerKgK,
+    meltingPointK: params.meltingPointK,
     insulation: {
       thicknessM: params.insulationThicknessMm / 1000,
       conductivityWPerMK: params.insulationConductivityWPerMK,

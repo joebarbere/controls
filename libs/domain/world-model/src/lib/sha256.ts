@@ -30,7 +30,10 @@ const K = Int32Array.from(SHA256_K);
 /**
  * Section 6.2.2's compression of the 64-byte block at `offset` of `bytes` into `h`, on int32 words
  * (`| 0` is addition modulo 2^32, as `>>> 0` is, in another representation) with the rotations
- * inlined: the bits are the standard's, only the arithmetic's JavaScript form is faster.
+ * inlined: the bits are the standard's, only the arithmetic's JavaScript form is faster. Sums are
+ * reduced pairwise (`| 0` after each pair) so V8 keeps them in int32 arithmetic, and Ch and Maj use
+ * their equivalent two-operation forms, g ^ (e & (f ^ g)) and (a & b) ^ (c & (a ^ b)): about 10 % faster
+ * on a 2,000-node plant's topology encoding (F3.6 part 2's toggle path). Golden vectors pin the bits.
  */
 function compress(h: Int32Array, w: Int32Array, bytes: Uint8Array, offset: number): void {
   // 1. Message schedule (big-endian words).
@@ -43,7 +46,7 @@ function compress(h: Int32Array, w: Int32Array, bytes: Uint8Array, offset: numbe
     const y = w[t - 2];
     const sigma0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
     const sigma1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
-    w[t] = (sigma1 + w[t - 7] + sigma0 + w[t - 16]) | 0;
+    w[t] = (((sigma1 + w[t - 7]) | 0) + ((sigma0 + w[t - 16]) | 0)) | 0;
   }
   // 2. Working variables.
   let a = h[0];
@@ -57,10 +60,10 @@ function compress(h: Int32Array, w: Int32Array, bytes: Uint8Array, offset: numbe
   // 3. Compression.
   for (let t = 0; t < 64; t++) {
     const bigSigma1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
-    const ch = (e & f) ^ (~e & g);
-    const t1 = (hh + bigSigma1 + ch + K[t] + w[t]) | 0;
+    const ch = g ^ (e & (f ^ g));
+    const t1 = (((((hh + bigSigma1) | 0) + ((ch + K[t]) | 0)) | 0) + w[t]) | 0;
     const bigSigma0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
-    const maj = (a & b) ^ (a & c) ^ (b & c);
+    const maj = (a & b) ^ (c & (a ^ b));
     const t2 = (bigSigma0 + maj) | 0;
     hh = g;
     g = f;
@@ -84,11 +87,36 @@ function compress(h: Int32Array, w: Int32Array, bytes: Uint8Array, offset: numbe
 
 /** Section 6.2.2: hashes `message` and returns the 32-byte digest. */
 export function sha256(message: Uint8Array): Uint8Array {
+  return sha256Finish(Int32Array.from(SHA256_H0), message, 0);
+}
+
+/**
+ * The hash state after the whole 64-byte blocks of `message` before `end` (rounded down to a block):
+ * a midstate a later {@link sha256Finish} of a message with the same leading bytes can resume from, so
+ * an unchanged prefix isn't hashed again (F3.6 part 2: a netlist's node section across a connection
+ * toggle). Returns `[state, bytes]`, the state and how many bytes it covers.
+ */
+export function sha256Prefix(message: Uint8Array, end: number): readonly [Int32Array, number] {
   const h = Int32Array.from(SHA256_H0);
+  const w = new Int32Array(64);
+  const whole = Math.min(end, message.length) - (Math.min(end, message.length) % 64);
+  for (let offset = 0; offset < whole; offset += 64) compress(h, w, message, offset);
+  return [h, whole];
+}
+
+/**
+ * The digest of `message`, from `state`, the hash state after its first `offset` bytes (a multiple of
+ * 64: the initial values for 0, or a {@link sha256Prefix} of a message with the same first `offset`
+ * bytes). `state` is not modified.
+ */
+export function sha256Finish(state: Int32Array, message: Uint8Array, offset: number): Uint8Array {
+  if (offset % 64 !== 0 || offset > message.length)
+    throw new RangeError('sha256Finish: offset must be a block boundary');
+  const h = Int32Array.from(state);
   const w = new Int32Array(64);
   // The whole blocks straight from the message; only the tail is copied to be padded.
   const whole = message.length - (message.length % 64);
-  for (let offset = 0; offset < whole; offset += 64) compress(h, w, message, offset);
+  for (let block = offset; block < whole; block += 64) compress(h, w, message, block);
   // Section 5.1.1: append a 1 bit, pad with zeros to 56 mod 64 bytes, then the 64-bit big-endian
   // bit length: one or two more blocks.
   const rest = message.length - whole;
@@ -107,7 +135,7 @@ export function sha256(message: Uint8Array): Uint8Array {
   tail[end - 3] = (low >>> 16) & 0xff;
   tail[end - 2] = (low >>> 8) & 0xff;
   tail[end - 1] = low & 0xff;
-  for (let offset = 0; offset < end; offset += 64) compress(h, w, tail, offset);
+  for (let block = 0; block < end; block += 64) compress(h, w, tail, block);
 
   const digest = new Uint8Array(32);
   for (let i = 0; i < 8; i++) {

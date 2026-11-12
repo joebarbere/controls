@@ -125,6 +125,7 @@ describe('conductorPhysics', () => {
       linearAlphaMaxK: 473.15,
       densityKgM3: 8890,
       specificHeatJPerKgK: 385,
+      meltingPointK: 1357.77,
       insulation: {
         thicknessM: 0.381 / 1000,
         conductivityWPerMK: 0.18,

@@ -24,7 +24,9 @@
       "specificHeatJPerKgK": 385,
       "insulationThicknessMm": 0.8,
       "insulationConductivityWPerMK": 0.18,
-      "surfaceEmissivity": 0.9
+      "surfaceEmissivity": 0.9,
+      "meltingPointK": 1357.77,
+      "insulationRatedTempK": 363.15
     }
   },
   "controls": [],
@@ -74,6 +76,18 @@
       "kind": "game-design",
       "citation": "game-design, anchored to the 600 V PVC hookup-wire wall, about 0.8 mm for 18 AWG in manufacturers' public sheets (no single maker): one PVC layer; the lead's thermal model takes the conductor solid-round at its nominal area.",
       "covers": ["model.params.insulationThicknessMm"]
+    },
+    {
+      "id": "copper-melting-point",
+      "kind": "real-world",
+      "citation": "The copper freezing point of the International Temperature Scale of 1990, 1357.77 K (H. Preston-Thomas, Metrologia 27, 1990), as the materials table's copper row, confirmed by electrical-realism-reviewer 2026-11-12 against the ITS-90 fixed points (Preston-Thomas, Metrologia 27, 1990). The lead fuses, open for good, when its conductor node reaches it (F3.6 part 2). Cross-checked against Preece's fusing law for bare copper in air, I = 80 d^1.5 A (d in mm), 82.9 A for 18 AWG: the model's steady state reaches the melting point at about 103 A, 24 % above it, because R(T) is clamped at 200 °C (ADR 0018 §2), so fusing comes late: a sustained 83 to 100 A on this 18 AWG lead survives in the model, where a real lead would likely fuse.",
+      "covers": ["model.params.meltingPointK"]
+    },
+    {
+      "id": "lead-insulation-rating",
+      "kind": "game-design",
+      "citation": "game-design: the lead's single PVC wall is taken at the insulation table's PVC machine-tool-wire rating, 90 °C dry (UL 1063 by number; the table's ul-type-ratings source); retail test-lead insulation ranges from about 60 °C (PVC) to 200 °C (silicone), and none is cited. The lead's insulationDamaged flag is set at this rating plus INSULATION_DAMAGE_MARGIN_K (40 K), as a conductor's (F3.6 part 2).",
+      "covers": ["model.params.insulationRatedTempK"]
     }
   ],
   "extensions": {}

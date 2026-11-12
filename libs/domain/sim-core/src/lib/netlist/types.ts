@@ -102,7 +102,12 @@ export type AbsentConnectionReason =
   /** An end names a terminal its device doesn't have. */
   | 'unknown-terminal'
   /** An end is unlanded, lying free (world v3, ADR 0015): wired to nothing. */
-  | 'unlanded';
+  | 'unlanded'
+  /**
+   * An end's state is `intermittentOpen` (ADR 0015, F3.6 part 2): an intermittent end in an open
+   * bucket, an end burned open, or a fused conductor or lead.
+   */
+  | 'intermittent-open';
 
 /** Something the compiler noticed. Deterministic order: entities, connections, islands, each ascending. */
 export type NetlistDiagnostic =

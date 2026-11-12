@@ -12,7 +12,7 @@ import { BUILTIN_CATALOG } from './builtin';
  * - entries may only **gain** data, and **only the fields the shipped release's own catalogue format
  *   lacked** are dropped before comparing (ADR 0018 §8, masked by the release's `catalogVersion`, never
  *   globally): a catalogue-1 release (0.3.0) lacked v2's `mounts`, `enclosure`, `conductor` and
- *   `terminals[].methods`, and its `lead` entries lacked the six thermal params F3.6 part 1 added at
+ *   `terminals[].methods`, and its `lead` entries lacked the six thermal params F3.6 part 1 and the two failure params F3.6 part 2 added at
  *   entry version 1. A catalogue-2 or later release masks no field, so 0.4.0's own method specs,
  *   drives and §8 fields are locked;
  * - prose may be corrected in place (`title`, a source's `citation`): only people read it, and it is in
@@ -56,8 +56,10 @@ const releases: Shipped[] = readdirSync(dir)
 const V2_DEVICE_FIELDS = ['mounts', 'enclosure', 'conductor'];
 
 /**
- * The thermal params F3.6 part 1 added to the `lead` kind at entry version 1 (D2, ADR 0018 §8): a
- * catalogue-1 release's lead entries lacked exactly these. Any other param stays strictly compared.
+ * The thermal params F3.6 part 1 added to the `lead` kind at entry version 1 (D2, ADR 0018 §8), and the
+ * two failure params F3.6 part 2 added (the melting point and the insulation rating, ADR 0018
+ * implementation notes, F3.6 part 2): a catalogue-1 release's lead entries lacked exactly these. Any
+ * other param stays strictly compared.
  */
 const V2_LEAD_PARAMS = [
   'linearAlphaMaxK',
@@ -66,6 +68,8 @@ const V2_LEAD_PARAMS = [
   'insulationThicknessMm',
   'insulationConductivityWPerMK',
   'surfaceEmissivity',
+  'meltingPointK',
+  'insulationRatedTempK',
 ];
 
 /** A copy of `record` without `keys`. */
@@ -183,7 +187,7 @@ describe('shipped catalogue documents', () => {
       }
     });
 
-    it('adding one of the six thermal params to a catalogue-1 lead passes', () => {
+    it('adding one of the eight thermal and failure params to a catalogue-1 lead passes', () => {
       for (const param of V2_LEAD_PARAMS) {
         expect(
           same(

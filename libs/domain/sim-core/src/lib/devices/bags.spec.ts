@@ -52,11 +52,41 @@ describe('every accepted bag starts and steps (F2.5 review)', () => {
         };
         const engine = SimEngine.start(world, engineTestOptions());
         engine.advanceTo(50);
-        for (const entity of engine.exportState().entities) {
-          for (const v of Object.values(entity.state)) if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+        const exported = engine.exportState();
+        for (const bag of [...exported.entities, ...exported.connections]) {
+          for (const v of Object.values(bag.state)) if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
         }
       }),
       { numRuns: 25 },
     );
+  });
+
+  it('a bench supply set to 1e300 V into two test leads steps with finite leads (fast-check seed -1580835202, path "0")', () => {
+    // The counterexample CI found (#106): the supply's absurd but schema-valid setpoint drives about
+    // 1e300 A through the leads, I² overflows to +∞, and engine 7 before F3.6 part 2's guard let a lead's
+    // temperature reach +∞, then NaN, so its stamped resistance was NaN (`DC value ohms of branch 2 must
+    // be finite`). Now an overflowed step fuses the lead at copper's melting point.
+    const device = ENGINE_TEST_CATALOG.devices.find((d) => d.model.kind === 'supply.bench');
+    const bus = engineBus();
+    const at = { x: 0, y: 0, z: 0 };
+    bus.exec('entity.place', { ref: BATTERY, positionMm: at });
+    bus.exec('entity.place', { ref: { id: device?.id, version: device?.version }, positionMm: at });
+    bus.exec('lead.connect', { ref: LEAD, a: { entity: 1, terminal: 'pos' }, b: { entity: 2, terminal: 'neg' } });
+    bus.exec('lead.connect', { ref: LEAD, a: { entity: 2, terminal: 'pos' }, b: { entity: 1, terminal: 'neg' } });
+    const state = { currentLimitA: 1e300, outputOn: true, setpointV: 1e300 };
+    const world = {
+      ...bus.state,
+      entities: bus.state.entities.map((e) =>
+        e.id === 2 ? { ...e, state: { ...e.state, ...state }, sim: { ...e.sim, mode: 'cv' } } : e,
+      ),
+    };
+    const engine = SimEngine.start(world, engineTestOptions());
+    expect(() => engine.advanceTo(50)).not.toThrow();
+    for (const { state: bag } of engine.exportState().connections) {
+      for (const v of Object.values(bag)) if (typeof v === 'number') expect(Number.isFinite(v)).toBe(true);
+      expect(bag['conductorTempK'] as number).toBeLessThanOrEqual(1357.77);
+      // The current really overflowed: both leads fused.
+      expect([bag['endAState'], bag['endBState']]).toStrictEqual(['intermittentOpen', 'intermittentOpen']);
+    }
   });
 });
