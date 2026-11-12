@@ -51,25 +51,23 @@ describe('the .ctrl fixtures', () => {
         const saved = readCtrlOrThrow(join(fixturesRoot, path)).world;
         expect(result.game.world()).toStrictEqual({ ...saved, sim: null });
         // A null-initial sim key the older engine never set (a lamp's filamentTempK before F2.5's
-        // filament model) is initialised by this one when the device enters the netlist; every other
-        // saved value is kept exactly.
+        // filament model; a lead's conductorTempK before F3.6 part 1's thermal bank) is initialised by
+        // this one when the device or connection enters its bank; every other saved value is kept exactly.
+        const materialised = result.game.materialisedWorld();
+        const filled = (bag: Record<string, unknown>, now: Record<string, unknown>) =>
+          Object.fromEntries(Object.entries(bag).map(([key, value]) => [key, value === null ? now[key] : value]));
         const initialised = {
           ...saved,
           sim: null,
-          entities: saved.entities.map((e, i) => ({
-            ...e,
-            sim: Object.fromEntries(
-              Object.entries(e.sim).map(([key, value]) => [
-                key,
-                value === null ? result.game.materialisedWorld().entities[i].sim[key] : value,
-              ]),
-            ),
-          })),
+          entities: saved.entities.map((e, i) => ({ ...e, sim: filled(e.sim, materialised.entities[i].sim) })),
+          connections: saved.connections.map((c, i) => ({ ...c, sim: filled(c.sim, materialised.connections[i].sim) })),
         };
-        expect({ ...result.game.materialisedWorld(), sim: null }).toStrictEqual(initialised);
-        for (const entity of result.game.materialisedWorld().entities) {
+        expect({ ...materialised, sim: null }).toStrictEqual(initialised);
+        for (const entity of materialised.entities) {
           for (const value of Object.values(entity.sim)) expect(value).not.toBeNull();
         }
+        // A lead's end keys stay null (its clips have no hot-spot node); its conductor is initialised.
+        for (const connection of materialised.connections) expect(connection.sim['conductorTempK']).not.toBeNull();
       } else {
         expect(result.replay.status).toBe('continued');
       }

@@ -312,7 +312,7 @@ Refusals aren't logged, so their codes aren't save format; they are API for scri
 2. **The element is static.** `ConnectionNetlistModel.element(params)` becomes `element(input)`: `input` holds the entry's params, `lengthMm` (or the lead's catalogue length), and per end the `TerminationV3` (or null for a clip), the method spec and the landed count. It returns static values: the conductor's resistance at the reference temperature and each end's as-made contact resistance R0. The connection bank's `dcValue`/`acValue` stamps R = R_cond(T) + R0a · degradationA + R0b · degradationB (+ the end's regime resistance, ADR 0018 §6) at solve time, as the lamp filament does. **The compiler reads the connection's sim state only through `simTopologyKeys` (`endAState`, `endBState`), and only the open versus not-open distinction.** A lead's static value is v2's; its solve-time value follows its temperature. AC conductors are purely resistive in P3 (no inductance), a stated abstraction.
 3. **Landed counts.** The compiler counts, on every compile, the conductor-kind ends landed on each terminal by each method, netlisted or not; lead clips don't count. The count goes in a preallocated per-terminal array. A connection's cache entry records its two end counts and the engine's view of its `simTopologyKeys`, and is rebuilt when either differs, so a count change is a values-only compile. `CompileOptions` gains `connectionSim(id)`, the engine's live connection bag, as `sim` is for entities. The factorisation cache is unaffected: counts are values.
 4. **It never reads** `route`, `colour`, `label`, `cable`, waypoints or positions. Conductors in one cable are electrically and (in P3) thermally independent (D7).
-5. **End voltages** are derived after the solve as V_terminal ∓ I · R_contact (exact for series elements) and published in the connection record (protocol 6); they add no unknowns.
+5. **End voltages** are derived after the solve as V_terminal ∓ I · R_contact (exact for series elements) and published in the connection record (protocol 7); they add no unknowns.
 
 So no new element kind or stamp is needed, the oracle corpus is unchanged, and a lead's value is the same as in v2.
 
@@ -321,7 +321,7 @@ So no new element kind or stamp is needed, the oracle corpus is unchanged, and a
 Both bags have ADR 0013's generic shape (`DeviceStateBag`), checked per kind at load against `MODEL_KINDS`, which now declares keys for connection kinds too (registered as stateful connections; `json-schema/connection-state.<kind>.schema.json`).
 
 - **`state` (commanded):** written only by commands. **Empty for `lead` and `conductor`.** It is kept so a later connection kind with a commanded setting needs no shape change. Termination, route, length, colour and label are typed fields, also commanded.
-- **`sim` (sim-owned):** written only by `materialiseWorld`, inert in the live world, never read by a command. **The renderer and the readouts read connection state only from records** (protocol 6), never from `connection.sim`. Owner `sim-engine-engineer`; `save-format-guardian` reviews every key. **`lead` and `conductor` share one key set of ten keys** (D2: leads join the thermal model):
+- **`sim` (sim-owned):** written only by `materialiseWorld`, inert in the live world, never read by a command. **The renderer and the readouts read connection state only from records** (protocol 7), never from `connection.sim`. Owner `sim-engine-engineer`; `save-format-guardian` reviews every key. **`lead` and `conductor` share one key set of ten keys** (D2: leads join the thermal model):
 
 | Key                                      | Type                                                             | Initial | Meaning                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------- | ---------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -376,7 +376,7 @@ Zod refinements on `WorldV3` (not in the JSON Schema), each with a refused fixtu
 
 - **`world.hash`** is unchanged in definition (SHA-256 of the canonical JSON of the parsed world, ADR 0007), so it now covers cables, the new counters, routes, lengths, colours, labels, terminations, `mountedOn`, entity labels and every connection's bags. Every world gains `"cables":[]`, `"nextCableId":1`, `"nextTerminationId":1` and per-entity `"label":null,"mountedOn":null`, so **every pinned world hash is re-pinned once**, at the world v3 PR, listed old → new in the CHANGELOG (the plan's list). Because termination ids and outcomes don't depend on `seq`, wiring the same circuit by the mouse, the keyboard or the palette reaches the same hash.
 - **`topologyHash`** keeps its encoding (`CNT`, version byte 1): a conductor is a branch like a lead, named `c<id>`, with model kind `conductor`. Lengths, terminations, temperatures and degradation are values and stay out; an `intermittentOpen` end changes it (the branch goes). Unlanded connections aren't in it. `hash.spec.ts` gains a `conductor` golden (F3.1 part 1).
-- **`snapshotHash`** gains the connection records with protocol 6 (F3.6 part 3).
+- **`snapshotHash`** gains the connection records with protocol 7 (F3.6 part 3).
 - **Not in any of them:** the baked centreline (its own cross-runtime golden, ADR 0017), lanes, the live preview, display state.
 
 ### The v2 → v3 migration
@@ -400,7 +400,9 @@ Catalogue v2 (ADR 0016) lands before world v3. The requirements this ADR puts on
 - **0.3.0 saves** (`catalogVersion` 1, engine 6) load as `engine-changed`, never refused: migrated to v3, the solution record dropped, solved again at the save's tick, log restarted, leads' new keys initialised by the engine from their nulls. A fixture test proves it (`fixtures/v2/ctrl/*-engine-6.ctrl`, never regenerated). The `sources.spec.ts` rule ("`sim-step-engine-${SIM_ENGINE_VERSION}.ctrl` loads as `continued`") can't hold for a catalogue-1 file once the build is catalogue 2, so engine-numbered fixtures written from catalogue 2 on are named `*-engine-N-catalog-C.ctrl` and the rule checks the current pair.
 - Saves are still references (ADR 0004): a conductor, cable, enclosure, accessory or tool is a `CatalogRef`, never inlined.
 
-### Protocol 6 connection records (finalised by the ADR 0011 amendment in F3.6 part 3)
+### Protocol 7 connection records (finalised by the ADR 0011 amendment in F3.6 part 3)
+
+_Renumbered (F3.6 part 1): protocol 6 carries the connection bags in the `state` export ([ADR 0011 amendment](0011-sim-worker-contract.md#amendment-protocol-6-connection-bags-in-the-export-f36-part-1)), so these records are protocol 7._
 
 Listed here so the persisted keys and the published fields are designed together; **the byte layout, the validity rule and the sign-offs belong to the ADR 0011 amendment** (`sim-engine-engineer` with `renderer-engineer` and `angular-ui-engineer`), which finalises everything in this section.
 

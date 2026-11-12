@@ -1,4 +1,4 @@
-import { createWorld, World } from '@controls/save-format';
+import { createWorld, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { compareSimEvents, ISLAND_EVENT_KINDS, type SimEvent, SIM_EVENT_KINDS } from './events';
 import { MaterialiseError, materialiseWorld, type SimStateExport } from './materialise';
 
@@ -72,6 +72,7 @@ describe('materialiseWorld (ADR 0011 §1, ADR 0013)', () => {
         { id: 1, state: { stateOfCharge: 0.75 } },
         { id: 4, state: { filamentTempK: 293.15 } },
       ],
+      connections: [],
       solution,
     };
     const out = materialiseWorld(busWorld, exported);
@@ -97,7 +98,7 @@ describe('materialiseWorld (ADR 0011 §1, ADR 0013)', () => {
   it('writes a null solution (an empty netlist) and leaves the bus world alone', () => {
     const busWorld = world();
     const withSolution = { ...busWorld, sim: solution };
-    const out = materialiseWorld(withSolution, { tick: 40, entities: [], solution: null });
+    const out = materialiseWorld(withSolution, { tick: 40, entities: [], connections: [], solution: null });
     expect(out.sim).toBeNull();
     expect(out.entities).toStrictEqual(busWorld.entities);
     expect(withSolution.sim).toBe(solution);
@@ -106,22 +107,64 @@ describe('materialiseWorld (ADR 0011 §1, ADR 0013)', () => {
   it('refuses an export for another tick, of an unknown or unsorted entity, or that fails the schemas', () => {
     const busWorld = world();
     const bad: SimStateExport[] = [
-      { tick: 41, entities: [], solution: null },
-      { tick: 40, entities: [{ id: 9, state: {} }], solution: null },
+      { tick: 41, entities: [], connections: [], solution: null },
+      { tick: 40, entities: [{ id: 9, state: {} }], connections: [], solution: null },
       {
         tick: 40,
         entities: [
           { id: 4, state: {} },
           { id: 1, state: {} },
         ],
+        connections: [],
         solution: null,
       },
-      { tick: 40, entities: [], solution: { ...solution, lastSolveTick: 41 } },
-      { tick: 40, entities: [], solution: { ...solution, nodes: [0, 0, 1] } },
-      { tick: 40, entities: [{ id: 1, state: { stateOfCharge: Number.NaN } }], solution: null },
-      { tick: 40, entities: [], solution: { ...solution, branches: [Number.POSITIVE_INFINITY, 0] } },
+      { tick: 40, entities: [], connections: [], solution: { ...solution, lastSolveTick: 41 } },
+      { tick: 40, entities: [], connections: [], solution: { ...solution, nodes: [0, 0, 1] } },
+      { tick: 40, entities: [{ id: 1, state: { stateOfCharge: Number.NaN } }], connections: [], solution: null },
+      { tick: 40, entities: [], connections: [], solution: { ...solution, branches: [Number.POSITIVE_INFINITY, 0] } },
     ];
     for (const exported of bad) expect(() => materialiseWorld(busWorld, exported)).toThrow(MaterialiseError);
+  });
+
+  it("writes the exported connections' sim bags (F3.6 part 1) and refuses an unknown or unsorted one", () => {
+    const lead = (id: number) => ({
+      id,
+      ref: { id: 'lead.quillfern-test-1m', version: 1 },
+      a: { entity: 1, terminal: 'pos', termination: null },
+      b: { entity: 4, terminal: 'a', termination: null },
+      cable: null,
+      route: null,
+      lengthMm: null,
+      colour: null,
+      label: null,
+      state: {},
+      sim: { ...LEAD_SIM_BAG_V3 },
+      extensions: {},
+    });
+    const busWorld = World.parse({ ...world(), nextConnectionId: 3, connections: [lead(1), lead(2)] });
+    const bag = { ...LEAD_SIM_BAG_V3, conductorTempK: 300.5 };
+    const out = materialiseWorld(busWorld, {
+      tick: 40,
+      entities: [],
+      connections: [{ id: 2, state: bag }],
+      solution: null,
+    });
+    expect(out.connections[0]).toBe(busWorld.connections[0]);
+    expect(out.connections[1].sim).toStrictEqual(bag);
+    expect(World.safeParse(out).success).toBe(true);
+    const unknown = { tick: 40, entities: [], connections: [{ id: 9, state: bag }], solution: null };
+    const unsorted = {
+      tick: 40,
+      entities: [],
+      connections: [
+        { id: 2, state: bag },
+        { id: 1, state: bag },
+      ],
+      solution: null,
+    };
+    for (const exported of [unknown, unsorted]) {
+      expect(() => materialiseWorld(busWorld, exported)).toThrow(MaterialiseError);
+    }
   });
 });
 

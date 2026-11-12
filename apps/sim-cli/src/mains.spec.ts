@@ -10,8 +10,8 @@ import { workshopWorld } from './testing/workshop';
  * which runs the same console file with the engine in the page: D6's cross-runtime check of the series
  * inductance's phasors (Node's V8 against Chromium's).
  */
-export const MAINS_HASH = 'fe7d0a7195b67ac840b1fb632a912e2a013b5792106150b1fad7d64b54c437fb';
-export const MAINS_SNAPSHOT_HASH = '0e95acf9b6b7cd8a753aec3833aeb0ea8786a0da796c3fef81f2f8fe8b2bbe3b';
+export const MAINS_HASH = '808caa78121e9b7cca11832af77b6d7c335aa8baeef890949c5e5aa9749f9c38';
+export const MAINS_SNAPSHOT_HASH = '59c72011c92f2f74b67b1884ee76818a3d49bed4a3d43149e64186ea8a1d8db7';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');
 

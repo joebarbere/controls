@@ -13,8 +13,8 @@ import { WORKSPACE_ROOT } from '../script-loader';
  *
  * The build writes saves at the current `schemaVersion`, so this build's fixtures live under
  * `fixtures/v<CURRENT_SCHEMA_VERSION>/ctrl`. A fixture of the same name under an older version's
- * directory (world v3, P3 PR 7: the four `-engine-6-catalog-2.ctrl` written as v2) is kept and must
- * still load as `continued` after migration.
+ * directory (world v3, P3 PR 7: the four `-engine-6-catalog-2.ctrl` written as v2) is kept; since engine 7
+ * (F3.6 part 1) they and their v3 twins load as `engine-changed`, regression tests never regenerated.
  */
 
 /** The save-format fixtures root. */
@@ -36,7 +36,7 @@ export const ENGINE_FIXTURE_DIRS: readonly string[] = Array.from({ length: CURRE
 /** An engine-numbered fixture name: engine N, and from catalogue 2 on catalogue C. */
 export const ENGINE_FIXTURE_PATTERN = /-engine-(\d+)(?:-catalog-(\d+))?\.ctrl$/;
 
-/** The fixture name this build writes and verifies for `scenario` (`sources` → `sources-engine-6-catalog-2.ctrl`). */
+/** The fixture name this build writes and verifies for `scenario` (`sources` → `sources-engine-7-catalog-2.ctrl`). */
 export function currentFixtureName(scenario: string): string {
   return `${scenario}-engine-${SIM_ENGINE_VERSION}-catalog-${CATALOG_VERSION}.ctrl`;
 }

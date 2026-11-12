@@ -12,7 +12,7 @@ import { AC_SOURCE, BATTERY, LAMP, LEAD } from '../../../testing/bench';
 import { BUSBAR, FLIP, OPAQUE, TWIN_SUPPLY } from '../../../testing/engine';
 import { benchLampHost, LAMP_120V } from '../../../testing/loads';
 import { BENCH_SUPPLY, SourceHost } from '../../../testing/sources';
-import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../../constants';
+import { AMBIENT_TEMPERATURE_K } from '../../constants';
 import {
   LAMP_AMBIENT_K,
   LAMP_CONDUCTION_FRACTION,
@@ -47,7 +47,7 @@ import { TUNGSTEN_RESISTIVITY, TUNGSTEN_TABLE_MAX_K, tungstenResistivity } from 
 const lampParams = BUILTIN_CATALOG.device(LAMP)?.model.params as LampIncandescentParams;
 const leadOhm = leadResistanceOhm(
   BUILTIN_CATALOG.device(LEAD)?.model.params as LeadParams,
-  LEAD_CONDUCTOR_TEMPERATURE_K.value,
+  AMBIENT_TEMPERATURE_K.value,
 );
 const RATED_OHM = 28.8;
 const RHO_RATED = 81.095;

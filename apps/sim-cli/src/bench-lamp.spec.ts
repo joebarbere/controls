@@ -24,11 +24,11 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * numeric change also bumps `SIM_ENGINE_VERSION` (D8).
  */
 /** `world.hash` with the lamp lit: 1.5 s after the switch closed. */
-export const BENCH_LAMP_LIT_HASH = 'bfc2b50e67771ba7f271cf786bb36d7e6cb4a0f3badba4ea6ab5a0140c5b4d4e';
-export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '6fac817fc4fc6eb9814d5905f55405d5e79bd75d20f7fc801613d34fe34403ea';
+export const BENCH_LAMP_LIT_HASH = 'b94f50ce3682363951da92ebfc36c31ee3f31ee38a446d06fb4f6d2a1f3281d2';
+export const BENCH_LAMP_LIT_SNAPSHOT_HASH = '348eda2ca0bf91e73ffc77af30cbbc3f4075d0c239d81cea17c1a0db3c80db08';
 /** `world.hash` at the end: 0.5 s after the switch opened, the lamp out. */
-export const BENCH_LAMP_HASH = 'ebad7403589275604ae5bb227245cc8800fd22c5174709a10b3887dabbac3d68';
-export const BENCH_LAMP_SNAPSHOT_HASH = '3fe52bcd091458bce1035c9d27ca8a7f986206bb554a93e76139f27e2b9be45a';
+export const BENCH_LAMP_HASH = '38784069e9d2d06e15b96a958dd19c8c1af8aaf6ec1ff1254018016907aed947';
+export const BENCH_LAMP_SNAPSHOT_HASH = '09bba8e072965bac308af4d1bde1f49228056d8fe0e183fee16e1951033f8ea8';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

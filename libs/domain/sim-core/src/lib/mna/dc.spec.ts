@@ -17,7 +17,7 @@ import { branchOf, current, nodeOf, syntheticNetlist, voltage } from '../../test
 import { GMIN_S } from '../constants';
 import { compileNetlist } from '../netlist/compile';
 import { createDcSolution, DcSolver, islandReferenceNode, ISLAND_FLAG_SINGULAR, solveDc } from './dc';
-import { DC_DEFAULT_VALUES, dcBranchValues, DcBranchValues } from './values';
+import { DC_DEFAULT_VALUES, dcBranchValues, DcBranchValues, RESISTOR_DEFAULT_MODELS } from './values';
 
 const lampHook = (ohms: number) => (branch: { model: string; index: number }, values: DcBranchValues) => {
   if (branch.model !== 'lamp.incandescent') return false;
@@ -402,5 +402,29 @@ describe('DcSolver', () => {
     // An ideal supply at the battery's full-charge EMF (12.9 V) against it: no current flows.
     expect(Math.abs(current(solution, branchOf(netlist, 2, 'cell')))).toBeLessThan(1e-9);
     expect(RL).toBeGreaterThan(0);
+  });
+});
+
+describe('RESISTOR_DEFAULT_MODELS (F3.6 part 1)', () => {
+  it("lists exactly the kinds whose DC default is a resistor of the branch's resistanceOhm", () => {
+    const branch = (model: string) =>
+      ({
+        index: 0,
+        element: { kind: 'connection', connection: 1 },
+        kind: 'resistor',
+        model,
+        source: null,
+        a: 0,
+        b: 1,
+        island: 0,
+        values: { resistanceOhm: 1.2345, internalResistanceOhm: 0.5, openCircuitVoltageFullV: 12.9 },
+      }) as const;
+    for (const [model, fill] of Object.entries(DC_DEFAULT_VALUES)) {
+      const values = new DcBranchValues(1);
+      fill(branch(model), values);
+      const isResistor = values.stamp(0) === 'resistor' && values.ohms[0] === 1.2345;
+      expect(RESISTOR_DEFAULT_MODELS.has(model), model).toBe(isResistor);
+    }
+    for (const model of RESISTOR_DEFAULT_MODELS) expect(Object.keys(DC_DEFAULT_VALUES)).toContain(model);
   });
 });

@@ -29,6 +29,16 @@ function switchEntry(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
+/** A lead's six thermal params (F3.6 part 1, ADR 0018 §8): copper in a 0.8 mm PVC wall. */
+const LEAD_THERMAL = {
+  linearAlphaMaxK: 473.15,
+  densityKgM3: 8890,
+  specificHeatJPerKgK: 385,
+  insulationThicknessMm: 0.8,
+  insulationConductivityWPerMK: 0.18,
+  surfaceEmissivity: 0.9,
+};
+
 function leadEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'lead.test',
@@ -51,6 +61,7 @@ function leadEntry(overrides: Record<string, unknown> = {}): Record<string, unkn
         temperatureCoefficientPerK: 0.004,
         referenceTemperatureK: 293.15,
         contactResistanceOhm: 0,
+        ...LEAD_THERMAL,
       },
     },
     controls: [],
@@ -65,6 +76,7 @@ function leadEntry(overrides: Record<string, unknown> = {}): Record<string, unkn
           'model.params.resistivityOhmM',
           'model.params.temperatureCoefficientPerK',
           'model.params.referenceTemperatureK',
+          ...Object.keys(LEAD_THERMAL).map((key) => `model.params.${key}`),
           'model.params.contactResistanceOhm',
         ],
       },

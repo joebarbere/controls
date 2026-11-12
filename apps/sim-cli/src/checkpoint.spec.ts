@@ -98,7 +98,7 @@ describe('the checkpoint scenario (P3 D19)', () => {
   });
 
   it('its checked-in save (world v3, this engine and catalogue) is the rebased log and loads continued', async () => {
-    // fixtures/v3/ctrl/checkpoint-engine-6-catalog-2.ctrl, written by the `--save` line in the scenario's
+    // fixtures/v3/ctrl/checkpoint-engine-7-catalog-2.ctrl, written by the `--save` line in the scenario's
     // header (the world v3 PR's checkpointed fixture); frozen like every .ctrl fixture.
     const game = await scenarioGame();
     const bytes = new Uint8Array(await readFile(currentFixture('checkpoint')));

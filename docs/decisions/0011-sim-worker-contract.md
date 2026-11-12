@@ -825,6 +825,14 @@ F2.6 implemented §4's traces (phase 2 acceptance, `sim-engine-engineer` and `an
 - **Batched with publishes.** Each watch's samples since its last batch go out as one `trace` (a transferred `Float64Array` of (tick, value) pairs) just before the publish's slot, so throttling changes how the samples are cut into batches, never which samples or their order (`libs/sim-worker/src/lib/traces.spec.ts`, under four publish timings and both transports).
 - **The host** (`SimHost.watch(target, {capacity, hz})` → `SimTrace`) keeps the newest `TRACE_CAPACITY` (8,192) samples in a ring and changes the trace's `version` signal at most at the panel rate, with a trailing change. A new worker (a new game, a load, a restart) is a new timeline: the samples are cleared and the watch is sent again to it. The e2e hook `__controlsSession.traces()` returns what the host received.
 
+## Amendment: protocol 6, connection bags in the export (F3.6 part 1)
+
+**Status: Accepted (2026-11-12).** Proposed by `sim-engine-engineer` in the F3.6 part 1 PR; agreed by `renderer-engineer` (the renderer and, having checked `SimHost` and the session, Electron: unaffected; 2026-11-12) and `angular-ui-engineer` (nothing in `libs/features` changes; 2026-11-12). ADR 0015 ("Connection state bags and their owners") already decided that `materialiseWorld` overwrites the `sim` bag of every connection of a known kind; carrying those bags from the worker to the host is a message change, so it takes a version.
+
+- **`SimStateExport` gains `connections: { id, state }[]`** (§4's `state` reply): every connection of a known connection kind (a lead, a conductor), netlisted or not, ascending by id, with its whole sim bag (ADR 0015's ten keys), parsed with the save-format `DeviceStateBag` schema like `entities`. `materialiseWorld` writes each into the world's connection, and refuses an unsorted export or one naming a connection the world doesn't hold.
+- **`SIM_PROTOCOL_VERSION` 5 → 6.** Nothing else changes: the slot layout, the device records, the descriptor, the events and every other message are protocol 5's (`snapshot.spec.ts`; the fingerprint is pinned as 6 in `protocol-fingerprint.spec.ts`). No new snapshot or record fields; the UI and renderer read nothing new from the worker. `connection.sim` reaches the main thread only in the materialised world (saves, `world.hash`, `netlistDump`); the renderer and readouts keep reading connection state only from records (protocol 7), never from `connection.sim`, per ADR 0015. (The materialised world the UI shows changes for worlds with leads, its console `world.hash`, save bytes and the inspector's `netlistDump` golden, because of engine 7, not the protocol.)
+- **F3.6 part 3's connection records and descriptor become protocol 7** (ADR 0015's "Protocol 6 connection records" draft, renumbered; ADR 0018's "Events are protocol" already allowed an earlier part to take 6).
+
 ## Resolved in review
 
 The proposal's open questions, by number:

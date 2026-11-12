@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-11-12) after the `electrical-realism-reviewer` and `save-format-guardian` reviews, every required change applied (see [Review](#review)). It gates F3.3 part 1 (the contact half) and F3.6 parts 1 and 2. Drafted by `sim-engine-engineer`.
 **Date:** 2026-11-12 (Phase 3)
 **Amends:** [ADR 0015](0015-world-document-v3.md) (the clamp-geometry list, the arcing band in "What the netlist compiler reads", the intermittent phase rule and its onset, the end-reset rule, the engine draws; the ten sim keys confirmed), [ADR 0016](0016-catalogue-format-v2.md) (deviation 8: the clamp geometry and twist-on fields). Spec v1.5 records the arcing-band amendment to plan §4.5 ([below](#arcing-and-the-spec-45-band)).
-**Sources:** [phase 3 plan](../../plans/phase-3-wiring.md) decisions D2, D4, D6, D7, D8, F3.1, F3.3, F3.6, the phase acceptance and "New in P3"; [ADR 0015](0015-world-document-v3.md) (the compiler reads static values, the bank stamps R at solve time, connection sim keys, the absolute integration schedule, intermittent dwell, termination streams, protocol 6 draft, the sim-engine review); [ADR 0016](0016-catalogue-format-v2.md) (terminal method specs, the `materials` and `insulation` tables, deviation 8); [ADR 0011](0011-sim-worker-contract.md) §2 and §7 (cadence, one branch per connection); ADR 0014 (`dmath`, reserved and still deferred); the P3 source pre-audit by `electrical-realism-reviewer` (2026-11-11), whose vetted sources are the only external sources this ADR cites as read; [simulation caveats](../caveats/simulation.md).
+**Sources:** [phase 3 plan](../../plans/phase-3-wiring.md) decisions D2, D4, D6, D7, D8, F3.1, F3.3, F3.6, the phase acceptance and "New in P3"; [ADR 0015](0015-world-document-v3.md) (the compiler reads static values, the bank stamps R at solve time, connection sim keys, the absolute integration schedule, intermittent dwell, termination streams, protocol 7 draft (drafted as 6), the sim-engine review); [ADR 0016](0016-catalogue-format-v2.md) (terminal method specs, the `materials` and `insulation` tables, deviation 8); [ADR 0011](0011-sim-worker-contract.md) §2 and §7 (cadence, one branch per connection); ADR 0014 (`dmath`, reserved and still deferred); the P3 source pre-audit by `electrical-realism-reviewer` (2026-11-11), whose vetted sources are the only external sources this ADR cites as read; [simulation caveats](../caveats/simulation.md).
 
 ## Context
 
@@ -26,7 +26,7 @@ This ADR decides the conductor resistance, the thermal model, the contact model,
 - **Electrical:** the connection bank's `dcValue`/`acValue` hooks stamp the solve-time value (§6). Two end regimes are nonlinear in the branch current: glowing and arcing. They use the existing warm-started outer loop as value updates, as constant-power loads already do. AC conductors are purely resistive (ADR 0015).
 - **Continuous:** a new connection thermal bank (§3), integrated on the fixed absolute schedule.
 - **Protection:** the bank's state machine (§6): end states, `terminationOverheat`, `insulationDamaged`. Only open versus not-open changes the topology (ADR 0015).
-- **Discrete, transport:** none. The protocol 6 records, event payloads and descriptor are finalised by the ADR 0011 amendment in F3.6 part 3. This ADR adds no record field to ADR 0015's draft.
+- **Discrete, transport:** none. The protocol 7 records, event payloads and descriptor (protocol 6 is F3.6 part 1's state export) are finalised by the ADR 0011 amendment in F3.6 part 3. This ADR adds no record field to ADR 0015's draft.
 
 ### 2. Conductor resistance R(T)
 
@@ -101,7 +101,7 @@ For a conductor of length L, cross-section A and material row m (table `material
 
   The bank also asserts τ ≥ 1 s for every node when it is built, in tests. The arcing and glowing regimes add heat, not stiffness: their coupling conductances stay linear and bounded, so the bound holds.
 
-- **The 1 % re-solve rule** (the lamp's, `CONNECTION_RESOLVE_RELTOL` = 0.01, numerical). After a scheduled step, if any netlisted connection carrying at least `CONNECTION_RESOLVE_MIN_A` = 1 µA has a branch value (R_cond(T_c) + both ends' R_end) more than 1 % away from the value the last solve saw, **read back from the solution as |ΔV|/|I| across the branch (the lamp's rule; never a value cached at the solve, which isn't in the `sim` bag)**, the continuous layer asks for a value-only re-solve at t + 1. Smooth heating moves R by far less than 1 % per 10 ms, so in practice this fires on regime and degradation steps, not while a conductor warms.
+- **The 1 % re-solve rule** (the lamp's, `CONNECTION_RESOLVE_RELTOL` = 0.01, numerical). After a scheduled step, if any netlisted connection carrying at least `CONNECTION_RESOLVE_MIN_A` = 1 µA has a branch value (R_cond(T_c) + both ends' R_end) more than 1 % away from the value the last solve saw, **read back from the solution as |ΔV|/|I| across the branch (the lamp's rule; never a value cached at the solve, which isn't in the `sim` bag)**, the continuous layer asks for a value-only re-solve at t + 1. Smooth heating moves R by far less than 1 % per 10 ms, so in practice this fires on regime and degradation steps, not while a conductor warms normally; fast fault heating (a shorted lead at hundreds of amps) re-solves every 3–4 steps (F3.6 part 1).
 
 #### 3.5 Closed-form steady states (for the goldens)
 
@@ -489,12 +489,12 @@ Spec §4.5's "arcing fault (0.5–2 Ω, nonlinear)", which D8 and ADR 0015 quote
 - **No command argument, command id or world shape changes.** `TerminationV3` already holds everything §4 reads.
 - **Catalogue fields** (§8) are catalogue format, not save format. They land while catalogue 2 is provisional, and P2 entries keep version 1 (ADR 0016).
 - **Contract:** no change to `SIM_PROTOCOL_VERSION` 6's draft record.
-- **Events are protocol.** The two event kinds and `SimEvent`'s connection and end fields are part of protocol 6 (F3.6 part 3). Part 2 implements the detection in `sim-core` and tests it there; the bad-termination scenario's event assertion lands with part 3. If part 2 must publish them, part 2 takes protocol 6 and the records become protocol 7. The payloads (connection, end, tick, temperature) are finalised in the ADR 0011 amendment with `renderer-engineer` and `angular-ui-engineer`.
+- **Events are protocol.** The two event kinds and `SimEvent`'s connection and end fields are part of protocol 7 (F3.6 part 3; F3.6 part 1 took protocol 6 for the connection bags in the state export, [ADR 0011 amendment](0011-sim-worker-contract.md#amendment-protocol-6-connection-bags-in-the-export-f36-part-1)). Part 2 implements the detection in `sim-core` and tests it there; the bad-termination scenario's event assertion lands with part 3. If part 2 must publish them, part 2 takes protocol 7 and the records become protocol 8. The payloads (connection, end, tick, temperature) are finalised in the ADR 0011 amendment with `renderer-engineer` and `angular-ui-engineer`.
 
 ## Abstractions (for `electrical-realism-reviewer`)
 
 1. Conductors are lumped per connection and in free air, including in cables, ducts and conduit, with no bundling or mutual heating (D7). The engine under-reads raceway and cable temperatures.
-2. The device terminal and the splice body are at ambient. Real breakers and blocks warm.
+2. The device terminal and the splice body are at ambient. Real breakers and blocks warm. So a good termination reads cooler than its conductor (golden 4: a 4.4 K rise at the good end against the conductor's 10.9 K), whereas a real breaker lug usually reads warmer than the wire: fix before any thermal-imaging tool ships (realism review of F3.6 part 1, O4).
 3. Hot-spot to conductor coupling is one-way (fin superposition): exact for L ≫ 1/m (≈ 84 mm for 14 AWG), approximate for short jumpers.
 4. R(T) is clamped at 200 °C (under-reads above it). Thermal conductivity comes from Wiedemann–Franz at T₀ (≈ 4 % high for copper, likely more for the aluminium alloy, unverified). c_p and k are constant in temperature. Burn-open uses the conductor metal's melting point; a brass terminal melts below copper, which is not modelled.
 5. Insulation heat capacity is left out unless sourced (τ ≈ 40 % short for 14 AWG; steady states unaffected).
@@ -514,6 +514,8 @@ Spec §4.5's "arcing fault (0.5–2 Ω, nonlinear)", which D8 and ADR 0015 quote
     - entry is a step in resistance: at 12.5 A from 80 to 147 mΩ, at 1 A from 80 mΩ to 4.7 Ω.
 
     Charter rule 5 is still met: the non-ohmic drop is measurable.
+
+17. **No fusing or insulation-failure limit in part 1** (F3.6 part 1 realism review, R2). A lead or conductor node has no melting, fusing or insulation-breakdown rule, and part 1 never sets `insulationDamaged`, so a reported temperature above about 200 °C is a lower bound on the damage, not a survivable state: a 12 V battery shorted through two test leads settles near 840 °C with its insulation intact. Part 2 decides the rule (Preece/Onderdonk-anchored; whether leads set `insulationDamaged`). Until part 2 the hot spot's α is also unclamped, so under a sustained overload a hot spot can report more than its metal's melting point.
 
 ## Deviations from the plan and from ADRs 0015 and 0016
 
@@ -548,7 +550,7 @@ Spec §4.5's "arcing fault (0.5–2 Ω, nonlinear)", which D8 and ADR 0015 quote
   Recommended: the lamp's ambient reads the same constant.
 
 - **`world-model`:** none beyond F3.3's `resolveTermination` (ADR 0015). The twist-on combination check uses `areaUm2`.
-- **`sim-protocol`:** the `terminationOverheat` and `insulationDamaged` event kinds and `SimEvent`'s connection and end fields, with the records, in protocol 6 (the ADR 0011 amendment, F3.6 part 3). F3.6 part 2 detects them in `sim-core` only.
+- **`sim-protocol`:** the `terminationOverheat` and `insulationDamaged` event kinds and `SimEvent`'s connection and end fields, with the records, in protocol 7 (the ADR 0011 amendment, F3.6 part 3). F3.6 part 2 detects them in `sim-core` only.
 - **Docs** (by `docs-keeper`, in the implementing PRs): `docs/architecture/simulation.md` (the thermal bank, contact model, regimes) and the new `wiring.md`; `docs/caveats/simulation.md` (thermal cadence, the R(T) clamp, the rise tolerance, the one-way fin, the `lnRatio` rule, the regimes in the outer loop); the glossary (contact and constriction resistance, seated and loose clamp, hot spot, fin conductance, glowing connection, series arcing, intermittent, burned open, derived ampacity); `docs/history.md` (`simEngineVersion` 7).
 
 ## Alternatives considered
@@ -579,6 +581,24 @@ Recorded by `sim-engine-engineer` in the F3.3 part 1 PR. Approved by `electrical
 11. **No pinned world, snapshot or bench hash moved; `SIM_ENGINE_VERSION` stays 6.** No pinned scenario holds a landed conductor.
 12. **No strip factor with an accessory.** φ_strip applies to a bare conductor only: with a ferrule or a ring or fork lug the clamp grips the accessory, not the stripped conductor, so a short strip doesn't lighten the clamp. A strip too short for the accessory's barrel is a crimp defect and is not modelled (an abstraction; the crimp quality carries crimp defects).
 13. **`MAX_TERMINAL_METHODS`** (8) is one constant exported by `@controls/catalog`: the schema's cap on a terminal's methods and the compiler's landed-count stride.
+
+## Implementation notes (F3.6 part 1)
+
+Recorded by `sim-engine-engineer` in the F3.6 part 1 PR (engine 7). Pending `electrical-realism-reviewer` (the constants and the lead's thermal params) and `save-format-guardian` (the bag semantics, the fixtures, the export).
+
+1. **Where it lives.** `sim-core/src/lib/thermal/bank.ts`, `ConnectionThermalBank`: the engine owns one, outside the device banks (its members are connections, netlisted or not; bank membership is not topology, ADR 0015). The engine syncs it after every recompile that changed the netlist (a values-only one refreshes each member's branch and static contact parts) and after every command that replaced `world.connections` (a rebuild: membership, ends and the identity rules), and points every connection branch's `dcValue`/`acValue` at it (its member index as the branch's device index). It steps in the continuous layer only at `t % SOLVE_INTERVAL_TICKS === 0`, after the device banks, with `CONNECTION_STEP_S` = 10 × `TICK_S` = 0.01 s exactly.
+2. **The heat path moved to `@controls/catalog`** (`conductor-thermal.ts`, `thermal-constants.ts`, and the `SourcedConstant` type): the load-time τ check (§3.4) needs `lnRatio` and h, and the catalogue can't import sim-core. sim-core re-exports every function and constant, so `derivedAmpacityA` (kept in sim-core) and the bank read one definition. The bank writes `conductanceToAirOf`'s operations out in its own loop (a call per member would box doubles); a spec pins one step bit for bit against `conductanceToAirOf`.
+3. **The step runs in four phases over all members** (current and h₀; T_s; h₁; G′ and T_c; then the hot spots; then the 1 % rule), each member getting exactly the operations of a one-at-a-time loop, so the processor overlaps independent members' long sqrt-and-divide chains (0.131 → 0.090 ms for the bench's 2,600 members). Results are bit-identical to the single loop.
+4. **Stamps.** A conductor's value is the compiler's static `conductorOhm` × (1 + α (min(T_c, T_lin) − T₀)) plus each landed end's (a (1 + α (T_h − T₀)) + b) · D, bit-equal to the static `resistanceOhm` at T₀; a lead's is ρ₀L/A × (1 + α (min(T_c, T_lin) − T₀)) + its two clips, bit-equal to v2's value at ambient. D is read from the bag (1 throughout part 1). **No clamp at the melting point yet**: `materials.meltingPointK` lands with part 2's burn-open (until then a hot spot's α is unclamped; no part 1 scenario comes near it).
+5. **Bags.** A member's T_c starts at the bag's value, or ambient when null (exported non-null from then on). A conductor end with a termination whose method spec resolves has a hot-spot node (T_h from the bag, or T_c when null); an end whose termination's id differs from the bag's `end*TerminationId` resets (T_h = T_c, D = 1, the new id, state `ok`: part 2 adds the §6 decision for D = 1); an unlanded end's temperature is null and its D, state and id are kept. An end whose terminal or method can't be resolved (a missing mod's device) has no hot-spot node. A lead's end keys stay initial and its `insulationDamaged` false. Deleted members are kept as tombstones while their id is below `nextConnectionId` (undo restores them).
+6. **Readings only.** A netlisted member on an island that isn't a reading is frozen (readability is evaluated once per island per step); a member that isn't netlisted carries no current and relaxes.
+7. **The 1 % rule** reads |ΔV| / |I| from the solution (the branch's end nodes, cached per member at a sync) against the value `computeStamp` gives after the step; a member under `CONNECTION_RESOLVE_MIN_A` never asks. A shorted lead (hundreds of amps) re-solves within the step; leads at a lamp's current never do.
+8. **The export** (`SimStateExport.connections`) carries every member's bag, and `materialiseWorld` writes them: a protocol change, `SIM_PROTOCOL_VERSION` 6 ([ADR 0011 amendment](0011-sim-worker-contract.md#amendment-protocol-6-connection-bags-in-the-export-f36-part-1)); part 3's records become protocol 7.
+9. **The lead's six params** (§8) are required `LeadParams` fields; the catalogue checks the lead's τ bound (2.344 s) and its insulation radius ratio (2.563, at most 8). `shipped.spec.ts` masks by each release's `catalogVersion` as §8 fixes, and compares `tools`.
+10. **The load-time τ check** runs once per otherwise valid catalogue; the bare-conductor bound takes the ambient at the material's T₀ (293.15 K, the game's ambient; a spec pins the equality). Values for the built-in catalogue: 14 AWG THHN 2.79 s, 4/0 THHN 69.6 s, 14 AWG bare 45.22 s (pinned to a hand value in `thermal-check.spec.ts`), the lead 2.34 s; every terminal method is far above 1 s.
+11. **Insulation heat capacity stays out** (§3.6): no insulation row was given a sourced density and specific heat in this PR, so the rows have no such fields and C′ is the metal's (τ about 40 % short for 14 AWG THHN; steady states unaffected).
+12. **Bench** (AMD Ryzen 5 5600X, Node 24.12): `tick-wired-plant` (1,000 devices, 2,000 landed conductors, 600 leads; a cadence tick's layers, the solve run untimed just before) 0.141 ms median against 0.3 ms, 0 B per tick against a 1 B allocation gate; `plant-resolve-topology-change-wired` (the plain case's compile and solve plus the bank's sync and stamps over the plant's ~2,000 leads) 1.66–1.70 ms reference-scaled against the calibrated 2 ms (the plain case 1.41–1.43). `intermittent-toggle-wired` is declared pending for part 2. The resistor-kind DC defaults now stamp from a slot (`RESISTOR_DEFAULT_MODELS`, `resistorAt`): the F2.5 mixed-world gate measured 0 B/step in 8 of 8 runs and was tightened from 2.5 to 1.
+13. **What moved** (engine 7, provisional): every scenario with a lead (the bench lamp, bench leads, sim-step, sources, mains, protection), each listed in the CHANGELOG's single 6 → 7 table; no `topologyHash` golden. A breaker short in the protection property's generator now starts near 117 A and falls as its leads heat (≈ 100 K/s), so the bimetal trips later: the generator's long-advance arm now reaches 6,000 ticks (was 2,500), which keeps the generator-health count of tripped samples at 6 of 24 (the threshold stays above 3).
 
 ## Review
 
@@ -628,6 +648,6 @@ Both reviews (2026-11-12) applied below. `content-designer` reviews the §8 valu
      - the §8 fields count as electrical after v0.4.0.
   4. Engine 7 is provisional until v0.4.0, with the freeze-on-any-release rule; the `-engine-6-catalog-2` fixtures are kept as regression tests (§12).
   5. ADR 0015 and ADR 0016 are amended in their own text (the clamp list, the arcing band, the phase rule, the engine draws, the onset exception, the reset rule, deviation 8).
-  6. The event kinds are protocol 6 (part 3); part 2 tests detection in `sim-core` only.
+  6. The event kinds are protocol 7 (part 3; renumbered from 6 by F3.6 part 1); part 2 tests detection in `sim-core` only.
 
   Smaller recommendations applied: a landed end's starting T_h (T_c, else ambient) and the finite-bag property.

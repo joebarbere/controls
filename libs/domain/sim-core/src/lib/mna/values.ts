@@ -122,6 +122,14 @@ export class DcBranchValues {
     this.ohms[branch] = r + 0;
   }
 
+  /** `resistor(branch, ohms[i])` (the connection thermal bank's solve-time value, F3.6). */
+  resistorAt(branch: number, ohms: Float64Array, i: number): void {
+    const r = ohms[i];
+    if (!(Number.isFinite(r) && r > 0)) badResistor(branch, r);
+    this.stamps[branch] = DC_STAMP_RESISTOR;
+    this.ohms[branch] = r;
+  }
+
   /** `isource(branch, amps[i])`. */
   isourceAt(branch: number, amps: Float64Array, i: number): void {
     const a = amps[i];
@@ -173,6 +181,20 @@ export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Objec
   battery: (branch, values) =>
     values.vsource(branch.index, branch.values['openCircuitVoltageFullV'], branch.values['internalResistanceOhm']),
 });
+
+/**
+ * The kinds whose DC default is exactly a resistor of the branch's static `resistanceOhm` (above): the
+ * engine stamps these from a slot it fills at each compile (`resistorAt`), the same value bit for bit.
+ * A spec checks every listed kind's default against it.
+ */
+export const RESISTOR_DEFAULT_MODELS: ReadonlySet<string> = new Set([
+  'conductor',
+  'lead',
+  'resistor',
+  'heater',
+  'fuse',
+  'breaker.thermalMagnetic',
+]);
 
 /**
  * Fills `out` (allocated if missing or the wrong size) with every DC-solvable branch's value: the

@@ -86,7 +86,7 @@ describe('the message protocol', () => {
 
   it('parses every worker message, and refuses malformed ones', () => {
     const shared = createSnapshotBuffer(128, true) as SharedArrayBuffer;
-    const exported = { tick: 0, entities: [], solution: null };
+    const exported = { tick: 0, entities: [], connections: [], solution: null };
     const messages: unknown[] = [
       { type: 'ready', protocol: 1, transport: 'sab', isolated: true, buffer: shared, tick: 0 },
       { type: 'ready', protocol: 1, transport: 'message', isolated: false, buffer: null, tick: 5 },
@@ -118,7 +118,7 @@ describe('the message protocol', () => {
   });
 
   it('a state export with a non-finite value is refused (engine-threw, never saved)', () => {
-    const exported = { tick: 0, entities: [{ id: 1, state: { x: Number.NaN } }], solution: null };
+    const exported = { tick: 0, entities: [{ id: 1, state: { x: Number.NaN } }], connections: [], solution: null };
     expect(
       parseWorkerMessage({ type: 'state', id: 1, tick: 0, export: exported, snapshotHash: '0'.repeat(64) }),
     ).toBeNull();

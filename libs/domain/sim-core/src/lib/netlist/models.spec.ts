@@ -1,5 +1,5 @@
 import { BUILTIN_CATALOG, MODEL_KINDS } from '@controls/catalog';
-import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
+import { AMBIENT_TEMPERATURE_K } from '../constants';
 import { LEAD } from '../../testing/bench';
 import { CONNECTION_NETLIST_MODELS, DEVICE_NETLIST_MODELS, ownModel } from './models';
 
@@ -60,13 +60,11 @@ describe('netlist models', () => {
   });
 
   it('the lead’s conductor temperature is a sourced constant inside the linear α range of leadResistanceOhm', () => {
-    expect(LEAD_CONDUCTOR_TEMPERATURE_K.value).toBeGreaterThanOrEqual(223.15);
-    expect(LEAD_CONDUCTOR_TEMPERATURE_K.value).toBeLessThanOrEqual(423.15);
-    expect(LEAD_CONDUCTOR_TEMPERATURE_K.source).toMatch(/^game-design: /);
+    expect(AMBIENT_TEMPERATURE_K.value).toBeGreaterThanOrEqual(223.15);
+    expect(AMBIENT_TEMPERATURE_K.value).toBeLessThanOrEqual(423.15);
+    expect(AMBIENT_TEMPERATURE_K.source).toMatch(/^game-design: /);
     // At the IACS reference temperature the built-in lead has exactly its catalogue resistivity.
-    expect(BUILTIN_CATALOG.device(LEAD)?.model.params['referenceTemperatureK']).toBe(
-      LEAD_CONDUCTOR_TEMPERATURE_K.value,
-    );
+    expect(BUILTIN_CATALOG.device(LEAD)?.model.params['referenceTemperatureK']).toBe(AMBIENT_TEMPERATURE_K.value);
   });
 
   it('look up own properties only', () => {

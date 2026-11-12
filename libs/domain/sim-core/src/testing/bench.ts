@@ -32,6 +32,16 @@ export const AC_SOURCE = { id: 'source.test-ac-120v', version: 1 };
 export const SUPPLY = { id: 'supply.test-bench', version: 1 };
 export const LEAD_2M = { id: 'lead.test-2m', version: 1 };
 
+/** A test lead's six thermal params (F3.6 part 1, ADR 0018 §8): the built-in lead's copper and 0.8 mm PVC wall. */
+export const TEST_LEAD_THERMAL = {
+  linearAlphaMaxK: 473.15,
+  densityKgM3: 8890,
+  specificHeatJPerKgK: 385,
+  insulationThicknessMm: 0.8,
+  insulationConductivityWPerMK: 0.18,
+  surfaceEmissivity: 0.9,
+};
+
 export const origin = { x: 0, y: 0, z: 0 };
 export const end = (entity: number, terminal: string) => ({ entity, terminal });
 
@@ -138,6 +148,7 @@ export const TEST_DOCUMENTS: readonly unknown[] = [
         temperatureCoefficientPerK: 0.00393,
         referenceTemperatureK: 293.15,
         contactResistanceOhm: 0.01,
+        ...TEST_LEAD_THERMAL,
       },
     },
     sources: testSource([
@@ -147,6 +158,7 @@ export const TEST_DOCUMENTS: readonly unknown[] = [
       'model.params.temperatureCoefficientPerK',
       'model.params.referenceTemperatureK',
       'model.params.contactResistanceOhm',
+      ...Object.keys(TEST_LEAD_THERMAL).map((key) => `model.params.${key}`),
     ]),
   },
 ];

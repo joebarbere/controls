@@ -322,10 +322,11 @@ describe('SimEngine: electrical results', () => {
     expect(both.engine.probe(end(2, 'l'), end(2, 'n'))).toStrictEqual(acOnly.engine.probe(end(2, 'l'), end(2, 'n')));
     const dc = both.engine.probe(end(1, 'pos'), end(1, 'neg'));
     expect(dc.kind === 'dc' && dc.volts).toBeGreaterThan(1);
-    // A cadence re-solve keeps both.
+    // A cadence re-solve keeps both; each shorted lead heats fast (hundreds of amps), so the 1 % rule
+    // re-solves both islands again at 11, within the step (F3.6 part 1).
     both.advanceTo(11);
-    expect(both.engine.probe(end(1, 'pos'), end(1, 'neg'))).toMatchObject({ kind: 'dc', solvedAt: 10 });
-    expect(both.engine.probe(end(2, 'l'), end(2, 'n'))).toMatchObject({ kind: 'ac', solvedAt: 10 });
+    expect(both.engine.probe(end(1, 'pos'), end(1, 'neg'))).toMatchObject({ kind: 'dc', solvedAt: 11 });
+    expect(both.engine.probe(end(2, 'l'), end(2, 'n'))).toMatchObject({ kind: 'ac', solvedAt: 11 });
   });
 
   it('reads a reactive AC load as a phasor with its phase: the inductor voltage leads its current', () => {
@@ -516,7 +517,7 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
   it('an empty netlist exports sim: null, and a props-only world hashes as before', () => {
     const host = Host.fresh().run([['entity.place', { ref: CRATE, positionMm: origin }]]);
     host.advanceTo(30);
-    expect(host.engine.exportState()).toStrictEqual({ tick: 30, entities: [], solution: null });
+    expect(host.engine.exportState()).toStrictEqual({ tick: 30, entities: [], connections: [], solution: null });
     expect(host.materialised()).toStrictEqual(host.bus.state);
     expect(decodeSnapshot(host.engine.snapshot())).toMatchObject({ tick: 30, lastSolveTick: 0, islands: [] });
   });
@@ -648,7 +649,7 @@ describe('SimEngine: the snapshot', () => {
     const host = Host.fresh().run(ENGINE_BENCH).advanceTo(100); // before the fuse melts
     const snapshot = decodeSnapshot(host.engine.snapshot());
     const exported = host.engine.exportState();
-    expect(SIM_PROTOCOL_VERSION).toBe(5);
+    expect(SIM_PROTOCOL_VERSION).toBe(6);
     expect(snapshot).toMatchObject({
       tick: 100,
       lastSolveTick: 90,

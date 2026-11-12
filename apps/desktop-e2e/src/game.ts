@@ -9,11 +9,11 @@ export const PLACE =
 /**
  * F2.5, decision D6 in the shipped runtime: the bench demo's world hashes, lit (switch closed, 1.5 s)
  * and then out (switch opened, 0.5 s more), the literals `apps/sim-cli/src/bench-lamp.spec.ts` pins
- * under Node and `apps/game-e2e/src/bench-lamp.spec.ts` in Chromium (engine 6). Change all of them
+ * under Node and `apps/game-e2e/src/bench-lamp.spec.ts` in Chromium (engine 7). Change all of them
  * together, never one: a difference in Electron is float drift between V8 builds, not a golden to re-pin.
  */
-export const BENCH_LAMP_LIT_HASH = 'bfc2b50e67771ba7f271cf786bb36d7e6cb4a0f3badba4ea6ab5a0140c5b4d4e';
-export const BENCH_LAMP_HASH = 'ebad7403589275604ae5bb227245cc8800fd22c5174709a10b3887dabbac3d68';
+export const BENCH_LAMP_LIT_HASH = 'b94f50ce3682363951da92ebfc36c31ee3f31ee38a446d06fb4f6d2a1f3281d2';
+export const BENCH_LAMP_HASH = '38784069e9d2d06e15b96a958dd19c8c1af8aaf6ec1ff1254018016907aed947';
 
 /**
  * `apps/sim-cli/scenarios/bench-lamp.console`, comments stripped, split at its `world.hash` lines:

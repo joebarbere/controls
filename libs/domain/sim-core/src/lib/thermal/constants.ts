@@ -1,9 +1,23 @@
 import type { SourcedConstant } from '../constants';
 
 /*
- * Sourced constants of the conductor thermal model (ADR 0018 §3.2, §9, §11), as far as F3.1's derived
- * ampacity needs them. F3.6 adds the rest (the bank's schedule, the hot-spot node, degradation).
+ * Sourced constants of the conductor thermal model that belong to the engine (ADR 0018 §3.4, §9, §11):
+ * the rating ambient of the derived ampacity, and the connection thermal bank's numerical settings.
+ * The heat-path constants (convection, radiation, emissivity, Lorenz number, the minimum time
+ * constant) live in `@controls/catalog` beside the heat path itself, so the catalogue's load check
+ * evaluates the same model; this module re-exports them.
  */
+
+export {
+  BARE_CONDUCTOR_EMISSIVITY,
+  H_CONV_COEFF,
+  LN_SERIES_TERMS,
+  LN_SQRT_STEPS,
+  LORENZ_NUMBER,
+  STEFAN_BOLTZMANN,
+  SURFACE_ITERATIONS,
+  THERMAL_MIN_TAU_S,
+} from '@controls/catalog';
 
 /**
  * The ambient building-wire ampacity is rated at (F3.1, D6): 30 °C. Separate from the game's 20 °C
@@ -30,54 +44,38 @@ export const NM_CABLE_AMPACITY_TEMP_K: SourcedConstant = {
     'real-world: NFPA 70-2023 Art. 334.80 (cited by number, paraphrased) limits the ampacity of NM cable to that of 60 °C conductors, whatever its conductors are rated (the catalogue review of 2026-11-11; ADR 0018 §9).',
 };
 
-/** The coefficient of the simplified laminar convection relation h = C · (ΔT / D)^¼ for air. */
-export const H_CONV_COEFF: SourcedConstant = {
-  value: 1.32,
-  unit: 'W·m⁻⁷ᐟ⁴·K⁻⁵ᐟ⁴',
-  kind: 'real-world',
-  source:
-    'real-world: the simplified natural-convection relation for a horizontal cylinder in air at atmospheric pressure, h = 1.32 (ΔT/D)^¼ with D in metres (Holman, Heat Transfer; vetted in the P3 source pre-audit). Against Churchill and Chu (1975) it is within −17 %/+22 % for D 2.6–16 mm and ΔT 10–60 K; it is used below its laminar Rayleigh range (Ra ≈ 50 for 14 AWG), justified only by that comparison (ADR 0018 §3.2).',
-};
-
-/** The Stefan–Boltzmann constant σ. */
-export const STEFAN_BOLTZMANN: SourcedConstant = {
-  value: 5.670374419e-8,
-  unit: 'W·m⁻²·K⁻⁴',
-  kind: 'real-world',
-  source:
-    'real-world (physics): σ = 2π⁵k_B⁴/(15h³c²) from the exactly defined SI 2019 constants (the CODATA 2018 value, 5.670374419 × 10⁻⁸ W·m⁻²·K⁻⁴).',
-};
-
-/** The surface emissivity of a bare conductor (insulated ones read their insulation row's). */
-export const BARE_CONDUCTOR_EMISSIVITY: SourcedConstant = {
-  value: 0.5,
-  unit: '1',
-  kind: 'game-design',
-  source:
-    'game-design: between bright copper (a few per cent) and heavily oxidised copper; the bare equipment grounding conductor normally carries no current, so its heating rarely matters (ADR 0018 §11).',
-};
-
-/** How many fixed-point steps find the insulation surface temperature from the conductor's (ADR 0018 §3.2). */
-export const SURFACE_ITERATIONS: SourcedConstant = {
-  value: 1,
+/**
+ * How many bank steps (of `SOLVE_INTERVAL_TICKS` × `TICK_S` = 10 ms) the shortest thermal time
+ * constant must span (ADR 0018 §3.4). The catalogue's `THERMAL_MIN_TAU_S` is this × the step; a spec
+ * pins the product.
+ */
+export const THERMAL_MIN_TAU_STEPS: SourcedConstant = {
+  value: 100,
   unit: '1',
   kind: 'numerical',
   source:
-    'numerical: one iteration is within 0.02 % (14 AWG THHN) to 0.2 % (18 AWG MTW) of the converged surface balance (ADR 0018 §3.2, prototype); a second would cost two square roots per conductor for no visible change.',
+    "numerical: forward Euler's per-step local error is (dt/τ)²/2 ≤ 5 × 10⁻⁵ at τ ≥ 100 dt, and its stability limit dt < 2τ holds with a 200× margin (ADR 0018 §3.4). The catalogue refuses an entry below it at load.",
 };
 
-/** `lnRatio`'s square roots (x^(1/16)) and atanh-series terms (ADR 0018 §3.2). */
-export const LN_SQRT_STEPS: SourcedConstant = {
-  value: 4,
+/**
+ * The connection bank's re-solve rule (ADR 0018 §3.4, the lamp's `LAMP_RESOLVE_RELTOL`): after a
+ * scheduled step, a netlisted connection whose solve-time value has moved more than this fraction
+ * from the value the last solve saw (read back from the solution as |ΔV| / |I|) asks for a value-only
+ * re-solve at t + 1.
+ */
+export const CONNECTION_RESOLVE_RELTOL: SourcedConstant = {
+  value: 0.01,
   unit: '1',
   kind: 'numerical',
   source:
-    'numerical: four square roots bring x ≤ 8 to within 1.14 of 1, where six terms of the atanh series give a relative error below 2 × 10⁻¹¹ against Math.log over 1.0001–8 (ADR 0018 §3.2; pinned in thermal.spec.ts).',
+    "numerical: the lamp's 1 % rule (LAMP_RESOLVE_RELTOL). Smooth heating moves a conductor's R by far less than 1 % per 10 ms step, so in practice it fires on value steps (part 2's regimes and degradation), not while a conductor warms normally; fast fault heating (a shorted lead at hundreds of amps) re-solves every 3–4 steps (ADR 0018 §3.4).",
 };
 
-export const LN_SERIES_TERMS: SourcedConstant = {
-  value: 6,
-  unit: '1',
+/** Below this branch current (A) the connection bank never asks for a re-solve (as `LAMP_RESOLVE_MIN_A`). */
+export const CONNECTION_RESOLVE_MIN_A: SourcedConstant = {
+  value: 1e-6,
+  unit: 'A',
   kind: 'numerical',
-  source: 'numerical: see LN_SQRT_STEPS.',
+  source:
+    "numerical: as LAMP_RESOLVE_MIN_A, 1 µA. A connection carrying less barely heats, and a gmin-level current's |ΔV| / |I| is rounding, so the 1 % rule would re-solve on noise (ADR 0018 §3.4).",
 };

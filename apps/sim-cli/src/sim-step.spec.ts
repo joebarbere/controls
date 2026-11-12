@@ -29,8 +29,8 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 const ENGINE_3_HASH = '0194d4c84ebfeaf505e21f4090f9bde461221017707e9b60db234e6a9a50cc2f';
 /** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session (`df471c07…b48a` as world v2). */
 const ENGINE_4_HASH = '91a543b9cafef2490c5145143114d32e3a78bac5ab80077716528a83ae2741f6';
-export const SIM_STEP_HASH = 'cb71c6a58409adb476b7b25aabd770cdc4240bc29f84e01b32045f4824e7ae3b';
-export const SIM_STEP_SNAPSHOT_HASH = 'eddf0d39a957c7c0f11d95a7f061a26640d747df153c065c8ac33ba0b7c966c7';
+export const SIM_STEP_HASH = '41d7b12bf8b2ddf549c4fe0f10f19c9cb785a8f77a421366e4da43e639606053';
+export const SIM_STEP_SNAPSHOT_HASH = '54003f07cf3f3f157adab45870cc946d905da770ebb1995fb3c8d330c1803f0b';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sim-step.console');

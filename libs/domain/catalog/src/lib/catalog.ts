@@ -8,9 +8,18 @@ import {
   type EnclosureSpec,
   type TerminalMethodSpec,
 } from './device';
+import { type ConductorPhysics, conductorPhysics } from './conductor';
+import {
+  conductorTauMinS,
+  conductorThermal,
+  leadThermalLine,
+  maxFinConductanceWPerK,
+  thermalTauAllowed,
+} from './conductor-thermal';
 import { AccessoryDefinition, CableDefinition, ToolDefinition } from './families';
 import { awgInRange, gaugeRow } from './gauge';
-import { type ModelKindDef, MODEL_KINDS, type StateKeyDef } from './model-kinds';
+import { LeadParams, type ModelKindDef, MODEL_KINDS, type StateKeyDef } from './model-kinds';
+import { THERMAL_MIN_TAU_S } from './thermal-constants';
 import {
   ACCESSORY_PREFIX,
   entryType,
@@ -198,6 +207,8 @@ export function parseCatalog(
       return true;
     },
   );
+  // The thermal time-constant check reads resolved rows and parsed params: only on an otherwise valid catalogue.
+  if (issues.length === 0) checkThermalTimeConstants(devices, kindByKey, resolveRow, issues);
   if (issues.length > 0) return { ok: false, issues: issues.slice(0, MAX_ISSUES) };
 
   const index = <T extends { id: string; version: number }>(entries: readonly T[]) =>
@@ -735,3 +746,76 @@ export function checkControlValue(
     ? { ok: true }
     : { ok: false, message: `${control.label} doesn't accept that value` };
 }
+
+/**
+ * The load-time thermal time-constant check (ADR 0018 §3.4): the engine's connection thermal bank
+ * integrates by forward Euler every 10 ms, so every node it builds must have τ ≥ `THERMAL_MIN_TAU_S`
+ * (100 steps). Conservative lower bounds, computed from the data alone:
+ *
+ * - a conductor entry: C′ · R′_ins (the surface resistance → 0, the hottest possible bound), or for a
+ *   bare conductor C′ / G′ at the top of its linear-α range;
+ * - a lead: the same conductor bound from its six thermal params (and its insulation's outer radius at
+ *   most {@link MAX_INSULATION_RADIUS_RATIO} × the conductor's, `lnRatio`'s pinned range);
+ * - a terminal method: C_h / (G_term + G_fin,max), with G_fin,max = √(G′_max k A) over every conductor
+ *   entry of this catalogue that the method's `awgRange` and `stranding` admit.
+ */
+function checkThermalTimeConstants(
+  devices: readonly DeviceDefinition[],
+  kindByKey: ReadonlyMap<string, ModelKindDef>,
+  resolveRow: (ref: TableRef) => Readonly<Record<string, unknown>> | undefined,
+  issues: ValidationIssue[],
+): void {
+  const add = (device: DeviceDefinition, path: string, message: string) =>
+    issues.push({ path: `${device.id}@${device.version}: ${path}`, message });
+  const minTau = THERMAL_MIN_TAU_S.value;
+  const conductors: { readonly physics: ConductorPhysics; readonly finMax: number }[] = [];
+  for (const device of devices) {
+    const kind = kindByKey.get(refKey(device.id, device.version));
+    if (kind?.kind === 'lead') {
+      const line = leadThermalLine(LeadParams.parse(device.model.params));
+      const r0 = line.diameterM / 2;
+      if (line.insulation !== null && r0 + line.insulation.thicknessM > MAX_INSULATION_RADIUS_RATIO * r0) {
+        add(
+          device,
+          'model.params.insulationThicknessMm',
+          `The insulation's outer radius is above ${MAX_INSULATION_RADIUS_RATIO}× the conductor's`,
+        );
+        continue;
+      }
+      const tau = conductorTauMinS(conductorThermal(line));
+      if (!thermalTauAllowed(tau)) add(device, 'model.params', thermalTauMessage('The lead', tau, minTau));
+      continue;
+    }
+    const physics = kind?.requires === 'conductor' ? conductorPhysics({ tableRow: resolveRow }, device) : undefined;
+    if (physics === undefined) continue;
+    const thermal = conductorThermal(physics);
+    const tau = conductorTauMinS(thermal);
+    if (!thermalTauAllowed(tau)) add(device, 'conductor', thermalTauMessage('The conductor', tau, minTau));
+    conductors.push({ physics, finMax: maxFinConductanceWPerK(thermal) });
+  }
+  for (const device of devices) {
+    for (const terminal of device.terminals) {
+      for (const spec of terminal.methods) {
+        let finMax = 0;
+        for (const { physics, finMax: fin } of conductors) {
+          const stranding =
+            physics.stranding === 'solid'
+              ? spec.stranding.includes('solid')
+              : spec.stranding.includes('stranded') || spec.stranding.includes('strandedFerrule');
+          if (stranding && awgInRange(physics.awg, spec.awgRange) && fin > finMax) finMax = fin;
+        }
+        const tau = spec.hotSpotHeatCapacityJPerK / (spec.heatPathWPerK + finMax);
+        if (!thermalTauAllowed(tau)) {
+          add(
+            device,
+            `terminals.${terminal.id}.methods.${spec.method}.hotSpotHeatCapacityJPerK`,
+            thermalTauMessage('The termination hot spot', tau, minTau),
+          );
+        }
+      }
+    }
+  }
+}
+
+const thermalTauMessage = (what: string, tau: number, min: number) =>
+  `${what}'s thermal time constant can be as short as ${tau.toPrecision(3)} s, below the ${min} s the engine's 10 ms step needs (ADR 0018 §3.4)`;

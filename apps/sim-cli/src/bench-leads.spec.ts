@@ -21,7 +21,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * so the lamp's island was recorded unsolved (0 iterations, zeros); since engine 5 (F2.5) the lamp is
  * modelled and the circuit is solved: the switch is closed, so the lamp is lit at tick 0's solve.
  */
-export const BENCH_LEADS_HASH = '6c098ca598309986ed4f0dbac91c64a7280ba12c947bf1e3549706fc36f77884';
+export const BENCH_LEADS_HASH = 'd4663903f756fe05a1b3f59c583d93f348e31e1ee31ce2675e079f7e564ab6ba';
 
 /** What engines 3 and 4 (the lamp unmodelled) wrote for the same world, read as world v3 (`b2124245…6b45` as v2). */
 const ENGINE_3_HASH = '8849579948ee872fa34f75a4ba9b76cdda9695d64677c5c676e01802a20e0555';

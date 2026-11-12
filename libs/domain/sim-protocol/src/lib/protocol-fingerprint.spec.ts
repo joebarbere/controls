@@ -39,6 +39,8 @@ import { snapshotHash } from './snapshot';
 
 const PINNED: Readonly<Record<number, string>> = {
   5: '94d71fbbe3b973e30eee08c40bdd40b2ad2a4bfc9af0a50d6a831ec40eda43a6',
+  // 6 (F3.6 part 1): `SimStateExport.connections`, every connection's sim bag in the `state` reply.
+  6: 'c0820b25bb7eb44de14ded06a6637d66b2bf4e97e107e8108832638e1fe36891',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */

@@ -20,5 +20,10 @@
  *   `LAMP_CONDUCTION_FRACTION`), so a switched-off lamp cools in seconds rather than minutes. A lit
  *   lamp settles a little hotter above its rated voltage (about 4 K at 12.84 V on a 12 V lamp) and a
  *   little cooler below it; at rated voltage it is unchanged.
+ * - 7 (F3.6 part 1, **provisional until v0.4.0**, ADR 0018 §12): the connection thermal bank. Leads
+ *   (D2) and conductors heat with I²R and cool to the 20 °C ambient on the fixed 10 ms schedule; each
+ *   landed conductor end has a termination hot spot; a connection's solve-time value follows its
+ *   temperatures (R(T), and the ends' constriction resistance). Every scenario with a lead moves.
+ *   Later P3 PRs that change engine-7 behaviour re-pin in place (no 7 → 7′), until v0.4.0 freezes it.
  */
-export const SIM_ENGINE_VERSION = 6;
+export const SIM_ENGINE_VERSION = 7;
