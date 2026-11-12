@@ -1,6 +1,6 @@
 /*
- * GENERATED from content/devices/*.json by builtin.spec.ts: do not edit. Edit the JSON files and
- * regenerate with `pnpm nx test catalog -u` (plan P2 decision D4).
+ * GENERATED from content/devices/*.json by content-mirrors.spec.ts: do not edit. Edit the JSON
+ * files and regenerate with `pnpm nx test catalog -u` (plan P2 decision D4).
  */
 export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
 {

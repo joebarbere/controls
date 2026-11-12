@@ -38,6 +38,11 @@ const simCliDir = fileURLToPath(new URL('./apps/sim-cli', import.meta.url));
 const simWorkerDir = fileURLToPath(new URL('./libs/sim-worker', import.meta.url));
 /** libs/domain/sim-core (P2): its source is also held to the D6 deterministic-maths rule below. */
 const simCoreDir = fileURLToPath(new URL('./libs/domain/sim-core', import.meta.url));
+/**
+ * world-model's routing maths (P3, decisions D5 and D13; F3.2 part 1): `lengthMm` and the baked
+ * centreline are persisted and hashed, so they must match in Node and Chromium. Held to D6 below.
+ */
+const routingDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/routing', import.meta.url));
 
 /** Every file pattern the path-scoped rules below apply to. */
 const sourceFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'];
@@ -147,29 +152,35 @@ const d6EngineDependentMath = [
 const d6Hint =
   'sim-core may use only IEEE-exact operations (+ - * /, Math.sqrt, …) and its own dmath, so a snapshot is byte-identical in Node and Chromium (decision D6 in plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1).';
 
-/** sim-core source: the determinism rules plus D6. Flat config replaces a rule's options wholesale, so the lists are merged. */
-const simCoreRules = {
+const routingD6Hint =
+  'Routing maths may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a baked route and its lengthMm are byte-identical in Node and Chromium (decisions D5 and D13 in plans/phase-3-wiring.md, D6 in plans/phase-2-circuit-engine.md).';
+
+/**
+ * The determinism rules plus D6 for the source `scope` names (in the messages). Flat config replaces a
+ * rule's options wholesale, so the lists are merged.
+ */
+const d6Rules = (scope, hint) => ({
   ...determinismRules,
   'no-restricted-properties': [
     ...determinismRules['no-restricted-properties'],
     ...d6EngineDependentMath.map((property) => ({
       object: 'Math',
       property,
-      message: `Math.${property}() is engine-dependent and banned in sim-core source. ${d6Hint}`,
+      message: `Math.${property}() is engine-dependent and banned in ${scope}. ${hint}`,
     })),
   ],
   'no-restricted-syntax': [
     ...determinismRules['no-restricted-syntax'],
     {
       selector: "BinaryExpression[operator='**']",
-      message: `The ** operator is engine-dependent (it is Math.pow) and banned in sim-core source. ${d6Hint}`,
+      message: `The ** operator is engine-dependent (it is Math.pow) and banned in ${scope}. ${hint}`,
     },
     {
       selector: "AssignmentExpression[operator='**=']",
-      message: `The **= operator is engine-dependent (it is Math.pow) and banned in sim-core source. ${d6Hint}`,
+      message: `The **= operator is engine-dependent (it is Math.pow) and banned in ${scope}. ${hint}`,
     },
   ],
-};
+});
 
 export default [
   ...nx.configs['flat/base'],
@@ -253,14 +264,18 @@ export default [
     ignores: [...toolingConfigs, ...ignores],
     rules: determinismRules,
   })),
-  // D6 deterministic maths, sim-core source only (after the block above, which it extends). Specs are exempt
-  // so they can compare dmath against Math; they run only in Node, so their rounding never reaches a hash.
-  {
-    basePath: simCoreDir,
+  // D6 deterministic maths in sim-core source and (P3, D5/D13) world-model's routing source, after the
+  // determinism block above, which these extend. Specs are exempt so they can compare against Math; they
+  // run only in Node, so their rounding never reaches a hash.
+  ...[
+    { basePath: simCoreDir, rules: d6Rules('sim-core source', d6Hint) },
+    { basePath: routingDir, rules: d6Rules('world-model routing source', routingD6Hint) },
+  ].map(({ basePath, rules }) => ({
+    basePath,
     files: sourceFiles,
     ignores: [...toolingConfigs, ...specFiles],
-    rules: simCoreRules,
-  },
+    rules,
+  })),
   // Domain source runs in the renderer and the sim worker as well as Node, so no Node built-ins; the
   // worker's own source neither. Specs run only under Vitest in Node and may use them (e.g. node:fs).
   ...[domainLibsDir, simWorkerDir].map((basePath) => ({

@@ -293,7 +293,10 @@ describe('the calibration loop', () => {
 
 describe('runBench', () => {
   it('lists pending cases without running them or letting them fail the report', () => {
-    const pending = [{ name: 'later', budgetMs: 1, enabledBy: 'F9.9' }];
+    const pending = [
+      { name: 'later', budgetMs: 1, enabledBy: 'F9.9', note: 'gated later' },
+      { name: 'unbudgeted', budgetMs: null, enabledBy: 'F9.9 part 2', note: 'no budget yet' },
+    ];
     expect(runBench([fixedCase()], steppingClock([1, 1, 1]), pending)).toMatchObject({ pending, ok: true });
   });
 
@@ -327,6 +330,33 @@ describe('the shipped bench cases', () => {
       referenceMs: CALIBRATION_REFERENCE_MS.value,
     });
     expect(PENDING_BENCH_CASES.map((c) => c.name)).not.toContain('plant-resolve-topology-change');
+  });
+});
+
+describe('the pending bench cases (P3 kickoff step 6)', () => {
+  it('declare the P3 budgets with the feature that implements each, and no timing', () => {
+    expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([
+      // Spec §4.5: per tick, and the calibrated re-solve on a wired plant.
+      ['tick-wired-plant', 0.3, 'F3.6 part 1'],
+      ['plant-resolve-topology-change-wired', 2, 'F3.6 part 1'],
+      // No spec budget: ADR 0017 fixes one from measurement; the single-command gate sits under WATCHDOG_MS.
+      ['route-bake-500-wires', null, 'F3.2 part 1'],
+      ['cable-add-worst-command', null, 'F3.4 part 1'],
+    ]);
+    for (const c of PENDING_BENCH_CASES) {
+      expect(c.note).not.toBe('');
+      expect(Object.keys(c).sort()).toStrictEqual(['budgetMs', 'enabledBy', 'name', 'note']);
+    }
+  });
+
+  it('use kebab-case names that no real case has yet (the implementing PR moves each one over)', () => {
+    const real = new Set(BENCH_CASES.map((c) => c.name));
+    const names = PENDING_BENCH_CASES.map((c) => c.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) {
+      expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(real.has(name)).toBe(false);
+    }
   });
 });
 
