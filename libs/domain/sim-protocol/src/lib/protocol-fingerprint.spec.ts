@@ -46,7 +46,7 @@ const PINNED: Readonly<Record<number, string>> = {
   // their status and end-state values), the descriptor's `connections`, and the connection events
   // (`terminationOverheat`, `insulationDamaged`; `SimEvent.connection` and `end`). The contract data
   // gained the connection-output module and the connection event kinds with it (new data, new version).
-  7: 'd11c46163a90f814e81db16e4060c1753c993559cc049ed18cdebb58ad32808d',
+  7: 'c2150b34e70503360ba6073983dc37c0dd988de12ff9624982b2b41d8fc8b884',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */

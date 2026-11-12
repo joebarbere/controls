@@ -71,8 +71,8 @@ test('wire.info and the inspector show the bad termination as sim-cli does (F3.6
   const wire = tree.locator('[role="treeitem"][data-key="b:c2"]');
   // The golden's 0.2011 V, 303.033 K; end a 0.300478 V, 393.822 K; end b 0.00610151 V, 301.709 K.
   await expect(wire.getByTestId('connection-detail')).toHaveText(
-    'drop 201 mV · 303 K · a 300 mV 394 K · b 6.10 mV 302 K',
+    'drop 201 mV, 303 K, end a 300 mV, 394 K, end b 6.10 mV, 302 K',
   );
   const lead = tree.locator('[role="treeitem"][data-key="b:c3"]');
-  await expect(lead.getByTestId('connection-detail')).toHaveText('drop 507 mV · 317 K'); // a lead's ends: none
+  await expect(lead.getByTestId('connection-detail')).toHaveText('drop 507 mV, 317 K'); // a lead's ends: none
 });

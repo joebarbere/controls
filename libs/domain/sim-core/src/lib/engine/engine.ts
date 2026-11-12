@@ -395,6 +395,14 @@ export class SimEngine {
   private connectionOffsets = new Uint32Array(0);
   private connectionSchemas: DeviceOutputSchema[] = [];
   private connectionDataBytes = 0;
+  /** Per bank end (2 × member + side): the node of its landed terminal in the current netlist, or −1. */
+  private connectionEndNodes = new Int32Array(0);
+  /** The bank or the netlist moved since `connectionEndNodes` was resolved. */
+  private endNodesStale = true;
+  /** Per node of the current netlist: its island. */
+  private nodeIslands = new Int32Array(0);
+  /** Per island: its reference node while its values are a reading, else −1 (`refreshIslandReadings`). */
+  private islandReadingReferences = new Int32Array(0);
   /** The bank's `membership` the connection layout was made for (−1: none yet). */
   private connectionMembership = -1;
   /** The generation at the last `syncConnections`: a membership change bumps it once, unless a recompile just did. */
@@ -542,6 +550,9 @@ export class SimEngine {
     const bank = this.connectionBank;
     bank.sync(this.world, this.current);
     this.pointConnections();
+    // Each end's terminal node is resolved before the next record write, not here: a sync runs on the
+    // re-solve path (an intermittent toggle), and the lookup is a string key per end.
+    this.endNodesStale = true;
     if (bank.membership !== this.connectionMembership) {
       // The descriptor lists every member (netlisted or not), so its generation follows the bank's
       // membership as well as the topology (protocol 7): once, unless a recompile just moved it.
@@ -773,6 +784,7 @@ export class SimEngine {
     if (i < 0) return null;
     const schema = CONNECTION_OUTPUT_SCHEMAS[bank.kindName(i)];
     const view = new DataView(new ArrayBuffer(schema.recordBytes));
+    this.refreshIslandReadings();
     this.writeConnectionRecord(i, view, 0);
     return { kind: schema.kind, connection: id, branch: bank.branch[i], values: decodeDeviceRecord(schema, view, 0) };
   }
@@ -782,16 +794,43 @@ export class SimEngine {
     const bank = this.connectionBank;
     const b = bank.branch[i];
     const solution = this.solved ? this.solution : null;
-    let status = 0;
-    let reference = -1;
-    if (b >= 0 && solution !== null) {
-      const island = this.current.branches[b].island;
-      status = readingStatusCode(this.status(island));
-      if (solution.islands[island].iterations > 0) {
-        reference = islandReferenceNode(this.current, this.current.islands[island]);
+    const status = b >= 0 && solution !== null ? readingStatusCode(this.status(this.current.branches[b].island)) : 0;
+    bank.writeRecord(
+      i,
+      view,
+      at,
+      solution,
+      status,
+      this.connectionEndNodes,
+      this.nodeIslands,
+      this.islandReadingReferences,
+    );
+  }
+
+  /**
+   * Each island's reference node while its values are a reading (solved, with a reference), else −1:
+   * what a connection record reads node voltages against. Before writing records (once per snapshot).
+   */
+  private refreshIslandReadings(): void {
+    if (this.endNodesStale) {
+      // Each end's terminal node (an open connection's record reads the voltages across its gap).
+      const bank = this.connectionBank;
+      if (this.connectionEndNodes.length !== 2 * bank.count) this.connectionEndNodes = new Int32Array(2 * bank.count);
+      for (let e = 0; e < 2 * bank.count; e++) {
+        const terminal = bank.endTerminal(e);
+        this.connectionEndNodes[e] = terminal === null ? -1 : (this.nodeOf.get(terminal) ?? -1);
       }
+      this.endNodesStale = false;
     }
-    bank.writeRecord(i, view, at, solution, status, reference);
+    const islands = this.current.islands;
+    if (this.islandReadingReferences.length !== islands.length) {
+      this.islandReadingReferences = new Int32Array(islands.length);
+    }
+    for (let k = 0; k < islands.length; k++) {
+      const island = islands[k];
+      this.islandReadingReferences[k] =
+        this.solved && this.status(island.index) === 'solved' ? islandReferenceNode(this.current, island) : -1;
+    }
   }
 
   /**
@@ -1303,6 +1342,7 @@ export class SimEngine {
       for (const node of island.nodes) for (const member of netlist.nodes[node].members) members.add(member.entity);
       return Object.freeze([...members].sort((x, y) => x - y));
     });
+    this.nodeIslands = Int32Array.from(netlist.nodes, (node) => node.island);
     this.nodeOf.clear();
     for (const node of netlist.nodes)
       for (const member of node.members) this.nodeOf.set(terminalKey(member), node.index);
@@ -1372,6 +1412,7 @@ export class SimEngine {
       connectionCount: this.connectionBank.count,
       connectionDataBytes: this.connectionDataBytes,
       writeConnections: (view, base) => {
+        this.refreshIslandReadings();
         const offsets = this.connectionOffsets;
         for (let i = 0; i < offsets.length; i++) this.writeConnectionRecord(i, view, base + offsets[i]);
       },

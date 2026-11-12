@@ -1,4 +1,8 @@
 import {
+  CONNECTION_CONDUCTOR_STATES,
+  CONNECTION_READING_CONDUCTOR_DROP,
+  CONNECTION_READING_END_A_DROP,
+  CONNECTION_READING_END_B_DROP,
   CONNECTION_RECORD_END_STATES,
   CONNECTION_RECORD_STATUS_VALUES,
   CONNECTION_VALUE_COUNT,
@@ -195,40 +199,54 @@ export interface NetlistValues {
   /** `391 mA, a -> b` (DC direction against the branch's ends), `2.00 A` (AC) or {@link NO_READING}. */
   readonly branches: readonly string[];
   /**
-   * Per branch: a connection branch's record detail (`drop 201 mV · 303 K · a 300 mV 394 K · b 6.10 mV
-   * 302 K`), or `null` for a device's element or a connection with no record.
+   * Per branch: a connection branch's record detail (`drop 201 mV, 303 K, end a 300 mV, 394 K, end b
+   * 6.10 mV, 302 K`), or `null` for a device's element or a connection with no record.
    */
   readonly connections: readonly (string | null)[];
 }
 
 /**
+ * A temperature for display: whole kelvin, never an SI prefix (a fusing end at 1358 K reads `1358 K`,
+ * not `1.36 kK`). Temperatures have their own formatter (UI caveats); everything else uses
+ * {@link formatQuantity}.
+ */
+export function formatTemperature(kelvin: number): string {
+  return `${Math.round(kelvin)} K`;
+}
+
+/**
  * Connection `c`'s record in `reading` (an index into the descriptor's `connections`) as one detail
- * line: the conductor's drop (or "no reading" unless the record is solved; `open` when not netlisted)
- * and temperature, then each end that has a termination node: its drop, its hot-spot temperature and
- * its state when not `ok`. An end whose state is `none` (a lead's clip, a free end) is left out, never
- * shown as 0 K.
+ * line, comma-separated so it reads aloud cleanly: the conductor's drop (or `open` when not
+ * netlisted, `fused` for a fused lead) and temperature, then each end that has a termination node:
+ * its drop (a gap's voltage for an open end), its hot-spot temperature and its state when not `ok`. An
+ * electrical value whose `readings` bit is clear is {@link NO_READING}, never 0 V; an end whose state
+ * is `none` (a lead's clip, a free end) is left out, never shown as 0 K. Unknown status or state codes
+ * fall back to `unsolved` and `none` (they can't come from this protocol: the version is checked).
  */
 export function connectionDetail(reading: NetlistReading, c: number): string {
   const at = c * CONNECTION_VALUE_COUNT;
   const v = (name: string) => reading.connectionValues[at + CONNECTION_VALUE_INDEX[name]];
   const status = CONNECTION_RECORD_STATUS_VALUES[reading.connectionStatus[c]] ?? 'unsolved';
-  const solved = status === 'solved';
-  const drop = (name: string) => (solved ? formatQuantity(v(name), 'V') : NO_READING);
+  const readings = v('readings');
+  const volts = (name: string, bit: number) => ((readings & bit) !== 0 ? formatQuantity(v(name), 'V') : NO_READING);
+  const fused = CONNECTION_CONDUCTOR_STATES[v('conductorState')] === 'open';
+  const body = volts('conductorDropV', CONNECTION_READING_CONDUCTOR_DROP);
   const parts = [
-    status === 'open' ? 'open' : `drop ${drop('conductorDropV')}`,
-    formatQuantity(v('conductorTempK'), 'K'),
+    fused ? `fused, gap ${body}` : status === 'open' ? 'open' : `drop ${body}`,
+    formatTemperature(v('conductorTempK')),
   ];
   for (const side of ['A', 'B'] as const) {
     const state = CONNECTION_RECORD_END_STATES[v(`end${side}State`)] ?? 'none';
     if (state === 'none') continue;
-    const end = [side.toLowerCase()];
-    if (status !== 'open') end.push(drop(`end${side}DropV`));
-    end.push(formatQuantity(v(`end${side}TempK`), 'K'));
-    if (state !== 'ok') end.push(state);
-    parts.push(end.join(' '));
+    const bit = side === 'A' ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP;
+    const end = [`end ${side.toLowerCase()}`];
+    if (state === 'intermittentOpen') end.push(`open, gap ${volts(`end${side}DropV`, bit)}`);
+    else if (status !== 'open') end.push(volts(`end${side}DropV`, bit));
+    parts.push(end.join(' '), formatTemperature(v(`end${side}TempK`)));
+    if (state !== 'ok' && state !== 'intermittentOpen') parts.push(state);
   }
   if (v('insulationDamaged') === 1) parts.push('insulation damaged');
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 /** The display strings of a reading (allocates: call it at the panel rate, never per snapshot). */

@@ -71,10 +71,11 @@ export function connectionRecords(records: readonly Readonly<Record<string, numb
 
 /** The lit bench's lead records (solved, their clips inside the conductor value) and the open wire's. */
 export const BENCH_CONNECTIONS = connectionRecords([
-  { currentA: 0.3906, conductorDropV: 0.03, conductorTempK: 293.4, status: 1 },
-  { currentA: 0.3906, conductorDropV: 0.0, conductorTempK: 293.4, status: 1 },
-  { currentA: 0.3906, conductorDropV: 0.016, conductorTempK: 293.4, status: 1 },
-  { conductorTempK: 293.15, endATempK: 293.15, endAState: 1, status: 4 },
+  { currentA: 0.3906, conductorDropV: 0.03, conductorTempK: 293.4, status: 1, readings: 63 },
+  { currentA: 0.3906, conductorDropV: 0.0, conductorTempK: 293.4, status: 1, readings: 63 },
+  { currentA: 0.3906, conductorDropV: 0.016, conductorTempK: 293.4, status: 1, readings: 63 },
+  // Open, a free end b: 0 A and 0 V across it are readings (bits 1 to 8), end a's terminal voltage too (16).
+  { conductorTempK: 293.15, endATempK: 293.15, endAState: 1, status: 4, readings: 31 },
 ]);
 
 /** Node voltages of the lit bench lamp (V, against node 0) and its loop current (A, a -> b of each branch). */

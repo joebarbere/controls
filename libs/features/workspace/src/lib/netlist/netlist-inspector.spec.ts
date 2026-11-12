@@ -100,7 +100,7 @@ describe('NetlistInspector', () => {
     expect(value(row(panel, 'Branch 5 e4.l1: 6 -> 5'))).toBe('no reading');
     // Protocol 7: a lead's branch row adds its record's drop and temperature; a device's has none.
     const lead = row(panel, 'Branch 2 c1: 1 -> 2');
-    expect(within(lead).getByTestId('connection-detail').textContent?.trim()).toBe('drop 30.0 mV · 293 K');
+    expect(within(lead).getByTestId('connection-detail').textContent?.trim()).toBe('drop 30.0 mV, 293 K');
     expect(lead.textContent).toContain('drop 30.0 mV'); // part of the row's text, read with it
     expect(within(row(panel, 'Branch 1 e3.filament: 3 -> 4')).queryByTestId('connection-detail')).toBeNull();
     expect(tree.querySelectorAll('[role="treeitem"]')).toHaveLength(19);

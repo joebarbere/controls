@@ -34,7 +34,7 @@ describe('wire.info', () => {
       'current 0 A',
     ]);
     expect(lines[4]).toMatch(/^conductor R 0\.0124\d* Ω at 293\.15 K, drop 0 V$/);
-    expect(lines[5]).toMatch(/^end a ok, contact [0-9.e-]+ Ω at 293\.15 K, drop 0 V$/);
+    expect(lines[5]).toMatch(/^end a ok, contact [0-9.e-]+ Ω at 293\.15 K, drop 0 V, conductor side \d+\.\d+ V$/);
     expect(lines.slice(6)).toStrictEqual(['end b none', 'insulation intact', '']);
   });
 
@@ -47,6 +47,39 @@ describe('wire.info', () => {
     const lead = formatWireInfo(h.engine, h.bus.state, 1).split('\n');
     expect(lead[1]).toBe('lead 1 lead.quillfern-test-1m@1 length 1000 mm');
     expect(lead[4]).toMatch(/^conductor R 0\.0409\d* Ω at 293\.15 K, drop .* V$/);
+    expect(lead.slice(5, 7)).toStrictEqual(['end a none', 'end b none']);
+  });
+
+  /** The wired loop with sim keys merged into chosen connections' bags. */
+  const opened = (sims: Readonly<Record<number, Readonly<Record<string, string | number>>>>) => {
+    const base = wiredLoopWorld();
+    const world = World.parse({
+      ...base,
+      connections: base.connections.map((c) => ({ ...c, sim: { ...c.sim, ...(sims[c.id] ?? {}) } })),
+    });
+    return new SourceHost(engineBus(5, world));
+  };
+
+  it('an open end prints `open` and the gap across it, never its closed-contact resistance', () => {
+    const h = opened({ 2: { endADegradation: 10_000, endATerminationId: 1 } });
+    const lines = formatWireInfo(h.engine, h.bus.state, 2).split('\n');
+    expect(lines[2]).toBe('status open (not netlisted)');
+    expect(lines[3]).toBe('current 0 A');
+    expect(lines[5]).toMatch(/^end a intermittentOpen, open at 293\.15 K, gap 1\d\.\d+ V, conductor side 0 V$/);
+    expect(lines[5]).not.toContain('Ω');
+    expect(lines[6]).toMatch(/^end b ok, contact .* Ω at 293\.15 K, drop 0 V, conductor side 0 V$/);
+  });
+
+  it('a gap with no closed side has no reading; a fused lead prints its body open with the gap', () => {
+    const both = opened({
+      3: { endADegradation: 10_000, endATerminationId: 3, endBDegradation: 10_000, endBTerminationId: 4 },
+    });
+    const three = formatWireInfo(both.engine, both.bus.state, 3).split('\n');
+    expect(three[5]).toBe('end a intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading');
+    expect(three[6]).toBe('end b intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading');
+    const fused = opened({ 1: { endAState: 'intermittentOpen', endBState: 'intermittentOpen' } });
+    const lead = formatWireInfo(fused.engine, fused.bus.state, 1).split('\n');
+    expect(lead[4]).toMatch(/^conductor open \(fused\) at 293\.15 K, gap 1\d\.\d+ V$/);
     expect(lead.slice(5, 7)).toStrictEqual(['end a none', 'end b none']);
   });
 

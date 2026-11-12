@@ -18,8 +18,11 @@ import { type ConnectionReadPlan, READ_F64, READ_I32, READ_NONE, READ_U32, READ_
  * Protocol 7 adds every **connection record** (F3.6 part 3): the descriptor's `connections`, in its
  * order, each record's fields copied into `connectionValues` in `CONNECTION_OUTPUT_FIELDS` order, so
  * the overlays and the inspector read drops and temperatures from records, never from `connection.sim`
- * (ADR 0011's F3.6 part 1 amendment). A record's solved fields are a reading only when its status is
- * `solved`; with `open` they are exactly 0; an end whose state is `none` has no temperature or contact.
+ * (ADR 0011's F3.6 part 1 amendment). A record's electrical fields (current, drops, end voltages) are
+ * a reading only when their bit is set in its `readings` value (`CONNECTION_READING_*`): never read a
+ * clear field as 0 A or 0 V. An `open` record's current is a reading of 0, but a gap (an
+ * `intermittentOpen` end, a fused lead) carries the voltage across it, or no reading; a free end has no
+ * end voltage. An end whose state is `none` has no temperature or contact.
  *
  * Built once per descriptor (cached by identity, like `DescriptorIndex`); {@link NetlistReadout.read}
  * allocates nothing, so a renderer may call it on every snapshot (`sim bench`'s `overlay-read` case

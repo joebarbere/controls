@@ -47,7 +47,7 @@ import { workshopWorld } from './testing/workshop';
  * `insulationDamaged` happen follows from the computed T_h.
  */
 export const BAD_TERMINATION_HASH = 'f630358e4fa9070416b89e27b7692165c8f89c92aebe7c2ee0cee02110488288';
-export const BAD_TERMINATION_SNAPSHOT_HASH = '5b3563611c0207162624b5dd57bbf4b3aab2a3a02f6f5831b58b3470ec0c41ac';
+export const BAD_TERMINATION_SNAPSHOT_HASH = 'aeb5eb4375e16e6a84af5a9205dc19aacd3ca3da872e64efeec0bacdba081439';
 
 /**
  * `wire.info 2` (the loose conductor) and `wire.info 3` (a test lead) at the end of the scenario
@@ -176,22 +176,31 @@ describe('the bad-termination scenario (F3.6 part 2, ADR 0018 §7)', () => {
     expect(Math.abs(sum - reading.rmsVolts) / reading.rmsVolts).toBeLessThan(1e-12);
   });
 
-  it('raises terminationOverheat (a protocol 7 sim event) exactly when the computed hot spot passes T_a + 100 K', async () => {
+  it('raises terminationOverheat (a protocol 7 sim event) once, at the step where the hot spot passes T_a + 100 K', async () => {
     const events: SimEvent[] = [];
     const game = await scenarioGame(events);
     const amps = game.device(4)?.values['currentA'] as number;
     const bad = handCalculation(game.materialisedWorld() as World, 2, amps);
-    const overheat = events.filter((e) => e.kind === 'terminationOverheat');
+    const threshold = TA + TERMINATION_OVERHEAT_RISE_K.value;
+    // Unconditional (realism review R1 notes): the computed steady hot spot is past the threshold.
+    expect(bad.ends[0].th).toBeGreaterThanOrEqual(threshold);
     expect(events.filter((e) => e.kind === 'insulationDamaged')).toHaveLength(0);
-    if (bad.ends[0].th >= TA + TERMINATION_OVERHEAT_RISE_K.value) {
-      expect(overheat).toHaveLength(1);
-      expect(overheat[0]).toMatchObject({ entity: null, entities: [], connection: 2, end: 'a' });
-      expect(overheat[0].detail['temperatureK'] as number).toBeGreaterThanOrEqual(
-        TA + TERMINATION_OVERHEAT_RISE_K.value,
-      );
-    } else {
-      expect(overheat).toHaveLength(0);
-    }
+    const overheat = events.filter((e) => e.kind === 'terminationOverheat');
+    expect(overheat).toHaveLength(1);
+    expect(overheat[0]).toMatchObject({ entity: null, entities: [], connection: 2, end: 'a' });
+    // Its tick is the state after the cadence step that crossed: below the threshold a tick before
+    // (the previous step's state), at or above it at the event's tick, and the event's temperature.
+    const { tick } = overheat[0];
+    expect(tick % 10).toBe(1);
+    const commands = (await readFile(scenario, 'utf8')).replace(/^sim\.step.*$/m, '').replace(/^world\.hash$/m, '');
+    const stepped = createGame({ world: workshopWorld() });
+    expect(await runConsoleScript(stepped, commands)).toMatchObject({ ok: true });
+    stepped.advanceTo(tick - 1);
+    expect(stepped.connection(2)?.values['endATempK'] as number).toBeLessThan(threshold);
+    stepped.advanceTo(tick);
+    const crossed = stepped.connection(2)?.values['endATempK'] as number;
+    expect(crossed).toBeGreaterThanOrEqual(threshold);
+    expect(overheat[0].detail['temperatureK']).toBe(crossed);
   });
 
   it('wire.info prints the records: the golden text, the same from a console line as from Game.wireInfo', async () => {

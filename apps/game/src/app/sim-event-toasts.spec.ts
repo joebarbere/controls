@@ -53,6 +53,21 @@ describe('SimEventToasts', () => {
     expect(shown()).toEqual([]);
   });
 
+  it('never toasts a connection event: an overheating termination is a fault the player must find (F3.6 part 3)', () => {
+    const { toasts, shown } = setup();
+    const connection = (kind: SimEvent['kind']): SimEvent => ({
+      tick: 11,
+      kind,
+      entity: null,
+      entities: [],
+      connection: 2,
+      end: 'a',
+      detail: { temperatureK: 393.5 },
+    });
+    toasts.events([connection('terminationOverheat'), connection('insulationDamaged')]);
+    expect(shown()).toEqual([]);
+  });
+
   it('forgets the window on a source reset (a new game reuses device ids)', () => {
     const { toasts, shown } = setup();
     toasts.events([event('blown', 3)]);

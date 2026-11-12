@@ -1,5 +1,5 @@
 import { type CommandRegistry, consoleFields } from '@controls/commands';
-import { CONSOLE_QUERIES } from '@controls/scripting-api';
+import { CONSOLE_QUERIES, CONSOLE_QUERY_ARGS } from '@controls/scripting-api';
 import { CONSOLE_VERBS, isConsoleWord } from './interpret';
 
 /*
@@ -111,10 +111,15 @@ export function completeConsoleInput<S>(
   if (words.length === 0) return result(consoleIds(registry));
   const head = words[0].text;
   if (head === 'help') return words.length === 1 ? result(consoleIds(registry)) : null;
-  if (isConsoleWord(registry, head)) return null;
-  const def = registry.get(head);
-  if (!def) return null;
-  const fields = consoleFields(def.args);
+  // A query's flags complete from its schema (`CONSOLE_QUERY_ARGS`), as a command's do.
+  const query =
+    isConsoleWord(registry, head) && Object.prototype.hasOwnProperty.call(CONSOLE_QUERY_ARGS, head)
+      ? CONSOLE_QUERY_ARGS[head]
+      : null;
+  if (query === null && isConsoleWord(registry, head)) return null;
+  const def = query === null ? registry.get(head) : null;
+  if (query === null && !def) return null;
+  const fields = consoleFields(query ?? (def as NonNullable<typeof def>).args);
   const rest = words.slice(1);
 
   if (current.text.startsWith('-')) {

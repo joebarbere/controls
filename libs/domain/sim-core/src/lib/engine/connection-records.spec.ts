@@ -1,5 +1,14 @@
+import { World } from '@controls/save-format';
 import {
+  CONNECTION_READING_CONDUCTOR_DROP,
+  CONNECTION_READING_CURRENT,
+  CONNECTION_READING_END_A_DROP,
+  CONNECTION_READING_END_A_VOLTS,
+  CONNECTION_READING_END_B_DROP,
+  CONNECTION_READING_END_B_VOLTS,
+  CONNECTION_AMBIENT_K,
   CONNECTION_OUTPUT_SCHEMAS,
+  CONNECTION_OVERHEAT_RISE_K,
   CONNECTION_RECORD_BYTES,
   decodeSnapshot,
   DescriptorIndex,
@@ -13,6 +22,9 @@ import { engineBus } from '../../testing/engine';
 import { SourceHost } from '../../testing/sources';
 import { wiredLoopWorld } from '../../testing/wired-loop';
 import { AMBIENT_TEMPERATURE_K } from '../constants';
+import { TERMINATION_OVERHEAT_RISE_K } from '../contact/regimes';
+import { READING_SOLVED } from '../devices/readings';
+import { READING_SOLVED_CODE } from '../thermal/bank';
 import type { SimConnectionRecord } from './engine';
 
 /*
@@ -44,8 +56,29 @@ const ROUNDING = 1e-12;
 const KCL = 1e-9;
 const relative = (a: number, b: number) => Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), 1e-300);
 
-const host = (options: Parameters<typeof wiredLoopWorld>[0] = {}) =>
-  new SourceHost(engineBus(options.seed ?? 5, wiredLoopWorld(options)));
+/** The wired loop, with sim keys merged into chosen connections' bags (a fused lead, a burned-open end). */
+type HostOptions = Parameters<typeof wiredLoopWorld>[0] & {
+  readonly leadSim?: Readonly<Record<number, Readonly<Record<string, string>>>>;
+  readonly conductorSim?: Readonly<Record<number, Readonly<Record<string, number>>>>;
+};
+const host = (options: HostOptions = {}) => {
+  const base = wiredLoopWorld(options);
+  const world = World.parse({
+    ...base,
+    connections: base.connections.map((c) => ({
+      ...c,
+      sim: { ...c.sim, ...(options.leadSim?.[c.id] ?? {}), ...(options.conductorSim?.[c.id] ?? {}) },
+    })),
+  });
+  return new SourceHost(engineBus(options.seed ?? 5, world));
+};
+
+/** |V(a) − V(b)| from an ideal DC probe. */
+function probeVolts(h: SourceHost, a: { entity: number; terminal: string }, b: { entity: number; terminal: string }) {
+  const reading = h.engine.probe(a, b);
+  if (reading.kind !== 'dc') throw new Error(`a DC reading, got ${reading.kind}`);
+  return Math.abs(reading.volts);
+}
 
 const num = (record: SimConnectionRecord | null, field: string): number => {
   const value = record?.values[field];
@@ -119,7 +152,7 @@ describe('connection records (protocol 7)', () => {
     expect(relative(num(c2, 'endBVolts'), nut3.volts + num(c2, 'endBDropV'))).toBeLessThan(ROUNDING);
   });
 
-  it('a connection that is not netlisted is `open`: zero current and drops, its own state still written', () => {
+  it('a free-end wire is `open`: 0 A and 0 V across it are readings, its free end has no end voltage', () => {
     const h = host().advanceTo(2000);
     const c7 = h.engine.connectionRecord(7);
     expect(c7).toMatchObject({ kind: 'conductor', connection: 7, branch: -1 });
@@ -129,16 +162,142 @@ describe('connection records (protocol 7)', () => {
       conductorDropV: 0,
       endADropV: 0,
       endBDropV: 0,
-      endAVolts: 0,
       endBVolts: 0,
       endAState: 'ok', // landed in nut 4
       endBState: 'none', // free
+      conductorState: 'closed',
       endBTempK: 0,
       endBContactOhm: 0,
     });
+    const readings = num(c7, 'readings');
+    const bits = (mask: number) => (readings & mask) === mask;
+    expect(
+      bits(
+        CONNECTION_READING_CURRENT |
+          CONNECTION_READING_CONDUCTOR_DROP |
+          CONNECTION_READING_END_A_DROP |
+          CONNECTION_READING_END_B_DROP,
+      ),
+    ).toBe(true);
+    // The landed end's conductor side is its terminal's potential (nut 4, live); the free end has none.
+    expect(bits(CONNECTION_READING_END_A_VOLTS)).toBe(true);
+    expect(bits(CONNECTION_READING_END_B_VOLTS)).toBe(false);
+    expect(num(c7, 'endAVolts')).toBe(probeVolts(h, { entity: 4, terminal: 'splice' }, { entity: 1, terminal: 'neg' }));
     expect(num(c7, 'endAContactOhm')).toBeGreaterThan(0); // the bank's own as-made value
     expect(num(c7, 'conductorTempK')).toBe(AMBIENT_TEMPERATURE_K.value); // no current, no heat
     expect(h.engine.connectionRecord(99)).toBeNull();
+  });
+
+  it('an energised wire with an intermittentOpen end: the gap carries about the supply voltage, never 0 V', () => {
+    // Conductor 2's breaker-screw end burned open (D far above 1 Ω / R_made): open in every bucket. The
+    // loop is broken there, so no current flows and the whole EMF stands across the gap.
+    const h = host({ conductor2Sim: { endADegradation: 10_000, endATerminationId: 1 } });
+    const c2 = h.engine.connectionRecord(2);
+    expect(c2?.values).toMatchObject({
+      status: 'open',
+      currentA: 0,
+      endAState: 'intermittentOpen',
+      endBState: 'ok',
+      conductorState: 'closed',
+      conductorDropV: 0,
+      endBDropV: 0,
+    });
+    const readings = num(c2, 'readings');
+    expect(readings & CONNECTION_READING_END_A_DROP).not.toBe(0);
+    const gap = probeVolts(h, { entity: 2, terminal: 'load' }, { entity: 3, terminal: 'splice' });
+    expect(gap).toBeGreaterThan(10); // a 12 V battery with nothing drawing current
+    expect(num(c2, 'endADropV')).toBe(gap);
+    // Both conductor sides float at nut 3 (its closed end): no current, so 0 V against the battery's −.
+    expect(readings & CONNECTION_READING_END_A_VOLTS).not.toBe(0);
+    expect(num(c2, 'endAVolts')).toBe(probeVolts(h, { entity: 3, terminal: 'splice' }, { entity: 1, terminal: 'neg' }));
+    expect(num(c2, 'endBVolts')).toBe(num(c2, 'endAVolts'));
+  });
+
+  it('a fused lead in series with a load: its body is the gap, at about the supply voltage', () => {
+    const h = host({ leadSim: { 1: { endAState: 'intermittentOpen', endBState: 'intermittentOpen' } } });
+    const lead = h.engine.connectionRecord(1);
+    expect(lead?.values).toMatchObject({
+      status: 'open',
+      currentA: 0,
+      conductorState: 'open',
+      endAState: 'none',
+      endBState: 'none',
+      endADropV: 0,
+      endBDropV: 0,
+    });
+    expect(lead?.kind).toBe('lead');
+    const readings = num(lead, 'readings');
+    expect(readings & CONNECTION_READING_CONDUCTOR_DROP).not.toBe(0);
+    const gap = probeVolts(h, { entity: 1, terminal: 'pos' }, { entity: 2, terminal: 'line' });
+    expect(gap).toBeGreaterThan(10);
+    expect(num(lead, 'conductorDropV')).toBe(gap);
+    // Each clip half sits at its terminal.
+    expect(num(lead, 'endAVolts')).toBe(probeVolts(h, { entity: 1, terminal: 'pos' }, { entity: 1, terminal: 'neg' }));
+    expect(num(lead, 'endBVolts')).toBe(probeVolts(h, { entity: 2, terminal: 'line' }, { entity: 1, terminal: 'neg' }));
+  });
+
+  it('property: an open record never reports a 0 V gap where the gap’s two sides differ', () => {
+    /** Which connection is opened: a conductor end by burning it open, or a lead by fusing it. */
+    const OPENINGS = [
+      { connection: 2, end: 'a', termination: 1 },
+      { connection: 2, end: 'b', termination: 2 },
+      { connection: 3, end: 'a', termination: 3 },
+      { connection: 4, end: 'b', termination: 6 },
+      { connection: 1, end: null, termination: 0 },
+      { connection: 5, end: null, termination: 0 },
+    ] as const;
+    let gaps = 0;
+    fc.assert(
+      fc.property(fc.subarray([...OPENINGS], { minLength: 1 }), fc.integer({ min: 0, max: 30 }), (open, steps) => {
+        const conductorSim: Record<number, Record<string, number>> = {};
+        const leadSim: Record<number, Record<string, string>> = {};
+        for (const o of open) {
+          if (o.end === null) leadSim[o.connection] = { endAState: 'intermittentOpen', endBState: 'intermittentOpen' };
+          else {
+            const prefix = o.end === 'a' ? 'endA' : 'endB';
+            conductorSim[o.connection] = {
+              ...conductorSim[o.connection],
+              [`${prefix}Degradation`]: 10_000,
+              [`${prefix}TerminationId`]: o.termination,
+            };
+          }
+        }
+        const h = host({ leadSim, conductorSim }).advance(steps * 10);
+        const world = h.bus.state;
+        for (const connection of world.connections) {
+          const r = h.engine.connectionRecord(connection.id);
+          if (r?.values['status'] !== 'open' || !connection.a || !connection.b) continue;
+          const readings = num(r, 'readings');
+          const fused = r.values['conductorState'] === 'open';
+          const sides = fused
+            ? [{ field: 'conductorDropV', bit: CONNECTION_READING_CONDUCTOR_DROP, x: connection.a, y: connection.b }]
+            : (['A', 'B'] as const)
+                .filter((s) => r.values[`end${s}State`] === 'intermittentOpen')
+                .map((s) => ({
+                  field: `end${s}DropV`,
+                  bit: s === 'A' ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP,
+                  x: s === 'A' ? connection.a : connection.b,
+                  y: s === 'A' ? connection.b : connection.a, // the floating conductor's closed end
+                }));
+          for (const { field, bit, x, y } of sides) {
+            const reading = h.engine.probe(x as never, y as never);
+            const otherOpen =
+              !fused && r.values[field === 'endADropV' ? 'endBState' : 'endAState'] === 'intermittentOpen';
+            if ((readings & bit) === 0) {
+              expect(num(r, field)).toBe(0); // no reading: written 0, never to be shown
+              continue;
+            }
+            expect(otherOpen).toBe(false); // a gap with no closed side has no reading
+            if (reading.kind !== 'dc') throw new Error(`a DC reading, got ${reading.kind}`);
+            expect(num(r, field)).toBe(Math.abs(reading.volts));
+            if (Math.abs(reading.volts) > 0) expect(num(r, field)).toBeGreaterThan(0);
+            gaps++;
+          }
+        }
+      }),
+      { numRuns: 40 },
+    );
+    expect(gaps).toBeGreaterThan(20); // generator health: gaps were really checked
   });
 
   it('bad termination: the end drop is I × R_contact within 0.5 % and more than 10× the good end, under load', () => {
@@ -240,5 +399,13 @@ describe('connection events (protocol 7)', () => {
     expect(overheats[0]).toMatchObject({ entity: null, entities: [], connection: 2, end: 'a' });
     expect(overheats[0].detail['temperatureK'] as number).toBeGreaterThanOrEqual(AMBIENT_TEMPERATURE_K.value + 100);
     expect(overheats[0].tick % 10).toBe(1); // the state after a cadence step (step tick + 1)
+  });
+});
+
+describe('the record contract against sim-core', () => {
+  it("the writer's inlined solved code is READING_SOLVED; sim-protocol's ambient and overheat rise are sim-core's", () => {
+    expect(READING_SOLVED_CODE).toBe(READING_SOLVED);
+    expect(CONNECTION_AMBIENT_K).toBe(AMBIENT_TEMPERATURE_K.value);
+    expect(CONNECTION_OVERHEAT_RISE_K).toBe(TERMINATION_OVERHEAT_RISE_K.value);
   });
 });

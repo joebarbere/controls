@@ -16,10 +16,20 @@ import {
 } from '@controls/catalog';
 import type { DeviceStateValue, World } from '@controls/save-format';
 import {
+  CONNECTION_CONDUCTOR_CLOSED,
+  CONNECTION_CONDUCTOR_OPEN,
   CONNECTION_END_ARCING,
-  CONNECTION_END_INTERMITTENT,
+  CONNECTION_END_INTERMITTENT_CLOSED,
+  CONNECTION_END_INTERMITTENT_OPEN,
   CONNECTION_END_NONE,
   CONNECTION_END_OK,
+  CONNECTION_READING_ALL,
+  CONNECTION_READING_CONDUCTOR_DROP,
+  CONNECTION_READING_CURRENT,
+  CONNECTION_READING_END_A_DROP,
+  CONNECTION_READING_END_A_VOLTS,
+  CONNECTION_READING_END_B_DROP,
+  CONNECTION_READING_END_B_VOLTS,
   CONNECTION_RECORD_OFFSETS,
   CONNECTION_RECORD_OPEN,
 } from '@controls/sim-protocol';
@@ -125,8 +135,25 @@ import { CONNECTION_RESOLVE_MIN_A, CONNECTION_RESOLVE_RELTOL } from './constants
  */
 
 const KIND_LEAD = 0;
-/** `READING_SOLVED` (devices/readings), inlined: the record writer compares the island status against it. */
-const READING_SOLVED_CODE = 1;
+/**
+ * `READING_SOLVED` (devices/readings), inlined: the record writer compares the island status against
+ * it (a spec requires the two equal).
+ */
+export const READING_SOLVED_CODE = 1;
+/** The current and the three drops are readings, the end voltages not (`readings` bits). */
+const READINGS_ELECTRICAL_NO_VOLTS =
+  CONNECTION_READING_CURRENT |
+  CONNECTION_READING_CONDUCTOR_DROP |
+  CONNECTION_READING_END_A_DROP |
+  CONNECTION_READING_END_B_DROP;
+
+/** |V(a) − V(b)| (complex) between two nodes of `nodes`; 0 without a solution. */
+function nodeDistance(nodes: ArrayLike<number> | null, a: number, b: number): number {
+  if (nodes === null) return 0;
+  const re = nodes[2 * a] - nodes[2 * b];
+  const im = nodes[2 * a + 1] - nodes[2 * b + 1];
+  return Math.sqrt(re * re + im * im);
+}
 const KIND_CONDUCTOR = 1;
 const AMBIENT = AMBIENT_TEMPERATURE_K.value;
 const H_CONV = H_CONV_COEFF.value;
@@ -290,6 +317,11 @@ export class ConnectionThermalBank {
   /** R_made's constriction and film parts (Ω), the bank's own: a record's contact while not netlisted. */
   private madeConstriction = new Float64Array(0);
   private madeFilm = new Float64Array(0);
+  /** Per end: 1 if it is landed on a terminal in the world (a lead's always are), else 0 (a free end). */
+  private landed = new Uint8Array(0);
+  /** Per end: the landed terminal's entity and id (`endTerminal`), for the engine's node lookup. */
+  private endEntity = new Int32Array(0);
+  private endTerminalIds: string[] = [];
   /** The degradation-rate multiplier (`degradationRateMultiplier`). */
   private rateMult = new Float64Array(0);
   /** The first outputs of the termination's `:intermittent` stream, and V_arc from its `:arcing` stream. */
@@ -481,6 +513,14 @@ export class ConnectionThermalBank {
     return this.detectCounts[1] > 0;
   }
 
+  /**
+   * End `e`'s (2 × member + side) landed terminal as `entity:terminal`, or `null` for a free end: the
+   * engine resolves its node at each sync (an open connection's record reads the terminals' voltages).
+   */
+  endTerminal(e: number): string | null {
+    return this.landed[e] === 1 ? `${this.endEntity[e]}:${this.endTerminalIds[e]}` : null;
+  }
+
   /** Member `i`'s catalogue model kind: `lead` or `conductor` (its connection record's kind). */
   kindName(i: number): string {
     return this.kind[i] === KIND_LEAD ? 'lead' : 'conductor';
@@ -490,17 +530,26 @@ export class ConnectionThermalBank {
    * Writes member `i`'s connection record (protocol 7, `CONNECTION_OUTPUT_FIELDS`) at byte `at` of
    * `view`, which arrives zeroed. `solution` is the engine's current one (null when it holds none),
    * `status` the record status of the member's island (`READING_*`, ignored when it isn't netlisted:
-   * `open`), `reference` that island's reference node (−1 for none).
+   * `open`). `endNodes` holds, per end (2 × member + side), the node of the terminal it is landed on in
+   * the current netlist, or −1; `nodeIsland` each node's island; `islandReference` each island's
+   * reference node when its values are a reading (solved, referenced), else −1.
    *
    * - **Own state** from the bank's arrays: R_cond at T_c (a lead's plus its clips), each landed end's
    *   value by its regime at the solved |I| (the stamp's law: ohmic, glowing or arcing; ohmic while not
-   *   netlisted, with the bank's own as-made parts), the temperatures, the published end states and
-   *   the insulation flag. An end with no termination node is `none`, its fields 0.
+   *   netlisted, with the bank's own as-made parts), the temperatures, the published end states, the
+   *   conductor state (`open` for a fused lead) and the insulation flag. An end with no termination
+   *   node is `none`, its fields 0.
    * - **Solved** (only when `status` is solved): |I|; the terminal-to-terminal voltage split in
    *   proportion to those resistances (so the three drops add up to it); each end's inner voltage
    *   V_terminal ∓ (V_a − V_b) · R_end / R_total against the island's reference (ADR 0015 note 5).
+   * - **Open** (not netlisted): 0 A and 0 V across the body and every closed or free end, all readings;
+   *   a gap (an `intermittentOpen` end, a fused lead's body) carries |ΔV| between its two sides when
+   *   both are on one readable island (an open end's conductor side floats at its closed end's
+   *   terminal), else no reading. End voltages: a closed end's terminal, an open end's floating
+   *   conductor, a lead's terminals; none for a free end.
    *
-   * A pure function of the bank's state and the solution, so of the export. Allocates nothing.
+   * Every electrical field's validity is its `readings` bit. A pure function of the bank's state, the
+   * world's landed ends and the solution, so of the export. Allocates nothing.
    */
   writeRecord(
     i: number,
@@ -508,7 +557,9 @@ export class ConnectionThermalBank {
     at: number,
     solution: DcSolution | null,
     status: number,
-    reference: number,
+    endNodes: Int32Array,
+    nodeIsland: Int32Array,
+    islandReference: Int32Array,
   ): void {
     const O = CONNECTION_RECORD_OFFSETS;
     const alpha = this.alpha[i];
@@ -538,7 +589,9 @@ export class ConnectionThermalBank {
             ? CONNECTION_END_ARCING
             : state === END_OK
               ? CONNECTION_END_OK
-              : CONNECTION_END_INTERMITTENT;
+              : state === END_INTERMITTENT_CLOSED
+                ? CONNECTION_END_INTERMITTENT_CLOSED
+                : CONNECTION_END_INTERMITTENT_OPEN;
         const regime = netlisted ? this.regime[e] : REGIME_OHMIC;
         if (regime === REGIME_ARC) {
           r = this.arcV[e] / (amps > ARC_FLOOR ? amps : ARC_FLOOR);
@@ -559,38 +612,122 @@ export class ConnectionThermalBank {
       if (side === 0) ra = r;
       else rb = r;
     }
+    const fusedLead = this.kind[i] === KIND_LEAD && this.state[2 * i] === END_INTERMITTENT_OPEN;
     view.setFloat64(at + O.conductorResistanceOhm, rc + 0, true);
     view.setFloat64(at + O.conductorTempK, this.tc[i] + 0, true);
     view.setUint8(at + O.insulationDamaged, this.insulationDamaged[i]);
-    if (!netlisted) {
-      view.setUint8(at + O.status, CONNECTION_RECORD_OPEN);
+    view.setUint8(at + O.conductorState, fusedLead ? CONNECTION_CONDUCTOR_OPEN : CONNECTION_CONDUCTOR_CLOSED);
+    if (netlisted) {
+      view.setUint8(at + O.status, status);
+      if (status !== READING_SOLVED_CODE) return; // no electrical field is a reading
+      const nodes = solution.nodes;
+      const na = this.memberNodeA[i];
+      const nb = this.memberNodeB[i];
+      const vre = nodes[2 * na] - nodes[2 * nb];
+      const vim = nodes[2 * na + 1] - nodes[2 * nb + 1];
+      const volts = Math.sqrt(vre * vre + vim * vim);
+      const total = rc + ra + rb;
+      const fa = total > 0 ? ra / total : 0;
+      const fb = total > 0 ? rb / total : 0;
+      const fc = total > 0 ? rc / total : 1;
+      view.setFloat64(at + O.currentA, amps + 0, true);
+      view.setFloat64(at + O.conductorDropV, volts * fc + 0, true);
+      view.setFloat64(at + O.endADropV, volts * fa + 0, true);
+      view.setFloat64(at + O.endBDropV, volts * fb + 0, true);
+      const reference = islandReference[this.memberIsland[i]];
+      if (reference < 0) {
+        view.setUint8(at + O.readings, READINGS_ELECTRICAL_NO_VOLTS);
+        return;
+      }
+      const refRe = nodes[2 * reference];
+      const refIm = nodes[2 * reference + 1];
+      const aRe = nodes[2 * na] - refRe - vre * fa;
+      const aIm = nodes[2 * na + 1] - refIm - vim * fa;
+      const bRe = nodes[2 * nb] - refRe + vre * fb;
+      const bIm = nodes[2 * nb + 1] - refIm + vim * fb;
+      view.setFloat64(at + O.endAVolts, Math.sqrt(aRe * aRe + aIm * aIm) + 0, true);
+      view.setFloat64(at + O.endBVolts, Math.sqrt(bRe * bRe + bIm * bIm) + 0, true);
+      view.setUint8(at + O.readings, CONNECTION_READING_ALL);
       return;
     }
-    view.setUint8(at + O.status, status);
-    if (status !== READING_SOLVED_CODE) return;
-    const nodes = solution.nodes;
-    const na = this.memberNodeA[i];
-    const nb = this.memberNodeB[i];
-    const vre = nodes[2 * na] - nodes[2 * nb];
-    const vim = nodes[2 * na + 1] - nodes[2 * nb + 1];
-    const volts = Math.sqrt(vre * vre + vim * vim);
-    const total = rc + ra + rb;
-    const fa = total > 0 ? ra / total : 0;
-    const fb = total > 0 ? rb / total : 0;
-    const fc = total > 0 ? rc / total : 1;
-    view.setFloat64(at + O.currentA, amps + 0, true);
-    view.setFloat64(at + O.conductorDropV, volts * fc + 0, true);
-    view.setFloat64(at + O.endADropV, volts * fa + 0, true);
-    view.setFloat64(at + O.endBDropV, volts * fb + 0, true);
-    if (reference < 0) return;
-    const refRe = nodes[2 * reference];
-    const refIm = nodes[2 * reference + 1];
-    const aRe = nodes[2 * na] - refRe - vre * fa;
-    const aIm = nodes[2 * na + 1] - refIm - vim * fa;
-    const bRe = nodes[2 * nb] - refRe + vre * fb;
-    const bIm = nodes[2 * nb + 1] - refIm + vim * fb;
-    view.setFloat64(at + O.endAVolts, Math.sqrt(aRe * aRe + aIm * aIm) + 0, true);
-    view.setFloat64(at + O.endBVolts, Math.sqrt(bRe * bRe + bIm * bIm) + 0, true);
+    view.setUint8(at + O.status, CONNECTION_RECORD_OPEN);
+    this.writeOpen(i, view, at, solution, fusedLead, endNodes, nodeIsland, islandReference);
+  }
+
+  /** The electrical fields of member `i`'s `open` record (see {@link writeRecord}). Allocates nothing. */
+  private writeOpen(
+    i: number,
+    view: DataView,
+    at: number,
+    solution: DcSolution | null,
+    fusedLead: boolean,
+    endNodes: Int32Array,
+    nodeIsland: Int32Array,
+    islandReference: Int32Array,
+  ): void {
+    const O = CONNECTION_RECORD_OFFSETS;
+    // The current, the body and every closed or free end: true readings of 0 (no current flows).
+    let readings = READINGS_ELECTRICAL_NO_VOLTS;
+    const nodes = solution === null ? null : solution.nodes;
+    const ea = 2 * i;
+    const eb = ea + 1;
+    const na = endNodes[ea];
+    const nb = endNodes[eb];
+    // A node's voltage is a reading when the solution holds its island as solved and referenced.
+    const okA = nodes !== null && na >= 0 && islandReference[nodeIsland[na]] >= 0;
+    const okB = nodes !== null && nb >= 0 && islandReference[nodeIsland[nb]] >= 0;
+    if (fusedLead) {
+      // The gap is the lead's body; each clip half sits at its terminal.
+      readings &= ~CONNECTION_READING_CONDUCTOR_DROP;
+      if (okA && okB && nodeIsland[na] === nodeIsland[nb]) {
+        view.setFloat64(at + O.conductorDropV, nodeDistance(nodes, na, nb) + 0, true);
+        readings |= CONNECTION_READING_CONDUCTOR_DROP;
+      }
+      if (okA) {
+        view.setFloat64(at + O.endAVolts, nodeDistance(nodes, na, islandReference[nodeIsland[na]]) + 0, true);
+        readings |= CONNECTION_READING_END_A_VOLTS;
+      }
+      if (okB) {
+        view.setFloat64(at + O.endBVolts, nodeDistance(nodes, nb, islandReference[nodeIsland[nb]]) + 0, true);
+        readings |= CONNECTION_READING_END_B_VOLTS;
+      }
+      view.setUint8(at + O.readings, readings);
+      return;
+    }
+    const openA = this.landed[ea] === 1 && this.state[ea] === END_INTERMITTENT_OPEN;
+    const openB = this.landed[eb] === 1 && this.state[eb] === END_INTERMITTENT_OPEN;
+    // The conductor floats at the potential of a landed, closed end on a readable node.
+    const closedA = this.landed[ea] === 1 && !openA && okA;
+    const closedB = this.landed[eb] === 1 && !openB && okB;
+    const float = closedA ? na : closedB ? nb : -1;
+    for (let side = 0; side < 2; side++) {
+      const e = ea + side;
+      const node = side === 0 ? na : nb;
+      const ok = side === 0 ? okA : okB;
+      const open = side === 0 ? openA : openB;
+      const closed = side === 0 ? closedA : closedB;
+      const dropBit = side === 0 ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP;
+      const voltsBit = side === 0 ? CONNECTION_READING_END_A_VOLTS : CONNECTION_READING_END_B_VOLTS;
+      if (open) {
+        // A gap: |ΔV| between its terminal and the floating conductor, or no reading.
+        readings &= ~dropBit;
+        if (ok && float >= 0 && nodeIsland[node] === nodeIsland[float]) {
+          view.setFloat64(at + (side === 0 ? O.endADropV : O.endBDropV), nodeDistance(nodes, node, float) + 0, true);
+          readings |= dropBit;
+        }
+      }
+      const source = closed ? node : open && float >= 0 ? float : -1;
+      if (source >= 0 && this.landed[e] === 1) {
+        const reference = islandReference[nodeIsland[source]];
+        view.setFloat64(
+          at + (side === 0 ? O.endAVolts : O.endBVolts),
+          nodeDistance(nodes, source, reference) + 0,
+          true,
+        );
+        readings |= voltsBit;
+      }
+    }
+    view.setUint8(at + O.readings, readings);
   }
 
   /** Detections overwritten before they were taken (the ring is full). */
@@ -1179,6 +1316,9 @@ export class ConnectionThermalBank {
     this.rMade[e] = 0;
     this.madeConstriction[e] = 0;
     this.madeFilm[e] = 0;
+    this.landed[e] = end === null ? 0 : 1;
+    this.endEntity[e] = end === null ? 0 : end.entity;
+    this.endTerminalIds[e] = end === null ? '' : end.terminal;
     this.rateMult[e] = 1;
     this.drawFirst[e] = 0;
     this.arcV[e] = 0;
@@ -1314,6 +1454,9 @@ export class ConnectionThermalBank {
     this.rMade = new Float64Array(2 * n);
     this.madeConstriction = new Float64Array(2 * n);
     this.madeFilm = new Float64Array(2 * n);
+    this.landed = new Uint8Array(2 * n);
+    this.endEntity = new Int32Array(2 * n);
+    this.endTerminalIds = new Array<string>(2 * n).fill('');
     this.rateMult = new Float64Array(2 * n);
     this.drawFirst = new Uint32Array(2 * n);
     this.arcV = new Float64Array(2 * n);
