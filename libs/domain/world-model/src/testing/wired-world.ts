@@ -18,6 +18,18 @@ export const LEAD = { id: 'lead.quillfern-test-1m', version: 1 };
 export const CABLE = { id: 'cable.test-14-2', version: 1 };
 export const BIT = { id: 'tool.test-bit-19', version: 1 };
 export const FERRULE = { id: 'ferrule.test-14', version: 1 };
+export const LUG = { id: 'lug.test-ring-14', version: 1 };
+export const STRANDED = { id: 'conductor.test-14-str', version: 1 };
+export const WIRE_10 = { id: 'conductor.test-10', version: 1 };
+export const BLOCK = { id: 'tb.test-2', version: 1 };
+export const CUTTER = { id: 'tool.test-cutter', version: 1 };
+export const STRIPPER = { id: 'tool.test-stripper', version: 1 };
+export const SCREWDRIVER = { id: 'tool.test-screwdriver', version: 1 };
+export const TORQUE = { id: 'tool.test-torque', version: 1 };
+export const CRIMPER = { id: 'tool.test-crimper', version: 1 };
+export const LABELLER = { id: 'tool.test-labeller', version: 1 };
+export const FISH_TAPE = { id: 'tool.test-fishtape', version: 1 };
+export const PUNCH = { id: 'tool.test-punch', version: 1 };
 
 export type Doc = Record<string, unknown> & {
   entities: Record<string, unknown>[];

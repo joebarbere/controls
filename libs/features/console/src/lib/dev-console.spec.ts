@@ -159,10 +159,10 @@ describe('DevConsoleComponent', () => {
     await user.keyboard('{Tab}');
     await fixture.whenStable();
     expect(input.text()).toBe('entity.delete');
-    expect(screen.getByText(/4 matches: \[entity\.delete] entity\.move/)).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe('4 matches, entity.delete inserted.');
+    expect(screen.getByText(/5 matches: \[entity\.delete] entity\.label/)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('5 matches, entity.delete inserted.');
     await user.keyboard('{Tab}');
-    expect(input.text()).toBe('entity.move');
+    expect(input.text()).toBe('entity.label');
   });
 
   it('lets Tab leave an empty input, so the keyboard is never trapped', async () => {

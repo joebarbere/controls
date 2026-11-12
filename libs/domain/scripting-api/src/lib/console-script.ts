@@ -12,7 +12,15 @@ import {
   splitConsoleLines,
 } from '@controls/commands';
 import type { ReplayEntry } from '@controls/save-format';
-import type { World } from '@controls/world-model';
+import {
+  CableAddArgs,
+  defaultCableLengthMm,
+  defaultWireLengthMm,
+  type Waypoint,
+  WireAddArgs,
+  WirePullArgs,
+  type World,
+} from '@controls/world-model';
 import * as z from 'zod';
 import type { DeepReadonly } from './game';
 
@@ -103,12 +111,68 @@ export interface ConsoleExpander {
 export type ConsoleExpansion =
   { readonly ok: true; readonly args: Record<string, unknown> } | { readonly ok: false; readonly message: string };
 
+/** The arguments `--lengthMm auto` reads, typed loosely: the line hasn't been validated yet. */
+const AutoLengthWire = z.looseObject({
+  a: WireAddArgs.shape.a,
+  b: WireAddArgs.shape.b,
+  route: WireAddArgs.shape.route,
+});
+const AutoLengthPull = z.looseObject({ route: WirePullArgs.shape.route });
+const AutoLengthCable = z.looseObject({
+  a: CableAddArgs.shape.a,
+  b: CableAddArgs.shape.b,
+  route: CableAddArgs.shape.route,
+  tailsMm: CableAddArgs.shape.tailsMm,
+});
+
+/**
+ * `--lengthMm auto` for one command (ADR 0015, "The length rule"): the route's default cut length on
+ * the live world, `routeDefaultLengthMm` through the same points the command checks (the floor, the
+ * slack and, for a cable, its tails). Any other `lengthMm` is left alone.
+ */
+function lengthAuto(
+  id: string,
+  schema: z.ZodType<Record<string, unknown>>,
+  length: (
+    world: World,
+    catalog: Catalog,
+    args: never,
+  ) => { ok: true; lengthMm: number } | { ok: false; message: string },
+): ConsoleExpander {
+  return {
+    id,
+    paths: ['lengthMm'],
+    expand: (world, catalog, args) => {
+      if (args['lengthMm'] !== 'auto') return { ok: true, args: { ...args } };
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        return {
+          ok: false,
+          message: `--lengthMm auto needs the route first: ${issue.path.join('.')}: ${issue.message}`,
+        };
+      }
+      const result = length(world as World, catalog, parsed.data as never);
+      if (!result.ok) return { ok: false, message: `--lengthMm auto: ${result.message}` };
+      return { ok: true, args: { ...args, lengthMm: result.lengthMm } };
+    },
+  };
+}
+
 /**
  * The console shorthand every console surface (the in-game console, `runConsoleScript`, `sim-cli`)
- * applies. Empty until routing exists: the wire commands PR adds `--route auto` and `--length auto`
- * (ADR 0015).
+ * applies (ADR 0015): `--lengthMm auto` on `wire.add`, `wire.pull` and `cable.add`.
+ *
+ * TODO(F3.2 part 1): `--route auto` arrives with the shared router (`game.autoRoute`, ADR 0017); until
+ * then a route is always explicit waypoints, and `auto` there is a parse error.
  */
-export const CONSOLE_EXPANDERS: readonly ConsoleExpander[] = [];
+export const CONSOLE_EXPANDERS: readonly ConsoleExpander[] = [
+  lengthAuto('wire.add', AutoLengthWire, defaultWireLengthMm),
+  lengthAuto('wire.pull', AutoLengthPull, (world, catalog, args: { route: Waypoint[] }) =>
+    defaultWireLengthMm(world, catalog, { a: null, b: null, route: args.route }),
+  ),
+  lengthAuto('cable.add', AutoLengthCable, defaultCableLengthMm),
+];
 
 /** Whether `path` of command `id` takes shorthand under `expanders` (for `parseConsoleCommand`). */
 export function consoleShorthand(

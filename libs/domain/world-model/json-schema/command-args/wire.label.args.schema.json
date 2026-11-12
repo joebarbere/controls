@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "connection",
+      "title": "Wire"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LabelText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Text"
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A tool in the catalogue (tool.…)",
+      "title": "Label maker",
+      "$ref": "#/$defs/CatalogRef"
+    }
+  },
+  "required": [
+    "id",
+    "text",
+    "tool"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "LabelText": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[\\x21-\\x7e](?:[\\x20-\\x7e]{0,30}[\\x21-\\x7e])?$",
+      "description": "Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    }
+  },
+  "title": "Arguments of wire.label"
+}

@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "connection",
+      "title": "Wire"
+    },
+    "end": {
+      "type": "string",
+      "enum": [
+        "a",
+        "b"
+      ],
+      "title": "End"
+    },
+    "at": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-controls-ref": "entity",
+          "title": "Entity"
+        },
+        "terminal": {
+          "description": "A terminal id of that device (l1, line, …)",
+          "title": "Terminal",
+          "$ref": "#/$defs/TerminalId"
+        },
+        "termination": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "auto"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "description": "One of the terminal’s methods (screw, …)",
+                  "title": "Method",
+                  "$ref": "#/$defs/TerminationMethodId"
+                },
+                "strip": {
+                  "type": "object",
+                  "properties": {
+                    "tool": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A tool in the catalogue (tool.…)",
+                      "title": "Stripper",
+                      "$ref": "#/$defs/CatalogRef"
+                    },
+                    "hole": {
+                      "title": "Hole",
+                      "$ref": "#/$defs/HoleId"
+                    },
+                    "lengthMm": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "title": "Strip length (mm)"
+                    }
+                  },
+                  "required": [
+                    "tool",
+                    "hole",
+                    "lengthMm"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Strip"
+                },
+                "accessory": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ref": {
+                          "title": "Ferrule or lug",
+                          "$ref": "#/$defs/CatalogRef"
+                        },
+                        "tool": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A tool in the catalogue (tool.…)",
+                          "title": "Crimper",
+                          "$ref": "#/$defs/CatalogRef"
+                        },
+                        "die": {
+                          "title": "Die",
+                          "$ref": "#/$defs/DieId"
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "tool",
+                        "die"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Accessory"
+                },
+                "clamp": {
+                  "type": "object",
+                  "properties": {
+                    "tool": {
+                      "anyOf": [
+                        {
+                          "description": "A tool in the catalogue (tool.…)",
+                          "title": "Tool",
+                          "$ref": "#/$defs/CatalogRef"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Driver"
+                    },
+                    "torqueNm": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Torque setting (N·m)"
+                    }
+                  },
+                  "required": [
+                    "tool",
+                    "torqueNm"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Clamp"
+                }
+              },
+              "required": [
+                "method",
+                "strip",
+                "accessory",
+                "clamp"
+              ],
+              "additionalProperties": false,
+              "title": "Specify"
+            }
+          ],
+          "title": "Termination"
+        }
+      },
+      "required": [
+        "entity",
+        "terminal",
+        "termination"
+      ],
+      "additionalProperties": false,
+      "title": "At"
+    }
+  },
+  "required": [
+    "id",
+    "end",
+    "at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "TerminalId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A terminal id within one device: a letter or digit, then letters, digits, \"_\" or \"-\"; at most 32."
+    },
+    "TerminationMethodId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A termination method id: lower camelCase."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "HoleId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A stripping hole id within one tool entry."
+    },
+    "DieId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A crimp die id within one tool entry; accessories list the die ids that crimp them."
+    }
+  },
+  "title": "Arguments of wire.land"
+}

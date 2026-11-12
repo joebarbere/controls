@@ -224,17 +224,24 @@ describe('entity-reference hints (F1.3)', () => {
 });
 
 describe('world registry, replay log and cheats', () => {
-  it('holds the world (entity, lead, device), edit, view and sim time commands', () => {
+  it('holds the world (entity, lead, device, wire, cable, enclosure), edit, view and sim time commands', () => {
     expect(
       createWorldRegistry()
         .list()
         .map((c) => `${c.id}:${c.undoable}`),
     ).toEqual([
+      'cable.add:true',
+      'cable.delete:true',
+      'cable.label:true',
+      'cable.reroute:true',
+      'cable.strip:true',
       'console.toggle:false',
       'device.operate:true',
       'edit.redo:false',
       'edit.undo:false',
+      'enclosure.openEntry:true',
       'entity.delete:true',
+      'entity.label:true',
       'entity.move:true',
       'entity.place:true',
       'entity.rotate:true',
@@ -250,6 +257,13 @@ describe('world registry, replay log and cheats', () => {
       'view.netlistInspector:false',
       'view.overlay:false',
       'view.resetLayout:false',
+      'wire.add:true',
+      'wire.delete:true',
+      'wire.label:true',
+      'wire.land:true',
+      'wire.pull:true',
+      'wire.reroute:true',
+      'wire.unland:true',
     ]);
   });
 

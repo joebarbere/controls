@@ -4,6 +4,7 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import { catalogRefArb, deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
+import { cableCommands, enclosureCommands, wireCommands } from './wiring';
 import { worldHash } from './hash';
 import { createWorldBus, createWorldRegistry, rebaseReplayLog, replayLog, toReplayLog } from './session';
 
@@ -232,7 +233,15 @@ describe('world command properties', () => {
       .list()
       .filter((def) => def.undoable);
     expect(undoable.map((d) => d.id).sort()).toEqual(
-      [...entityCommands().map((d) => d.id), 'lead.connect', 'lead.disconnect', 'device.operate'].sort(),
+      [
+        ...entityCommands().map((d) => d.id),
+        'lead.connect',
+        'lead.disconnect',
+        'device.operate',
+        ...wireCommands().map((d) => d.id),
+        ...cableCommands().map((d) => d.id),
+        ...enclosureCommands().map((d) => d.id),
+      ].sort(),
     );
     fc.assert(
       fc.property(worldArb, opsArb, opArb, (initial, prefix, op) => {
@@ -356,18 +365,23 @@ describe('world command properties', () => {
     );
   });
 
-  it('deleting an entity removes exactly its connections; undo restores them with the same ids, redo removes the same ids (plan F2.1)', () => {
+  it('deleting an entity removes exactly its leads and unlands its conductors; undo restores them with the same ids, redo removes the same ids (plan F2.1, ADR 0015)', () => {
     fc.assert(
       fc.property(worldArb, opsArb, deleteTargetArb, (initial, ops, target) => {
         const bus = createWorldBus(initial);
         ops.forEach((op) => run(bus, op));
         const before = bus.state;
         const id = deleteTarget(before, target);
-        if (!bus.exec('entity.delete', { id }).ok) return; // a missing id: refused, nothing to check
+        if (!bus.exec('entity.delete', { id }).ok) return; // a missing id or occupied: refused, nothing to check
         const touches = (c: World['connections'][number]) => c.a?.entity === id || c.b?.entity === id;
-        const kept = before.connections.filter((c) => !touches(c));
-        // No connection is left with an end on the deleted entity, and every other one is kept as it was.
-        expect(bus.state.connections).toStrictEqual(kept);
+        const kept = before.connections.filter((c) => !(c.lengthMm === null && touches(c)));
+        // No connection is left with an end on the deleted entity (leads go, conductors are unlanded,
+        // never dangling), and every other one is kept as it was.
+        expect(bus.state.connections.some(touches)).toBe(false);
+        expect(bus.state.connections.map((c) => c.id)).toStrictEqual(kept.map((c) => c.id));
+        const untouched = before.connections.filter((c) => !touches(c));
+        const ids = new Set(untouched.map((c) => c.id));
+        expect(bus.state.connections.filter((c) => ids.has(c.id))).toStrictEqual(untouched);
         expect(bus.state.nextConnectionId).toBe(before.nextConnectionId);
         expect(bus.exec('edit.undo').ok).toBe(true);
         expect(bus.state.connections).toStrictEqual(before.connections);

@@ -103,6 +103,10 @@ A `Game` owns an in-process `SimEngine` (`@controls/sim-core`) as its time host 
 
 Loading verifies a save's log with an engine replaying it from its initial world, unless `engineCompatible(manifest, build)` (D8) says the save is from another engine or catalogue: then `world.json` loads as saved and a new log starts (`engine-changed`). The engine refusing a world at start (`SimStartError`) is the load error `start-failed`.
 
+## Console shorthand (P3)
+
+`expandConsoleArgs` (`scripting-api`) runs each registered `ConsoleExpander` on a line's args on the live world just before `exec`, so only explicit arguments are logged and a replay never needs the expander. `CONSOLE_EXPANDERS` holds `--lengthMm auto` for `wire.add`, `wire.pull` and `cable.add` (P3 PR 8): `defaultWireLengthMm` / `defaultCableLengthMm` in `world-model` compute the route's points as the command does and call `routeDefaultLengthMm` (the floor, 5 % slack and the tails). `--route auto` waits for F3.2 part 1's router.
+
 ## Reserved queries
 
 `game.tag(path)` (P10, PLC tags) is in the `Game` type now and throws `NotAvailableError` (`code: 'not-available'`). Reserving it keeps the name stable and gives a script a precise error instead of `is not a function`. `game.probe` was reserved the same way until F2.3a implemented it.

@@ -186,14 +186,20 @@ describe('console shorthand (expandConsoleArgs, ADR 0015)', () => {
   const place = (x: string) =>
     `entity.place --ref.id prop.crate --ref.version 1 --positionMm.x ${x} --positionMm.y 0 --positionMm.z 0`;
 
-  it('ships no shorthand until routing exists', () => {
-    expect(CONSOLE_EXPANDERS).toEqual([]);
+  it("ships `--lengthMm auto` for wire.add, wire.pull and cable.add, and no `--route auto` yet (F3.2 part 1's router)", () => {
+    expect(CONSOLE_EXPANDERS.map((e) => [e.id, e.paths])).toEqual([
+      ['wire.add', ['lengthMm']],
+      ['wire.pull', ['lengthMm']],
+      ['cable.add', ['lengthMm']],
+    ]);
     const args = { a: 1 };
     expect(expandConsoleArgs(createWorld({ seed: 0 }), BUILTIN_CATALOG, 'entity.place', args)).toEqual({
       ok: true,
       args,
     });
     expect(consoleShorthand()('entity.place', 'positionMm.x')).toBe(false);
+    expect(consoleShorthand()('wire.add', 'lengthMm')).toBe(true);
+    expect(consoleShorthand()('wire.add', 'route')).toBe(false);
   });
 
   it('runs a registered expander per line, on the live world, and logs only the expanded args', async () => {

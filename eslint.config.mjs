@@ -43,6 +43,16 @@ const simCoreDir = fileURLToPath(new URL('./libs/domain/sim-core', import.meta.u
  * centreline are persisted and hashed, so they must match in Node and Chromium. Held to D6 below.
  */
 const routingDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/routing', import.meta.url));
+/**
+ * world-model's termination resolver (P3, ADR 0015): a landing's outcome is stored and hashed, so
+ * `resolveTermination` must give the same bits in Node and Chromium. Held to D6 below.
+ */
+const terminationDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/termination', import.meta.url));
+/**
+ * world-model's wiring commands (P3 PR 8, ADR 0015): their geometry checks (route floors, collisions,
+ * mounts) decide which logged commands replay, so they are held to D6 too.
+ */
+const wiringDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/wiring', import.meta.url));
 
 /** Every file pattern the path-scoped rules below apply to. */
 const sourceFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'];
@@ -151,6 +161,9 @@ const d6EngineDependentMath = [
 ];
 const d6Hint =
   'sim-core may use only IEEE-exact operations (+ - * /, Math.sqrt, …) and its own dmath, so a snapshot is byte-identical in Node and Chromium (decision D6 in plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1).';
+
+const terminationD6Hint =
+  'Termination outcomes and the wiring commands geometry checks may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a stored termination and what a logged command decides are byte-identical in Node and Chromium (ADR 0015, decision D6 in plans/phase-2-circuit-engine.md).';
 
 const routingD6Hint =
   'Routing maths may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a baked route and its lengthMm are byte-identical in Node and Chromium (decisions D5 and D13 in plans/phase-3-wiring.md, D6 in plans/phase-2-circuit-engine.md).';
@@ -270,6 +283,8 @@ export default [
   ...[
     { basePath: simCoreDir, rules: d6Rules('sim-core source', d6Hint) },
     { basePath: routingDir, rules: d6Rules('world-model routing source', routingD6Hint) },
+    { basePath: terminationDir, rules: d6Rules('world-model termination source', terminationD6Hint) },
+    { basePath: wiringDir, rules: d6Rules('world-model wiring source', terminationD6Hint) },
   ].map(({ basePath, rules }) => ({
     basePath,
     files: sourceFiles,

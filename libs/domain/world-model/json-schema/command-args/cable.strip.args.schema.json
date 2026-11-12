@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "cable",
+      "title": "Cable"
+    },
+    "end": {
+      "type": "string",
+      "enum": [
+        "a",
+        "b"
+      ],
+      "title": "End"
+    },
+    "jacketMm": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2000,
+      "title": "Jacket stripped (mm)"
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A tool in the catalogue (tool.…)",
+      "title": "Stripper",
+      "$ref": "#/$defs/CatalogRef"
+    }
+  },
+  "required": [
+    "id",
+    "end",
+    "jacketMm",
+    "tool"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    }
+  },
+  "title": "Arguments of cable.strip"
+}

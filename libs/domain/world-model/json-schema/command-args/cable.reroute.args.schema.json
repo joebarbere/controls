@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "cable",
+      "title": "Cable"
+    },
+    "route": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "title": "Waypoint",
+        "$ref": "#/$defs/WaypointV3"
+      },
+      "title": "Route"
+    }
+  },
+  "required": [
+    "id",
+    "route"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "PositionMmV1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "description": "Integer millimetres, right-handed, +y up."
+    },
+    "FixtureIdV1": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Lower-case words joined by single hyphens, at most 64 characters."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
+    },
+    "WaypointV3": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "free",
+            "duct",
+            "conduit",
+            "staple",
+            "bore"
+          ]
+        },
+        "positionMm": {
+          "$ref": "#/$defs/PositionMmV1"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FixtureIdV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "positionMm",
+        "entity",
+        "fixture",
+        "tool"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "title": "Arguments of cable.reroute"
+}

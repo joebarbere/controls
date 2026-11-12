@@ -16,6 +16,8 @@ import {
   OrientationMdegV1,
   PositionMmV1,
 } from '@controls/save-format';
+import { checkMount } from './wiring/mounting';
+import { unlandEnd } from './wiring/wire-commands';
 import * as z from 'zod';
 import type { Connection, Entity, EntityId, OrientationMdeg, World } from './types';
 
@@ -28,13 +30,15 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * the same change (undo restores them with their ids), so no connection ever dangles. Every change
  * keeps `tick` and leaves every other entity's `sim` bag alone (ADR 0011 §1, §3).
  *
- * World v3 (ADR 0015): `entity.place` takes `mountedOn` (default `null`) and a new entity is unmounted
- * and unlabelled. Until the world v3 commands land (P3 PR 8: mount checks, sliding along a mount,
- * unlanding on delete), anything that would leave a v3 world invalid is refused instead: a non-null
- * `mountedOn` (`mounting-unavailable` once the host and mount check out), moving, rotating or
- * deleting an entity something is mounted on, a cable enters or a route is hosted by (`occupied`),
- * moving or rotating a mounted device (`mounted`), and moving, rotating or deleting an entity with a
- * landed conductor end (`wired`). Test leads behave exactly as in v2.
+ * World v3 (ADR 0015, "Mounting and occupancy"): `entity.place` takes `mountedOn` (default `null`),
+ * checked against the catalogue (`checkMount`: the host's mount, the device's fit, the mount frame,
+ * its place on the mount and room on it), and a new entity is unlabelled (`entity.label` prints one).
+ * An entity something is mounted on, a cable enters or a route is hosted by is `occupied`: it can't
+ * move, turn or go. A mounted device can't be rotated, and moves only by sliding along its own mount
+ * (re-checked), unless `wired`. An entity with a landed conductor end is `wired`: it can't move or
+ * turn (its wires' routes and lengths would be left behind), but deleting it unlands those ends (a
+ * rest waypoint where each terminal was) in the same change, so no end dangles; undo restores the
+ * entity, its leads and its conductors exactly, terminations included. Test leads behave as in v2.
  *
  * The argument shapes are persisted in replay logs: changing one is a save-format change.
  */
@@ -109,17 +113,29 @@ export function isLead(connection: Connection): boolean {
 }
 
 /**
- * Why entity `id` can't move, turn or go (until P3 PR 8's wiring commands refine these), or `null`:
- * `occupied` (a device is mounted on it, a cable end is in one of its entries, or a route waypoint
- * names it), `wired` (a conductor end is landed on it).
+ * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a cable end is in one of its
+ * entries, or a route waypoint names it. An occupied entity can't move, turn or be deleted.
+ */
+export function entityOccupied(world: World, id: EntityId): boolean {
+  if (world.entities.some((e) => e.mountedOn?.entity === id)) return true;
+  if (world.cables.some((c) => c.a?.entity === id || c.b?.entity === id || c.route.some((w) => w.entity === id))) {
+    return true;
+  }
+  return world.connections.some((c) => c.route?.some((w) => w.entity === id) ?? false);
+}
+
+/** Whether a conductor end is landed on entity `id` (`wired`: it can't move or turn). */
+export function entityWired(world: World, id: EntityId): boolean {
+  return world.connections.some((c) => !isLead(c) && touchesEntity(c, id));
+}
+
+/**
+ * Why entity `id` can't move or turn, or `null`: `occupied` (see {@link entityOccupied}) or `wired`
+ * (see {@link entityWired}).
  */
 export function entityHold(world: World, id: EntityId): 'occupied' | 'wired' | null {
-  if (world.entities.some((e) => e.mountedOn?.entity === id)) return 'occupied';
-  if (world.cables.some((c) => c.a?.entity === id || c.b?.entity === id || c.route.some((w) => w.entity === id))) {
-    return 'occupied';
-  }
-  if (world.connections.some((c) => c.route?.some((w) => w.entity === id))) return 'occupied';
-  if (world.connections.some((c) => !isLead(c) && touchesEntity(c, id))) return 'wired';
+  if (entityOccupied(world, id)) return 'occupied';
+  if (entityWired(world, id)) return 'wired';
   return null;
 }
 
@@ -180,15 +196,16 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
         return fail('not-placeable', `${args.ref.id} is a connection: make it with lead.connect`);
       }
       if (args.mountedOn !== null) {
-        const mountedOn = args.mountedOn;
-        const host = findEntity(state, mountedOn.entity);
-        if (!host) return notFound(mountedOn.entity);
-        const mount = catalog.device(host.ref)?.enclosure?.mounts.find((m) => m.id === mountedOn.mount);
-        if (!mount) return fail('unknown-mount', `Entity ${mountedOn.entity} has no mount "${mountedOn.mount}"`);
-        if (!catalog.device(args.ref)?.mounts.some((m) => m.type === mount.type)) {
-          return fail('mount-mismatch', `${args.ref.id} does not fit a ${mount.type} mount`);
-        }
-        return fail('mounting-unavailable', 'Mounting on an enclosure arrives with the world v3 commands');
+        const refused = checkMount(
+          state,
+          catalog,
+          args.ref,
+          args.positionMm,
+          args.orientationMdeg,
+          args.mountedOn,
+          null,
+        );
+        if (refused) return refused;
       }
       const bags = kind ? initialBags(kind) : { state: {}, sim: {} };
       const entity: Entity = {
@@ -197,7 +214,7 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
         transform: { positionMm: { ...args.positionMm }, orientationMdeg: { ...args.orientationMdeg } },
         state: bags.state,
         sim: bags.sim,
-        mountedOn: null,
+        mountedOn: args.mountedOn && { ...args.mountedOn },
         label: null,
         extensions: {},
       };
@@ -210,28 +227,40 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
   });
 }
 
-/** `entity.move`: sets an entity's position (absolute, integer mm). Undo restores the old one. */
-export const entityMove = defineCommand<EntityMoveArgs, World>({
-  id: 'entity.move',
-  title: 'Move object',
-  category: 'Entity',
-  args: EntityMoveArgs,
-  undoable: true,
-  run: ({ state }, { id, positionMm }) => {
-    const entity = findEntity(state, id);
-    if (!entity) return notFound(id);
-    if (entity.mountedOn !== null) return fail('mounted', `Entity ${id} is mounted: it can't leave its mount`);
-    const hold = entityHold(state, id);
-    if (hold !== null) return holdFailure(hold, id);
-    const before = entity.transform.positionMm;
-    const after = { ...positionMm };
-    const setPosition = (position: typeof after) => (w: World) => ({
-      ...w,
-      entities: withEntity(w.entities, id, (e) => ({ ...e, transform: { ...e.transform, positionMm: position } })),
-    });
-    return succeed({ apply: setPosition(after), invert: setPosition(before) });
-  },
-});
+/**
+ * `entity.move`: sets an entity's position (absolute, integer mm). Undo restores the old one. A
+ * mounted device only slides along its own mount (`off-mount`, `mount-full` re-checked).
+ */
+export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
+  return defineCommand<EntityMoveArgs, World>({
+    id: 'entity.move',
+    title: 'Move object',
+    category: 'Entity',
+    args: EntityMoveArgs,
+    undoable: true,
+    run: ({ state }, { id, positionMm }) => {
+      const entity = findEntity(state, id);
+      if (!entity) return notFound(id);
+      const hold = entityHold(state, id);
+      if (hold !== null) return holdFailure(hold, id);
+      if (entity.mountedOn !== null) {
+        const { orientationMdeg } = entity.transform;
+        const refused = checkMount(state, catalog, entity.ref, positionMm, orientationMdeg, entity.mountedOn, id);
+        if (refused) return refused;
+      }
+      const before = entity.transform.positionMm;
+      const after = { ...positionMm };
+      const setPosition = (position: typeof after) => (w: World) => ({
+        ...w,
+        entities: withEntity(w.entities, id, (e) => ({ ...e, transform: { ...e.transform, positionMm: position } })),
+      });
+      return succeed({ apply: setPosition(after), invert: setPosition(before) });
+    },
+  });
+}
+
+/** `entity.move` against the built-in catalogue. */
+export const entityMove = entityMoveCommand();
 
 /**
  * `entity.rotate`: turns an entity by a per-axis delta, composed by modular integer addition
@@ -264,52 +293,78 @@ export const entityRotate = defineCommand<EntityRotateArgs, World>({
 export const ENTITY_DELETE_SELECTION_BINDING = 'entity.delete.selection';
 
 /**
- * `entity.delete`: removes an entity and every connection with an end on it (plan F2.1: deleting
- * never leaves a lead in the world to be silently compiled). `nextEntityId` is untouched, so the id
- * is never handed out again while undo can bring the entity back; undo reinserts it, and its
- * connections, with the same ids and data. Delete (or Backspace) in the viewport deletes the selected
+ * `entity.delete`: removes an entity and every test lead with an end on it (plan F2.1: deleting
+ * never leaves a lead in the world to be silently compiled), and unlands every conductor end on it
+ * (ADR 0015: a free rest waypoint where the terminal was, for a single conductor), in the same change.
+ * An occupied entity can't go (`occupied`). `nextEntityId` is untouched, so the id is never handed out
+ * again while undo can bring the entity back; undo reinserts it, its leads and its conductors with the
+ * same ids and data, terminations included. Delete (or Backspace) in the viewport deletes the selected
  * entity: the binding takes `id` from the `selection.entityId` context key, so the log holds the
  * concrete id.
  */
-export const entityDelete = defineCommand<EntityDeleteArgs, World>({
-  id: 'entity.delete',
-  title: 'Delete object',
-  category: 'Entity',
-  args: EntityDeleteArgs,
-  undoable: true,
-  bindings: [
-    {
-      id: ENTITY_DELETE_SELECTION_BINDING,
-      title: 'Delete the selected object',
-      category: 'Entity',
-      target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: SELECTION_ENTITY_ID_KEY } },
-      defaults: ['Delete', 'Backspace'],
-      when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_ENTITY_ID_KEY}`,
+export function entityDeleteCommand(catalog: Catalog = BUILTIN_CATALOG) {
+  return defineCommand<EntityDeleteArgs, World>({
+    id: 'entity.delete',
+    title: 'Delete object',
+    category: 'Entity',
+    args: EntityDeleteArgs,
+    undoable: true,
+    bindings: [
+      {
+        id: ENTITY_DELETE_SELECTION_BINDING,
+        title: 'Delete the selected object',
+        category: 'Entity',
+        target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: SELECTION_ENTITY_ID_KEY } },
+        defaults: ['Delete', 'Backspace'],
+        when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_ENTITY_ID_KEY}`,
+      },
+    ],
+    run: ({ state }, { id }) => {
+      const entity = findEntity(state, id);
+      if (!entity) return notFound(id);
+      if (entityOccupied(state, id)) return holdFailure('occupied', id);
+      const leads = state.connections.filter((c) => isLead(c) && touchesEntity(c, id));
+      const wired = state.connections.filter((c) => !isLead(c) && touchesEntity(c, id));
+      const unlanded = new Map<number, Connection>();
+      for (const wire of wired) {
+        let next: Connection | null = wire;
+        for (const end of ['a', 'b'] as const) {
+          if (next !== null && next[end]?.entity === id) next = unlandEnd(state, catalog, next, end);
+        }
+        if (next === null)
+          return fail('wired', `The catalogue can't place where wire ${wire.id} lands on entity ${id}`);
+        unlanded.set(wire.id, next);
+      }
+      const leadIds = new Set(leads.map((c) => c.id));
+      const untouched = leads.length === 0 && unlanded.size === 0;
+      const restored = new Map(wired.map((c) => [c.id, c]));
+      return succeed({
+        apply: (w) => ({
+          ...w,
+          entities: withoutEntity(w.entities, id),
+          connections: untouched
+            ? w.connections
+            : w.connections.filter((c) => !leadIds.has(c.id)).map((c) => unlanded.get(c.id) ?? c),
+        }),
+        invert: (w) => ({
+          ...w,
+          entities: insertSorted(w.entities, entity),
+          connections: untouched
+            ? w.connections
+            : insertAllSorted(
+                w.connections.map((c) => restored.get(c.id) ?? c),
+                leads,
+              ),
+        }),
+      });
     },
-  ],
-  run: ({ state }, { id }) => {
-    const entity = findEntity(state, id);
-    if (!entity) return notFound(id);
-    const hold = entityHold(state, id);
-    if (hold !== null) return holdFailure(hold, id);
-    // Only leads remain on it (a landed conductor is `wired` above).
-    const removed = state.connections.filter((c) => touchesEntity(c, id));
-    return succeed({
-      apply: (w) => ({
-        ...w,
-        entities: withoutEntity(w.entities, id),
-        connections: removed.length === 0 ? w.connections : w.connections.filter((c) => !touchesEntity(c, id)),
-      }),
-      invert: (w) => ({
-        ...w,
-        entities: insertSorted(w.entities, entity),
-        connections: removed.length === 0 ? w.connections : insertAllSorted(w.connections, removed),
-      }),
-    });
-  },
-});
+  });
+}
+
+/** `entity.delete` against the built-in catalogue. */
+export const entityDelete = entityDeleteCommand();
 
 /** The entity commands, in a fixed order, resolving refs against `catalog`. */
 export function entityCommands(catalog: Catalog = BUILTIN_CATALOG): AnyCommandDef<World>[] {
-  return [entityPlaceCommand(catalog), entityMove, entityRotate, entityDelete];
+  return [entityPlaceCommand(catalog), entityMoveCommand(catalog), entityRotate, entityDeleteCommand(catalog)];
 }

@@ -164,6 +164,10 @@ flowchart LR
 
 `world.hash` is still the SHA-256 of the canonical JSON of the whole parsed world, so it covers every new field; every pinned world golden was re-pinned once at world v3 (CHANGELOG). `topologyHash` keeps its encoding: a conductor will be a branch like a lead, and an unlanded connection is absent (`unlanded`).
 
+### How the commands keep a v3 world valid (P3 PR 8)
+
+The wiring commands (`world-model/src/lib/wiring/`) never produce a world the schema or `checkWorldReferences` would refuse, a property over random command sequences checks it. A free end always rests on a `free` waypoint (unlanding adds one, landing replaces it, deleting a device unlands its conductors), a route's waypoints plus its landed ends stay within `MAX_ROUTE_WAYPOINTS`, termination ids come from `nextTerminationId` and are unique, cable conductors are created and deleted with their cable, and `entity.place` mounts a device only where `checkMount` finds its mount, frame, place and room. A termination is resolved when the end is landed and stored as its outcome (`resolveTermination`, ADR 0015); the engine never recomputes it.
+
 ## Fixtures and levels (F1.9)
 
 A world has two lists of placed things:

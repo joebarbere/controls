@@ -240,6 +240,18 @@ device.operate 2 closed true
 
 Terminal ids come from the device's catalogue entry (`content/devices/*.json`: the battery has `pos` and `neg`, the switch and the lamp `a` and `b`). `apps/sim-cli/scenarios/bench-leads.{console,ts}` is the full example.
 
+## Wires (P3)
+
+From world v3 a script or a console file can cut, route and land real conductors (`wire.*`), run cables (`cable.*`), open enclosure entries, mount devices and print labels ([ADR 0015](../decisions/0015-world-document-v3.md#commands)). Every tool-using command names its tool, and a route is explicit waypoints. Objects are dotted flags; a route is a JSON word; `--lengthMm auto` fills in the route's default cut length on the live world:
+
+```text
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x 1050 --positionMm.y 300 --positionMm.z 100 --mountedOn.entity 2 --mountedOn.mount rail-1
+wire.add --ref.id conductor.test-14 --ref.version 1 --a.entity 1 --a.terminal l1 --a.termination auto --b null --route [{"kind":"free","positionMm":{"x":50,"y":500,"z":300},"entity":null,"fixture":null,"tool":null},{"kind":"free","positionMm":{"x":1070,"y":500,"z":300},"entity":null,"fixture":null,"tool":null}] --lengthMm auto --colour.base black --colour.stripe null --tool.id tool.test-cutter --tool.version 1
+wire.land 1 --end b --at.entity 3 --at.terminal line --at.termination auto
+```
+
+`--a.termination auto` (the ideal termination) is accepted only at Trainee; at other difficulties spell out the steps (`--a.termination.method screw --a.termination.strip.tool.id … --a.termination.strip.hole … --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id … --a.termination.clamp.torqueNm 4`). The ids above are from the TEST-ONLY wiring catalogue (`@controls/world-model/testing`): the game's catalogue has no conductors, cables or tools until the P3 content lands, so `libs/domain/scripting-api/src/lib/wiring.spec.ts` is the worked example (a console file and a TypeScript script reaching one pinned hash). `--route auto` arrives with the router (F3.2 part 1).
+
 ## Time and probes (F2.3a)
 
 The engine follows every command, so a script can let time pass and measure the circuit it built. A worked example (`apps/sim-cli/scenarios/sim-step.console` is the console-file version):

@@ -23,7 +23,13 @@ describe('completeConsoleInput', () => {
     expect(consoleIds(registry)).toEqual(
       expect.arrayContaining(['entity.place', 'help', 'run', 'clear', 'world.hash']),
     );
-    expect(at('ent')?.candidates).toEqual(['entity.delete', 'entity.move', 'entity.place', 'entity.rotate']);
+    expect(at('ent')?.candidates).toEqual([
+      'entity.delete',
+      'entity.label',
+      'entity.move',
+      'entity.place',
+      'entity.rotate',
+    ]);
     expect(at('')?.candidates.length).toBe(consoleIds(registry).length);
     expect(at('world.')).toMatchObject({ from: 0, to: 6, prefix: 'world.', candidates: ['world.hash'] });
     expect(at('netl')?.candidates).toEqual(['netlist.dump']);
@@ -124,9 +130,9 @@ describe('TabCompleter', () => {
     const first = tab.tab('entity.', 7);
     expect(first).toMatchObject({ text: 'entity.delete', selected: 0 });
     const second = tab.tab(first?.text ?? '', first?.cursor ?? 0);
-    expect(second).toMatchObject({ text: 'entity.move', selected: 1 });
+    expect(second).toMatchObject({ text: 'entity.label', selected: 1 });
     const third = tab.tab(second?.text ?? '', second?.cursor ?? 0);
-    expect(third).toMatchObject({ text: 'entity.place' });
+    expect(third).toMatchObject({ text: 'entity.move' });
     expect(tab.tab('entity.', 7)).toMatchObject({ text: 'entity.delete', selected: 0 }); // edited: fresh
     tab.reset();
     expect(tab.tab('nothing.here --', 15)).toBeNull();
