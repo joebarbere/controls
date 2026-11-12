@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { createManifest, readCtrl, writeCtrl } from '@controls/save-format';
-import { BUILD_ENGINE_VERSIONS, createGame, MAX_VERIFY_TICKS } from '@controls/scripting-api';
-import { worldHash } from '@controls/world-model';
+import { BUILD_ENGINE_VERSIONS, createGame, MAX_VERIFY_TICKS, writeSave } from '@controls/scripting-api';
+import { type World, worldHash } from '@controls/world-model';
 import { STATE_QUERY_TIMEOUT_MS } from '@controls/sim-protocol';
 import { FakeSimWorker, type FakeSimWorkerOptions } from '../testing/fake-sim-worker';
 import { START_RETRY_MS, verifyDeadlineMs } from './load';
@@ -130,11 +130,15 @@ describe('prepareLoad', () => {
   it('never replays a log longer than MAX_VERIFY_TICKS, exactly as the headless load (too-long-to-verify)', async () => {
     const { session, fakes } = setup();
     const save = circuitSave(MAX_VERIFY_TICKS.value + 1);
-    const result = await session.prepareLoad(save.bytes);
+    // The whole log, as saves wrote it before checkpoints (P3 D19); a save now is rebased and verifies.
+    const whole = writeSave(save.game.materialisedWorld() as World, save.game.replayLog());
+    const result = await session.prepareLoad(whole);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.prepared.replay).toMatchObject({ status: 'restarted', reason: 'too-long-to-verify' });
     expect(starts(fakes)).toEqual(['world']); // no replay start was ever sent
     expect(result.prepared.hash).toBe(save.hash); // world.json as saved
+    const rebased = await session.prepareLoad(save.bytes);
+    expect(rebased.ok && rebased.prepared.replay).toEqual({ status: 'continued' });
   });
 
   it('loads a save from another engine without verifying it (engine-changed), never with its solution record', async () => {

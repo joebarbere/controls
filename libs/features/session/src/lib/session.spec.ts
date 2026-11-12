@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
-import { createWorld } from '@controls/save-format';
+import { createWorld, readCtrl } from '@controls/save-format';
 import { createGame, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { FakeSimWorker } from '../testing/fake-sim-worker';
@@ -232,6 +232,42 @@ describe('Session', () => {
     expect(replayed.ok && replayed.game.hash()).toBe(await session.hashAt());
     // The session's world is the game's frozen snapshot.
     expect(Object.isFrozen(session.world())).toBe(true);
+  });
+
+  it('a save past 10 000 ticks is rebased onto the checkpoint the worker gave: the headless game’s bytes, loaded continued (P3 D19)', async () => {
+    const { session } = withWorker();
+    session.newSandbox({ seed: 0 });
+    const game = createGame({ seed: 0 });
+    const script = [
+      'entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 0 --positionMm.y 0 --positionMm.z 0',
+      'entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 200 --positionMm.y 0 --positionMm.z 0',
+      'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a',
+      'lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 1 --b.terminal neg',
+      'sim.step 12000',
+      'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 10 --positionMm.y 0 --positionMm.z -20',
+      'sim.step 13000',
+    ].join('\n');
+    const target = {
+      registry: session.registry,
+      exec: session.exec.bind(session),
+      hash: () => session.hashAt(),
+      netlistDump: () => session.netlistDumpAt(),
+    };
+    expect(await runConsoleScript(target, script)).toMatchObject({ ok: true, executed: 7 });
+    expect(await runConsoleScript(game, script)).toMatchObject({ ok: true, executed: 7 });
+    expect(session.replayLog()).toEqual(game.replayLog()); // the whole log, from tick 0
+    const saved = await session.saver().save();
+    expect(saved.bytes).toStrictEqual(game.save());
+    const read = readCtrl(saved.bytes);
+    if (!read.ok || read.value.replayLog === null) throw new Error('no replay log');
+    expect(read.value.replayLog).toMatchObject({ firstSeq: 7, endTick: 25_000, initialWorld: { tick: 20_000 } });
+    expect(read.value.replayLog.entries).toEqual([]);
+
+    const result = await session.prepareLoad(saved.bytes);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.prepared.replay).toEqual({ status: 'continued' });
+    session.adopt(result.prepared);
+    expect(await session.hashAt()).toBe(game.hash());
   });
 
   it('netlist.dump from the sim worker is byte for byte the headless game’s (F2.6)', async () => {

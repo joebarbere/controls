@@ -352,7 +352,7 @@ sequenceDiagram
     participant IO as Platform.files
     P->>SES: exec('file.save') (Mod+S, palette, console; unlogged)
     SES->>SG: onCommand('file.save')
-    SG->>SES: saver(): captures the bus world, the log and endTick at T, posts query 'state' at T
+    SG->>SES: saver(): captures the bus world, saveLog() (rebased onto the latest checkpoint) and endTick at T, posts query 'state' at T
     SG->>SG: thumbnail (viewport PNG, optional)
     SES-->>SG: the worker's export at T → materialiseWorld → writeSave → .ctrl bytes
     SG->>IO: write({ kind: 'manual', name, overwrite }, bytes)
@@ -368,6 +368,17 @@ sequenceDiagram
         SG->>SES: adopt(prepared): world, empty undo stack, log continued, its worker carries on
         SG-->>P: "Loaded …" (+ warning if replay.status is restarted)
     end
+```
+
+- **A save's replay log starts at its latest checkpoint** (P3 kickoff step 4, decision D19). Each time sim time reaches a multiple of `CHECKPOINT_TICKS` (10 000 ticks, equal to `MAX_VERIFY_TICKS`), the `Game` stops there and keeps the materialised world at that tick, before any command logged at it, with the number of entries before it. Headless it is `materialisedWorld()` from the in-process engine; in the game it is the worker's answer to a `state` query posted at that moment (`TimeHost.captureWorld`), arriving later. The saver writes `Game.saveLog()`: the whole log rebased onto that world (`rebaseReplayLog(log, count, worldAtCut)`, ADR 0013), so a load verifies less than 10 000 ticks and comes back `continued`. If an undo or redo after the checkpoint reaches back across it, or the worker never answered, the save keeps the whole log (as before). The undo history in the session is unaffected; only what a save writes changes.
+
+```mermaid
+flowchart LR
+    T0["log start<br/>(tick 0, or the load)"] --> C1["checkpoint 10 000<br/>materialised world, count"]
+    C1 --> C2["checkpoint 20 000<br/>(replaces the last)"]
+    C2 --> S["save at 25 000"]
+    S -->|"rebaseReplayLog(log, count, world at 20 000)"| LOG["replay.log: initialWorld at 20 000,<br/>firstSeq + count, entries from 20 000, endTick 25 000"]
+    S -->|"undo in the tail reaches before 20 000,<br/>or no answer from the worker"| WHOLE["replay.log: the whole log"]
 ```
 
 - **A load's outcome never depends on wall time or on the worker being well** (#58 review): a verifying worker that crashes or misses its deadline (which grows with the log) restarts the log from `world.json` as `verify-unavailable` (the log wasn't checked: never refused by the `refuse` policy, an info notice); a `world.json` start whose worker fails is retried once with 30 s deadlines; only a real `start-failed` reason refuses a save as damaged, and a worker that fails twice is `sim-failed`.
@@ -396,6 +407,7 @@ flowchart TD
 - **Randomness:** the world `seed` feeds sfc32 streams derived per use, so no generator state is persisted (ADR 0007).
 - **Hash:** SHA-256 over canonical JSON of the world document only (sorted keys, normalised `-0`).
 - **Replay:** `initialWorld` plus `{ seq, tick, id, args }` entries reproduce the saved world's hash.
+- **Checkpoints:** taken at exact multiples of `CHECKPOINT_TICKS`, from the session's commands and ticks alone, so the same seed and commands save the same bytes however time was let pass, headless or in the game.
 
 ## Related
 

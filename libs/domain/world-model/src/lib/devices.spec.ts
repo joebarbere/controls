@@ -179,3 +179,60 @@ describe('rebaseReplayLog edge cases', () => {
     expect(rebaseReplayLog(broken, 1)).toMatchObject({ ok: false, error: { kind: 'failed', seq: 0 } });
   });
 });
+
+describe('rebaseReplayLog onto a given world at the cut (ADR 0013, P3 D19)', () => {
+  // Commands at ticks 0, 5 and 12; the cut world is at tick 10 (between seq 1 and seq 2).
+  const initial = world([]);
+  const live = createWorldBus(initial);
+  live.exec('entity.place', { ref: CRATE, positionMm: { x: 0, y: 0, z: 0 } });
+  live.advanceTo(5);
+  live.exec('entity.place', { ref: CRATE, positionMm: { x: 10, y: 0, z: 0 } });
+  live.advanceTo(10);
+  // What a checkpoint holds: the world at the cut, here marked (an extension) so it differs from the replayed one.
+  const atCut: World = { ...live.state, entities: live.state.entities.map((e) => ({ ...e, extensions: { cut: 1 } })) };
+  live.advanceTo(12);
+  live.exec('entity.move', { id: 11, positionMm: { x: 20, y: 0, z: 0 } });
+  live.advanceTo(15);
+  const log = toReplayLog(initial, live);
+
+  it('starts the log from that world, without replaying the head, and keeps the tail, seqs and endTick', () => {
+    const result = rebaseReplayLog(log, 2, atCut);
+    expect(result.ok && result.log).toStrictEqual(
+      createReplayLog(atCut, log.entries.slice(2), { firstSeq: 2, endTick: 15 }),
+    );
+    // The head isn't replayed: even a head that no longer replays rebases (the caller vouches for it).
+    const broken = { ...log, entries: [{ ...log.entries[0], args: { id: 99 } }, ...log.entries.slice(1)] };
+    expect(rebaseReplayLog(broken, 2, atCut).ok).toBe(true);
+  });
+
+  it('accepts a cut world at either end of the gap, and none outside it or of another seed', () => {
+    expect(rebaseReplayLog(log, 2, { ...atCut, tick: 5 }).ok).toBe(true); // the head's last entry
+    expect(rebaseReplayLog(log, 2, { ...atCut, tick: 12 }).ok).toBe(true); // the tail's first
+    expect(rebaseReplayLog(log, 3, { ...atCut, tick: 15 }).ok).toBe(true); // empty tail: up to endTick
+    expect(rebaseReplayLog(log, 0, { ...atCut, tick: 0 }).ok).toBe(true); // empty head: from the start
+    for (const [count, cut] of [
+      [2, { ...atCut, tick: 4 }],
+      [2, { ...atCut, tick: 13 }],
+      [3, { ...atCut, tick: 16 }],
+      [2, { ...atCut, seed: atCut.seed + 1 }],
+    ] as const) {
+      expect(rebaseReplayLog(log, count, cut)).toMatchObject({ ok: false, error: { kind: 'out-of-range' } });
+    }
+    expect(rebaseReplayLog(log, 4, atCut)).toMatchObject({ ok: false, error: { kind: 'out-of-range' } });
+  });
+
+  it('refuses a cut that a later undo reaches across, and keeps one whose undos stay in the tail', () => {
+    const undoing = createWorldBus(initial);
+    undoing.exec('entity.place', { ref: CRATE, positionMm: { x: 0, y: 0, z: 0 } });
+    undoing.advanceTo(10);
+    const cut = undoing.state;
+    undoing.exec('entity.place', { ref: CRATE, positionMm: { x: 10, y: 0, z: 0 } });
+    undoing.exec('edit.undo'); // pops the place at tick 10: inside the tail
+    expect(rebaseReplayLog(toReplayLog(initial, undoing), 1, cut).ok).toBe(true);
+    undoing.exec('edit.undo'); // pops the place at tick 0: across the cut
+    expect(rebaseReplayLog(toReplayLog(initial, undoing), 1, cut)).toMatchObject({
+      ok: false,
+      error: { kind: 'failed', seq: 3 },
+    });
+  });
+});

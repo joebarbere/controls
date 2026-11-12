@@ -50,6 +50,16 @@ export { type SimClock, type SimFailure, SimQueryRejection, type SimStateReply }
 /** The sim's status (ADR 0011 §10), also the `sim.status` context key. */
 export type SimStatus = 'none' | 'starting' | 'running' | 'paused' | 'suspended' | 'crashed' | 'unavailable';
 
+/**
+ * Numerical choice: the deadline of a save checkpoint's `state` query (P3 D19), the longest a timer
+ * can wait (2³¹ − 1 ms, about 24.8 days), so in practice none. A checkpoint is taken while time
+ * passes, possibly far ahead of a worker that is still catching up; with a wall-clock deadline a slow
+ * machine would drop it and write different save bytes than a fast one. The worker answers queries
+ * in order, so a save (whose own query is posted later) is never held up by it; a crash or a replaced
+ * worker still rejects it, and a save then keeps the whole log.
+ */
+export const CHECKPOINT_QUERY_TIMEOUT_MS = 2_147_483_647;
+
 /** The game a host follows: `Session` binds its current game on every start or adopt. */
 export interface SimSessionBinding {
   /** The bus's tick (the commanded tick). */
@@ -190,10 +200,15 @@ export class SimHost {
     return this.commandedTickState() - this.simTickState() > lead;
   }
 
-  /** The game's time host: every logged entry and advance goes to the current worker (ADR 0011 §3, §4). */
+  /**
+   * The game's time host: every logged entry and advance goes to the current worker (ADR 0011 §3, §4).
+   * `captureWorld` is the game's save checkpoint (P3 D19): a `state` query posted at once, at the
+   * bus's tick, with {@link CHECKPOINT_QUERY_TIMEOUT_MS}' deadline.
+   */
   readonly time: TimeHost = {
     advanceTo: (tick) => this.advanced(tick),
     applied: (entry) => this.applied(entry),
+    captureWorld: () => this.capture(CHECKPOINT_QUERY_TIMEOUT_MS).world,
   };
 
   constructor() {

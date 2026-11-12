@@ -44,6 +44,7 @@ import {
   checkWorldDevices,
   createWorldBus,
   createWorldRegistry,
+  rebaseReplayLog,
   replayLog as replayWorldLog,
   toReplayLog,
   type World,
@@ -78,6 +79,13 @@ export interface TimeHost {
   applied(entry: ReplayEntry, world: World): void;
   /** The sim-owned state at the bus's tick, synchronously, if the host can give it. */
   exportState?(): SimStateExport;
+  /**
+   * The materialised world at the bus's tick, asked for now and answered later (the game's sim worker:
+   * a `state` query posted at once, so it describes exactly this tick). A game takes its save
+   * checkpoints with it ({@link CHECKPOINT_TICKS}) when the host has no {@link exportState}; without
+   * either, the game takes none and its saves write the whole log.
+   */
+  captureWorld?(): Promise<World>;
 }
 
 /** A deeply read-only view of a value: what {@link Game.world} returns (it is also frozen at run time). */
@@ -279,13 +287,27 @@ export interface Game {
   snapshotHash(): string;
   /** The replay entries logged so far. */
   entries(): readonly ReplayEntry[];
-  /** The replay log of this game: its initial world plus every entry, ending at the current tick. */
+  /**
+   * The whole replay log of this game: its initial world plus every entry, ending at the current
+   * tick (what `sim.restart` and `sim run --log` use). A save writes {@link saveLog} instead.
+   */
   replayLog(): ReplayLog;
   /**
-   * The game as a `.ctrl` save (F1.8b): a manifest for this build, the materialised world, the replay
-   * log and an optional thumbnail. Deterministic: the same game gives the same bytes. Load it with
-   * {@link loadGame}. Throws `CtrlWriteError` if the save would be over a size cap or the thumbnail
-   * isn't a PNG.
+   * The replay log a save writes (P3 D19): {@link replayLog} rebased onto the game's latest checkpoint
+   * at or before the current tick, the materialised world taken whenever time reached a multiple of
+   * {@link CHECKPOINT_TICKS}, so the log a load verifies spans less than `MAX_VERIFY_TICKS`. The whole
+   * log when there is no checkpoint yet (since the game started or was loaded), or when an undo or
+   * redo in the tail reaches a change from before the checkpoint (the rebase isn't exact then). A
+   * pure function of the session's commands and ticks, the same headless and in the game.
+   * Asynchronous because in the game the checkpoint's world comes from the sim worker; captured
+   * when called, and it never rejects (a checkpoint the worker never gave falls back to the whole log).
+   */
+  saveLog(): Promise<ReplayLog>;
+  /**
+   * The game as a `.ctrl` save (F1.8b): a manifest for this build, the materialised world, the
+   * replay log ({@link saveLog}: rebased onto the latest checkpoint) and an optional thumbnail.
+   * Deterministic: the same game gives the same bytes. Load it with {@link loadGame}. Throws
+   * `CtrlWriteError` if the save would be over a size cap or the thumbnail isn't a PNG.
    */
   save(options?: SaveGameOptions): Uint8Array;
   canUndo(): boolean;
@@ -371,14 +393,55 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     if (engine === null) return;
     for (const event of engine.takeEvents()) for (const listener of [...simListeners]) listener(event);
   };
-  const moveTo = (tick: number) => {
-    if (!Number.isSafeInteger(tick)) throw new RangeError(`advanceTo needs a safe integer tick, got ${tick}`);
-    if (tick < bus.currentTick())
-      throw new RangeError(`advanceTo(${tick}) is before the current tick ${bus.currentTick()}`);
+  /**
+   * The latest save checkpoint (P3 D19): the materialised world when time first reached a multiple
+   * of {@link CHECKPOINT_TICKS}, before any command at that tick, and how many entries came before
+   * it. `pending` while the game's sim worker hasn't answered yet.
+   */
+  let checkpoint:
+    | { readonly count: number; readonly world: World; readonly pending: null }
+    | { readonly count: number; readonly world: null; readonly pending: Promise<World> }
+    | null = null;
+  const step = (tick: number) => {
     engine?.advanceTo(tick);
     time?.advanceTo(tick);
     bus.advanceTo(tick);
     deepFreeze(bus.state);
+  };
+  const takeCheckpoint = () => {
+    const count = bus.entries.length;
+    if (time !== undefined && time.exportState === undefined) {
+      if (time.captureWorld === undefined) return; // no checkpoint: saves keep the whole log
+      const pending = time.captureWorld();
+      pending.catch(() => undefined); // observed by saveLog, which falls back to the whole log
+      checkpoint = { count, world: null, pending };
+      return;
+    }
+    checkpoint = { count, world: materialisedWorld(), pending: null };
+  };
+  const moveTo = (tick: number) => {
+    if (!Number.isSafeInteger(tick)) throw new RangeError(`advanceTo needs a safe integer tick, got ${tick}`);
+    if (tick < bus.currentTick())
+      throw new RangeError(`advanceTo(${tick}) is before the current tick ${bus.currentTick()}`);
+    // Only the last multiple crossed matters (a save uses the latest checkpoint): stop there, take
+    // it, then go on. `%` is exact on safe integers, so the cut is too.
+    const cut = tick - (tick % CHECKPOINT_TICKS.value);
+    if (cut > bus.currentTick()) {
+      step(cut);
+      takeCheckpoint();
+    }
+    step(tick);
+  };
+  /** `log` rebased onto `world`, the checkpoint after `count` entries, or `log` if that isn't exact. */
+  const rebased = (log: ReplayLog, count: number, world: World): ReplayLog => {
+    const result = rebaseReplayLog(log, count, world, bus.registry);
+    return result.ok ? result.log : log;
+  };
+  const saveLogNow = (): ReplayLog => {
+    const log = toReplayLog(initialWorld, bus);
+    if (checkpoint === null) return log;
+    if (checkpoint.world === null) throw new NotAvailableError('save', 'worker');
+    return rebased(log, checkpoint.count, checkpoint.world);
   };
   const revision = () => engine?.revision ?? 0;
   const materialisedWorld = (): World => {
@@ -468,7 +531,16 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     snapshotHash: () => needEngine('snapshotHash').snapshotHash(),
     entries: () => bus.entries,
     replayLog: () => toReplayLog(initialWorld, bus),
-    save: (options = {}) => writeSave(materialisedWorld(), toReplayLog(initialWorld, bus), options),
+    saveLog() {
+      const taken = checkpoint;
+      if (taken === null || taken.pending === null) return Promise.resolve(saveLogNow());
+      const log = toReplayLog(initialWorld, bus);
+      return taken.pending.then(
+        (world) => rebased(log, taken.count, world),
+        () => log,
+      );
+    },
+    save: (options = {}) => writeSave(materialisedWorld(), saveLogNow(), options),
     canUndo: () => bus.canUndo,
     canRedo: () => bus.canRedo,
     contextKeys: () => bus.contextKeys(),
@@ -733,7 +805,23 @@ export const MAX_VERIFY_TICKS: SourcedConstant = {
   unit: 'tick',
   kind: 'numerical',
   source:
-    'numerical: `sim bench` case `plant-advance-1000-ticks` (the 2,000-node plant, 100 cadence solves and 1,000 layer steps) measured 45 ms per 1,000 ticks (0.045 ms per tick) on an AMD Ryzen 5 5600X under Node 24, built bundle. CI runners run the plant re-solve about 1.4× (Ubuntu) to 3.2× (Windows) slower, so about 0.15 ms per tick on the slowest. For load verification under about 2 s on CI-class hardware that allows about 13 800 ticks; 10 000 (10 s of sim time) leaves headroom: about 0.45 s locally and 1.45 s on the slowest runner. Small P2 benches replay far faster. Whether long logs are later rebased or checkpointed, so verification stays bounded, is an open user decision (plan F2.3a).',
+    'numerical: `sim bench` case `plant-advance-1000-ticks` (the 2,000-node plant, 100 cadence solves and 1,000 layer steps) measured 45 ms per 1,000 ticks (0.045 ms per tick) on an AMD Ryzen 5 5600X under Node 24, built bundle. CI runners run the plant re-solve about 1.4× (Ubuntu) to 3.2× (Windows) slower, so about 0.15 ms per tick on the slowest. For load verification under about 2 s on CI-class hardware that allows about 13 800 ticks; 10 000 (10 s of sim time) leaves headroom: about 0.45 s locally and 1.45 s on the slowest runner. Small P2 benches replay far faster. Saves rebase their log onto a checkpoint every `CHECKPOINT_TICKS` (P3 D19), so a save of any length is verified within this bound.',
+};
+
+/**
+ * How often a game takes a save checkpoint (P3 D19): whenever time reaches a multiple of this many
+ * ticks, the materialised world at that tick, before any command logged at it. A save rebases its
+ * log onto the latest one ({@link Game.saveLog}), so the log a load verifies spans less than
+ * {@link MAX_VERIFY_TICKS} and long sessions load `continued` instead of `too-long-to-verify`. Not save
+ * format: any value writes loadable saves, but it decides a save's bytes, so changing it changes what
+ * the same session saves.
+ */
+export const CHECKPOINT_TICKS: SourcedConstant = {
+  value: MAX_VERIFY_TICKS.value,
+  unit: 'tick',
+  kind: 'numerical',
+  source:
+    'numerical: equal to `MAX_VERIFY_TICKS` (P3 kickoff decision D19). With a checkpoint at every multiple of the verify bound, the tail a save keeps after its latest checkpoint spans at most `MAX_VERIFY_TICKS` − 1 ticks, the longest that still verifies, so the main thread holds at most one checkpoint world (the latest) and takes one `state` query from the sim worker per 10 s of sim time.',
 };
 
 /**

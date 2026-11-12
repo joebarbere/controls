@@ -31,6 +31,7 @@ import {
   replayGame,
   replayLogGame,
   TOO_LONG_TO_VERIFY_MESSAGE,
+  writeSave,
 } from './game';
 
 /*
@@ -424,7 +425,11 @@ describe('loading saves from other engines (D8)', () => {
     expect(loaded.game.tick()).toBe(huge);
     expect(loaded.game.entries()).toStrictEqual([]);
     game.advance(1);
-    expect(load(game.save()).replay).toMatchObject({ reason: 'too-long-to-verify' }); // one past the bound
+    // One past the bound: a save of the whole log restarts; the game's own save is rebased onto its
+    // checkpoint at 10 000 (P3 D19) and verifies.
+    const whole = writeSave(game.materialisedWorld() as World, game.replayLog());
+    expect(load(whole).replay).toMatchObject({ reason: 'too-long-to-verify' });
+    expect(load(game.save()).replay).toStrictEqual({ status: 'continued' });
   });
 });
 

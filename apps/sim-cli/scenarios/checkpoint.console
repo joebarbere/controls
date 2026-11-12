@@ -1,0 +1,23 @@
+# P3 D19: save checkpoints. The bench lamp (bench-lamp.console's circuit) switched on and off for 25 s
+# of sim time, across the checkpoints at 10 000 and 20 000 ticks, with a crate placed and undone after
+# the last one. A save at the end (`--save`) rebases its replay log onto the materialised world at
+# 20 000, so loading it verifies the last 5 s (`continued`) instead of restarting the log as too long.
+#   pnpm sim run apps/sim-cli/scenarios/checkpoint.console --world content/levels/workshop.json --save checkpoint.ctrl
+#   pnpm sim replay checkpoint.ctrl
+entity.place --ref.id battery.ferrovane-12v-7ah --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id switch.tessaline-spst-toggle --ref.version 1 --positionMm.x 1100 --positionMm.y -300 --positionMm.z 200
+entity.place --ref.id lamp.lumivane-12v-5w --ref.version 1 --positionMm.x 1300 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal pos --b.entity 2 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 2 --a.terminal b --b.entity 3 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal b --b.entity 1 --b.terminal neg
+device.operate 2 closed true    # tick 0: the lamp lights
+sim.step 9000
+device.operate 2 closed false   # tick 9 000: out, across the checkpoint at 10 000
+sim.step 6000
+device.operate 2 closed true    # tick 15 000: lit again, across the checkpoint at 20 000
+sim.step 7000
+entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 500 --positionMm.y 0 --positionMm.z 200
+sim.step 1000
+edit.undo                       # tick 23 000: undoes the crate, after the checkpoint (the rebase stays exact)
+sim.step 2000
+world.hash                      # tick 25 000
