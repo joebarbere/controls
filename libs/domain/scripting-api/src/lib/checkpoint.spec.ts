@@ -226,7 +226,9 @@ describe('a session saved at any tick, loaded and advanced, equals the uninterru
       }),
       { numRuns: 30 },
     );
-  });
+    // Generous: each run plays up to ~72 000 ticks twice and loads a save, about 2.4 s for all 30 runs
+    // locally; CI runs every project's tests in parallel with coverage, which took it past the 5 s default.
+  }, 60_000);
 });
 
 describe('checkpoints with a time host (the game: the sim worker answers later)', () => {
