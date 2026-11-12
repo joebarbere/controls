@@ -20,6 +20,7 @@ import { builtinProp } from '../props';
 import { type BoxMm, boxFromCorners, conservativeCube, segmentCrossesBox } from '../routing/collide';
 import { routeFloorMm } from '../routing/floor';
 import { entityPointMm, isAxisAligned } from '../snap/quarter-turn';
+import { combinationProblem } from '../termination/combination';
 import {
   resolveTermination,
   type TerminationArg,
@@ -344,15 +345,6 @@ export function checkLanding(
     const name = args === 'auto' ? 'a conductor' : `a ${args.method} termination`;
     return fail('wrong-method', `Terminal "${at.terminal}" of entity ${at.entity} takes no ${name}`);
   }
-  // TODO(F3.6 part 1, the ADR 0018 catalogue fields PR): check a twist-on splice against the method's
-  // `combination` bounds (count, AWG, total size; ADR 0018 §4.4). Until the catalogue has them, no
-  // twist-on landing can be checked, so every one is refused (ADR 0015 implementation note 15).
-  if (spec.method === 'twistOn') {
-    return fail(
-      'combination-out-of-range',
-      'Twist-on splices need their rated combinations (ADR 0018), not in the catalogue yet',
-    );
-  }
   const accessory = args === 'auto' || args.accessory === null ? null : catalog.accessory(args.accessory.ref);
   if (
     args !== 'auto' &&
@@ -370,9 +362,16 @@ export function checkLanding(
       [c.a, c.b].some(
         (e) => e?.entity === at.entity && e.terminal === at.terminal && e.termination?.method === spec.method,
       ),
-  ).length;
-  if (landedHere >= spec.maxConductors) {
+  );
+  if (landedHere.length >= spec.maxConductors) {
     return fail('terminal-full', `Terminal "${at.terminal}" already holds ${spec.maxConductors} by ${spec.method}`);
+  }
+  // A twist-on splice: the conductors it would hold against its rated combination (ADR 0018 §4.4).
+  if (spec.combination !== null) {
+    const awgs = landedHere.map((c) => catalog.device(c.ref)?.conductor?.awg ?? conductor.awg);
+    awgs.push(conductor.awg);
+    const problem = combinationProblem(spec.combination, awgs);
+    if (problem !== null) return fail('combination-out-of-range', problem);
   }
   let tools: TerminationTools | null = null;
   if (args !== 'auto') {

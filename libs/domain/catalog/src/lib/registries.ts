@@ -158,6 +158,15 @@ export const ACCESSORY_PREFIX: Readonly<Record<AccessoryKind, string>> = Object.
   forkLug: 'lug.',
 });
 
+/**
+ * How a terminal holds a conductor (ADR 0018 §8, `TerminalMethodSpec.clampType`): it decides which
+ * quality inputs apply to the contact model (§4.3: only a `bindingScrew` splays bare strands). The ids
+ * are catalogue format; each termination method allows the ones its row lists (`clampTypes`).
+ */
+export const CLAMP_TYPES = ['bindingScrew', 'pressurePlate', 'boxLug', 'springCage', 'pushIn', 'twistOn'] as const;
+export const ClampType = z.enum(CLAMP_TYPES);
+export type ClampType = z.infer<typeof ClampType>;
+
 /** A registry row's provenance (realism charter). */
 interface Provenance {
   readonly description: string;
@@ -171,6 +180,8 @@ export interface TerminationMethodDef extends Provenance {
   readonly clampTorque: boolean;
   /** The accessories that may be crimped onto a conductor landed by this method. */
   readonly accessories: readonly AccessoryKind[];
+  /** The clamp types a spec of this method may declare (ADR 0018 §8). */
+  readonly clampTypes: readonly ClampType[];
 }
 
 /**
@@ -182,6 +193,7 @@ export const TERMINATION_METHODS: Readonly<Record<string, TerminationMethodDef>>
     id: 'screw',
     clampTorque: true,
     accessories: ['ferrule', 'ringLug', 'forkLug'],
+    clampTypes: ['bindingScrew', 'pressurePlate', 'boxLug'],
     description:
       'A screw clamp: a binding-head screw or a pressure plate tightened onto the conductor to a marked torque.',
     kind: 'real-world',
@@ -192,6 +204,7 @@ export const TERMINATION_METHODS: Readonly<Record<string, TerminationMethodDef>>
     id: 'springCage',
     clampTorque: false,
     accessories: ['ferrule'],
+    clampTypes: ['springCage'],
     description:
       'A spring-cage (spring-clamp or push-in) terminal: a spring presses the conductor against a bar; no screw.',
     kind: 'real-world',
@@ -202,6 +215,7 @@ export const TERMINATION_METHODS: Readonly<Record<string, TerminationMethodDef>>
     id: 'backStab',
     clampTorque: false,
     accessories: [],
+    clampTypes: ['pushIn'],
     description: 'A push-in (back-wired) device terminal: a spring tab grips a solid conductor pushed into a hole.',
     kind: 'real-world',
     source:
@@ -211,6 +225,7 @@ export const TERMINATION_METHODS: Readonly<Record<string, TerminationMethodDef>>
     id: 'twistOn',
     clampTorque: false,
     accessories: [],
+    clampTypes: ['twistOn'],
     description: 'A twist-on wire connector: a tapered spring twisted onto the stripped conductors of a splice.',
     kind: 'real-world',
     source:

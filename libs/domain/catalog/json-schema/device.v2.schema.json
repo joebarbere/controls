@@ -36,7 +36,8 @@
         "protection",
         "lead",
         "conductor",
-        "enclosure"
+        "enclosure",
+        "splice"
       ]
     },
     "sizeMm": {
@@ -243,6 +244,99 @@
                     "+z",
                     "-z"
                   ]
+                },
+                "clampType": {
+                  "type": "string",
+                  "enum": [
+                    "bindingScrew",
+                    "pressurePlate",
+                    "boxLug",
+                    "springCage",
+                    "pushIn",
+                    "twistOn"
+                  ]
+                },
+                "clampDepthMm": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 50
+                },
+                "contactOhm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "heatPathWPerK": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "hotSpotHeatCapacityJPerK": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "combination": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "minConductors": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "maxConductors": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "awg": {
+                          "type": "object",
+                          "properties": {
+                            "smallest": {
+                              "$ref": "#/$defs/Awg"
+                            },
+                            "largest": {
+                              "$ref": "#/$defs/Awg"
+                            }
+                          },
+                          "required": [
+                            "smallest",
+                            "largest"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "totalAreaUm2": {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "max": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "minConductors",
+                        "maxConductors",
+                        "awg",
+                        "totalAreaUm2"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -256,7 +350,13 @@
                 "drives",
                 "alRated",
                 "entryMm",
-                "exitAxis"
+                "exitAxis",
+                "clampType",
+                "clampDepthMm",
+                "contactOhm",
+                "heatPathWPerK",
+                "hotSpotHeatCapacityJPerK",
+                "combination"
               ],
               "additionalProperties": false
             }

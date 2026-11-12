@@ -14,6 +14,7 @@ import { Awg, AwgRange } from './gauge';
 import {
   Axis,
   DriveType,
+  ClampType,
   ColourId,
   ConductorStranding,
   EntryId,
@@ -53,6 +54,27 @@ export const PointMm = z.strictObject({ x: Int, y: Int, z: Int });
 export type PointMm = z.infer<typeof PointMm>;
 
 /**
+ * A twist-on splice's rated conductor combinations (ADR 0018 §4.4, §8): a count range, a size range
+ * and a total-size range. Bounds paraphrased from public packaging data under a fictional brand, never
+ * a reproduced combination chart. The total size is the sum of the landed conductors' integer
+ * `AWG_GAUGES[n].areaUm2`, so the check is exact integer arithmetic.
+ */
+export const TwistOnCombination = z
+  .strictObject({
+    /** The fewest conductors the splice is rated for. */
+    minConductors: Int.min(1).max(16),
+    /** The most; equals the method spec's `maxConductors`. */
+    maxConductors: Int.min(1).max(16),
+    /** The conductor sizes each landed conductor must lie in (integer AWG designations). */
+    awg: AwgRange,
+    /** The landed conductors' total area (integer µm², from `AWG_GAUGES[n].areaUm2`), both ends included. */
+    totalAreaUm2: z.strictObject({ min: Int.min(0), max: Int.min(1) }),
+  })
+  .refine((c) => c.minConductors <= c.maxConductors, { message: 'minConductors must not exceed maxConductors' })
+  .refine((c) => c.totalAreaUm2.min <= c.totalAreaUm2.max, { message: 'totalAreaUm2.min must not exceed its max' });
+export type TwistOnCombination = z.infer<typeof TwistOnCombination>;
+
+/**
  * How conductors may be landed on a terminal by one method (ADR 0015). A terminal lists its methods
  * in a save-format order: `'auto'` takes the first. From catalogue 2 on its values count as
  * electrical (changing one after v0.4.0 is a new entry version).
@@ -84,12 +106,30 @@ export const TerminalMethodSpec = z
     entryMm: PointMm,
     /** The direction a landed conductor leaves the terminal, in the device's own frame. */
     exitAxis: Axis,
+    /**
+     * How the conductor is held (ADR 0018 §8; one of the method's `clampTypes`): only a `bindingScrew`
+     * splays a bare stranded conductor (§4.3).
+     */
+    clampType: ClampType,
+    /** The length of conductor the clamp grips (integer mm, 1..50, at most the nominal strip length); a shorter strip seats like less torque (§4.3). */
+    clampDepthMm: Int.min(1).max(50),
+    /** R₀ (Ω): the contact resistance at the marked torque (or the spring's force), copper conductor, at T₀ (§4.1). */
+    contactOhm: FiniteNumber.positive(),
+    /** G_term (W/K): the hot spot's heat path into the device at ambient (§3.3; F3.6 reads it). */
+    heatPathWPerK: FiniteNumber.positive(),
+    /** C_h (J/K): the clamp parts' heat capacity, the hot-spot node's (§3.3; F3.6 reads it). */
+    hotSpotHeatCapacityJPerK: FiniteNumber.positive(),
+    /** A twist-on splice's rated combinations (§4.4): non-null exactly for `twistOn`. */
+    combination: TwistOnCombination.nullable(),
   })
   .refine((m) => m.maxConductors >= m.ratedConductors, { message: 'maxConductors must be at least ratedConductors' })
   .refine((m) => new Set(m.stranding).size === m.stranding.length, { message: 'stranding values must be unique' })
   .refine((m) => new Set(m.drives).size === m.drives.length, { message: 'drives must be unique' })
   .refine((m) => m.stripLengthMm.tolerance < m.stripLengthMm.nominal, {
     message: 'the strip-length tolerance must be below the nominal length',
+  })
+  .refine((m) => m.clampDepthMm <= m.stripLengthMm.nominal, {
+    message: 'clampDepthMm must not exceed the nominal strip length',
   });
 export type TerminalMethodSpec = z.infer<typeof TerminalMethodSpec>;
 
@@ -247,7 +287,16 @@ export type DeviceSource = CatalogSource;
  * Device categories, for the palette and the build menu. Adding one is a catalogue change. `lead` and
  * `conductor` go with connection kinds and only with them; `enclosure` with enclosure kinds.
  */
-export const DeviceCategory = z.enum(['source', 'load', 'switch', 'protection', 'lead', 'conductor', 'enclosure']);
+export const DeviceCategory = z.enum([
+  'source',
+  'load',
+  'switch',
+  'protection',
+  'lead',
+  'conductor',
+  'enclosure',
+  'splice',
+]);
 export type DeviceCategory = z.infer<typeof DeviceCategory>;
 
 /** One device entry (catalogue format v2). */

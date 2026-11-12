@@ -26,6 +26,20 @@ describe('the AWG gauge table', () => {
     }
   });
 
+  it('areaUm2 is pinned: integer µm², the six-figure area × 10⁶ rounded once (ADR 0018 §4.4; never changes)', () => {
+    // A twist-on splice's total-size check reads these; changing one changes what a replay refuses.
+    expect(AWG_GAUGES.map((r) => r.areaUm2)).toStrictEqual([
+      107219000, 85028800, 67430900, 53475100, 42407700, 33630800, 26670500, 21150600, 16773200, 13301800, 10548800,
+      8365560, 6634190, 5261150, 4172290, 3308770, 2623980, 2080910, 1650230, 1308700, 1037840, 823047, 652706, 517619,
+      410491, 325534, 258160, 204730, 162359, 128756, 102108, 80976, 64216, 50926, 40386, 32028, 25399, 20142, 15974,
+      12668, 10046, 7967, 6318, 5010,
+    ]);
+    for (const row of AWG_GAUGES) {
+      expect(Number.isInteger(row.areaUm2), row.name).toBe(true);
+      expect(Math.abs(row.areaUm2 - row.areaMm2 * 1e6), row.name).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   it('the anchors: 36 AWG is 0.005 in and 4/0 is 0.46 in, with 39 steps between', () => {
     expect(gaugeRow(36)?.diameterMm).toBeCloseTo(0.005 * 25.4, 6);
     expect(gaugeRow(-3)?.diameterMm).toBeCloseTo(0.46 * 25.4, 3);

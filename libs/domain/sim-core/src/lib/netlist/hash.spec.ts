@@ -26,6 +26,8 @@ import { BREAKER, FUSE_1A } from '../../testing/protection';
 import { free, SPLIT_PHASE, THHN_14_SOLID, wireArgs, wiredBus } from '../../testing/wired';
 import { WIRING_TEST_CATALOG } from '@controls/world-model/testing';
 
+const WIRE_NUT_M = { id: 'splice.corvelle-tw-m', version: 1 };
+
 /**
  * Golden topology hashes of the bench lamp. They are persisted in every save's `WorldV2.sim` and in
  * snapshots, so a change here moves saves: change the encoding only with a version-byte and
@@ -58,6 +60,8 @@ const MODEL_KIND_TOPOLOGY = {
   conductor: '6d6c6e344f3d62db57a9b512402123349f268ae2bf69fb99c42e908675d805ca',
   enclosureBox: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
   enclosurePanel: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  spliceTwistOn: '4b84f762f1ccf0f8beabf60c49f4cea3f29de9f8c3f543e1b991e7442a78789e',
+  spliceTwistOnSpliced: 'bb58f915c2e8cf15d9f306b622b527cb565002b2966bc456c9b7f19a884c5092',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -80,6 +84,8 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   conductor: 'conductor',
   enclosureBox: 'enclosure.box',
   enclosurePanel: 'enclosure.panel',
+  spliceTwistOn: 'splice.twistOn',
+  spliceTwistOnSpliced: 'splice.twistOn',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -231,6 +237,18 @@ describe('topologyHash', () => {
       // F3.5: an enclosure adds nothing to the netlist (both are the empty netlist's hash).
       enclosureBox: one({ id: 'box.tinmoor-1g-steel', version: 1 }),
       enclosurePanel: one({ id: 'panel.pellmoor-din-400x500', version: 1 }),
+      // F3.3: a lone wire nut, and one splicing L1 to the breaker's line screw through two conductors.
+      spliceTwistOn: one(WIRE_NUT_M),
+      spliceTwistOnSpliced: (() => {
+        const bus = wiredBus();
+        run(bus, 'entity.place', { ref: SPLIT_PHASE, positionMm: origin });
+        run(bus, 'entity.place', { ref: BREAKER, positionMm: { x: 1050, y: 300, z: 100 } });
+        run(bus, 'entity.place', { ref: WIRE_NUT_M, positionMm: { x: 500, y: 600, z: 300 } });
+        const route = [free(50, 500, 300), free(1070, 500, 300)];
+        run(bus, 'wire.add', wireArgs(THHN_14_SOLID, [1, 'l1'], [3, 'splice'], route, 2000));
+        run(bus, 'wire.add', wireArgs(THHN_14_SOLID, [3, 'splice'], [2, 'line'], route, 2000));
+        return compileNetlist(bus.state, WIRING_TEST_CATALOG).topologyHash;
+      })(),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 

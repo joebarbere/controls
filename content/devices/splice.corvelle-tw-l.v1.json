@@ -1,0 +1,119 @@
+{
+  "id": "splice.corvelle-tw-l",
+  "version": 1,
+  "title": "Twist-on wire connector, large (14 to 10 AWG, 2 to 5 conductors)",
+  "brand": "Corvelle",
+  "modelName": "TW-L",
+  "category": "splice",
+  "sizeMm": {
+    "widthMm": 24,
+    "heightMm": 34,
+    "depthMm": 24
+  },
+  "terminals": [
+    {
+      "id": "splice",
+      "label": "SPLICE",
+      "positionMm": {
+        "x": 12,
+        "y": 0,
+        "z": 12
+      },
+      "methods": [
+        {
+          "method": "twistOn",
+          "ratedConductors": 5,
+          "maxConductors": 5,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 12,
+            "y": 0,
+            "z": 12
+          },
+          "exitAxis": "-y",
+          "clampType": "twistOn",
+          "clampDepthMm": 11,
+          "contactOhm": 0.0005,
+          "heatPathWPerK": 0.01,
+          "hotSpotHeatCapacityJPerK": 1,
+          "combination": {
+            "minConductors": 2,
+            "maxConductors": 5,
+            "awg": {
+              "smallest": 14,
+              "largest": 10
+            },
+            "totalAreaUm2": {
+              "min": 4161820,
+              "max": 16543850
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "splice.twistOn",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "twist-on-class",
+      "kind": "game-design",
+      "citation": "game-design, inside the general class of UL 486C-listed twist-on connectors (cited by number; the standard was not read): makers sell them in a few colour-coded sizes, each rated for a count range and a size range of copper conductors, stripped about 1/2 in. This fictional large size takes 2 to 5 copper conductors of 14 to 10 AWG, solid or stranded, not aluminium, with a combined size from 14 + 14 AWG (4161820 µm²) to 12 + 12 + 12 + 12 + 12 AWG (16543850 µm², from the gauge table's areaUm2). The bounds are a paraphrased, simplified envelope chosen for play: no maker's combination chart was read or reproduced, so they are labelled game-design until one is read (ADR 0018 §4.4). The 13 ± 2 mm strip and 11 mm of twisted engagement are game-design too.",
+      "covers": [
+        "terminals.splice.methods.twistOn.ratedConductors",
+        "terminals.splice.methods.twistOn.maxConductors",
+        "terminals.splice.methods.twistOn.awgRange",
+        "terminals.splice.methods.twistOn.stranding",
+        "terminals.splice.methods.twistOn.stripLengthMm",
+        "terminals.splice.methods.twistOn.alRated",
+        "terminals.splice.methods.twistOn.clampType",
+        "terminals.splice.methods.twistOn.clampDepthMm",
+        "terminals.splice.methods.twistOn.combination"
+      ]
+    },
+    {
+      "id": "twist-on-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §11): R₀ = 0.5 mΩ for a twist-on joint, between the spring cage (0.3 mΩ) and the back-stab (1.0 mΩ), within NBS Building Science Series 128's (1980, read in the P3 pre-audit) 1.5 mΩ acceptance limit for an assembled connection. Every landed conductor gets it with a fixed spring force (r = 1), scaled only by strip length, nicks and the metal (ADR 0018 §4.4).",
+      "covers": ["terminals.splice.methods.twistOn.contactOhm"]
+    },
+    {
+      "id": "twist-on-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3; F3.6 reads them): the joint sits inside an insulating shell, so its heat path to the device (taken at ambient) is small, 0.01 W/K, against the screw class's 0.026 W/K; the clamp's heat capacity is a physics estimate, about 2 g of steel spring and the twisted copper ends × about 450 J/(kg·K), rounded to 1 J/K.",
+      "covers": [
+        "terminals.splice.methods.twistOn.heatPathWPerK",
+        "terminals.splice.methods.twistOn.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "twist-on-body",
+      "kind": "game-design",
+      "citation": "game-design: a 24 × 34 × 24 mm tapered shell with its one splice terminal at the open end, conductors entering along −y; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.splice.methods.twistOn.entryMm",
+        "terminals.splice.methods.twistOn.exitAxis"
+      ]
+    }
+  ],
+  "extensions": {}
+}

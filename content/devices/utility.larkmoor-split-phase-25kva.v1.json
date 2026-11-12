@@ -41,7 +41,13 @@
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -75,7 +81,13 @@
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -109,7 +121,13 @@
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     }
@@ -149,7 +167,7 @@
     {
       "id": "stand-in-terminals",
       "kind": "game-design",
-      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
+      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it. Their contact and clamp values copy the breaker's screw class (ADR 0018 §8): a pressure plate gripping 10 mm, R₀ 0.3 mΩ (NBS BSS 103's good-connection class), a 0.026 W/K heat path and a 1.1 J/K clamp, all game-design here, like the torque.",
       "covers": ["terminals.*.methods.screw"]
     },
     {

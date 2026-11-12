@@ -1,6 +1,15 @@
-import type { BatteryParams, Catalog, DeviceDefinition, LampIncandescentParams, LeadParams } from '@controls/catalog';
+import type {
+  BatteryParams,
+  Catalog,
+  DeviceDefinition,
+  LampIncandescentParams,
+  LeadParams,
+  TerminalMethodSpec,
+} from '@controls/catalog';
 import { conductorPhysics, conductorResistanceOhm, leadResistanceOhm } from '@controls/catalog';
+import type { TerminationV3 } from '@controls/save-format';
 import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
+import { asMadeContactInto, type ContactConductor, type ContactParts } from '../contact/contact';
 import {
   benchSupplyNetlistModel,
   dinPsuNetlistModel,
@@ -65,6 +74,20 @@ export interface DeviceNetlistModel {
   topology(input: DeviceTopologyInput): DeviceTopology;
 }
 
+/**
+ * One end of a connection as its netlist model reads it (ADR 0015 implementation notes 2 and 3): the
+ * stored termination, the terminal's spec for its method, and how many conductor ends that method
+ * holds on the terminal (this one included; lead clips never count). A lead's clip is all `null`/0.
+ */
+export interface ConnectionEndInput {
+  readonly termination: TerminationV3 | null;
+  readonly spec: TerminalMethodSpec | null;
+  readonly landedCount: number;
+}
+
+/** A lead clip, or an end a model doesn't read: no termination. */
+export const CLIP_END: ConnectionEndInput = Object.freeze({ termination: null, spec: null, landedCount: 0 });
+
 /** What a connection's netlist model reads (ADR 0015, ADR 0018 §1): static data only. */
 export interface ConnectionElementInput {
   /** The catalogue entry's `model.params`, already validated against the kind's schema. */
@@ -75,6 +98,8 @@ export interface ConnectionElementInput {
   readonly catalog: Catalog;
   /** The connection's cut length (integer mm, `ConnectionV3.lengthMm`), or `null` for a lead. */
   readonly lengthMm: number | null;
+  /** Its two ends; the compiler builds the element only when both are landed. */
+  readonly ends: { readonly a: ConnectionEndInput; readonly b: ConnectionEndInput };
 }
 
 /** The netlist model of a connection kind (a test lead, a conductor): one element, `a` to `b`. */
@@ -149,6 +174,19 @@ const lampIncandescent: DeviceNetlistModel = {
 const SPST_CLOSED: DeviceTopology = { joins: [['a', 'b']], elements: [] };
 const SPST_OPEN: DeviceTopology = { joins: NO_JOINS, elements: [] };
 
+const SPLICE: DeviceTopology = { joins: NO_JOINS, elements: [] };
+
+/**
+ * A twist-on splice (F3.3 part 1, ADR 0018 §4.4): one `splice` terminal, so every conductor landed in
+ * it meets at one node, joined ideally. Each conductor's own branch carries its end's contact
+ * resistance (R₀ from the method spec, r = 1); the splice body holds no element.
+ */
+const spliceTwistOn: DeviceNetlistModel = {
+  kind: 'splice.twistOn',
+  simTopologyKeys: [],
+  topology: () => SPLICE,
+};
+
 /**
  * An ideal SPST switch: closed joins its terminals into one node with no branch; open drops it, so
  * the terminals are separate nodes. Its current is the current of the leads at either side.
@@ -185,40 +223,61 @@ const lead: ConnectionNetlistModel = {
 };
 
 /**
- * A conductor (F3.1, ADR 0018 §1): one resistor branch whose static value is the conductor's
- * resistance at its material's reference temperature T₀ (`conductorResistanceOhm` over the cut length)
- * plus each end's as-made contact resistance. Values:
+ * A conductor (F3.1, F3.3 part 1, ADR 0018 §1 and §4): one resistor branch whose static value is the
+ * conductor's resistance at its material's reference temperature T₀ (`conductorResistanceOhm` over the
+ * cut length) plus each end's as-made contact resistance (`asMadeContactInto`, from the stored
+ * termination, the method spec and the landed count). Values:
  *
  * - `conductorOhm`: R_cond(T₀) = ρ₀ · k_lay · L / A;
- * - `endAContactOhm`, `endBContactOhm`: each end's as-made contact resistance. **0 (ideal) until F3.3
- *   part 1**, which adds the method spec's `contactOhm` and the termination-quality model (ADR 0018 §4);
- * - `resistanceOhm`: their sum, the value the DC and AC solvers stamp. From F3.6 the connection bank
- *   stamps the solve-time value instead (R(T), degradation, the end regimes).
+ * - `endAConstrictionOhm`, `endAFilmOhm` (and `endB…`): each end's two parts, the constriction part
+ *   that carries the metal's α at solve time and the temperature-independent film part (§3.3, §4.3);
+ * - `endAContactOhm`, `endBContactOhm`: each end's R_made, the sum of its two parts;
+ * - `resistanceOhm`: R_cond plus both ends, the value the DC and AC solvers stamp. From F3.6 the
+ *   connection bank stamps the solve-time value instead (R(T), degradation, the end regimes).
  *
- * No thermal state yet (F3.6): a conductor sits at T₀ = 20 °C, the game's ambient. A conductor with a
- * free end never reaches here (the compiler leaves it out, `unlanded`).
+ * No thermal state yet (F3.6): a conductor and its ends sit at T₀ = 20 °C, the game's ambient. A
+ * conductor with a free end never reaches here (the compiler leaves it out, `unlanded`).
  */
 const conductor: ConnectionNetlistModel = {
   kind: 'conductor',
-  element: ({ device, catalog, lengthMm }) => {
+  element: ({ device, catalog, lengthMm, ends }) => {
     const physics = conductorPhysics(catalog, device);
     if (physics === undefined || lengthMm === null) {
       throw new Error(`conductor model: ${device.id}@${device.version} needs conductor data and a cut length`);
     }
     const conductorOhm = conductorResistanceOhm(physics, lengthMm, physics.referenceTemperatureK);
-    const endAContactOhm = 0;
-    const endBContactOhm = 0;
+    const a = endContact(device, ends.a, physics);
+    const b = endContact(device, ends.b, physics);
+    const endAContactOhm = a.constrictionOhm + a.filmOhm;
+    const endBContactOhm = b.constrictionOhm + b.filmOhm;
     return {
       kind: 'resistor',
       values: {
         conductorOhm,
+        endAConstrictionOhm: a.constrictionOhm,
         endAContactOhm,
+        endAFilmOhm: a.filmOhm,
+        endBConstrictionOhm: b.constrictionOhm,
         endBContactOhm,
+        endBFilmOhm: b.filmOhm,
         resistanceOhm: conductorOhm + endAContactOhm + endBContactOhm,
       },
     };
   },
 };
+
+/** A landed conductor end's as-made contact: its termination and method spec are required. */
+function endContact(device: DeviceDefinition, end: ConnectionEndInput, conductor: ContactConductor): ContactParts {
+  const { termination, spec } = end;
+  if (termination === null || spec === null) {
+    throw new Error(`conductor model: ${device.id}@${device.version} has a landed end without a termination`);
+  }
+  return asMadeContactInto(
+    { constrictionOhm: 0, filmOhm: 0 },
+    { termination, spec, landedCount: end.landedCount },
+    conductor,
+  );
+}
 
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
@@ -231,6 +290,7 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   heater: heaterNetlistModel,
   'lamp.incandescent': lampIncandescent,
   resistor: resistorNetlistModel,
+  'splice.twistOn': spliceTwistOn,
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,

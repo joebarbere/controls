@@ -766,7 +766,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 90,
             "z": 20
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -806,7 +812,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 0,
             "z": 20
           },
-          "exitAxis": "-y"
+          "exitAxis": "-y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     }
@@ -922,6 +934,32 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: a slotted and square (Robertson) combination head, as on many North American branch-breaker and panel screws (common practice, not one product); the drive type is a name and its size is not modelled.",
       "covers": [
         "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread, nicks, crimps and aluminium (ADR 0018 §4).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm"
+      ]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), for F3.6's hot-spot node: the heat path into the device, 0.026 W/K, is calibrated, not measured: with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the threshold of visible glow (the Draper point, about 525 °C) and about 1000 °C. The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass clamp parts × about 380 J/(kg·K).",
+      "covers": [
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "breaker-terminal-clamp",
+      "kind": "game-design",
+      "citation": "game-design: the fictional breaker's wire screws clamp the conductor under a pressure plate (a saddle) rather than wrapping it under a binding head, so bare strands are held (ADR 0018 §4.3); the plate grips 10 mm of conductor, inside the 13 ± 2 mm strip. Not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
       ]
     }
   ],
@@ -4480,6 +4518,378 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "splice.corvelle-tw-l",
+  "version": 1,
+  "title": "Twist-on wire connector, large (14 to 10 AWG, 2 to 5 conductors)",
+  "brand": "Corvelle",
+  "modelName": "TW-L",
+  "category": "splice",
+  "sizeMm": {
+    "widthMm": 24,
+    "heightMm": 34,
+    "depthMm": 24
+  },
+  "terminals": [
+    {
+      "id": "splice",
+      "label": "SPLICE",
+      "positionMm": {
+        "x": 12,
+        "y": 0,
+        "z": 12
+      },
+      "methods": [
+        {
+          "method": "twistOn",
+          "ratedConductors": 5,
+          "maxConductors": 5,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 12,
+            "y": 0,
+            "z": 12
+          },
+          "exitAxis": "-y",
+          "clampType": "twistOn",
+          "clampDepthMm": 11,
+          "contactOhm": 0.0005,
+          "heatPathWPerK": 0.01,
+          "hotSpotHeatCapacityJPerK": 1,
+          "combination": {
+            "minConductors": 2,
+            "maxConductors": 5,
+            "awg": {
+              "smallest": 14,
+              "largest": 10
+            },
+            "totalAreaUm2": {
+              "min": 4161820,
+              "max": 16543850
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "splice.twistOn",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "twist-on-class",
+      "kind": "game-design",
+      "citation": "game-design, inside the general class of UL 486C-listed twist-on connectors (cited by number; the standard was not read): makers sell them in a few colour-coded sizes, each rated for a count range and a size range of copper conductors, stripped about 1/2 in. This fictional large size takes 2 to 5 copper conductors of 14 to 10 AWG, solid or stranded, not aluminium, with a combined size from 14 + 14 AWG (4161820 µm²) to 12 + 12 + 12 + 12 + 12 AWG (16543850 µm², from the gauge table's areaUm2). The bounds are a paraphrased, simplified envelope chosen for play: no maker's combination chart was read or reproduced, so they are labelled game-design until one is read (ADR 0018 §4.4). The 13 ± 2 mm strip and 11 mm of twisted engagement are game-design too.",
+      "covers": [
+        "terminals.splice.methods.twistOn.ratedConductors",
+        "terminals.splice.methods.twistOn.maxConductors",
+        "terminals.splice.methods.twistOn.awgRange",
+        "terminals.splice.methods.twistOn.stranding",
+        "terminals.splice.methods.twistOn.stripLengthMm",
+        "terminals.splice.methods.twistOn.alRated",
+        "terminals.splice.methods.twistOn.clampType",
+        "terminals.splice.methods.twistOn.clampDepthMm",
+        "terminals.splice.methods.twistOn.combination"
+      ]
+    },
+    {
+      "id": "twist-on-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §11): R₀ = 0.5 mΩ for a twist-on joint, between the spring cage (0.3 mΩ) and the back-stab (1.0 mΩ), within NBS Building Science Series 128's (1980, read in the P3 pre-audit) 1.5 mΩ acceptance limit for an assembled connection. Every landed conductor gets it with a fixed spring force (r = 1), scaled only by strip length, nicks and the metal (ADR 0018 §4.4).",
+      "covers": [
+        "terminals.splice.methods.twistOn.contactOhm"
+      ]
+    },
+    {
+      "id": "twist-on-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3; F3.6 reads them): the joint sits inside an insulating shell, so its heat path to the device (taken at ambient) is small, 0.01 W/K, against the screw class's 0.026 W/K; the clamp's heat capacity is a physics estimate, about 2 g of steel spring and the twisted copper ends × about 450 J/(kg·K), rounded to 1 J/K.",
+      "covers": [
+        "terminals.splice.methods.twistOn.heatPathWPerK",
+        "terminals.splice.methods.twistOn.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "twist-on-body",
+      "kind": "game-design",
+      "citation": "game-design: a 24 × 34 × 24 mm tapered shell with its one splice terminal at the open end, conductors entering along −y; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.splice.methods.twistOn.entryMm",
+        "terminals.splice.methods.twistOn.exitAxis"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "splice.corvelle-tw-m",
+  "version": 1,
+  "title": "Twist-on wire connector, medium (18 to 12 AWG, 2 to 4 conductors)",
+  "brand": "Corvelle",
+  "modelName": "TW-M",
+  "category": "splice",
+  "sizeMm": {
+    "widthMm": 20,
+    "heightMm": 28,
+    "depthMm": 20
+  },
+  "terminals": [
+    {
+      "id": "splice",
+      "label": "SPLICE",
+      "positionMm": {
+        "x": 10,
+        "y": 0,
+        "z": 10
+      },
+      "methods": [
+        {
+          "method": "twistOn",
+          "ratedConductors": 4,
+          "maxConductors": 4,
+          "awgRange": {
+            "smallest": 18,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 10,
+            "y": 0,
+            "z": 10
+          },
+          "exitAxis": "-y",
+          "clampType": "twistOn",
+          "clampDepthMm": 11,
+          "contactOhm": 0.0005,
+          "heatPathWPerK": 0.01,
+          "hotSpotHeatCapacityJPerK": 1,
+          "combination": {
+            "minConductors": 2,
+            "maxConductors": 4,
+            "awg": {
+              "smallest": 18,
+              "largest": 12
+            },
+            "totalAreaUm2": {
+              "min": 1646094,
+              "max": 9926310
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "splice.twistOn",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "twist-on-class",
+      "kind": "game-design",
+      "citation": "game-design, inside the general class of UL 486C-listed twist-on connectors (cited by number; the standard was not read): makers sell them in a few colour-coded sizes, each rated for a count range and a size range of copper conductors, stripped about 1/2 in. This fictional medium size takes 2 to 4 copper conductors of 18 to 12 AWG, solid or stranded, not aluminium, with a combined size from 18 + 18 AWG (1646094 µm²) to 12 + 12 + 12 AWG (9926310 µm², from the gauge table's areaUm2). The bounds are a paraphrased, simplified envelope chosen for play: no maker's combination chart was read or reproduced, so they are labelled game-design until one is read (ADR 0018 §4.4). The 13 ± 2 mm strip and 11 mm of twisted engagement are game-design too.",
+      "covers": [
+        "terminals.splice.methods.twistOn.ratedConductors",
+        "terminals.splice.methods.twistOn.maxConductors",
+        "terminals.splice.methods.twistOn.awgRange",
+        "terminals.splice.methods.twistOn.stranding",
+        "terminals.splice.methods.twistOn.stripLengthMm",
+        "terminals.splice.methods.twistOn.alRated",
+        "terminals.splice.methods.twistOn.clampType",
+        "terminals.splice.methods.twistOn.clampDepthMm",
+        "terminals.splice.methods.twistOn.combination"
+      ]
+    },
+    {
+      "id": "twist-on-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §11): R₀ = 0.5 mΩ for a twist-on joint, between the spring cage (0.3 mΩ) and the back-stab (1.0 mΩ), within NBS Building Science Series 128's (1980, read in the P3 pre-audit) 1.5 mΩ acceptance limit for an assembled connection. Every landed conductor gets it with a fixed spring force (r = 1), scaled only by strip length, nicks and the metal (ADR 0018 §4.4).",
+      "covers": [
+        "terminals.splice.methods.twistOn.contactOhm"
+      ]
+    },
+    {
+      "id": "twist-on-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3; F3.6 reads them): the joint sits inside an insulating shell, so its heat path to the device (taken at ambient) is small, 0.01 W/K, against the screw class's 0.026 W/K; the clamp's heat capacity is a physics estimate, about 2 g of steel spring and the twisted copper ends × about 450 J/(kg·K), rounded to 1 J/K.",
+      "covers": [
+        "terminals.splice.methods.twistOn.heatPathWPerK",
+        "terminals.splice.methods.twistOn.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "twist-on-body",
+      "kind": "game-design",
+      "citation": "game-design: a 20 × 28 × 20 mm tapered shell with its one splice terminal at the open end, conductors entering along −y; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.splice.methods.twistOn.entryMm",
+        "terminals.splice.methods.twistOn.exitAxis"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "splice.corvelle-tw-s",
+  "version": 1,
+  "title": "Twist-on wire connector, small (22 to 14 AWG, 2 to 3 conductors)",
+  "brand": "Corvelle",
+  "modelName": "TW-S",
+  "category": "splice",
+  "sizeMm": {
+    "widthMm": 16,
+    "heightMm": 22,
+    "depthMm": 16
+  },
+  "terminals": [
+    {
+      "id": "splice",
+      "label": "SPLICE",
+      "positionMm": {
+        "x": 8,
+        "y": 0,
+        "z": 8
+      },
+      "methods": [
+        {
+          "method": "twistOn",
+          "ratedConductors": 3,
+          "maxConductors": 3,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 14
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 8,
+            "y": 0,
+            "z": 8
+          },
+          "exitAxis": "-y",
+          "clampType": "twistOn",
+          "clampDepthMm": 11,
+          "contactOhm": 0.0005,
+          "heatPathWPerK": 0.01,
+          "hotSpotHeatCapacityJPerK": 1,
+          "combination": {
+            "minConductors": 2,
+            "maxConductors": 3,
+            "awg": {
+              "smallest": 22,
+              "largest": 14
+            },
+            "totalAreaUm2": {
+              "min": 651068,
+              "max": 4161820
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "splice.twistOn",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "twist-on-class",
+      "kind": "game-design",
+      "citation": "game-design, inside the general class of UL 486C-listed twist-on connectors (cited by number; the standard was not read): makers sell them in a few colour-coded sizes, each rated for a count range and a size range of copper conductors, stripped about 1/2 in. This fictional small size takes 2 to 3 copper conductors of 22 to 14 AWG, solid or stranded, not aluminium, with a combined size from 22 + 22 AWG (651068 µm²) to 14 + 14 AWG (4161820 µm², from the gauge table's areaUm2). The bounds are a paraphrased, simplified envelope chosen for play: no maker's combination chart was read or reproduced, so they are labelled game-design until one is read (ADR 0018 §4.4). The 13 ± 2 mm strip and 11 mm of twisted engagement are game-design too.",
+      "covers": [
+        "terminals.splice.methods.twistOn.ratedConductors",
+        "terminals.splice.methods.twistOn.maxConductors",
+        "terminals.splice.methods.twistOn.awgRange",
+        "terminals.splice.methods.twistOn.stranding",
+        "terminals.splice.methods.twistOn.stripLengthMm",
+        "terminals.splice.methods.twistOn.alRated",
+        "terminals.splice.methods.twistOn.clampType",
+        "terminals.splice.methods.twistOn.clampDepthMm",
+        "terminals.splice.methods.twistOn.combination"
+      ]
+    },
+    {
+      "id": "twist-on-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §11): R₀ = 0.5 mΩ for a twist-on joint, between the spring cage (0.3 mΩ) and the back-stab (1.0 mΩ), within NBS Building Science Series 128's (1980, read in the P3 pre-audit) 1.5 mΩ acceptance limit for an assembled connection. Every landed conductor gets it with a fixed spring force (r = 1), scaled only by strip length, nicks and the metal (ADR 0018 §4.4).",
+      "covers": [
+        "terminals.splice.methods.twistOn.contactOhm"
+      ]
+    },
+    {
+      "id": "twist-on-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3; F3.6 reads them): the joint sits inside an insulating shell, so its heat path to the device (taken at ambient) is small, 0.01 W/K, against the screw class's 0.026 W/K; the clamp's heat capacity is a physics estimate, about 2 g of steel spring and the twisted copper ends × about 450 J/(kg·K), rounded to 1 J/K.",
+      "covers": [
+        "terminals.splice.methods.twistOn.heatPathWPerK",
+        "terminals.splice.methods.twistOn.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "twist-on-body",
+      "kind": "game-design",
+      "citation": "game-design: a 16 × 22 × 16 mm tapered shell with its one splice terminal at the open end, conductors entering along −y; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.splice.methods.twistOn.entryMm",
+        "terminals.splice.methods.twistOn.exitAxis"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "supply.brindlecore-bench-30v-5a",
   "version": 1,
   "title": "0–30 V 0–5 A bench DC power supply",
@@ -4622,7 +5032,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 125,
             "z": 110
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 7,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
         }
       ]
     },
@@ -4663,7 +5079,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 125,
             "z": 110
           },
-          "exitAxis": "+y"
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 7,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
         }
       ]
     }
@@ -4769,6 +5191,32 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: unverified. DIN-rail power supplies commonly have slotted and Pozidriv combination terminal screws (common practice for IEC-style terminals, not read from one datasheet); the drive type is a name and its size is not modelled.",
       "covers": [
         "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-contact",
+      "kind": "game-design",
+      "citation": "game-design: the supply's output terminals take the branch-circuit screw class's contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1). BSS 103 measured wiring-device terminals, not a power supply's box clamps, so applying it here is a game-design choice.",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §3.3), for F3.6's hot-spot node: the heat path takes the screw class's calibrated 0.026 W/K (no better figure for a supply's terminal); the clamp's heat capacity, 0.5 J/K, is a physics estimate for a smaller box clamp, about 1.3 g of brass and steel × about 380 J/(kg·K).",
+      "covers": [
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "din-psu-terminal-clamp",
+      "kind": "game-design",
+      "citation": "game-design: the supply's screw terminals are box clamps (a rising cage that closes around the conductor), so bare strands are held (ADR 0018 §4.3); the cage grips 7 mm of conductor, inside the 8 ± 1 mm strip. Not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
       ]
     }
   ],
@@ -5080,7 +5528,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -5120,7 +5574,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     },
@@ -5160,7 +5620,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
             "y": 250,
             "z": 200
           },
-          "exitAxis": "+z"
+          "exitAxis": "+z",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
         }
       ]
     }
@@ -5209,7 +5675,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "stand-in-terminals",
       "kind": "game-design",
-      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
+      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it. Their contact and clamp values copy the breaker's screw class (ADR 0018 §8): a pressure plate gripping 10 mm, R₀ 0.3 mΩ (NBS BSS 103's good-connection class), a 0.026 W/K heat path and a 1.1 J/K clamp, all game-design here, like the torque.",
       "covers": [
         "terminals.*.methods.screw"
       ]

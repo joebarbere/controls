@@ -37,16 +37,17 @@ flowchart LR
 
 Each placed entity contributes a **fragment**: its sorted terminals, the groups of terminals it joins ideally, and its elements. A fragment comes from the model kind's `DeviceNetlistModel.topology({ params, state, sim })` in `DEVICE_NETLIST_MODELS`; a test checks every placed kind in `MODEL_KINDS` has one. The model says only what the netlist needs: which terminals are joined, which elements sit between which terminals, and when. Stamps and electrical behaviour belong to the device models of F2.4 and F2.5.
 
-| Model kind                | Topology                                                                                                                                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `battery`                 | One `vsource` element `cell`, `neg` → `pos`, a DC source                                                                                                                                             |
-| `lamp.incandescent`       | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank                                                                                                                |
-| `resistor`, `heater`      | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                                                                                                                                   |
-| `switch.spst`             | Closed: an ideal join of `a` and `b`, no element. Open: nothing                                                                                                                                      |
-| `fuse`                    | Intact: one `resistor` element `link`, `a` → `b`. Blown (sim `blown`): nothing (F2.5)                                                                                                                |
-| `breaker.thermalMagnetic` | Handle `on` and not `tripped`: one `resistor` element `pole`, `line` → `load`. Otherwise nothing (F2.5)                                                                                              |
-| `lead` (connection)       | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K)                                                                                                             |
-| `conductor` (connection)  | One `resistor` branch, `a` → `b`: `conductorResistanceOhm` over the cut length at T₀ (20 °C) plus each end's as-made contact resistance (ideal until F3.3); absent while an end is free (`unlanded`) |
+| Model kind                | Topology                                                                                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `battery`                 | One `vsource` element `cell`, `neg` → `pos`, a DC source                                                                                                                                                                    |
+| `lamp.incandescent`       | One `resistor` element `filament`, `a` → `b`; its value is R(T), from the lamp's bank                                                                                                                                       |
+| `resistor`, `heater`      | One `resistor` element `element`, `a` → `b`, of fixed value (F2.5)                                                                                                                                                          |
+| `switch.spst`             | Closed: an ideal join of `a` and `b`, no element. Open: nothing                                                                                                                                                             |
+| `fuse`                    | Intact: one `resistor` element `link`, `a` → `b`. Blown (sim `blown`): nothing (F2.5)                                                                                                                                       |
+| `breaker.thermalMagnetic` | Handle `on` and not `tripped`: one `resistor` element `pole`, `line` → `load`. Otherwise nothing (F2.5)                                                                                                                     |
+| `lead` (connection)       | One `resistor` branch, `a` → `b`, from `leadResistanceOhm` at the 20 °C bench (293.15 K)                                                                                                                                    |
+| `conductor` (connection)  | One `resistor` branch, `a` → `b`: `conductorResistanceOhm` over the cut length at T₀ (20 °C) plus each end's as-made contact resistance ([below](#contact-resistance-f33-part-1)); absent while an end is free (`unlanded`) |
+| `splice.twistOn`          | Nothing: one `splice` terminal, so every conductor landed in it meets at its node (F3.3)                                                                                                                                    |
 
 A model that changes topology on a sim-owned event lists those keys in `simTopologyKeys` (the fuse lists `blown`, the breaker `tripped`). It is shown only those keys, never the rest of the engine's state. The other P2 kinds list none. A protective device compiles to a branch while closed, never to an ideal join, because its current is what heats it.
 
@@ -749,6 +750,28 @@ sequenceDiagram
 - **Reading, not computing:** `SimEngine.branchAmps(element)` is |I| from the held solution with `NetlistReadout`'s rule, and `NaN` when the element isn't in this netlist or its island isn't solved. The observer never writes to the engine, so snapshots, hashes and events are the same watched or not (`traces.spec.ts`).
 - **Independent of timing:** batches are cut by publishes, which the wall clock throttles, but the concatenated samples are identical under every publish timing and both transports. A replay start's history (ticks ≤ `endTick`) is dropped, as its events are.
 - **The host** clears a trace on a new worker (new game, load, restart) and watches it again there. `__controlsSession.traces()` gives e2e specs what the UI received.
+
+## Contact resistance (F3.3 part 1)
+
+Each landed conductor end's **as-made contact resistance** (ADR 0018 §4) is part of its conductor's static branch value. It is a pure function of the stored `TerminationV3` outcome, the terminal's method spec (catalogue data, §8) and how many conductor ends that method holds on the terminal, computed by `asMadeContactInto` in `sim-core/src/lib/contact/`.
+
+```mermaid
+flowchart LR
+    T[TerminationV3: torque, strip, nicks, crimp] --> R[r = min 1, T/T_marked]
+    S[Method spec: torqueNm, clampDepthMm, clampType, ratedConductors, contactOhm] --> R
+    N[Landed count n, counted by the compiler] --> E
+    R --> E[r_eff = r × φ_strip × rated/n × spread]
+    E --> C[R_clamp = R₀/√clamp r_eff + 100 mΩ · 1 − r_eff/0.4 ²]
+    C --> M[× metal factor, + crimp, × 1/1 − f]
+    M --> V[endXConstrictionOhm, endXFilmOhm]
+```
+
+- **Calibrated, then shaped.** R₀ (`contactOhm`) is a measured good connection (0.3 mΩ for the screw class, NBS BSS 103). Holm's R ∝ F^−½ holds only while the clamp is seated (from 40 % of the marked torque); below, a loose film term rises quadratically to BSS 128's 100 mΩ "loose" class at zero torque. 20 % torque gives 25.47 mΩ, 84.9 × R₀.
+- **The other inputs** scale the clamp ratio: a strip shorter than the clamp depth, more conductors than the clamp is rated for (shared evenly), bare strands under a binding screw (× 0.5). A ferrule or lug adds a crimp on the same seated/loose law (0.05 mΩ when good); nicks divide by the intact share; a non-copper conductor scales by the two members' mean resistivity (aluminium 1.3197 ×). Aluminium on an unrated method only multiplies the degradation rate (F3.6).
+- **Two parts.** The constriction part will follow the metal's temperature in F3.6's connection bank; the film part (loose term and crimp) doesn't.
+- **Counted, not stored.** The compiler counts conductor ends per (terminal, method) on every compile (netlisted or not, never lead clips) and rebuilds a conductor's element when a count or spec changes: a values-only compile, never a topology change.
+- **Twist-on splices** (`splice.twistOn`) are one terminal; each conductor in one gets the nut's R₀ with r = 1. Which combinations may be landed is a command check (`combinationProblem`, ADR 0018 §4.4).
+- **Termination outcomes** come from `resolveTermination` in `world-model` at landing time ([commands](commands.md)): the hole's nicks (capped at its geometric reach), the crimp quality, and the achieved torque (a torque driver within its accuracy; a plain screwdriver uniform in 0.3–1.3 × the mark, so about one landing in ten is loose).
 
 ## Not yet
 

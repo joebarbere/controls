@@ -1,6 +1,7 @@
 import {
   type AccessoryDefinition,
   type ConductorStranding,
+  gaugeRow,
   type TerminalMethodSpec,
   terminationMethod,
   type ToolDefinition,
@@ -24,12 +25,26 @@ import { deriveStream, type Sfc32, terminationStreamKey } from '../prng';
  * `resolve.spec.ts` freeze it at v0.4.0; after that a changed outcome is a new method id or a
  * versioned resolver, never a silent edit.
  *
- * The numbers below are **game-design, provisional**: they are decided in the F3.3 part 1 PR
- * (`sim-engine-engineer` with `electrical-realism-reviewer`), which re-pins the golden vectors;
- * otherwise they freeze as game-design at v0.4.0 (ADR 0015 implementation note 11). The rules they follow are fixed here: the right hole nicks nothing,
- * a smaller one nicks more per gauge step; the right die crimps fully (1), another die less; a torque
- * driver lands within its stated accuracy of its setting; a plain screwdriver lands with a seeded
- * spread around the specified torque.
+ * The numbers below are **game-design**, decided in F3.3 part 1 (ADR 0018 §4.3, ADR 0015
+ * implementation note 11; `electrical-realism-reviewer` signs them off) and frozen at v0.4.0. Each is
+ * read through ADR 0018's contact model, which is what makes them mean something:
+ *
+ * - **Nicks.** A hole that is too small cuts into the metal: a share per AWG step it is too small,
+ *   plus a little for a hole cut for the other stranding, with a seeded spread, and never more than
+ *   the hole can geometrically reach, 1 − (d_hole/d_cond)² (the area outside the blade circle). A
+ *   stranded conductor (and a stranded hole) is taken 3/√7 ≈ 1.134 times the solid diameter of its
+ *   gauge, a 7-strand concentric bundle (an abstraction: 19 and 37 strands sit at 1.147 and 1.151).
+ *   So the right hole, a larger one, or the stranded hole of the same gauge on a solid conductor
+ *   (physically the solid hole one size up) nicks nothing. The contact model reads a nick as 1/(1 − f).
+ * - **Crimps.** The right die closes fully (1); a die the accessory doesn't list is an under-crimp at
+ *   0.25, inside ADR 0018's loose regime (14.1 mΩ for the crimp alone, golden 5); each AWG step the
+ *   conductor lies outside the die's range takes 0.3 more (one size off still seats, three are loose);
+ *   an imperfect crimp gets a seeded spread below its base.
+ * - **Clamp torque.** A torque driver lands within its stated accuracy of its setting. A plain
+ *   screwdriver is **biased low**: uniform in [0.3, 1.3) × the marked torque (mean 0.8), so about one
+ *   hand-tightened landing in ten falls below ADR 0018's seat fraction (0.4) and lands in the loose
+ *   regime (up to 22× R₀), and about seven in ten are under the mark. The contact model caps the
+ *   benefit at the mark.
  */
 
 /** A conductor as a termination sees it: its integer AWG designation and how it is made. */
@@ -82,23 +97,44 @@ export function terminationStreams(seed: number, id: number): TerminationStreams
   };
 }
 
-/** game-design, provisional (F3.3 part 1 decides): area lost per AWG step a strip hole is too small. */
+/**
+ * game-design: the area share nicked per AWG step a strip hole is too small. Below the geometric
+ * reach of one step (a blade circle one gauge smaller lies outside 20.7 % of the area), since a blade
+ * scores rather than severs the metal it reaches.
+ */
 export const NICK_FRACTION_PER_AWG_STEP = 0.15;
-/** game-design, provisional: area lost to a hole cut for the other stranding (and not too large). */
+/** game-design: the area share nicked by a hole cut for the other stranding (only where it is smaller, by the cap). */
 export const NICK_FRACTION_STRANDING_MISMATCH = 0.05;
-/** game-design, provisional: a nick's seeded spread, a factor in [1 − s, 1 + s). */
+/** game-design: a nick's seeded spread, a factor in [1 − s, 1 + s) (then capped at the geometric reach). */
 export const NICK_SPREAD = 0.25;
-/** game-design, provisional: crimp quality with a die the accessory doesn't list (an under-crimp). */
-export const WRONG_DIE_CRIMP_QUALITY = 0.5;
-/** game-design, provisional: quality lost per AWG step the conductor lies outside the die's range. */
-export const CRIMP_QUALITY_PER_AWG_STEP = 0.2;
-/** game-design, provisional: an imperfect crimp's seeded spread, a factor in (1 − s, 1]. */
+/**
+ * physics (geometry): a 7-strand concentric conductor's diameter squared over the solid conductor's of
+ * the same area, (3/√7)² = 9/7 (seven strands of d/√7 make a bundle three strands wide). Applied to
+ * stranded conductors and stranded holes in the nick cap; an abstraction for 19 and 37 strands.
+ */
+export const STRANDED_DIAMETER_SQUARED_RATIO = 9 / 7;
+/**
+ * game-design: crimp quality with a die the accessory doesn't list, an under-crimp in ADR 0018's
+ * loose regime (below its 0.4 seat fraction; ADR 0018 §12 golden 5).
+ */
+export const WRONG_DIE_CRIMP_QUALITY = 0.25;
+/** game-design: quality lost per AWG step the conductor lies outside the die's range (one off seats, three are loose). */
+export const CRIMP_QUALITY_PER_AWG_STEP = 0.3;
+/** game-design: an imperfect crimp's seeded spread, a factor in (1 − s, 1]. */
 export const CRIMP_SPREAD = 0.1;
 /**
- * game-design, provisional (ADR 0015 Review, content: "a field-study source for the screwdriver
- * spread, or game-design"): a plain screwdriver lands within ±40 % of the specified torque.
+ * game-design (ADR 0015 Review asked for a field-study source or game-design; none was vetted): a
+ * plain screwdriver's achieved torque is biased low, centred on 0.8 × the marked torque. Hand
+ * tightening without a torque readout under-shoots the marked value, which is why NFPA 70-2023 Art.
+ * 110.14(D) (cited by number) requires an approved means, typically a torque tool, where a torque is
+ * marked; the bias's size is chosen, not measured.
  */
-export const SCREWDRIVER_TORQUE_SPREAD = 0.4;
+export const SCREWDRIVER_TORQUE_MEAN_FRACTION = 0.8;
+/**
+ * game-design: a plain screwdriver's spread around its mean, ± 0.5 × the marked torque, so it lands
+ * uniformly in [0.3, 1.3) × the mark: one landing in ten below ADR 0018's seat fraction (0.4).
+ */
+export const SCREWDRIVER_TORQUE_SPREAD = 0.5;
 
 /** The ideal outcome `'auto'` makes: the method at its nominal strip and torque, no nicks, no accessory. */
 export function autoTermination(id: number, spec: TerminalMethodSpec): TerminationV3 {
@@ -113,12 +149,31 @@ export function autoTermination(id: number, spec: TerminalMethodSpec): Terminati
   };
 }
 
-/** The share of the conductor's area a strip hole nicks (before the spread): 0 for the right hole. */
+/** A size's diameter squared, relative: its gauge area, × 9/7 when stranded (a 7-strand bundle). */
+function diameterSquared(awg: number, stranding: ConductorStranding): number {
+  const area = gaugeRow(awg)?.areaMm2 ?? 0;
+  return stranding === 'stranded' ? area * STRANDED_DIAMETER_SQUARED_RATIO : area;
+}
+
+/**
+ * The most a strip hole can nick: the conductor's area outside the blade circle, 1 − (d_hole/d_cond)²,
+ * or 0 when the hole is at least as wide as the conductor.
+ */
+export function nickCap(hole: ToolHole, conductor: TerminationConductor): number {
+  const cond = diameterSquared(conductor.awg, conductor.stranding);
+  const reach = cond > 0 ? 1 - diameterSquared(hole.awg, hole.stranding) / cond : 0;
+  return reach > 0 ? reach : 0;
+}
+
+/**
+ * The share of the conductor's area a strip hole nicks (before the spread): the per-step model,
+ * min(1, steps × 0.15 + mismatch), never above {@link nickCap}. 0 for the right hole or a wider one.
+ */
 export function nickBase(hole: ToolHole, conductor: TerminationConductor): number {
   const steps = hole.awg - conductor.awg; // > 0: a hole for a thinner conductor
   if (steps < 0) return 0;
   const mismatch = hole.stranding === conductor.stranding ? 0 : NICK_FRACTION_STRANDING_MISMATCH;
-  return Math.min(1, steps * NICK_FRACTION_PER_AWG_STEP + mismatch);
+  return Math.min(1, steps * NICK_FRACTION_PER_AWG_STEP + mismatch, nickCap(hole, conductor));
 }
 
 /** How many AWG steps `awg` lies outside `range` (0 inside it). */
@@ -151,7 +206,12 @@ export function resolveTermination(
   // Strip: the length as asked; nicks from a hole too small (or for the other stranding).
   const nick = nickBase(tools.strip.hole, conductor);
   const nickedStrandFraction =
-    nick === 0 ? 0 : Math.min(1, nick * (1 - NICK_SPREAD + 2 * NICK_SPREAD * streams.strip().nextFloat()));
+    nick === 0
+      ? 0
+      : Math.min(
+          nickCap(tools.strip.hole, conductor),
+          nick * (1 - NICK_SPREAD + 2 * NICK_SPREAD * streams.strip().nextFloat()),
+        );
   // Crimp: 1 with the right die, less (with a spread) otherwise.
   let accessory: TerminationV3['accessory'] = null;
   if (tools.accessory !== null && args.accessory !== null) {
@@ -170,7 +230,8 @@ export function resolveTermination(
     if (torque !== null && args.clamp.torqueNm !== null) {
       torqueNm = args.clamp.torqueNm * (1 + torque.accuracyFraction * (2 * u - 1));
     } else {
-      torqueNm = (spec.torqueNm as number) * (1 + SCREWDRIVER_TORQUE_SPREAD * (2 * u - 1));
+      torqueNm =
+        (spec.torqueNm as number) * (SCREWDRIVER_TORQUE_MEAN_FRACTION + SCREWDRIVER_TORQUE_SPREAD * (2 * u - 1));
     }
   }
   return {
