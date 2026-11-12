@@ -367,7 +367,9 @@ describe('publishing (ADR 0011 §7)', () => {
     expect(Math.max(...gaps)).toBeLessThan(2 * LIVENESS_PUBLISH_MS);
     expect(h.of('error')).toEqual([]);
     expect(h.view()?.hashedBytes()).toEqual(game.snapshot()); // and the same bytes in the end
-  });
+    // Generous: 1,250 commands through the real engine; about 0.6 s locally, but CI's macOS runner
+    // took it past the 5 s default while every project tested in parallel with coverage.
+  }, 60_000);
 
   it('throttles cadence publishes to PUBLISH_MIN_WALL_MS but always publishes on reaching the target', () => {
     const fast = harness();
