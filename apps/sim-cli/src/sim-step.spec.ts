@@ -106,7 +106,7 @@ describe('the sim-step scenario', () => {
     });
   });
 
-  it('its checked-in save (engine 5, tick 1234, a solved short) loads as continued and replays to the same hash', () => {
+  it("its checked-in save (this engine's, tick 1234, a solved short) loads as continued and replays to the same hash", () => {
     const fixture = join(
       WORKSPACE_ROOT,
       `libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-${SIM_ENGINE_VERSION}.ctrl`,

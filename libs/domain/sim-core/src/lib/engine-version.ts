@@ -16,5 +16,9 @@
  * - 5: F2.5, the first loads. The lamp has a filament model (tungsten R(T), heated and cooled), so an
  *   island holding one is solved where engine 4 left it unmodelled; the lamp, resistor and heater
  *   publish device records, and a heating filament re-solves within the step.
+ * - 6: the lamp's filament also loses heat by conduction into its two lead-ins (the end loss,
+ *   `LAMP_CONDUCTION_FRACTION`), so a switched-off lamp cools in seconds rather than minutes. A lit
+ *   lamp settles a little hotter above its rated voltage (about 4 K at 12.84 V on a 12 V lamp) and a
+ *   little cooler below it; at rated voltage it is unchanged.
  */
-export const SIM_ENGINE_VERSION = 5;
+export const SIM_ENGINE_VERSION = 6;
