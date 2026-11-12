@@ -67,7 +67,7 @@
     {
       "id": "its-90-fixed-points",
       "kind": "real-world",
-      "citation": "The International Temperature Scale of 1990 (H. Preston-Thomas, Metrologia 27, 3-10, 1990), whose defining fixed points include the freezing points of aluminium (933.473 K) and copper (1357.77 K). A public reference, not re-read for this table: electrical-realism-reviewer to confirm (ADR 0018 §5). Pure aluminium stands in for the 8000-series alloy, whose solidus is slightly lower. The engine burns a conductor or termination open when its node reaches the melting point, and never reports a node above it (F3.6 part 2).",
+      "citation": "The International Temperature Scale of 1990 (H. Preston-Thomas, Metrologia 27, 3-10, 1990), whose defining fixed points include the freezing points of aluminium (933.473 K) and copper (1357.77 K). Confirmed by electrical-realism-reviewer 2026-11-12 against the ITS-90 fixed points (Preston-Thomas, Metrologia 27, 1990) (ADR 0018 §5). Pure aluminium stands in for the 8000-series alloy, whose solidus is slightly lower. The engine burns a conductor or termination open when its node reaches the melting point, and never reports a node above it (F3.6 part 2).",
       "covers": ["rows.*.meltingPointK"]
     }
   ],

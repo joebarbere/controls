@@ -402,7 +402,7 @@ const endKeys = (end: 'A' | 'B'): Record<string, StateKeyDef> => ({
     'sim',
     CONNECTION_END_STATES,
     'ok',
-    `End ${end.toLowerCase()}'s contact state. intermittentOpen takes the connection out of the netlist; its phase is a pure function of the seed, the termination's stream and the tick bucket.`,
+    `End ${end.toLowerCase()}'s contact state. intermittentOpen takes the connection out of the netlist. For a conductor end it is a pure function of its degradation, its as-made contact resistance, its termination's stream and the tick bucket (ADR 0018 §6). For a lead, both ends intermittentOpen means the lead fused, permanently: stored, not derived, and the only non-initial value a lead's end keys take (F3.6 part 2).`,
   ),
 });
 

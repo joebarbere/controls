@@ -1,0 +1,10 @@
+# F3.6 part 2: a save holding a fused lead. One 18 AWG test lead across the split-phase stand-in's L1
+# and N carries kiloamps; its conductor reaches copper's melting point within a few tens of ms and the
+# lead fuses: both end states intermittentOpen, for good, its insulation flagged damaged. By tick 100 it
+# has started to cool. `apps/sim-cli/src/fused-lead.spec.ts` loads the save written from this file.
+#   pnpm sim run apps/sim-cli/scenarios/fused-lead.console --world content/levels/workshop.json
+#   (with --save libs/domain/save-format/fixtures/v3/ctrl/fused-lead-engine-7-catalog-2.ctrl)
+entity.place --ref.id utility.larkmoor-split-phase-25kva --ref.version 1 --positionMm.x 900 --positionMm.y -300 --positionMm.z 200
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 1 --a.terminal l1 --b.entity 1 --b.terminal n
+sim.step 100
+world.hash

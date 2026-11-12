@@ -4299,7 +4299,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "copper-melting-point",
       "kind": "real-world",
-      "citation": "The copper freezing point of the International Temperature Scale of 1990, 1357.77 K (H. Preston-Thomas, Metrologia 27, 1990), as the materials table's copper row (not re-read here; electrical-realism-reviewer to confirm). The lead fuses, open for good, when its conductor node reaches it (F3.6 part 2). Cross-checked against Preece's fusing law for bare copper in air, I = 80 d^1.5 A (d in mm), 82.9 A for 18 AWG: the model's steady state reaches the melting point at about 103 A, 24 % above it, because R(T) is clamped at 200 °C (ADR 0018 §2).",
+      "citation": "The copper freezing point of the International Temperature Scale of 1990, 1357.77 K (H. Preston-Thomas, Metrologia 27, 1990), as the materials table's copper row, confirmed by electrical-realism-reviewer 2026-11-12 against the ITS-90 fixed points (Preston-Thomas, Metrologia 27, 1990). The lead fuses, open for good, when its conductor node reaches it (F3.6 part 2). Cross-checked against Preece's fusing law for bare copper in air, I = 80 d^1.5 A (d in mm), 82.9 A for 18 AWG: the model's steady state reaches the melting point at about 103 A, 24 % above it, because R(T) is clamped at 200 °C (ADR 0018 §2), so fusing comes late: a sustained 83 to 100 A on this 18 AWG lead survives in the model, where a real lead would likely fuse.",
       "covers": [
         "model.params.meltingPointK"
       ]
