@@ -1,8 +1,33 @@
 import { expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Places a crate at a fixed spot, as a console line (the desktop app has no test hook). */
 export const PLACE =
   'entity.place --ref.id prop.crate --ref.version 1 --positionMm.x 100 --positionMm.y 0 --positionMm.z -200';
+
+/**
+ * F2.5, decision D6 in the shipped runtime: the bench demo's world hashes, lit (switch closed, 1.5 s)
+ * and then out (switch opened, 0.5 s more), the literals `apps/sim-cli/src/bench-lamp.spec.ts` pins
+ * under Node and `apps/game-e2e/src/bench-lamp.spec.ts` in Chromium (engine 6). Change all of them
+ * together, never one: a difference in Electron is float drift between V8 builds, not a golden to re-pin.
+ */
+export const BENCH_LAMP_LIT_HASH = '2b441a98c5491c67023f5affd3fc2cd7b8d9c9eebfd76ea2c01f7687ae13d0aa';
+export const BENCH_LAMP_HASH = 'd310d770494403137c676f59f0461e64e975ec1ba6fa5e6fabc459f893177389';
+
+/**
+ * `apps/sim-cli/scenarios/bench-lamp.console`, comments stripped, split at its `world.hash` lines:
+ * `lit` builds the bench, closes the switch and steps to the lit hash; `out` opens it and steps on.
+ */
+export function benchLampScenario(): { lit: string[]; out: string[] } {
+  const lines = readFileSync(join(__dirname, '../../sim-cli/scenarios/bench-lamp.console'), 'utf8')
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean);
+  const lit = lines.indexOf('world.hash');
+  expect(lit).toBe(8);
+  return { lit: lines.slice(0, lit), out: lines.slice(lit + 1, lines.lastIndexOf('world.hash')) };
+}
 
 /** New sandbox from the main menu with `seed`, keyboard only once the dialog is open. */
 export async function newSandbox(window: Page, seed: number): Promise<void> {
