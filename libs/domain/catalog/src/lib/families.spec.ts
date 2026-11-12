@@ -285,6 +285,13 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(catalog.tableRow(copper)).toMatchObject({ temperatureCoefficientPerK: 0.00393 });
   });
 
+  it('refuses an unknown family key in the object form (a misspelt family would drop its documents)', () => {
+    const result = parseCatalog(2, { ...input(), tool: [tool()] } as CatalogInput, KINDS);
+    expect(!result.ok && result.issues.map((i) => `${i.path}: ${i.message}`).join()).toContain(
+      'tool: Not a catalogue family',
+    );
+  });
+
   it('one namespace: family prefixes are reserved, conductor ids go with conductor data', () => {
     expect(
       messages({ devices: [conductor('conductor.test-14'), bareConductor(), box({ id: 'tool.box' })] }).join(),

@@ -49,7 +49,7 @@ describe('materials v1', () => {
   });
 
   it('the plan golden: 30 m of 14 AWG solid copper is 0.248565 Ω at 20 °C', () => {
-    // A = 2.08091 mm² (gauge table); R = 1.724138e-8 × 30 / 2.08091e-6 = 0.248563 Ω.
+    // A = 2.08091 mm² (gauge table); R = 1.724138e-8 × 30 / 2.08091e-6 = 0.248565 Ω.
     const area = gaugeRow(14)?.areaMm2 as number;
     expect(relative(resistanceOhm(copper, 30, area, 293.15), 0.248565)).toBeLessThan(0.005);
     // Per metre: 8.2855 mΩ/m.
@@ -101,7 +101,7 @@ describe('insulation v1', () => {
       s.covers.includes('rows.xhhw2.thermalConductivityWPerMK'),
     );
     expect(source?.kind).toBe('game-design');
-    expect(source?.citation).toMatch(/^Unverified/);
+    expect(source?.citation).toMatch(/^game-design: unverified/);
   });
 });
 

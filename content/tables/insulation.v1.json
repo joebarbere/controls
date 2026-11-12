@@ -44,7 +44,7 @@
     {
       "id": "ul-type-ratings",
       "kind": "real-world",
-      "citation": "Conductor temperature ratings of the types as public manufacturers' specification sheets state them for wire listed to the UL standards, cited by number only (UL 83 for THHN/THWN-2, UL 44 for XHHW-2, UL 1063 for MTW, UL 719 for NM-B), paraphrased: THHN 90 °C in dry locations; THWN-2 and XHHW-2 90 °C in wet or dry locations; MTW 90 °C dry and 60 °C wet; NM-B, whose conductors are rated 90 °C. Not taken from the NEC's conductor-insulation table. How much current a rating allows is derived by the thermal model (D6), never stored.",
+      "citation": "Conductor temperature ratings of the types as public manufacturers' specification sheets state them for wire listed to the UL standards, cited by number only (UL 83 for THHN/THWN-2, UL 44 for XHHW-2, UL 1063 for MTW, UL 719 for NM-B), paraphrased: THHN 90 °C in dry locations; THWN-2 and XHHW-2 90 °C in wet or dry locations; MTW 90 °C dry and 60 °C wet; NM-B 90 °C, which is the rating of the cable's conductors, not of the jacket compound (the jacket row carries the cable's rating). Not taken from the NEC's conductor-insulation table. How much current a rating allows is derived by the thermal model (D6), never stored.",
       "covers": [
         "rows.thhnThwn2.ratedTempDryK",
         "rows.thhnThwn2.ratedTempWetK",
@@ -85,7 +85,7 @@
     {
       "id": "xlpe-conductivity-unverified",
       "kind": "game-design",
-      "citation": "Unverified, so labelled game-design: XLPE thermal conductivity of about 0.29 W/(m·K) appears only in a secondary source (a field-simulation package's material library); the primary reference, IEC 60287-2-1, is paywalled and was not read. Replace with a verified figure, as a new table version, when one is found.",
+      "citation": "game-design: unverified, so not a measurement. XLPE thermal conductivity of about 0.29 W/(m·K) appears only in a secondary source (a field-simulation package's material library); the primary reference, IEC 60287-2-1, is paywalled and was not read. Replace with a verified figure, as a new table version, when one is found.",
       "covers": ["rows.xhhw2.thermalConductivityWPerMK"]
     },
     {

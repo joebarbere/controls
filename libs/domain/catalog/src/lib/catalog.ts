@@ -75,6 +75,9 @@ export interface CatalogInput {
   readonly tables?: readonly unknown[];
 }
 
+/** The keys a {@link CatalogInput} may have; any other is refused. */
+export const CATALOG_INPUT_KEYS = ['devices', 'cables', 'tools', 'accessories', 'tables'] as const;
+
 export type CatalogResult =
   | { readonly ok: true; readonly catalog: Catalog }
   | { readonly ok: false; readonly issues: readonly ValidationIssue[] };
@@ -132,6 +135,12 @@ export function parseCatalog(
   const issues: ValidationIssue[] = [];
   if (!Number.isSafeInteger(version) || version < 1) {
     issues.push({ path: 'version', message: 'catalogVersion must be an integer of at least 1' });
+  }
+  // A misspelt family (`tool:` for `tools:`) would otherwise drop its documents silently.
+  for (const key of Object.keys(sourcesOf)) {
+    if (!(CATALOG_INPUT_KEYS as readonly string[]).includes(key)) {
+      issues.push({ path: key, message: `Not a catalogue family (expected one of ${CATALOG_INPUT_KEYS.join(', ')})` });
+    }
   }
 
   const tables = parseTables(sourcesOf.tables ?? [], issues);

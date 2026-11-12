@@ -60,7 +60,7 @@ Subsystem pages (sim-core, PLC, HMI, …) are added in the phase that builds the
 | [0012 Oracle corpus](decisions/0012-oracle-corpus.md)                     | P2 (Accepted for DC and AC): 500 DC + 500 AC ngspice decks and results checked in, staleness check, explicit gmin, 1e-6 relative tolerance, confirmed by the DC and phasor solvers   |
 | [0013 World document v2](decisions/0013-world-document-v2.md)             | P2: connections (test leads) and their id rule, commanded and sim state bags, `MODEL_KINDS`, solution record, `firstSeq`/`endTick`, catalogue v1                                     |
 | [0015 World document v3](decisions/0015-world-document-v3.md)             | P3: leads and conductors in one array, cables, termination outcomes and `nextTerminationId`, routes and the length rule, mounting, wire commands, stream keys, the v2 → v3 migration |
-| [0016 Catalogue format v2](decisions/0016-catalogue-format-v2.md)         | P3 (Proposed): one id namespace, termination method specs, mounts and enclosures, cables, tools, accessories, pinned tables, integer AWG, coverage paths, `catalogVersion` 2         |
+| [0016 Catalogue format v2](decisions/0016-catalogue-format-v2.md)         | P3: one id namespace, termination method specs, mounts and enclosures, cables, tools, accessories, pinned tables, integer AWG, coverage paths, `catalogVersion` 2                    |
 
 ## Reference
 

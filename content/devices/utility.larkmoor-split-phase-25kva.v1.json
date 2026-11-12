@@ -146,7 +146,7 @@
     {
       "id": "stand-in-terminals",
       "kind": "game-design",
-      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so its terminals take a branch circuit the way a 15 A breaker's and a neutral bar's do: one 14 to 10 AWG copper or aluminium conductor each, solid or stranded, a 13 ± 2 mm strip and a 4.0 N·m marked torque (the values of the breaker-terminal class in breaker.saltmere-1p-15a). Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
+      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
       "covers": ["terminals.*.methods.screw"]
     }
   ],

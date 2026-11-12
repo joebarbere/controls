@@ -148,6 +148,16 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
   });
 
+  it.each(['sim-step', 'sources', 'bench-lamp', 'protection'])(
+    "this engine's catalogue-1 %s save (0.3.0's catalogue) loads as engine-changed, never refused (ADR 0016)",
+    (scenario) => {
+      const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlDir, `${scenario}-engine-6.ctrl`))));
+      if (!loaded.ok) throw new Error(loaded.error.message);
+      expect(loaded.manifest.catalogVersion).toBe(1);
+      expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+    },
+  );
+
   it('docs/history.md has exactly one row per engine version up to this one', () => {
     const history = readFileSync(join(WORKSPACE_ROOT, 'docs/history.md'), 'utf8');
     const table = history.slice(history.indexOf('| simEngineVersion |'));

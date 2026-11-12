@@ -22,9 +22,9 @@ const terminalGrammar = (id: string, description: string) =>
 
 /*
  * ADR 0015 names these primitives for world v3 (`ColourId`, `TerminationMethodId`, `MountId`,
- * `EntryId`, `HoleId`, `DieId`). The catalogue defines them here with exactly the ADR's grammar;
- * `save-format`'s v3 schemas (world v3 PR) declare their own copies, and a test there pins that the
- * two accept the same strings.
+ * `EntryId`, `HoleId`, `DieId`). Until world v3 lands the catalogue defines them here with exactly
+ * the ADR's grammar; world v3 (PR 7) moves them into `save-format`'s primitives, the source of truth
+ * for persisted grammar, and this module re-exports those in place of its own copies (ADR 0016).
  */
 
 /** A row of the catalogue colour table (`black`, `white`, `green`, `bare`). */
@@ -44,7 +44,7 @@ export const DieId = terminalGrammar(
 );
 /** A table name (`materials`, `insulation`, `colours`). */
 export const TableName = camelId('TableName', 'A catalogue table name: lower camelCase.');
-/** A row key of a table (`copper`, `thhnThwn2`). */
+/** A row key of a table (`copperAnnealed`, `thhnThwn2`). */
 export const TableKey = camelId('TableKey', 'A row key of a catalogue table: lower camelCase.');
 
 /** One of the six axis directions of an entity's own frame (integer quarter-turn geometry, ADR 0015). */
