@@ -1,0 +1,23 @@
+# F3.6 part 2 (ADR 0018 §7): a bad termination's hot spot. The split-phase stand-in's L1 feeds the
+# 15 A breaker's line screw through 14 AWG solid THHN (landed at the marked torque); the breaker's load
+# screw lands a second 14 AWG THHN at 20 % of its marked 4 N·m (0.8 N·m on the 0.3–1.2 N·m torque
+# driver, ±6 %): the loose-clamp regime, about 85 × R₀. That conductor runs to a wire nut, and test
+# leads take the nut through the 10 Ω resistor to N. The resistor stands in for a 1.44 kW load (no
+# 120 V heater or lamp exists in the catalogue yet; its 10 W rating isn't modelled), so about 11.8 A
+# flows: the loose end settles about 100 K above its conductor, past the 100 K overheat rise and below
+# the oxidation onset (no degradation), while the good ends stay within a few kelvin of theirs.
+# `apps/sim-cli/src/bad-termination.spec.ts` derives every expectation from the built circuit's current.
+# 600 s of sim time: the hot spot (τ ≈ 30 s) and the conductors are at their steady state.
+#   pnpm sim run apps/sim-cli/scenarios/bad-termination.console --world content/levels/workshop.json
+#   (with --save libs/domain/save-format/fixtures/v3/ctrl/bad-termination-engine-7-catalog-2.ctrl)
+entity.place --ref.id utility.larkmoor-split-phase-25kva --ref.version 1 --positionMm.x 0 --positionMm.y 0 --positionMm.z 0
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x 1000 --positionMm.y 0 --positionMm.z 0
+device.operate 2 on true
+entity.place --ref.id splice.corvelle-tw-l --ref.version 1 --positionMm.x 2000 --positionMm.y 0 --positionMm.z 0
+entity.place --ref.id resistor.orrinwood-10r-10w --ref.version 1 --positionMm.x 3000 --positionMm.y 0 --positionMm.z 0
+wire.add --ref.id conductor.tallowmere-thhn-14-solid --ref.version 1 --a.entity 1 --a.terminal l1 --a.termination.method screw --a.termination.strip.tool.id tool.veltmark-ws-1018 --a.termination.strip.tool.version 1 --a.termination.strip.hole sol14 --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id tool.calderyn-ts-15 --a.termination.clamp.tool.version 1 --a.termination.clamp.torqueNm 4 --b.entity 2 --b.terminal line --b.termination.method screw --b.termination.strip.tool.id tool.veltmark-ws-1018 --b.termination.strip.tool.version 1 --b.termination.strip.hole sol14 --b.termination.strip.lengthMm 13 --b.termination.accessory null --b.termination.clamp.tool.id tool.calderyn-ts-15 --b.termination.clamp.tool.version 1 --b.termination.clamp.torqueNm 4 --route [{"kind":"free","positionMm":{"x":500,"y":800,"z":0},"entity":null,"fixture":null,"tool":null}] --lengthMm auto --colour.base black --colour.stripe null --tool.id tool.veltmark-dc-8 --tool.version 1
+wire.add --ref.id conductor.tallowmere-thhn-14-solid --ref.version 1 --a.entity 2 --a.terminal load --a.termination.method screw --a.termination.strip.tool.id tool.veltmark-ws-1018 --a.termination.strip.tool.version 1 --a.termination.strip.hole sol14 --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id tool.calderyn-ts-03 --a.termination.clamp.tool.version 1 --a.termination.clamp.torqueNm 0.8 --b.entity 3 --b.terminal splice --b.termination.method twistOn --b.termination.strip.tool.id tool.veltmark-ws-1018 --b.termination.strip.tool.version 1 --b.termination.strip.hole sol14 --b.termination.strip.lengthMm 13 --b.termination.accessory null --b.termination.clamp.tool null --b.termination.clamp.torqueNm null --route [{"kind":"free","positionMm":{"x":1500,"y":800,"z":0},"entity":null,"fixture":null,"tool":null}] --lengthMm auto --colour.base black --colour.stripe null --tool.id tool.veltmark-dc-8 --tool.version 1
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 3 --a.terminal splice --b.entity 4 --b.terminal a
+lead.connect --ref.id lead.quillfern-test-1m --ref.version 1 --a.entity 4 --a.terminal b --b.entity 1 --b.terminal n
+sim.step 600000
+world.hash

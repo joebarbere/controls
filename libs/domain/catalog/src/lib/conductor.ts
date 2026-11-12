@@ -84,6 +84,7 @@ export function conductorPhysics(
     linearAlphaMaxK: material.linearAlphaMaxK,
     densityKgM3: material.densityKgM3,
     specificHeatJPerKgK: material.specificHeatJPerKgK,
+    meltingPointK: material.meltingPointK,
     insulation:
       insulation === null
         ? null

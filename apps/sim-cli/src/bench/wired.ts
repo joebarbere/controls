@@ -174,6 +174,65 @@ function resolveWired(resolver: WiredResolver, world: World): string {
 
 let warmWired: WiredResolver | null = null;
 
+/**
+ * The connection `intermittent-toggle-wired` opens: the first loop's breaker → nut conductor (its first
+ * conductor), so every conductor of that loop loses its current and its island splits.
+ */
+export const TOGGLED_CONNECTION = 2;
+
+/** The end states the toggled connection compiles with in the timed run: its breaker end open. */
+const OPEN_END = Object.freeze({ endAState: 'intermittentOpen', endBState: 'ok' });
+
+/** What `intermittent-toggle-wired` keeps between runs: the wired resolver, and whether the toggled end is open. */
+interface ToggleResolver extends WiredResolver {
+  open: boolean;
+}
+
+/** Recompiles with the toggled end open or not (read through `connectionSim`, as the engine does), syncs, fills, solves. */
+function resolveToggle(resolver: ToggleResolver, world: World): string {
+  const bank = resolver.bank;
+  const netlist: Netlist = resolver.compiler.compile(world, {
+    connectionSim: (id) => (resolver.open && id === TOGGLED_CONNECTION ? OPEN_END : bank.topologyView(id)),
+  });
+  bank.sync(world, netlist);
+  resolver.values = dcBranchValues(netlist, resolver.hook, resolver.values);
+  const solution = resolver.solver.solve(netlist, resolver.values);
+  let sum = 0;
+  for (let i = 0; i < solution.nodes.length; i += 2) sum += solution.nodes[i];
+  return `${netlist.nodes.length}:${netlist.branches.length}:${netlist.islands.length}:${netlist.topologyHash}:${sum}`;
+}
+
+let toggleWired: ToggleResolver | null = null;
+
+/**
+ * `intermittent-toggle-wired` (ADR 0015, ADR 0018 §10, F3.6 part 2): one end entering
+ * `intermittentOpen` on the wired plant (1,000 devices, 2,000 landed conductors, materialised at
+ * {@link WIRED_START}): the structural recompile that drops its branch (the plant renumbered from
+ * cached fragments), the bank's sync to the new netlist, the values (the bank's for every connection)
+ * and the solve. `prepare` (untimed) leaves everything on the closed plant, so every run is the same
+ * toggle; the factorisation cache holds both states after the first warm-up run, as it does for an
+ * end flickering every 100 ms. Gated at spec §4.5's 2 ms re-solve, calibrated (as the plain re-solve).
+ */
+export function intermittentToggleCase(budgetMs: number, calibration: BenchCalibration): BenchCase {
+  return {
+    name: 'intermittent-toggle-wired',
+    warmup: 20,
+    runs: 101,
+    budgetMs,
+    calibration,
+    prepare: () => {
+      toggleWired ??= { ...wiredResolver(), open: false };
+      toggleWired.open = false;
+      resolveToggle(toggleWired, wiredPlantWorld());
+    },
+    run: () => {
+      const resolver = toggleWired as ToggleResolver;
+      resolver.open = true;
+      return resolveToggle(resolver, wiredPlantWorld());
+    },
+  };
+}
+
 /** `plant-resolve-topology-change-wired`, on the plant's closed and open worlds (cases.ts builds them). */
 export function resolveWiredCase(
   worlds: () => { readonly closed: World; readonly open: World },

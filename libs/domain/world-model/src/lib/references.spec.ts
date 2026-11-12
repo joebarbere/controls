@@ -40,7 +40,20 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
     );
     const hotLead = edit((d) => Object.assign(d.connections[4], { sim: { ...LEAD_SIM_BAG_V3, endATempK: 400 } }));
     expect(messages(hotLead)).toStrictEqual([
-      "connections[4].sim.endATempK: A lead's end keys stay at their initial values",
+      "connections[4].sim.endATempK: A lead's end keys stay at their initial values (both ends open when fused)",
+    ]);
+    // A fused lead (F3.6 part 2): both end states open, every other end key initial.
+    const fused = { ...LEAD_SIM_BAG_V3, endAState: 'intermittentOpen', endBState: 'intermittentOpen' };
+    expect(check(edit((d) => Object.assign(d.connections[4], { sim: fused })))).toStrictEqual([]);
+    const halfOpen = edit((d) =>
+      Object.assign(d.connections[4], { sim: { ...LEAD_SIM_BAG_V3, endAState: 'intermittentOpen' } }),
+    );
+    expect(messages(halfOpen)).toStrictEqual([
+      "connections[4].sim.endAState: A lead's end keys stay at their initial values (both ends open when fused)",
+    ]);
+    const fusedHot = edit((d) => Object.assign(d.connections[4], { sim: { ...fused, endBDegradation: 2 } }));
+    expect(messages(fusedHot)).toStrictEqual([
+      "connections[4].sim.endBDegradation: A lead's end keys stay at their initial values (both ends open when fused)",
     ]);
     // A lead's conductor does heat (leads join the thermal model, D2).
     const warmLead = edit((d) => Object.assign(d.connections[4], { sim: { ...LEAD_SIM_BAG_V3, conductorTempK: 300 } }));

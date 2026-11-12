@@ -15,7 +15,7 @@ import {
 } from '@controls/sim-core';
 import { materialiseWorld } from '@controls/sim-protocol';
 import { cableAddBench, type CableAddBench } from './cable-add';
-import { resolveWiredCase, TICK_WIRED_CASE } from './wired';
+import { intermittentToggleCase, resolveWiredCase, TICK_WIRED_CASE } from './wired';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -378,6 +378,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
   },
   TICK_WIRED_CASE,
   resolveWiredCase(plantWorlds, RESOLVE_BUDGET_MS, CALIBRATION),
+  intermittentToggleCase(RESOLVE_BUDGET_MS, CALIBRATION),
   SNAPSHOT_READ_CASE,
   OVERLAY_READ_CASE,
   CABLE_ADD_CASE,
@@ -403,12 +404,6 @@ function bagDigest(engine: SimEngine): string {
  * each into `BENCH_CASES` with its real workload and removes it here.
  */
 export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
-  {
-    name: 'intermittent-toggle-wired',
-    budgetMs: RESOLVE_BUDGET_MS,
-    enabledBy: 'F3.6 part 2',
-    note: 'ADR 0015/0018 §10: one end entering or leaving intermittentOpen on the wired 2,000-node plant (a one-branch recompile and re-solve), under the calibrated re-solve gate.',
-  },
   {
     name: 'route-bake-500-wires',
     budgetMs: null,

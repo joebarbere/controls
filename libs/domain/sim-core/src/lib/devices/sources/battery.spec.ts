@@ -173,10 +173,16 @@ describe('the battery model (golden)', () => {
   });
 
   it('a flat battery collapses: shorted from 5 %, the current dies away and it never goes below empty', () => {
-    // One lead across the terminals: about 190 A, so the 3 % above the collapse goes in about 4 s.
+    // Two paths of two leads each, through two wire nuts: about 190 A in all, as one lead across the
+    // terminals gave before F3.6 part 2, but under 100 A per lead, below the 18 AWG lead's fusing
+    // current (about 103 A, where its node reaches copper's melting point). The 3 % above the collapse
+    // goes in about 4 s.
     const built = new SourceHost();
     built.place(BATTERY);
-    built.lead(1, 'pos', 1, 'neg');
+    built.place({ id: 'splice.corvelle-tw-l', version: 1 });
+    built.place({ id: 'splice.corvelle-tw-l', version: 1 });
+    built.lead(1, 'pos', 2, 'splice').lead(2, 'splice', 1, 'neg');
+    built.lead(1, 'pos', 3, 'splice').lead(3, 'splice', 1, 'neg');
     const host = built.withSim(1, { stateOfCharge: 0.05 });
     const start = host.amps(1);
     expect(start).toBeGreaterThan(150);

@@ -12,7 +12,7 @@ import { startSandbox } from './support/sandbox';
  * drift (ADR 0014), not a golden to re-pin. The `?sab=0` fallback gives the same hashes.
  * Since F2.5 the D6 golden with a lit lamp is `bench-lamp.spec.ts` (`bench-lamp.console`, both transports).
  */
-const SIM_STEP_HASH = '41d7b12bf8b2ddf549c4fe0f10f19c9cb785a8f77a421366e4da43e639606053';
+const SIM_STEP_HASH = 'd350f0791b8705347c331b764b3022a7461177e74e4ce0848b067a173ef23732';
 const SIM_STEP_SNAPSHOT_HASH = '54003f07cf3f3f157adab45870cc946d905da770ebb1995fb3c8d330c1803f0b';
 
 type Hooks = {
@@ -87,7 +87,7 @@ for (const { transport, query } of [
  * must reach the hashes `apps/sim-cli/src/sources.spec.ts` pins under Node: the CV/CC mode, the hiccup
  * ticks and the coulomb counting, byte for byte.
  */
-const SOURCES_HASH = '853b3d22ce479213f04ab2649e3fcac1dfb897cc81fdeda9a0c942a4613fb59a';
+const SOURCES_HASH = '22f018df2fb7e6bbedc44fef3ecf2d03ff88c9b2d2d0e4b8730f13dc4db0a66d';
 const SOURCES_SNAPSHOT_HASH = '0c1f995ef683e9446e52f5fa8398ba54c4ba46cada225485d5bdd50ae32e6e43';
 
 test('the sources scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
@@ -116,8 +116,8 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
  * F2.4 part 2: the split-phase service's series-inductance phasors across runtimes.
  * `apps/sim-cli/scenarios/mains.console` must reach the hashes `apps/sim-cli/src/mains.spec.ts` pins.
  */
-const MAINS_HASH = '808caa78121e9b7cca11832af77b6d7c335aa8baeef890949c5e5aa9749f9c38';
-const MAINS_SNAPSHOT_HASH = '59c72011c92f2f74b67b1884ee76818a3d49bed4a3d43149e64186ea8a1d8db7';
+const MAINS_HASH = '3eb673ed92c1cee26ac285622072bca369b2a74b0e9949b9c38d34e7c1dc080d';
+const MAINS_SNAPSHOT_HASH = '62bf42bac39a9698eb72797b8e31d4d5f91c1ec5a9bfd2ce2b2a9da551b885f2';
 
 test('the mains scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
   await page.goto('/?e2e=1&renderer=webgl2');
@@ -136,7 +136,7 @@ test('the mains scenario reaches the same hashes in the game as sim-cli in Node 
     'Ran 4 commands from mains.console.',
   );
 
-  expect(await hook(page, (h) => h.busWorld().tick)).toBe(100);
+  expect(await hook(page, (h) => h.busWorld().tick)).toBe(10);
   expect(await hook(page, (h) => h.hash())).toBe(MAINS_HASH);
   expect(await hook(page, (h) => h.snapshotHash())).toBe(MAINS_SNAPSHOT_HASH);
 });

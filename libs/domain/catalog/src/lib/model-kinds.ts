@@ -303,6 +303,16 @@ export const LeadParams = z.strictObject({
   insulationConductivityWPerMK: positive,
   /** The insulation surface's emissivity ε (0 to 1). */
   surfaceEmissivity: FiniteNumber.positive().max(1),
+  /*
+   * The failure params (F3.6 part 2, ADR 0018 implementation notes): the lead's conductor fuses (the
+   * lead opens for good) when its node reaches the metal's melting point, and its insulation is
+   * damaged (the sticky `insulationDamaged`) at its rating plus `INSULATION_DAMAGE_MARGIN_K`. Added at
+   * entry version 1 while catalogue 2 is provisional.
+   */
+  /** The conductor metal's melting point (K). */
+  meltingPointK: positive,
+  /** The insulation's temperature rating (K). */
+  insulationRatedTempK: positive,
 });
 export type LeadParams = z.infer<typeof LeadParams>;
 
@@ -400,7 +410,8 @@ const endKeys = (end: 'A' | 'B'): Record<string, StateKeyDef> => ({
  * The sim-owned bag of a connection kind (ADR 0015, "Connection state bags and their owners"): ten
  * keys shared by `lead` and, from F3.1, `conductor`, written only by the engine (`materialiseWorld`)
  * and persisted in world v3's `ConnectionV3.sim`. A lead's end keys stay at their initial values (its
- * clips have no termination node). Provisional until v0.4.0 (finalised by ADR 0018); after that a
+ * clips have no termination node), except that a fused lead's two end states are `intermittentOpen`
+ * (F3.6 part 2). Provisional until v0.4.0 (finalised by ADR 0018); after that a
  * change is a `schemaVersion` bump. World v2 connections carry no bags, so these keys mean nothing to
  * a v2 save: they enter saves with world v3.
  */

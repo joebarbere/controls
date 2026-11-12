@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { compileNetlist } from '@controls/sim-core';
 import { BENCH_CASES } from './cases';
-import { TICK_WIRED_CASE, WIRED_START, wiredPlantWorld } from './wired';
+import { TICK_WIRED_CASE, TOGGLED_CONNECTION, WIRED_START, wiredPlantWorld } from './wired';
 import { buildWiredPlant, WIRED_LOOPS, WIRED_PARALLEL } from './wired-plant';
 
 /*
@@ -55,5 +55,29 @@ describe('tick-wired-plant', () => {
     const first = resolve?.run();
     resolve?.prepare?.();
     expect(resolve?.run()).toBe(first);
+  });
+});
+
+describe('intermittent-toggle-wired (F3.6 part 2)', () => {
+  it('times one end opening on the wired plant: its branch dropped, the plant recompiled and re-solved', () => {
+    const toggle = BENCH_CASES.find((c) => c.name === 'intermittent-toggle-wired');
+    expect(toggle).toMatchObject({ budgetMs: 2 });
+    expect(toggle?.calibration).toBeDefined();
+    const closed = compileNetlist(wiredPlantWorld(), BUILTIN_CATALOG);
+    toggle?.prepare?.();
+    const first = toggle?.run() ?? '';
+    const [nodes, branches, islands, hash] = first.split(':');
+    // One branch fewer, the same nodes and islands (the opened loop is still one chain), a new hash.
+    expect(Number(nodes)).toBe(closed.nodes.length);
+    expect(Number(branches)).toBe(closed.branches.length - 1);
+    expect(Number(islands)).toBe(closed.islands.length);
+    expect(hash).not.toBe(closed.topologyHash);
+    const open = compileNetlist(wiredPlantWorld(), BUILTIN_CATALOG, {
+      connectionSim: (id) =>
+        id === TOGGLED_CONNECTION ? { endAState: 'intermittentOpen', endBState: 'ok' } : undefined,
+    });
+    expect(hash).toBe(open.topologyHash);
+    toggle?.prepare?.();
+    expect(toggle?.run()).toBe(first);
   });
 });

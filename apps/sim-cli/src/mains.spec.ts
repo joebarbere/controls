@@ -8,10 +8,11 @@ import { workshopWorld } from './testing/workshop';
  * The mains scenario (F2.4 part 2): a split-phase utility service behind its R + jωL, with
  * near-bolted faults through test leads (L1–N and L1–L2), not loads. Its two hashes are pinned here **and** in `apps/game-e2e/src/sim-engine.spec.ts`,
  * which runs the same console file with the engine in the page: D6's cross-runtime check of the series
- * inductance's phasors (Node's V8 against Chromium's).
+ * inductance's phasors (Node's V8 against Chromium's). Since F3.6 part 2 it stops at tick 10, before
+ * either lead fuses (an 18 AWG lead carrying kiloamps reaches copper's melting point within tens of ms).
  */
-export const MAINS_HASH = '808caa78121e9b7cca11832af77b6d7c335aa8baeef890949c5e5aa9749f9c38';
-export const MAINS_SNAPSHOT_HASH = '59c72011c92f2f74b67b1884ee76818a3d49bed4a3d43149e64186ea8a1d8db7';
+export const MAINS_HASH = '3eb673ed92c1cee26ac285622072bca369b2a74b0e9949b9c38d34e7c1dc080d';
+export const MAINS_SNAPSHOT_HASH = '62bf42bac39a9698eb72797b8e31d4d5f91c1ec5a9bfd2ce2b2a9da551b885f2';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');
 
@@ -25,7 +26,7 @@ async function scenarioGame(): Promise<Game> {
 describe('the mains scenario (F2.4 part 2)', () => {
   it('reaches its pinned hashes, with L1, L2 and N carrying different phasor currents', async () => {
     const game = await scenarioGame();
-    expect(game.tick()).toBe(100);
+    expect(game.tick()).toBe(10);
     expect(game.hash()).toBe(MAINS_HASH);
     expect(game.snapshotHash()).toBe(MAINS_SNAPSHOT_HASH);
     const l1n = game.probe('1:l1', '1:n');

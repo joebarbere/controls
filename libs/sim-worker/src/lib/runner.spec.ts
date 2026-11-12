@@ -1,6 +1,6 @@
 import { createWorld, type ReplayEntry, type World } from '@controls/save-format';
 import { createGame, type Game } from '@controls/scripting-api';
-import type { SimDeviceModel } from '@controls/sim-core';
+import { type SimDeviceModel, SimEngine } from '@controls/sim-core';
 import {
   BATTERY,
   end,
@@ -11,9 +11,11 @@ import {
   LEAD,
   origin,
   THERMAL_LOAD,
+  wiredLoopWorld,
 } from '@controls/sim-core/testing';
 import {
   LIVENESS_PUBLISH_MS,
+  materialiseWorld,
   MIN_SLOT_BYTES,
   PUBLISH_MIN_WALL_MS,
   PUBLISH_SEQ_INDEX,
@@ -162,6 +164,29 @@ describe('following the host', () => {
       const bytes = h.query('snapshot', 200);
       expect(bytes.type === 'snapshotBytes' && new Uint8Array(bytes.bytes)).toEqual(game.snapshot());
       expect(state.type === 'state' && state.snapshotHash).toBe(game.snapshotHash());
+    }
+  });
+
+  it('an intermittent end toggles at the same ticks in the worker as headless, both transports (F3.6 part 2)', () => {
+    // The wired loop with its breaker-load end degraded into the intermittent band (R_deg = 0.3 mΩ ×
+    // 1000 = 0.3 Ω): its bucket draws open, arc and close the circuit every 100 ticks; the snapshot
+    // bytes and the materialised hash must agree at every checked tick.
+    // Built directly, then materialised so every bag has its kind's keys (a loadable world).
+    const raw = wiredLoopWorld({ conductor2Sim: { endADegradation: 1000, endATerminationId: 1 } });
+    const world = materialiseWorld(raw, SimEngine.start(raw, options()).exportState());
+    for (const transport of ['sab', 'message'] as const) {
+      const game = reference(world);
+      const h = harness();
+      h.init({ kind: 'world', world, firstSeq: 0 }, transport);
+      for (const tick of [150, 777, 2000]) {
+        game.advanceTo(tick);
+        h.send({ type: 'advance', tick });
+        h.drain();
+        expect(h.view()?.tick).toBe(tick);
+        expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
+        const state = h.query('state', tick);
+        expect(RunnerHarness.hashOf(game.world() as World, state)).toBe(game.hash());
+      }
     }
   });
 

@@ -37,6 +37,9 @@ const LEAD_THERMAL = {
   insulationThicknessMm: 0.8,
   insulationConductivityWPerMK: 0.18,
   surfaceEmissivity: 0.9,
+  // The failure params (F3.6 part 2).
+  meltingPointK: 1357.77,
+  insulationRatedTempK: 363.15,
 };
 
 function leadEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {

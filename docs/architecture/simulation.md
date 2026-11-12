@@ -793,7 +793,32 @@ flowchart LR
 - **Bags.** T_c starts at ambient when the bag's is null; a landed end at T_c. A new termination (another id) resets its end; an unlanded end keeps its degradation, state and id. Deleted members are tombstoned while their id can't be reused. The export (`SimStateExport.connections`, protocol 6) carries every member's bag and `materialiseWorld` writes it.
 - **The catalogue refuses τ < 1 s** (100 steps) at load: conductors, leads and terminal methods, from conservative bounds (ADR 0018 §3.4). The heat path lives in `@controls/catalog` for that check; sim-core re-exports it.
 - **Budget.** `sim bench`'s `tick-wired-plant` times a cadence tick's layers on 1,000 devices and 2,000 landed conductors (gated at 0.3 ms and 1 B per tick); `plant-resolve-topology-change-wired` the calibrated re-solve with the bank synced and stamping. The step runs in phases over all members so independent members' sqrt-and-divide chains overlap.
-- **Not yet** (F3.6 parts 2 and 3): degradation, the glowing, intermittent and arcing regimes, `terminationOverheat` and `insulationDamaged`, the melting clamp; the connection records, the heat overlay and the readouts.
+- **Not yet** (F3.6 part 3): the connection records, the detections published as events, the heat overlay and the readouts.
+
+## Degradation, end states and the failure rule (F3.6 part 2)
+
+The bank's ends degrade, change regime and open; its nodes have limits (ADR 0018 §5, §6, [implementation notes](../decisions/0018-conductor-and-termination-physics.md#implementation-notes-f36-part-2)). Still `SIM_ENGINE_VERSION` 7, provisional.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ok
+    ok --> ok: R_deg < 80 mΩ ohmic, from 80 mΩ glowing (V = V_G0 + P_G/I)
+    ok --> intermittent: R_deg ≥ 160 mΩ (compact list)
+    state intermittent {
+        closed --> open: bucket draw (100 ticks)
+        open --> arcing: bucket draw
+        arcing --> closed: bucket draw
+    }
+    intermittent --> burnedOpen: R_deg ≥ 1 Ω, or the melting point
+```
+
+- **Degradation.** D (≥ 1, `end*Degradation`) grows only while the hot spot is above `OXIDATION_ONSET_K` (149 °C), by `DEGRADATION_RATE_PER_K_S` × the end's multiplier (10 for aluminium on an unrated method) per kelvin of excess, in the same scheduled step as the temperatures, and never falls. R_deg = R_made · D drives everything below, so the progression is monotone.
+- **Regimes.** An `ok` end is ohmic below `GLOW_ONSET_OHM` and follows the glowing law from it (also an `intermittentClosed` end); an `arcing` end stamps V_arc/|I| (V_arc uniform in 15–30 V, drawn once per termination from `termination:<id>:arcing`; |I| floored at 0.5 A). Both laws are nonlinear: on DC the outer loop's `iterate` hook (pointed at the bank only for such connections) values them; on AC they take the last solution's |I| and the 1 % rule re-solves until they settle.
+- **States.** `endStateCode(R_made · D, s, bucket)` with `s` the first output of `termination:<id>:intermittent` and one draw per 100-tick bucket (`mix32(s ^ imul(bucket, 0x9e3779b1))`: 30 % open, 20 % arcing, 50 % closed). Decided at each cadence step for the compact list's ends (protection layer, `protection(ctx)`) and at every rebuild, for bucket ⌊(T − 1)/100⌋, so a bag always equals the pure function. Entering or leaving `intermittentOpen` is a topology change (the compiler reads it through `connectionSim` and leaves the connection out, `intermittent-open`); any other change is a value change.
+- **Limits and the failure rule.** No node reports above its metal's melting point (`materials.meltingPointK`, or the lead's `meltingPointK`): a hot spot reaching it burns open (D raised to 1 Ω / R_made); a conductor node reaching it fuses the connection (a conductor: both landed ends burned open; a lead: both end states `intermittentOpen`, the one non-initial lead end state). `insulationDamaged` is set, sticky, at the insulation's rating + 40 K on the conductor node or a conductor's hot spot (a lead's rating is its `insulationRatedTempK`). The fusing current is anchored to Preece and reads 24–34 % high because R(T) is clamped at 200 °C.
+- **Detections.** `terminationOverheat` (a hot spot crossing T_a + 100 K upwards) and `insulationDamaged` go into a preallocated ring (`SimEngine.takeConnectionDetections()`); publishing them as events is protocol 7 (F3.6 part 3).
+- **The bad-termination scenario** (`apps/sim-cli/scenarios/bad-termination.console`, ADR 0018 §7): a 20 %-torque breaker screw on 14 AWG THHN at 11.8 A settles 90.8 K above its conductor with 81.5× a good end's drop, every expectation derived from the built current.
+- **Budget.** `intermittent-toggle-wired`: one end opening on the wired plant (a structural recompile, the bank's sync and the solve), under the calibrated 2 ms re-solve gate.
 
 ## Not yet
 

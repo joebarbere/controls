@@ -187,7 +187,8 @@ export const BUILTIN_TABLE_DOCUMENTS: readonly unknown[] = [
       "temperatureCoefficientPerK": 0.00403,
       "linearAlphaMaxK": 473.15,
       "densityKgM3": 2703,
-      "specificHeatJPerKgK": 897
+      "specificHeatJPerKgK": 897,
+      "meltingPointK": 933.473
     },
     "copperAnnealed": {
       "name": "Annealed copper (100 % IACS)",
@@ -197,7 +198,8 @@ export const BUILTIN_TABLE_DOCUMENTS: readonly unknown[] = [
       "temperatureCoefficientPerK": 0.00393,
       "linearAlphaMaxK": 473.15,
       "densityKgM3": 8890,
-      "specificHeatJPerKgK": 385
+      "specificHeatJPerKgK": 385,
+      "meltingPointK": 1357.77
     }
   },
   "sources": [
@@ -240,6 +242,14 @@ export const BUILTIN_TABLE_DOCUMENTS: readonly unknown[] = [
       "citation": "Specific heat near 25 °C derived from the NIST-JANAF Thermochemical Tables (M. W. Chase Jr., 4th ed., J. Phys. Chem. Ref. Data Monograph 9, 1998) through the solid-phase Shomate fits published in the NIST Chemistry WebBook (read): copper 24.47 J/(mol·K) ÷ 63.546 g/mol = 385 J/(kg·K); aluminium 24.21 J/(mol·K) ÷ 26.982 g/mol = 897 J/(kg·K), the pure metal standing in for the dilute 8000-series alloy. Taken as constant over the conductor's temperature range (it rises slowly with temperature), an abstraction the thermal model states.",
       "covers": [
         "rows.*.specificHeatJPerKgK"
+      ]
+    },
+    {
+      "id": "its-90-fixed-points",
+      "kind": "real-world",
+      "citation": "The International Temperature Scale of 1990 (H. Preston-Thomas, Metrologia 27, 3-10, 1990), whose defining fixed points include the freezing points of aluminium (933.473 K) and copper (1357.77 K). A public reference, not re-read for this table: electrical-realism-reviewer to confirm (ADR 0018 §5). Pure aluminium stands in for the 8000-series alloy, whose solidus is slightly lower. The engine burns a conductor or termination open when its node reaches the melting point, and never reports a node above it (F3.6 part 2).",
+      "covers": [
+        "rows.*.meltingPointK"
       ]
     }
   ],

@@ -18,6 +18,9 @@ const copper: LeadParams = {
   insulationThicknessMm: 0.8,
   insulationConductivityWPerMK: 0.18,
   surfaceEmissivity: 0.9,
+  // The failure params (F3.6 part 2): copper's ITS-90 point, a 90 °C PVC rating.
+  meltingPointK: 1357.77,
+  insulationRatedTempK: 363.15,
 };
 
 /** ρ L / A at 20 °C: 1/58e6 Ω·m × 1 m / 8.2305e-7 m² ≈ 20.95 mΩ (solid wire; stranded leads read about 10 % more). */

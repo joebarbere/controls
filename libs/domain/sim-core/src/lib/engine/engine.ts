@@ -47,7 +47,13 @@ import type {
 export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from '../devices';
-import { ConnectionThermalBank, type ConnectionBankOptions } from '../thermal/bank';
+import {
+  CONNECTION_TOPOLOGY_CHANGED,
+  CONNECTION_UNCHANGED,
+  type ConnectionBankOptions,
+  type ConnectionDetection,
+  ConnectionThermalBank,
+} from '../thermal/bank';
 import { islandNominalBands, type NominalBandReason, SOURCE_BAND_RULES } from './bands';
 import { buildTopologyDescriptor } from './descriptor';
 import {
@@ -385,6 +391,9 @@ export class SimEngine {
   private readonly hook: DcIterationHook;
   private readonly nonlinear: { hook: DcIterationHook; warmStart: DcSolution | null };
   private readonly simOf = (entity: number): StateBag | undefined => this.liveBag(entity);
+  /** The compiler's view of a connection's end states: the bank's (ADR 0015, F3.6 part 2). */
+  private readonly connectionSimOf = (connection: number) => this.connectionBank.topologyView(connection);
+  private readonly compileOptions = { sim: this.simOf, connectionSim: this.connectionSimOf };
 
   private constructor(world: World, options: SimEngineOptions) {
     this.options = options;
@@ -394,8 +403,12 @@ export class SimEngine {
     this.compiler = new NetlistCompiler(this.catalog, { models: this.netlistModels });
     this.world = world;
     this.tickNow = world.tick;
+    // The connection bank first: its end states are decided when it is built (an engine-changed load
+    // re-decides them under this engine, ADR 0018 §6), and the compiler reads them.
+    this.connectionBank = new ConnectionThermalBank(this.catalog, options.connectionBank);
+    this.connectionBank.syncWorld(world);
     // The world's sim bags are what was materialised: right at a start (CompileOptions.sim falls back to them).
-    this.current = this.compiler.compile(world, { sim: this.simOf });
+    this.current = this.compiler.compile(world, this.compileOptions);
     this.solution = createDcSolution(this.current);
     this.spare = createDcSolution(this.current);
     this.values = new DcBranchValues(this.current.branches.length);
@@ -421,7 +434,6 @@ export class SimEngine {
       islandStatus: (island) => this.status(island),
       emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
     };
-    this.connectionBank = new ConnectionThermalBank(this.catalog, options.connectionBank);
     this.rebuild();
     this.syncConnections();
   }
@@ -490,10 +502,13 @@ export class SimEngine {
     this.revisionCount++;
     // Sim state the command resolves (a tripped breaker reset by its handle) before the compiler reads it.
     if (this.commandedBanks) this.notifyCommanded(previous, world);
-    const changed = this.recompile();
     // The connection bank follows the world's connections even when the netlist didn't move (an
-    // unlanded conductor, ADR 0015: bank membership is not topology).
-    if (changed || world.connections !== previous.connections) this.syncConnections();
+    // unlanded conductor, ADR 0015: bank membership is not topology), and before the compile, which
+    // reads its end states (a re-landed end's state is decided for D = 1, ADR 0018 §6).
+    const connectionsChanged = world.connections !== previous.connections;
+    if (connectionsChanged) this.connectionBank.syncWorld(world);
+    const changed = this.recompile();
+    if (changed || connectionsChanged) this.syncConnections();
     if (changed) this.solve(this.tickNow, 'command');
   }
 
@@ -504,6 +519,16 @@ export class SimEngine {
   private syncConnections(): void {
     const bank = this.connectionBank;
     bank.sync(this.world, this.current);
+    this.pointConnections();
+  }
+
+  /**
+   * Points every connection branch's value hooks at the bank, and its outer-loop hook too while one of
+   * its ends is in a nonlinear regime (glowing or arcing, ADR 0018 §6): a linear connection keeps none,
+   * so the wired plant's outer loop calls no hook per conductor.
+   */
+  private pointConnections(): void {
+    const bank = this.connectionBank;
     const asBank = bank as unknown as SimDeviceBank;
     for (let i = 0; i < bank.count; i++) {
       const b = bank.branch[i];
@@ -512,8 +537,17 @@ export class SimEngine {
       this.branchDevice[b] = i;
       this.branchDcValue[b] = bank.dcValue as SimDeviceBank['dcValue'];
       this.branchAcValue[b] = bank.acValue as SimDeviceBank['acValue'];
-      this.branchIterate[b] = null;
+      this.branchIterate[b] = bank.isNonlinear(i) ? (bank.iterate as SimDeviceBank['iterate']) : null;
     }
+  }
+
+  /**
+   * The connection detections (`terminationOverheat`, `insulationDamaged`, ADR 0018 §6) since the last
+   * call, oldest first. Detected in sim-core only: protocol 7 (F3.6 part 3) publishes them as events,
+   * so they are not in {@link takeEvents} and never in any hash. Allocates.
+   */
+  takeConnectionDetections(): ConnectionDetection[] {
+    return this.connectionBank.takeDetections();
   }
 
   /** Calls `commanded` on each netlisted device whose commanded `state` bag the command replaced. */
@@ -730,12 +764,24 @@ export class SimEngine {
     }
     // The connection thermal bank integrates on the fixed absolute schedule only (ADR 0018 §3.4).
     const connections = this.connectionBank;
-    if (t % SOLVE_INTERVAL_TICKS.value === 0 && connections.count > 0 && connections.continuous(ctx)) stale = true;
+    const cadence = t % SOLVE_INTERVAL_TICKS.value === 0 && connections.count > 0;
+    if (cadence && connections.continuous(ctx)) stale = true;
     const protection = this.protectionBanks;
     for (let i = 0; i < protection.length; i++) {
       if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) {
         if (this.protectionTopology[i] === 1) topologyChanged = true;
         else valuesChanged = true;
+      }
+    }
+    // Its end states, decided at the same cadence ticks (ADR 0018 §6): only open versus not open moves
+    // the topology; any other state or regime change is a value change, and may add or drop an
+    // outer-loop hook.
+    if (cadence) {
+      const changed = connections.protection(ctx);
+      if (changed !== CONNECTION_UNCHANGED) {
+        if (changed === CONNECTION_TOPOLOGY_CHANGED) topologyChanged = true;
+        else valuesChanged = true;
+        this.pointConnections();
       }
     }
     this.tickNow = t + 1;
@@ -751,7 +797,7 @@ export class SimEngine {
 
   /** Recompiles the commanded world with the live sim state; true if the netlist changed. */
   private recompile(): boolean {
-    const next = this.compiler.compile(this.world, { sim: this.simOf });
+    const next = this.compiler.compile(this.world, this.compileOptions);
     if (next === this.current) return false;
     const structural = next.nodes !== this.current.nodes || next.devices !== this.current.devices;
     const previousFlags = structural ? this.flagsByEntity() : null;
@@ -924,6 +970,8 @@ export class SimEngine {
   private fillValues(): void {
     const netlist = this.current;
     const values = this.values;
+    // The connection bank values a nonlinear end at the last solution's current (null: none for this netlist).
+    this.connectionBank.solution = this.solved ? this.solution : null;
     values.clear();
     this.unvalued.fill(0);
     const islands = netlist.islands;

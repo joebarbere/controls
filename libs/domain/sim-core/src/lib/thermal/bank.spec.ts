@@ -338,10 +338,14 @@ describe('the connection thermal bank: properties (ADR 0018 §12)', () => {
           stored += spec.hotSpotHeatCapacityJPerK * ((after[end] as number) - th);
           lost += fin * (th - tc) + spec.heatPathWPerK * (th - TA);
         }
+        // A node held at its melting point (burned open, F3.6 part 2) discards its excess heat by design.
+        const temps = ['conductorTempK', 'endATempK', 'endBTempK'].map((key) => after[key] as number);
+        if (temps.some((t) => t >= p.meltingPointK)) return;
         const input = current * current * resistance * dt;
         const balance = input - stored - lost * dt;
-        // The floor: each stored term is a difference of temperatures near 300 K, exact to about 6 × 10⁻¹⁴ K.
-        const floor = (cPrime * L + 2 * spec.hotSpotHeatCapacityJPerK) * 1e-13;
+        // The floor: each stored term is a difference of temperatures, exact to a few ulps of the hottest
+        // (about 6 × 10⁻¹⁴ K near 300 K, 3 × 10⁻¹³ K near 1300 K).
+        const floor = (cPrime * L + 2 * spec.hotSpotHeatCapacityJPerK) * 4e-16 * Math.max(300, ...temps);
         const scale = Math.max(input, lost * dt);
         expect(Math.abs(balance)).toBeLessThan(1e-9 * scale + floor);
       }),

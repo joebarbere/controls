@@ -63,6 +63,13 @@ export interface CompileOptions {
    * the bags hold what was materialised; during play the engine must pass its live state.
    */
   readonly sim?: (entity: number) => StateBag | undefined;
+  /**
+   * The engine's sim-owned state of a connection (ADR 0015, F3.6 part 2): only the keys its model lists
+   * in `simTopologyKeys` (`endAState`, `endBState`) are read, and only whether one is
+   * `intermittentOpen` (the connection is then absent, `intermittent-open`). When it returns
+   * `undefined`, or is left out, the world's own `sim` bag is used (right at a start or a load).
+   */
+  readonly connectionSim?: (connection: number) => Readonly<Record<string, unknown>> | undefined;
 }
 
 export interface NetlistCompilerOptions {
@@ -229,6 +236,7 @@ const ABSENT_KEYS: Readonly<Record<AbsentConnectionReason, string>> = {
   'absent-end': 'absent absent-end',
   'unknown-terminal': 'absent unknown-terminal',
   unlanded: 'absent unlanded',
+  'intermittent-open': 'absent intermittent-open',
 };
 
 const byId = <T extends { readonly id: number }>(items: readonly T[]): readonly T[] => {
@@ -340,6 +348,10 @@ export class NetlistCompiler {
         b = plantTerminal(cached.bEntry, cached.bTerminal);
         if (a === ABSENT_END || b === ABSENT_END) reason = 'absent-end';
         else if (a < 0 || b < 0) reason = 'unknown-terminal';
+        else if (openEnd(result.model, options.connectionSim?.(connection.id) ?? connection.sim)) {
+          // An end that is open (intermittent, burned open, a fused lead) takes the branch out (ADR 0015).
+          reason = 'intermittent-open';
+        }
       }
       record('c');
       record(connection.id);
@@ -619,6 +631,13 @@ function plantTerminal(entry: EntityCacheEntry | null, terminal: number): number
 }
 
 const NO_SIM: StateBag = Object.freeze({});
+
+/** Whether a connection's sim state has an `intermittentOpen` end, read through its model's `simTopologyKeys`. */
+function openEnd(model: ConnectionNetlistModel, sim: Readonly<Record<string, unknown>>): boolean {
+  const keys = model.simTopologyKeys;
+  for (let i = 0; i < keys.length; i++) if (sim[keys[i]] === 'intermittentOpen') return true;
+  return false;
+}
 
 /** The keys of `sim` that `model` lists in `simTopologyKeys`, in that order; a missing key is `null`. */
 function simTopologyView(model: DeviceNetlistModel, sim: StateBag): StateBag {

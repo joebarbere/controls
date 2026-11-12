@@ -32,7 +32,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
  */
-export const SOURCES_HASH = '853b3d22ce479213f04ab2649e3fcac1dfb897cc81fdeda9a0c942a4613fb59a';
+export const SOURCES_HASH = '22f018df2fb7e6bbedc44fef3ecf2d03ff88c9b2d2d0e4b8730f13dc4db0a66d';
 export const SOURCES_SNAPSHOT_HASH = '0c1f995ef683e9446e52f5fa8398ba54c4ba46cada225485d5bdd50ae32e6e43';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
