@@ -1,4 +1,5 @@
 import { createGame, ENGINE_CHANGED_MESSAGE, replayGame, runConsoleScript } from '@controls/scripting-api';
+import { CATALOG_VERSION } from '@controls/catalog';
 import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -103,7 +104,7 @@ describe('the bench-leads scenario', () => {
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_3_HASH}`);
     expect(replay.stderr).toContain(
-      `written by sim engine 3, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue 1`,
+      `written by sim engine 3, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue ${CATALOG_VERSION}`,
     );
   });
 
@@ -114,7 +115,7 @@ describe('the bench-leads scenario', () => {
     expect(replay.status).toBe(1);
     expect(replay.stderr).toContain(`replays to ${BENCH_LEADS_HASH}, but world.json hashes to ${ENGINE_1_HASH}`);
     expect(replay.stderr).toContain(
-      `written by sim engine 1, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue 1`,
+      `written by sim engine 1, catalogue 1; this build is engine ${SIM_ENGINE_VERSION}, catalogue ${CATALOG_VERSION}`,
     );
     expect(replay.stderr).toContain(ENGINE_CHANGED_MESSAGE);
     expect(replay.stderr).toContain(`"sim run <empty.console> --world ${fixture}"`);

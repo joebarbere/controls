@@ -5,15 +5,123 @@
   "brand": "Larkmoor Power",
   "modelName": "LP-SP25",
   "category": "source",
-  "sizeMm": { "widthMm": 300, "heightMm": 300, "depthMm": 200 },
+  "sizeMm": {
+    "widthMm": 300,
+    "heightMm": 300,
+    "depthMm": 200
+  },
   "terminals": [
-    { "id": "l1", "label": "L1", "positionMm": { "x": 50, "y": 250, "z": 200 } },
-    { "id": "l2", "label": "L2", "positionMm": { "x": 250, "y": 250, "z": 200 } },
-    { "id": "n", "label": "N", "positionMm": { "x": 150, "y": 250, "z": 200 } }
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 50,
+        "y": 250,
+        "z": 200
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 50,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 250,
+        "y": 250,
+        "z": 200
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 250,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 150,
+        "y": 250,
+        "z": 200
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "alRated": true,
+          "entryMm": {
+            "x": 150,
+            "y": 250,
+            "z": 200
+          },
+          "exitAxis": "+z"
+        }
+      ]
+    }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "utility.splitPhase",
-    "params": { "ratedKva": 25, "percentImpedance": 2, "xOverR": 2, "lineToNeutralV": 120 }
+    "params": {
+      "ratedKva": 25,
+      "percentImpedance": 2,
+      "xOverR": 2,
+      "lineToNeutralV": 120
+    }
   },
   "controls": [],
   "sources": [
@@ -34,6 +142,12 @@
       "kind": "game-design",
       "citation": "game-design: a placeholder size and terminal layout. The service is headless in P2 (no service entrance or meter base until P4), so it is not drawn.",
       "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "stand-in-terminals",
+      "kind": "game-design",
+      "citation": "game-design: in P3 this service is the stand-in supply of the demo circuit (D12), standing in for P4's load centre, so each terminal takes one branch-circuit conductor: 14 to 10 AWG copper or aluminium, solid or stranded, a 13 ± 2 mm strip. The 4.0 N·m torque on all three is the breaker load terminal's value (breaker.saltmere-1p-15a), reused for simplicity; a real neutral bar is commonly marked lower (about 2.3 N·m, 20 lb·in, for 14 to 10 AWG), which P4's neutral bar will take. Conductors enter at the terminals and leave along +z. Not a transformer secondary's real terminals; P4 replaces it.",
+      "covers": ["terminals.*.methods.screw"]
     }
   ],
   "extensions": {}

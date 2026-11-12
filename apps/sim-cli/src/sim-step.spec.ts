@@ -6,6 +6,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
@@ -107,10 +108,7 @@ describe('the sim-step scenario', () => {
   });
 
   it("its checked-in save (this engine's, tick 1234, a solved short) loads as continued and replays to the same hash", () => {
-    const fixture = join(
-      WORKSPACE_ROOT,
-      `libs/domain/save-format/fixtures/v2/ctrl/sim-step-engine-${SIM_ENGINE_VERSION}.ctrl`,
-    );
+    const fixture = currentFixture('sim-step');
     const loaded = loadGame(new Uint8Array(readFileSync(fixture)));
     if (!loaded.ok) throw new Error(loaded.error.message);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });

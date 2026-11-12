@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "conductivityIacsPercent": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "resistivityOhmM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "referenceTemperatureK": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "temperatureCoefficientPerK": {
+      "type": "number",
+      "minimum": 0
+    },
+    "linearAlphaMaxK": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "densityKgM3": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "specificHeatJPerKgK": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": [
+    "name",
+    "conductivityIacsPercent",
+    "resistivityOhmM",
+    "referenceTemperatureK",
+    "temperatureCoefficientPerK",
+    "linearAlphaMaxK",
+    "densityKgM3",
+    "specificHeatJPerKgK"
+  ],
+  "additionalProperties": false,
+  "title": "Row of catalogue table materials",
+  "description": "Conductor metals: resistivity and α at a reference temperature, density, specific heat."
+}

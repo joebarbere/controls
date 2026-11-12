@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "brand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "modelName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "stripper",
+        "cutter",
+        "screwdriver",
+        "torqueDriver",
+        "crimper",
+        "nutDriver",
+        "drill",
+        "holeSaw",
+        "knockoutPunch",
+        "fishTape",
+        "labelMaker"
+      ]
+    },
+    "capabilities": {
+      "minItems": 1,
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "cut",
+              "strip",
+              "stripJacket",
+              "crimp",
+              "drive",
+              "torque",
+              "openEntry",
+              "bore",
+              "pull",
+              "label"
+            ]
+          },
+          "maxAwg": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Awg"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "step",
+          "maxAwg"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "holes": {
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/HoleId"
+          },
+          "awg": {
+            "$ref": "#/$defs/Awg"
+          },
+          "stranding": {
+            "type": "string",
+            "enum": [
+              "solid",
+              "stranded"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "awg",
+          "stranding"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "dies": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/DieId"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "awgRange": {
+            "type": "object",
+            "properties": {
+              "smallest": {
+                "$ref": "#/$defs/Awg"
+              },
+              "largest": {
+                "$ref": "#/$defs/Awg"
+              }
+            },
+            "required": [
+              "smallest",
+              "largest"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "awgRange"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "torque": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "minNm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "maxNm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "accuracyFraction": {
+              "type": "number",
+              "minimum": 0,
+              "exclusiveMaximum": 1
+            }
+          },
+          "required": [
+            "minNm",
+            "maxNm",
+            "accuracyFraction"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "boreDiameterMm": {
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sources": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "real-world",
+              "game-design"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "covers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_-]*)(?:\\.(?:(?:[A-Za-z0-9][A-Za-z0-9_-]*)|\\*))*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "citation",
+          "covers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "title",
+    "brand",
+    "modelName",
+    "kind",
+    "capabilities",
+    "holes",
+    "dies",
+    "torque",
+    "boreDiameterMm",
+    "sources",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls tool, catalogue format v2",
+  "description": "One file in content/tools/ (ADR 0016). Zod in @controls/catalog is authoritative; capability consistency and source coverage are checked by parseCatalog.",
+  "$defs": {
+    "Awg": {
+      "type": "integer",
+      "minimum": -3,
+      "maximum": 40,
+      "description": "An AWG size as an integer designation: 4/0 = -3, 3/0 = -2, 2/0 = -1, 1/0 = 0, then 1 to 40."
+    },
+    "HoleId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A stripping hole id within one tool entry."
+    },
+    "DieId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A crimp die id within one tool entry; accessories list the die ids that crimp them."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    }
+  }
+}

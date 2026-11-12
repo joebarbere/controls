@@ -1,0 +1,28 @@
+{
+  "table": "colours",
+  "version": 1,
+  "title": "Conductor, stripe and jacket colours",
+  "rows": {
+    "bare": { "name": "Bare copper", "srgb": "#b87333" },
+    "black": { "name": "Black", "srgb": "#1c1c1c" },
+    "blue": { "name": "Blue", "srgb": "#1f4fbf" },
+    "brown": { "name": "Brown", "srgb": "#6b4528" },
+    "green": { "name": "Green", "srgb": "#2e7d32" },
+    "grey": { "name": "Grey (gray)", "srgb": "#8a8a8a" },
+    "orange": { "name": "Orange", "srgb": "#ef7d00" },
+    "pink": { "name": "Pink", "srgb": "#e87ea1" },
+    "purple": { "name": "Purple", "srgb": "#6a3d9a" },
+    "red": { "name": "Red", "srgb": "#c62828" },
+    "white": { "name": "White", "srgb": "#ededed" },
+    "yellow": { "name": "Yellow", "srgb": "#f2c200" }
+  },
+  "sources": [
+    {
+      "id": "display-colours",
+      "kind": "game-design",
+      "citation": "game-design: display values only, chosen to read well under the game's lighting and against each other. They are not colour standards and never take part in a check: what a conductor is made in, and what the region's rules say about it, are colour ids. The ids are append-only across versions (ADR 0015). The set covers the colours building wire and cable jackets are commonly sold in, and bare copper.",
+      "covers": ["rows.*.srgb"]
+    }
+  ],
+  "extensions": {}
+}

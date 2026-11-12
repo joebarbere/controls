@@ -2,12 +2,14 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { catalogJsonSchemas } from './json-schema';
 import { MODEL_KINDS } from './model-kinds';
+import { TABLE_KINDS } from './tables';
 
 /*
  * The JSON Schema files in libs/domain/catalog/json-schema/ are generated from Zod and checked in. If
  * this test fails they are stale: regenerate them with `pnpm nx test catalog -u` and commit the
- * result. `device-state.<kind>.schema.json` is save format (ADR 0013): an existing kind's file changes
- * only with a `schemaVersion` bump.
+ * result. `device-state.<kind>.schema.json` and `connection-state.<kind>.schema.json` are save format
+ * (ADR 0013, ADR 0015): an existing kind's file changes only with a `schemaVersion` bump (the lead's
+ * connection keys enter saves with world v3).
  */
 
 const outDir = join(import.meta.dirname, '../../json-schema');
@@ -30,11 +32,30 @@ describe('exported catalogue JSON Schema', () => {
     expect(readdirSync(outDir).sort()).toStrictEqual(Object.keys(schemas).sort());
   });
 
-  it('has the entry format and one device-state file per placed model kind', () => {
-    const placed = Object.values(MODEL_KINDS)
-      .filter((k) => k.placement === 'entity')
-      .map((k) => `device-state.${k.kind}.schema.json`);
-    expect(Object.keys(schemas).sort()).toStrictEqual(['device.v1.schema.json', ...placed].sort());
+  it('has the v2 formats, one row file per table and one state file per model kind', () => {
+    const states = Object.values(MODEL_KINDS).map((k) =>
+      k.placement === 'entity' ? `device-state.${k.kind}.schema.json` : `connection-state.${k.kind}.schema.json`,
+    );
+    const formats = ['device', 'cable', 'tool', 'accessory', 'table'].map((f) => `${f}.v2.schema.json`);
+    const rows = Object.keys(TABLE_KINDS).map((t) => `table-row.${t}.schema.json`);
+    expect(Object.keys(schemas).sort()).toStrictEqual([...formats, ...rows, ...states].sort());
+  });
+
+  it('pins the lead bags (ADR 0015): no commanded keys, the ten sim keys', () => {
+    const props = schemas['connection-state.lead.schema.json']['properties'] as Record<string, Node>;
+    expect(props['state']['properties']).toStrictEqual({});
+    expect(Object.keys(props['sim']['properties'] as Node).sort()).toStrictEqual([
+      'conductorTempK',
+      'endADegradation',
+      'endAState',
+      'endATempK',
+      'endATerminationId',
+      'endBDegradation',
+      'endBState',
+      'endBTempK',
+      'endBTerminationId',
+      'insulationDamaged',
+    ]);
   });
 
   it('every object property is required and unknown keys are refused', () => {

@@ -57,6 +57,71 @@ export interface VoltageRanges {
   readonly utilizationB: VoltageRange;
 }
 
+/**
+ * A colour a rule accepts (catalogue v2): a base insulation colour, or any base the rule doesn't
+ * exclude (`base: null`), with a tracer stripe or none. Colour ids are rows of the catalogue colour
+ * table. The world stores one stripe per conductor, so "three continuous stripes" is one stripe here.
+ */
+export interface ColourPattern {
+  readonly base: string | null;
+  readonly stripe: string | null;
+}
+
+/** Whether a rule is the region's code or industry convention (labelled honestly, realism charter). */
+export type ColourRuleBasis = 'code' | 'convention';
+
+/** A region's identification rule for one conductor role, over colour ids. */
+export interface ConductorColourRule {
+  readonly patterns: readonly ColourPattern[];
+  /** Bases a `base: null` pattern doesn't accept. */
+  readonly excludedBases: readonly string[];
+  readonly basis: ColourRuleBasis;
+  readonly kind: 'real-world' | 'game-design';
+  readonly source: string;
+}
+
+/** The colours conventionally used for a nominal system's ungrounded conductors, in line order (L1, L2, L3). */
+export interface UngroundedColourConvention {
+  /** A nominal system's `name` in this profile. */
+  readonly system: string;
+  readonly colours: readonly string[];
+  readonly basis: ColourRuleBasis;
+  readonly kind: 'real-world' | 'game-design';
+  readonly source: string;
+}
+
+/**
+ * A region's conductor colour rules (catalogue v2, ADR 0015): the rules P4's inspector checks against.
+ * They are never part of the load check, and they say nothing about which colours a product is made
+ * in (that is each conductor entry's `colours`). Article numbers are cited and paraphrased; no code
+ * text is reproduced.
+ */
+export interface RegionConductorColours {
+  /** How a grounded (neutral) conductor is identified. */
+  readonly grounded: ConductorColourRule;
+  /** How an equipment grounding conductor is identified. */
+  readonly equipmentGrounding: ConductorColourRule;
+  /** Bases an ungrounded conductor may not have (reserved for the grounded conductor and the EGC). */
+  readonly notForUngrounded: {
+    readonly colours: readonly string[];
+    readonly basis: ColourRuleBasis;
+    readonly source: string;
+  };
+  /** Ungrounded colours by nominal system: convention, not code. */
+  readonly ungrounded: readonly UngroundedColourConvention[];
+  /** The marking of a delta system's high leg. */
+  readonly highLeg: { readonly colour: string; readonly basis: ColourRuleBasis; readonly source: string };
+}
+
+/** Whether `colour` matches one of `rule`'s patterns. */
+export function matchesColourRule(rule: ConductorColourRule, colour: { base: string; stripe: string | null }): boolean {
+  return rule.patterns.some(
+    (p) =>
+      (p.base === null ? !rule.excludedBases.includes(colour.base) : p.base === colour.base) &&
+      p.stripe === colour.stripe,
+  );
+}
+
 /** One region's electrical profile. */
 export interface RegionProfile {
   readonly id: RegionId;
@@ -71,6 +136,8 @@ export interface RegionProfile {
   readonly threePhaseIndustrial: NominalSystem;
   /** Steady-state voltage ranges (F2.4): service and utilization, ranges A and B. */
   readonly voltageRanges: VoltageRanges;
+  /** Conductor identification rules over colour ids (catalogue v2): code and convention, labelled. */
+  readonly conductorColours: RegionConductorColours;
 }
 
 /** `range` at `nominalV`: the band in volts, `[min, max]`. */
@@ -82,6 +149,12 @@ const ANSI_C84_1 =
   'ANSI C84.1-2020, "American National Standard for Electric Power Systems and Equipment — Voltage Ratings (60 Hertz)", which lists the standard nominal system voltages of US utility services';
 const IEEE_141 =
   'IEEE Std 141-1993 ("Red Book", Recommended Practice for Electric Power Distribution for Industrial Plants), ch. 3, "Voltage considerations", on the nominal voltages of US low-voltage systems (withdrawn; superseded by the IEEE 3000 series, IEEE Std 3001.x and 3002.x)';
+
+/**
+ * The code edition the colour rules cite. Pinned to 2023: the 2026 edition's numbering wasn't checked
+ * (P3 source pre-audit).
+ */
+const NFPA_70 = 'NFPA 70-2023 (National Electrical Code)';
 
 const volts = (value: number, source: string): RegionValue => ({ value, unit: 'V', kind: 'real-world', source });
 
@@ -166,6 +239,64 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
     utilizationB: {
       min: fraction(104, 'Range B utilization minimum (the general column)'),
       max: fraction(127, 'Range B utilization maximum'),
+    },
+  },
+  conductorColours: {
+    grounded: {
+      patterns: [
+        { base: 'white', stripe: null },
+        { base: 'grey', stripe: null },
+        { base: null, stripe: 'white' },
+        { base: null, stripe: 'grey' },
+      ],
+      excludedBases: ['green'],
+      basis: 'code',
+      kind: 'real-world',
+      source: `${NFPA_70}, Art. 200.6 (cited by number, paraphrased): an insulated grounded conductor of 6 AWG or smaller is identified by a continuous white or grey outer finish, or by continuous white or grey stripes along its whole length on insulation of any colour but green; larger ones may instead be identified where they terminate. The world stores one stripe, so the code's three stripes are one stripe id here.`,
+    },
+    equipmentGrounding: {
+      patterns: [
+        { base: 'bare', stripe: null },
+        { base: 'green', stripe: null },
+        { base: 'green', stripe: 'yellow' },
+      ],
+      excludedBases: [],
+      basis: 'code',
+      kind: 'real-world',
+      source: `${NFPA_70}, Art. 250.119 (cited by number, paraphrased): an equipment grounding conductor may be bare; if covered or insulated, its outer finish is continuous green, or green with one or more yellow stripes. Conductors larger than 6 AWG may be re-identified where they terminate.`,
+    },
+    notForUngrounded: {
+      colours: ['white', 'grey', 'green'],
+      basis: 'code',
+      source: `${NFPA_70}, Art. 200.7 (white and grey finishes are kept for the grounded conductor, with narrow exceptions for re-identified conductors) and Art. 250.119 (green finishes are kept for equipment grounding), cited by number and paraphrased.`,
+    },
+    ungrounded: [
+      {
+        system: '120/240 V',
+        colours: ['black', 'red'],
+        basis: 'convention',
+        kind: 'real-world',
+        source: `Industry convention, not a code rule: black and red for the two lines of a 120/240 V single-phase service. ${NFPA_70}, Arts. 210.5(C) and 215.12(C) (cited by number) require the identification method of ungrounded conductors to be documented where more than one nominal system is present, without mandating colours.`,
+      },
+      {
+        system: '208Y/120 V',
+        colours: ['black', 'red', 'blue'],
+        basis: 'convention',
+        kind: 'real-world',
+        source: `Industry convention, not a code rule: black, red and blue for L1, L2 and L3 of a 208Y/120 V system. ${NFPA_70}, Arts. 210.5(C) and 215.12(C) (cited by number) require the method to be documented where more than one nominal system is present, without mandating colours.`,
+      },
+      {
+        system: '480Y/277 V',
+        colours: ['brown', 'orange', 'yellow'],
+        basis: 'convention',
+        kind: 'real-world',
+        source: `Industry convention, not a code rule: brown, orange and yellow for L1, L2 and L3 of a 480Y/277 V system. ${NFPA_70}, Arts. 210.5(C) and 215.12(C) (cited by number) require the method to be documented where more than one nominal system is present, without mandating colours.`,
+      },
+    ],
+    highLeg: {
+      colour: 'orange',
+      basis: 'code',
+      source: `${NFPA_70}, Art. 110.15 (cited by number, paraphrased): on a four-wire delta system with one phase leg at the higher voltage to ground, that leg is durably marked orange or by another effective means. No P3 source builds such a system.`,
     },
   },
 });

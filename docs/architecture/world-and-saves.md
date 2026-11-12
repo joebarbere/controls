@@ -227,7 +227,7 @@ flowchart TD
 
 ## The device catalogue (P2 kickoff)
 
-A save names every device by catalogue reference (`{ id, version }`); `@controls/catalog` resolves it. The catalogue's entries are data in `content/devices/<id>.v<version>.json`, mirrored into `builtin-devices.generated.ts` (domain code can't import `content/`, and the game, the sim worker and `sim-cli` must resolve refs identically) and validated when the module loads. Its version, `catalogVersion` (1), goes in each save's manifest. Built-in props (`prop.*`) are not catalogue entries; they stay in `world-model` (`BUILTIN_PROPS`).
+A save names every device by catalogue reference (`{ id, version }`); `@controls/catalog` resolves it. The catalogue's entries are data in `content/devices/<id>.v<version>.json`, mirrored into `builtin-devices.generated.ts` (domain code can't import `content/`, and the game, the sim worker and `sim-cli` must resolve refs identically) and validated when the module loads. Its version, `catalogVersion` (2 from P3, provisional until v0.4.0; [ADR 0016](../decisions/0016-catalogue-format-v2.md)), goes in each save's manifest. Catalogue v2 adds `content/tables/` (materials, insulation, colours, pinned by `{ table, version, key }`, mirrored into `builtin-tables.generated.ts`) and the cable, tool and accessory families, which share one id namespace with the devices. Built-in props (`prop.*`) are not catalogue entries; they stay in `world-model` (`BUILTIN_PROPS`).
 
 ```mermaid
 flowchart LR

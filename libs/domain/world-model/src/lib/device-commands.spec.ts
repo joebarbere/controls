@@ -136,9 +136,12 @@ describe('device.operate', () => {
       category: 'source',
       sizeMm: { widthMm: 10, heightMm: 10, depthMm: 10 },
       terminals: [
-        { id: 'neg', label: '-', positionMm: origin },
-        { id: 'pos', label: '+', positionMm: origin },
+        { id: 'neg', label: '-', positionMm: origin, methods: [] },
+        { id: 'pos', label: '+', positionMm: origin, methods: [] },
       ],
+      mounts: [],
+      enclosure: null,
+      conductor: null,
       model: { kind: 'supply.test', params: {} },
       controls: [
         { id: 'setpointV', label: 'Voltage', type: 'setpoint', unit: 'V', min: 0, max: 20, step: 0.1 },

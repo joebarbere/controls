@@ -1,0 +1,99 @@
+{
+  "table": "insulation",
+  "version": 1,
+  "title": "Conductor insulation and cable jackets",
+  "rows": {
+    "mtw": {
+      "name": "MTW",
+      "material": "PVC insulation, single layer (machine tool wire)",
+      "ratedTempDryK": 363.15,
+      "ratedTempWetK": 333.15,
+      "thermalConductivityWPerMK": 0.18,
+      "jacketThermalConductivityWPerMK": null,
+      "emissivity": 0.9
+    },
+    "nmbJacket": {
+      "name": "NM-B cable jacket",
+      "material": "PVC outer jacket of a non-metallic-sheathed cable",
+      "ratedTempDryK": 363.15,
+      "ratedTempWetK": null,
+      "thermalConductivityWPerMK": 0.18,
+      "jacketThermalConductivityWPerMK": null,
+      "emissivity": 0.9
+    },
+    "thhnThwn2": {
+      "name": "THHN/THWN-2",
+      "material": "PVC insulation with an extruded nylon jacket",
+      "ratedTempDryK": 363.15,
+      "ratedTempWetK": 363.15,
+      "thermalConductivityWPerMK": 0.18,
+      "jacketThermalConductivityWPerMK": 0.25,
+      "emissivity": 0.9
+    },
+    "xhhw2": {
+      "name": "XHHW-2",
+      "material": "Cross-linked polyethylene (XLPE), single layer",
+      "ratedTempDryK": 363.15,
+      "ratedTempWetK": 363.15,
+      "thermalConductivityWPerMK": 0.29,
+      "jacketThermalConductivityWPerMK": null,
+      "emissivity": 0.9
+    }
+  },
+  "sources": [
+    {
+      "id": "ul-type-ratings",
+      "kind": "real-world",
+      "citation": "Conductor temperature ratings of the types as public manufacturers' specification sheets state them for wire listed to the UL standards, cited by number only (UL 83 for THHN/THWN-2, UL 44 for XHHW-2, UL 1063 for MTW, UL 719 for NM-B), paraphrased: THHN 90 °C in dry locations; THWN-2 and XHHW-2 90 °C in wet or dry locations; MTW 90 °C dry and 60 °C wet; NM-B 90 °C, which is the rating of the cable's conductors, not of the jacket compound (the jacket row carries the cable's rating). Not taken from the NEC's conductor-insulation table. How much current a rating allows is derived by the thermal model (D6), never stored.",
+      "covers": [
+        "rows.thhnThwn2.ratedTempDryK",
+        "rows.thhnThwn2.ratedTempWetK",
+        "rows.xhhw2.ratedTempDryK",
+        "rows.xhhw2.ratedTempWetK",
+        "rows.mtw.ratedTempDryK",
+        "rows.mtw.ratedTempWetK",
+        "rows.nmbJacket.ratedTempDryK"
+      ]
+    },
+    {
+      "id": "nm-dry-locations",
+      "kind": "real-world",
+      "citation": "NFPA 70-2023 Art. 334.12 (uses not permitted; cited by number and paraphrased) keeps NM cable out of wet and damp locations, so the NM-B jacket row has no wet rating.",
+      "covers": ["rows.nmbJacket.ratedTempWetK"]
+    },
+    {
+      "id": "pvc-nylon-conductivity",
+      "kind": "real-world",
+      "citation": "Thermal conductivity of PVC about 0.16 to 0.20 W/(m·K) (0.18 is taken, mid-band) and of nylon 6/6 about 0.25 W/(m·K), from a plastics distributor's published thermal-property table (read by electrical-realism-reviewer in the P3 source pre-audit), paraphrased. Compound-to-compound spread is about as large as the difference between the two.",
+      "covers": [
+        "rows.thhnThwn2.thermalConductivityWPerMK",
+        "rows.thhnThwn2.jacketThermalConductivityWPerMK",
+        "rows.mtw.thermalConductivityWPerMK",
+        "rows.nmbJacket.thermalConductivityWPerMK"
+      ]
+    },
+    {
+      "id": "single-layer-constructions",
+      "kind": "game-design",
+      "citation": "game-design choice inside real constructions: XHHW-2 is a single XLPE layer and an NM-B jacket a single PVC layer; MTW is made both as plain PVC and with a nylon jacket, and the single-layer variant is taken here. So these rows have no outer jacket layer.",
+      "covers": [
+        "rows.mtw.jacketThermalConductivityWPerMK",
+        "rows.xhhw2.jacketThermalConductivityWPerMK",
+        "rows.nmbJacket.jacketThermalConductivityWPerMK"
+      ]
+    },
+    {
+      "id": "xlpe-conductivity-unverified",
+      "kind": "game-design",
+      "citation": "game-design: unverified, so not a measurement. XLPE thermal conductivity of about 0.29 W/(m·K) appears only in a secondary source (a field-simulation package's material library); the primary reference, IEC 60287-2-1, is paywalled and was not read. Replace with a verified figure, as a new table version, when one is found.",
+      "covers": ["rows.xhhw2.thermalConductivityWPerMK"]
+    },
+    {
+      "id": "surface-emissivity",
+      "kind": "game-design",
+      "citation": "game-design judgement: a total emissivity of 0.9 for every insulation and jacket surface. An infrared-thermometer maker's emissivity table gives about 0.93 for PVC (read in the P3 source pre-audit); colours and nylon differ a little. Radiation is kept because it carries 20 to 30 % of a small conductor's heat in free air (D6).",
+      "covers": ["rows.*.emissivity"]
+    }
+  ],
+  "extensions": {}
+}

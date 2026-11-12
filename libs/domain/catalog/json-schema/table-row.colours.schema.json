@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "srgb": {
+      "type": "string",
+      "pattern": "^#[0-9a-f]{6}$"
+    }
+  },
+  "required": [
+    "name",
+    "srgb"
+  ],
+  "additionalProperties": false,
+  "title": "Row of catalogue table colours",
+  "description": "Insulation, stripe and jacket colours: append-only ids (ADR 0015) with display values."
+}

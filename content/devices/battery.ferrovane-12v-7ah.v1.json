@@ -18,7 +18,8 @@
         "x": 18,
         "y": 32,
         "z": 98
-      }
+      },
+      "methods": []
     },
     {
       "id": "pos",
@@ -27,9 +28,13 @@
         "x": 133,
         "y": 32,
         "z": 98
-      }
+      },
+      "methods": []
     }
   ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
   "model": {
     "kind": "battery",
     "params": {

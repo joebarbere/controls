@@ -5,13 +5,47 @@
   "brand": "Tessaline",
   "modelName": "TS-101",
   "category": "switch",
-  "sizeMm": { "widthMm": 60, "heightMm": 40, "depthMm": 45 },
+  "sizeMm": {
+    "widthMm": 60,
+    "heightMm": 40,
+    "depthMm": 45
+  },
   "terminals": [
-    { "id": "a", "label": "1", "positionMm": { "x": 10, "y": 20, "z": 12 } },
-    { "id": "b", "label": "2", "positionMm": { "x": 50, "y": 20, "z": 12 } }
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 10,
+        "y": 20,
+        "z": 12
+      },
+      "methods": []
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 50,
+        "y": 20,
+        "z": 12
+      },
+      "methods": []
+    }
   ],
-  "model": { "kind": "switch.spst", "params": {} },
-  "controls": [{ "id": "closed", "label": "Closed", "type": "toggle" }],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "switch.spst",
+    "params": {}
+  },
+  "controls": [
+    {
+      "id": "closed",
+      "label": "Closed",
+      "type": "toggle"
+    }
+  ],
   "sources": [
     {
       "id": "base-layout",
