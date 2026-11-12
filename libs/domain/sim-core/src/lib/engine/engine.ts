@@ -31,7 +31,7 @@ import {
 } from '../mna/dc';
 import { AcSolver } from '../mna/ac';
 import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue } from '../mna/ac-values';
-import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue } from '../mna/values';
+import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue, RESISTOR_DEFAULT_MODELS } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
 import type {
@@ -47,6 +47,7 @@ import type {
 export type { SimIslandStatus } from './device-model';
 import { SOLVE_INTERVAL_TICKS, TICK_S } from './constants';
 import { BUILTIN_DEVICE_MODELS } from '../devices';
+import { ConnectionThermalBank, type ConnectionBankOptions } from '../thermal/bank';
 import { islandNominalBands, type NominalBandReason, SOURCE_BAND_RULES } from './bands';
 import { buildTopologyDescriptor } from './descriptor';
 import {
@@ -220,6 +221,8 @@ export interface SimEngineOptions {
   readonly netlistModels?: NetlistModels;
   /** Engine device models by kind (default {@link BUILTIN_DEVICE_MODELS}); tests add synthetic kinds. */
   readonly deviceModels?: Readonly<Record<string, SimDeviceModel>>;
+  /** The connection thermal bank's test parameters (ADR 0018 §3.5's linearised goldens); never in play. */
+  readonly connectionBank?: ConnectionBankOptions;
 }
 
 /** Counts, for tests and diagnostics: never part of any result. */
@@ -320,6 +323,12 @@ export class SimEngine {
   private commandedBanks = false;
   private devices = new Map<number, DeviceSlot>();
   private readonly tombstones = new Map<number, StateBag>();
+  /**
+   * The connection thermal bank (F3.6 part 1, ADR 0018 §3): every connection of a known connection
+   * kind, netlisted or not, with its ten sim keys. Synced after every recompile and every command that
+   * changed the world's connections; stepped at cadence ticks only.
+   */
+  private readonly connectionBank: ConnectionThermalBank;
   // Per branch: the bank and device index that values it, and the kind's default.
   private branchBank: (SimDeviceBank | null)[] = [];
   private branchDevice = new Int32Array(0);
@@ -334,6 +343,9 @@ export class SimEngine {
   private branchAcValue: (SimDeviceBank['acValue'] | null)[] = [];
   private branchIterate: (SimDeviceBank['iterate'] | null)[] = [];
   private branchDefault: (DcDefaultValue | undefined)[] = [];
+  /** Per branch: 1 if its DC default is its static `resistanceOhm`, which `defaultOhms` holds (see `refreshDefaultOhms`). */
+  private defaultResistor = new Uint8Array(0);
+  private defaultOhms = new Float64Array(0);
   private branchAcDefault: (AcDefaultValue | undefined)[] = [];
   // Per island: unmodelled, the entities, the flags of the last solve, and the snapshot's arrays.
   private unmodelled = new Uint8Array(0);
@@ -409,7 +421,9 @@ export class SimEngine {
       islandStatus: (island) => this.status(island),
       emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
     };
+    this.connectionBank = new ConnectionThermalBank(this.catalog, options.connectionBank);
     this.rebuild();
+    this.syncConnections();
   }
 
   /**
@@ -476,7 +490,30 @@ export class SimEngine {
     this.revisionCount++;
     // Sim state the command resolves (a tripped breaker reset by its handle) before the compiler reads it.
     if (this.commandedBanks) this.notifyCommanded(previous, world);
-    if (this.recompile()) this.solve(this.tickNow, 'command');
+    const changed = this.recompile();
+    // The connection bank follows the world's connections even when the netlist didn't move (an
+    // unlanded conductor, ADR 0015: bank membership is not topology).
+    if (changed || world.connections !== previous.connections) this.syncConnections();
+    if (changed) this.solve(this.tickNow, 'command');
+  }
+
+  /**
+   * Brings the connection bank up to the world and the current netlist, and points every connection
+   * branch's value hooks at it (its member index as the branch's device index).
+   */
+  private syncConnections(): void {
+    const bank = this.connectionBank;
+    bank.sync(this.world, this.current);
+    const asBank = bank as unknown as SimDeviceBank;
+    for (let i = 0; i < bank.count; i++) {
+      const b = bank.branch[i];
+      if (b < 0) continue;
+      this.branchBank[b] = asBank;
+      this.branchDevice[b] = i;
+      this.branchDcValue[b] = bank.dcValue as SimDeviceBank['dcValue'];
+      this.branchAcValue[b] = bank.acValue as SimDeviceBank['acValue'];
+      this.branchIterate[b] = null;
+    }
   }
 
   /** Calls `commanded` on each netlisted device whose commanded `state` bag the command replaced. */
@@ -498,6 +535,7 @@ export class SimEngine {
       id: device.entity,
       state: { ...this.liveBag(device.entity) },
     }));
+    const connections = this.connectionBank.exportBags();
     const s = this.solution;
     const solution =
       this.solved && !isEmptyNetlist(this.current)
@@ -509,7 +547,7 @@ export class SimEngine {
             islands: s.islands.map((island) => ({ flags: island.flags, iterations: island.iterations })),
           }
         : null;
-    return { tick: this.tickNow, entities, solution };
+    return { tick: this.tickNow, entities, connections, solution };
   }
 
   /** The snapshot at this tick: a copy of its hashed bytes (ADR 0011 §5.2, `game.snapshot()`). */
@@ -690,6 +728,9 @@ export class SimEngine {
     for (let i = 0; i < continuous.length; i++) {
       if ((continuous[i].continuous as (c: LayerContext) => boolean | void)(ctx) === true) stale = true;
     }
+    // The connection thermal bank integrates on the fixed absolute schedule only (ADR 0018 §3.4).
+    const connections = this.connectionBank;
+    if (t % SOLVE_INTERVAL_TICKS.value === 0 && connections.count > 0 && connections.continuous(ctx)) stale = true;
     const protection = this.protectionBanks;
     for (let i = 0; i < protection.length; i++) {
       if ((protection[i].protection as (c: LayerContext) => boolean)(ctx)) {
@@ -703,7 +744,7 @@ export class SimEngine {
     // t + 1 either way, so the change is tick-exact. A value-only change never compiles: the compile
     // walks the whole world, allocating (an F2.4 gate: 12 B/step for two hiccuping PSUs in 15 devices).
     // A continuous layer's stale value (a heating filament, F2.5) re-solves without a recompile.
-    if (topologyChanged) this.recompile();
+    if (topologyChanged && this.recompile()) this.syncConnections();
     if (topologyChanged || valuesChanged) this.solve(t + 1, 'layer');
     else if (stale) this.solve(t + 1, 'continuous');
   }
@@ -730,8 +771,31 @@ export class SimEngine {
         this.previousFlags[island.index] = flags;
       });
       this.generation++;
+    } else {
+      // A values-only change (a commanded value, a landed count): the defaults' static values moved.
+      this.refreshDefaultOhms();
     }
     return true;
+  }
+
+  /**
+   * Copies each branch's static `resistanceOhm` into a slot, for the kinds whose DC default is exactly
+   * "a resistor of `resistanceOhm`", so a solve stamps it with `resistorAt` instead of a keyed load per
+   * branch per solve. Same value, bit for bit; it only keeps the per-solve path free of the heap
+   * numbers a megamorphic keyed load of a double makes (F3.6 part 1's allocation gate).
+   */
+  private refreshDefaultOhms(): void {
+    const branches = this.current.branches;
+    if (this.defaultOhms.length !== branches.length) {
+      this.defaultOhms = new Float64Array(branches.length);
+      this.defaultResistor = new Uint8Array(branches.length);
+    }
+    for (let i = 0; i < branches.length; i++) {
+      const ohms = branches[i].values['resistanceOhm'];
+      const resistor = RESISTOR_DEFAULT_MODELS.has(branches[i].model) && typeof ohms === 'number';
+      this.defaultResistor[i] = resistor ? 1 : 0;
+      this.defaultOhms[i] = resistor ? ohms : 0;
+    }
   }
 
   /** Each entity's island's flags, for judging rising edges across a topology change. */
@@ -883,7 +947,8 @@ export class SimEngine {
         }
         const fallback = this.branchDefault[index];
         if (fallback !== undefined) {
-          fallback(branch, values);
+          if (this.defaultResistor[index] === 1) values.resistorAt(index, this.defaultOhms, index);
+          else fallback(branch, values);
           continue;
         }
         // No model can value it: keep the solver going with a harmless stamp, then discard the island.
@@ -1049,6 +1114,7 @@ export class SimEngine {
     this.branchAcValue = new Array<SimDeviceBank['acValue'] | null>(branchCount).fill(null);
     this.branchIterate = new Array<SimDeviceBank['iterate'] | null>(branchCount).fill(null);
     this.branchDefault = netlist.branches.map((branch) => ownModel(DC_DEFAULT_VALUES, branch.model));
+    this.refreshDefaultOhms();
     this.branchAcDefault = netlist.branches.map((branch) => ownModel(AC_DEFAULT_VALUES, branch.model));
     this.hasAc = netlist.islands.some((island) => island.kind === 'ac');
     for (const branch of netlist.branches) {

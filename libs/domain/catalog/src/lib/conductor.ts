@@ -1,4 +1,5 @@
 import type { Catalog } from './catalog';
+import type { ThermalInsulationData, ThermalLineData } from './conductor-thermal';
 import type { DeviceDefinition } from './device';
 import { gaugeRow } from './gauge';
 import type { ConductorParams } from './model-kinds';
@@ -29,25 +30,15 @@ export interface ConductorResistanceData {
   readonly layFactor: number;
 }
 
-/** A conductor's insulation as the thermal model reads it (ADR 0018 §3.2), SI units. */
-export interface ConductorInsulationData {
-  /** The insulation wall t₁ (m). */
-  readonly thicknessM: number;
-  /** Its thermal conductivity k₁ (W/(m·K)). */
-  readonly conductivityWPerMK: number;
-  /** The outer jacket wall t₂ (m), or `null` for a single layer. */
-  readonly jacketThicknessM: number | null;
-  /** The jacket's thermal conductivity k₂ (W/(m·K)), or `null` for a single layer. */
-  readonly jacketConductivityWPerMK: number | null;
-  /** The outer surface's emissivity ε. */
-  readonly emissivity: number;
+/** A conductor's insulation as the thermal model reads it (ADR 0018 §3.2), SI units, with its ratings. */
+export interface ConductorInsulationData extends ThermalInsulationData {
   /** The insulation's dry and wet temperature ratings (K; wet `null` where not rated). */
   readonly ratedTempDryK: number;
   readonly ratedTempWetK: number | null;
 }
 
 /** Everything the electrical and thermal models read about one conductor entry, resolved and in SI. */
-export interface ConductorPhysics extends ConductorResistanceData {
+export interface ConductorPhysics extends ThermalLineData {
   /** Its AWG designation (4/0 = −3). */
   readonly awg: number;
   readonly stranding: ConductorStranding;
@@ -57,9 +48,6 @@ export interface ConductorPhysics extends ConductorResistanceData {
    * to about 15 % wider, compact strands about at it).
    */
   readonly diameterM: number;
-  /** The metal's density (kg/m³) and specific heat (J/(kg·K)), for F3.6's heat capacity. */
-  readonly densityKgM3: number;
-  readonly specificHeatJPerKgK: number;
   /** The insulation, or `null` for a bare conductor. */
   readonly insulation: ConductorInsulationData | null;
 }
@@ -70,7 +58,10 @@ export interface ConductorPhysics extends ConductorResistanceData {
  * a placed device, a test kind without a lay factor). Throws only if the catalogue is inconsistent
  * (a pinned row missing), which `parseCatalog` rules out.
  */
-export function conductorPhysics(catalog: Catalog, device: DeviceDefinition): ConductorPhysics | undefined {
+export function conductorPhysics(
+  catalog: Pick<Catalog, 'tableRow'>,
+  device: DeviceDefinition,
+): ConductorPhysics | undefined {
   const spec = device.conductor;
   const layFactor = device.model.params['layFactor'];
   if (spec === null || layFactor === undefined) return undefined;

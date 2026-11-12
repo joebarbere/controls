@@ -19,6 +19,12 @@ export const SimStateExport = z.strictObject({
    * model kind, absent values `null`).
    */
   entities: z.array(z.strictObject({ id: Int.min(1), state: DeviceStateBag })),
+  /**
+   * Every connection of a known connection kind (a lead, a conductor), netlisted or not, ascending by
+   * id, with its whole sim bag: the connection thermal bank's ten keys (F3.6 part 1; ADR 0015,
+   * "Connection state bags": `materialiseWorld` overwrites every such connection's bag).
+   */
+  connections: z.array(z.strictObject({ id: Int.min(1), state: DeviceStateBag })),
   /** The last electrical solution (ADR 0011 §9.6), or `null` when the netlist is empty (ADR 0013). */
   solution: SimSolutionV2.nullable(),
 });
@@ -34,14 +40,15 @@ export class MaterialiseError extends Error {
 
 /**
  * The world as a save writes it and `world.hash` hashes it: `busWorld` with the `sim` bag of every
- * entity in `exported` replaced by the engine's, and `WorldV2.sim` set to its solution. **Only those
- * are written**: every other bag (props, unknown refs, devices the engine didn't netlist, and every
- * commanded `state` bag) is the bus world's, unchanged, and so is every other field. Entities whose
- * bag is unchanged keep their objects.
+ * entity and every connection in `exported` replaced by the engine's (since F3.6 part 1 the connection
+ * thermal bank's, for every connection of a known kind), and `WorldV2.sim` set to its solution. **Only
+ * those are written**: every other bag (props, unknown refs, devices the engine didn't netlist, and
+ * every commanded `state` bag) is the bus world's, unchanged, and so is every other field.
  *
  * The export is parsed with the save-format schemas first (finite numbers, `-0` normalised to `+0`,
  * bag key grammar). Throws a {@link MaterialiseError} if it fails to parse, is for another tick, names
- * an entity the world doesn't hold, isn't sorted, or carries a solution for a later tick than its own.
+ * an entity or a connection the world doesn't hold, isn't sorted, or carries a solution for a later
+ * tick than its own.
  */
 export function materialiseWorld(busWorld: World, exported: SimStateExport): World {
   const parsed = SimStateExport.safeParse(exported);
@@ -72,5 +79,24 @@ export function materialiseWorld(busWorld: World, exported: SimStateExport): Wor
     return { ...entity, sim: bag };
   });
   if (found !== bags.size) throw new MaterialiseError('The export names an entity the world does not hold');
-  return { ...busWorld, entities, sim: solution };
+  const connectionBags = new Map<number, DeviceStateBag>();
+  previous = 0;
+  for (const { id, state: bag } of state.connections) {
+    if (id <= previous) throw new MaterialiseError('The exported connections must be sorted by ascending id');
+    previous = id;
+    connectionBags.set(id, bag);
+  }
+  found = 0;
+  const connections =
+    connectionBags.size === 0
+      ? busWorld.connections
+      : busWorld.connections.map((connection) => {
+          const bag = connectionBags.get(connection.id);
+          if (bag === undefined) return connection;
+          found++;
+          return { ...connection, sim: bag };
+        });
+  if (found !== connectionBags.size)
+    throw new MaterialiseError('The export names a connection the world does not hold');
+  return { ...busWorld, entities, connections, sim: solution };
 }

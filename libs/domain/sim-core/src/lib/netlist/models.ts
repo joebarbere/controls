@@ -8,7 +8,7 @@ import type {
 } from '@controls/catalog';
 import { conductorPhysics, conductorResistanceOhm, leadResistanceOhm } from '@controls/catalog';
 import type { TerminationV3 } from '@controls/save-format';
-import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../constants';
+import { AMBIENT_TEMPERATURE_K } from '../constants';
 import { asMadeContactInto, type ContactConductor, type ContactParts } from '../contact/contact';
 import {
   benchSupplyNetlistModel,
@@ -218,7 +218,7 @@ const lead: ConnectionNetlistModel = {
   kind: 'lead',
   element: ({ params }) => ({
     kind: 'resistor',
-    values: { resistanceOhm: leadResistanceOhm(params as LeadParams, LEAD_CONDUCTOR_TEMPERATURE_K.value) },
+    values: { resistanceOhm: leadResistanceOhm(params as LeadParams, AMBIENT_TEMPERATURE_K.value) },
   }),
 };
 

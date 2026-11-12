@@ -4,7 +4,7 @@ import { AC_SOURCE, BATTERY, LEAD } from '../../../testing/bench';
 import { BUSBAR, OPAQUE } from '../../../testing/engine';
 import { HEATER, RESISTOR_10R } from '../../../testing/loads';
 import { BENCH_SUPPLY, SourceHost } from '../../../testing/sources';
-import { LEAD_CONDUCTOR_TEMPERATURE_K } from '../../constants';
+import { AMBIENT_TEMPERATURE_K } from '../../constants';
 import { dcBranchValues } from '../../mna/values';
 import { acBranchValues } from '../../mna/ac-values';
 import { compileNetlist } from '../../netlist/compile';
@@ -21,7 +21,7 @@ import { HEATER_OUTPUT, heaterResistanceOhm, RESISTOR_OUTPUT } from './resistive
 
 const leadOhm = leadResistanceOhm(
   BUILTIN_CATALOG.device(LEAD)?.model.params as LeadParams,
-  LEAD_CONDUCTOR_TEMPERATURE_K.value,
+  AMBIENT_TEMPERATURE_K.value,
 );
 const rel = (actual: number, expected: number) => Math.abs(actual / expected - 1);
 

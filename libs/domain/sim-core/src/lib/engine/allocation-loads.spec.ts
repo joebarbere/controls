@@ -31,12 +31,14 @@ const WARM_UP_STEPS = 100_000;
  * gates, out of the covered run), the worst median of 100 runs with other test suites loading the
  * machine: a lit lamp 0.70 B/step, a fuse carrying a lit lamp 0.28, a closed breaker carrying 1.3 A
  * 0.64 (gates 1.0 each); every F2.5 kind at once in one engine 2.14 on F2.4's mixed-world windows
- * (8 × 2,000 steps after an 80,000-step warm-up; gate 2.5). The last test measures each layer alone.
+ * (8 × 2,000 steps after an 80,000-step warm-up; gate 2.5 until F3.6 part 1, which stamps the resistor
+ * defaults from a slot instead of a keyed load per solve: 0 B/step in 8 of 8 runs, gate 1). The last
+ * test measures each layer alone.
  */
 const LAMP_GATE = 1;
 const FUSE_GATE = 1;
 const BREAKER_GATE = 1;
-const MIXED_GATE = 2.5;
+const MIXED_GATE = 1;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
@@ -258,7 +260,7 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
     expect(measured.perStep, measured.report).toBeLessThan(BREAKER_GATE);
   });
 
-  it('every F2.5 kind at once in one engine (four solved islands) stays under 2.5 bytes per step', () => {
+  it('every F2.5 kind at once in one engine (four solved islands) stays under 1 byte per step', () => {
     const shift = (commands: readonly (readonly [string, object])[], by: number) =>
       commands.map(
         ([id, args]) =>

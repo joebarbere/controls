@@ -289,6 +289,20 @@ export const LeadParams = z.strictObject({
   referenceTemperatureK: positive,
   /** Contact resistance at each end, where the clip meets a terminal (Ω). */
   contactResistanceOhm: FiniteNumber.min(0),
+  /*
+   * The thermal params (F3.6 part 1, D2, ADR 0018 §8): from engine 7 a lead heats like a conductor
+   * (its clips have no hot-spot node). Added at entry version 1 while catalogue 2 is provisional.
+   */
+  /** The top of the metal's linear-α range (K): R(T) is clamped there (ADR 0018 §2). */
+  linearAlphaMaxK: positive,
+  /** The metal's density (kg/m³) and specific heat (J/(kg·K)): the heat capacity C′ = ρ_m c_p A. */
+  densityKgM3: positive,
+  specificHeatJPerKgK: positive,
+  /** The insulation wall (mm), one layer, and its thermal conductivity (W/(m·K)). */
+  insulationThicknessMm: positive,
+  insulationConductivityWPerMK: positive,
+  /** The insulation surface's emissivity ε (0 to 1). */
+  surfaceEmissivity: FiniteNumber.positive().max(1),
 });
 export type LeadParams = z.infer<typeof LeadParams>;
 

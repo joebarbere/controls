@@ -342,11 +342,13 @@ describe('the shipped bench cases', () => {
 
   it('gate the re-solve at spec §4.5’s 2 ms, scaled by the calibration loop; nothing else is calibrated', () => {
     const calibrated = BENCH_CASES.filter((c) => c.calibration !== undefined);
-    expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([['plant-resolve-topology-change', 2]]);
-    expect(calibrated[0].calibration).toMatchObject({
-      run: runCalibration,
-      referenceMs: CALIBRATION_REFERENCE_MS.value,
-    });
+    expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([
+      ['plant-resolve-topology-change', 2],
+      ['plant-resolve-topology-change-wired', 2],
+    ]);
+    for (const c of calibrated) {
+      expect(c.calibration).toMatchObject({ run: runCalibration, referenceMs: CALIBRATION_REFERENCE_MS.value });
+    }
     expect(PENDING_BENCH_CASES.map((c) => c.name)).not.toContain('plant-resolve-topology-change');
   });
 });
@@ -354,9 +356,9 @@ describe('the shipped bench cases', () => {
 describe('the pending bench cases (P3 kickoff step 6)', () => {
   it('declare the P3 budgets with the feature that implements each, and no timing', () => {
     expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([
-      // Spec §4.5: per tick, and the calibrated re-solve on a wired plant.
-      ['tick-wired-plant', 0.3, 'F3.6 part 1'],
-      ['plant-resolve-topology-change-wired', 2, 'F3.6 part 1'],
+      // The calibrated re-solve gate on an intermittent end's toggle (F3.6 part 1 moved tick-wired-plant
+      // and plant-resolve-topology-change-wired into BENCH_CASES).
+      ['intermittent-toggle-wired', 2, 'F3.6 part 2'],
       // No spec budget: ADR 0017 fixes one from measurement. (F3.4 part 1 moved the single-command gate,
       // cable-add-worst-command, into BENCH_CASES.)
       ['route-bake-500-wires', null, 'F3.2 part 1'],

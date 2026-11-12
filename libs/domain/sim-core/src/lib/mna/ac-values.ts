@@ -107,6 +107,14 @@ export class AcBranchValues {
     this.ohms[branch] = ohms;
   }
 
+  /** `resistor(branch, ohms[i])`, reading by slot (the connection thermal bank, F3.6). */
+  resistorAt(branch: number, ohms: Float64Array, i: number): void {
+    const r = ohms[i];
+    if (!(Number.isFinite(r) && r > 0)) notPositive('ohms', branch, r);
+    this.stamps[branch] = AC_STAMP_RESISTOR;
+    this.ohms[branch] = r;
+  }
+
   inductor(branch: number, henries: number): void {
     if (!(Number.isFinite(henries) && henries > 0)) notPositive('henries', branch, henries);
     this.stamps[branch] = AC_STAMP_INDUCTOR;

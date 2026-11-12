@@ -18,7 +18,13 @@
       "resistivityOhmM": 1.724137931034483e-8,
       "temperatureCoefficientPerK": 0.00393,
       "referenceTemperatureK": 293.15,
-      "contactResistanceOhm": 0.01
+      "contactResistanceOhm": 0.01,
+      "linearAlphaMaxK": 473.15,
+      "densityKgM3": 8890,
+      "specificHeatJPerKgK": 385,
+      "insulationThicknessMm": 0.8,
+      "insulationConductivityWPerMK": 0.18,
+      "surfaceEmissivity": 0.9
     }
   },
   "controls": [],
@@ -50,6 +56,24 @@
       "kind": "real-world",
       "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
       "covers": ["model.params.contactResistanceOhm"]
+    },
+    {
+      "id": "copper-thermal-data",
+      "kind": "real-world",
+      "citation": "The lead's copper, as the materials table's annealed-copper row cites it (F3.6 part 1, ADR 0018 §8): NBS Handbook 100, Copper Wire Tables (1966, read in full by electrical-realism-reviewer), a density of 8.89 g/cm³ and resistance linear in temperature up to 200 °C (473.15 K), where the engine clamps R(T); a specific heat of 385 J/(kg·K) near 25 °C from the NIST-JANAF Thermochemical Tables (Chase, 4th ed., 1998) through the NIST Chemistry WebBook's Shomate fit (24.47 J/(mol·K) ÷ 63.546 g/mol). Paraphrased; no table reproduced.",
+      "covers": ["model.params.linearAlphaMaxK", "model.params.densityKgM3", "model.params.specificHeatJPerKgK"]
+    },
+    {
+      "id": "pvc-insulation-thermal-data",
+      "kind": "real-world",
+      "citation": "The lead's PVC insulation, as the insulation table cites it (ADR 0018 §8): a thermal conductivity of 0.18 W/(m·K), mid-band of PVC's 0.16 to 0.20 W/(m·K) from a plastics distributor's published thermal-property table (read by electrical-realism-reviewer in the P3 source pre-audit), and the table's game-design surface emissivity of 0.9 (an infrared-thermometer maker's table gives about 0.93 for PVC). Paraphrased.",
+      "covers": ["model.params.insulationConductivityWPerMK", "model.params.surfaceEmissivity"]
+    },
+    {
+      "id": "lead-insulation-wall",
+      "kind": "game-design",
+      "citation": "game-design: a 0.8 mm PVC wall, typical of flexible bench test-lead insulation (one layer; the lead's thermal model takes the conductor solid-round at its nominal area).",
+      "covers": ["model.params.insulationThicknessMm"]
     }
   ],
   "extensions": {}

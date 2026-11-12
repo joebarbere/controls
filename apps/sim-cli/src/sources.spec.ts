@@ -22,18 +22,18 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v3/ctrl/sources-engine-6-catalog-2.ctrl` is its save (world v3;
- * the v2 one of the same name is kept and still loads as `continued` after migration; `-engine-4`,
- * `-engine-5` and `-engine-6` are earlier engines' or catalogues', now `engine-changed`), written by
+ * Node's V8 and Chromium's). `fixtures/v3/ctrl/sources-engine-7-catalog-2.ctrl` is its save (world v3,
+ * engine 7; the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
+ * `-engine-4`, `-engine-5` and `-engine-6` are earlier engines' or catalogues', `engine-changed` too), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/sources-engine-6-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/sources-engine-7-catalog-2.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
  */
-export const SOURCES_HASH = 'b5c801e8ca9ee16aa1e7360e6837f813b381a37feaf705a02541bce841bd6230';
-export const SOURCES_SNAPSHOT_HASH = 'b63d9ad8c1869275ca0d3f6c8e36e05dc35407c4ef6f7b62b08816d86b924295';
+export const SOURCES_HASH = '853b3d22ce479213f04ab2649e3fcac1dfb897cc81fdeda9a0c942a4613fb59a';
+export const SOURCES_SNAPSHOT_HASH = '0c1f995ef683e9446e52f5fa8398ba54c4ba46cada225485d5bdd50ae32e6e43';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sources.console');
@@ -172,9 +172,12 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
   );
 
   it.each(['sim-step', 'sources', 'bench-lamp', 'protection'])(
-    'the world v2 %s save of this engine and catalogue migrates to exactly what this build writes, and loads as continued (ADR 0015)',
+    'the world v2 and v3 engine-6 catalogue-2 %s saves migrate to the same document, and load as engine-changed (ADR 0015, ADR 0018 §12)',
     (scenario) => {
-      const name = currentFixtureName(scenario);
+      // Engine 6 under catalogue 2 never shipped; its fixtures are kept, never regenerated, as
+      // regression tests that a save from the previous engine under the same catalogue loads,
+      // re-solves and restarts its log instead of being refused (engine 7, F3.6 part 1).
+      const name = `${scenario}-engine-6-catalog-2.ctrl`;
       const [v2, v3] = [ctrlFixtureDir(2), CTRL_FIXTURE_DIR].map((dir) => {
         const read = readCtrl(new Uint8Array(readFileSync(join(dir, name))));
         if (!read.ok) throw new Error(read.error.message);
@@ -183,8 +186,21 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
       expect(v2.fromVersion).toBe(2);
       expect(v3.fromVersion).toBe(3);
       expect({ world: v2.world, replayLog: v2.replayLog }).toStrictEqual({ world: v3.world, replayLog: v3.replayLog });
-      const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlFixtureDir(2), name))));
+      for (const dir of [ctrlFixtureDir(2), CTRL_FIXTURE_DIR]) {
+        const loaded = loadGame(new Uint8Array(readFileSync(join(dir, name))));
+        if (!loaded.ok) throw new Error(loaded.error.message);
+        expect(loaded.manifest.simEngineVersion).toBe(6);
+        expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
+      }
+    },
+  );
+
+  it.each(['sim-step', 'sources', 'bench-lamp', 'protection', 'checkpoint'])(
+    "this engine's and catalogue's %s save exists under world v3 and loads as continued",
+    (scenario) => {
+      const loaded = loadGame(new Uint8Array(readFileSync(currentFixture(scenario))));
       if (!loaded.ok) throw new Error(loaded.error.message);
+      expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
       expect(loaded.replay).toStrictEqual({ status: 'continued' });
     },
   );

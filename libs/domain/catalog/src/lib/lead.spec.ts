@@ -11,6 +11,13 @@ const copper: LeadParams = {
   temperatureCoefficientPerK: 0.00393,
   referenceTemperatureK: 293.15,
   contactResistanceOhm: 0.01, // per end
+  // The thermal params (F3.6 part 1): copper, a 0.8 mm PVC wall.
+  linearAlphaMaxK: 473.15,
+  densityKgM3: 8890,
+  specificHeatJPerKgK: 385,
+  insulationThicknessMm: 0.8,
+  insulationConductivityWPerMK: 0.18,
+  surfaceEmissivity: 0.9,
 };
 
 /** ρ L / A at 20 °C: 1/58e6 Ω·m × 1 m / 8.2305e-7 m² ≈ 20.95 mΩ (solid wire; stranded leads read about 10 % more). */

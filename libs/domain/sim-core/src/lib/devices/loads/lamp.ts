@@ -1,6 +1,6 @@
 import type { LampIncandescentParams } from '@controls/catalog';
 import type { DeviceOutputSchema } from '@controls/sim-protocol';
-import type { SourcedConstant } from '../../constants';
+import { AMBIENT_TEMPERATURE_K, type SourcedConstant } from '../../constants';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
 import { branchReading, f64Field, READING_SOLVED, statusField } from '../readings';
 import { tungstenResistivity } from './tungsten';
@@ -73,14 +73,12 @@ import { tungstenResistivity } from './tungsten';
  * clamped at the resistivity table's 3600 K, 100 K below tungsten's melting point).
  */
 
-/** The bench's ambient temperature (K): a lamp starts here, and radiates and conducts to it. */
-export const LAMP_AMBIENT_K: SourcedConstant = {
-  value: 293.15,
-  unit: 'K',
-  kind: 'game-design',
-  source:
-    'game-design: the workshop bench at 20 °C (293.15 K), the same ambient as the test leads (LEAD_CONDUCTOR_TEMPERATURE_K). A newly placed lamp starts at it (its filamentTempK is null until the engine first netlists it).',
-};
+/**
+ * The lamp's ambient (K): a lamp starts here (its `filamentTempK` is null until the engine first
+ * netlists it), and radiates and conducts to it. The game's one ambient since F3.6 part 1
+ * (`AMBIENT_TEMPERATURE_K`, ADR 0018 §3.1), so a lamp and the leads and conductors feeding it share it.
+ */
+export const LAMP_AMBIENT_K: SourcedConstant = AMBIENT_TEMPERATURE_K;
 
 /** The highest filament temperature the model reaches (K): the resistivity table's top. */
 export const LAMP_MAX_TEMP_K: SourcedConstant = {

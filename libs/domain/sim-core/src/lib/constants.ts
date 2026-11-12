@@ -4,27 +4,24 @@
  * `electrical-realism-reviewer` before the PR that adds or changes one merges.
  */
 
-export interface SourcedConstant {
-  readonly value: number;
-  /** SI unit symbol. */
-  readonly unit: string;
-  /** `numerical`: a solver setting with no electrical meaning (`gmin`, an iteration cap). */
-  readonly kind: 'real-world' | 'game-design' | 'numerical';
-  readonly source: string;
-}
+import type { SourcedConstant } from '@controls/catalog';
+
+export type { SourcedConstant } from '@controls/catalog';
 
 /**
- * The conductor temperature a test lead's resistance is taken at (F2.1). P2 has no conductor heating
- * (P3 brings it, with world v3 lead state), so every lead sits at this fixed temperature. It lies
- * inside the range where `leadResistanceOhm`'s linear α model holds (about 223 to 423 K), so the
- * compiler needs no clamp; a spec checks the range.
+ * The game's ambient temperature (F3.6 part 1, ADR 0018 §3.1; `LEAD_CONDUCTOR_TEMPERATURE_K` renamed,
+ * same value and source). Every conductor, lead, termination hot spot and lamp filament heats from and
+ * cools towards it, and a device terminal a conductor lands on is taken at it (D7, an abstraction).
+ * The netlist compiler takes a lead's static value at it (v2's value), inside the range where the
+ * linear α model holds (about 223 to 423 K); a spec checks the range. Separate from the 30 °C ampacity
+ * rating ambient (`RATING_AMBIENT_K`, ADR 0018 §9).
  */
-export const LEAD_CONDUCTOR_TEMPERATURE_K: SourcedConstant = {
+export const AMBIENT_TEMPERATURE_K: SourcedConstant = {
   value: 293.15,
   unit: 'K',
   kind: 'game-design',
   source:
-    'game-design: the workshop bench is taken at 20 °C (293.15 K), a usual indoor ambient and the reference temperature of the International Annealed Copper Standard (IEC 60028), so a copper lead at ambient has exactly its catalogue resistivity. Self-heating is ignored until P3 adds conductor temperature.',
+    'game-design: the workshop is taken at 20 °C (293.15 K), a usual indoor ambient and the reference temperature of the International Annealed Copper Standard (IEC 60028), so a copper conductor at ambient has exactly its catalogue resistivity. Conductors, leads and terminations heat from it (ADR 0018 §3); lamp filaments start at it and radiate and conduct to it.',
 };
 
 /**

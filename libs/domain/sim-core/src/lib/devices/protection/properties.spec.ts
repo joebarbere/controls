@@ -209,11 +209,15 @@ describe('protection determinism properties (F2.5 part 2)', () => {
     }
     // Measured on this seed, of 24 (two-body fuse, F2.5 review): 18 cut mid-interval, 11 with a fuse or
     // breaker part-heated, 6 with a blown fuse, 6 with a tripped breaker, 4 that blow or trip after the
-    // reload.
+    // reload. Engine 7 (F3.6 part 1: leads heat): 18, 15, 6, 1 and 5. A short through the breaker
+    // starts near 117 A, just under its 8× magnetic band, and its two 18 AWG leads now heat at about
+    // 100 K/s, so the current falls towards 90 A and the bimetal trips later than most samples run;
+    // the tripped-breaker cases are covered by the protection spec's goldens, and here by at least one
+    // sample and the after-reload count.
     expect(counts.midInterval).toBeGreaterThan(12);
     expect(counts.heating).toBeGreaterThan(6);
     expect(counts.blown).toBeGreaterThan(3);
-    expect(counts.tripped).toBeGreaterThan(3);
+    expect(counts.tripped).toBeGreaterThan(0);
     expect(counts.eventsAfterReload).toBeGreaterThan(1);
   });
 });

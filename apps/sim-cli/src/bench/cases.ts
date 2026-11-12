@@ -15,6 +15,7 @@ import {
 } from '@controls/sim-core';
 import { materialiseWorld } from '@controls/sim-protocol';
 import { cableAddBench, type CableAddBench } from './cable-add';
+import { resolveWiredCase, TICK_WIRED_CASE } from './wired';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -375,6 +376,8 @@ export const BENCH_CASES: readonly BenchCase[] = [
       return `${engine.stats.cadenceSolves % 100}:${engine.netlist.topologyHash}`;
     },
   },
+  TICK_WIRED_CASE,
+  resolveWiredCase(plantWorlds, RESOLVE_BUDGET_MS, CALIBRATION),
   SNAPSHOT_READ_CASE,
   OVERLAY_READ_CASE,
   CABLE_ADD_CASE,
@@ -401,16 +404,10 @@ function bagDigest(engine: SimEngine): string {
  */
 export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
   {
-    name: 'tick-wired-plant',
-    budgetMs: 0.3,
-    enabledBy: 'F3.6 part 1',
-    note: 'Spec §4.5 per tick: 1,000 catalogue devices plus 2,000 conductors with thermal state, median, with an allocation gate.',
-  },
-  {
-    name: 'plant-resolve-topology-change-wired',
+    name: 'intermittent-toggle-wired',
     budgetMs: RESOLVE_BUDGET_MS,
-    enabledBy: 'F3.6 part 1',
-    note: 'Spec §4.5 re-solve after a topology change on a wired 2,000-node plant, calibrated like plant-resolve-topology-change.',
+    enabledBy: 'F3.6 part 2',
+    note: 'ADR 0015/0018 §10: one end entering or leaving intermittentOpen on the wired 2,000-node plant (a one-branch recompile and re-solve), under the calibrated re-solve gate.',
   },
   {
     name: 'route-bake-500-wires',

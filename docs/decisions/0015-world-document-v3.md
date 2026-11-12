@@ -402,6 +402,8 @@ Catalogue v2 (ADR 0016) lands before world v3. The requirements this ADR puts on
 
 ### Protocol 6 connection records (finalised by the ADR 0011 amendment in F3.6 part 3)
 
+_Renumbered (F3.6 part 1): protocol 6 carries the connection bags in the `state` export ([ADR 0011 amendment](0011-sim-worker-contract.md#amendment-protocol-6-connection-bags-in-the-export-f36-part-1)), so these records are protocol 7._
+
 Listed here so the persisted keys and the published fields are designed together; **the byte layout, the validity rule and the sign-offs belong to the ADR 0011 amendment** (`sim-engine-engineer` with `renderer-engineer` and `angular-ui-engineer`), which finalises everything in this section.
 
 - **One record per connection in the thermal bank** (every connection of a known connection kind, netlisted or not), in connection-id order, laid out by its kind's `ConnectionOutputSchema` (the device schema's rules: `f64` first, then 4-byte, then `u8`, padded to 8).

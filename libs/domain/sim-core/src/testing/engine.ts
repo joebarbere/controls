@@ -7,7 +7,17 @@ import { BUILTIN_DEVICE_MODELS, GENERATOR_STUB_NAMEPLATE } from '../lib/devices'
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../lib/engine/device-model';
 import type { SimEngineOptions } from '../lib/engine/engine';
 import type { DeviceNetlistModel, NetlistModels } from '../lib/netlist/models';
-import { BATTERY, end, LEAD, origin, SPST, TEST_DOCUMENTS, TEST_MODEL_KINDS, TEST_MODELS } from './bench';
+import {
+  BATTERY,
+  end,
+  LEAD,
+  origin,
+  SPST,
+  TEST_DOCUMENTS,
+  TEST_LEAD_THERMAL,
+  TEST_MODEL_KINDS,
+  TEST_MODELS,
+} from './bench';
 
 /*
  * Synthetic device models for the engine loop's specs and `sim bench` (F2.3a). P2's real models (the
@@ -303,6 +313,7 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
         temperatureCoefficientPerK: 0.00393,
         referenceTemperatureK: 293.15,
         contactResistanceOhm: 0,
+        ...TEST_LEAD_THERMAL,
       },
     },
     sources: sources([
@@ -312,6 +323,7 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
       'temperatureCoefficientPerK',
       'referenceTemperatureK',
       'contactResistanceOhm',
+      ...Object.keys(TEST_LEAD_THERMAL),
     ]).map((s) => ({ ...s, covers: s.covers.filter((c) => c !== 'sizeMm' && c !== 'terminals') })),
   },
   entry(THERMAL_LOAD, 'Test thermal load', 'test.thermalLoad', THERMAL_PARAMS),
@@ -739,6 +751,7 @@ export function engineTestOptions(journal: string[] = []): Required<SimEngineOpt
       'test.orderA': orderProbe('test.orderA', journal),
       'test.orderB': orderProbe('test.orderB', journal),
     },
+    connectionBank: {},
   };
 }
 

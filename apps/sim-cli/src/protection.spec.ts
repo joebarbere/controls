@@ -13,13 +13,13 @@ import { workshopWorld } from './testing/workshop';
  * are pinned here; `fixtures/v3/ctrl/protection-engine-<N>-catalog-<C>.ctrl` is its save, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/protection.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/protection-engine-6-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/protection-engine-7-catalog-2.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). The fixture-rebuild check in
  * `sources.spec.ts` rebuilds it from the scenario.
  */
-export const PROTECTION_HASH = '037dfcc1e77457a0adb52555ad4fb2490f68ff550655c28760cb587b5e155d42';
-export const PROTECTION_SNAPSHOT_HASH = '5054a1b4127ba47e9894c1c6f184ade2789ea3ab0ccc228b35c9bc4fd444144e';
+export const PROTECTION_HASH = '4846631ab611d770e4c393b0ccfecdda661e75593f6477def18dab9be1ffe70b';
+export const PROTECTION_SNAPSHOT_HASH = '14a0f73a19ce8ef0879adb0dbb5d8ecc8161464be14bf38454b7d685c370aedd';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/protection.console');
 const fixture = currentFixture('protection');

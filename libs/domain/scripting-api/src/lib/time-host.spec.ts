@@ -90,7 +90,7 @@ describe('a game with a time host', () => {
     }
     const exporting = createGame({
       seed: 1,
-      time: recorder(() => ({ tick: 0, entities: [], solution: null })).host,
+      time: recorder(() => ({ tick: 0, entities: [], connections: [], solution: null })).host,
     });
     expect(exporting.hash()).toBe(worldHash(createWorld({ seed: 1 })));
     expect(exporting.netlistDump()).toContain('solution none');
