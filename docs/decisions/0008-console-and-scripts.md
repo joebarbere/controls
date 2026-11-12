@@ -1,6 +1,6 @@
 # ADR 0008: Console grammar, CodeMirror 6, and where scripts may run
 
-**Status:** Accepted. The grammar and the script boundary landed with F1.6; the CodeMirror 6 section with F1.5.
+**Status:** Accepted. The grammar and the script boundary landed with F1.6; the CodeMirror 6 section with F1.5. **Amended in P3 PR 5a** (arrays, nullable objects and unions as JSON words; the line cap; console shorthand; query arguments): see [the amendment](#amendment-p3-pr-5a-json-words-shorthand-and-query-arguments).
 **Date:** 2026-10-27 (Phase 1)
 **Sources:** plan §4.6; [phase 1 plan](../../plans/phase-1-game-shell.md) F1.5, F1.6 and the kickoff decisions; [ADR 0006](0006-command-system.md) (commands, `when`, replay); [ADR 0007](0007-world-document-v1.md) (world document, hash, replay log)
 
@@ -133,10 +133,22 @@ The console lives in `@controls/feature-console` (architecture: [dev console](..
 
 **Toggle and gating.** `console.toggle` is a view command (no world change, and not in the replay log: UI-chrome toggles use `logged: false`, the same rule as `palette.open`, ADR 0006) with the default key `Backquote`, `globalKeybinding: true` and `when: console.available`. Because it is global, backtick closes the console from inside its own input, as in most games' consoles; the cost is that a literal backtick can't be typed there (no part of the grammar needs one, and rebinding the toggle frees the key). The `console.available` context key is true in a Sandbox or a dev build while the workspace is on screen; elsewhere the backtick does nothing and the console shows a note instead of the input.
 
+## Amendment (P3 PR 5a): JSON words, shorthand and query arguments
+
+[ADR 0015](0015-world-document-v3.md) gives commands array arguments (routes), nullable objects (free wire ends) and object-or-literal unions (`'auto' | TerminationArgs`), so the grammar grows, as the "Arrays" consequence below required. Everything above still holds unless this section says otherwise.
+
+- **JSON words.** `word := bare | quoted | json`: a word that starts with `[` or `{` is a JSON array or object, read to its matching bracket (JSON strings skipped, so spaces and `#` inside strings are part of it), followed by a space or the end of the line. It must be well-formed JSON, at most 32 levels deep (`MAX_CONSOLE_JSON_DEPTH`, the replay log's bound on args) and without a `__proto__` key; each is a lexical error at the word's column. A bare word that starts with a bracket is therefore always JSON: quote text such as `"[A]"`.
+- **Typing.** A JSON word may fill any key whose leaf schema is an array, tuple, object, record, union or unknown; any other key refuses it ("takes one word, not a JSON value"). An array key accepts **only** a JSON word (or `null` if nullable). An unquoted `null` gives `null` for every nullable key, objects and unions with a `null` member included (`--a null`). A union's bare word is typed lexically, as before (`--termination auto`).
+- **Dotted flags into unions.** A dotted flag may descend into a nullable object or into the **one** object member of a union: `--a.entity 3 --a.termination.method screw`. Mixing a JSON word or `null` with dotted flags for the same key is "given twice".
+- **`formatConsoleLine` stays schema-free.** It writes arrays and empty objects as compact JSON words with keys sorted at every level, and every other object as dotted flags, which read back through the rule above (so a union's object member and a nullable object are written as flags, which is also what a person types). Non-finite numbers and holes in arrays are refused. Strings starting with a bracket are quoted. The round-trip property covers arrays, nullable objects, `'auto' | object` unions and nullable scalars.
+- **Line cap.** `MAX_CONSOLE_LINE_LENGTH` rises from 4,096 to **393,216** (384 KiB). The largest legal `wire.add` and `wire.pull` (ADR 0015: 1 024 waypoints, each a bore with a 64-character fixture id and a tool ref, every id and integer at its schema maximum; 16 conductors) format to 346,976 and 348,617 characters; the cap leaves about 13 % for spacing a person adds inside JSON. `max-line.spec.ts` builds both from test-only mirrors of the ADR 0015 shapes and checks they fit and round-trip. Console history is unchanged: lines over its 2,000-character cap still run but are not kept.
+- **Console shorthand** (`--route auto`, `--length auto`, ADR 0015) is expanded by `expandConsoleArgs(world, catalog, id, args)` in `@controls/scripting-api`, once per line, on the live world, just before `exec`, by every console surface (the in-game console, `runConsoleScript`, so `sim run` and the game's `run`). The mapping keeps a bare word lexical at the paths an expander claims (`ConsoleArgsOptions.shorthand`), so it reaches the expander instead of failing to type. Only expanded args are logged: a replay log never holds shorthand, and a console file that uses it re-pins its hashes when an expander changes. `CONSOLE_EXPANDERS` is empty until routing exists.
+- **Query arguments.** A console query maps its words onto its own args schema (`CONSOLE_QUERY_ARGS`, `consoleQueryArgs`) with the same grammar, so `wire.info <id>` can take one. `world.hash` and `netlist.dump` take none and still say so.
+
 ## Consequences
 
 - One parser for every text surface: the in-game console, console-line files and `sim-cli` accept the same lines, and a test checks a session recorded through the scripting API re-runs as console lines to the same hash.
 - Command authors control console ergonomics through the args schema: key order sets positional order, and dotted flags follow nesting. Reordering an args object's keys is a console-grammar change, worth a CHANGELOG line.
-- Arrays have no console syntax yet. The first command that takes an array must extend the grammar here.
+- Arrays had no console syntax until the P3 PR 5a amendment above, which added JSON words before the first command that takes one.
 - `sim-cli` depends on esbuild at run time for TypeScript scripts only. If esbuild ever leaves the workspace, console-line files, `replay` and `hash` keep working, and module scripts need another loader.
 - The CSP and the renderer are untouched: scripting adds no eval path to the game.

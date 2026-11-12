@@ -4,6 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { CONSOLE_AVAILABLE_KEY, defineCommand, NoArgs, succeed } from '@controls/commands';
 import { Session } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
+import { MAX_CONSOLE_LINE_LENGTH as MAX_HISTORY_LINE_LENGTH, Settings } from '@controls/save-format';
 import type { World } from '@controls/world-model';
 import { screen, waitFor, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -110,6 +111,18 @@ describe('DevConsoleComponent', () => {
     expect(lastEntry()).toBe('entity.place: ok (log #0)');
     expect(input.text()).toBe('');
     expect(TestBed.inject(SettingsStore).settings().console.history).toEqual([PLACE]);
+  });
+
+  it('runs a line longer than the history cap but keeps it out of history, so settings stay valid', async () => {
+    const { session, user } = await setup();
+    const input = await editor();
+    const long = `${PLACE} # ${'x'.repeat(MAX_HISTORY_LINE_LENGTH)}`;
+    input.set(long);
+    await user.keyboard('{Enter}');
+    expect(session.entries().map((e) => e.id)).toEqual(['entity.place']);
+    const settings = TestBed.inject(SettingsStore).settings();
+    expect(settings.console.history).toEqual([]);
+    expect(Settings.safeParse(settings).success).toBe(true);
   });
 
   it('marks a parse error at its column and keeps the line until it is edited', async () => {

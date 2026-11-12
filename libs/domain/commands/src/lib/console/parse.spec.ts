@@ -92,6 +92,44 @@ describe('parseConsoleLine', () => {
   it('allows tabs as separators', () => {
     expect(line('x.y\t1\t--a\t2')).toMatchObject({ positionals: [{ text: '1' }], flags: [{ name: 'a' }] });
   });
+
+  it('reads a JSON word to its matching bracket, spaces, quotes and # in strings included', () => {
+    const json = '[{"a":"x y # \\"z\\" ]"},{"b":[1, 2]}]';
+    expect(line(`x.y ${json} --b {} --c 1 # done`)).toEqual({
+      id: 'x.y',
+      column: 1,
+      positionals: [{ text: json, quoted: false, column: 5, json: true }],
+      flags: [
+        {
+          name: 'b',
+          column: 5 + json.length + 1,
+          value: { text: '{}', quoted: false, column: json.length + 10, json: true },
+        },
+        { name: 'c', column: json.length + 13, value: { text: '1', quoted: false, column: json.length + 17 } },
+      ],
+    });
+    expect(line('x.y a[1] b{')?.positionals.map((w) => w.text)).toEqual(['a[1]', 'b{']); // only a leading bracket
+    expect(line('x.y ]')?.positionals).toEqual([{ text: ']', quoted: false, column: 5 }]);
+  });
+
+  it.each([
+    ['x.y [1', 5, /Unterminated JSON value/],
+    ['x.y {"a":"]}', 5, /Unterminated JSON value/],
+    ['x.y [1]]', 8, /Expected a space after the JSON value/],
+    ["x.y {'a':1}", 5, /Malformed JSON value/],
+    ['x.y [1,]', 5, /Malformed JSON value/],
+    ['x.y {"__proto__":{}}', 5, /__proto__/],
+    ['x.y [{"a":{"__proto__":1}}]', 5, /__proto__/],
+    [`x.y ${'['.repeat(33)}${']'.repeat(33)}`, 5, /nested deeper than 32/],
+  ])('rejects the JSON word %j at column %i', (source, column, message) => {
+    const e = error(source);
+    expect(e.column).toBe(column);
+    expect(e.message).toMatch(message);
+  });
+
+  it('accepts JSON words nested exactly 32 deep', () => {
+    expect(line(`x.y ${'['.repeat(32)}${']'.repeat(32)}`)?.positionals[0].json).toBe(true);
+  });
 });
 
 describe('splitConsoleLines', () => {

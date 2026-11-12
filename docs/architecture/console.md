@@ -39,6 +39,9 @@ flowchart LR
 - **Nothing in the console changes the world itself.** Commands go through `Session.exec`; console words (`help`, `run`, `clear`, `world.hash`) only read.
 - **CodeMirror is a lazy chunk** (`import('./console-editor')`, about 60 kB gzipped), loaded when the console first becomes available, so it isn't in the initial bundle. The input's host `div` carries `data-autofocus` and forwards focus into CodeMirror, including focus that arrives while the chunk is still loading.
 - **One registry.** Completion and `help` read ids from `registry.list()` and flags from `consoleFields(def.args)`, the same walk over the Zod shape that `consoleArgs` uses to map flags, so neither can offer a flag the mapping would refuse. There is no console-only command list.
+- **JSON words (ADR 0008 amendment, P3 PR 5a).** An array, a nullable object or an object-or-literal union can be given as one compact JSON word (`--route [{"kind":"free",…}]`); `consoleFields` lists such a key as kind `json`, completion offers its literal words (`auto`) and `null`, and `help` shows `JSON`. Dotted flags also reach into a nullable object or a union's object member (`--a.termination.method screw`). Completion skips a JSON word (spaces in its strings included) and offers nothing inside one.
+- **Shorthand.** Before `exec`, a command line's args go through `expandConsoleArgs(world, catalog, id, args)` from `@controls/scripting-api`, on the live world, as `runConsoleScript` and `sim-cli` do. No shorthand is registered until routing exists (`CONSOLE_EXPANDERS` is empty); `--route auto` and `--length auto` land with the wire commands. The log holds the expanded args; history holds the line as typed.
+- **Queries take arguments** through `consoleQueryArgs` (each query's schema in `CONSOLE_QUERY_ARGS`, mapped like a command's args). `world.hash` and `netlist.dump` take none; `wire.info <id>` will.
 
 ## A typed line
 
@@ -68,7 +71,8 @@ sequenceDiagram
         C->>S: confirmCheat()
         S->>X: exec(id, args)
     else command
-        S->>X: exec(id, args)
+        S->>S: expandConsoleArgs(live world, id, args)
+        S->>X: exec(id, expanded args)
         X-->>S: ok (logged) or a typed error
     end
 ```
@@ -101,4 +105,4 @@ sequenceDiagram
 
 ## History
 
-Submitted lines (errors included, so they can be recalled and fixed) go to settings `console.history`, oldest first. `appendHistory` keeps the schema's caps: no blank lines or repeats of the newest, at most 200 lines, at most 2,000 characters per line (a longer line still runs but isn't kept) and only well-formed strings. Output is UI state (the last 500 entries) and isn't saved.
+Submitted lines (errors included, so they can be recalled and fixed) go to settings `console.history`, oldest first. `appendHistory` keeps the schema's caps: no blank lines or repeats of the newest, at most 200 lines, at most 2,000 characters per line (a longer line still runs, up to the grammar's 393,216, but isn't kept, so `settings:set` never sees an over-cap value) and only well-formed strings. History keeps the line as typed, shorthand included, not its expansion. Output is UI state (the last 500 entries) and isn't saved.

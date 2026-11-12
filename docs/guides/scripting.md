@@ -142,7 +142,8 @@ command.id positional… --flag value --nested.flag value --boolean-flag
 
 - The first word is the command id. Positional words come next and fill the command's argument keys in order (`entity.delete 3` → `{ id: 3 }`). Flags come last.
 - `--a.b value` sets a nested field. A flag with no value (followed by another flag or the end of the line) means `true`.
-- Words are typed by the argument schema: `12` is a number for a number field and the text `"12"` for a string field. Quote strings with spaces or that would look like something else: `"two words"`, `'it\'s'`, `"--not-a-flag"`.
+- Words are typed by the argument schema: `12` is a number for a number field and the text `"12"` for a string field. Quote strings with spaces or that would look like something else: `"two words"`, `'it\'s'`, `"--not-a-flag"`, `"[A]"`.
+- A list, or a whole object, is one compact JSON word: `--route [{"kind":"free","positionMm":{"x":0,"y":0,"z":0}}]` (a word starting with `[` or `{` is always JSON). `--a null` clears an optional object, and dotted flags reach into an `auto`-or-details argument: `--a.termination auto` or `--a.termination.method screw` ([ADR 0008 amendment](../decisions/0008-console-and-scripts.md#amendment-p3-pr-5a-json-words-shorthand-and-query-arguments)). A line may be up to 393,216 characters.
 - `#` starts a comment. `world.hash` prints the current hash and is never logged.
 - `netlist.dump` (F2.6) prints the compiled netlist and its island diagnostics, one output line per text line, and is never logged either. After the netlist (`netlist …`, `topology …`, `island …`, `node …`, `branch …`, `diagnostic …` lines) come `solution tick T` (the tick of the solve shown, or `solution none` without a circuit) and one line per island:
 

@@ -14,15 +14,19 @@ import {
  * patterns and strictness are checked in exactly one place for every surface.
  *
  * - Flags address the args object by dotted path: `--positionMm.x 100`. A path that isn't in the
- *   schema's object shape is an error here (with a column), not just a Zod issue later.
+ *   schema's object shape is an error here (with a column), not just a Zod issue later. A dotted
+ *   path may also go inside a nullable object, or the one object member of a union
+ *   (`--a.termination.method screw` for `termination: 'auto' | { method, … }`).
  * - Positional words fill the shape's keys in declaration order, so `entity.delete 3` means
  *   `{ id: 3 }`. A key can't be given both ways, or twice.
  * - Words are typed by the leaf schema: a number field needs a number literal, a boolean field takes
  *   a bare flag, `true` or `false`, and string-like fields take the text as written (`12` → "12").
- *   Leaves the mapping can't classify (unions, `unknown`) get the word's lexical type.
+ *   Leaves the mapping can't classify (scalar unions, `unknown`) get the word's lexical type.
+ * - A JSON word (`[…]` or `{…}`, ADR 0008 amendment) gives a whole array, object or union value; it
+ *   is the only way to give an array. A nullable value (an object or union included) takes `null`.
  */
 
-/** A JSON-ish value a console word can become. */
+/** A JSON-ish value a scalar console word can become. */
 export type ConsoleArgValue = string | number | boolean | null;
 
 export type ConsoleArgsResult =
@@ -32,17 +36,31 @@ export type ConsoleCommandResult =
   | { readonly ok: true; readonly command: { readonly id: string; readonly args: Record<string, unknown> } | null }
   | { readonly ok: false; readonly error: ConsoleError };
 
+/** Options for {@link consoleArgs} and {@link parseConsoleCommand}. */
+export interface ConsoleArgsOptions {
+  /**
+   * Console shorthand (ADR 0015, `expandConsoleArgs` in `@controls/scripting-api`): for a dotted
+   * argument path where this returns true, an unquoted, non-JSON word keeps its lexical type
+   * instead of being typed by the schema, so `--route auto` reaches the expander as `'auto'` and
+   * `--lengthMm 3000` is still a number. The expander must replace it before `exec`.
+   */
+  readonly shorthand?: (path: string) => boolean;
+}
+
 interface SchemaDef {
   readonly type: string;
   readonly innerType?: z.ZodType;
   readonly in?: z.ZodType;
   readonly shape?: Readonly<Record<string, z.ZodType>>;
   readonly values?: readonly unknown[];
+  readonly options?: readonly z.ZodType[];
 }
 
 const WRAPPERS = new Set(['optional', 'default', 'prefault', 'nullable', 'readonly', 'catch', 'nonoptional']);
 /** Wrappers that let a key be left out (for help and completion only; `exec` decides). */
 const OPTIONAL_WRAPPERS = new Set(['optional', 'default', 'prefault']);
+/** Schema types whose value is given as one JSON word (or by dotted flags, for objects). */
+const JSON_TYPES = new Set(['array', 'object', 'tuple', 'record', 'union', 'unknown', 'any']);
 /** Same as the JSON-number grammar (no leading zeros, no `+`, no hex). */
 const NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -53,11 +71,19 @@ function defOf(schema: z.ZodType): SchemaDef {
   return schema._zod.def as unknown as SchemaDef;
 }
 
+interface Unwrapped {
+  readonly def: SchemaDef;
+  /** A wrapper, a `null` member or a `null` literal accepts `null`. */
+  readonly nullable: boolean;
+  readonly optional: boolean;
+  readonly inner: z.ZodType;
+}
+
 /**
  * Strips optional/default/nullable/pipe wrappers down to the schema that decides a word's type, and
- * notes whether a wrapper accepts `null` (so `--x null` works for a nullable number).
+ * notes whether `null` is accepted (so `--x null` works for a nullable number or object).
  */
-function unwrap(schema: z.ZodType): { def: SchemaDef; nullable: boolean; optional: boolean; inner: z.ZodType } {
+function unwrap(schema: z.ZodType): Unwrapped {
   let inner = schema;
   let def = defOf(schema);
   let nullable = false;
@@ -70,7 +96,44 @@ function unwrap(schema: z.ZodType): { def: SchemaDef; nullable: boolean; optiona
     else break;
     def = defOf(inner);
   }
+  if (def.type === 'union' && unionMembers(def).some((m) => isNullMember(m.def))) nullable = true;
   return { def, nullable, optional, inner };
+}
+
+function unionMembers(def: SchemaDef): Unwrapped[] {
+  return (def.options ?? []).map((option) => unwrap(option));
+}
+
+function isNullMember(def: SchemaDef): boolean {
+  return def.type === 'null' || (def.type === 'literal' && (def.values ?? []).includes(null));
+}
+
+/**
+ * The object a dotted flag can descend into: the schema itself (unwrapped), or the one object
+ * member of a union (`'auto' | { … }`, `{ … } | null`). Two object members would be ambiguous.
+ */
+function objectOf(schema: z.ZodType): z.ZodType | null {
+  const { def, inner } = unwrap(schema);
+  if (def.type === 'object') return inner;
+  if (def.type !== 'union') return null;
+  const objects = unionMembers(def).filter((m) => m.def.type === 'object');
+  return objects.length === 1 ? objects[0].inner : null;
+}
+
+function shapeOf(schema: z.ZodType): Readonly<Record<string, z.ZodType>> | null {
+  const object = objectOf(schema);
+  const shape = object ? defOf(object).shape : undefined;
+  return shape ?? null;
+}
+
+/** The scalar literal values of a union's literal and enum members, in declaration order. */
+function unionLiterals(def: SchemaDef): (string | number | boolean)[] {
+  const values: (string | number | boolean)[] = [];
+  for (const member of unionMembers(def)) {
+    const kind = fieldKind(member.def);
+    if (kind.kind === 'enum') for (const v of kind.values) if (!values.includes(v)) values.push(v);
+  }
+  return values;
 }
 
 class MappingError extends Error {
@@ -102,17 +165,36 @@ function numberOf(word: ConsoleWord, label: string): number {
   return n;
 }
 
-function typed(schema: z.ZodType, label: string, value: ConsoleWord | null, column: number): ConsoleArgValue {
+function typed(
+  schema: z.ZodType,
+  path: string,
+  label: string,
+  value: ConsoleWord | null,
+  column: number,
+  options: ConsoleArgsOptions,
+): unknown {
   const { def, nullable } = unwrap(schema);
-  if (def.type === 'object') {
-    throw new MappingError(`${label} is an object: give its fields as flags (${label}.<field>)`, column);
-  }
   if (value === null) {
     if (def.type === 'boolean') return true;
     throw new MappingError(`${label} needs a value`, column);
   }
+  if (value.json) {
+    if (JSON_TYPES.has(def.type)) return JSON.parse(value.text) as unknown;
+    throw new MappingError(`${label} takes one word, not a JSON value (quote it for text)`, value.column);
+  }
+  if (!value.quoted && options.shorthand?.(path)) return lexical(value);
   if (nullable && !value.quoted && value.text === 'null') return null;
   switch (def.type) {
+    case 'object':
+      throw new MappingError(
+        `${label} is an object: give its fields as flags (${label}.<field>) or the whole object as JSON`,
+        column,
+      );
+    case 'array':
+    case 'tuple':
+      throw new MappingError(`${label} is a list: give it as one JSON word, like [1,2]`, column);
+    case 'record':
+      throw new MappingError(`${label} is a map: give it as one JSON word, like {"key":1}`, column);
     case 'boolean':
       if (!value.quoted && (value.text === 'true' || value.text === 'false')) return value.text === 'true';
       throw new MappingError(`${label} expects true or false, found ${JSON.stringify(value.text)}`, value.column);
@@ -133,18 +215,21 @@ function typed(schema: z.ZodType, label: string, value: ConsoleWord | null, colu
   }
 }
 
-function shapeOf(schema: z.ZodType): Readonly<Record<string, z.ZodType>> | null {
-  const { def } = unwrap(schema);
-  return def.type === 'object' && def.shape ? def.shape : null;
-}
-
 function hasOwn(record: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 
-/** Sets `path` in `target`, creating nested objects; `flagLabel` names it in errors. */
+/** One line's mapping: the args object and the nested objects the flags themselves created. */
+interface Mapping {
+  readonly args: Record<string, unknown>;
+  /** Objects made by dotted flags (a JSON word's objects are complete and can't be added to). */
+  readonly built: WeakSet<object>;
+  readonly options: ConsoleArgsOptions;
+}
+
+/** Sets `path` in the mapping, creating nested objects; `flagLabel` names it in errors. */
 function assign(
-  target: Record<string, unknown>,
+  mapping: Mapping,
   root: z.ZodType,
   path: readonly string[],
   value: ConsoleWord | null,
@@ -152,7 +237,7 @@ function assign(
   flagLabel: string,
 ): void {
   let schema = root;
-  let object = target;
+  let object = mapping.args;
   for (let i = 0; i < path.length; i++) {
     const key = path[i];
     const label = path.slice(0, i + 1).join('.');
@@ -163,12 +248,16 @@ function assign(
     schema = shape[key];
     if (i === path.length - 1) {
       if (hasOwn(object, key)) throw new MappingError(`Argument ${label} is given twice`, column);
-      object[key] = typed(schema, flagLabel, value, column);
+      object[key] = typed(schema, label, flagLabel, value, column, mapping.options);
       return;
     }
-    if (!hasOwn(object, key)) object[key] = {};
+    if (!hasOwn(object, key)) {
+      const child = {};
+      mapping.built.add(child);
+      object[key] = child;
+    }
     const child = object[key];
-    if (typeof child !== 'object' || child === null) {
+    if (typeof child !== 'object' || child === null || !mapping.built.has(child)) {
       throw new MappingError(`Argument ${label} is given twice`, column);
     }
     object = child as Record<string, unknown>;
@@ -180,9 +269,13 @@ function assign(
  * pass to `exec`. Errors carry the column of the offending word or flag. Doesn't validate bounds or
  * required fields: `exec` does that with the same schema.
  */
-export function consoleArgs(schema: z.ZodType, line: ConsoleCommandLine): ConsoleArgsResult {
+export function consoleArgs(
+  schema: z.ZodType,
+  line: ConsoleCommandLine,
+  options: ConsoleArgsOptions = {},
+): ConsoleArgsResult {
   try {
-    const args: Record<string, unknown> = {};
+    const mapping: Mapping = { args: {}, built: new WeakSet(), options };
     const keys = Object.keys(shapeOf(schema) ?? {});
     line.positionals.forEach((word, index) => {
       const key = keys[index];
@@ -194,10 +287,10 @@ export function consoleArgs(schema: z.ZodType, line: ConsoleCommandLine): Consol
           word.column,
         );
       }
-      assign(args, schema, [key], word, word.column, key);
+      assign(mapping, schema, [key], word, word.column, key);
     });
-    for (const flag of line.flags) assignFlag(args, schema, flag);
-    return { ok: true, args };
+    for (const flag of line.flags) assignFlag(mapping, schema, flag);
+    return { ok: true, args: mapping.args };
   } catch (error) {
     // Only MappingError is thrown above.
     const { message, column } = error as MappingError;
@@ -205,15 +298,20 @@ export function consoleArgs(schema: z.ZodType, line: ConsoleCommandLine): Consol
   }
 }
 
-function assignFlag(args: Record<string, unknown>, schema: z.ZodType, flag: ConsoleFlag): void {
-  assign(args, schema, flag.name.split('.'), flag.value, flag.column, `--${flag.name}`);
+function assignFlag(mapping: Mapping, schema: z.ZodType, flag: ConsoleFlag): void {
+  assign(mapping, schema, flag.name.split('.'), flag.value, flag.column, `--${flag.name}`);
 }
 
 /**
  * Parses a console line and resolves it against `registry`: the command id and its raw args, or
  * `null` for a blank or comment line. An unknown id is an error at the id's column.
+ * `shorthand(id, path)` marks console shorthand paths (see {@link ConsoleArgsOptions}).
  */
-export function parseConsoleCommand<S>(registry: CommandRegistry<S>, source: string): ConsoleCommandResult {
+export function parseConsoleCommand<S>(
+  registry: CommandRegistry<S>,
+  source: string,
+  shorthand?: (id: string, path: string) => boolean,
+): ConsoleCommandResult {
   const parsed = parseConsoleLine(source);
   if (!parsed.ok) return parsed;
   if (parsed.line === null) return { ok: true, command: null };
@@ -221,12 +319,16 @@ export function parseConsoleCommand<S>(registry: CommandRegistry<S>, source: str
   if (!def) {
     return { ok: false, error: { message: `Unknown command "${parsed.line.id}"`, column: parsed.line.column } };
   }
-  const mapped = consoleArgs(def.args, parsed.line);
+  const mapped = consoleArgs(def.args, parsed.line, shorthand ? { shorthand: (path) => shorthand(def.id, path) } : {});
   return mapped.ok ? { ok: true, command: { id: def.id, args: mapped.args } } : mapped;
 }
 
-/** How a console word for a field is typed (see `consoleArgs`). `object` fields are given by their fields. */
-export type ConsoleFieldKind = 'number' | 'boolean' | 'string' | 'enum' | 'other';
+/**
+ * How a console word for a field is typed (see `consoleArgs`). `json` is a value given as one JSON
+ * word (an array, a nullable object or an object-or-literal union); its `values` are the union's
+ * literal words (`auto`), and a nullable one also takes `null`. Plain objects are given by their fields.
+ */
+export type ConsoleFieldKind = 'number' | 'boolean' | 'string' | 'enum' | 'json' | 'other';
 
 /** One flag a command accepts: what `help` documents and what Tab completion offers (F1.5). */
 export interface ConsoleField {
@@ -239,7 +341,7 @@ export interface ConsoleField {
   readonly optional: boolean;
   /** `null` is accepted. */
   readonly nullable: boolean;
-  /** 0-based position for a top-level scalar key that can be given positionally, else `null`. */
+  /** 0-based position for a top-level key that can be given positionally, else `null`. */
   readonly position: number | null;
   /** Numeric bounds, where the schema declares them. */
   readonly min: number | null;
@@ -278,10 +380,17 @@ function fieldKind(def: SchemaDef): Pick<ConsoleField, 'kind' | 'values'> {
   }
 }
 
+/** A union given as a JSON word: it has an object or array member (else it is a scalar union, typed lexically). */
+function isStructuredUnion(def: SchemaDef): boolean {
+  return def.type === 'union' && unionMembers(def).some((m) => JSON_TYPES.has(m.def.type) && m.def.type !== 'union');
+}
+
 /**
  * Every flag path `consoleArgs` accepts for `schema` (a command's `args`), depth first in key
  * declaration order, so completion and `help` can never offer a flag the mapping would reject.
- * Object-valued keys are expanded into their fields (an object is given as dotted flags).
+ * Object-valued keys are expanded into their fields (an object is given as dotted flags); a
+ * nullable object, an object-or-literal union and an array are also listed themselves, as `json`
+ * (a JSON word, `null`, or one of the union's literal words), and a union's object member is expanded.
  */
 export function consoleFields(schema: z.ZodType): ConsoleField[] {
   const fields: ConsoleField[] = [];
@@ -292,24 +401,34 @@ export function consoleFields(schema: z.ZodType): ConsoleField[] {
       if (FORBIDDEN_KEYS.has(key) || !FLAG_SEGMENT.test(key)) return;
       const path = prefix ? `${prefix}.${key}` : key;
       const { def, nullable, optional, inner } = unwrap(shape[key]);
-      if (def.type === 'object') {
+      const outer = shape[key] as unknown as NumberBounds;
+      const meta = inner as unknown as NumberBounds;
+      const common = {
+        path,
+        optional: optionalParent || optional,
+        nullable,
+        position: prefix ? null : index,
+        min: null,
+        max: null,
+        description: outer.description ?? meta.description ?? null,
+      };
+      const structured = isStructuredUnion(def);
+      if (structured || def.type === 'array' || def.type === 'tuple' || (def.type === 'object' && nullable)) {
+        fields.push({ ...common, kind: 'json', values: def.type === 'union' ? unionLiterals(def) : [] });
+      }
+      if (def.type === 'object' || structured) {
         walk(shape[key], path, optionalParent || optional, depth + 1);
         return;
       }
-      const meta = inner as unknown as NumberBounds;
-      const outer = shape[key] as unknown as NumberBounds;
+      if (def.type === 'array' || def.type === 'tuple') return;
       // `z.int()` reports the safe-integer range as its bounds; that isn't a declared bound.
       const bound = (v: number | null | undefined) =>
         typeof v === 'number' && Number.isFinite(v) && Math.abs(v) !== Number.MAX_SAFE_INTEGER ? v : null;
       fields.push({
-        path,
+        ...common,
         ...fieldKind(def),
-        optional: optionalParent || optional,
-        nullable,
-        position: prefix ? null : index,
         min: def.type === 'number' ? bound(meta.minValue) : null,
         max: def.type === 'number' ? bound(meta.maxValue) : null,
-        description: outer.description ?? meta.description ?? null,
       });
     });
   };
@@ -317,7 +436,7 @@ export function consoleFields(schema: z.ZodType): ConsoleField[] {
   return fields;
 }
 
-/** Thrown by {@link formatConsoleLine} for args the grammar can't express (arrays, empty objects, non-finite numbers). */
+/** Thrown by {@link formatConsoleLine} for args the grammar can't express (non-finite numbers, holes, odd keys). */
 export class ConsoleFormatError extends Error {
   constructor(message: string) {
     super(message);
@@ -331,6 +450,8 @@ function needsQuotes(text: string): boolean {
     text === '' ||
     /[\s"'\\#]/.test(text) ||
     text.startsWith('--') ||
+    text.startsWith('[') ||
+    text.startsWith('{') ||
     text === 'true' ||
     text === 'false' ||
     text === 'null' ||
@@ -357,15 +478,50 @@ function formatValue(value: unknown, label: string): string {
   }
 }
 
+/**
+ * The compact JSON word for an array or object, keys sorted at every level so the output is
+ * deterministic. Refuses what `JSON.stringify` would change silently (non-finite numbers become
+ * `null`, `undefined` array items become `null`, other types vanish).
+ */
+function formatJson(value: unknown, label: string): string {
+  const write = (v: unknown, at: string, depth: number): string => {
+    if (depth > 64) throw new ConsoleFormatError(`${label} is nested too deeply`);
+    if (v === null || typeof v === 'boolean' || typeof v === 'string') return JSON.stringify(v);
+    if (typeof v === 'number') {
+      if (!Number.isFinite(v)) throw new ConsoleFormatError(`${at} is not a finite number`);
+      return JSON.stringify(v);
+    }
+    if (Array.isArray(v)) {
+      const items: string[] = [];
+      for (let i = 0; i < v.length; i++) {
+        if (v[i] === undefined) throw new ConsoleFormatError(`${at}[${i}] is missing`);
+        items.push(write(v[i], `${at}[${i}]`, depth + 1));
+      }
+      return `[${items.join(',')}]`;
+    }
+    if (typeof v === 'object') {
+      const entries = Object.keys(v)
+        .sort()
+        .filter((k) => (v as Record<string, unknown>)[k] !== undefined)
+        .map((k) => `${JSON.stringify(k)}:${write((v as Record<string, unknown>)[k], `${at}.${k}`, depth + 1)}`);
+      return `{${entries.join(',')}}`;
+    }
+    throw new ConsoleFormatError(`${at} can't be written as JSON`);
+  };
+  return write(value, label, 0);
+}
+
 function flatten(value: Record<string, unknown>, prefix: string, out: string[]): void {
   for (const key of Object.keys(value).sort()) {
     const child = value[key];
     const name = prefix ? `${prefix}.${key}` : key;
     if (!FLAG_SEGMENT.test(key)) throw new ConsoleFormatError(`Key ${JSON.stringify(key)} can't be a flag name`);
     if (typeof child === 'object' && child !== null) {
-      if (Array.isArray(child)) throw new ConsoleFormatError(`--${name} is an array (not in the console grammar)`);
-      if (Object.keys(child).length === 0) throw new ConsoleFormatError(`--${name} is an empty object`);
-      flatten(child as Record<string, unknown>, name, out);
+      if (Array.isArray(child) || Object.keys(child).length === 0) {
+        out.push(`--${name} ${formatJson(child, `--${name}`)}`);
+      } else {
+        flatten(child as Record<string, unknown>, name, out);
+      }
     } else if (child !== undefined) {
       out.push(`--${name} ${formatValue(child, `--${name}`)}`);
     }
@@ -374,9 +530,11 @@ function flatten(value: Record<string, unknown>, prefix: string, out: string[]):
 
 /**
  * Writes a command call as a console line, with every argument as a flag (sorted, so the output is
- * deterministic). `parseConsoleCommand` reads it back to the same args. Used for "copy as console
- * line", history and turning replay logs into console files. Throws {@link ConsoleFormatError} for
- * args the grammar can't express.
+ * deterministic): scalars as words, objects as dotted flags (which also reach a nullable object or
+ * a union's object member), and arrays and empty objects as one compact JSON word with sorted keys.
+ * `parseConsoleCommand` reads it back to the same args. Used for "copy as console line", history and
+ * turning replay logs into console files. Throws {@link ConsoleFormatError} for args the grammar
+ * can't express.
  */
 export function formatConsoleLine(id: string, args: Readonly<Record<string, unknown>> = {}): string {
   const parts: string[] = [];

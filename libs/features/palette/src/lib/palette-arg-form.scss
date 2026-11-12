@@ -65,3 +65,29 @@
   justify-content: flex-end;
   gap: var(--ctl-space-2);
 }
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ctl-space-3);
+}
+
+.item {
+  display: grid;
+  gap: var(--ctl-space-2);
+  margin: 0;
+  padding: var(--ctl-space-2) var(--ctl-space-3);
+  border: 1px dashed var(--ctl-border);
+  border-radius: var(--ctl-radius);
+}
+
+.item legend {
+  padding: 0 var(--ctl-space-1);
+  color: var(--ctl-fg-muted);
+}
+
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ctl-space-2);
+}

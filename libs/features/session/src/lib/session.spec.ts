@@ -220,6 +220,7 @@ describe('Session', () => {
     ].join('\n');
     const target = {
       registry: session.registry,
+      world: () => session.world(),
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),
@@ -249,6 +250,7 @@ describe('Session', () => {
     ].join('\n');
     const target = {
       registry: session.registry,
+      world: () => session.world(),
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),
@@ -283,6 +285,7 @@ describe('Session', () => {
     ].join('\n');
     const target = {
       registry: session.registry,
+      world: () => session.world(),
       exec: session.exec.bind(session),
       hash: () => session.hashAt(),
       netlistDump: () => session.netlistDumpAt(),

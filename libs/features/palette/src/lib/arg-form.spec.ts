@@ -1,19 +1,30 @@
-import { ARG_REF_KEYWORD, entityRefMeta, fileCommands } from '@controls/commands';
+import { ARG_REF_KEYWORD, cableRefMeta, connectionRefMeta, entityRefMeta, fileCommands } from '@controls/commands';
 import { createWorldRegistry } from '@controls/world-model';
 import * as z from 'zod';
 import {
+  addListItem,
   allFields,
   type ArgForm,
+  type ArgFormContext,
   argsFromValues,
   buildArgForm,
+  canAddItem,
+  canRemoveItem,
+  type ChoiceField,
   humaniseKey,
   initialValues,
+  listHint,
+  listItem,
+  type ListField,
+  moveListItem,
   numberHint,
   type NumberField,
+  removeListItem,
   scalarHint,
   type ScalarField,
   scalarValue,
   validateArgs,
+  visibleFields,
 } from './arg-form';
 
 function formOf(schema: z.ZodType): ArgForm {
@@ -22,7 +33,7 @@ function formOf(schema: z.ZodType): ArgForm {
   return result.form;
 }
 
-const none = { selectedEntityId: null };
+const none: ArgFormContext = { selectedEntityId: null };
 
 /** One schema with every shape the palette supports. */
 const Kitchen = z.strictObject({
@@ -73,12 +84,20 @@ describe('buildArgForm', () => {
   });
 
   it.each([
-    ['an array', z.strictObject({ ids: z.array(z.int()) }), 'ids'],
-    ['a union with an object', z.strictObject({ v: z.union([z.string(), z.strictObject({ a: z.int() })]) }), 'v'],
-    ['a union with an enum', z.strictObject({ v: z.union([z.boolean(), z.enum(['a', 'b'])]) }), 'v'],
-    ['a union with null', z.strictObject({ v: z.union([z.string(), z.null()]) }), 'v'],
+    [
+      'a union of text and an object',
+      z.strictObject({ v: z.union([z.string(), z.strictObject({ a: z.int() })]) }),
+      'v',
+    ],
+    [
+      'a union with two objects',
+      z.strictObject({ v: z.union([z.strictObject({ a: z.int() }), z.strictObject({ b: z.int() })]) }),
+      'v',
+    ],
+    ['a tuple', z.strictObject({ t: z.tuple([z.int(), z.string()]) }), 't'],
+    ['a list of records', z.strictObject({ l: z.array(z.record(z.string(), z.int())) }), 'l.#'],
     ['a record', z.strictObject({ bag: z.record(z.string(), z.int()) }), 'bag'],
-    ['a nullable', z.strictObject({ v: z.int().nullable() }), 'v'],
+    ['a ref on a choice', z.strictObject({ v: z.union([z.literal('a'), z.literal(1)]).meta(entityRefMeta) }), 'v'],
     ['an object with open keys', z.looseObject({ a: z.int() }), ''],
     ['a non-object root', z.int(), ''],
     ['a ref on a string', z.strictObject({ id: z.string().meta(entityRefMeta) }), 'id'],
@@ -251,6 +270,225 @@ describe('scalar unions (a boolean, a number or text in one field)', () => {
     expect(scalarHint({ ...field, types: ['boolean'] })).toBe('true or false');
     const [three] = formOf(Operate).fields as ScalarField[];
     expect(scalarHint(three)).toBe('true or false, a number, or text');
+  });
+});
+
+/** ADR 0015 shapes, with test-only schemas (the wire commands land later). */
+const Int = z.int();
+const Termination = z
+  .strictObject({ method: z.string().min(1), torqueNm: z.number().nullable() })
+  .meta({ title: 'Termination' });
+const Waypoint = z
+  .strictObject({
+    kind: z.enum(['free', 'duct']),
+    positionMm: z.strictObject({ x: Int, y: Int, z: Int }),
+    entity: Int.min(1).nullable().meta(entityRefMeta),
+  })
+  .meta({ title: 'Waypoint' });
+const Wire = z.strictObject({
+  a: z
+    .strictObject({ entity: Int.min(1).meta(entityRefMeta), termination: z.union([z.literal('auto'), Termination]) })
+    .nullable(),
+  mountedOn: z.strictObject({ entity: Int, mount: z.string() }).nullable().default(null),
+  route: z.array(Waypoint).min(1).max(3),
+  tags: z.array(z.string().min(1)).max(2).optional(),
+  label: z.string().min(1).nullable(),
+  note: z.string().nullable().default('hi'),
+  lengthMm: Int.min(1).nullable().optional(),
+  wire: Int.min(1).meta(connectionRefMeta),
+  cable: Int.min(1).meta(cableRefMeta),
+  lit: z.boolean().nullable(),
+});
+
+describe('choice, nullable and list fields (ADR 0015)', () => {
+  const form = formOf(Wire);
+  const byId = (values: Record<string, unknown> = initialValues(form, none)) =>
+    Object.fromEntries(visibleFields(form.fields, values as never).map((f) => [f.id, f]));
+
+  it('builds a choice for a nullable object and an object-or-literal union', () => {
+    const fields = byId();
+    const a = fields['a'] as ChoiceField;
+    expect(a).toMatchObject({ kind: 'choice', required: true });
+    expect(a.options).toEqual([
+      { kind: 'object', label: 'Specify' },
+      { kind: 'value', value: null, label: 'None' },
+    ]);
+    expect(a.object?.fields.map((f) => f.id)).toEqual(['a.entity', 'a.termination']);
+    const termination = a.object?.fields[1] as ChoiceField;
+    expect(termination.options).toEqual([
+      { kind: 'value', value: 'auto', label: 'auto' },
+      { kind: 'object', label: 'Termination' },
+    ]);
+    expect(termination.object?.fields.map((f) => f.id)).toEqual(['a.termination.method', 'a.termination.torqueNm']);
+    expect(fields['mountedOn']).toMatchObject({ kind: 'choice', defaultValue: null, required: false });
+    expect(fields['lit']).toMatchObject({
+      kind: 'choice',
+      options: [
+        { kind: 'value', value: true, label: 'Yes' },
+        { kind: 'value', value: false, label: 'No' },
+        { kind: 'value', value: null, label: 'None' },
+      ],
+    });
+  });
+
+  it('builds nullable scalars, keeping the wrapper hints and references', () => {
+    const fields = byId();
+    expect(fields['label']).toMatchObject({ kind: 'string', nullable: true, minLength: 1, required: true });
+    expect(fields['note']).toMatchObject({ kind: 'string', nullable: true, defaultValue: 'hi' });
+    expect(fields['lengthMm']).toMatchObject({ kind: 'number', nullable: true, minimum: 1, required: false });
+    expect(fields['route.0.entity']).toMatchObject({ kind: 'number', nullable: true, ref: 'entity' });
+    expect(fields['wire']).toMatchObject({ kind: 'number', ref: 'connection', nullable: false });
+    expect(fields['cable']).toMatchObject({ kind: 'number', ref: 'cable' });
+    const hinted = formOf(
+      z.strictObject({ n: Int.nullable().meta({ ...entityRefMeta, title: 'Host', description: 'Where' }) }),
+    ).fields[0];
+    expect(hinted).toMatchObject({
+      kind: 'number',
+      ref: 'entity',
+      nullable: true,
+      label: 'Host',
+      description: 'Where',
+    });
+  });
+
+  it('builds lists with bounds, an item label and indexed item ids', () => {
+    const route = form.fields.find((f) => f.id === 'route') as ListField;
+    expect(route).toMatchObject({ kind: 'list', minItems: 1, maxItems: 3, itemLabel: 'Waypoint' });
+    expect(listHint(route)).toBe('1 to 3 waypoints');
+    const tags = form.fields.find((f) => f.id === 'tags') as ListField;
+    expect(listHint(tags)).toBe('At most 2 items');
+    expect(listItem(tags, 1)).toMatchObject({ id: 'tags.1', key: '1', label: 'Item 2', kind: 'string' });
+    const second = listItem(route, 2);
+    expect(second).toMatchObject({ id: 'route.2', label: 'Waypoint', kind: 'object' });
+    expect(allFields([second]).map((f) => f.id)).toEqual([
+      'route.2',
+      'route.2.kind',
+      'route.2.positionMm',
+      'route.2.positionMm.x',
+      'route.2.positionMm.y',
+      'route.2.positionMm.z',
+      'route.2.entity',
+    ]);
+    expect(listItem(route, 2)).toBe(second); // cached, so templates keep their views
+  });
+
+  it('starts lists at minItems (or the default) and choices unchosen (or at the default)', () => {
+    const values = initialValues(form, { selectedEntityId: 7, selectedConnectionId: 4 });
+    expect(values).toMatchObject({
+      a: '',
+      'a.entity': '7', // prefilled from the selection, used if the object is chosen
+      'a.termination': '',
+      mountedOn: '1', // the default, null
+      route: 1,
+      'route.0.kind': '',
+      'route.0.entity': '', // a nullable reference is never prefilled: blank means null
+      tags: 0,
+      label: '',
+      note: 'hi',
+      wire: '4',
+      cable: '', // no cable selected (the key may not be published yet)
+    });
+    const listed = formOf(z.strictObject({ ids: z.array(Int).default([3, 4]) }));
+    expect(initialValues(listed, none)).toEqual({ ids: 2, 'ids.0': '3', 'ids.1': '4' });
+    const chosen = formOf(
+      z.strictObject({ t: z.union([z.literal('auto'), Termination]).default({ method: 'screw', torqueNm: 1 }) }),
+    );
+    expect(initialValues(chosen, none)).toEqual({ t: '1', 't.method': 'screw', 't.torqueNm': '1' });
+  });
+
+  it('turns choices, nullable blanks and list items into args', () => {
+    const values = {
+      ...initialValues(form, none),
+      a: '0',
+      'a.entity': '3',
+      'a.termination': '1',
+      'a.termination.method': 'screw',
+      route: 2,
+      'route.0.kind': '0',
+      'route.0.positionMm.x': '1',
+      'route.0.positionMm.y': '2',
+      'route.0.positionMm.z': '3',
+      'route.1.kind': '1',
+      'route.1.positionMm.x': '4',
+      'route.1.positionMm.y': '5',
+      'route.1.positionMm.z': '6',
+      'route.1.entity': '9',
+      wire: '2',
+      cable: '5',
+      lit: '1',
+    };
+    const args = argsFromValues(form, values);
+    expect(args).toEqual({
+      a: { entity: 3, termination: { method: 'screw', torqueNm: null } },
+      mountedOn: null,
+      route: [
+        { kind: 'free', positionMm: { x: 1, y: 2, z: 3 }, entity: null },
+        { kind: 'duct', positionMm: { x: 4, y: 5, z: 6 }, entity: 9 },
+      ],
+      label: null, // blank, no default: null
+      note: 'hi',
+      lengthMm: null, // optional and nullable, no default: blank is null too
+      wire: 2,
+      cable: 5,
+      lit: false,
+    });
+    expect(argsFromValues(form, { ...values, note: '' })).not.toHaveProperty('note'); // blank with a default: left out
+    expect(validateArgs(Wire, form, args, values)).toMatchObject({ ok: true });
+    expect(argsFromValues(form, { ...values, a: '1', 'a.termination': '0' })['a']).toBeNull();
+    expect(argsFromValues(form, { ...values, 'a.termination': '0' })['a']).toEqual({ entity: 3, termination: 'auto' });
+    expect(argsFromValues(form, { ...values, tags: 1, 'tags.0': 'x' })['tags']).toEqual(['x']);
+  });
+
+  it('maps Zod issues onto list items and chosen objects by their indexed ids', () => {
+    const values = {
+      ...initialValues(form, none),
+      a: '0',
+      'a.entity': '0',
+      'a.termination': '1',
+      route: 2,
+      'route.0.kind': '0',
+      'route.0.positionMm.x': '1',
+      'route.0.positionMm.y': '2',
+      'route.0.positionMm.z': '3',
+      'route.1.kind': '0',
+      'route.1.positionMm.x': '1.5',
+      'route.1.positionMm.y': '0',
+      'route.1.positionMm.z': '0',
+      tags: 1,
+      wire: '1',
+      cable: '1',
+      lit: '2',
+    };
+    const result = validateArgs(Wire, form, argsFromValues(form, values), values);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.fields['route.1.positionMm.x']?.[0]).toMatch(/int/i);
+    expect(result.errors.fields['a.entity']?.[0]).toMatch(/>=1|1/);
+    expect(result.errors.fields['a.termination.method']?.[0]).toMatch(/>=1 characters/);
+    expect(result.errors.fields['tags.0']?.[0]).toMatch(/>=1 characters/);
+    // Without the values, the same issues fall back to the list and the choice.
+    const coarse = validateArgs(Wire, form, argsFromValues(form, values));
+    expect(!coarse.ok && Object.keys(coarse.errors.fields).sort()).toEqual(['a', 'route', 'tags']);
+  });
+
+  it('adds, removes and moves list items, carrying every nested value', () => {
+    const route = form.fields.find((f) => f.id === 'route') as ListField;
+    let values: Record<string, unknown> = initialValues(form, none);
+    values = addListItem(route, values as never, none);
+    values = addListItem(route, values as never, none);
+    expect(values['route']).toBe(3);
+    expect(canAddItem(route, values as never)).toBe(false);
+    values = { ...values, 'route.0.positionMm.x': 'a', 'route.1.positionMm.x': 'b', 'route.2.positionMm.x': 'c' };
+    const x = (v: Record<string, unknown>) => [0, 1, 2].map((i) => v[`route.${i}.positionMm.x`]);
+    const moved = moveListItem(route, values as never, 2, 0);
+    expect(x(moved)).toEqual(['c', 'a', 'b']);
+    const removed = removeListItem(route, moved, 1);
+    expect(removed['route']).toBe(2);
+    expect(x(removed)).toEqual(['c', 'b', undefined]);
+    expect(Object.keys(removed).filter((k) => k.startsWith('route.2'))).toEqual([]);
+    const one = removeListItem(route, removed, 0);
+    expect(canRemoveItem(route, one)).toBe(false); // minItems 1
+    expect(canRemoveItem(route, removed)).toBe(true);
   });
 });
 
