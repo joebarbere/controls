@@ -1,0 +1,20 @@
+# F3.5 part 1: the enclosure e2e (apps/game-e2e/src/enclosures.spec.ts) as console lines. Both must end
+# at DIN_PANEL_BREAKER_HASH (apps/sim-cli/src/din-panel-breaker.spec.ts), and so must the snapping
+# script din-panel-breaker.ts.
+#   pnpm sim run apps/sim-cli/scenarios/din-panel-breaker.console --world content/levels/workshop.json
+#
+# It starts from the workshop level (New sandbox with seed 0). Positions are what placeInWorld
+# (@controls/world-model) gives for the cursor points the e2e aims at.
+toolbelt.select 4
+# Click the backplate at (0, 50): the 400 x 500 panel snaps to the 5 mm grid.
+entity.place --ref.id panel.pellmoor-din-400x500 --ref.version 1 --positionMm.x -200 --positionMm.y -200 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+# Escape puts the tool away (no command); focus DIN rail 1, then pick the breaker.
+view.focus --target din-rail-1
+toolbelt.select 5
+# Enter with the reticle on the panel's rail 1 at (0, 150): 165 mm along, the 40 mm breaker's left edge
+# goes to module slot round(145 / 17.5) = 8, round(8 x 17.5) = 140 mm, and its bottom 45 mm below the
+# rail centreline. Its frame is the rail's (+x along, front +z): no turn.
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -25 --positionMm.y 105 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+# A click at (-100, 150) on the same rail: slot round(45 / 17.5) = 3, round(52.5) = 53 mm.
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -112 --positionMm.y 105 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+world.hash

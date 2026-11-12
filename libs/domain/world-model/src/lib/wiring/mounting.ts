@@ -38,7 +38,10 @@ const cross = (p: PositionMm, q: PositionMm): PositionMm => ({
 const same = (p: PositionMm, q: PositionMm): boolean => p.x === q.x && p.y === q.y && p.z === q.z;
 
 /** The mount's frame in world directions: the device's +x (`axis`), +y and +z (`facing`), or `null`. */
-function mountFrame(host: Entity, mount: EnclosureMount): { x: PositionMm; y: PositionMm; z: PositionMm } | null {
+export function mountFrame(
+  host: Pick<Entity, 'transform'>,
+  mount: EnclosureMount,
+): { x: PositionMm; y: PositionMm; z: PositionMm } | null {
   const x = rotateQuarterTurns(host.transform.orientationMdeg, UNIT[mount.axis]);
   const z = rotateQuarterTurns(host.transform.orientationMdeg, UNIT[mount.facing]);
   return x && z && { x, y: cross(z, x), z };
@@ -48,7 +51,11 @@ function mountFrame(host: Entity, mount: EnclosureMount): { x: PositionMm; y: Po
  * Whether a device turned to `orientation` sits in the mount's frame: its orientation is the host's
  * composed with the mount's catalogue frame (both quarter-turns, compared exactly on two axes).
  */
-export function fitsMountFrame(host: Entity, mount: EnclosureMount, orientation: OrientationMdeg): boolean {
+export function fitsMountFrame(
+  host: Pick<Entity, 'transform'>,
+  mount: EnclosureMount,
+  orientation: OrientationMdeg,
+): boolean {
   const frame = mountFrame(host, mount);
   const x = rotateQuarterTurns(orientation, UNIT['+x']);
   const z = rotateQuarterTurns(orientation, UNIT['+z']);
@@ -57,7 +64,7 @@ export function fitsMountFrame(host: Entity, mount: EnclosureMount, orientation:
 
 /** Where `position` lies in the mount's frame (`along`, `cross`, `normal`, integer mm), or `null`. */
 export function mountOffset(
-  host: Entity,
+  host: Pick<Entity, 'transform'>,
   mount: EnclosureMount,
   position: PositionMm,
 ): { along: number; cross: number; normal: number } | null {
@@ -110,7 +117,7 @@ const overlap = (a0: number, a1: number, b0: number, b1: number): boolean => a0 
  * (`mount-full`). `self` is the device being slid (it doesn't crowd itself), or `null`.
  */
 export function checkMount(
-  world: World,
+  world: Pick<World, 'entities'>,
   catalog: Catalog,
   ref: CatalogRef,
   position: PositionMm,

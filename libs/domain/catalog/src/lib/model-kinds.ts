@@ -323,6 +323,25 @@ function enumKey<const V extends readonly [string, ...string[]]>(
   return { owner, type: 'enum', schema: z.enum(values), initial, values, description };
 }
 
+/** Enclosure parameters (F3.5): none. An enclosure has no electrical model in P3; its data is its `enclosure` block. */
+export const EnclosureParams = z.strictObject({});
+export type EnclosureParams = z.infer<typeof EnclosureParams>;
+
+/**
+ * The commanded `openEntries` key every enclosure kind declares (ADR 0015, D11): a bit set over the
+ * catalogue entry's `entries[]` in their save-format order (bit i set: entry i is open). Every entry
+ * starts closed. At most 32 entries, so the set is an unsigned 32-bit integer.
+ */
+const OPEN_ENTRIES_KEY: StateKeyDef = {
+  owner: 'commanded',
+  type: 'number',
+  schema: Int.min(0).max(0xffffffff),
+  initial: 0,
+  values: null,
+  description:
+    "Which of the enclosure's entries are open: bit i is entries[i] in catalogue order (enclosure.openEntry sets one). A new enclosure starts with every entry closed.",
+};
+
 /** A connection end's contact state (ADR 0015); `intermittentOpen` takes the connection out of the netlist. */
 export const CONNECTION_END_STATES = ['ok', 'intermittentClosed', 'intermittentOpen', 'arcing'] as const;
 
@@ -388,7 +407,8 @@ export const CONNECTION_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
  * heater, and part 2's fuse and thermal-magnetic breaker. P3: F3.1's conductor, whose sim keys are the
- * lead's ten connection keys. Adding a kind needs no `schemaVersion` bump.
+ * lead's ten connection keys, and F3.5's enclosure kinds (`enclosure.box`,
+ * `enclosure.panel`); adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -447,6 +467,26 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     keys: CONNECTION_SIM_KEYS,
     description:
       'A building-wire conductor (F3.1): cut to a length, landed on terminals with wire.add, one resistance from its material, size, length and temperature plus each end’s contact.',
+  },
+  'enclosure.box': {
+    kind: 'enclosure.box',
+    placement: 'entity',
+    requires: 'enclosure',
+    terminals: [],
+    params: EnclosureParams,
+    keys: { openEntries: OPEN_ENTRIES_KEY },
+    description:
+      'An outlet or junction box (F3.5): device yokes, cable entries and an interior volume for box fill (P4); no electrical model.',
+  },
+  'enclosure.panel': {
+    kind: 'enclosure.panel',
+    placement: 'entity',
+    requires: 'enclosure',
+    terminals: [],
+    params: EnclosureParams,
+    keys: { openEntries: OPEN_ENTRIES_KEY },
+    description:
+      'A control-panel enclosure (F3.5): a backplate and DIN rails to mount devices on, and cable entries; no electrical model.',
   },
   fuse: {
     kind: 'fuse',

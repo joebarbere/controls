@@ -1,4 +1,11 @@
-import { type Catalog, type DriveType, drivesFit, type ToolDefinition, type ToolStep } from '@controls/catalog';
+import {
+  type Catalog,
+  type DeviceDefinition,
+  type DriveType,
+  drivesFit,
+  type ToolDefinition,
+  type ToolStep,
+} from '@controls/catalog';
 import { BUILTIN_PROP_VERSION, BUILTIN_PROPS, builtinProp } from '../props';
 import type { CatalogRef } from '../types';
 
@@ -60,19 +67,32 @@ export interface BeltChoice {
   readonly ref: CatalogRef;
   readonly title: string;
   /** For grouping in a picker. */
-  readonly group: 'Props' | 'Tools';
+  readonly group: 'Props' | 'Devices' | 'Tools';
 }
 
 /**
- * What a belt editor offers (F3.4 part 1): the built-in props, then every catalogue tool (newest
- * version of each id), each sorted by id. Conductor spools and cables join with F3.1 part 2, catalogue
- * devices with mouse placement of them (F3.5 part 1).
+ * What a belt editor offers (F3.4 part 1): the built-in props, then (F3.5 part 1) every placeable
+ * catalogue device with a body, so the mouse can place it (`beltSlotKind` says `placeable`: the
+ * enclosures, the breaker, the supplies, …), then every catalogue tool; each group sorted by id, the
+ * newest version of each id. Conductor spools and cables join with F3.1 part 2.
  */
 export function beltChoices(catalog: Catalog): BeltChoice[] {
   const props = BUILTIN_PROPS.map((p) => ({
     ref: { id: p.id, version: BUILTIN_PROP_VERSION },
     title: p.title,
     group: 'Props' as const,
+  }));
+  const newestDevice = new Map<string, DeviceDefinition>();
+  for (const d of catalog.devices) {
+    // Sorted by id, then version: the last of an id is its newest.
+    if (d.sizeMm !== null && beltSlotKind(catalog, { id: d.id, version: d.version }) === 'placeable') {
+      newestDevice.set(d.id, d);
+    }
+  }
+  const devices = [...newestDevice.values()].map((d) => ({
+    ref: { id: d.id, version: d.version },
+    title: d.title,
+    group: 'Devices' as const,
   }));
   const newest = new Map<string, ToolDefinition>();
   for (const tool of catalog.tools) newest.set(tool.id, tool); // sorted by id, then version
@@ -81,7 +101,7 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
     title: t.title,
     group: 'Tools' as const,
   }));
-  return [...props, ...tools];
+  return [...props, ...devices, ...tools];
 }
 
 /**

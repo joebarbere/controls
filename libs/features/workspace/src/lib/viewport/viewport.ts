@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 import {
   type ContextValue,
+  type ExecResult,
   MODE_KEY,
   SELECTION_ENTITY_ID_KEY,
   SELECTION_FOCUSABLE_KEY,
@@ -49,6 +50,16 @@ import { connectViewportOverlays } from './viewport-overlays';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
+/** The placement failures worth explaining (a rule, not "no surface under the cursor"), in words. */
+const PLACEMENT_HINTS: Readonly<Partial<Record<string, string>>> = {
+  'mount-full': 'That spot on the mount is taken.',
+  overlaps: 'Something is in the way.',
+  occupied: 'It holds a mounted device or a cable: empty it first.',
+  wired: 'Conductors are landed on it: unland them first.',
+  'off-mount': 'A mounted device only slides along its own mount.',
+  'too-large': 'Too large for this surface.',
+};
+
 /** Window property for the E2E test hook (`?e2e=1` only). Drives the renderer API, never the world. */
 const TEST_HOOK = '__controlsViewport';
 
@@ -64,8 +75,10 @@ const TEST_HOOK = '__controlsViewport';
  * **World and gestures:** the renderer draws `Session.world()` (it syncs by entity id and never
  * mutates it) and arms placement with the active tool-belt slot when it is placeable (`ActiveTool`). Its
  * gesture intents become exactly one Command each, through `Session.exec`: a click or Enter on a
- * snapped spot is `entity.place`, dropping a dragged (or `M`-picked) entity is `entity.move`, and
- * Escape while placing puts the tool away without a command. Delete is the `entity.delete.selection`
+ * snapped spot is `entity.place` (with `mountedOn` when it snapped to an enclosure's mount, F3.5),
+ * dropping a dragged (or `M`-picked) entity is `entity.move`, and Escape while placing puts the tool
+ * away without a command. Gestures and keys run through `Session.execFromInput`, so a refusal reaches
+ * the shell's toasts; while the ghost can't commit, a polite status line says why (`placementHint`). Delete is the `entity.delete.selection`
  * binding (the keybinding service runs it, not this component). **Operating a device** (F2.5): E is
  * the `device.operate.selection` binding, and a double-click on a device runs the same command here,
  * `device.operate {id, control, value}` on the selection's first toggle (a switch's `closed`), set to
@@ -112,6 +125,9 @@ const TEST_HOOK = '__controlsViewport';
         {{ st.drawCalls }} draws · {{ st.geometries }} geo · {{ st.bvhs }} bvh
       </div>
     }
+    @if (placementHint(); as hint) {
+      <div class="placement-hint" data-testid="placement-hint" role="status" aria-live="polite">{{ hint }}</div>
+    }
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
     }
@@ -148,6 +164,20 @@ const TEST_HOOK = '__controlsViewport';
     .dev-hud {
       bottom: 0.75rem;
     }
+    .placement-hint {
+      position: absolute;
+      left: 50%;
+      top: 0.75rem;
+      transform: translateX(-50%);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      background: rgb(0 0 0 / 65%);
+      color: #f4d58d;
+      font:
+        13px/1.4 system-ui,
+        sans-serif;
+      pointer-events: none;
+    }
     .crosshair {
       position: absolute;
       left: 50%;
@@ -172,6 +202,7 @@ const TEST_HOOK = '__controlsViewport';
     '[attr.data-placement-ref]': 'state()?.placement?.ref?.id ?? null',
     '[attr.data-placement-valid]': 'placementValid()',
     '[attr.data-placement-target]': 'state()?.placement?.targetId ?? null',
+    '[attr.data-placement-reason]': 'state()?.placement?.reason ?? null',
     '[attr.data-overlays]': 'overlays.active()',
   },
 })
@@ -186,6 +217,14 @@ export class Viewport {
   protected readonly placementValid = computed(() => {
     const placement = this.state()?.placement;
     return placement ? String(placement.valid) : null;
+  });
+  /**
+   * Why the ghost can't commit, in words, when that's a rule the player broke rather than "no surface
+   * here" (F3.5: a full slot, something in the way, an occupied enclosure). `null` otherwise.
+   */
+  protected readonly placementHint = computed(() => {
+    const reason = this.state()?.placement?.reason;
+    return reason ? (PLACEMENT_HINTS[reason] ?? null) : null;
   });
   readonly backendChange = output<RenderBackend | 'unavailable'>();
 
@@ -334,15 +373,16 @@ export class Viewport {
     switch (intent.kind) {
       case 'place':
         this.report(
-          this.session.exec('entity.place', {
+          this.session.execFromInput('entity.place', {
             ref: intent.ref,
             positionMm: intent.positionMm,
             orientationMdeg: intent.orientationMdeg,
+            mountedOn: intent.mountedOn,
           }),
         );
         return;
       case 'move':
-        this.report(this.session.exec('entity.move', { id: intent.id, positionMm: intent.positionMm }));
+        this.report(this.session.execFromInput('entity.move', { id: intent.id, positionMm: intent.positionMm }));
         return;
       case 'cancelPlacement':
         this.toolBelt.clear();
@@ -366,12 +406,15 @@ export class Viewport {
     const ndcX = (2 * (event.clientX - rect.left)) / rect.width - 1;
     const ndcY = 1 - (2 * (event.clientY - rect.top)) / rect.height;
     if (this.renderer.pickAt(ndcX, ndcY)?.entityId !== id) return;
-    this.report(this.session.exec('device.operate', { id, control: toggle.control, value: toggle.value }));
+    this.report(this.session.execFromInput('device.operate', { id, control: toggle.control, value: toggle.value }));
   }
 
-  /** A refused gesture command is a bug (the renderer only commits valid snaps): say so in the console. */
-  private report(result: { readonly ok: boolean }): void {
-    if (!result.ok) console.warn('viewport gesture command failed', result);
+  /**
+   * A gesture command with bad arguments is a bug (the renderer only commits valid snaps): say so in
+   * the console. A refusal is the world's answer and reaches the toasts through `execFromInput`.
+   */
+  private report(result: ExecResult): void {
+    if (!result.ok && result.error.kind !== 'rejected') console.warn('viewport gesture command failed', result);
   }
 
   /** Publishes the view state as `when` context keys (`undefined` clears them). */

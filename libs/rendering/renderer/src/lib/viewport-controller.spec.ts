@@ -1,6 +1,13 @@
 import { Box3, Box3Helper, Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
 import { createWorld, migrateWorld } from '@controls/save-format';
-import { createWorldBus, placeOnTargets, worldSnapTargets, type Entity, type World } from '@controls/world-model';
+import {
+  createWorldBus,
+  placeInWorld,
+  placeOnTargets,
+  worldSnapTargets,
+  type Entity,
+  type World,
+} from '@controls/world-model';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ManualFrameClock } from './loop/manual-frame-clock';
@@ -560,7 +567,13 @@ describe('ViewportController placement', () => {
     const expected = placeOnTargets(BOX, { x: -150, y: 300, z: 0 }, targets);
     if (!expected.ok) throw new Error('expected a placement');
     expect(seen).toEqual([
-      { kind: 'place', ref: BOX, positionMm: expected.positionMm, orientationMdeg: expected.orientationMdeg },
+      {
+        kind: 'place',
+        ref: BOX,
+        positionMm: expected.positionMm,
+        orientationMdeg: expected.orientationMdeg,
+        mountedOn: null,
+      },
     ]);
     expect(controller.state.selected).toBeNull(); // placing doesn't select
     controller.dispose();
@@ -633,6 +646,7 @@ describe('ViewportController placement', () => {
         ref: BOX,
         positionMm: { x: -60, y: -40, z: 0 },
         orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+        mountedOn: null,
       },
     ]);
     controller.setPlacement(null);
@@ -880,7 +894,7 @@ describe('ViewportController on the workshop', () => {
     ).map(([ref, cursor]) => {
       const r = placeOnTargets(ref, cursor, targets);
       if (!r.ok) throw new Error(`expected a placement, got ${r.reason}`);
-      return { kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg };
+      return { kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg, mountedOn: null };
     });
     expect(seen).toEqual(expected);
     expect(expected[1].orientationMdeg).toEqual({ yaw: 0, pitch: 270_000, roll: 0 }); // stood up on the bench
@@ -1079,5 +1093,212 @@ describe('ViewportController on-demand rendering (with RenderLoop)', () => {
     loop.dispose();
     canvas.dispatchEvent(pointer('pointermove', 640, 360));
     expect(clock.pendingFrames).toBe(0);
+  });
+});
+
+// --- F3.5 part 1: catalogue devices, enclosure mounts, knockouts ----------------------------
+
+describe('ViewportController with enclosures (F3.5)', () => {
+  const PANEL_REF = { id: 'panel.pellmoor-din-400x500', version: 1 };
+  const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
+  const BOX_1G = { id: 'box.tinmoor-1g-steel', version: 1 };
+  const device = (
+    id: number,
+    ref: { id: string; version: number },
+    positionMm: { x: number; y: number; z: number },
+    extra: Partial<Entity> = {},
+  ): Entity => {
+    const bus = createWorldBus(createWorld({ seed: 0 }));
+    const placed = bus.exec('entity.place', { ref, positionMm });
+    if (!placed.ok) throw new Error(JSON.stringify(placed));
+    return { ...bus.state.entities[0], id, ...extra };
+  };
+  /** The workshop panel with the DIN panel on the backplate as entity 1 (where the mouse puts it). */
+  const panelWorld = (...more: Entity[]) => worldWith(device(1, PANEL_REF, { x: -200, y: -250, z: 0 }), ...more);
+  const RAIL = { entity: 1, mount: 'rail-1' };
+  const breakerOn = (id: number, x: number, state: Record<string, boolean> = {}) => {
+    const e = device(id, BREAKER, { x, y: 55, z: 22 }, { mountedOn: RAIL });
+    return { ...e, state: { ...e.state, ...state } };
+  };
+
+  it('the mouse places a catalogue device: the DIN panel on the backplate, with the arguments a script gets', () => {
+    const { canvas, controller } = setup();
+    const seen = intents(controller);
+    controller.setPlacement(PANEL_REF);
+    const p = pointAt(canvas, controller, 0, 0);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({
+      valid: true,
+      targetId: 'backplate',
+      mountedOn: null,
+      reason: null,
+    });
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    const expected = placeInWorld(PANEL, PANEL_REF, { x: 0, y: 0, z: 0 }, worldSnapTargets(PANEL));
+    expect(expected).toMatchObject({ ok: true, positionMm: { x: -200, y: -250, z: 0 } });
+    if (!expected.ok) throw new Error('unreachable');
+    expect(seen).toEqual([
+      {
+        kind: 'place',
+        ref: PANEL_REF,
+        positionMm: expected.positionMm,
+        orientationMdeg: expected.orientationMdeg,
+        mountedOn: null,
+      },
+    ]);
+    controller.dispose();
+  });
+
+  it("snaps the breaker onto the panel's rail 1 with the mouse: one place intent carrying mountedOn", () => {
+    const { canvas, controller } = setup();
+    controller.syncWorld(panelWorld());
+    const seen = intents(controller);
+    controller.setPlacement(BREAKER);
+    const p = pointAt(canvas, controller, -65, 100, 22);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({
+      valid: true,
+      targetId: 'entity-1:rail-1',
+      mountedOn: RAIL,
+    });
+    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-77, 55, 22]);
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    expect(seen).toEqual([
+      {
+        kind: 'place',
+        ref: BREAKER,
+        positionMm: { x: -77, y: 55, z: 22 },
+        orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+        mountedOn: RAIL,
+      },
+    ]);
+    controller.dispose();
+  });
+
+  it('an occupied slot shows why and commits nothing; an occupied panel refuses a drag', () => {
+    const { canvas, controller } = setup();
+    controller.syncWorld(panelWorld(breakerOn(2, -77)));
+    const seen = intents(controller);
+    controller.setPlacement(BREAKER);
+    const p = pointAt(canvas, controller, -65, 100, 22);
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({
+      valid: false,
+      reason: 'mount-full',
+      targetId: 'entity-1:rail-1',
+    });
+    expect(ghostOf(controller).visible).toBe(false);
+    canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
+    canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
+    controller.setPlacement(null);
+    // Drag the panel by its frame: it holds the breaker, so the ghost says `occupied` and the drop is nothing.
+    const grab = controller.projectMm({ x: -199, y: 0, z: 200 });
+    canvas.dispatchEvent(pointer('pointermove', grab.x, grab.y));
+    canvas.dispatchEvent(pointer('pointerdown', grab.x, grab.y));
+    const drop = controller.projectMm({ x: 250, y: 0, z: 0 });
+    canvas.dispatchEvent(pointer('pointermove', drop.x, drop.y));
+    controller.update(1 / 60);
+    expect(controller.state.placement).toMatchObject({ kind: 'move', entityId: 1, valid: false, reason: 'occupied' });
+    canvas.dispatchEvent(pointer('pointerup', drop.x, drop.y));
+    expect(seen).toEqual([]);
+    controller.dispose();
+  });
+
+  it('dragging a mounted breaker slides it along its rail (one move intent)', () => {
+    const { canvas, controller } = setup();
+    controller.syncWorld(panelWorld(breakerOn(2, -77)));
+    const seen = intents(controller);
+    const grab = controller.projectMm({ x: -57, y: 100, z: 93 });
+    canvas.dispatchEvent(pointer('pointermove', grab.x, grab.y));
+    canvas.dispatchEvent(pointer('pointerdown', grab.x, grab.y));
+    for (let i = 1; i <= 6; i++) {
+      const q = controller.projectMm({ x: -57 + i * 25, y: 100, z: 22 });
+      canvas.dispatchEvent(pointer('pointermove', q.x, q.y));
+      controller.update(1 / 60);
+    }
+    expect(controller.state.placement).toMatchObject({
+      kind: 'move',
+      valid: true,
+      targetId: 'entity-1:rail-1',
+      mountedOn: RAIL,
+    });
+    const end = controller.projectMm({ x: 93, y: 100, z: 22 });
+    canvas.dispatchEvent(pointer('pointerup', end.x, end.y));
+    // 93 + 165 = 258 along; 258 − 20 = 238 → slot round(13.6) = 14, round(14 × 17.5) = 245 → x = 80.
+    expect(seen).toEqual([{ kind: 'move', id: 2, positionMm: { x: 80, y: 55, z: 22 } }]);
+    controller.dispose();
+  });
+
+  it('draws knockouts open or closed from openEntries, and the breaker handle from state.on (scene-graph snapshot)', () => {
+    const { controller } = setup();
+    const box = device(3, BOX_1G, { x: 250, y: 100, z: 0 });
+    controller.syncWorld(panelWorld(breakerOn(2, -77, { on: true }), { ...box, state: { openEntries: 0b10100 } }));
+    const graph = worldGraph(controller);
+    expect(graph).toMatchSnapshot('panel, breaker and box');
+    const node = (g: ReturnType<typeof worldGraph>, id: string) => g.children?.find((c) => c.name === id);
+    // Bits 2 and 4: ko-top and ko-back. The entries are two meshes, closed and open, never picked.
+    expect(node(graph, 'entity-3')?.openEntries).toStrictEqual(['ko-top', 'ko-back']);
+    expect(node(graph, 'entity-3')?.children?.map((c) => [c.name, c.visible])).toStrictEqual([
+      ['entries:closed', true],
+      ['entries:open', true],
+    ]);
+    expect(node(graph, 'entity-1')?.openEntries).toStrictEqual([]);
+    expect(node(graph, 'entity-1')?.children?.map((c) => [c.name, c.visible])).toStrictEqual([
+      ['entries:closed', true],
+      ['entries:open', false],
+    ]);
+    const picked = controller.scene.getObjectByName('entity-3')?.getObjectByName('entries:open') as Mesh;
+    expect(Object.prototype.hasOwnProperty.call(picked, 'raycast')).toBe(true); // its own no-op
+    expect(graph.children?.find((c) => c.name === 'entity-2')?.breaker).toStrictEqual({ on: true });
+    // Opening another knockout swaps one material and redraws; turning the breaker off turns its handle.
+    let frames = 0;
+    controller.onInvalidate(() => frames++);
+    controller.syncWorld(panelWorld(breakerOn(2, -77, { on: false }), { ...box, state: { openEntries: 0b11100 } }));
+    expect(frames).toBeGreaterThan(0);
+    const after = worldGraph(controller);
+    expect(node(after, 'entity-3')?.openEntries).toStrictEqual(['ko-top', 'ko-bottom', 'ko-back']);
+    expect(after.children?.find((c) => c.name === 'entity-2')?.breaker).toStrictEqual({ on: false });
+    controller.dispose();
+  });
+
+  it('enclosures and their parts release every geometry, material and BVH (disposal)', () => {
+    const { canvas, controller } = setup();
+    const baseline = controller.bvhCount;
+    const box = device(3, BOX_1G, { x: 250, y: 100, z: 0 });
+    const furnished = (openEntries = 0) => panelWorld(breakerOn(2, -77), { ...box, state: { openEntries } });
+    controller.syncWorld(furnished());
+    controller.setPlacement(BREAKER);
+    pointAt(canvas, controller, 0, 100, 22);
+    controller.update(1 / 60);
+    expect(controller.bvhCount).toBeGreaterThan(baseline);
+    // Removing every entity returns the BVHs and recipes to baseline.
+    controller.setPlacement(null);
+    controller.syncWorld(PANEL);
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(baseline);
+    // Opening knockouts gives the box its own merged entry geometries; changing them again disposes the old.
+    controller.syncWorld(furnished(0b00100));
+    const first = (controller.scene.getObjectByName('entity-3')?.getObjectByName('entries:open') as Mesh).geometry;
+    const firstSpy = vi.spyOn(first, 'dispose');
+    controller.syncWorld(furnished(0b10100));
+    expect(firstSpy).toHaveBeenCalledTimes(1);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh || o instanceof Box3Helper) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(controller.recipeCount).toBe(0);
+    expect(controller.bvhCount).toBe(0);
+    expect(canvas.live.size).toBe(0);
   });
 });

@@ -75,6 +75,7 @@ describe('snap constants', () => {
       constants.DIN_RAIL_CAPTURE,
       constants.BACKPLATE_MARGIN,
       constants.SNAP_PLANE_TOLERANCE,
+      constants.MOUNT_CAPTURE_DEPTH,
     ];
     for (const c of all) {
       expect(c.source.length).toBeGreaterThan(10);

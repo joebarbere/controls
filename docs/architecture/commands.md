@@ -122,7 +122,7 @@ flowchart LR
   tool --> change
 ```
 
-`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry`.
+`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry`.
 
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 

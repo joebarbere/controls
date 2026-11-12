@@ -88,8 +88,12 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     });
   });
 
-  it('the breaker and the DIN supply fit a DIN rail; nothing else declares a mount', () => {
+  it('the breaker and the DIN supply fit a DIN rail; the F3.5 boxes fit a stud flange; nothing else declares a mount', () => {
     expect(BUILTIN_CATALOG.devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
+      ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 51 }]],
+      ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 102 }]],
+      ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 102 }]],
+      ['box.tinmoor-4sq-steel', [{ type: 'studFlange', widthMm: 102 }]],
       ['breaker.saltmere-1p-15a', [{ type: 'din35', widthMm: 40 }]],
       ['supply.railwick-din-24v-5a', [{ type: 'din35', widthMm: 40 }]],
     ]);
@@ -98,21 +102,32 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       for (const m of d.mounts) expect(m.widthMm).toBeLessThanOrEqual(d.sizeMm?.widthMm ?? 0);
   });
 
-  it('no entry is an enclosure yet; only the conductor kind’s entries carry conductor data', () => {
-    expect(BUILTIN_CATALOG.devices.filter((d) => d.enclosure !== null)).toStrictEqual([]);
+  it('only the F3.5 boxes and panel are enclosures; only the conductor kind’s entries carry conductor data', () => {
+    expect(BUILTIN_CATALOG.devices.filter((d) => d.enclosure !== null).map((d) => d.id)).toStrictEqual([
+      'box.tinmoor-1g-steel',
+      'box.tinmoor-2g-nm',
+      'box.tinmoor-4rd-nm-ceiling',
+      'box.tinmoor-4sq-steel',
+      'panel.pellmoor-din-400x500',
+    ]);
     expect(
       BUILTIN_CATALOG.devices.filter((d) => (d.conductor !== null) !== (d.model.kind === 'conductor')),
     ).toStrictEqual([]);
   });
 
-  it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection and one test lead (plan P2)', () => {
+  it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection, one test lead and the F3.5 enclosures', () => {
     expect(p2Devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
       ['battery.ferrovane-12v-7ah', 'battery'],
+      ['box.tinmoor-1g-steel', 'enclosure.box'],
+      ['box.tinmoor-2g-nm', 'enclosure.box'],
+      ['box.tinmoor-4rd-nm-ceiling', 'enclosure.box'],
+      ['box.tinmoor-4sq-steel', 'enclosure.box'],
       ['breaker.saltmere-1p-15a', 'breaker.thermalMagnetic'],
       ['fuse.emberlyn-5x20-fa-1a', 'fuse'],
       ['heater.hearthvale-12v-50w', 'heater'],
       ['lamp.lumivane-12v-5w', 'lamp.incandescent'],
       ['lead.quillfern-test-1m', 'lead'],
+      ['panel.pellmoor-din-400x500', 'enclosure.panel'],
       ['resistor.orrinwood-10r-10w', 'resistor'],
       ['supply.brindlecore-bench-30v-5a', 'supply.bench'],
       ['supply.railwick-din-24v-5a', 'supply.dinPsu'],
@@ -123,15 +138,20 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     ]);
   });
 
-  it('uses fictional brands only (realism charter), one per maker (the utility serves three services)', () => {
+  it('uses fictional brands only (realism charter), one per maker (the utility serves three services, Tinmoor makes the boxes)', () => {
     const brands = p2Devices.map((d) => d.brand);
     expect(brands).toStrictEqual([
       'Ferrovane',
+      'Tinmoor',
+      'Tinmoor',
+      'Tinmoor',
+      'Tinmoor',
       'Saltmere',
       'Emberlyn',
       'Hearthvale',
       'Lumivane',
       'Quillfern',
+      'Pellmoor',
       'Orrinwood',
       'Brindlecore',
       'Railwick',

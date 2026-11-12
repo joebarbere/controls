@@ -1,0 +1,186 @@
+{
+  "id": "box.tinmoor-4sq-steel",
+  "version": 1,
+  "title": "4 in square steel junction box, 1-1/2 in deep",
+  "brand": "Tinmoor",
+  "modelName": "TM-4S15",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 102,
+    "heightMm": 102,
+    "depthMm": 40
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 102
+    }
+  ],
+  "enclosure": {
+    "mounts": [],
+    "entries": [
+      {
+        "id": "ko-top-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 34,
+          "y": 102,
+          "z": 20
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-top-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 68,
+          "y": 102,
+          "z": 20
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-bottom-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 34,
+          "y": 0,
+          "z": 20
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 68,
+          "y": 0,
+          "z": 20
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-left-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 0,
+          "y": 34,
+          "z": 20
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "ko-left-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 0,
+          "y": 68,
+          "z": 20
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "ko-right-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 102,
+          "y": 34,
+          "z": 20
+        },
+        "axis": "-x"
+      },
+      {
+        "id": "ko-right-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 102,
+          "y": 68,
+          "z": 20
+        },
+        "axis": "-x"
+      },
+      {
+        "id": "ko-back",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 51,
+          "y": 51,
+          "z": 0
+        },
+        "axis": "+z"
+      }
+    ],
+    "interiorVolumeMm3": 364952
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation is the outside size, rounded to whole millimetres (102 × 102 × 40 mm), with 2 mm drawn walls on the sides and back, so the inside is 98 × 98 × 38 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 98 × 98 × 38 = 364952 mm³ (about 22.27 in³), about 6.1 % above the volume boxes of this class are marked with (rounded corners, ears). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
+      "covers": ["interiorVolumeMm3"]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: two 1/2 in trade-size knockouts in each side wall and one 3/4 in knockout in the back, one connector each (real boxes often have concentric 1/2 and 3/4 in knockouts; each is one size here). No yoke: a device needs a raised cover or mud ring (P4). Positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": [
+        "entries.ko-top-1",
+        "entries.ko-top-2",
+        "entries.ko-bottom-1",
+        "entries.ko-bottom-2",
+        "entries.ko-left-1",
+        "entries.ko-left-2",
+        "entries.ko-right-1",
+        "entries.ko-right-2",
+        "entries.ko-back"
+      ]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: fixed to the side of a stud by a bracket (common practice); it takes its full width along the stud.",
+      "covers": ["fits.studFlange"]
+    }
+  ],
+  "extensions": {}
+}

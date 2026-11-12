@@ -56,6 +56,8 @@ const MODEL_KIND_TOPOLOGY = {
   breakerOff: '5b7e7d973bfcf376679cee1f29d5d298fc67ae0b5c0f5b3949f9d0df5ec5708e',
   breakerOn: 'ba3697d37256b7b5a65e4a8670c99ff69d36a30b6c3945d61c403707730efab7',
   conductor: '6d6c6e344f3d62db57a9b512402123349f268ae2bf69fb99c42e908675d805ca',
+  enclosureBox: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  enclosurePanel: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -76,6 +78,8 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   breakerOff: 'breaker.thermalMagnetic',
   breakerOn: 'breaker.thermalMagnetic',
   conductor: 'conductor',
+  enclosureBox: 'enclosure.box',
+  enclosurePanel: 'enclosure.panel',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -224,11 +228,47 @@ describe('topologyHash', () => {
         );
         return compileNetlist(bus.state, WIRING_TEST_CATALOG).topologyHash;
       })(),
+      // F3.5: an enclosure adds nothing to the netlist (both are the empty netlist's hash).
+      enclosureBox: one({ id: 'box.tinmoor-1g-steel', version: 1 }),
+      enclosurePanel: one({ id: 'panel.pellmoor-din-400x500', version: 1 }),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 
   it('pins every model kind in MODEL_KINDS (a new kind without a pin fails here)', () => {
     expect([...new Set(Object.values(PINNED_KIND))].sort()).toStrictEqual(Object.keys(MODEL_KINDS).sort());
+  });
+
+  it('an enclosure, open entries or not, changes nothing electrical in the bench lamp (F3.5)', () => {
+    const plain = compileNetlist(benchLamp(true), BUILTIN_CATALOG);
+    const bus = benchBus();
+    for (const ref of [BATTERY, SPST, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
+    run(bus, 'entity.place', {
+      ref: { id: 'panel.pellmoor-din-400x500', version: 1 },
+      positionMm: { x: 5000, y: 0, z: 0 },
+    });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(3, 'a') });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') });
+    run(bus, 'device.operate', { id: 2, control: 'closed', value: true });
+    const electrical = (n: ReturnType<typeof compileNetlist>) => ({
+      topologyHash: n.topologyHash,
+      nodes: n.nodes,
+      branches: n.branches,
+      islands: n.islands,
+      diagnostics: n.diagnostics,
+    });
+    const withPanel = compileNetlist(bus.state, BUILTIN_CATALOG);
+    expect(electrical(withPanel)).toStrictEqual(electrical(plain));
+    // The device list may name the enclosure, but only as a device with no parts (no element, no output).
+    const extra = withPanel.devices.filter((d) => !plain.devices.some((p) => p.entity === d.entity));
+    expect(extra.every((d) => d.entity === 4)).toBe(true);
+    expect(withPanel.devices.filter((d) => d.entity !== 4)).toStrictEqual(plain.devices);
+    // Opening knockouts (commanded `openEntries`, set here without a tool) changes nothing either.
+    const opened = {
+      ...bus.state,
+      entities: bus.state.entities.map((e) => (e.id === 4 ? { ...e, state: { ...e.state, openEntries: 0b10101 } } : e)),
+    };
+    expect(electrical(compileNetlist(opened, BUILTIN_CATALOG))).toStrictEqual(electrical(plain));
   });
 
   it('names elements by entity and part, or by connection', () => {

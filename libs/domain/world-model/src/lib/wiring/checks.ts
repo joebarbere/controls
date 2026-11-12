@@ -253,7 +253,10 @@ export function obstacleBoxes(world: World, catalog: Catalog): { readonly entity
 }
 
 /** An entity's body box: exact at quarter-turns, the conservative cube otherwise. */
-export function bodyBox(entity: Entity, size: { widthMm: number; heightMm: number; depthMm: number }): BoxMm {
+export function bodyBox(
+  entity: Pick<Entity, 'transform'>,
+  size: { widthMm: number; heightMm: number; depthMm: number },
+): BoxMm {
   const far = entityPointMm(entity.transform, { x: size.widthMm, y: size.heightMm, z: size.depthMm });
   if (far === null) {
     return conservativeCube(entity.transform.positionMm, { w: size.widthMm, h: size.heightMm, d: size.depthMm });

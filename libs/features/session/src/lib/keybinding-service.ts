@@ -162,6 +162,7 @@ export class KeybindingService {
     event.preventDefault();
     if (event.repeat) return;
     // Context arguments (the selection's id, …) are read now, so the log holds concrete values.
-    this.session.exec(binding.decl.target.command, bindingArgs(binding.decl.target, context));
+    // A refusal (Delete on an occupied enclosure) reaches the shell's toasts through `execFromInput`.
+    this.session.execFromInput(binding.decl.target.command, bindingArgs(binding.decl.target, context));
   }
 }

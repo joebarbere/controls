@@ -21,6 +21,8 @@ import {
 import type { SelectableInfo } from './selection';
 
 const SELECTABLE_KEY = 'selectable';
+/** `userData` flag of a mesh under a selectable that is never picked (and gets no BVH). */
+export const UNPICKABLE_KEY = 'unpickable';
 
 /** Marks `object` (and so every mesh under it) as selectable. Stored in `userData`, so it is JSON-plain. */
 export function markSelectable(object: Object3D, info: SelectableInfo): void {
@@ -94,7 +96,8 @@ export class Picker {
     for (const root of roots) {
       root.updateWorldMatrix(true, true);
       root.traverse((o) => {
-        if (!(o instanceof Mesh)) return;
+        // Decoration under a selectable (an enclosure's entries) opts out: no BVH, its own no-op raycast.
+        if (!(o instanceof Mesh) || o.userData[UNPICKABLE_KEY] === true) return;
         const geometry = o.geometry as BvhGeometry;
         liveGeometries.add(geometry);
         liveMeshes.add(o);

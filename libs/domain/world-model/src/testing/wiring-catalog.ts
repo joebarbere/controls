@@ -258,6 +258,14 @@ const block = {
   extensions: {},
 };
 
+/** A yoke-mounted wiring device stand-in (F3.5's yoke snapping): the block's body, fitting a device yoke. */
+const yokeDevice = {
+  ...block,
+  id: 'tb.test-yoke',
+  mounts: [{ type: 'deviceYoke', widthMm: 20 }],
+  sources: source(['sizeMm', 'terminals', 'terminals.*.methods', 'fits.deviceYoke']),
+};
+
 const panel = {
   id: 'panel.test-din',
   version: 1,
@@ -423,6 +431,7 @@ export const WIRING_TEST_CATALOG: Catalog = catalogOrThrow(
       conductor('conductor.test-10', true, 10),
       box,
       block,
+      yokeDevice,
       panel,
     ],
     cables: [cable],

@@ -181,11 +181,16 @@ export class App {
     // Toast actions run commands through the one registry (the crash toast's Restart simulation).
     this.notifications.setActionRunner((commandId) => void this.session.exec(commandId));
     const offCrash = this.session.sim.onCrash((crash) => this.crashed(crash));
+    // A key or gesture the world refused (Delete on an occupied enclosure, F3.5): say why.
+    const offRefusal = this.session.onRefusal((refusal) =>
+      this.notifications.notify(`${refusal.title}: ${refusal.message}`, { level: 'warning', timeoutMs: 6000 }),
+    );
     inject(SimEventToasts); // trip and blow toasts, coalesced per device
     inject(DestroyRef).onDestroy(() => {
       offLoaded();
       offThumbnail();
       offCrash();
+      offRefusal();
       this.notifications.setActionRunner(null);
     });
   }

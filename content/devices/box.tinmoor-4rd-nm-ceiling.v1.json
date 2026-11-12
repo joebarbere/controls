@@ -1,0 +1,111 @@
+{
+  "id": "box.tinmoor-4rd-nm-ceiling",
+  "version": 1,
+  "title": "4 in round nonmetallic ceiling box",
+  "brand": "Tinmoor",
+  "modelName": "TM-4RC",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 102,
+    "heightMm": 102,
+    "depthMm": 57
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 102
+    }
+  ],
+  "enclosure": {
+    "mounts": [],
+    "entries": [
+      {
+        "id": "clamp-top",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 51,
+          "y": 102,
+          "z": 30
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 51,
+          "y": 0,
+          "z": 30
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "clamp-left",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 0,
+          "y": 51,
+          "z": 30
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "clamp-right",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 102,
+          "y": 51,
+          "z": 30
+        },
+        "axis": "-x"
+      }
+    ],
+    "interiorVolumeMm3": 390864
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: a round nonmetallic (PVC) ceiling box of 4 in outside diameter for a luminaire, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Outside taken as a cylinder of 102 mm diameter and 57 mm deep (4 in and 2-1/4 in), with 3 mm drawn walls, so the inside is 96 mm across and 54 mm deep; its bounding box is 102 × 102 × 57 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain cylinder, π × (96 / 2)² × 54 = 390864 mm³ (about 23.85 in³), rounded to a whole mm³: about 17.5 % above the volume round nonmetallic boxes of this class are marked with, because their walls taper. It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
+      "covers": ["interiorVolumeMm3"]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: four built-in cable clamps (knock-in tabs) a quarter-turn apart around the wall, one cable each, the box clamps the cable itself. No mount for a luminaire in P3 (P4 brings luminaires). Positions are on the round wall at its quarter points and are not taken from a product drawing.",
+      "covers": ["entries.clamp-top", "entries.clamp-bottom", "entries.clamp-left", "entries.clamp-right"]
+    },
+    {
+      "id": "joist-mount",
+      "kind": "game-design",
+      "citation": "game-design: nailed to the side of a joist or stud through its bracket (studFlange, common practice); it takes its full width along the framing member.",
+      "covers": ["fits.studFlange"]
+    }
+  ],
+  "extensions": {}
+}

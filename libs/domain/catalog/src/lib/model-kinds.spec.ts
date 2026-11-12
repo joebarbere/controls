@@ -13,11 +13,13 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds and F3.1’s conductor, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor and the F3.5 enclosure kinds, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.thermalMagnetic',
       'conductor',
+      'enclosure.box',
+      'enclosure.panel',
       'fuse',
       'generator.portable',
       'heater',
@@ -48,6 +50,9 @@ describe('MODEL_KINDS', () => {
         thermal: 'sim number 0',
         tripped: 'sim boolean false',
       },
+      // F3.5 (ADR 0015, D11): the commanded knockout bit set; provisional until v0.4.0.
+      'enclosure.box': { openEntries: 'commanded number 0' },
+      'enclosure.panel': { openEntries: 'commanded number 0' },
       fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       heater: {},

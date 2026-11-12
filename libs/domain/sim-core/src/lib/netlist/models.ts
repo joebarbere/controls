@@ -159,6 +159,19 @@ const switchSpst: DeviceNetlistModel = {
   topology: ({ state }) => (state['closed'] === true ? SPST_CLOSED : SPST_OPEN),
 };
 
+const NO_TOPOLOGY: DeviceTopology = { joins: NO_JOINS, elements: [] };
+
+/**
+ * An enclosure (F3.5: a box or a panel): no terminals and no elements, so nothing in the netlist. Its
+ * metal isn't bonded to anything until P4's grounding work gives boxes a ground terminal.
+ */
+const enclosureBox: DeviceNetlistModel = { kind: 'enclosure.box', simTopologyKeys: [], topology: () => NO_TOPOLOGY };
+const enclosurePanel: DeviceNetlistModel = {
+  kind: 'enclosure.panel',
+  simTopologyKeys: [],
+  topology: () => NO_TOPOLOGY,
+};
+
 /**
  * A test lead: a resistance from resistivity × length ÷ area at the bench temperature, plus the clip
  * contact resistance at each end (`leadResistanceOhm`, ADR 0013; never from conductor tables).
@@ -211,6 +224,8 @@ const conductor: ConnectionNetlistModel = {
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
   'breaker.thermalMagnetic': breakerNetlistModel,
+  'enclosure.box': enclosureBox,
+  'enclosure.panel': enclosurePanel,
   fuse: fuseNetlistModel,
   'generator.portable': generatorPortableNetlistModel,
   heater: heaterNetlistModel,

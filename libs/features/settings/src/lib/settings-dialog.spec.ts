@@ -88,12 +88,22 @@ describe('SettingsDialog', () => {
     );
     expect(within(slot(4)).getByRole('group', { name: 'Tools' })).toBeTruthy();
 
+    // Placeable catalogue devices (F3.5): a DIN panel and the breaker can go on the belt.
+    expect(within(slot(5)).getByRole('group', { name: 'Devices' })).toBeTruthy();
+    await user.selectOptions(slot(5), 'panel.pellmoor-din-400x500@1');
+    await user.selectOptions(slot(6), 'breaker.saltmere-1p-15a@1');
+    await fixture.whenStable();
+    expect(store.settings().toolBelt.slots.slice(4, 6)).toStrictEqual([
+      { id: 'panel.pellmoor-din-400x500', version: 1 },
+      { id: 'breaker.saltmere-1p-15a', version: 1 },
+    ]);
+
     // A stored ref the picker doesn't offer is still shown, not a blank select.
     const slots = [...store.settings().toolBelt.slots];
-    slots[8] = { id: 'lamp.lumivane-12v-5w', version: 1 };
+    slots[8] = { id: 'lead.quillfern-test-1m', version: 1 }; // a spool: not offered until F3.1 part 2
     store.update('toolBelt', { slots });
     await fixture.whenStable();
-    expect(slot(9).value).toBe('lamp.lumivane-12v-5w@1');
+    expect(slot(9).value).toBe('lead.quillfern-test-1m@1');
     expect(slot(9).selectedOptions[0]?.textContent?.trim()).not.toBe('');
   });
 

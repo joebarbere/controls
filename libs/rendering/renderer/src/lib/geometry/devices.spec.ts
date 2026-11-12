@@ -1,5 +1,6 @@
 import {
   Box3,
+  DoubleSide,
   Group,
   Mesh,
   Scene,
@@ -16,13 +17,17 @@ import { WorldSync } from '../world/world-sync';
 import {
   BULB_SLOT,
   BULB_TINTS,
+  buildDeviceEntries,
   buildDeviceGeometry,
   buildDeviceLever,
   buildDeviceMaterials,
   DEVICE_SLOTS,
   deviceDefinitionFor,
   deviceLabel,
+  CLOSED_ENTRY_SLOT,
+  entryIsOpen,
   leverAngle,
+  OPENING_SLOT,
 } from './devices';
 import { PropRecipes } from './props';
 
@@ -373,5 +378,140 @@ describe('F2.5 devices in the scene', () => {
     spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
     expect(sync.recipes.size).toBe(0);
     expect(scene.children).toHaveLength(0);
+  });
+});
+
+// --- F3.5 part 1: the breaker, the fuse and the enclosures -----------------------------------
+
+const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
+const FUSE = { id: 'fuse.emberlyn-5x20-fa-1a', version: 1 };
+const ENCLOSURES = [
+  { id: 'box.tinmoor-1g-steel', version: 1 },
+  { id: 'box.tinmoor-2g-nm', version: 1 },
+  { id: 'box.tinmoor-4sq-steel', version: 1 },
+  { id: 'box.tinmoor-4rd-nm-ceiling', version: 1 },
+  { id: 'panel.pellmoor-din-400x500', version: 1 },
+];
+
+describe('F3.5 recipes', () => {
+  it('draw the breaker, the fuse and every enclosure (no longer unknown objects)', () => {
+    for (const ref of [BREAKER, FUSE, ...ENCLOSURES]) expect(deviceDefinitionFor(ref)?.id).toBe(ref.id);
+    expect([BREAKER, FUSE, ...ENCLOSURES].map((ref) => deviceLabel(def(ref)))).toStrictEqual([
+      'Saltmere SB-115',
+      'Emberlyn EF-520-1A',
+      'Tinmoor TM-132C',
+      'Tinmoor TM-2GN',
+      'Tinmoor TM-4S15',
+      'Tinmoor TM-4RC',
+      'Pellmoor PM-4520-D',
+    ]);
+  });
+
+  it.each([BREAKER, FUSE])('%o fills its catalogue size from the min corner and reaches every terminal', (ref) => {
+    const d = def(ref);
+    const g = buildDeviceGeometry(d);
+    const b = bounds(g);
+    const size = d.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+    expect(toMm(b.min).every((n) => n >= -1)).toBe(true);
+    expect(b.max.x * 1000).toBeCloseTo(size.widthMm, 3);
+    expect(b.max.y * 1000).toBeLessThanOrEqual(size.heightMm + 1);
+    expect(b.max.y * 1000).toBeGreaterThanOrEqual(size.heightMm - 1e-3);
+    expect(b.max.z * 1000).toBeLessThanOrEqual(size.depthMm + 1);
+    for (const t of d.terminals) {
+      const p = new Vector3(t.positionMm.x, t.positionMm.y, t.positionMm.z).multiplyScalar(0.001);
+      expect(b.containsPoint(p), `${ref.id} ${t.id}`).toBe(true);
+    }
+    g.dispose();
+  });
+
+  it('the breaker has a handle lever turned by state.on; the fuse has none', () => {
+    const lever = buildDeviceLever(def(BREAKER));
+    expect(lever).toMatchObject({ stateKey: 'on', userKey: 'breaker', pivotMm: { x: 20, y: 45, z: 70 } });
+    expect(DEVICE_SLOTS[lever?.slot ?? -1]).toBe('panel');
+    lever?.geometry.dispose();
+    expect(buildDeviceLever(def(FUSE))).toBeNull();
+    for (const ref of ENCLOSURES) expect(buildDeviceLever(def(ref))).toBeNull();
+  });
+
+  it.each(ENCLOSURES)(
+    '%o is an open-fronted body exactly its size, with an entry part at each catalogue entry',
+    (ref) => {
+      const d = def(ref);
+      const g = buildDeviceGeometry(d);
+      const b = bounds(g);
+      const size = d.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+      expect(toMm(b.min)).toStrictEqual([0, 0, 0]);
+      expect(toMm(b.max)).toStrictEqual([size.widthMm, size.heightMm, size.depthMm]);
+      const entries = buildDeviceEntries(d);
+      expect(entries.map((e) => e.id)).toStrictEqual(d.enclosure?.entries.map((e) => e.id));
+      entries.forEach((part, i) => {
+        // The entry's catalogue position is on its part (the outside face), inside the body's bounds.
+        const p = d.enclosure?.entries[i].positionMm as { x: number; y: number; z: number };
+        const point = new Vector3(p.x, p.y, p.z).multiplyScalar(0.001);
+        expect(bounds(part.geometry).clone().expandByScalar(1e-6).containsPoint(point), `${ref.id} ${part.id}`).toBe(
+          true,
+        );
+        expect(b.clone().expandByScalar(0.001).containsPoint(point)).toBe(true);
+        part.geometry.dispose();
+      });
+      g.dispose();
+    },
+  );
+
+  it('match the geometry snapshot (bounds, vertices, slots, entries and levers per entry)', () => {
+    const summary = [BREAKER, FUSE, ...ENCLOSURES].map((ref) => {
+      const d = def(ref);
+      const g = buildDeviceGeometry(d);
+      const b = bounds(g);
+      const lever = buildDeviceLever(d);
+      const entries = buildDeviceEntries(d);
+      const out = {
+        id: ref.id,
+        boundsMm: [...toMm(b.min), ...toMm(b.max)],
+        vertices: g.getAttribute('position').count,
+        slots: g.groups.map((group) => [DEVICE_SLOTS[group.materialIndex as number], group.count]),
+        lever: lever && {
+          pivotMm: lever.pivotMm,
+          boundsMm: [...toMm(bounds(lever.geometry).min), ...toMm(bounds(lever.geometry).max)],
+        },
+        entries: entries.map((e) => [
+          e.id,
+          e.type,
+          ...toMm(bounds(e.geometry).min).map(Math.round),
+          ...toMm(bounds(e.geometry).max).map(Math.round),
+        ]),
+      };
+      g.dispose();
+      lever?.geometry.dispose();
+      entries.forEach((e) => e.geometry.dispose());
+      return out;
+    });
+    expect(summary).toMatchSnapshot('F3.5 recipes');
+  });
+
+  it('nonmetallic boxes are blue; steel ones galvanised; enclosures draw double-sided bodies', () => {
+    const body = (id: string) => buildDeviceMaterials(def({ id, version: 1 }))[DEVICE_SLOTS.indexOf('body')];
+    expect(body('box.tinmoor-2g-nm').color.getHex()).toBe(0x2f5fa8);
+    expect(body('box.tinmoor-1g-steel').color.getHex()).toBe(0xb8bec4);
+    expect(body('box.tinmoor-1g-steel').side).toBe(DoubleSide);
+    expect(entryIsOpen(0b101, 0)).toBe(true);
+    expect(entryIsOpen(0b101, 1)).toBe(false);
+    expect(entryIsOpen(0b101, 2)).toBe(true);
+    expect(entryIsOpen(null, 0)).toBe(false);
+    expect([OPENING_SLOT, CLOSED_ENTRY_SLOT].map((i) => DEVICE_SLOTS[i])).toStrictEqual(['opening', 'accent']);
+  });
+
+  it('an enclosure recipe disposes its entry geometries with the last release', () => {
+    const recipes = new PropRecipes();
+    const box = recipes.acquire(ENCLOSURES[0]);
+    expect(box.enclosure).toBe(true);
+    expect(box.entries).toHaveLength(5);
+    const owned = [box.geometry, box.entriesAll as BufferGeometry, ...box.entries.map((e) => e.geometry)];
+    const spies = [...owned, ...(box.material as Material[])].map((r) => vi.spyOn(r, 'dispose'));
+    recipes.release(ENCLOSURES[0]);
+    spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(recipes.size).toBe(0);
+    expect(recipes.acquire(BREAKER).enclosure).toBe(false);
+    recipes.dispose();
   });
 });
