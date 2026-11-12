@@ -1,4 +1,4 @@
-import { ARG_REF_KEYWORD, type ArgRefKind } from '@controls/commands';
+import { ARG_REF_KEYWORD, ARG_REF_KINDS, type ArgRefKind } from '@controls/commands';
 import * as z from 'zod';
 
 /*
@@ -9,16 +9,23 @@ import * as z from 'zod';
  *
  * The form only shapes and types what the player typed; validation is the command's own schema
  * (`validateArgs`), the same one `exec`, the console and scripts use. Shapes the form can't express
- * (arrays, records, recursion, unions other than one of JSON scalar types) make `buildArgForm` fail,
- * and a spec builds a form for every registered command, so a new command can't silently break the
- * palette. A union of scalar types (`device.operate`'s `value`: a boolean, a number or a string) is a
- * text field typed like a console word: `true`/`false`, a JSON number, or the text.
+ * (records, recursion, tuples, unions other than the ones below) make `buildArgForm` fail, and a
+ * spec builds a form for every registered command, so a new command can't silently break the
+ * palette. The shapes it can express:
+ *
+ * - objects, strings, numbers, booleans, enums and consts;
+ * - a union of JSON scalar types (`device.operate`'s `value`): a text field typed like a console word;
+ * - a nullable scalar (`z.string().nullable()`): a text field where blank is `null` (ADR 0015);
+ * - a choice (ADR 0015): an `anyOf` of `null`, const or enum scalars and at most one object, such as
+ *   a nullable object or `'auto' | TerminationArgs`. A radio group; the object's fields show when chosen;
+ * - a list (`z.array`) of any of these, with `minItems` and `maxItems`. Item field ids carry the
+ *   index (`route.3.positionMm.x`), so Zod issue paths map onto them.
  */
 
 interface FieldBase {
-  /** Key in the parent object. */
+  /** Key in the parent object (the index as text for a list item). */
   readonly key: string;
-  /** Dotted path from the args root (`positionMm.x`): the field's id in values and errors. */
+  /** Dotted path from the args root (`positionMm.x`, `route.3.kind`): the field's id in values and errors. */
   readonly id: string;
   readonly label: string;
   readonly description: string | null;
@@ -32,6 +39,8 @@ export interface StringField extends FieldBase {
   readonly kind: 'string';
   readonly minLength: number | null;
   readonly maxLength: number | null;
+  /** Accepts `null`: a blank field is `null` when the key has no default (else it is left out). */
+  readonly nullable: boolean;
 }
 
 export interface NumberField extends FieldBase {
@@ -41,8 +50,10 @@ export interface NumberField extends FieldBase {
   readonly maximum: number | null;
   readonly exclusiveMinimum: number | null;
   readonly exclusiveMaximum: number | null;
-  /** What the number refers to (`entity`: an entity id, so the form offers the selection). */
+  /** What the number refers to (an entity, connection or cable id), so the form offers the selection. */
   readonly ref: ArgRefKind | null;
+  /** Accepts `null`: a blank field is `null` when the key has no default (else it is left out). */
+  readonly nullable: boolean;
 }
 
 export interface BooleanField extends FieldBase {
@@ -68,6 +79,8 @@ export interface ScalarField extends FieldBase {
   readonly kind: 'scalar';
   /** The types the union accepts, in schema order. */
   readonly types: readonly ScalarType[];
+  /** Accepts `null` too: blank is `null` when the key has no default. */
+  readonly nullable: boolean;
 }
 
 export interface ObjectField extends FieldBase {
@@ -75,7 +88,39 @@ export interface ObjectField extends FieldBase {
   readonly fields: readonly ArgField[];
 }
 
-export type ArgField = StringField | NumberField | BooleanField | EnumField | ScalarField | ObjectField;
+/** One option of a {@link ChoiceField}: a scalar value (`null`, `'auto'`) or the union's object. */
+export type ChoiceOption =
+  | { readonly kind: 'value'; readonly value: EnumOption; readonly label: string }
+  | { readonly kind: 'object'; readonly label: string };
+
+/**
+ * A union of `null`, const/enum scalars and at most one object (a nullable object, `'auto' | {…}`):
+ * a radio group. The object's fields (ids under this field's id, as for an object) apply only while
+ * the object option is chosen.
+ */
+export interface ChoiceField extends FieldBase {
+  readonly kind: 'choice';
+  readonly options: readonly ChoiceOption[];
+  /** The object member, or `null` if the union has none. Its `id` is this field's id. */
+  readonly object: ObjectField | null;
+}
+
+/**
+ * An array (`z.array(item)`): a list of item fieldsets the player can add to, remove from and
+ * reorder. `item` is a template whose id is `<list id>.#`; {@link listItem} makes the field for an
+ * index. The item count is the value at the list's id.
+ */
+export interface ListField extends FieldBase {
+  readonly kind: 'list';
+  readonly item: ArgField;
+  /** What one item is called ("Waypoint"): the items' `title`, else "Item". */
+  readonly itemLabel: string;
+  readonly minItems: number;
+  readonly maxItems: number | null;
+}
+
+export type ArgField =
+  StringField | NumberField | BooleanField | EnumField | ScalarField | ObjectField | ChoiceField | ListField;
 
 /** A command's argument form: the fields of its args object (empty for argument-less commands). */
 export interface ArgForm {
@@ -97,7 +142,10 @@ class Unsupported extends Error {
   }
 }
 
-const UNITS: Readonly<Record<string, string>> = { Mm: 'mm', Mdeg: 'millidegrees' };
+/** The id segment standing for "any index" in a list's item template. */
+const ITEM = '#';
+
+const UNITS: Readonly<Record<string, string>> = { Mm: 'mm', Mdeg: 'millidegrees', Nm: 'N·m' };
 const WORDS: Readonly<Record<string, string>> = { id: 'ID', ref: 'Catalogue item' };
 
 /** `positionMm` → `Position (mm)`, `deltaMdeg` → `Delta (millidegrees)`, `id` → `ID`. */
@@ -114,6 +162,7 @@ const isObject = (v: unknown): v is JsonSchema => typeof v === 'object' && v !==
 const numberOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 const isPrimitive = (v: unknown): v is EnumOption =>
   v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+const isRefKind = (v: unknown): v is ArgRefKind => (ARG_REF_KINDS as readonly unknown[]).includes(v);
 
 /** Builds the form for an args schema. Fails (never throws) with the path of a shape it can't express. */
 export function buildArgForm(schema: z.ZodType): ArgFormResult {
@@ -170,6 +219,9 @@ function objectFields(schema: JsonSchema, defs: JsonSchema, path: string, refs: 
   });
 }
 
+/** Keywords describing a field (not its type), copied from a nullable wrapper onto its scalar member. */
+const OUTER_KEYWORDS = ['title', 'description', 'default', ARG_REF_KEYWORD];
+
 function field(
   key: string,
   id: string,
@@ -177,6 +229,7 @@ function field(
   required: boolean,
   defs: JsonSchema,
   outerRefs: readonly string[],
+  nullable = false,
 ): ArgField {
   const { schema, refs } = resolve(raw, defs, id, outerRefs);
   const base: FieldBase = {
@@ -188,14 +241,25 @@ function field(
     defaultValue: schema['default'],
   };
   const ref = schema[ARG_REF_KEYWORD];
-  if (ref !== undefined && ref !== 'entity') throw new Unsupported(id, `unknown ${ARG_REF_KEYWORD} ${String(ref)}`);
-  if (ref !== undefined && schema['type'] !== 'integer')
-    throw new Unsupported(id, 'entity references must be integers');
+  if (ref !== undefined && !isRefKind(ref)) throw new Unsupported(id, `unknown ${ARG_REF_KEYWORD} ${String(ref)}`);
 
-  const types = scalarUnion(schema['anyOf']) ?? scalarTypeList(schema['type']);
-  if (types !== null) return { ...base, kind: 'scalar', types };
-  for (const keyword of ['anyOf', 'oneOf', 'allOf', 'not']) {
-    if (schema[keyword] !== undefined) throw new Unsupported(id, `${keyword} (unions) is not supported`);
+  const union = unionMembers(schema, id);
+  if (union !== null) {
+    const nonNull = union.filter((m) => !isNullSchema(m));
+    const hasNull = nonNull.length < union.length;
+    const types = scalarUnion(nonNull);
+    if (types !== null && nonNull.length > 1) return { ...base, kind: 'scalar', types, nullable: hasNull };
+    // A nullable scalar (`z.int().nullable()`, `z.string().nullable()`): the member, with the wrapper's hints.
+    if (hasNull && nonNull.length === 1 && isPlainScalar(nonNull[0])) {
+      const outer = Object.fromEntries(OUTER_KEYWORDS.filter((k) => k in schema).map((k) => [k, schema[k]]));
+      return field(key, id, { ...nonNull[0], ...outer }, required, defs, refs, true);
+    }
+    if (ref !== undefined) throw new Unsupported(id, 'references must be integers');
+    return choiceField(base, union, defs, refs);
+  }
+  if (ref !== undefined && schema['type'] !== 'integer') throw new Unsupported(id, 'references must be integers');
+  for (const keyword of ['oneOf', 'allOf', 'not']) {
+    if (schema[keyword] !== undefined) throw new Unsupported(id, `${keyword} is not supported`);
   }
   if (Array.isArray(schema['enum']) || 'const' in schema) {
     const options = Array.isArray(schema['enum']) ? schema['enum'] : [schema['const']];
@@ -210,6 +274,7 @@ function field(
         kind: 'string',
         minLength: numberOrNull(schema['minLength']),
         maxLength: numberOrNull(schema['maxLength']),
+        nullable,
       };
     case 'integer':
     case 'number':
@@ -221,7 +286,8 @@ function field(
         maximum: numberOrNull(schema['maximum']),
         exclusiveMinimum: numberOrNull(schema['exclusiveMinimum']),
         exclusiveMaximum: numberOrNull(schema['exclusiveMaximum']),
-        ref: ref === 'entity' ? 'entity' : null,
+        ref: isRefKind(ref) ? ref : null,
+        nullable,
       };
     case 'boolean':
       // An optional boolean without a default has three states (unset, true, false): offer a choice.
@@ -230,9 +296,25 @@ function field(
         : { ...base, kind: 'enum', options: [true, false] };
     case 'object':
       return { ...base, kind: 'object', fields: objectFields(schema, defs, id, refs) };
+    case 'array':
+      return listField(base, schema, defs, refs);
     default:
       throw new Unsupported(id, `type ${JSON.stringify(schema['type'] ?? null)} is not supported`);
   }
+}
+
+/** The members of an `anyOf`, or of a `type` list (how Zod writes a union of bare types), else `null`. */
+function unionMembers(schema: JsonSchema, id: string): JsonSchema[] | null {
+  const anyOf = schema['anyOf'];
+  if (Array.isArray(anyOf)) {
+    if (!anyOf.every(isObject)) throw new Unsupported(id, 'anyOf members must be schemas');
+    return anyOf;
+  }
+  const type = schema['type'];
+  if (!Array.isArray(type)) return null;
+  // `{ type: ['string', 'null'], maxLength: 3 }`: the other keywords belong to the non-null type.
+  const rest = Object.fromEntries(Object.entries(schema).filter(([k]) => k !== 'type' && !OUTER_KEYWORDS.includes(k)));
+  return type.map((t: unknown) => (t === 'null' ? { type: 'null' } : { ...rest, type: t }));
 }
 
 /** Keywords a scalar union member may carry besides `type` (bounds and hints, never structure). */
@@ -248,14 +330,14 @@ const SCALAR_KEYWORDS = new Set([
 ]);
 
 /**
- * The scalar types of an `anyOf` whose every member is a plain `boolean`, `number`, `integer` or
- * `string` schema (no enum, const, object or nested union), or `null` if it isn't one.
+ * The scalar types of union members that are each a plain `boolean`, `number`, `integer` or
+ * `string` schema (no enum, const, object or nested union), or `null` if they aren't.
  */
-function scalarUnion(anyOf: unknown): ScalarType[] | null {
-  if (!Array.isArray(anyOf) || anyOf.length < 2) return null;
+function scalarUnion(members: readonly JsonSchema[]): ScalarType[] | null {
+  if (members.length === 0) return null;
   const types: ScalarType[] = [];
-  for (const member of anyOf) {
-    if (!isObject(member) || !Object.keys(member).every((k) => SCALAR_KEYWORDS.has(k))) return null;
+  for (const member of members) {
+    if (!Object.keys(member).every((k) => SCALAR_KEYWORDS.has(k))) return null;
     const type = member['type'] === 'integer' ? 'number' : member['type'];
     if (type !== 'boolean' && type !== 'number' && type !== 'string') return null;
     if (!types.includes(type)) types.push(type);
@@ -263,67 +345,216 @@ function scalarUnion(anyOf: unknown): ScalarType[] | null {
   return types;
 }
 
-/** The scalar types of a `type` list (`["boolean", "number", "string"]`, how Zod writes a union of bare scalars), or `null`. */
-function scalarTypeList(type: unknown): ScalarType[] | null {
-  return Array.isArray(type) ? scalarUnion(type.map((t: unknown) => ({ type: t }))) : null;
+const isNullSchema = (s: JsonSchema): boolean => s['type'] === 'null' || ('const' in s && s['const'] === null);
+
+/** A plain `string`/`number`/`integer` schema (bounds and hints allowed, no enum or const). */
+function isPlainScalar(s: JsonSchema): boolean {
+  return (
+    (s['type'] === 'string' || s['type'] === 'number' || s['type'] === 'integer') &&
+    !('const' in s) &&
+    s['enum'] === undefined
+  );
 }
 
-/** Every field in the form, depth first (objects before their children). */
+function choiceField(
+  base: FieldBase,
+  members: readonly JsonSchema[],
+  defs: JsonSchema,
+  refs: readonly string[],
+): ChoiceField {
+  const options: ChoiceOption[] = [];
+  let object: ObjectField | null = null;
+  const addValue = (value: unknown) => {
+    if (!isPrimitive(value)) throw new Unsupported(base.id, 'choice values must be JSON scalars');
+    if (options.some((o) => o.kind === 'value' && o.value === value)) return;
+    options.push({ kind: 'value', value, label: valueLabel(value) });
+  };
+  for (const raw of members) {
+    const member = resolve(raw, defs, base.id, refs).schema;
+    if (isNullSchema(member)) addValue(null);
+    else if ('const' in member) addValue(member['const']);
+    else if (Array.isArray(member['enum'])) member['enum'].forEach(addValue);
+    else if (member['type'] === 'boolean') [true, false].forEach(addValue);
+    else if (member['type'] === 'object') {
+      if (object !== null) throw new Unsupported(base.id, 'a union may have at most one object member');
+      object = {
+        ...base,
+        kind: 'object',
+        label: typeof member['title'] === 'string' ? member['title'] : base.label,
+        fields: objectFields(member, defs, base.id, resolve(raw, defs, base.id, refs).refs),
+      };
+      options.push({ kind: 'object', label: typeof member['title'] === 'string' ? member['title'] : 'Specify' });
+    } else {
+      throw new Unsupported(base.id, 'unions other than null, constants and one object are not supported');
+    }
+  }
+  if (options.length < 2) throw new Unsupported(base.id, 'a choice needs at least two options');
+  return { ...base, kind: 'choice', options, object };
+}
+
+function valueLabel(value: EnumOption): string {
+  if (value === null) return 'None';
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  return String(value);
+}
+
+function listField(base: FieldBase, schema: JsonSchema, defs: JsonSchema, refs: readonly string[]): ListField {
+  const items = schema['items'];
+  if (!isObject(items)) throw new Unsupported(base.id, 'arrays need one item schema (tuples are not supported)');
+  if (schema['prefixItems'] !== undefined) throw new Unsupported(base.id, 'tuples are not supported');
+  if (schema['uniqueItems'] === true) throw new Unsupported(base.id, 'uniqueItems is not supported');
+  const resolved = resolve(items, defs, base.id, refs).schema;
+  const itemLabel = typeof resolved['title'] === 'string' ? resolved['title'] : 'Item';
+  const item = field(ITEM, `${base.id}.${ITEM}`, items, true, defs, refs);
+  const minItems = numberOrNull(schema['minItems']) ?? 0;
+  return {
+    ...base,
+    kind: 'list',
+    item: { ...item, label: itemLabel },
+    itemLabel,
+    minItems,
+    maxItems: numberOrNull(schema['maxItems']),
+  };
+}
+
+/** Re-bases a field's id (and its descendants') from prefix `from` to `to`. */
+function rebase(f: ArgField, from: string, to: string): ArgField {
+  const id = to + f.id.slice(from.length);
+  switch (f.kind) {
+    case 'object':
+      return { ...f, id, fields: f.fields.map((c) => rebase(c, from, to)) };
+    case 'choice':
+      return { ...f, id, object: f.object ? (rebase(f.object, from, to) as ObjectField) : null };
+    case 'list':
+      return { ...f, id, item: rebase(f.item, from, to) };
+    default:
+      return { ...f, id };
+  }
+}
+
+const itemCache = new WeakMap<ListField, ArgField[]>();
+
+/** The field for item `index` of `list` (ids like `route.3.positionMm.x`). Cached per list field. */
+export function listItem(list: ListField, index: number): ArgField {
+  let items = itemCache.get(list);
+  if (!items) itemCache.set(list, (items = []));
+  const cached = items[index];
+  if (cached) return cached;
+  const rebased = rebase(list.item, list.item.id, `${list.id}.${index}`);
+  // A scalar item is labelled with its number ("Tag 2"); an object item's fieldset legend says it.
+  const label = rebased.kind === 'object' ? rebased.label : `${list.itemLabel} ${index + 1}`;
+  const made = { ...rebased, key: String(index), label };
+  items[index] = made;
+  return made;
+}
+
+/**
+ * Every field in the form with a fixed id, depth first (objects before their children). A choice's
+ * object fields and a list's items depend on the values: see {@link visibleFields}.
+ */
 export function allFields(fields: readonly ArgField[]): ArgField[] {
   return fields.flatMap((f) => (f.kind === 'object' ? [f, ...allFields(f.fields)] : [f]));
 }
 
 /**
- * What the player has entered, by field id: text for strings and numbers, `true`/`false` for
- * booleans, the option index as text for enums (`''` = not chosen), and for an optional object
- * without a default whether it is included.
+ * The value at each field id: text for strings, numbers and scalars, `true`/`false` for booleans
+ * and for whether an optional object (no default) is included, the option index as text for enums
+ * and choices (`''` = not chosen), and the item count (a number) for a list.
  */
-export type ArgValues = Readonly<Record<string, string | boolean>>;
+export type ArgValue = string | boolean | number;
+export type ArgValues = Readonly<Record<string, ArgValue>>;
 
-/** Context for initial values: the selected world entity, offered to entity-reference fields. */
+/** The current selection, offered to reference fields. Missing keys mean nothing of that kind is selected. */
 export interface ArgFormContext {
   readonly selectedEntityId: number | null;
+  readonly selectedConnectionId?: number | null;
+  readonly selectedCableId?: number | null;
+}
+
+function selected(context: ArgFormContext, kind: ArgRefKind): number | null {
+  const id =
+    kind === 'entity'
+      ? context.selectedEntityId
+      : kind === 'connection'
+        ? context.selectedConnectionId
+        : context.selectedCableId;
+  return typeof id === 'number' ? id : null;
 }
 
 /** Whether an object field is included only when the player asks for it (optional, no default). */
 export const isOptionalObject = (f: ObjectField): boolean => !f.required && f.defaultValue === undefined;
 
-/** Initial values: schema defaults (also from a parent object's default), else the selection for entity refs. */
-export function initialValues(form: ArgForm, context: ArgFormContext): Record<string, string | boolean> {
-  const values: Record<string, string | boolean> = {};
-  const visit = (fields: readonly ArgField[], inherited: unknown) => {
-    for (const f of fields) {
-      const fromParent = isObjectValue(inherited) ? inherited[f.key] : undefined;
-      const value = f.defaultValue !== undefined ? f.defaultValue : fromParent;
-      switch (f.kind) {
-        case 'object':
-          if (isOptionalObject(f)) values[f.id] = false;
-          visit(f.fields, value);
-          break;
-        case 'boolean':
-          values[f.id] = value === true;
-          break;
-        case 'enum': {
-          const index = value === undefined ? -1 : f.options.indexOf(value as EnumOption);
-          values[f.id] = index < 0 ? '' : String(index);
-          break;
-        }
-        case 'number':
-          if (typeof value === 'number') values[f.id] = String(value);
-          else if (f.ref === 'entity' && context.selectedEntityId !== null)
-            values[f.id] = String(context.selectedEntityId);
-          else values[f.id] = '';
-          break;
-        case 'string':
-          values[f.id] = typeof value === 'string' ? value : '';
-          break;
-        case 'scalar':
-          values[f.id] = value === undefined || value === null ? '' : String(value);
-          break;
-      }
+/** The chosen option of a choice field, if any. */
+export function chosenOption(f: ChoiceField, values: ArgValues): ChoiceOption | null {
+  const raw = values[f.id];
+  return typeof raw === 'string' && raw !== '' ? (f.options[Number(raw)] ?? null) : null;
+}
+
+/** A list's item count in `values`. */
+export function itemCount(f: ListField, values: ArgValues): number {
+  const raw = values[f.id];
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+}
+
+/** Writes `f`'s initial values (from `value`, else defaults, else the selection for references) into `out`. */
+function fill(f: ArgField, value: unknown, context: ArgFormContext, out: Record<string, ArgValue>): void {
+  switch (f.kind) {
+    case 'object':
+      if (isOptionalObject(f)) out[f.id] = false;
+      for (const child of f.fields) fill(child, childValue(child, value), context, out);
+      return;
+    case 'boolean':
+      out[f.id] = value === true;
+      return;
+    case 'enum': {
+      const index = value === undefined ? -1 : f.options.indexOf(value as EnumOption);
+      out[f.id] = index < 0 ? '' : String(index);
+      return;
     }
-  };
-  visit(form.fields, undefined);
+    case 'choice': {
+      const index =
+        value === undefined
+          ? -1
+          : isObjectValue(value)
+            ? f.options.findIndex((o) => o.kind === 'object')
+            : f.options.findIndex((o) => o.kind === 'value' && o.value === value);
+      out[f.id] = index < 0 ? '' : String(index);
+      if (f.object) for (const child of f.object.fields) fill(child, childValue(child, value), context, out);
+      return;
+    }
+    case 'list': {
+      const items = Array.isArray(value) ? value : [];
+      const count = Array.isArray(value) ? items.length : f.minItems;
+      out[f.id] = count;
+      for (let i = 0; i < count; i++) fill(listItem(f, i), items[i], context, out);
+      return;
+    }
+    case 'number': {
+      // A nullable reference isn't prefilled: blank means null there, and the selection would change that.
+      const pick = f.ref !== null && !f.nullable ? selected(context, f.ref) : null;
+      out[f.id] = typeof value === 'number' ? String(value) : pick !== null ? String(pick) : '';
+      return;
+    }
+    case 'string':
+      out[f.id] = typeof value === 'string' ? value : '';
+      return;
+    case 'scalar':
+      out[f.id] = value === undefined || value === null ? '' : String(value);
+      return;
+  }
+}
+
+/** A child's starting value: its own default, else its parent's value at its key. */
+function childValue(child: ArgField, parent: unknown): unknown {
+  if (child.defaultValue !== undefined) return child.defaultValue;
+  return isObjectValue(parent) ? parent[child.key] : undefined;
+}
+
+/** Initial values: schema defaults (also from a parent object's default), else the selection for references. */
+export function initialValues(form: ArgForm, context: ArgFormContext): Record<string, ArgValue> {
+  const values: Record<string, ArgValue> = {};
+  for (const f of form.fields) fill(f, f.defaultValue, context, values);
   return values;
 }
 
@@ -334,21 +565,26 @@ function isObjectValue(v: unknown): v is Readonly<Record<string, unknown>> {
 /** The JSON-number grammar, as the console uses (no `+`, no hex, no leading zeros). */
 const NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
+/** What a blank nullable field means: `null` when the key has no default, else "not given" (the default applies). */
+const blank = (f: FieldBase & { readonly nullable: boolean }): unknown =>
+  f.nullable && f.defaultValue === undefined ? null : undefined;
+
 /**
- * The args object the values describe. Blank optional fields are left out (so defaults apply), a
- * number field that isn't a number is passed through as text, so the schema reports it.
+ * The args object the values describe. Blank optional fields are left out (so defaults apply),
+ * blank nullable fields are `null` unless they have a default, and a number field that isn't a
+ * number is passed through as text, so the schema reports it.
  */
 export function argsFromValues(form: ArgForm, values: ArgValues): Record<string, unknown> {
   const build = (fields: readonly ArgField[]): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
     for (const f of fields) {
-      const value = valueOf(f, values);
+      const value = valueOf(f);
       if (value !== undefined) out[f.key] = value;
     }
     return out;
   };
-  const valueOf = (f: ArgField, v: ArgValues): unknown => {
-    const raw = v[f.id];
+  const valueOf = (f: ArgField): unknown => {
+    const raw = values[f.id];
     switch (f.kind) {
       case 'object':
         return isOptionalObject(f) && raw !== true ? undefined : build(f.fields);
@@ -356,17 +592,30 @@ export function argsFromValues(form: ArgForm, values: ArgValues): Record<string,
         return raw === true;
       case 'enum':
         return typeof raw === 'string' && raw !== '' ? f.options[Number(raw)] : undefined;
+      case 'choice': {
+        const option = chosenOption(f, values);
+        if (option === null) return undefined;
+        return option.kind === 'value' ? option.value : build(f.object?.fields ?? []);
+      }
+      case 'list': {
+        const count = itemCount(f, values);
+        if (count === 0 && !f.required && f.defaultValue === undefined) return undefined;
+        return Array.from({ length: count }, (_, i) => valueOf(listItem(f, i)));
+      }
       case 'number': {
         const text = typeof raw === 'string' ? raw.trim() : '';
-        if (text === '') return undefined;
+        if (text === '') return blank(f);
         return NUMBER.test(text) ? Number(text) : text;
       }
       case 'string': {
         const text = typeof raw === 'string' ? raw : '';
+        if (text === '' && f.nullable) return blank(f);
         return text === '' && !f.required ? undefined : text;
       }
-      case 'scalar':
-        return scalarValue(f, typeof raw === 'string' ? raw.trim() : '');
+      case 'scalar': {
+        const value = scalarValue(f, typeof raw === 'string' ? raw.trim() : '');
+        return value === undefined ? blank(f) : value;
+      }
     }
   };
   return build(form.fields);
@@ -383,6 +632,29 @@ export function scalarValue(f: ScalarField, text: string): unknown {
   return text;
 }
 
+/**
+ * The fields the values make visible, depth first: {@link allFields} plus the chosen object's
+ * fields of each choice and every item of each list (at the current counts).
+ */
+export function visibleFields(fields: readonly ArgField[], values: ArgValues): ArgField[] {
+  return fields.flatMap((f): ArgField[] => {
+    switch (f.kind) {
+      case 'object':
+        return [f, ...visibleFields(f.fields, values)];
+      case 'choice':
+        return chosenOption(f, values)?.kind === 'object' && f.object
+          ? [f, ...visibleFields(f.object.fields, values)]
+          : [f];
+      case 'list': {
+        const items = Array.from({ length: itemCount(f, values) }, (_, i) => listItem(f, i));
+        return [f, ...visibleFields(items, values)];
+      }
+      default:
+        return [f];
+    }
+  });
+}
+
 /** Validation messages: per field id, plus messages that belong to no field. */
 export interface ArgErrors {
   readonly fields: Readonly<Record<string, readonly string[]>>;
@@ -394,13 +666,19 @@ export type ValidateResult =
 
 /**
  * Validates `args` with the command's own schema and maps each Zod issue to the field at its path
- * (or to the nearest enclosing field). A missing value reads "Required"; every other message is
- * Zod's own, so the palette, console and scripts report the same rules.
+ * (or to the nearest enclosing field): `route.3.positionMm.x` for an item of a list. A missing value
+ * reads "Required"; every other message is Zod's own, so the palette, console and scripts report the
+ * same rules. `values` (when given) decides which choice objects and list items exist.
  */
-export function validateArgs(schema: z.ZodType, form: ArgForm, args: Record<string, unknown>): ValidateResult {
+export function validateArgs(
+  schema: z.ZodType,
+  form: ArgForm,
+  args: Record<string, unknown>,
+  values: ArgValues = {},
+): ValidateResult {
   const parsed = schema.safeParse(args);
   if (parsed.success) return { ok: true, args: parsed.data };
-  const ids = new Set(allFields(form.fields).map((f) => f.id));
+  const ids = new Set(visibleFields(form.fields, values).map((f) => f.id));
   const fields: Record<string, string[]> = {};
   const formErrors: string[] = [];
   for (const issue of parsed.error.issues) {
@@ -421,10 +699,66 @@ export function validateArgs(schema: z.ZodType, form: ArgForm, args: Record<stri
 function valueAt(value: unknown, path: readonly string[]): unknown {
   let current = value;
   for (const key of path) {
-    if (!isObjectValue(current) || !Object.prototype.hasOwnProperty.call(current, key)) return undefined;
-    current = current[key];
+    if (typeof current !== 'object' || current === null || !Object.prototype.hasOwnProperty.call(current, key)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[key];
   }
   return current;
+}
+
+/** Item `index`'s values (keys `<list>.<index>` and below), re-keyed for index `to`. */
+function itemEntries(list: ListField, values: ArgValues, index: number, to: number): [string, ArgValue][] {
+  const from = `${list.id}.${index}`;
+  const target = `${list.id}.${to}`;
+  return Object.entries(values)
+    .filter(([k]) => k === from || k.startsWith(`${from}.`))
+    .map(([k, v]) => [target + k.slice(from.length), v]);
+}
+
+/** `values` without any item of `list` (count kept). */
+function withoutItems(list: ListField, values: ArgValues): Record<string, ArgValue> {
+  const prefix = `${list.id}.`;
+  return Object.fromEntries(Object.entries(values).filter(([k]) => !k.startsWith(prefix)));
+}
+
+/** Rebuilds a list's items from an index order (`order[i]` is the old index now at `i`). */
+function reorder(list: ListField, values: ArgValues, order: readonly number[]): Record<string, ArgValue> {
+  const out = withoutItems(list, values);
+  order.forEach((from, to) => {
+    for (const [k, v] of itemEntries(list, values, from, to)) out[k] = v;
+  });
+  out[list.id] = order.length;
+  return out;
+}
+
+/** Whether another item may be added (below `maxItems`). */
+export const canAddItem = (list: ListField, values: ArgValues): boolean =>
+  list.maxItems === null || itemCount(list, values) < list.maxItems;
+
+/** Whether an item may be removed (above `minItems`). */
+export const canRemoveItem = (list: ListField, values: ArgValues): boolean => itemCount(list, values) > list.minItems;
+
+/** `values` with a new item at the end of `list`, filled from the item's defaults. */
+export function addListItem(list: ListField, values: ArgValues, context: ArgFormContext): Record<string, ArgValue> {
+  const count = itemCount(list, values);
+  const out: Record<string, ArgValue> = { ...values, [list.id]: count + 1 };
+  fill(listItem(list, count), list.item.defaultValue, context, out);
+  return out;
+}
+
+/** `values` without item `index` of `list`; later items move up one. */
+export function removeListItem(list: ListField, values: ArgValues, index: number): Record<string, ArgValue> {
+  const order = Array.from({ length: itemCount(list, values) }, (_, i) => i).filter((i) => i !== index);
+  return reorder(list, values, order);
+}
+
+/** `values` with item `from` of `list` moved to `to` (the items between shift by one). */
+export function moveListItem(list: ListField, values: ArgValues, from: number, to: number): Record<string, ArgValue> {
+  const order = Array.from({ length: itemCount(list, values) }, (_, i) => i);
+  const [moved] = order.splice(from, 1);
+  order.splice(to, 0, moved);
+  return reorder(list, values, order);
 }
 
 /** Short help for a number field's bounds: "Whole number, 1 to 9". */
@@ -446,4 +780,14 @@ export function numberHint(f: NumberField): string {
 export function scalarHint(f: ScalarField): string {
   const words = f.types.map((t) => ({ boolean: 'true or false', number: 'a number', string: 'text' })[t]);
   return words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')}, or ${words.at(-1)}`;
+}
+
+/** Short help for a list's size: "1 to 1024 waypoints", "At most 4 items", "Any number of items". */
+export function listHint(f: ListField): string {
+  const noun = `${f.itemLabel.toLowerCase()}s`;
+  if (f.maxItems !== null && f.minItems === f.maxItems) return `Exactly ${f.minItems} ${noun}`;
+  if (f.maxItems !== null && f.minItems > 0) return `${f.minItems} to ${f.maxItems} ${noun}`;
+  if (f.maxItems !== null) return `At most ${f.maxItems} ${noun}`;
+  if (f.minItems > 0) return `At least ${f.minItems} ${noun}`;
+  return `Any number of ${noun}`;
 }

@@ -2,9 +2,11 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { splitConsoleLines } from '@controls/commands';
 import { KeybindingService, Session } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
+import { BUILTIN_CATALOG } from '@controls/catalog';
 import {
   type ConsoleTarget,
   describeExecError,
+  expandConsoleArgs,
   formatConsoleScriptError,
   runConsoleQuery,
   runConsoleScript,
@@ -82,6 +84,7 @@ export class DevConsole {
   /** The console target for console-line files: the same `exec` and `hash` the input uses. */
   private readonly target: ConsoleTarget = {
     registry: this.session.registry,
+    world: () => this.session.world(),
     exec: (id, args) => this.session.exec(id, args),
     hash: () => this.session.hashAt(),
     netlistDump: () => this.session.netlistDumpAt(),
@@ -123,7 +126,7 @@ export class DevConsole {
         // A round trip to the sim worker: a placeholder now, the answer's lines when it arrives.
         const query = action.id;
         const id = this.push({ kind: 'output', text: `${query}: computing…` });
-        runConsoleQuery(this.target, query).then(
+        runConsoleQuery(this.target, query, action.args).then(
           (lines) => this.replaceWith(id, lines),
           () =>
             this.replace(id, {
@@ -189,7 +192,14 @@ export class DevConsole {
   }
 
   private exec(source: string, id: string, args: Record<string, unknown>): void {
-    const result = this.session.exec(id, args);
+    // Console shorthand is expanded on the live world as the line runs (ADR 0015): only the
+    // expanded args reach exec and the log; history keeps the line as typed.
+    const expanded = expandConsoleArgs(this.session.world(), BUILTIN_CATALOG, id, args);
+    if (!expanded.ok) {
+      this.push({ kind: 'error', text: expanded.message, source, column: firstColumn(source) });
+      return;
+    }
+    const result = this.session.exec(id, expanded.args);
     if (result.ok) {
       this.push({
         kind: 'output',

@@ -24,7 +24,29 @@ interface Word {
   readonly text: string;
 }
 
-/** Words before the cursor, plus the (possibly empty) word the cursor is in; `null` inside a quote or comment. */
+/**
+ * The end of a JSON word starting at `start` (a `[` or `{`): just past its matching bracket, or
+ * `null` if it isn't closed before the end of `text` (the cursor is inside it).
+ */
+function jsonEnd(text: string, start: number): number | null {
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === '[' || ch === '{') depth++;
+    else if ((ch === ']' || ch === '}') && --depth === 0) return i + 1;
+  }
+  return null;
+}
+
+/**
+ * Words before the cursor, plus the (possibly empty) word the cursor is in; `null` inside a quote,
+ * a JSON word or a comment.
+ */
 function scan(before: string): { words: Word[]; current: Word } | null {
   const words: Word[] = [];
   let i = 0;
@@ -41,6 +63,10 @@ function scan(before: string): { words: Word[]; current: Word } | null {
       while (i < before.length && before[i] !== ch) i += before[i] === '\\' ? 2 : 1;
       if (i >= before.length) return null; // the cursor is inside the quote
       i++;
+    } else if (ch === '[' || ch === '{') {
+      const end = jsonEnd(before, i);
+      if (end === null) return null; // the cursor is inside the JSON word
+      i = end;
     } else {
       while (i < before.length && before[i] !== ' ' && before[i] !== '\t') i++;
     }
@@ -50,7 +76,7 @@ function scan(before: string): { words: Word[]; current: Word } | null {
   const endsInWord = last !== undefined && last.start + last.text.length === before.length;
   if (endsInWord) {
     words.pop();
-    if (last.text.startsWith('"') || last.text.startsWith("'")) return null;
+    if (/^["'[{]/.test(last.text)) return null;
     return { words, current: last };
   }
   return { words, current: { start: before.length, text: '' } };
@@ -103,8 +129,10 @@ export function completeConsoleInput<S>(
   } else if (!rest.some((w) => w.text.startsWith('--'))) {
     field = fields.find((f) => f.position === rest.length); // positional words fill keys in order
   }
-  if (!field || (field.kind !== 'enum' && field.kind !== 'boolean')) return null;
-  return result(field.values.map(String));
+  if (!field || (field.kind !== 'enum' && field.kind !== 'boolean' && field.kind !== 'json')) return null;
+  // A JSON-word field (an array, a nullable object, an object-or-literal union) completes its literal
+  // words and `null`; the JSON itself is typed by hand.
+  return result([...field.values.map(String), ...(field.kind === 'json' && field.nullable ? ['null'] : [])]);
 }
 
 /** Longest common prefix of `items` (non-empty). */

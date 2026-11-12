@@ -27,6 +27,9 @@ function valueLabel(field: ConsoleField): string {
         return field.values.map(String).join('|');
       case 'string':
         return 'text';
+      case 'json':
+        // One JSON word (`[…]`, `{…}`), or one of a union's literal words.
+        return [...field.values.map(String), 'JSON'].join('|');
       default:
         return 'value';
     }

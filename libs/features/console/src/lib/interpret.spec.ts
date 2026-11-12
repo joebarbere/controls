@@ -1,5 +1,6 @@
 import { defineCommand, NoArgs, succeed } from '@controls/commands';
 import { createWorldRegistry, type World } from '@controls/world-model';
+import * as z from 'zod';
 import { isConsoleAvailable } from './availability';
 import { consoleHelp } from './help';
 import { isConsoleWord, resolveConsoleLine } from './interpret';
@@ -24,6 +25,38 @@ describe('resolveConsoleLine', () => {
     expect(resolve('   # just a comment')).toEqual({ kind: 'blank' });
   });
 
+  it('maps JSON words, nullable objects and console shorthand through the shared mapping', () => {
+    const wires = createWorldRegistry().register(
+      defineCommand({
+        id: 'wire.add',
+        title: 'Add wire',
+        category: 'Wiring',
+        args: z.strictObject({
+          route: z.array(z.strictObject({ x: z.int() })),
+          a: z.strictObject({ entity: z.int() }).nullable(),
+        }),
+        undoable: true,
+        run: () => succeed<World>(),
+      }),
+    );
+    expect(resolveConsoleLine(wires, 'wire.add --route [{"x":1}] --a null')).toEqual({
+      kind: 'command',
+      id: 'wire.add',
+      args: { route: [{ x: 1 }], a: null },
+      cheat: false,
+    });
+    expect(resolveConsoleLine(wires, 'wire.add --route auto')).toMatchObject({ kind: 'error', column: 10 });
+    const shorthand = (id: string, path: string) => id === 'wire.add' && path === 'route';
+    expect(resolveConsoleLine(wires, 'wire.add --route auto', shorthand)).toMatchObject({
+      kind: 'command',
+      args: { route: 'auto' },
+    });
+    const help = consoleHelp(wires, 'wire.add');
+    expect(help.ok && help.lines).toEqual(expect.arrayContaining(['Usage: wire.add <route> <a> --a.entity <number>']));
+    expect(help.ok && help.lines.join('\n')).toMatch(/--route\s+JSON; required; or positional #1/);
+    expect(help.ok && help.lines.join('\n')).toMatch(/--a\s+JSON\|null; required; or positional #2/);
+  });
+
   it('reports grammar and mapping errors at their column', () => {
     expect(resolve('entity.place --idd 1')).toEqual({ kind: 'error', message: 'Unknown argument --idd', column: 14 });
     expect(resolve('entity.delete "3')).toMatchObject({ kind: 'error', column: 15 });
@@ -36,8 +69,8 @@ describe('resolveConsoleLine', () => {
     expect(resolve('help entity.place')).toEqual({ kind: 'help', id: 'entity.place' });
     expect(resolve('run')).toEqual({ kind: 'run' });
     expect(resolve('clear')).toEqual({ kind: 'clear' });
-    expect(resolve('world.hash')).toEqual({ kind: 'query', id: 'world.hash' });
-    expect(resolve('netlist.dump')).toEqual({ kind: 'query', id: 'netlist.dump' });
+    expect(resolve('world.hash')).toEqual({ kind: 'query', id: 'world.hash', args: {} });
+    expect(resolve('netlist.dump')).toEqual({ kind: 'query', id: 'netlist.dump', args: {} });
     expect(isConsoleWord(registry, 'netlist.dump')).toBe(true);
     expect(isConsoleWord(registry, 'help')).toBe(true);
     expect(isConsoleWord(registry, 'entity.place')).toBe(false);
@@ -48,7 +81,7 @@ describe('resolveConsoleLine', () => {
     expect(resolve('help --all')).toMatchObject({ kind: 'error', message: 'help takes no flags', column: 6 });
     expect(resolve('clear now')).toMatchObject({ kind: 'error', message: 'clear takes no arguments', column: 7 });
     expect(resolve('world.hash 1')).toMatchObject({ kind: 'error', column: 12 });
-    expect(resolve('netlist.dump --all')).toMatchObject({ kind: 'error', message: 'netlist.dump takes no flags' });
+    expect(resolve('netlist.dump --all')).toMatchObject({ kind: 'error', message: 'netlist.dump takes no arguments' });
     expect(resolve('run scenario.console')).toMatchObject({ kind: 'error', column: 5 });
     expect((resolve('run x') as { message: string }).message).toBe(
       "run takes no path: the game can't read files by path. Type run on its own to pick a file, or drop one on the console",

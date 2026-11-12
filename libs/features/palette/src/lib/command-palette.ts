@@ -11,13 +11,27 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { type AnyCommandDef, SELECTION_ENTITY_ID_KEY } from '@controls/commands';
+import {
+  type AnyCommandDef,
+  SELECTION_CABLE_ID_KEY,
+  SELECTION_CONNECTION_ID_KEY,
+  SELECTION_ENTITY_ID_KEY,
+} from '@controls/commands';
 import { KeybindingService, Session } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
 import { MAX_PALETTE_RECENTS } from '@controls/save-format';
 import { Button, Dialog } from '@controls/ui';
 import type { World } from '@controls/world-model';
-import { type ArgErrors, type ArgForm, argsFromValues, buildArgForm, initialValues, validateArgs } from './arg-form';
+import {
+  type ArgErrors,
+  type ArgForm,
+  type ArgFormContext,
+  argsFromValues,
+  type ArgValues,
+  buildArgForm,
+  initialValues,
+  validateArgs,
+} from './arg-form';
 import { type EntityChoice, PaletteArgForm } from './palette-arg-form';
 import { type PaletteItem, paletteItems } from './palette-items';
 
@@ -65,7 +79,7 @@ export class CommandPalette {
   protected readonly view = signal<View>({ kind: 'list' });
   protected readonly query = signal('');
   protected readonly active = signal(0);
-  protected readonly values = signal<Readonly<Record<string, string | boolean>>>({});
+  protected readonly values = signal<ArgValues>({});
   /** Set by the first Run, so errors appear (and then update live) only after an attempt. */
   private readonly attempted = signal(false);
   /** The refusal of the last run, shown on the form it came from. */
@@ -93,6 +107,22 @@ export class CommandPalette {
     const id = this.session.contextKeys()[SELECTION_ENTITY_ID_KEY];
     if (typeof id !== 'number') return null;
     return this.entities().find((e) => e.id === id) ?? null;
+  });
+  /**
+   * The selection reference fields are prefilled from: the `selection.*` context keys (ADR 0015).
+   * Connection and cable selection keys may not be published yet; a missing key prefills nothing.
+   */
+  protected readonly selection = computed<ArgFormContext>(() => {
+    const keys = this.session.contextKeys();
+    const id = (key: string) => {
+      const value = keys[key];
+      return typeof value === 'number' ? value : null;
+    };
+    return {
+      selectedEntityId: id(SELECTION_ENTITY_ID_KEY),
+      selectedConnectionId: id(SELECTION_CONNECTION_ID_KEY),
+      selectedCableId: id(SELECTION_CABLE_ID_KEY),
+    };
   });
   protected readonly entities = computed<EntityChoice[]>(() =>
     this.session.world().entities.map((e) => ({ id: e.id, label: e.ref.id })),
@@ -211,7 +241,8 @@ export class CommandPalette {
   }
 
   private validate(view: { def: Command; form: ArgForm }): [unknown, ArgErrors] {
-    const result = validateArgs(view.def.args, view.form, argsFromValues(view.form, this.values()));
+    const values = this.values();
+    const result = validateArgs(view.def.args, view.form, argsFromValues(view.form, values), values);
     return result.ok ? [result.args, NO_ERRORS] : [undefined, result.errors];
   }
 
@@ -270,8 +301,7 @@ export class CommandPalette {
 
   private toForm(def: Command, form: ArgForm, reset = true): void {
     if (reset) {
-      const selected = this.session.contextKeys()[SELECTION_ENTITY_ID_KEY];
-      this.values.set(initialValues(form, { selectedEntityId: typeof selected === 'number' ? selected : null }));
+      this.values.set(initialValues(form, this.selection()));
       this.attempted.set(false);
     }
     this.execError.set(null);

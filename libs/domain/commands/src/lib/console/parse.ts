@@ -9,9 +9,10 @@
  *   command    := id ( ws+ ( flag | word ) )*
  *   id         := segment ( '.' segment )*          segment := [a-z][a-zA-Z0-9]*
  *   flag       := '--' name ( ws+ word )?           name := ident ( '.' ident )*, ident := [A-Za-z_][A-Za-z0-9_]*
- *   word       := bare | quoted
- *   bare       := any run of non-space characters not starting with '"', "'", '#' or '--'
+ *   word       := bare | quoted | json
+ *   bare       := any run of non-space characters not starting with '"', "'", '#', '[', '{' or '--'
  *   quoted     := '...' or "..." with \\ \' \" escapes, followed by a space or the end
+ *   json       := a JSON array or object, '[' or '{' to its matching bracket, followed by a space or the end
  *   comment    := '#' to the end of the line (only where a word could start)
  *
  * - A flag takes the next word as its value unless that word is another flag or the line ends; a
@@ -19,6 +20,11 @@
  * - Words are typed later, against the schema (`consoleArgs`): `12` is a number for a number field
  *   and the string "12" for a string field. Quoted words are always strings.
  * - Dotted flag names address nested objects: `--positionMm.x 100`.
+ * - A JSON word (ADR 0008 amendment, ADR 0015) gives an array or a whole object in one word:
+ *   `--route [{"kind":"free",...}]`. It is checked here (well-formed, at most
+ *   {@link MAX_CONSOLE_JSON_DEPTH} deep, no `__proto__` key) and typed against the schema later.
+ *   Strings inside it may hold spaces and `#`; a word that only starts with a bracket is JSON, so a
+ *   text value like `[A]` must be quoted.
  */
 
 /** One argument word, before it is typed against a schema. */
@@ -29,6 +35,11 @@ export interface ConsoleWord {
   readonly quoted: boolean;
   /** 1-based column of the word's first character (its opening quote, if quoted). */
   readonly column: number;
+  /**
+   * Set (only) on a JSON word, an array or object literal such as `[1,2]`. `text` is the JSON as
+   * written: well-formed, at most {@link MAX_CONSOLE_JSON_DEPTH} deep, without a `__proto__` key.
+   */
+  readonly json?: true;
 }
 
 export interface ConsoleFlag {
@@ -60,8 +71,23 @@ export type ConsoleParseResult =
   | { readonly ok: true; readonly line: ConsoleCommandLine | null }
   | { readonly ok: false; readonly error: ConsoleError };
 
-/** Longest console line accepted (characters). */
-export const MAX_CONSOLE_LINE_LENGTH = 4096;
+/**
+ * Longest console line accepted (UTF-16 code units). Sized to admit the largest legal `wire.add` and
+ * `wire.pull` of ADR 0015 (a route of `MAX_ROUTE_WAYPOINTS` = 1 024 waypoints, every id, string and
+ * number at its schema maximum) as `formatConsoleLine` writes them. The largest is `wire.pull` at
+ * 348 617 characters (a bore waypoint with a 64-character fixture id and a tool ref is about 340
+ * characters, × 1 024); `max-line.spec.ts` builds both and checks they round-trip. 384 KiB leaves
+ * about 13 % for spacing a person (or a script) adds inside JSON words. Lines longer than the
+ * settings history cap (2 000) still run but are not kept in `console.history`.
+ */
+export const MAX_CONSOLE_LINE_LENGTH = 393_216;
+
+/**
+ * Deepest nesting a JSON word may have (`[]` and `{}` are 1): the bound the replay log puts on
+ * command args (`MAX_JSON_VALUE_DEPTH` in `@controls/save-format`), so a console line can't build
+ * args a log would refuse for their depth.
+ */
+export const MAX_CONSOLE_JSON_DEPTH = 32;
 
 const ID = /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/;
 const FLAG_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
@@ -112,6 +138,61 @@ function readQuoted(source: string, start: number): { word: RawWord; end: number
   return { word: { text, quoted: true, column: start + 1, flag: false }, end };
 }
 
+/**
+ * Reads a JSON word starting at `start` (a `[` or `{`) up to its matching bracket, skipping JSON
+ * strings, so spaces and `#` inside strings (or between tokens) belong to the word.
+ */
+function readJson(source: string, start: number): { word: RawWord; end: number } {
+  let depth = 0;
+  let maxDepth = 0;
+  let inString = false;
+  let i = start;
+  for (; i < source.length; i++) {
+    const ch = source[i];
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      inString = true;
+    } else if (ch === '[' || ch === '{') {
+      depth++;
+      maxDepth = Math.max(maxDepth, depth);
+    } else if (ch === ']' || ch === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  if (i >= source.length) throw new ConsoleSyntaxError('Unterminated JSON value (no closing bracket)', start + 1);
+  const end = i + 1;
+  if (end < source.length && !isSpace(source[end])) {
+    throw new ConsoleSyntaxError('Expected a space after the JSON value', end + 1);
+  }
+  if (maxDepth > MAX_CONSOLE_JSON_DEPTH) {
+    throw new ConsoleSyntaxError(`JSON value is nested deeper than ${MAX_CONSOLE_JSON_DEPTH} levels`, start + 1);
+  }
+  const text = source.slice(start, end);
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new ConsoleSyntaxError('Malformed JSON value', start + 1);
+  }
+  if (hasProtoKey(value)) throw new ConsoleSyntaxError('JSON value has a "__proto__" key', start + 1);
+  return { word: { text, quoted: false, column: start + 1, flag: false, json: true }, end };
+}
+
+/** Whether a parsed JSON value has an own `__proto__` key anywhere (iterative; depth is already bounded). */
+function hasProtoKey(value: unknown): boolean {
+  const stack: unknown[] = [value];
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (typeof item !== 'object' || item === null) continue;
+    if (!Array.isArray(item) && Object.prototype.hasOwnProperty.call(item, '__proto__')) return true;
+    for (const child of Object.values(item)) stack.push(child);
+  }
+  return false;
+}
+
 function tokenise(source: string): RawWord[] {
   const words: RawWord[] = [];
   let i = 0;
@@ -124,6 +205,12 @@ function tokenise(source: string): RawWord[] {
     if (ch === '#') break;
     if (ch === '"' || ch === "'") {
       const { word, end } = readQuoted(source, i);
+      words.push(word);
+      i = end;
+      continue;
+    }
+    if (ch === '[' || ch === '{') {
+      const { word, end } = readJson(source, i);
       words.push(word);
       i = end;
       continue;
@@ -199,7 +286,8 @@ export function parseConsoleLine(source: string): ConsoleParseResult {
 }
 
 function strip(word: RawWord): ConsoleWord {
-  return { text: word.text, quoted: word.quoted, column: word.column };
+  const plain = { text: word.text, quoted: word.quoted, column: word.column };
+  return word.json ? { ...plain, json: true } : plain;
 }
 
 /** One line of a console-line file, with its 1-based line number. */

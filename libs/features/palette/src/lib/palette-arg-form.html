@@ -16,6 +16,9 @@
     }
   </datalist>
   }
+  <p class="ctl-visually-hidden" role="status" aria-live="polite" data-testid="palette-form-status">
+    {{ announcement() }}
+  </p>
   <div class="actions">
     <button ctlButton="ghost" type="button" (click)="goBack.emit()">Back</button>
     <button ctlButton="primary" type="submit">Run</button>
@@ -36,6 +39,91 @@
     } @if (!isOptionalObject(field) || checked(field)) {
     <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: field.fields }" />
     }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </fieldset>
+  } @else if (field.kind === 'choice') {
+  <fieldset class="group" [attr.aria-describedby]="describedBy(field)" [attr.data-field]="field.id">
+    <legend>{{ field.label }}</legend>
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    }
+    <div class="choices">
+      @for (option of field.options; track $index) {
+      <label class="check">
+        <input
+          type="radio"
+          [id]="domId(field, '-option-' + $index)"
+          [name]="domId(field)"
+          [value]="$index"
+          [checked]="isChosen(field, $index)"
+          [attr.aria-invalid]="errorsOf(field).length > 0"
+          (change)="choose(field, $index)"
+        />
+        {{ option.label }}
+      </label>
+      }
+    </div>
+    @if (chosenObject(field); as object) {
+    <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: object.fields }" />
+    }
+    <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
+  </fieldset>
+  } @else if (field.kind === 'list') {
+  <fieldset class="group" [attr.aria-describedby]="describedBy(field)" [attr.data-field]="field.id">
+    <legend>{{ field.label }}</legend>
+    @if (hintOf(field); as hint) {
+    <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
+    } @for (item of items(field); track $index) {
+    <fieldset class="item" [id]="domId(item, '-item')">
+      <legend>{{ itemLegend(field, $index) }}</legend>
+      @if (item.kind === 'object') {
+      <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: item.fields }" />
+      <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: item }" />
+      } @else {
+      <ng-container *ngTemplateOutlet="fieldList; context: { $implicit: [item] }" />
+      }
+      <div class="item-actions">
+        <button
+          ctlButton="ghost"
+          type="button"
+          [id]="domId(item, '-up')"
+          [attr.aria-disabled]="$first"
+          (click)="moveItem(field, $index, -1)"
+        >
+          Move up
+        </button>
+        <button
+          ctlButton="ghost"
+          type="button"
+          [id]="domId(item, '-down')"
+          [attr.aria-disabled]="isLast(field, $index)"
+          (click)="moveItem(field, $index, 1)"
+        >
+          Move down
+        </button>
+        <button
+          ctlButton="ghost"
+          type="button"
+          [id]="domId(item, '-remove')"
+          [attr.aria-disabled]="!canRemove(field)"
+          (click)="removeItem(field, $index)"
+        >
+          Remove
+        </button>
+      </div>
+    </fieldset>
+    }
+    <div class="item-actions">
+      <button
+        ctlButton
+        type="button"
+        [id]="domId(field, '-add')"
+        [attr.aria-disabled]="!canAdd(field)"
+        (click)="addItem(field)"
+      >
+        Add {{ field.itemLabel.toLowerCase() }}
+      </button>
+    </div>
     <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />
   </fieldset>
   } @else if (field.kind === 'boolean') {
@@ -87,7 +175,7 @@
       [value]="text(field)"
       [attr.inputmode]="field.kind === 'number' ? inputMode(field) : null"
       [attr.list]="field.kind === 'number' && field.ref === 'entity' && entities().length > 0 ? prefix + '-entities' : null"
-      [attr.aria-required]="field.required"
+      [attr.aria-required]="isRequiredText(field)"
       [attr.aria-invalid]="errorsOf(field).length > 0"
       [attr.aria-describedby]="describedBy(field)"
       (input)="onText(field, $event)"

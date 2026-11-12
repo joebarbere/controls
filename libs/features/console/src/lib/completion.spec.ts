@@ -69,6 +69,44 @@ describe('completeConsoleInput', () => {
   });
 });
 
+describe('completing JSON-word arguments (ADR 0008 amendment)', () => {
+  const wires = new CommandRegistry<number>().register(
+    defineCommand({
+      id: 'wire.add',
+      title: 'Add wire',
+      category: 'Wiring',
+      args: z.strictObject({
+        route: z.array(z.strictObject({ x: z.int() })),
+        a: z
+          .strictObject({
+            entity: z.int(),
+            termination: z.union([z.literal('auto'), z.strictObject({ m: z.string() })]),
+          })
+          .nullable(),
+      }),
+      undoable: true,
+      run: () => succeed<number>(),
+    }),
+  );
+  const on = (text: string) => completeConsoleInput(wires, text, text.length);
+
+  it('offers flags inside nullable objects and unions, and their literal words and null', () => {
+    expect(on('wire.add --a')?.candidates).toEqual(['--a', '--a.entity', '--a.termination', '--a.termination.m']);
+    expect(on('wire.add --a ')?.candidates).toEqual(['null']);
+    expect(on('wire.add --a.termination a')?.candidates).toEqual(['auto']);
+    expect(on('wire.add --route ')).toBeNull(); // a JSON list is typed by hand
+  });
+
+  it('skips a JSON word with spaces in its strings, and completes nothing inside one', () => {
+    expect(on('wire.add --route [{"x":1, "y":"a b"}] --a.ter')?.candidates).toEqual([
+      '--a.termination',
+      '--a.termination.m',
+    ]);
+    expect(on('wire.add --route [{"x":1, "y":"a b')).toBeNull();
+    expect(on('wire.add --route [1]')).toBeNull();
+  });
+});
+
 describe('TabCompleter', () => {
   it('inserts a unique candidate with a space, or extends to the common prefix', () => {
     const tab = new TabCompleter(registry);

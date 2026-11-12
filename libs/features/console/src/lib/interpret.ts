@@ -1,5 +1,5 @@
 import { type CommandRegistry, parseConsoleCommand, parseConsoleLine } from '@controls/commands';
-import { CONSOLE_QUERIES } from '@controls/scripting-api';
+import { CONSOLE_QUERIES, consoleQueryArgs, consoleShorthand } from '@controls/scripting-api';
 
 /*
  * What one console line asks for (ADR 0008). The grammar, the mapping onto a command's args and the
@@ -29,7 +29,7 @@ export type ConsoleAction =
   | { readonly kind: 'help'; readonly id: string | null }
   | { readonly kind: 'run' }
   | { readonly kind: 'clear' }
-  | { readonly kind: 'query'; readonly id: string }
+  | { readonly kind: 'query'; readonly id: string; readonly args: Record<string, unknown> }
   | {
       readonly kind: 'command';
       readonly id: string;
@@ -49,15 +49,24 @@ export function isConsoleWord<S>(registry: CommandRegistry<S>, id: string): bool
 
 /**
  * Resolves one console line against `registry` without running anything. Parse and mapping errors
- * carry the 1-based column of the offending word.
+ * carry the 1-based column of the offending word. `shorthand` marks console shorthand argument
+ * paths (default: the shared `CONSOLE_EXPANDERS`), whose words reach the expander untyped.
  */
-export function resolveConsoleLine<S>(registry: CommandRegistry<S>, source: string): ConsoleAction {
+export function resolveConsoleLine<S>(
+  registry: CommandRegistry<S>,
+  source: string,
+  shorthand: (id: string, path: string) => boolean = consoleShorthand(),
+): ConsoleAction {
   const lexed = parseConsoleLine(source);
   if (!lexed.ok) return { kind: 'error', ...lexed.error };
   const line = lexed.line;
   if (line === null) return { kind: 'blank' };
 
-  if (isConsoleWord(registry, line.id)) {
+  if (!isVerb(line.id) && isConsoleWord(registry, line.id)) {
+    const query = consoleQueryArgs(line); // queries map their args like commands (ADR 0015)
+    return query.ok ? { kind: 'query', id: line.id, args: query.args } : { kind: 'error', ...query.error };
+  }
+  if (isVerb(line.id)) {
     const [first, second] = line.positionals;
     const flag = line.flags[0];
     if (flag) return { kind: 'error', message: `${line.id} takes no flags`, column: flag.column };
@@ -76,12 +85,10 @@ export function resolveConsoleLine<S>(registry: CommandRegistry<S>, source: stri
       }
       return { kind: 'error', message: `${line.id} takes no arguments`, column: first.column };
     }
-    if (line.id === 'run') return { kind: 'run' };
-    if (line.id === 'clear') return { kind: 'clear' };
-    return { kind: 'query', id: line.id };
+    return line.id === 'run' ? { kind: 'run' } : { kind: 'clear' };
   }
 
-  const parsed = parseConsoleCommand(registry, source);
+  const parsed = parseConsoleCommand(registry, source, shorthand);
   if (!parsed.ok) return { kind: 'error', ...parsed.error };
   // A line that lexed as a command always maps to one (or to an error above).
   const command = parsed.command as { readonly id: string; readonly args: Record<string, unknown> };
