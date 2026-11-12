@@ -31,7 +31,7 @@ One id namespace covers the whole catalogue (ADR 0015); the prefix says the fami
 | device    | anything else        | `content/devices/`     | Placed devices, enclosures, leads; conductors use `conductor.*` and only they      |
 | cable     | `cable.*`            | `content/cables/`      | From F3.1 part 2: an assembly of pinned conductor entries in a jacket              |
 | tool      | `tool.*`             | `content/tools/`       | From F3.4 part 1: capabilities, holes, dies, torque range, bore size               |
-| accessory | `ferrule.*`, `lug.*` | `content/accessories/` | From F3.3 part 1: ferrules and ring or fork lugs, with the die ids that crimp them |
+| accessory | `ferrule.*`, `lug.*` | `content/accessories/` | From F3.1 part 2: ferrules and ring or fork lugs, with the die ids that crimp them |
 | (table)   | —                    | `content/tables/`      | Pinned by `{ table, version, key }`; not entries                                   |
 
 `prop.*` is reserved for the built-in props. A new `content/` directory needs a row in `MIRRORS` (or `UNMIRRORED`) in `libs/domain/catalog/src/lib/content-mirrors.spec.ts`, a `.prettierignore` line for its generated mirror, and its documents passed to `parseCatalog` in `builtin.ts`.
@@ -55,6 +55,24 @@ A conductor is a `conductor.*` device entry of model kind `conductor` (category 
 
 Never store a diameter, an area, a resistance or an ampacity: they are derived (`conductorPhysics`, `conductorResistanceOhm`, `derivedAmpacityA`). Aluminium starts at 12 AWG (Art. 310.3(A), by number). A spec sheet with an ampacity column is an NEC table: find one without (see the [content caveats](../caveats/content.md)). Add the entry's derived values to the reviewer's list (`conductors.spec.ts` and `thermal.spec.ts` compute them).
 
+## Cables
+
+A cable is a `cable.*` entry in `content/cables/` that pins its conductor entries; it never inlines conductor data.
+
+- **Author the conductors first.** Every member is a `conductor.*` device entry: the insulated conductors from the cable's own construction (NM-B's are THHN-type, so they pin `thhnThwn2` with the THHN walls of the size), the bare EGC as its own entry with `insulation: null`, null thicknesses and colours `[bare]`. The member's `colour` must be one its entry is made in, and `insulated` must match the entry.
+- **Order is save format** (`ConnectionV3.cable.conductor`): ungrounded first (black, then red), then the grounded (white), then the EGC. `index` equals the position.
+- **Jacket:** pin the `nmbJacket` insulation row; the colour, wall and outer size are product data. A flat cable stores `heightMm` (minor) and `widthMm` (major); a round one stores its diameter in both. `cables.spec.ts` checks the size is at least the conductors' geometric minimum and at most 20 % above it.
+- **No ampacity, anywhere.** NM-B's 60 °C limit (Art. 334.80, by number) is P4's rule; derived ampacity uses `NM_CABLE_AMPACITY_TEMP_K` when P4 asks.
+- **Cover** `conductors` (or `conductors.<index>`) and each `jacket.<field>`. Add the per-metre resistance of each new conductor to `cables.spec.ts` with its hand calculation.
+
+## Accessories
+
+Ferrules (`ferrule.*`, kind `ferrule`) and insulated ring and fork lugs (`lug.*`, kinds `ringLug`, `forkLug`) in `content/accessories/`.
+
+- `dies` lists the crimper die ids that crimp it properly; any other die is an under-crimp (ADR 0018 §4.3). Lugs use the colour-code ids `red`, `blue`, `yellow`, the dies of `tool.veltmark-cr-2210`; ferrules use `square` (a ferrule crimper is still to come, F3.4 follow-up).
+- `awgRange` and `stranding` are what the accessory fits (`wrong-accessory` otherwise); ferrules are stranded only. `barrelLengthMm` is what the strip length must match; `studDiameterMm` is a lug's screw size (`null` for a ferrule), computed for Unified numbered sizes as (0.060 + 0.013 N) in.
+- **Twist-on wire nuts are not accessories.** ADR 0018 §4.4 makes them `splice.twistOn` devices with a `twistOn` terminal method whose `combination` bounds (conductor count, AWG range, total `areaUm2`) are paraphrased from public packaging data under a fictional brand, never a reproduced chart. They arrive with F3.3 part 1, which adds the fields.
+
 ## Termination specs
 
 - A terminal's `methods` is empty for a clip-only terminal. Give a terminal methods only where a conductor really lands on that product.
@@ -77,6 +95,7 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 
 | Brand          | Makes                                             |
 | -------------- | ------------------------------------------------- |
+| -------------- | ------------------------------------------------  |
 | Brindlecore    | Bench DC supply                                   |
 | Calderyn       | Torque screwdrivers                               |
 | Emberlyn       | Cartridge fuse                                    |
@@ -90,7 +109,9 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Quorvale       | Aluminium building wire (XHHW-2)                  |
 | Railwick       | DIN-rail power supply                             |
 | Saltmere       | Circuit breaker                                   |
+| Sorrelby       | NM-B cable and its conductors                     |
 | Tallowmere     | Copper building wire (THHN/THWN-2) and MTW        |
 | Tessaline      | Toggle switch                                     |
 | Testbrand      | Test-only fixtures in specs, never in `content/`  |
+| Thimbleby      | Ferrules and insulated ring and fork lugs         |
 | Veltmark       | Hand tools (strippers, cutters, drivers, crimper) |

@@ -1,0 +1,84 @@
+{
+  "id": "conductor.sorrelby-nm-10-solid",
+  "version": 1,
+  "title": "10 AWG solid copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-10S",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 10,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.508,
+    "jacketThicknessMm": 0.102,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, solid copper at 14 to 10 AWG, with a total wall of about 24 mil at 10 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (20 mil PVC under 4 mil nylon, 0.508 mm and 0.102 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": ["conductor.colours"]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

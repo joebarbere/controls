@@ -156,7 +156,7 @@ Owner `content-designer`, with `sim-engine-engineer` for the `conductor` netlist
 - [x] **Part 1:** a `conductor` connection kind in `MODEL_KINDS` (params: area from the AWG formula, strand count and lay factor, material ref, insulation ref, insulation thickness, outer diameter; sim keys reserved for F3.6, declared now so they freeze with v3); THHN/THWN-2 (14 AWG–4/0, solid and stranded where made), MTW (18–10 AWG) and XHHW-2 aluminium (two sizes); each entry lists its product colours from the colour table (`RegionProfile.conductorColours` holds the region's rules over those ids for P4, not the products; ADR 0015). _Done (PR 9), pending `electrical-realism-reviewer` sign-off:_ params are `{ layFactor }` only (area, diameter and the material and insulation data come from the gauge table and the pinned rows; the outer diameter is derived); `ConductorSpec.jacketThicknessMm` holds THHN's nylon layer; 21 entries (Tallowmere THHN/THWN-2 14 AWG–4/0, solid at 14–10 AWG; Tallowmere MTW 18–10 AWG; Quorvale aluminium XHHW-2 4 AWG and 4/0). The netlist model is one branch, R_cond at T₀ plus two contact terms that are ideal until F3.3 part 1.
 - [x] **Resistance is derived, never tabulated:** R = ρ₀ · L · k_lay / A · (1 + α(T − T₀)) (`conductorResistanceOhm`, `+ − × ÷` only). Hand-calculated goldens for 18, 14, 12, 4 and 4/0 AWG, copper and aluminium, within 0.5 %. Properties: R strictly decreases with area, scales linearly with length, Al/Cu ratio = ρ_Al/ρ_Cu. _Done (PR 9):_ `catalog/src/lib/conductor.spec.ts`; the 30 m 14 AWG unit golden runs through the netlist and the DC solver in `sim-core/src/lib/netlist/conductor.spec.ts`.
 - [x] **`ampacityA` is derived (D6)**, with a self-consistency test and a cited cross-check band per insulation type. No NEC 310.16 value in content, code, tests or docs. _Done (PR 9), pending `electrical-realism-reviewer` sign-off:_ `derivedAmpacityA` in `sim-core/src/lib/thermal/` per ADR 0018 §9 (free air, 30 °C, one surface iteration, radiation on); self-consistency by integration, a ±20 % cross-check per insulation type against an independent Churchill–Chu plus radiation balance (worst 4.9 %) and the reviewer's 14 AWG and 4/0 THHN figures; the NM 60 °C call is a separate constant.
-- [ ] **Part 2:** NM-B assemblies (14/2, 14/3, 12/2, 12/3, 10/2, 10/3, 8/3, 6/3 with ground; the set follows public product lines, under a fictional brand) as `cable` entries with their conductor lists; the bare EGC is `insulated: false`.
+- [x] **Part 2:** NM-B assemblies (14/2, 14/3, 12/2, 12/3, 10/2, 10/3, 8/3, 6/3 with ground; the set follows public product lines, under a fictional brand) as `cable` entries with their conductor lists; the bare EGC is `insulated: false`. _Done (PR 10), pending `electrical-realism-reviewer` sign-off:_ eight Sorrelby NM-B cables pinning eight new conductor entries (THHN-type NM conductors 14–10 AWG solid, 8 and 6 AWG 7-strand; bare solid EGCs 14, 12 and 10 AWG, 10 AWG in 8/3 and 6/3), product data from one maker's NM-B sheet with no ampacity column (the jacket wall game-design); no ampacity stored. With it, the termination accessories of F3.3's content half: five Thimbleby insulated ferrules (18–10 AWG, die `square`, no ferrule crimper yet) and seven insulated ring and fork lugs (dies `red`, `blue`, `yellow`, the F3.4 part 1 crimper's). Wire nuts wait for F3.3 part 1 (a `splice.twistOn` device with `combination` bounds, ADR 0018 §4.4, not an accessory). The plan's "aluminium" in F3.1 part 2 is part 1's two XHHW-2 sizes; no aluminium NM-B (the public copper product line followed has none).
 - [ ] The test lead is unchanged and still connects; `bench-lamp.console` reaches its (v3-repinned) hashes.
 - [x] A `topologyHash` pin for the `conductor` kind (`hash.spec.ts`), no `CNT` encoding version bump. _Done (PR 9):_ no existing pin moved.
 
@@ -281,24 +281,24 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 
 ## Status
 
-| Feature | Description                                              | Status              |
-| ------- | -------------------------------------------------------- | ------------------- |
-| —       | Kickoff: `content-designer`, decisions, gates, guard e2e | ✅ Done             |
-| —       | Replay-log checkpointing                                 | ✅ Done             |
-| —       | ADR 0015 world v3 and wire contract (agent team)         | ✅ Accepted         |
-| —       | Palette and console argument forms (PR 5a)               | ✅ Done             |
-| —       | Catalogue format v2 + `catalogVersion` 2                 | ✅ Done             |
-| —       | World document v3 + migration                            | ✅ Done             |
-| —       | World v3 commands                                        | ✅ Done             |
-| F3.1    | Conductor catalogue (parts 1–2)                          | 🟡 Part 1 done      |
-| F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started      |
-| F3.3    | Terminations (parts 1–2)                                 | ⬜ Not started      |
-| F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🚧 Part 1 in review |
-| F3.5    | Enclosures and mounting (parts 1–2)                      | ⬜ Not started      |
-| F3.6    | Thermal, degradation, readouts (parts 1–3)               | ⬜ Not started      |
-| —       | Frame-time probe (500 devices with wires)                | ⬜ Not started      |
-| —       | Phase-acceptance scenarios and E2E                       | ⬜ Not started      |
-| —       | v0.4.0 release                                           | ⬜ Not started      |
+| Feature | Description                                              | Status                           |
+| ------- | -------------------------------------------------------- | -------------------------------- |
+| —       | Kickoff: `content-designer`, decisions, gates, guard e2e | ✅ Done                          |
+| —       | Replay-log checkpointing                                 | ✅ Done                          |
+| —       | ADR 0015 world v3 and wire contract (agent team)         | ✅ Accepted                      |
+| —       | Palette and console argument forms (PR 5a)               | ✅ Done                          |
+| —       | Catalogue format v2 + `catalogVersion` 2                 | ✅ Done                          |
+| —       | World document v3 + migration                            | ✅ Done                          |
+| —       | World v3 commands                                        | ✅ Done                          |
+| F3.1    | Conductor catalogue (parts 1–2)                          | 🟡 Part 1 done, part 2 in review |
+| F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started                   |
+| F3.3    | Terminations (parts 1–2)                                 | ⬜ Not started                   |
+| F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🚧 Part 1 in review              |
+| F3.5    | Enclosures and mounting (parts 1–2)                      | ⬜ Not started                   |
+| F3.6    | Thermal, degradation, readouts (parts 1–3)               | ⬜ Not started                   |
+| —       | Frame-time probe (500 devices with wires)                | ⬜ Not started                   |
+| —       | Phase-acceptance scenarios and E2E                       | ⬜ Not started                   |
+| —       | v0.4.0 release                                           | ⬜ Not started                   |
 
 ## Open follow-ups
 

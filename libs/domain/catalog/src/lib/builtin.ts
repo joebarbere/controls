@@ -1,3 +1,5 @@
+import { BUILTIN_ACCESSORY_DOCUMENTS } from './builtin-accessories.generated';
+import { BUILTIN_CABLE_DOCUMENTS } from './builtin-cables.generated';
 import { BUILTIN_DEVICE_DOCUMENTS } from './builtin-devices.generated';
 import { BUILTIN_TABLE_DOCUMENTS } from './builtin-tables.generated';
 import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
@@ -5,11 +7,11 @@ import { type Catalog, catalogOrThrow } from './catalog';
 
 /*
  * The catalogue built into the game (plan P2 decision D4, P3 D3): `content/devices/*.json`,
- * `content/tables/*.json` and `content/tools/*.json` (F3.4 part 1), mirrored into
- * `builtin-*.generated.ts` so every domain lib, the game and `sim-cli` resolve refs the same way without reading files (domain code can't import `content/`). The
- * JSON files are authoritative; `content-mirrors.spec.ts` fails when a mirror is stale (regenerate with
- * `pnpm nx test catalog -u`). Cables and accessories join as their first entries land (F3.1 part 2,
- * F3.3 part 1), each with its own mirror.
+ * `content/tables/*.json`, `content/tools/*.json` (F3.4 part 1), `content/cables/*.json` and
+ * `content/accessories/*.json` (F3.1 part 2), mirrored into `builtin-*.generated.ts` so every domain
+ * lib, the game and `sim-cli` resolve refs the same way without reading files (domain code can't
+ * import `content/`). The JSON files are authoritative; `content-mirrors.spec.ts` fails when a mirror
+ * is stale (regenerate with `pnpm nx test catalog -u`).
  */
 
 /**
@@ -25,5 +27,7 @@ export const CATALOG_VERSION = 2;
 export const BUILTIN_CATALOG: Catalog = catalogOrThrow(CATALOG_VERSION, {
   devices: BUILTIN_DEVICE_DOCUMENTS,
   tools: BUILTIN_TOOL_DOCUMENTS,
+  cables: BUILTIN_CABLE_DOCUMENTS,
+  accessories: BUILTIN_ACCESSORY_DOCUMENTS,
   tables: BUILTIN_TABLE_DOCUMENTS,
 });

@@ -248,13 +248,14 @@ let cableResolver: Resolver | null = null;
 let cableBus: ReturnType<CableAddBench['bus']> | null = null;
 
 /**
- * F3.4 part 1's single-command gate, on a **bench-only synthetic assembly** (no real cable exists
- * before F3.1 part 2): one `cable.add` of a 16-conductor assembly (`MAX` conductors an assembly may
- * have, `CableDefinition`) between two boxes beside the 2,000-node plant, then the netlist recompile and
- * solve that follow it. `cable.add` lands no terminations (ADR 0015: a cable's conductors are free at
- * its entries until `wire.land`), so "auto terminations" don't apply to it; its new conductors are
- * free-ended, so the recompile records 16 absent connections and re-solves the plant. Replace the
- * synthetic assembly with the largest real one when F3.1 part 2 lands.
+ * F3.4 part 1's single-command gate, on real content since F3.1 part 2: one `cable.add` of the largest
+ * real assembly the real cutter cuts (NM-B 8/3 with ground, four conductors; `cable-add.ts` says why
+ * not 6/3) beside the 2,000-node plant, free-ended (no real enclosure before F3.5 part 1), then the
+ * netlist recompile and solve that follow it. `cable.add` lands no terminations (ADR 0015: a cable's
+ * conductors are free until `wire.land`), so "auto terminations" don't apply to it; its new conductors
+ * are free-ended, so the recompile records four absent connections and re-solves the plant. Before
+ * F3.1 part 2 it ran a bench-only 16-conductor synthetic assembly (the format's maximum) on the TEST-ONLY
+ * catalogue; the budget is unchanged.
  */
 export const CABLE_ADD_CASE: BenchCase = {
   name: 'cable-add-worst-command',

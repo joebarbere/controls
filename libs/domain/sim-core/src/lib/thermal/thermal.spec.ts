@@ -225,7 +225,8 @@ describe('derivedAmpacityA (D6, ADR 0018 §9): free air, 30 °C ambient, single 
       return Math.sqrt(q / conductorResistanceOhm(physics, 1000, tc));
     };
     const worst: Record<string, number> = {};
-    for (const device of CONDUCTORS) {
+    // Insulated entries only: a bare conductor (NM-B's EGC) has no insulation row to group or rate it by.
+    for (const device of CONDUCTORS.filter((d) => d.conductor?.insulation !== null)) {
       const physics = physicsOf(device.id);
       const derived = derivedAmpacityA(conductorThermal(physics), { ratingTempK: T90, ambientK: T30 });
       const check = independent(physics, T90, T30);

@@ -325,12 +325,12 @@ describe('the shipped bench cases', () => {
     }
   });
 
-  it('gate the worst single command at a tenth of WATCHDOG_MS: one cable.add of the 16-conductor bench assembly', () => {
+  it('gate the worst single command at a tenth of WATCHDOG_MS: one cable.add of the largest real assembly the cutter cuts (NM-B 8/3)', () => {
     expect(CABLE_ADD_BUDGET_MS).toBe(WATCHDOG_MS / 10);
     const gate = BENCH_CASES.find((c) => c.name === 'cable-add-worst-command');
     expect(gate).toMatchObject({ budgetMs: CABLE_ADD_BUDGET_MS });
     expect(gate?.calibration).toBeUndefined();
-    // Two runs from the same prepared state agree: the cable, 16 more connections, the same re-solve.
+    // Two runs from the same prepared state agree: the cable, four more connections, the same re-solve.
     gate?.prepare?.();
     const first = gate?.run();
     gate?.prepare?.();

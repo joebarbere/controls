@@ -1,0 +1,65 @@
+{
+  "id": "conductor.sorrelby-bare-10-solid",
+  "version": 1,
+  "title": "10 AWG bare solid copper grounding conductor of NM-B cable",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-10B",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 10,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": null,
+    "insulationThicknessMm": null,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "bare",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-egc-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: NM-B carries an uninsulated copper equipment grounding conductor, wrapped in fire-retardant paper and laid between or beside the insulated conductors; it is the circuit conductors' size at 14 to 10 AWG and 10 AWG in 8/3 and 6/3. A bare EGC is permitted by NFPA 70-2023 Art. 250.119 (by number). The paper wrap is not modelled (no insulation row, colour bare).",
+      "covers": ["conductor.awg", "conductor.insulation", "conductor.colours"]
+    },
+    {
+      "id": "nm-egc-solid",
+      "kind": "game-design",
+      "citation": "game-design: solid, one strand. The sheet read makes 10 AWG circuit conductors solid and gives the 10 AWG grounding conductor of 8/3 and 6/3 without its stranding; solid is taken for every 10 AWG ground.",
+      "covers": ["conductor.stranding", "conductor.strandCount"]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}
