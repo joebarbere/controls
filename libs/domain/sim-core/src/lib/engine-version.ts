@@ -25,5 +25,7 @@
  *   landed conductor end has a termination hot spot; a connection's solve-time value follows its
  *   temperatures (R(T), and the ends' constriction resistance). Every scenario with a lead moves.
  *   Later P3 PRs that change engine-7 behaviour re-pin in place (no 7 → 7′), until v0.4.0 freezes it.
+ *   D12 (no re-pin): a lamp entry may carry its own `conductionFraction`; entries without it keep
+ *   `LAMP_CONDUCTION_FRACTION`, so every existing scenario computes the same.
  */
 export const SIM_ENGINE_VERSION = 7;
