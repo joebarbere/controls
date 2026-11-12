@@ -46,6 +46,15 @@ A `covers` path covers itself and everything below it; `*` (not first) matches o
 
 Shortcuts: `terminals.*.methods.screw` covers every field of both terminals' screw specs; split it when the fields have different sources (a real torque, a game-design strip length).
 
+## Conductors
+
+A conductor is a `conductor.*` device entry of model kind `conductor` (category `conductor`, `sizeMm: null`, no terminals, mounts or controls). Write:
+
+- the `conductor` block from the product's sheet: `awg` (integer designation), `stranding` and `strandCount`, the pinned `materials` and `insulation` rows, `insulationThicknessMm` and, for an insulation row with a jacket layer (THHN's nylon), `jacketThicknessMm`, and the colours the product is made in;
+- `model.params.layFactor`: 1 for solid, 1.02 for Class B/C stranding (cite NBS Handbooks 100 and 109).
+
+Never store a diameter, an area, a resistance or an ampacity: they are derived (`conductorPhysics`, `conductorResistanceOhm`, `derivedAmpacityA`). Aluminium starts at 12 AWG (Art. 310.3(A), by number). A spec sheet with an ampacity column is an NEC table: find one without (see the [content caveats](../caveats/content.md)). Add the entry's derived values to the reviewer's list (`conductors.spec.ts` and `thermal.spec.ts` compute them).
+
 ## Termination specs
 
 - A terminal's `methods` is empty for a clip-only terminal. Give a terminal methods only where a conductor really lands on that product.
@@ -76,7 +85,9 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Lumivane       | Incandescent lamps                               |
 | Orrinwood      | Power resistor                                   |
 | Quillfern      | Test leads                                       |
+| Quorvale       | Aluminium building wire (XHHW-2)                 |
 | Railwick       | DIN-rail power supply                            |
 | Saltmere       | Circuit breaker                                  |
+| Tallowmere     | Copper building wire (THHN/THWN-2) and MTW       |
 | Tessaline      | Toggle switch                                    |
 | Testbrand      | Test-only fixtures in specs, never in `content/` |

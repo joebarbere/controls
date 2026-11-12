@@ -1,0 +1,111 @@
+{
+  "id": "conductor.tallowmere-thhn-14-solid",
+  "version": 1,
+  "title": "14 AWG solid copper THHN/THWN-2 building wire",
+  "brand": "Tallowmere",
+  "modelName": "TM-THHN-14S",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 14,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.381,
+    "jacketThicknessMm": 0.102,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      },
+      {
+        "base": "blue",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": null
+      },
+      {
+        "base": "yellow",
+        "stripe": null
+      },
+      {
+        "base": "orange",
+        "stripe": null
+      },
+      {
+        "base": "brown",
+        "stripe": null
+      },
+      {
+        "base": "grey",
+        "stripe": null
+      },
+      {
+        "base": "purple",
+        "stripe": null
+      },
+      {
+        "base": "pink",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "thhn-construction",
+      "kind": "real-world",
+      "citation": "Typical published construction of 14 AWG THHN/THWN-2 (a US maker's public specification sheet, revised 02/2026, read; it carries no ampacity column; listed to UL 83, cited by number): made solid and 19-strand at 14 to 10 AWG; this size has a 15 mil PVC wall (0.381 mm) under a 4 mil nylon covering (0.102 mm), rounded from mils; colour-coded black, white, red, blue, green, yellow, orange, brown, grey, purple and pink (the sheet's tan has no colour id), most colours on all sizes. Tracer stripes are made at 14 to 10 AWG; this entry lists the solid colours only (game-design simplification). Rated 90 °C dry (THHN) and wet (THWN-2): the pinned insulation row thhnThwn2. Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as public THHN/THWN-2 and MTW sheets state for the conductor (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

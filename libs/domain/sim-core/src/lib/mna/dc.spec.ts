@@ -97,6 +97,7 @@ describe('dcBranchValues', () => {
     expect(values.ohms[lead]).toBe(netlist.branches[lead].values['resistanceOhm']);
     expect(values.ohms[branchOf(netlist, 3, 'filament')]).toBe(28.8);
     expect(Object.keys(DC_DEFAULT_VALUES)).toStrictEqual([
+      'conductor',
       'lead',
       'resistor',
       'heater',

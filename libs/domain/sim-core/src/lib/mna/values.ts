@@ -151,6 +151,7 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  * Defaults by model kind, for branches no hook sets:
  *
  * - `lead`: its `resistanceOhm` (resistivity × length ÷ area, F2.1);
+ * - `conductor` (F3.1): its static `resistanceOhm`, R_cond at T₀ plus both ends' contact resistance;
  * - `battery`: its full-charge open-circuit EMF (`openCircuitVoltageFullV`) behind `internalResistanceOhm`:
  *   a new battery (state of charge 1, its kind's initial value) for callers that run no engine model.
  *   The engine's battery model (F2.4) always sets the EMF from the live state of charge instead. The
@@ -163,6 +164,7 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  * default: the engine's hook must set them.
  */
 export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Object.freeze({
+  conductor: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   lead: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   resistor: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   heater: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),

@@ -285,6 +285,25 @@ export const LeadParams = z.strictObject({
 });
 export type LeadParams = z.infer<typeof LeadParams>;
 
+/**
+ * Conductor parameters (F3.1, ADR 0016, ADR 0018 §2). A conductor entry's electrical and thermal data
+ * come from its `conductor` block: the size (`AWG_GAUGES` gives the area and diameter), the pinned
+ * `materials` row (ρ₀, α, T₀, the linear-α clamp) and `insulation` row (ratings, conductivities,
+ * emissivity), and the per-entry insulation and jacket thicknesses. The only number that is the
+ * entry's own is the stranding lay factor; the cut length is the world's (`ConnectionV3.lengthMm`).
+ * R(T) = ρ₀ · k_lay · L / A · (1 + α (T − T₀)), see `conductorResistanceOhm`.
+ */
+export const ConductorParams = z.strictObject({
+  /**
+   * The stranding lay factor k_lay: a stranded conductor's strands are helices, longer than the
+   * conductor, so its resistance is that factor above a solid conductor of the same nominal area.
+   * 1 for solid; 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbooks 100 and 109), also
+   * applied to bunched (flexible) MTW stranding as a game-design approximation.
+   */
+  layFactor: FiniteNumber.min(1).max(1.1),
+});
+export type ConductorParams = z.infer<typeof ConductorParams>;
+
 function key(
   owner: StateOwner,
   type: Exclude<StateValueType, 'enum'>,
@@ -368,7 +387,8 @@ export const CONNECTION_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
- * heater, and part 2's fuse and thermal-magnetic breaker; adding a kind needs no `schemaVersion` bump.
+ * heater, and part 2's fuse and thermal-magnetic breaker. P3: F3.1's conductor, whose sim keys are the
+ * lead's ten connection keys. Adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -417,6 +437,16 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     },
     description:
       'A single-pole thermal-magnetic circuit breaker: an inverse-time thermal trip and an instantaneous magnetic trip; after a trip the handle must go off, then on.',
+  },
+  conductor: {
+    kind: 'conductor',
+    placement: 'connection',
+    requires: 'conductor',
+    terminals: [],
+    params: ConductorParams,
+    keys: CONNECTION_SIM_KEYS,
+    description:
+      'A building-wire conductor (F3.1): cut to a length, landed on terminals with wire.add, one resistance from its material, size, length and temperature plus each end’s contact.',
   },
   fuse: {
     kind: 'fuse',

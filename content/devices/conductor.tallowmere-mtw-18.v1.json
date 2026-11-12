@@ -1,0 +1,103 @@
+{
+  "id": "conductor.tallowmere-mtw-18",
+  "version": 1,
+  "title": "18 AWG stranded copper MTW machine tool wire",
+  "brand": "Tallowmere",
+  "modelName": "TM-MTW-18",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 18,
+    "stranding": "stranded",
+    "strandCount": 16,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "mtw"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      },
+      {
+        "base": "blue",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "orange",
+        "stripe": null
+      },
+      {
+        "base": "yellow",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": null
+      },
+      {
+        "base": "green",
+        "stripe": "yellow"
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "mtw-construction",
+      "kind": "real-world",
+      "citation": "Typical published construction of Type MTW machine tool wire (a US maker's public MTW/TEW specification sheet, read; no ampacity column; listed to UL 1063, cited by number): flexible stranded bare copper under a single PVC wall (the sheet lists 16 to 10 AWG; the 18 AWG strand count and wall thickness are the game-design source mtw-18-assumed). The single-layer construction is the pinned insulation row mtw (90 °C dry, 60 °C wet). Paraphrased; no table copied.",
+      "covers": ["conductor.awg", "conductor.stranding", "conductor.insulation"]
+    },
+    {
+      "id": "mtw-18-assumed",
+      "kind": "game-design",
+      "citation": "game-design: the sheet read lists 16 to 10 AWG only, so 18 AWG is taken with the same 30 mil (0.762 mm) PVC wall and 16 strands (a secondary listing seen in a search summary, not read). Unverified.",
+      "covers": ["conductor.strandCount", "conductor.insulationThicknessMm"]
+    },
+    {
+      "id": "mtw-colours",
+      "kind": "game-design",
+      "citation": "game-design: a control-panel palette (black, red, blue, white, orange, yellow, green, and green with a yellow tracer). Makers offer about a dozen MTW colours without the sheets read naming them.",
+      "covers": ["conductor.colours"]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as public THHN/THWN-2 and MTW sheets state for the conductor (bunched (flexible) stranding per ASTM B174; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "game-design",
+      "citation": "game-design: A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced. A 18 AWG MTW conductor is bunched (flexible) stranding, not concentric, so this concentric figure is applied to it as an approximation (bunched stranding is about 1.02 to 1.03, unverified); it moves the resistance by 1 % at most.",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

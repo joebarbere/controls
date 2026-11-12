@@ -520,6 +520,17 @@
                 }
               ]
             },
+            "jacketThicknessMm": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "colours": {
               "minItems": 1,
               "maxItems": 32,
@@ -556,6 +567,7 @@
             "material",
             "insulation",
             "insulationThicknessMm",
+            "jacketThicknessMm",
             "colours"
           ],
           "additionalProperties": false

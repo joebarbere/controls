@@ -7,6 +7,7 @@ export * from './lib/sources';
 export * from './lib/tables';
 export * from './lib/catalog';
 export * from './lib/lead';
+export * from './lib/conductor';
 export * from './lib/builtin';
 export * from './lib/json-schema';
 export * from './lib/region';

@@ -89,6 +89,7 @@ const conductor = (id: string, insulated: boolean, awg = 14, stranding: 'solid' 
     material: copper,
     insulation: insulated ? thhn : null,
     insulationThicknessMm: insulated ? 0.4 : null,
+    jacketThicknessMm: insulated ? 0.1 : null,
     colours: insulated
       ? [
           { base: 'black', stripe: null },
