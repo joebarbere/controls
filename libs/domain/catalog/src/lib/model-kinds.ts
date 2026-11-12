@@ -192,6 +192,15 @@ export const LampIncandescentParams = z.strictObject({
   filamentRatedTempK: FiniteNumber.min(1000).max(3600),
   /** The filament's thermal time constant at its rated point (ms): how fast it heats and cools there. */
   thermalTimeConstantMs: positive,
+  /**
+   * The fraction of the rated power the filament loses by conduction (the end loss into its lead-ins)
+   * at its rated point, the rest radiated (P3 decision D17: paired with `thermalTimeConstantMs`). Optional,
+   * added while catalogue 2 is provisional: an entry without it (`lamp.lumivane-12v-5w@1`) takes
+   * `sim-core`'s sourced `LAMP_CONDUCTION_FRACTION` (0.1), so its physics and every pinned hash are
+   * unchanged. Bounded at 0.2: above about 0.12 the model's light falls more than 4 % under the published
+   * L ∝ V^3.4 at 75 % of rated volts (simulation caveats).
+   */
+  conductionFraction: FiniteNumber.min(0).max(0.2).optional(),
 });
 export type LampIncandescentParams = z.infer<typeof LampIncandescentParams>;
 

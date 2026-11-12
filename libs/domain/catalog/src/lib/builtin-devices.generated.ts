@@ -4043,6 +4043,195 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "heater.hearthvale-120v-1500w",
+  "version": 1,
+  "title": "120 V 1500 W heater element on a base",
+  "brand": "Hearthvale",
+  "modelName": "HV-12015",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 120,
+    "depthMm": 90
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "L1",
+      "positionMm": {
+        "x": 20,
+        "y": 60,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 2
+          },
+          "torqueNm": 1.8,
+          "drives": [
+            "slotted",
+            "phillips"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 0,
+            "y": 60,
+            "z": 30
+          },
+          "exitAxis": "-x",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "L2",
+      "positionMm": {
+        "x": 380,
+        "y": 60,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 2
+          },
+          "torqueNm": 1.8,
+          "drives": [
+            "slotted",
+            "phillips"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 400,
+            "y": 60,
+            "z": 30
+          },
+          "exitAxis": "+x",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "heater",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 1500
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "space-heater-class",
+      "kind": "real-world",
+      "citation": "The 120 V 1500 W resistance space-heater element, the usual top rating of NEC-region 120 V portable and small fixed heaters (makers' published ratings, typical figures, paraphrased, not one vendor's). Its resistance is V² / P = 14400 / 1500 = 9.6 Ω and its rated current P / V = 12.5 A. A nickel-chromium element's resistance rises only a few percent from cold to hot (a temperature coefficient of about 1e-4 per kelvin), so it is taken as constant at the rated (hot) value.",
+      "covers": [
+        "model.params.ratedVoltageV",
+        "model.params.ratedPowerW"
+      ]
+    },
+    {
+      "id": "base-layout",
+      "kind": "game-design",
+      "citation": "game-design: the element in a guard on a 400 × 120 mm base, 90 mm tall, with a terminal at each end; not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    },
+    {
+      "id": "heater-terminal-class",
+      "kind": "game-design",
+      "citation": "game-design: the element's two terminals are pressure-plate screw clamps, marked for one copper conductor of 14 to 10 AWG, solid or stranded (two fit, and the second makes a worse termination, D8), not for aluminium; the plate grips 8 mm of a 10 ± 2 mm strip, so every in-tolerance strip seats fully. The marked torque, 1.8 N·m (about 16 lb·in), is chosen inside the 14 to 18 lb·in range makers give for wiring-device terminal screws (read for the 120 V lamp's holder); it is not a published heater figure. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number); no UL 486A-B torque table is used. Not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "heater-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors reach each terminal from the base's end face and leave along ±x; not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "heater-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and Phillips combination head (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "game-design",
+      "citation": "game-design: the screw-terminal class's R₀ applied to the heater's clamps. NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1) measured good branch-circuit wiring-device screw terminals at 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ; 0.3 mΩ is taken at the marked torque with a copper conductor at 20 °C. BSS 103 did not measure heater terminals.",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm"
+      ]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), the screw-terminal class's values: the heat path into the device, 0.026 W/K, is calibrated, not measured (with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the Draper point, about 525 °C, and about 1000 °C). The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass clamp parts × about 380 J/(kg·K). The heater's own heat at its terminals is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "heater.hearthvale-12v-50w",
   "version": 1,
   "title": "12 V 50 W heater element on a base",
@@ -4104,6 +4293,237 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "sizeMm",
         "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "lamp.lumivane-120v-60w",
+  "version": 1,
+  "title": "120 V 60 W incandescent lamp in a keyless holder on a base",
+  "brand": "Lumivane",
+  "modelName": "LV-120-60",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 110,
+    "heightMm": 110,
+    "depthMm": 150
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "BRASS",
+      "positionMm": {
+        "x": 15,
+        "y": 55,
+        "z": 20
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": [
+            "slotted",
+            "phillips"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 0,
+            "y": 55,
+            "z": 20
+          },
+          "exitAxis": "-x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "SILVER",
+      "positionMm": {
+        "x": 95,
+        "y": 55,
+        "z": 20
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded"
+          ],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": [
+            "slotted",
+            "phillips"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 110,
+            "y": 55,
+            "z": 20
+          },
+          "exitAxis": "+x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "lamp.incandescent",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 60,
+      "filamentRatedTempK": 2700,
+      "thermalTimeConstantMs": 30,
+      "conductionFraction": 0.05
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "general-service-lamp-class",
+      "kind": "real-world",
+      "citation": "The 120 V 60 W general-service incandescent lamp with a medium screw base, the common household lamp of NEC-region lighting circuits (lamp makers' catalogues, typical published ratings, paraphrased, not one vendor's). Its hot resistance is V² / P = 14400 / 60 = 240 Ω and its rated current P / V = 0.5 A.",
+      "covers": [
+        "model.params.ratedVoltageV",
+        "model.params.ratedPowerW"
+      ]
+    },
+    {
+      "id": "filament-temperature",
+      "kind": "real-world",
+      "citation": "L. L. Holladay, \"Proportion of energy radiated by incandescent solids in various spectral regions\", J. Opt. Soc. Am. 17 (1928), pp. 329–342, Table 5 (read 2026-11-12), paraphrased: regular gas-filled tungsten lamps of 50 W and 75 W run their filaments at a maximum of about 2685 K and 2735 K; a 60 W lamp interpolates to about 2705 K, and 2700 K is taken (the rounding is game-design). With tungsten's resistivity (Jones and Langmuir, 1927) it gives a cold resistance of 240 × 5.4849 / 81.095 = 16.23 Ω at 20 °C, 1/14.79 of the hot one, where the cold-start inrush comes from.",
+      "covers": [
+        "model.params.filamentRatedTempK"
+      ]
+    },
+    {
+      "id": "inrush-band",
+      "kind": "real-world",
+      "citation": "Physics from H. A. Jones and I. Langmuir, General Electric Review 30 (1927): a filament's cold-to-hot resistance ratio is ρ(T_r)/ρ(T_a), 13.5 to 16.1 for rated temperatures of 2500 to 2900 K at a 293 K ambient; 14.79 at this lamp's 2700 K. Source impedance and the wiring in series lower the current ratio, so the tested inrush band is 10 to 15 times the settled current.",
+      "covers": [
+        "model.params.filamentRatedTempK"
+      ]
+    },
+    {
+      "id": "filament-time-constant",
+      "kind": "real-world",
+      "citation": "Physics estimate (P3 decision D17, the τ ≈ 30 ms the realism review recommended in P2), recomputed in lamp-120v.spec.ts: a straight tungsten wire that radiates 95 % of 60 W at 2700 K with a total emissivity of about 0.317 (Holladay 1928, Table 3: 0.311 at 2600 K, 0.323 at 2800 K) and has 240 Ω there (ρ = 81.095 µΩ·cm, Jones and Langmuir) is about 43 µm × 440 mm, 12.5 mg at 19.3 g/cm³; with tungsten's heat capacity at 2700 K (36.19 J/(mol·K), NIST-JANAF table for crystalline tungsten, read 2026-11-12; 0.197 J/(g·K)) that is 2.46 mJ/K against a loss slope of 0.0857 W/K, τ ≈ 29 ms. A coiled filament's self-shading lengthens the wire and raises it (about 33 ms if 90 % of its surface radiates freely). 30 ms is taken; the model's heat capacity is then 2.57 mJ/K.",
+      "covers": [
+        "model.params.thermalTimeConstantMs"
+      ]
+    },
+    {
+      "id": "conduction-fraction",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour (P3 decision D17, paired with the 30 ms time constant as the realism review recommended in P2): 5 % of the rated power is lost by conduction at the rated point, the rest radiated. The model's light fits the published L ∝ V^3.4 (Fink and Beaty) best near 5 %. A long 120 V filament's end loss into its lead-ins is smaller than the bench lamp's (Langmuir, MacLane and Blodgett, Phys. Rev. 35, 1930: end losses are largest for short, thick, low-voltage filaments), and a gas-filled lamp also loses heat to its gas, which the vacuum model doesn't carry; the one linear term stands in for both. With it a switched-off filament's tail time constant is C / G = 2.57 mJ/K / 1.246 mW/K ≈ 2.1 s.",
+      "covers": [
+        "model.params.conductionFraction"
+      ]
+    },
+    {
+      "id": "holder-layout",
+      "kind": "game-design",
+      "citation": "game-design: the lamp stands in a keyless porcelain holder on a 110 × 110 mm base, 150 mm tall with the lamp, with the brass (line) screw on one side and the silver (neutral) screw on the other; a stand-in for P4's lampholders and boxes (D12), not modelled on a product.",
+      "covers": [
+        "sizeMm",
+        "terminals"
+      ]
+    },
+    {
+      "id": "holder-terminal-torque",
+      "kind": "real-world",
+      "citation": "Makers' product pages for medium-base keyless incandescent lampholders with terminal screws give a terminal-screw torque range of 14 to 18 lb·in (1.6 to 2.0 N·m) (read 2026-11-12, paraphrased, not one vendor's). The fictional holder is marked 1.8 N·m (about 16 lb·in), inside it; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.torqueNm"
+      ]
+    },
+    {
+      "id": "holder-terminal-class",
+      "kind": "game-design",
+      "citation": "game-design: the holder's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw, and the head grips 12 mm of it. Usual for wiring-device side terminals, not published figures read for this entry.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "holder-terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors reach each screw from the base's side face and leave along ±x; not modelled on a product.",
+      "covers": [
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "holder-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and Phillips combination head, common on wiring-device terminal screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit wiring-device screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread and nicks (ADR 0018 §4).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm"
+      ]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), the screw-terminal class's values: the heat path into the device, 0.026 W/K, is calibrated, not measured (with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the Draper point, about 525 °C, and about 1000 °C); a porcelain holder conducts less than a breaker's body, which the class value doesn't distinguish. The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass screw and terminal plate × about 380 J/(kg·K).",
+      "covers": [
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
       ]
     }
   ],

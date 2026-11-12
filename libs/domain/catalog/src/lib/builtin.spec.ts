@@ -66,6 +66,10 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     expect(landed).toStrictEqual([
       'breaker.saltmere-1p-15a:line:screw',
       'breaker.saltmere-1p-15a:load:screw',
+      'heater.hearthvale-120v-1500w:a:screw',
+      'heater.hearthvale-120v-1500w:b:screw',
+      'lamp.lumivane-120v-60w:a:screw',
+      'lamp.lumivane-120v-60w:b:screw',
       'splice.corvelle-tw-l:splice:twistOn',
       'splice.corvelle-tw-m:splice:twistOn',
       'splice.corvelle-tw-s:splice:twistOn',
@@ -121,7 +125,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     ).toStrictEqual([]);
   });
 
-  it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection, one test lead and the F3.5 enclosures', () => {
+  it('holds the P2 bench devices, the F2.4 supplies, the F2.5 loads and protection, one test lead, the F3.5 enclosures and the D12 120 V lamp and heater', () => {
     expect(p2Devices.map((d) => [d.id, d.model.kind])).toStrictEqual([
       ['battery.ferrovane-12v-7ah', 'battery'],
       ['box.tinmoor-1g-steel', 'enclosure.box'],
@@ -130,7 +134,9 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       ['box.tinmoor-4sq-steel', 'enclosure.box'],
       ['breaker.saltmere-1p-15a', 'breaker.thermalMagnetic'],
       ['fuse.emberlyn-5x20-fa-1a', 'fuse'],
+      ['heater.hearthvale-120v-1500w', 'heater'],
       ['heater.hearthvale-12v-50w', 'heater'],
+      ['lamp.lumivane-120v-60w', 'lamp.incandescent'],
       ['lamp.lumivane-12v-5w', 'lamp.incandescent'],
       ['lead.quillfern-test-1m', 'lead'],
       ['panel.pellmoor-din-400x500', 'enclosure.panel'],
@@ -144,7 +150,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     ]);
   });
 
-  it('uses fictional brands only (realism charter), one per maker (the utility serves three services, Tinmoor makes the boxes)', () => {
+  it('uses fictional brands only (realism charter), one per maker (the utility serves three services, Tinmoor makes the boxes, Lumivane both lamps, Hearthvale both heaters)', () => {
     const brands = p2Devices.map((d) => d.brand);
     expect(brands).toStrictEqual([
       'Ferrovane',
@@ -155,6 +161,8 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       'Saltmere',
       'Emberlyn',
       'Hearthvale',
+      'Hearthvale',
+      'Lumivane',
       'Lumivane',
       'Quillfern',
       'Pellmoor',

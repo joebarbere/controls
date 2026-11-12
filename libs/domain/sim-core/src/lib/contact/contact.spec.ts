@@ -323,13 +323,16 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
     const methods = BUILTIN_CATALOG.devices
       .flatMap((d) => d.terminals.flatMap((t) => t.methods))
       .filter((m) => m.method === 'screw');
-    expect(methods.length).toBe(7);
+    // The breaker (2), the DIN supply (2), the stand-in service (3) and D12's heater (2) and lamp (2).
+    expect(methods.length).toBe(11);
     for (const m of methods) {
       expect(m.contactOhm).toBe(3e-4);
       expect(m.heatPathWPerK).toBe(0.026);
       expect(m.combination).toBeNull();
-      expect(['pressurePlate', 'boxLug']).toContain(m.clampType);
+      // Only the 120 V lamp's side-wired holder screws are binding heads (they splay bare strands).
+      expect(['pressurePlate', 'boxLug', 'bindingScrew']).toContain(m.clampType);
       expect(m.clampDepthMm).toBeLessThanOrEqual(m.stripLengthMm.nominal - m.stripLengthMm.tolerance);
     }
+    expect(methods.filter((m) => m.clampType === 'bindingScrew')).toHaveLength(2);
   });
 });

@@ -25,7 +25,8 @@ import { tungstenResistivity } from './tungsten';
  *
  *   C · dT/dt = I² · R(T) − k · (T⁴ − T_a⁴) − G · (T − T_a).
  *
- * At the rated point a fraction f (`LAMP_CONDUCTION_FRACTION`) of the rated power leaves by conduction
+ * At the rated point a fraction f (the entry's `conductionFraction`, else `LAMP_CONDUCTION_FRACTION`;
+ * P3 D17) of the rated power leaves by conduction
  * and the rest by radiation, so T_r is still the steady state at the rated power:
  *
  *   k = (1 − f) · P_r / (T_r⁴ − T_a⁴),   G = f · P_r / (T_r − T_a),
@@ -91,7 +92,8 @@ export const LAMP_MAX_TEMP_K: SourcedConstant = {
 
 /**
  * The fraction of a lamp's rated power lost by conduction (the end loss through its two lead-ins) at its
- * rated point; the rest is radiated. Sets the conductance G = f · P_r / (T_r − T_a).
+ * rated point; the rest is radiated. Sets the conductance G = f · P_r / (T_r − T_a). The default for an
+ * entry without its own `conductionFraction` param (`lampConductionFraction`).
  */
 export const LAMP_CONDUCTION_FRACTION: SourcedConstant = {
   value: 0.1,
@@ -100,6 +102,15 @@ export const LAMP_CONDUCTION_FRACTION: SourcedConstant = {
   source:
     "game-design inside published behaviour. A filament loses heat by conduction along itself into its two cooler lead-ins as well as by radiation (a small wedge-base lamp's filament hangs between its two lead-ins without separate supports); this end loss is largest for short, thick, low-voltage filaments (I. Langmuir, S. MacLane and K. B. Blodgett, \"The effect of end losses on the characteristics of filaments of tungsten and other materials\", Physical Review 35 (5), 1930, pp. 478–503, doi:10.1103/PhysRev.35.478). For the bench lamp (a 12 V 5 W filament of about 40 µm tungsten wire some 40–50 mm long) a fin-equation estimate puts the end loss through the two lead-ins at a few percent of the input, about 5 % if the leads stayed at ambient. 10 % is taken at the rated point as an upper value; the model's light fits the published L ∝ V^3.4 (Fink and Beaty) best near 5 % and stays within 3 % of it from 75 % to 115 % of rated volts at 10 %. With the bench lamp's 50 ms time constant a switched-off filament is below 600 K in about 1.8 s and within 10 K of ambient in about 7 s; radiation alone (engine 5) took about 6 s and 20 s to reach 600 K and 400 K.",
 };
+
+/**
+ * The conduction fraction a lamp entry runs with: its own `conductionFraction` param when it has one
+ * (P3 D17: the 120 V lamp's τ ≈ 30 ms / f ≈ 0.05 pairing), else `LAMP_CONDUCTION_FRACTION` (the bench
+ * lamp, whose physics and hashes are unchanged).
+ */
+export function lampConductionFraction(p: LampIncandescentParams): number {
+  return p.conductionFraction ?? LAMP_CONDUCTION_FRACTION.value;
+}
 
 /** Light output against radiated power: L ∝ P^(3.4/1.6) = P^(17/8). */
 export const LAMP_LIGHT_POWER_EXPONENT: SourcedConstant = {
@@ -177,7 +188,6 @@ export const LAMP_MODEL: SimDeviceModel = {
     const ratedOhm = new Float64Array(n);
     const rhoRated = new Float64Array(n);
     // k (W/K⁴), G (W/K) and C (J/K) of the ODE, and the rated radiated power's T⁴ term, T_r⁴ − T_a⁴.
-    const conductionFraction = LAMP_CONDUCTION_FRACTION.value;
     const radiation = new Float64Array(n);
     const conduction = new Float64Array(n);
     const heatCapacity = new Float64Array(n);
@@ -197,6 +207,8 @@ export const LAMP_MODEL: SimDeviceModel = {
       rhoRated[i] = tungstenResistivity(tr);
       const tr3 = tr * tr * tr;
       ratedSpan4[i] = tr3 * tr - ambient4;
+      // The entry's own fraction (D17) or, for an entry without one, the sourced default.
+      const conductionFraction = lampConductionFraction(p);
       radiation[i] = ((1 - conductionFraction) * p.ratedPowerW) / ratedSpan4[i];
       conduction[i] = (conductionFraction * p.ratedPowerW) / (tr - ambient);
       heatCapacity[i] = (4 * radiation[i] * tr3 + conduction[i]) * (p.thermalTimeConstantMs / 1000);

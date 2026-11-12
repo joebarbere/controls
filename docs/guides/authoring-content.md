@@ -79,6 +79,7 @@ Ferrules (`ferrule.*`, kind `ferrule`) and insulated ring and fork lugs (`lug.*`
 - **Order is save format:** `'auto'` (Trainee) takes the first method.
 - `torqueNm` is the device's **marked** torque, non-null exactly for `screw`; `drives` (the screw head's drive types from `DRIVE_TYPES`) is non-empty exactly for `screw`. A tool that can `drive` lists the drives its tip fits. Gauges are integer AWG designations (`awgRange: { smallest: 14, largest: 10 }`; 1/0 = 0 … 4/0 = −3).
 - `entryMm` and `exitAxis` are game-design geometry unless the product's drawing is cited.
+- **A lamp's conduction fraction is its own param** (D17): `lamp.incandescent` entries may set `conductionFraction` (0–0.2) beside `thermalTimeConstantMs`, the pair that sets the filament's heat capacity and its cool-down; without it the entry takes `sim-core`'s `LAMP_CONDUCTION_FRACTION` (0.1). Source both, and recompute k, G and C = (4 k T_r³ + G) τ in a spec (`lamp-120v.spec.ts` shows the hand calculation).
 
 ## Entry versions
 
@@ -95,13 +96,12 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 
 | Brand          | Makes                                             |
 | -------------- | ------------------------------------------------- |
-| -------------- | ------------------------------------------------  |
 | Brindlecore    | Bench DC supply                                   |
 | Corvelle       | Twist-on wire connectors (wire nuts)              |
 | Calderyn       | Torque screwdrivers                               |
 | Emberlyn       | Cartridge fuse                                    |
 | Ferrovane      | Sealed lead-acid battery                          |
-| Hearthvale     | Heater element                                    |
+| Hearthvale     | Heater elements                                   |
 | Larkmoor Power | Utility services (one brand for the utility)      |
 | Lumivane       | Incandescent lamps                                |
 | Orrinwood      | Power resistor                                    |
