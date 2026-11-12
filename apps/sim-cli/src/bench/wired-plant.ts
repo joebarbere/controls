@@ -18,6 +18,12 @@ import { type ConnectionV3, type EntityV3, LEAD_SIM_BAG_V3, World } from '@contr
  */
 
 export const WIRED_LOOPS = 200;
+/**
+ * The loops of the smoke run's plant (`sim bench --smoke`, CI's `bench.spec.ts`): the same loop a tenth
+ * as many times, so the allocation probe runs the same code (bank step, stamps, solve) at a tenth of
+ * the cost per tick. Smoke runs prove the cases run, never measure; the full bench keeps 200.
+ */
+export const WIRED_SMOKE_LOOPS = 20;
 export const WIRED_PARALLEL = 9;
 
 const BATTERY = { id: 'battery.ferrovane-12v-7ah', version: 1 };
@@ -27,8 +33,8 @@ const LAMP = { id: 'lamp.lumivane-12v-5w', version: 1 };
 const LEAD = { id: 'lead.quillfern-test-1m', version: 1 };
 const THHN_14 = { id: 'conductor.tallowmere-thhn-14-solid', version: 1 };
 
-/** The wired plant's world at tick 0 (sim bags initial, no solution). */
-export function buildWiredPlant(): World {
+/** The wired plant's world at tick 0 (sim bags initial, no solution), of `loops` loops. */
+export function buildWiredPlant(loops = WIRED_LOOPS): World {
   const entities: EntityV3[] = [];
   const connections: ConnectionV3[] = [];
   let terminations = 0;
@@ -89,7 +95,7 @@ export function buildWiredPlant(): World {
       colour: { base: 'black', stripe: null },
     });
 
-  for (let k = 0; k < WIRED_LOOPS; k++) {
+  for (let k = 0; k < loops; k++) {
     const battery = place(BATTERY, {}, {});
     const breaker = place(BREAKER, { on: true }, {});
     const nutA = place(NUT, {}, {});

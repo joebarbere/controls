@@ -2,12 +2,14 @@ import { fakeSnapshotView, ISLAND_FLAG_SINGULAR, NetlistReadout } from '@control
 import {
   bandName,
   buildNetlistTree,
+  connectionDetail,
   formatQuantity,
+  formatTemperature,
   NO_READING,
   netlistSampler,
   sameNetlistValues,
 } from './netlist-model';
-import { BENCH_BRANCHES, BENCH_NODES, benchDescriptor } from './netlist.fakes';
+import { BENCH_BRANCHES, BENCH_CONNECTIONS, BENCH_NODES, benchDescriptor, connectionRecords } from './netlist.fakes';
 
 describe('formatQuantity', () => {
   it('writes three significant figures with an SI prefix', () => {
@@ -72,6 +74,91 @@ describe('buildNetlistTree', () => {
     const keys = buildNetlistTree(benchDescriptor(1)).map((i) => i.key);
     expect(buildNetlistTree(benchDescriptor(2)).map((i) => i.key)).toEqual(keys);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('connectionDetail (protocol 7)', () => {
+  const descriptor = benchDescriptor();
+  const read = (connections: Uint8Array, islands = [{ band: 1 }, {}]) =>
+    netlistSampler()(
+      fakeSnapshotView({ descriptor, nodes: BENCH_NODES, branches: BENCH_BRANCHES, islands, connections }),
+    );
+  const detail = (connections: Uint8Array, c: number) => {
+    const reading = NetlistReadout.of(descriptor).createReading();
+    NetlistReadout.of(descriptor).read(fakeSnapshotView({ descriptor, connections }), reading);
+    return connectionDetail(reading, c);
+  };
+
+  it("shows a lead's drop and temperature (its ends have no termination node), on its branch row", () => {
+    const values = read(BENCH_CONNECTIONS);
+    expect(values.connections).toEqual([
+      null, // the battery's cell
+      null, // the lamp's filament
+      'drop 30.0 mV, 293 K',
+      'drop 0 V, 293 K',
+      'drop 16.0 mV, 293 K',
+      null, // the AC island's source
+    ]);
+  });
+
+  it("shows a wire's end drops, hot spots and non-ok states, comma-separated; no reading without its bit", () => {
+    const wire = connectionRecords([
+      {
+        conductorDropV: 0.2011,
+        endADropV: 0.300478,
+        endBDropV: 0.0061,
+        conductorTempK: 303.03,
+        endATempK: 393.82,
+        endBTempK: 301.7,
+        endAState: 1,
+        endBState: 4,
+        insulationDamaged: 1,
+        status: 1,
+        readings: 63,
+      },
+      { conductorTempK: 300, endATempK: 310, endAState: 2, status: 2 },
+      { conductorTempK: 300, status: 0 },
+      { conductorTempK: 293.15, endATempK: 293.15, endAState: 1, status: 4, readings: 31 },
+    ]);
+    const values = read(wire);
+    expect(values.connections[2]).toBe(
+      'drop 201 mV, 303 K, end a 300 mV, 394 K, end b 6.10 mV, 302 K, arcing, insulation damaged',
+    );
+    expect(values.connections[3]).toBe(`drop ${NO_READING}, 300 K, end a ${NO_READING}, 310 K, intermittentClosed`);
+    expect(values.connections[4]).toBe(`drop ${NO_READING}, 300 K`);
+    expect(detail(wire, 3)).toBe('open, 293 K, end a, 293 K');
+  });
+
+  it('an open end shows its gap (or no reading), a fused lead its body; never 0 V across a gap', () => {
+    const open = connectionRecords([
+      // Conductor: end a intermittentOpen with a 12.8 V gap (its bit, 4), end b closed.
+      {
+        endADropV: 12.8,
+        conductorTempK: 293.15,
+        endATempK: 293.15,
+        endBTempK: 293.15,
+        endAState: 3,
+        endBState: 1,
+        status: 4,
+        readings: 63,
+      },
+      // The same with the gap unknown (bit 4 clear): written 0, shown as no reading.
+      { conductorTempK: 293.15, endATempK: 293.15, endAState: 3, status: 4, readings: 11 },
+      // A fused lead: the body is the gap.
+      { conductorDropV: 12.8, conductorTempK: 1357.77, conductorState: 1, status: 4, readings: 63 },
+      { conductorTempK: 1357.77, conductorState: 1, status: 4, readings: 13 },
+    ]);
+    expect(detail(open, 0)).toBe('open, 293 K, end a open, gap 12.8 V, 293 K, end b, 293 K');
+    expect(detail(open, 1)).toBe(`open, 293 K, end a open, gap ${NO_READING}, 293 K`);
+    // Temperatures take no SI prefix: a fused lead at its melting point reads 1358 K, never 1.36 kK.
+    expect(detail(open, 2)).toBe('fused, gap 12.8 V, 1358 K');
+    expect(detail(open, 3)).toBe(`fused, gap ${NO_READING}, 1358 K`);
+  });
+
+  it('formatTemperature: whole kelvin, no prefix', () => {
+    expect(formatTemperature(1400.4)).toBe('1400 K');
+    expect(formatTemperature(293.15)).toBe('293 K');
+    expect(formatQuantity(1400, 'K')).toBe('1.40 kK'); // why temperatures have their own formatter
   });
 });
 

@@ -89,6 +89,32 @@ describe('resolveConsoleLine', () => {
   });
 });
 
+describe('wire.info (F3.6 part 3)', () => {
+  it('parses an id positionally or by flag, and refuses a missing, non-numeric or zero id at its column', () => {
+    expect(resolve('wire.info 2')).toEqual({ kind: 'query', id: 'wire.info', args: { id: 2 } });
+    expect(resolve('wire.info --id 2')).toEqual({ kind: 'query', id: 'wire.info', args: { id: 2 } });
+    expect(isConsoleWord(registry, 'wire.info')).toBe(true);
+    expect(resolve('wire.info')).toMatchObject({ kind: 'error', message: expect.stringMatching(/^wire\.info: id: /) });
+    expect(resolve('wire.info x')).toMatchObject({ kind: 'error', column: 11 });
+    expect(resolve('wire.info 0')).toMatchObject({
+      kind: 'error',
+      message: expect.stringMatching(/^wire\.info: id: /),
+    });
+  });
+
+  it('help wire.info gives its usage and argument from CONSOLE_QUERY_ARGS', () => {
+    const help = consoleHelp(registry, 'wire.info');
+    expect(help.ok && help.lines[0]).toMatch(/^wire\.info: Print a wire’s or lead’s current/);
+    expect(help.ok && help.lines).toContain('Usage: wire.info <id>');
+    expect(help.ok && help.lines.join('\n')).toMatch(/--id\s+number >= 1; required; or positional #1/);
+    // A query without arguments still says so, from its schema.
+    expect(consoleHelp(registry, 'netlist.dump')).toMatchObject({
+      ok: true,
+      lines: expect.arrayContaining(['Arguments: none']),
+    });
+  });
+});
+
 describe('consoleHelp', () => {
   const chords = (id: string) => (id === 'edit.undo' ? ['Ctrl+Z'] : []);
 

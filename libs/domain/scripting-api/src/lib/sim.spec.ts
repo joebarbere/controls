@@ -19,6 +19,7 @@ import { createWorldRegistry, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runConsoleScript } from './console-script';
 import { engineCompatible } from './engine-compat';
 import {
   BUILD_ENGINE_VERSIONS,
@@ -27,6 +28,7 @@ import {
   GameOptionsError,
   loadGame,
   MAX_VERIFY_TICKS,
+  NotAvailableError,
   ProbeError,
   replayGame,
   replayLogGame,
@@ -132,7 +134,9 @@ describe('time in the scripting API (ADR 0011 §3)', () => {
     game.advance(100);
     expect(events).toStrictEqual([]);
     game.advance(400);
-    expect(events).toStrictEqual([{ tick: expect.any(Number), kind: 'blown', entity: 4, entities: [], detail: {} }]);
+    expect(events).toStrictEqual([
+      { tick: expect.any(Number), kind: 'blown', entity: 4, entities: [], connection: null, end: null, detail: {} },
+    ]);
     const again = bench();
     const replayedEvents: unknown[] = [];
     again.on('sim', (event) => replayedEvents.push(event));
@@ -461,5 +465,47 @@ describe('v1 logs replay unchanged with the engine (P1 fixtures)', () => {
       }),
       { numRuns: 60 },
     );
+  });
+});
+
+describe('game.connection and wire.info (F3.6 part 3, plan D16)', () => {
+  it("game.connection decodes a lead's protocol 7 record; null for no such connection", () => {
+    const game = bench();
+    game.advance(50);
+    const lead = game.connection(1);
+    expect(lead).toMatchObject({
+      kind: 'lead',
+      connection: 1,
+      values: { status: 'solved', endAState: 'none', endBState: 'none', insulationDamaged: 'no' },
+    });
+    expect(lead?.branch).toBeGreaterThanOrEqual(0);
+    expect(lead?.values['currentA']).toBeGreaterThan(1); // the bench's ~5 A loop
+    expect(game.connection(999)).toBeNull();
+  });
+
+  it('wire.info prints the record as console lines; a bad id is a parse error, an unknown one a line of output', async () => {
+    const game = bench();
+    game.advance(50);
+    const text = game.wireInfo(1);
+    const lines = text.trimEnd().split('\n');
+    expect(lines[0]).toBe(`wire.info 1 tick ${game.tick()}`);
+    expect(lines[1]).toBe('lead 1 lead.quillfern-test-1m@1 length 1000 mm');
+    expect(lines).toContain('end a none');
+    expect(lines.at(-1)).toBe('insulation intact');
+    const run = await runConsoleScript(game, 'wire.info 1\nwire.info --id 999\n');
+    expect(run).toMatchObject({ ok: true });
+    expect(run.output).toStrictEqual([...lines, `wire.info 999 tick ${game.tick()}`, 'no connection 999']);
+    for (const bad of ['wire.info', 'wire.info x', 'wire.info 0', 'wire.info 1 2']) {
+      expect(await runConsoleScript(game, bad)).toMatchObject({ ok: false, error: { kind: 'parse' } });
+    }
+    // Read-only: nothing logged.
+    expect(game.entries()).toHaveLength(ENGINE_BENCH.length);
+  });
+
+  it('a game without an engine has no records: connection throws NotAvailableError', () => {
+    const game = createGame({ seed: 3, registry: registry(), engine: false });
+    expect(() => game.connection(1)).toThrow(NotAvailableError);
+    // wire.info still answers from the materialised world (as netlist.dump does): no connection.
+    expect(game.wireInfo(1)).toBe('wire.info 1 tick 0\nno connection 1\n');
   });
 });

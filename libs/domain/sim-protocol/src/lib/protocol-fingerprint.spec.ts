@@ -1,9 +1,10 @@
 import { DeviceStateBag, ReplayEntry, ReplayLog, SimSolutionV2, World } from '@controls/save-format';
 import * as z from 'zod';
 import * as buffer from './buffer';
+import * as connectionOutput from './connection-output';
 import { TopologyDescriptorSchema } from './descriptor';
 import { DEVICE_OUTPUT_SCHEMAS, NOMINAL_BANDS, RECORD_STATUS_VALUES } from './device-output';
-import { SIM_EVENT_KINDS } from './events';
+import { CONNECTION_EVENT_KINDS, SIM_EVENT_KINDS } from './events';
 import * as layout from './layout';
 import { HostToWorker, SimErrorCode, SimStartReason, WorkerToHost } from './messages';
 import { snapshotHash } from './snapshot';
@@ -41,6 +42,11 @@ const PINNED: Readonly<Record<number, string>> = {
   5: '94d71fbbe3b973e30eee08c40bdd40b2ad2a4bfc9af0a50d6a831ec40eda43a6',
   // 6 (F3.6 part 1): `SimStateExport.connections`, every connection's sim bag in the `state` reply.
   6: 'c0820b25bb7eb44de14ded06a6637d66b2bf4e97e107e8108832638e1fe36891',
+  // 7 (F3.6 part 3): connection records (the slot's connection section, `CONNECTION_OUTPUT_SCHEMAS`,
+  // their status and end-state values), the descriptor's `connections`, and the connection events
+  // (`terminationOverheat`, `insulationDamaged`; `SimEvent.connection` and `end`). The contract data
+  // gained the connection-output module and the connection event kinds with it (new data, new version).
+  7: 'c2150b34e70503360ba6073983dc37c0dd988de12ff9624982b2b41d8fc8b884',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */
@@ -83,6 +89,9 @@ function protocolContract(): unknown {
     deviceOutputs: DEVICE_OUTPUT_SCHEMAS,
     recordStatus: RECORD_STATUS_VALUES,
     events: SIM_EVENT_KINDS,
+    // Protocol 7: the connection records and events.
+    connectionOutput: constants(connectionOutput as unknown as Record<string, unknown>),
+    connectionEvents: CONNECTION_EVENT_KINDS,
     hostToWorker: messageTypes(HostToWorker as never),
     workerToHost: messageTypes(WorkerToHost as never),
     hostToWorkerSchema: messageSchemas(HostToWorker),

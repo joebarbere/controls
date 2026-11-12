@@ -13,10 +13,10 @@ import {
   asMadeContact,
   OXIDATION_ONSET_K,
   SIM_ENGINE_VERSION,
-  SimEngine,
   TERMINATION_OVERHEAT_RISE_K,
   INSULATION_DAMAGE_MARGIN_K,
 } from '@controls/sim-core';
+import type { SimEvent } from '@controls/sim-protocol';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -47,7 +47,14 @@ import { workshopWorld } from './testing/workshop';
  * `insulationDamaged` happen follows from the computed T_h.
  */
 export const BAD_TERMINATION_HASH = 'f630358e4fa9070416b89e27b7692165c8f89c92aebe7c2ee0cee02110488288';
-export const BAD_TERMINATION_SNAPSHOT_HASH = '486ac115bdb91e404bed22096f0e6eb7d1957284f1a65ba690dadf98413769e5';
+export const BAD_TERMINATION_SNAPSHOT_HASH = 'aeb5eb4375e16e6a84af5a9205dc19aacd3ca3da872e64efeec0bacdba081439';
+
+/**
+ * `wire.info 2` (the loose conductor) and `wire.info 3` (a test lead) at the end of the scenario
+ * (F3.6 part 3): pinned in Node here and byte for byte in Chromium by `apps/game-e2e/src/wire-info.spec.ts`.
+ * Re-pin with `pnpm nx test sim-cli -u` and review the diff, never in the e2e alone.
+ */
+const WIRE_INFO_GOLDEN = join(import.meta.dirname, 'goldens/wire-info/bad-termination.txt');
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/bad-termination.console');
 const TA = 293.15;
@@ -55,8 +62,9 @@ const T0 = 293.15;
 const ALPHA = 0.00393;
 const END_TICK = 600_000;
 
-async function scenarioGame(): Promise<Game> {
+async function scenarioGame(events: SimEvent[] = []): Promise<Game> {
   const game = createGame({ world: workshopWorld() });
+  game.on('sim', (event) => events.push(event));
   const result = await runConsoleScript(game, await readFile(scenario, 'utf8'));
   expect(result).toMatchObject({ ok: true, output: [BAD_TERMINATION_HASH] });
   return game;
@@ -139,24 +147,70 @@ describe('the bad-termination scenario (F3.6 part 2, ADR 0018 §7)', () => {
     expect(sim['insulationDamaged']).toBe(bad.ends[0].th >= 363.15 + INSULATION_DAMAGE_MARGIN_K.value);
   });
 
-  it('detects terminationOverheat exactly when the computed hot spot passes T_a + 100 K (sim-core; published in part 3)', async () => {
-    // The scenario's commands, then its 600 s on an engine whose detections the test reads.
-    const text = (await readFile(scenario, 'utf8')).replace(/^sim\.step.*$/m, '').replace(/^world\.hash$/m, '');
-    const game = createGame({ world: workshopWorld() });
-    expect(await runConsoleScript(game, text)).toMatchObject({ ok: true });
-    const engine = SimEngine.start(game.materialisedWorld() as World);
-    engine.advanceTo(END_TICK);
-    const straight = await scenarioGame();
-    expect(engine.snapshotHash()).toBe(straight.snapshotHash());
-    const amps = straight.device(4)?.values['currentA'] as number;
-    const bad = handCalculation(straight.materialisedWorld() as World, 2, amps);
-    const overheat = engine.takeConnectionDetections().filter((d) => d.kind === 'terminationOverheat');
-    if (bad.ends[0].th >= TA + TERMINATION_OVERHEAT_RISE_K.value) {
-      expect(overheat).toHaveLength(1);
-      expect(overheat[0]).toMatchObject({ connection: 2, end: 'a' });
-    } else {
-      expect(overheat).toHaveLength(0);
-    }
+  it("the connection record (protocol 7): the loose end's drop is I × R_contact within 0.5 %, at least 10× a good end's", async () => {
+    const game = await scenarioGame();
+    const world = game.materialisedWorld() as World;
+    const amps = game.device(4)?.values['currentA'] as number;
+    const bad = handCalculation(world, 2, amps);
+    const record = game.connection(2);
+    const good = game.connection(1);
+    if (record === null || good === null) throw new Error('both conductors have records');
+    const v = record.values;
+    expect(v).toMatchObject({ status: 'solved', endAState: 'ok', endBState: 'ok', insulationDamaged: 'no' });
+    // Series: the conductor carries the resistor's current (the solve's rounding).
+    expect(Math.abs((v['currentA'] as number) - amps) / amps).toBeLessThan(1e-9);
+    // The engine's end drop against the hand calculation's I × R_contact (R at the computed T_h).
+    const handDrop = amps * bad.ends[0].rEnd;
+    expect(Math.abs((v['endADropV'] as number) - handDrop) / handDrop).toBeLessThan(0.005);
+    expect(Math.abs((v['endAContactOhm'] as number) - bad.ends[0].rEnd) / bad.ends[0].rEnd).toBeLessThan(0.005);
+    // The acceptance's 10×, from the records alone: the loose end against conductor 1's good end at the breaker.
+    expect((v['endADropV'] as number) / (good.values['endBDropV'] as number)).toBeGreaterThanOrEqual(10);
+    // Temperatures are own state: the record holds the bag's values exactly.
+    const sim = connection(world, 2).sim;
+    expect(v['endATempK']).toBe(sim['endATempK']);
+    expect(v['conductorTempK']).toBe(sim['conductorTempK']);
+    // The drops add up to the terminal-to-terminal voltage (an AC island: |V(load) − V(nut)|).
+    const reading = game.probe('2:load', '3:splice');
+    if (reading.kind !== 'ac') throw new Error(`an AC reading, got ${reading.kind}`);
+    const sum = (v['conductorDropV'] as number) + (v['endADropV'] as number) + (v['endBDropV'] as number);
+    expect(Math.abs(sum - reading.rmsVolts) / reading.rmsVolts).toBeLessThan(1e-12);
+  });
+
+  it('raises terminationOverheat (a protocol 7 sim event) once, at the step where the hot spot passes T_a + 100 K', async () => {
+    const events: SimEvent[] = [];
+    const game = await scenarioGame(events);
+    const amps = game.device(4)?.values['currentA'] as number;
+    const bad = handCalculation(game.materialisedWorld() as World, 2, amps);
+    const threshold = TA + TERMINATION_OVERHEAT_RISE_K.value;
+    // Unconditional (realism review R1 notes): the computed steady hot spot is past the threshold.
+    expect(bad.ends[0].th).toBeGreaterThanOrEqual(threshold);
+    expect(events.filter((e) => e.kind === 'insulationDamaged')).toHaveLength(0);
+    const overheat = events.filter((e) => e.kind === 'terminationOverheat');
+    expect(overheat).toHaveLength(1);
+    expect(overheat[0]).toMatchObject({ entity: null, entities: [], connection: 2, end: 'a' });
+    // Its tick is the state after the cadence step that crossed: below the threshold a tick before
+    // (the previous step's state), at or above it at the event's tick, and the event's temperature.
+    const { tick } = overheat[0];
+    expect(tick % 10).toBe(1);
+    const commands = (await readFile(scenario, 'utf8')).replace(/^sim\.step.*$/m, '').replace(/^world\.hash$/m, '');
+    const stepped = createGame({ world: workshopWorld() });
+    expect(await runConsoleScript(stepped, commands)).toMatchObject({ ok: true });
+    stepped.advanceTo(tick - 1);
+    expect(stepped.connection(2)?.values['endATempK'] as number).toBeLessThan(threshold);
+    stepped.advanceTo(tick);
+    const crossed = stepped.connection(2)?.values['endATempK'] as number;
+    expect(crossed).toBeGreaterThanOrEqual(threshold);
+    expect(overheat[0].detail['temperatureK']).toBe(crossed);
+  });
+
+  it('wire.info prints the records: the golden text, the same from a console line as from Game.wireInfo', async () => {
+    const game = await scenarioGame();
+    const text = `${game.wireInfo(2)}${game.wireInfo(3)}`;
+    await expect(text).toMatchFileSnapshot(WIRE_INFO_GOLDEN);
+    expect(text).toContain('end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V'); // the loose end
+    const { output } = await runConsoleScript(game, 'wire.info 2\nwire.info --id 3\n');
+    expect(`${output.join('\n')}\n`).toBe(text);
+    expect(game.hash()).toBe(BAD_TERMINATION_HASH); // read-only
   });
 
   it('its checked-in save (engine 7, landed conductors, non-null end keys) loads as continued and runs on identically', async () => {

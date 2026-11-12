@@ -1,4 +1,5 @@
 import { LATEST_SLOT_INDEX, PUBLISH_SEQ_INDEX, readBufferHeader, SLOT_COUNT, slotOffset } from './buffer';
+import { CONNECTION_F64_COUNT, CONNECTION_U8_COUNT, CONNECTION_U8_OFFSET } from './connection-output';
 import type { FieldRef, TopologyDescriptor } from './descriptor';
 import {
   BRANCH_ENTRY_BYTES,
@@ -29,6 +30,8 @@ export interface SnapshotView {
   readonly branchCount: number;
   readonly islandCount: number;
   readonly deviceCount: number;
+  /** Protocol 7: the connection records' count (the descriptor's `connections`). */
+  readonly connectionCount: number;
   /** The slot flags (`SNAPSHOT_FLAG_*`). */
   readonly flags: number;
   /** A node voltage's part: 0 = re, 1 = im (V, against the solver's ground). */
@@ -50,9 +53,57 @@ export interface SnapshotView {
    * where the engine doesn't inline it).
    */
   readAll(fields: readonly FieldRef[], out: Float64Array): void;
+  /** A connection record's field (protocol 7, `DescriptorIndex.connectionField`); u8 enums return the code. */
+  readConnection(field: FieldRef): number;
+  /** Every connection field of `fields` into `out` (same index): {@link readAll} for the connection section. */
+  readConnectionAll(fields: readonly FieldRef[], out: Float64Array): void;
+  /**
+   * Reads a {@link ConnectionReadPlan} into `out` (value k from `plan.offsets[k]`, by
+   * `plan.types[k]`): many fields of many connection records in one allocation-free pass, with no
+   * per-field object (`NetlistReadout` reads every field of every record with it, per snapshot).
+   */
+  readConnectionValues(plan: ConnectionReadPlan, out: Float64Array): void;
   /** The slot's hashed bytes (tests and `snapshot.hash` only): a view, no copy. */
   hashedBytes(): Uint8Array;
 }
+
+/** Values per record on the fast path (`CONNECTION_OUTPUT_FIELDS`, in order). */
+const CONNECTION_VALUES = CONNECTION_F64_COUNT + CONNECTION_U8_COUNT;
+
+/** A {@link ConnectionReadPlan} value's type: an f64, a u32, an i32, a u8, or none (written as 0). */
+export const READ_F64 = 0;
+export const READ_U32 = 1;
+export const READ_I32 = 2;
+export const READ_U8 = 3;
+export const READ_NONE = 4;
+
+/**
+ * Where to read each value of a batched connection read (`SnapshotView.readConnectionValues`):
+ * per value, its byte offset within the connection section and its `READ_*` type. Built once per
+ * descriptor (`NetlistReadout`), never per snapshot.
+ */
+export interface ConnectionReadPlan {
+  readonly offsets: Uint32Array;
+  readonly types: Uint8Array;
+  /** True when every f64 offset is a multiple of 8: the reader may then index 8-byte words directly. */
+  readonly aligned: boolean;
+  /**
+   * When every record is laid out exactly as `CONNECTION_OUTPUT_FIELDS` (the protocol layout of every
+   * P3 kind), each record's offset within the connection section, 8-aligned: the reader then copies
+   * each record's f64 words and u8 bytes in order, with no per-value lookup. Otherwise `null`.
+   */
+  readonly records: Uint32Array | null;
+}
+
+/**
+ * Whether this platform stores typed-array values little-endian (as the snapshot does): then an
+ * aligned f64 can be read through a `Float64Array` over the private copy, several times faster per
+ * value than `DataView.getFloat64` across 2,000 connection records (`sim bench` `overlay-read`).
+ */
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+/** A `Float64Array` over the whole 8-byte words of `bytes`' buffer (its byteOffset is 0). */
+const f64Over = (bytes: Uint8Array): Float64Array => new Float64Array(bytes.buffer, 0, bytes.byteLength >> 3);
 
 /**
  * The private copy and its accessors: one per reader, reused for every read. It holds two buffers:
@@ -63,13 +114,16 @@ class CopiedSnapshot implements SnapshotView {
   /** What the view reads. */
   private front: Uint8Array;
   private data: DataView;
+  private frontF64: Float64Array;
   /** Where the next read is copied. */
   back: Uint8Array;
   private backData: DataView;
+  private backF64: Float64Array;
   private nodesAt = SLOT_HEADER_BYTES;
   private branchesAt = SLOT_HEADER_BYTES;
   private islandsAt = SLOT_HEADER_BYTES;
   private devicesAt = SLOT_HEADER_BYTES;
+  private connectionsAt = SLOT_HEADER_BYTES;
   descriptor!: TopologyDescriptor;
   tick = 0;
   lastSolveTick = 0;
@@ -78,14 +132,17 @@ class CopiedSnapshot implements SnapshotView {
   branchCount = 0;
   islandCount = 0;
   deviceCount = 0;
+  connectionCount = 0;
   flags = 0;
   payloadBytes = 0;
 
   constructor(capacity: number) {
     this.front = new Uint8Array(capacity);
     this.data = new DataView(this.front.buffer);
+    this.frontF64 = f64Over(this.front);
     this.back = new Uint8Array(capacity);
     this.backData = new DataView(this.back.buffer);
+    this.backF64 = f64Over(this.back);
   }
 
   get capacity(): number {
@@ -98,8 +155,10 @@ class CopiedSnapshot implements SnapshotView {
     front.set(this.front);
     this.front = front;
     this.data = new DataView(front.buffer);
+    this.frontF64 = f64Over(front);
     this.back = new Uint8Array(capacity);
     this.backData = new DataView(this.back.buffer);
+    this.backF64 = f64Over(this.back);
   }
 
   /** The back copy's generation (read before a descriptor is chosen). */
@@ -111,10 +170,13 @@ class CopiedSnapshot implements SnapshotView {
   swapIn(descriptor: TopologyDescriptor): void {
     const front = this.front;
     const data = this.data;
+    const frontF64 = this.frontF64;
     this.front = this.back;
     this.data = this.backData;
+    this.frontF64 = this.backF64;
     this.back = front;
     this.backData = data;
+    this.backF64 = frontF64;
     const d = this.data;
     const o = SLOT_OFFSETS;
     this.descriptor = descriptor;
@@ -125,12 +187,14 @@ class CopiedSnapshot implements SnapshotView {
     this.branchCount = d.getUint32(o.branchCount, true);
     this.islandCount = d.getUint32(o.islandCount, true);
     this.deviceCount = d.getUint32(o.deviceCount, true);
+    this.connectionCount = d.getUint32(o.connectionCount, true);
     this.flags = d.getUint32(o.flags, true);
     this.payloadBytes = d.getUint32(o.payloadBytes, true);
     this.nodesAt = SLOT_HEADER_BYTES;
     this.branchesAt = this.nodesAt + this.nodeCount * NODE_ENTRY_BYTES;
     this.islandsAt = this.branchesAt + this.branchCount * BRANCH_ENTRY_BYTES;
     this.devicesAt = this.islandsAt + this.islandCount * ISLAND_ENTRY_BYTES;
+    this.connectionsAt = this.devicesAt + d.getUint32(o.deviceDataBytes, true);
   }
 
   voltage(node: number, part: 0 | 1): number {
@@ -181,8 +245,77 @@ class CopiedSnapshot implements SnapshotView {
     }
   }
 
+  readConnection(field: FieldRef): number {
+    // As `read`: the f64 path alone, small enough to inline.
+    if (field.type === 'f64') return this.data.getFloat64(this.connectionsAt + field.offset, true);
+    return this.readIntegerAt(this.connectionsAt + field.offset, field);
+  }
+
+  readConnectionAll(fields: readonly FieldRef[], out: Float64Array): void {
+    const data = this.data;
+    const base = this.connectionsAt;
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      out[i] =
+        field.type === 'f64'
+          ? data.getFloat64(base + field.offset, true)
+          : this.readIntegerAt(base + field.offset, field);
+    }
+  }
+
+  readConnectionValues(plan: ConnectionReadPlan, out: Float64Array): void {
+    const base = this.connectionsAt;
+    const offsets = plan.offsets;
+    const types = plan.types;
+    const data = this.data;
+    const bytes = this.front;
+    // Typed-array reads where the layout allows (little-endian, an aligned f64: every section and
+    // record is 8-aligned in the copy): the per-snapshot readout reads 16 fields of 2,000 records.
+    const n = Math.min(offsets.length, types.length, out.length);
+    const records = plan.records;
+    if (records !== null && LITTLE_ENDIAN && (base & 7) === 0 && records.length * CONNECTION_VALUES <= out.length) {
+      // The protocol layout, record by record: 12 contiguous f64 words, then 4 u8 bytes.
+      const words = this.frontF64;
+      let k = 0;
+      for (let c = 0; c < records.length; c++) {
+        const at = base + records[c];
+        let w = at >> 3;
+        for (let i = 0; i < CONNECTION_F64_COUNT; i++) out[k++] = words[w++];
+        const u = at + CONNECTION_U8_OFFSET;
+        for (let i = 0; i < CONNECTION_U8_COUNT; i++) out[k++] = bytes[u + i];
+      }
+      return;
+    }
+    if (LITTLE_ENDIAN && plan.aligned && (base & 7) === 0) {
+      const words = this.frontF64;
+      const w0 = base >> 3;
+      for (let k = 0; k < n; k++) {
+        const type = types[k];
+        if (type === READ_F64) out[k] = words[w0 + (offsets[k] >> 3)];
+        else if (type === READ_U8) out[k] = bytes[base + offsets[k]];
+        else out[k] = this.readOther(type, base + offsets[k]);
+      }
+      return;
+    }
+    for (let k = 0; k < n; k++) {
+      const type = types[k];
+      out[k] = type === READ_F64 ? data.getFloat64(base + offsets[k], true) : this.readOther(type, base + offsets[k]);
+    }
+  }
+
+  /** A u8, u32 or i32 value at `at` (0 for `READ_NONE`). */
+  private readOther(type: number, at: number): number {
+    if (type === READ_U8) return this.front[at];
+    if (type === READ_U32) return this.data.getUint32(at, true);
+    if (type === READ_I32) return this.data.getInt32(at, true);
+    return 0;
+  }
+
   private readInteger(field: FieldRef): number {
-    const at = this.devicesAt + field.offset;
+    return this.readIntegerAt(this.devicesAt + field.offset, field);
+  }
+
+  private readIntegerAt(at: number, field: FieldRef): number {
     if (field.type === 'u32') return this.data.getUint32(at, true);
     if (field.type === 'i32') return this.data.getInt32(at, true);
     return this.data.getUint8(at);

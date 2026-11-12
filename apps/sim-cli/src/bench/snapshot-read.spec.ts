@@ -1,4 +1,10 @@
-import { bytesPerRead, READ_ALLOCATION_GATE_BYTES, READ_PLANT, snapshotReadRig } from './snapshot-read';
+import {
+  bytesPerRead,
+  READ_ALLOCATION_GATE_BYTES,
+  READ_PLANT,
+  READ_SMOKE_PLANT,
+  snapshotReadRig,
+} from './snapshot-read';
 
 /*
  * The per-frame snapshot read's rig and allocation measure (plan F2.3b, #60 review): every frame's
@@ -33,10 +39,24 @@ describe('the snapshot read rig', () => {
     plain.read();
     // Every node is at (1.5, 1.5) V like its reference node: 0 V. Every branch carries (0.25, 0.25) A,
     // |I| = 0.25 √2, from a to b (the rig's islands are DC).
-    expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25), 9);
+    // Protocol 7: every connection record's temperature (300–304 K) and its status (solved, 1).
+    let records = 0;
+    for (let i = 0; i < READ_PLANT.connections; i++) records += 300 + (i % 5) + 1;
+    expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25) + records, 6);
     expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000, 2)).toBeLessThan(
       READ_ALLOCATION_GATE_BYTES,
     );
+  });
+
+  it("the smoke run's plant is a tenth of every count, and its reads allocate nothing either", () => {
+    for (const key of Object.keys(READ_PLANT) as (keyof typeof READ_PLANT)[]) {
+      expect(READ_SMOKE_PLANT[key] * 10).toBe(READ_PLANT[key]);
+    }
+    for (const netlist of [false, true]) {
+      expect(bytesPerRead(snapshotReadRig(READ_SMOKE_PLANT, { netlist }), 1_000, 2)).toBeLessThan(
+        READ_ALLOCATION_GATE_BYTES,
+      );
+    }
   });
 
   it('the measure catches a read that allocates', () => {

@@ -10,6 +10,8 @@ const event = (kind: SimEvent['kind'], entity: number | null, tick = 0): SimEven
   kind,
   entity,
   entities: [],
+  connection: null,
+  end: null,
   detail: {},
 });
 
@@ -48,6 +50,21 @@ describe('SimEventToasts', () => {
   it('ignores other kinds and island events', () => {
     const { toasts, shown } = setup();
     toasts.events([event('hiccup', 2), event('overRated', 2), event('singular', null), event('blown', null)]);
+    expect(shown()).toEqual([]);
+  });
+
+  it('never toasts a connection event: an overheating termination is a fault the player must find (F3.6 part 3)', () => {
+    const { toasts, shown } = setup();
+    const connection = (kind: SimEvent['kind']): SimEvent => ({
+      tick: 11,
+      kind,
+      entity: null,
+      entities: [],
+      connection: 2,
+      end: 'a',
+      detail: { temperatureK: 393.5 },
+    });
+    toasts.events([connection('terminationOverheat'), connection('insulationDamaged')]);
     expect(shown()).toEqual([]);
   });
 

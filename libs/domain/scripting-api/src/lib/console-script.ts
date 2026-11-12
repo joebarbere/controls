@@ -46,23 +46,27 @@ export interface ConsoleTarget {
   hash(): string | Promise<string>;
   /** The `netlist.dump` text (plan F2.6), ending with a newline. */
   netlistDump(): string | Promise<string>;
+  /** The `wire.info <id>` text (F3.6 part 3), ending with a newline. */
+  wireInfo(id: number): string | Promise<string>;
 }
 
 /**
  * Read-only console queries that are not commands (they change nothing and are never logged).
  * `world.hash` prints the current `world.hash`; `netlist.dump` prints the netlist and its island
- * diagnostics (F2.6), one output line per text line. F1.5 adds `help`, `run` and `clear` in the console.
+ * diagnostics (F2.6), one output line per text line; `wire.info <id>` prints one connection's length
+ * and record (F3.6 part 3, plan D16). F1.5 adds `help`, `run` and `clear` in the console.
  */
-export const CONSOLE_QUERIES: readonly string[] = ['world.hash', 'netlist.dump'];
+export const CONSOLE_QUERIES: readonly string[] = ['world.hash', 'netlist.dump', 'wire.info'];
 
 /**
- * Each console query's argument schema (ADR 0015: `wire.info <id>` will take one). Mapped with the
- * same console grammar as a command's args (`consoleArgs`), positionally or by flag, and checked
- * with the schema. A query is never logged, so its args are not save format.
+ * Each console query's argument schema (ADR 0015). Mapped with the same console grammar as a
+ * command's args (`consoleArgs`), positionally or by flag (`wire.info 2`, `wire.info --id 2`), and
+ * checked with the schema. A query is never logged, so its args are not save format.
  */
 export const CONSOLE_QUERY_ARGS: Readonly<Record<string, z.ZodObject>> = {
   'world.hash': z.strictObject({}),
   'netlist.dump': z.strictObject({}),
+  'wire.info': z.strictObject({ id: z.int().min(1).max(Number.MAX_SAFE_INTEGER).meta({ title: 'Connection id' }) }),
 };
 
 export type ConsoleQueryArgsResult =
@@ -213,15 +217,15 @@ export function queryLines(text: string): string[] {
 
 /**
  * Runs one console query against `target` and returns its output lines. `args` come from
- * {@link consoleQueryArgs}; no query reads any yet (`wire.info <id>` will, ADR 0015).
+ * {@link consoleQueryArgs} (`wire.info` reads its `id`).
  */
 export async function runConsoleQuery(
   target: ConsoleTarget,
   id: string,
   args: Readonly<Record<string, unknown>> = {},
 ): Promise<string[]> {
-  void args;
   if (id === 'netlist.dump') return queryLines(await target.netlistDump());
+  if (id === 'wire.info') return queryLines(await target.wireInfo(args['id'] as number));
   return [await target.hash()];
 }
 

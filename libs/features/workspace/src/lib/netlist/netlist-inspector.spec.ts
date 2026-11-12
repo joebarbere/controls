@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { SimHost } from '@controls/feature-session';
 import { fakeSnapshotView, PANEL_SAMPLE_HZ, type SnapshotView, type WatchTarget } from '@controls/sim-protocol';
 import { NetlistInspector, REDUCED_MOTION_TRACE_HZ } from './netlist-inspector';
-import { BENCH_BRANCHES, BENCH_NODES, benchDescriptor } from './netlist.fakes';
+import { BENCH_BRANCHES, BENCH_CONNECTIONS, BENCH_NODES, benchDescriptor } from './netlist.fakes';
 
 /**
  * A `SimHost` whose `select` samples on demand: `publish(view)` runs the selector as a sample would.
@@ -74,6 +74,7 @@ const lit = (descriptor = benchDescriptor(), scale = 1, tick = 1500) =>
     nodes: BENCH_NODES,
     branches: BENCH_BRANCHES.map(([re]) => [re * scale, 0] as const),
     islands: [{ band: 1 }, { iterations: 0 }],
+    connections: BENCH_CONNECTIONS,
   });
 /** A row by its static label text (cheaper than `getByRole('treeitem', { name })`, docs/caveats/ui.md). */
 const row = (panel: HTMLElement, label: string) =>
@@ -97,6 +98,11 @@ describe('NetlistInspector', () => {
     expect(value(row(panel, 'Island 1 · AC'))).toBe('unmodelled · band none');
     expect(value(row(panel, 'Node 5: 4:l1'))).toBe('no reading');
     expect(value(row(panel, 'Branch 5 e4.l1: 6 -> 5'))).toBe('no reading');
+    // Protocol 7: a lead's branch row adds its record's drop and temperature; a device's has none.
+    const lead = row(panel, 'Branch 2 c1: 1 -> 2');
+    expect(within(lead).getByTestId('connection-detail').textContent?.trim()).toBe('drop 30.0 mV, 293 K');
+    expect(lead.textContent).toContain('drop 30.0 mV'); // part of the row's text, read with it
+    expect(within(row(panel, 'Branch 1 e3.filament: 3 -> 4')).queryByTestId('connection-detail')).toBeNull();
     expect(tree.querySelectorAll('[role="treeitem"]')).toHaveLength(19);
     const island = row(panel, 'Island 0 · DC');
     expect(island.getAttribute('aria-level')).toBe('1');

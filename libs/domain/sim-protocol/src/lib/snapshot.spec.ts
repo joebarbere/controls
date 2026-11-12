@@ -32,9 +32,15 @@ import {
   type SnapshotSource,
 } from './snapshot';
 
-/** A snapshot source over plain arrays, with device records written as one f64 per device. */
-function source(overrides: Partial<SnapshotSource> & { readonly devices?: readonly number[] } = {}): SnapshotSource {
+/** A snapshot source over plain arrays, with device (and connection) records written as one f64 each. */
+function source(
+  overrides: Partial<SnapshotSource> & {
+    readonly devices?: readonly number[];
+    readonly connections?: readonly number[];
+  } = {},
+): SnapshotSource {
   const devices = overrides.devices ?? [];
+  const connections = overrides.connections ?? [];
   return {
     topologyGeneration: 3,
     tick: 1234,
@@ -55,6 +61,11 @@ function source(overrides: Partial<SnapshotSource> & { readonly devices?: readon
     deviceDataBytes: 8 * devices.length,
     writeDevices(view, offset) {
       devices.forEach((value, i) => view.setFloat64(offset + 8 * i, value, true));
+    },
+    connectionCount: connections.length,
+    connectionDataBytes: 8 * connections.length,
+    writeConnections(view, offset) {
+      connections.forEach((value, i) => view.setFloat64(offset + 8 * i, value, true));
     },
     ...overrides,
   };
@@ -78,6 +89,7 @@ const snapshotArb = fc.record({
   branches: fc.array(finiteArb, { maxLength: 80, size: 'large' }),
   islands: fc.array(islandArb, { maxLength: 8 }),
   devices: fc.array(finiteArb, { maxLength: 6 }),
+  connections: fc.array(finiteArb, { maxLength: 6 }),
   ticks: fc.tuple(fc.nat({ max: Number.MAX_SAFE_INTEGER }), fc.nat({ max: Number.MAX_SAFE_INTEGER })),
   hash: fc.uint8Array({ minLength: 32, maxLength: 32 }),
 });
@@ -100,6 +112,7 @@ function sourceOf(g: GeneratedSnapshot): SnapshotSource {
     islandUnknowns: g.islands.map((i) => i.unknowns),
     islandBands: g.islands.map((i) => i.band),
     devices: g.devices,
+    connections: g.connections,
   });
 }
 
@@ -112,11 +125,21 @@ function encode(s: SnapshotSource, slotSeq = 0): Uint8Array {
 const hashed = (s: SnapshotSource) => snapshotHashedBytes(encode(s));
 
 describe('the snapshot layout (ADR 0011 §5)', () => {
-  it('is protocol version 6 (the slot layout unchanged since 5), with a 96-byte slot header whose hashed region starts at byte 8', () => {
-    expect(SIM_PROTOCOL_VERSION).toBe(6);
+  it('is protocol version 7 (connection records), with a 96-byte slot header whose hashed region starts at byte 8', () => {
+    expect(SIM_PROTOCOL_VERSION).toBe(7);
     expect([SLOT_HEADER_BYTES, SLOT_HASHED_START]).toStrictEqual([96, 8]);
-    expect(SLOT_OFFSETS).toMatchObject({ tick: 8, lastSolveTick: 16, flags: 44, topologyHash: 48, payloadBytes: 80 });
-    expect(slotBytesFor(3, 4, 2, 24)).toBe(96 + 48 + 64 + 32 + 24);
+    expect(SLOT_OFFSETS).toMatchObject({
+      tick: 8,
+      lastSolveTick: 16,
+      flags: 44,
+      topologyHash: 48,
+      payloadBytes: 80,
+      connectionCount: 84,
+      connectionDataBytes: 88,
+      reserved: 92,
+    });
+    expect(slotBytesFor(3, 4, 2, 24, 0)).toBe(96 + 48 + 64 + 32 + 24);
+    expect(slotBytesFor(3, 4, 2, 24, 104)).toBe(96 + 48 + 64 + 32 + 24 + 104);
     expect([align8(0), align8(1), align8(8), align8(9)]).toStrictEqual([0, 8, 8, 16]);
   });
 
@@ -147,6 +170,38 @@ describe('the snapshot layout (ADR 0011 §5)', () => {
       ].join(''),
     );
     expect(snapshotHash(bytes)).toBe('dd9ff86422c9ea982ddeb9eb58acb8cd1fedb31ecc016a882f9b7dd386541bf1');
+  });
+
+  it('pins the bytes of a snapshot with a connection section (protocol 7): counts in bytes 84–91, records after the devices', () => {
+    // As above, plus one connection record of one f64 (2.5): connectionCount 1 and connectionDataBytes
+    // 8 in what were reserved bytes, 4 reserved zeros, payloadBytes 80, the record after the device.
+    // A snapshot with no connection records is byte for byte protocol 6's (the golden above is unchanged).
+    const bytes = hashed(source({ devices: [0.5], connections: [2.5] }));
+    expect(Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')).toBe(
+      [
+        '0000000000489340',
+        '0000000000389340',
+        '02000000010000000100000001000000',
+        '0800000000000000',
+        'ab'.repeat(32),
+        '50000000',
+        '01000000',
+        '08000000',
+        '00'.repeat(4),
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000002840',
+        '0000000000000000',
+        '000000000000d03f',
+        '0000000000000000',
+        '01000100000000000200000000000000',
+        '000000000000e03f',
+        '0000000000000440',
+      ].join(''),
+    );
+    const decoded = decodeSnapshot(bytes);
+    expect(decoded.connectionCount).toBe(1);
+    expect(new DataView(decoded.connections.buffer, decoded.connections.byteOffset).getFloat64(0, true)).toBe(2.5);
   });
 });
 
@@ -230,7 +285,7 @@ describe('encodeSnapshot and decodeSnapshot', () => {
       copy[at] = value;
       return () => decodeSnapshot(copy);
     };
-    expect(tampered(84 - SLOT_HASHED_START, 1)).toThrow(/reserved/); // the slot header's reserved bytes
+    expect(tampered(92 - SLOT_HASHED_START, 1)).toThrow(/reserved/); // the slot header's reserved bytes
     const island = SLOT_HEADER_BYTES - SLOT_HASHED_START + 2 * 16 + 16;
     expect(tampered(island, 7)).toThrow(/kind/);
     expect(tampered(island + 13, 1)).toThrow(/reserved/);

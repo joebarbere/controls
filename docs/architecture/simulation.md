@@ -816,10 +816,35 @@ stateDiagram-v2
 - **Regimes.** An `ok` end is ohmic below `GLOW_ONSET_OHM` and follows the glowing law from it (also an `intermittentClosed` end); an `arcing` end stamps V_arc/|I| (V_arc uniform in 15–30 V, drawn once per termination from `termination:<id>:arcing`; |I| floored at 0.5 A). Both laws are nonlinear: on DC the outer loop's `iterate` hook (pointed at the bank only for such connections) values them; on AC they take the last solution's |I| and the 1 % rule re-solves until they settle.
 - **States.** `endStateCode(R_made · D, s, bucket)` with `s` the first output of `termination:<id>:intermittent` and one draw per 100-tick bucket (`mix32(s ^ imul(bucket, 0x9e3779b1))`: 30 % open, 20 % arcing, 50 % closed). Decided at each cadence step for the compact list's ends (protection layer, `protection(ctx)`) and at every rebuild, for bucket ⌊(T − 1)/100⌋, so a bag always equals the pure function. Entering or leaving `intermittentOpen` is a topology change (the compiler reads it through `connectionSim` and leaves the connection out, `intermittent-open`); any other change is a value change.
 - **Limits and the failure rule.** No node reports above its metal's melting point (`materials.meltingPointK`, or the lead's `meltingPointK`): a hot spot reaching it burns open (D raised to 1 Ω / R_made); a conductor node reaching it fuses the connection (a conductor: both landed ends burned open; a lead: both end states `intermittentOpen`, the one non-initial lead end state). `insulationDamaged` is set, sticky, at the insulation's rating + 40 K on the conductor node or a conductor's hot spot (a lead's rating is its `insulationRatedTempK`). The fusing current is anchored to Preece and reads 24–34 % high because R(T) is clamped at 200 °C.
-- **Detections.** `terminationOverheat` (a hot spot crossing T_a + 100 K upwards) and `insulationDamaged` go into a preallocated ring (`SimEngine.takeConnectionDetections()`); publishing them as events is protocol 7 (F3.6 part 3).
+- **Detections.** `terminationOverheat` (a hot spot crossing T_a + 100 K upwards) and `insulationDamaged` go into a preallocated ring, which the engine drains into sim events after every step that recorded one (protocol 7, below).
 - **The bad-termination scenario** (`apps/sim-cli/scenarios/bad-termination.console`, ADR 0018 §7): a 20 %-torque breaker screw on 14 AWG THHN at 11.8 A settles 90.8 K above its conductor with 81.5× a good end's drop, every expectation derived from the built current.
 - **Budget.** `intermittent-toggle-wired`: one end opening on the wired plant (the compiler's open-toggle path, the bank's sync and a linear solve copying the untouched islands), under the calibrated 2 ms re-solve gate.
 - **The open-toggle path.** A recompile of the same world whose only change is an end opening or closing skips the world walk and the terminal partition: `NetlistCompiler` re-assembles branches and islands from the previous netlist and resumes the topology hash after the unchanged node section. The result equals a from-scratch compile exactly (property-tested).
+
+## Connection records and events (F3.6 part 3, protocol 7)
+
+The readers' view of the bank ([ADR 0011 amendment](../decisions/0011-sim-worker-contract.md#amendment-protocol-7-connection-records-and-connection-events-f36-part-3), Accepted 2026-11-12 by `renderer-engineer` and `angular-ui-engineer`). No model changed; `SIM_ENGINE_VERSION` stays 7.
+
+```mermaid
+flowchart LR
+    BANK["ConnectionThermalBank<br/>(state at tick T)"] -->|writeRecord| SLOT["slot: … devices,<br/>connections (104 B each)"]
+    SOL["solution record"] --> BANK
+    SLOT --> DESC["descriptor.connections<br/>{connection, kind, recordOffset, branch}"]
+    SLOT --> READOUT["NetlistReadout<br/>connectionStatus, connectionValues"]
+    READOUT --> INSPECTOR["netlist inspector<br/>connection rows"]
+    READOUT -.F3.2 part 2.-> HEAT["heat overlay"]
+    BANK -->|detections| EVENTS["sim events<br/>terminationOverheat, insulationDamaged"]
+    SOL --> INFO["connectionRecord → game.connection, wire.info"]
+    BANK --> INFO
+```
+
+- **One record per bank member** (every lead and conductor of a known kind, netlisted or not), in connection-id order, in the slot's connection section after the devices (`connectionCount` and `connectionDataBytes` at slot bytes 84 and 88). Its fields: the current, conductor and end drops, and the end voltages on the conductor side of each contact, each a reading only with its bit in `readings`; the own-state conductor resistance at T_c, each end's contact by its regime, the temperatures, the end states (`none` for an end with no termination node; `intermittentOpen` for a gap), `conductorState` (`open` for a fused lead) and the insulation flag; `status` (`open` when not netlisted). A lead's clips are inside its conductor resistance.
+- **An open record never claims 0 V across a gap.** Not netlisted, no current flows: 0 A and 0 V across the body, a closed end or a free end are readings. The drop across an `intermittentOpen` end (or a fused lead's body) is the |ΔV| between the gap's two sides when both are on one solved, referenced island (the conductor floats at its landed, closed end's terminal), else no reading. End voltages: a closed end's terminal, an open end's floating conductor, a lead's terminals; none for a free end. The engine resolves each landed end's terminal node before writing records (lazily, so the toggle re-solve path pays nothing).
+- **The drops** split the solved terminal-to-terminal voltage in proportion to R_cond, R_a and R_b evaluated from the state at the snapshot's tick, so they add up to it and each drop is within 1 % of I × the record's resistance for it (exactly at a solve tick; the 1 % rule bounds the total, and below `CONNECTION_RESOLVE_MIN_A` there is no bound). A record is a pure function of the export, like a device record: a loaded engine writes the same bytes (property-tested).
+- **The generation follows membership**: adding or removing a non-netlisted member bumps it once and sends a new descriptor, with `topologyHash` unchanged.
+- **Events.** The detections become `terminationOverheat` and `insulationDamaged` sim events, with `connection`, `end` (`null` for the conductor node) and `detail.temperatureK`, after device and island events at the same tick.
+- **Reading.** `NetlistReadout` reads every record into `connectionValues` (18 values each, `CONNECTION_VALUE_INDEX`) with a plan built once per descriptor; for the protocol layout it copies each record's 12 f64 words and 6 bytes in order. Headless, `SimEngine.connectionRecord(id)` decodes one (`game.connection`), and `wireInfo(world, id)` formats it for the `wire.info <id>` console query, a pure function of the materialised world like `netlist.dump`.
+- **Bench.** `snapshot-read-500-devices` and `overlay-read-500-devices` carry 2,000 records (about 208 KB): still 0 B per read.
 
 ## Not yet
 

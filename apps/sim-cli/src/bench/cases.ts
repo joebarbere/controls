@@ -23,6 +23,7 @@ import {
   bytesPerRead,
   READ_ALLOCATION_GATE_BYTES,
   READ_PLANT,
+  READ_SMOKE_PLANT,
   snapshotReadRig,
   type SnapshotReadRig,
 } from './snapshot-read';
@@ -171,6 +172,16 @@ function netlistRig(): SnapshotReadRig {
   return overlayRig;
 }
 
+/** The smoke run's rigs (`READ_SMOKE_PLANT`), for the allocation probes' smoke forms only. */
+let smokeRigs: { plain: SnapshotReadRig; netlist: SnapshotReadRig } | null = null;
+function smokeRig(netlist: boolean): SnapshotReadRig {
+  smokeRigs ??= {
+    plain: snapshotReadRig(READ_SMOKE_PLANT),
+    netlist: snapshotReadRig(READ_SMOKE_PLANT, { netlist: true }),
+  };
+  return netlist ? smokeRigs.netlist : smokeRigs.plain;
+}
+
 /**
  * ADR 0011 §9.2's per-frame read (plan F2.3b): reported, not time-gated (the budget is 0.1 ms at p99
  * and measured at a seventh of it; a raw-ms gate would need the calibrated headroom first). Gated on
@@ -195,7 +206,8 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
     return String(rig().sum());
   },
   invariant: (smoke) => {
-    const bytes = smoke ? bytesPerRead(rig(), SMOKE_READS, SMOKE_WINDOWS) : bytesPerRead(rig());
+    // Smoke: the same probe on the smoke plant (a tenth of every count), so a CI smoke run stays cheap.
+    const bytes = smoke ? bytesPerRead(smokeRig(false), SMOKE_READS, SMOKE_WINDOWS) : bytesPerRead(rig());
     return {
       value: bytes,
       failure:
@@ -208,8 +220,9 @@ export const SNAPSHOT_READ_CASE: BenchCase = {
 
 /**
  * F2.6: the overlays' per-snapshot read, the snapshot read above plus `NetlistReadout.read` over the
- * whole netlist (1,000 node voltages against their references, 1,500 branch currents, 50 islands).
- * Reported, not time-gated, like the read it extends; gated on allocating nothing.
+ * whole netlist (1,000 node voltages against their references, 1,500 branch currents, 50 islands)
+ * and, since protocol 7 (F3.6 part 3), every field of 2,000 connection records. Reported, not
+ * time-gated, like the read it extends; gated on allocating nothing.
  */
 export const OVERLAY_READ_CASE: BenchCase = {
   name: 'overlay-read-500-devices',
@@ -221,10 +234,13 @@ export const OVERLAY_READ_CASE: BenchCase = {
     netlistRig().read();
     return String(netlistRig().sum());
   },
-  invariant: () => {
+  invariant: (smoke) => {
     // Smaller windows than the plain read's (a readout costs about twice the copy): 4,000 reads at
     // 12 B or more each is still 48 kB a window, far above the gate, and the case stays a few seconds.
-    const bytes = bytesPerRead(netlistRig(), 4_000, 6, 10_000);
+    // Smoke: the plain read's smoke form on the smoke plant (it ignored smoke before, 13 s of CI's 30).
+    const bytes = smoke
+      ? bytesPerRead(smokeRig(true), SMOKE_READS, SMOKE_WINDOWS)
+      : bytesPerRead(netlistRig(), 4_000, 6, 10_000);
     return {
       value: bytes,
       failure:

@@ -35,6 +35,10 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
  *   ten times a second, never per snapshot. The structure is rebuilt only for a new descriptor.
  * - **Validity:** an island that isn't solved, or a node of an island with no reference, reads
  *   "no reading", never 0 V or 0 A (`NetlistReadout`, the overlays' readout).
+ * - **Connections** (protocol 7, F3.6 part 3): a lead's or a wire's branch row adds a detail line from
+ *   its connection record, the conductor's drop and temperature and each landed end's drop and
+ *   hot-spot temperature (`connectionDetail`). It is part of the row's text, so a screen reader reads
+ *   it with the row; a debug aid like the panel itself (`console.available`, plan D16).
  * - **Keyboard:** an ARIA tree with a roving tab stop. Up and Down move, Home and End jump, Right
  *   expands or goes to the first child, Left collapses or goes to the parent. The focused row is the
  *   selection; a selected node's terminals are {@link highlighted} (the workspace passes them to the
@@ -85,6 +89,9 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
           >
             <span class="label">{{ item.label }}</span>
             <span class="value" [class.unknown]="valueOf(item) === noReading">{{ valueOf(item) }}</span>
+            @if (detailOf(item); as detail) {
+              <span class="detail" data-testid="connection-detail">{{ detail }}</span>
+            }
           </li>
         }
       </ul>
@@ -131,6 +138,7 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
     }
     .row {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       gap: var(--ctl-space-2);
       padding: 2px var(--ctl-space-1);
@@ -177,6 +185,12 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
     .value.unknown {
       color: var(--ctl-fg-muted);
       font-style: italic;
+    }
+    .detail {
+      flex-basis: 100%;
+      padding-left: var(--ctl-space-2);
+      color: var(--ctl-fg-muted);
+      font-size: 0.85em;
     }
   `,
 })
@@ -278,6 +292,12 @@ export class NetlistInspector {
       default:
         return '';
     }
+  }
+
+  /** A connection branch's record detail (drops and temperatures), or `null`. */
+  protected detailOf(item: NetlistTreeItem): string | null {
+    if (item.kind !== 'branch') return null;
+    return this.values()?.connections[item.index] ?? null;
   }
 
   protected focusItem(key: string): void {

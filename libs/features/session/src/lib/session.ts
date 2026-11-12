@@ -238,6 +238,11 @@ export class Session {
     return (await this.sim.netlistDumpAt()).text;
   }
 
+  /** The `wire.info <id>` text at the current tick, from the sim worker's export (`SimHost.wireInfoAt`, F3.6 part 3). */
+  async wireInfoAt(id: number): Promise<string> {
+    return (await this.sim.wireInfoAt(id)).text;
+  }
+
   /**
    * Binds a save to the game running now, at its current tick (ADR 0011 §9.5): the bus world, the
    * log and `endTick` are captured in this call, and the worker's `state` query is posted in it, so
@@ -369,6 +374,7 @@ export class Session {
       exec: (id: string, args?: unknown) => this.exec(id, args),
       hash: () => this.hashAt(),
       netlistDump: () => this.netlistDumpAt(),
+      wireInfo: (id: number) => this.wireInfoAt(id),
       snapshotHash: () => this.sim.snapshotHash(),
       busWorld: () => this.game.world(),
       simTick: () => this.sim.simTick(),

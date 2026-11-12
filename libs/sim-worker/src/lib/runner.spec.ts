@@ -218,6 +218,33 @@ describe('following the host', () => {
     expect(h.of('events').flatMap((m) => m.events)).toEqual(events);
   });
 
+  it('forwards connection events (protocol 7) and publishes connection records as headless does, both transports', () => {
+    // The wired loop with the breaker's load screw degraded to 400× its as-made contact: it passes
+    // ambient + 100 K within two minutes, a `terminationOverheat` on connection 2's end a.
+    // Materialised first: the spec world leaves device bags empty, which a game refuses.
+    const raw = wiredLoopWorld({ spread: true, conductor2Sim: { endADegradation: 400, endATerminationId: 1 } });
+    const world = materialiseWorld(raw, SimEngine.start(raw, options()).exportState());
+    for (const transport of ['sab', 'message'] as const) {
+      const game = reference(world);
+      const events: unknown[] = [];
+      game.on('sim', (event) => events.push(event));
+      game.advance(120_000);
+      const h = harness();
+      h.init({ kind: 'world', world, firstSeq: 0 }, transport);
+      h.send({ type: 'advance', tick: 120_000 });
+      h.drain();
+      const sent = h.of('events').flatMap((m) => m.events);
+      expect(sent).toEqual(events);
+      expect(sent).toContainEqual(
+        expect.objectContaining({ kind: 'terminationOverheat', entity: null, connection: 2, end: 'a' }),
+      );
+      expect(h.view()?.connectionCount).toBe(7);
+      expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
+      const topology = h.of('topology').at(-1);
+      expect(topology?.descriptor.connections.map((c) => c.connection)).toStrictEqual([1, 2, 3, 4, 5, 6, 7]);
+    }
+  });
+
   it('delivers events as headless does whatever the publish timing: batches cut at each command (#62 review)', () => {
     // A thermal load that also reports `overRated` every 20 ticks without changing the topology (as
     // F2.4's protection events can): a time-driven event that no forced publish flushes. At tick 20 a
@@ -437,7 +464,11 @@ describe('publishing (ADR 0011 §7)', () => {
       for (const entry of runBench(game)) h.send({ type: 'command', entry });
       h.drain();
       const grown = h.of('topology').filter((m) => m.buffer !== null);
-      expect(grown.length).toBe(transport === 'sab' ? 1 : 0); // the fallback grows its pool instead
+      // The fallback grows its pool instead. With the shared buffer it grows at least once: since
+      // protocol 7 each lead adds a 104-byte connection record, so the bench outgrows twice its first
+      // topology more than once.
+      if (transport === 'sab') expect(grown.length).toBeGreaterThanOrEqual(1);
+      else expect(grown).toHaveLength(0);
       expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
     }
   });

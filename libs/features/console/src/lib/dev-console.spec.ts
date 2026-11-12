@@ -209,6 +209,22 @@ describe('DevConsoleComponent', () => {
     expect(session.entries()).toHaveLength(entries);
   });
 
+  it('prints wire.info one line per entry, and an unknown id as a line of output, without logging (F3.6 part 3)', async () => {
+    const { session, user } = await setup();
+    const entries = session.entries().length;
+    const input = await editor();
+    input.set('wire.info 7');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(lastEntry()).toBe('no connection 7'));
+    const shown = [...output().querySelectorAll('.entry')].map((e) => e.textContent?.trim());
+    expect(shown.slice(-3)).toEqual(['> wire.info 7', 'wire.info 7 tick 0', 'no connection 7']);
+    expect(await session.wireInfoAt(7)).toBe('wire.info 7 tick 0\nno connection 7\n');
+    input.set('wire.info x');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(lastEntry()).toContain('Column 11: '));
+    expect(session.entries()).toHaveLength(entries);
+  });
+
   it('warns before a cheat runs, and runs it only when confirmed', async () => {
     const { session, user } = await setup();
     const input = await editor();
@@ -305,6 +321,17 @@ describe('DevConsoleComponent', () => {
     await TestBed.inject(DevConsole).runFile({ name: 'h.console', size: 11, text: async () => 'world.hash\n' });
     await fixture.whenStable();
     expect(lastEntry()).toContain('h.console: the simulation didn’t answer');
+  });
+
+  it('says so when the sim does not answer a wire.info', async () => {
+    const { session, user } = await setup();
+    const input = await editor();
+    vi.spyOn(session, 'wireInfoAt').mockRejectedValue(new Error('crashed'));
+    input.set('wire.info 2');
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(lastEntry()).toBe('wire.info: the simulation didn’t answer (restart it if it crashed).'),
+    );
   });
 
   it('says so when the sim does not answer a netlist.dump', async () => {

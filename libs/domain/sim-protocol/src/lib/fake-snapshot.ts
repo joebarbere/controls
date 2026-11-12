@@ -35,6 +35,8 @@ export interface FakeSnapshot {
   readonly islands?: readonly FakeIsland[];
   /** The device section's bytes (records at the descriptor's offsets), zero-filled to a multiple of 8. */
   readonly devices?: Uint8Array;
+  /** Protocol 7: the connection section's bytes (records at the descriptor's offsets), zero-filled to a multiple of 8. */
+  readonly connections?: Uint8Array;
 }
 
 /** A `SnapshotView` of `fake`, encoded and decoded by the real codec. Allocates; never per frame. */
@@ -51,6 +53,16 @@ export function fakeSnapshotView(fake: FakeSnapshot): SnapshotView {
   const islands = d.islands.map((island, i) => ({ island, entry: fake.islands?.[i] ?? {} }));
   const devices = fake.devices ?? new Uint8Array(0);
   const deviceDataBytes = (devices.byteLength + 7) & ~7;
+  const connections = fake.connections ?? new Uint8Array(0);
+  // Room for every record the descriptor lists (zeros where `connections` stops), as the engine lays it out.
+  let extent = connections.byteLength;
+  for (const c of d.connections) {
+    const schema = Object.prototype.hasOwnProperty.call(d.connectionSchemas, c.kind)
+      ? d.connectionSchemas[c.kind]
+      : null;
+    extent = Math.max(extent, c.recordOffset + (schema?.recordBytes ?? 0));
+  }
+  const connectionDataBytes = (extent + 7) & ~7;
   const source: SnapshotSource = {
     topologyGeneration: d.generation,
     tick: fake.tick ?? 1,
@@ -71,6 +83,11 @@ export function fakeSnapshotView(fake: FakeSnapshot): SnapshotView {
     deviceDataBytes,
     writeDevices(view, offset) {
       for (let i = 0; i < devices.byteLength; i++) view.setUint8(offset + i, devices[i]);
+    },
+    connectionCount: d.connections.length,
+    connectionDataBytes,
+    writeConnections(view, offset) {
+      for (let i = 0; i < connections.byteLength; i++) view.setUint8(offset + i, connections[i]);
     },
   };
   const slot = new Uint8Array(snapshotSlotBytes(source));

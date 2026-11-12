@@ -1,5 +1,5 @@
 /*
- * The snapshot layout (ADR 0011 §5, `SIM_PROTOCOL_VERSION` 2): byte offsets and codes. Shared by the
+ * The snapshot layout (ADR 0011 §5, `SIM_PROTOCOL_VERSION` 7): byte offsets and codes. Shared by the
  * engine's encoder (headless and, from F2.3b, the sim worker), the reader and the tests, so every
  * runtime writes and reads the same bytes. Every multi-byte value is little-endian.
  *
@@ -11,7 +11,7 @@
  * The protocol version (ADR 0011 §12). Any change to the layout, the island encoding, the nominal
  * bands, a device output schema, the message union or the descriptor bumps it, even an additive one.
  */
-export const SIM_PROTOCOL_VERSION = 6; // 2: `error.reason` (F2.3b review); 3: F2.4's device records registered; 4: F2.5's (nothing hashed changed); 5: F2.6's nominal bands (island band bytes are hashed); 6: F3.6 part 1, the `state` export carries every connection's sim bag (connection records move to 7)
+export const SIM_PROTOCOL_VERSION = 7; // 2: `error.reason` (F2.3b review); 3: F2.4's device records registered; 4: F2.5's (nothing hashed changed); 5: F2.6's nominal bands (island band bytes are hashed); 6: F3.6 part 1, the `state` export carries every connection's sim bag; 7: F3.6 part 3, connection records, the descriptor's connections and the connection events (ADR 0011 amendment)
 
 /** The buffer header's magic: the bytes `CSIM` read as a little-endian `u32` (F2.3b writes it). */
 export const SNAPSHOT_MAGIC = 0x4d495343;
@@ -47,8 +47,12 @@ export const SLOT_OFFSETS = Object.freeze({
   topologyHash: 48,
   /** `u32`: the bytes used after the header. */
   payloadBytes: 80,
-  /** Bytes 84–95 are reserved, written as zero (and hashed). */
-  reserved: 84,
+  /** `u32` (protocol 7): connection records, one per connection in the thermal bank. */
+  connectionCount: 84,
+  /** `u32` (protocol 7), a multiple of 8: the connection section's bytes. */
+  connectionDataBytes: 88,
+  /** Bytes 92–95 are reserved, written as zero (and hashed). */
+  reserved: 92,
 });
 
 /** A node entry: `f64 re`, `f64 im` (V, against the solver's ground). */
@@ -101,15 +105,23 @@ export function align8(n: number): number {
 }
 
 /**
- * The bytes a slot needs for these counts: the header plus every section (ADR 0011 §5.3). Each
- * section's entries are a multiple of 8 bytes, so the sections are packed with no padding between them.
+ * The bytes a slot needs for these counts: the header plus every section (ADR 0011 §5.3; the
+ * connection section since protocol 7). Each section's entries are a multiple of 8 bytes, so the
+ * sections are packed with no padding between them.
  */
-export function slotBytesFor(nodeCount: number, branchCount: number, islandCount: number, deviceDataBytes: number) {
+export function slotBytesFor(
+  nodeCount: number,
+  branchCount: number,
+  islandCount: number,
+  deviceDataBytes: number,
+  connectionDataBytes: number,
+) {
   return (
     SLOT_HEADER_BYTES +
     nodeCount * NODE_ENTRY_BYTES +
     branchCount * BRANCH_ENTRY_BYTES +
     islandCount * ISLAND_ENTRY_BYTES +
-    align8(deviceDataBytes)
+    align8(deviceDataBytes) +
+    align8(connectionDataBytes)
   );
 }

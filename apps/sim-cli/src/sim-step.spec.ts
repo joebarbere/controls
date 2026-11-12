@@ -30,7 +30,7 @@ const ENGINE_3_HASH = '0194d4c84ebfeaf505e21f4090f9bde461221017707e9b60db234e6a9
 /** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session (`df471c07…b48a` as world v2). */
 const ENGINE_4_HASH = '91a543b9cafef2490c5145143114d32e3a78bac5ab80077716528a83ae2741f6';
 export const SIM_STEP_HASH = 'd350f0791b8705347c331b764b3022a7461177e74e4ce0848b067a173ef23732';
-export const SIM_STEP_SNAPSHOT_HASH = '54003f07cf3f3f157adab45870cc946d905da770ebb1995fb3c8d330c1803f0b';
+export const SIM_STEP_SNAPSHOT_HASH = '155c2cd26fb761cff74036f668e10124738b16fb374c274bd90e23f4730cf57f';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/sim-step.console');

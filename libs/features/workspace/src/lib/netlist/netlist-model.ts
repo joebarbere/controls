@@ -1,4 +1,12 @@
 import {
+  CONNECTION_CONDUCTOR_STATES,
+  CONNECTION_READING_CONDUCTOR_DROP,
+  CONNECTION_READING_END_A_DROP,
+  CONNECTION_READING_END_B_DROP,
+  CONNECTION_RECORD_END_STATES,
+  CONNECTION_RECORD_STATUS_VALUES,
+  CONNECTION_VALUE_COUNT,
+  CONNECTION_VALUE_INDEX,
   type DescriptorElementRef,
   type DescriptorTerminalRef,
   NetlistReadout,
@@ -18,7 +26,10 @@ import {
  *   elements, `a -> b` ends;
  * - the **values**: one display string per island, node and branch, read through `NetlistReadout`
  *   (the overlays' readout, so both agree on what is a reading). An island that isn't `solved`, and a
- *   node of an island with no reference, read "no reading", never 0 V or 0 A.
+ *   node of an island with no reference, read "no reading", never 0 V or 0 A;
+ * - per **connection branch** (a lead's or a wire's, protocol 7, F3.6 part 3), a detail line from its
+ *   connection record: the conductor's drop and temperature and each landed end's drop, hot-spot
+ *   temperature and any non-`ok` state (`connectionDetail`). Records only, never `connection.sim`.
  */
 
 /** What a value cell shows when there is no reading (the validity rule, ADR 0011 §5.3). */
@@ -187,11 +198,61 @@ export interface NetlistValues {
   readonly nodes: readonly string[];
   /** `391 mA, a -> b` (DC direction against the branch's ends), `2.00 A` (AC) or {@link NO_READING}. */
   readonly branches: readonly string[];
+  /**
+   * Per branch: a connection branch's record detail (`drop 201 mV, 303 K, end a 300 mV, 394 K, end b
+   * 6.10 mV, 302 K`), or `null` for a device's element or a connection with no record.
+   */
+  readonly connections: readonly (string | null)[];
+}
+
+/**
+ * A temperature for display: whole kelvin, never an SI prefix (a fusing end at 1358 K reads `1358 K`,
+ * not `1.36 kK`). Temperatures have their own formatter (UI caveats); everything else uses
+ * {@link formatQuantity}.
+ */
+export function formatTemperature(kelvin: number): string {
+  return `${Math.round(kelvin)} K`;
+}
+
+/**
+ * Connection `c`'s record in `reading` (an index into the descriptor's `connections`) as one detail
+ * line, comma-separated so it reads aloud cleanly: the conductor's drop (or `open` when not
+ * netlisted, `fused` for a fused lead) and temperature, then each end that has a termination node:
+ * its drop (a gap's voltage for an open end), its hot-spot temperature and its state when not `ok`. An
+ * electrical value whose `readings` bit is clear is {@link NO_READING}, never 0 V; an end whose state
+ * is `none` (a lead's clip, a free end) is left out, never shown as 0 K. Unknown status or state codes
+ * fall back to `unsolved` and `none` (they can't come from this protocol: the version is checked).
+ */
+export function connectionDetail(reading: NetlistReading, c: number): string {
+  const at = c * CONNECTION_VALUE_COUNT;
+  const v = (name: string) => reading.connectionValues[at + CONNECTION_VALUE_INDEX[name]];
+  const status = CONNECTION_RECORD_STATUS_VALUES[reading.connectionStatus[c]] ?? 'unsolved';
+  const readings = v('readings');
+  const volts = (name: string, bit: number) => ((readings & bit) !== 0 ? formatQuantity(v(name), 'V') : NO_READING);
+  const fused = CONNECTION_CONDUCTOR_STATES[v('conductorState')] === 'open';
+  const body = volts('conductorDropV', CONNECTION_READING_CONDUCTOR_DROP);
+  const parts = [
+    fused ? `fused, gap ${body}` : status === 'open' ? 'open' : `drop ${body}`,
+    formatTemperature(v('conductorTempK')),
+  ];
+  for (const side of ['A', 'B'] as const) {
+    const state = CONNECTION_RECORD_END_STATES[v(`end${side}State`)] ?? 'none';
+    if (state === 'none') continue;
+    const bit = side === 'A' ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP;
+    const end = [`end ${side.toLowerCase()}`];
+    if (state === 'intermittentOpen') end.push(`open, gap ${volts(`end${side}DropV`, bit)}`);
+    else if (status !== 'open') end.push(volts(`end${side}DropV`, bit));
+    parts.push(end.join(' '), formatTemperature(v(`end${side}TempK`)));
+    if (state !== 'ok' && state !== 'intermittentOpen') parts.push(state);
+  }
+  if (v('insulationDamaged') === 1) parts.push('insulation damaged');
+  return parts.join(', ');
 }
 
 /** The display strings of a reading (allocates: call it at the panel rate, never per snapshot). */
 export function netlistValues(reading: NetlistReading): NetlistValues {
   const { descriptor } = reading;
+  const readout = NetlistReadout.of(descriptor);
   const solved = (island: number) => reading.islandStatus[island] === READING_SOLVED;
   return {
     descriptor,
@@ -210,6 +271,11 @@ export function netlistValues(reading: NetlistReading): NetlistValues {
       const direction = reading.branchDirection[i];
       return direction === 0 ? amps : `${amps}, ${direction > 0 ? 'a -> b' : 'b -> a'}`;
     }),
+    connections: descriptor.branches.map((b) => {
+      if (b.element.kind !== 'connection') return null;
+      const c = readout.recordOfConnection(b.element.connection);
+      return c < 0 ? null : connectionDetail(reading, c);
+    }),
   };
 }
 
@@ -217,10 +283,15 @@ export function netlistValues(reading: NetlistReading): NetlistValues {
 export function sameNetlistValues(a: NetlistValues | null, b: NetlistValues | null): boolean {
   if (a === b) return true;
   if (a === null || b === null || a.descriptor !== b.descriptor || a.tick !== b.tick) return false;
-  return same(a.islands, b.islands) && same(a.nodes, b.nodes) && same(a.branches, b.branches);
+  return (
+    same(a.islands, b.islands) &&
+    same(a.nodes, b.nodes) &&
+    same(a.branches, b.branches) &&
+    same(a.connections, b.connections)
+  );
 }
 
-function same(a: readonly string[], b: readonly string[]): boolean {
+function same(a: readonly (string | null)[], b: readonly (string | null)[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;

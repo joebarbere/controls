@@ -1,4 +1,5 @@
 import { type CommandRegistry, type ConsoleField, consoleFields } from '@controls/commands';
+import { CONSOLE_QUERY_ARGS } from '@controls/scripting-api';
 import { consoleIds } from './completion';
 import { CONSOLE_WORDS } from './interpret';
 
@@ -65,32 +66,39 @@ function overview<S>(registry: CommandRegistry<S>, chords: ChordLabels): string[
   return lines;
 }
 
+/** The `Arguments:` lines of a schema's fields. */
+function argumentLines(fields: readonly ConsoleField[]): string[] {
+  if (fields.length === 0) return ['Arguments: none'];
+  const lines = ['Arguments:'];
+  const width = Math.max(...fields.map((f) => f.path.length)) + 4;
+  for (const field of fields) {
+    const notes = [
+      valueLabel(field),
+      field.optional ? 'optional' : 'required',
+      field.position !== null ? `or positional #${field.position + 1}` : '',
+      field.description ?? '',
+    ].filter(Boolean);
+    lines.push(`  ${pad(`--${field.path}`, width)}${notes.join('; ')}`);
+  }
+  return lines;
+}
+
 /** One command or console word in detail. */
 function detail<S>(registry: CommandRegistry<S>, id: string, chords: ChordLabels): HelpResult {
   const def = registry.get(id);
   if (!def) {
     const word = Object.prototype.hasOwnProperty.call(CONSOLE_WORDS, id) ? CONSOLE_WORDS[id] : undefined;
     if (!word) return { ok: false, message: `Unknown command "${id}" (help lists them all)` };
-    return { ok: true, lines: [`${id}: ${word.summary}.`, `Usage: ${word.usage}`] };
+    // A query's usage and arguments come from its schema (`CONSOLE_QUERY_ARGS`), as a command's do.
+    const schema = Object.prototype.hasOwnProperty.call(CONSOLE_QUERY_ARGS, id) ? CONSOLE_QUERY_ARGS[id] : null;
+    if (schema === null) return { ok: true, lines: [`${id}: ${word.summary}.`, `Usage: ${word.usage}`] };
+    const fields = consoleFields(schema);
+    return { ok: true, lines: [`${id}: ${word.summary}.`, `Usage: ${usage(id, fields)}`, ...argumentLines(fields)] };
   }
   const fields = consoleFields(def.args);
   const keys = chords(def.id);
   const lines = [`${def.id}: ${def.title} (${def.category})`, `Usage: ${usage(def.id, fields)}`];
-  if (fields.length > 0) {
-    lines.push('Arguments:');
-    const width = Math.max(...fields.map((f) => f.path.length)) + 4;
-    for (const field of fields) {
-      const notes = [
-        valueLabel(field),
-        field.optional ? 'optional' : 'required',
-        field.position !== null ? `or positional #${field.position + 1}` : '',
-        field.description ?? '',
-      ].filter(Boolean);
-      lines.push(`  ${pad(`--${field.path}`, width)}${notes.join('; ')}`);
-    }
-  } else {
-    lines.push('Arguments: none');
-  }
+  lines.push(...argumentLines(fields));
   lines.push(`Keys: ${keys.length ? keys.join(', ') : 'none'}`);
   if (def.when) lines.push(`When: ${def.when}`);
   lines.push(`Undoable: ${def.undoable ? 'yes' : 'no'}`);

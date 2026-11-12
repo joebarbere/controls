@@ -88,6 +88,7 @@ export class DevConsole {
     exec: (id, args) => this.session.exec(id, args),
     hash: () => this.session.hashAt(),
     netlistDump: () => this.session.netlistDumpAt(),
+    wireInfo: (id) => this.session.wireInfoAt(id),
   };
 
   /** Runs one typed line. */

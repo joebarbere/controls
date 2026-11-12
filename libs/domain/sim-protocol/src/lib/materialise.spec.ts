@@ -1,5 +1,5 @@
 import { createWorld, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
-import { compareSimEvents, ISLAND_EVENT_KINDS, type SimEvent, SIM_EVENT_KINDS } from './events';
+import { compareSimEvents, CONNECTION_EVENT_KINDS, ISLAND_EVENT_KINDS, type SimEvent, SIM_EVENT_KINDS } from './events';
 import { MaterialiseError, materialiseWorld, type SimStateExport } from './materialise';
 
 const transform = { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } };
@@ -174,6 +174,8 @@ describe('sim events (ADR 0011 §4)', () => {
     kind,
     entity,
     entities,
+    connection: null,
+    end: null,
     detail: {},
   });
 
@@ -192,8 +194,44 @@ describe('sim events (ADR 0011 §4)', () => {
     expect(compareSimEvents(event(1, 'blown', 1), event(1, 'blown', 1))).toBe(0);
   });
 
-  it('island events are nonConverged and singular', () => {
+  it('sort connection events (protocol 7) after device and island events at a tick, by connection, end (conductor, a, b), then kind', () => {
+    const connectionEvent = (
+      tick: number,
+      kind: SimEvent['kind'],
+      connection: number,
+      end: SimEvent['end'],
+    ): SimEvent => ({
+      tick,
+      kind,
+      entity: null,
+      entities: [],
+      connection,
+      end,
+      detail: { temperatureK: 400 },
+    });
+    const events = [
+      connectionEvent(4, 'terminationOverheat', 7, 'b'),
+      connectionEvent(4, 'insulationDamaged', 7, null),
+      connectionEvent(4, 'terminationOverheat', 7, 'a'),
+      connectionEvent(4, 'terminationOverheat', 2, 'b'),
+      event(4, 'blown', 9),
+      connectionEvent(3, 'insulationDamaged', 9, 'a'),
+    ];
+    expect(
+      [...events].sort(compareSimEvents).map((e) => `${e.tick}:${e.kind}:${e.entity ?? `c${e.connection}.${e.end}`}`),
+    ).toStrictEqual([
+      '3:insulationDamaged:c9.a',
+      '4:blown:9',
+      '4:terminationOverheat:c2.b',
+      '4:insulationDamaged:c7.null',
+      '4:terminationOverheat:c7.a',
+      '4:terminationOverheat:c7.b',
+    ]);
+  });
+
+  it('island events are nonConverged and singular; connection events terminationOverheat and insulationDamaged', () => {
     expect([...ISLAND_EVENT_KINDS].sort()).toStrictEqual(['nonConverged', 'singular']);
+    expect([...CONNECTION_EVENT_KINDS].sort()).toStrictEqual(['insulationDamaged', 'terminationOverheat']);
     expect(SIM_EVENT_KINDS).toContain('blown');
   });
 });

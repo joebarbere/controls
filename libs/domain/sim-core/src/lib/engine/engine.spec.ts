@@ -148,7 +148,9 @@ describe('SimEngine: the clock and the step order (ADR 0011 §2, §4)', () => {
       host.advanceTo(++tick);
       events = host.engine.takeEvents();
     }
-    expect(events).toStrictEqual([{ tick, kind: 'blown', entity: 4, entities: [], detail: {} }]);
+    expect(events).toStrictEqual([
+      { tick, kind: 'blown', entity: 4, entities: [], connection: null, end: null, detail: {} },
+    ]);
     expect(tick % 10).not.toBe(0); // not a cadence tick, so only the trip can have solved there
     expect(host.engine.lastSolveTick).toBe(tick);
     expect(host.engine.stats.layerSolves).toBe(1);
@@ -365,7 +367,7 @@ describe('SimEngine: electrical results', () => {
     expect(host.engine.islands()).toMatchObject([{ kind: 'ac', status: 'singular', entities: [1, 2] }]);
     expect(host.engine.probe(end(1, 'l'), end(1, 'n'))).toStrictEqual({ kind: 'singular', tick: 0, island: 0 });
     expect(host.engine.takeEvents()).toStrictEqual([
-      { tick: 0, kind: 'singular', entity: null, entities: [1], detail: {} },
+      { tick: 0, kind: 'singular', entity: null, entities: [1], connection: null, end: null, detail: {} },
     ]);
     host.advanceTo(40); // still singular at every cadence solve: no new event, and the load never heats
     expect(host.engine.takeEvents()).toStrictEqual([]);
@@ -462,7 +464,7 @@ describe('SimEngine: electrical results', () => {
     expect(host.engine.probe(end(1, 'pos'), end(1, 'neg'))).toStrictEqual({ kind: 'singular', tick: 0, island: 0 });
     // Raised once, when the twin was placed (alone in its island); joining the load to it is no new loop.
     expect(host.engine.takeEvents()).toStrictEqual([
-      { tick: 0, kind: 'singular', entity: null, entities: [1], detail: {} },
+      { tick: 0, kind: 'singular', entity: null, entities: [1], connection: null, end: null, detail: {} },
     ]);
     expect(decodeSnapshot(host.engine.snapshot()).flags & ISLAND_FLAG_SINGULAR).toBe(ISLAND_FLAG_SINGULAR);
     // Still singular at every cadence solve and through a topology change of the same island: no new event.
@@ -649,7 +651,7 @@ describe('SimEngine: the snapshot', () => {
     const host = Host.fresh().run(ENGINE_BENCH).advanceTo(100); // before the fuse melts
     const snapshot = decodeSnapshot(host.engine.snapshot());
     const exported = host.engine.exportState();
-    expect(SIM_PROTOCOL_VERSION).toBe(6);
+    expect(SIM_PROTOCOL_VERSION).toBe(7);
     expect(snapshot).toMatchObject({
       tick: 100,
       lastSolveTick: 90,

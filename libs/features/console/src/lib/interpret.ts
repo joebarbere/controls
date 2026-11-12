@@ -21,6 +21,11 @@ export const CONSOLE_WORDS: Readonly<Record<string, { readonly usage: string; re
     usage: 'netlist.dump',
     summary: 'Print the netlist and each island’s solve status and nominal band (read-only, not logged)',
   },
+  'wire.info': {
+    // `help wire.info` builds its usage from `CONSOLE_QUERY_ARGS`; this one is the fallback.
+    usage: 'wire.info <id>',
+    summary: 'Print a wire’s or lead’s current, drops, temperatures and end states (read-only, not logged)',
+  },
 };
 
 export type ConsoleAction =

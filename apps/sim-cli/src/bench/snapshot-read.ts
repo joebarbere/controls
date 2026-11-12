@@ -1,4 +1,9 @@
 import {
+  CONNECTION_OUTPUT_SCHEMAS,
+  CONNECTION_RECORD_BYTES,
+  CONNECTION_RECORD_OFFSETS,
+  CONNECTION_VALUE_COUNT,
+  CONNECTION_VALUE_INDEX,
   createSnapshotBuffer,
   DescriptorIndex,
   encodeSnapshot,
@@ -27,10 +32,40 @@ import { runInNewContext } from 'node:vm';
  * With `netlist` (F2.6's overlays and inspector), each frame also reads the whole netlist out of the
  * copy: every node's |V| against its island reference, every branch's |I| and direction, and each
  * island's status and band (`NetlistReadout.read`), what the voltage and current overlays draw from.
+ *
+ * Protocol 7 (F3.6 part 3): the slot also holds 2,000 connection records (104 B each, about 208 KB,
+ * ADR 0015's wired-plant size), so every read copies them; the netlist rig also reads every field of
+ * every record into the readout's `connectionValues`, what the heat overlay and the inspector draw from.
  */
 
-/** The plant: 500 devices of one 24-byte record each, 1,000 nodes, 1,500 branches, 50 islands. */
-export const READ_PLANT = Object.freeze({ devices: 500, nodes: 1_000, branches: 1_500, islands: 50 });
+/** A read rig's plant: its counts. */
+export interface ReadPlant {
+  readonly devices: number;
+  readonly nodes: number;
+  readonly branches: number;
+  readonly islands: number;
+  readonly connections: number;
+}
+
+/**
+ * The plant: 500 devices of one 24-byte record each, 1,000 nodes, 1,500 branches, 50 islands and
+ * (protocol 7) 2,000 connection records.
+ */
+export const READ_PLANT = Object.freeze({
+  devices: 500,
+  nodes: 1_000,
+  branches: 1_500,
+  islands: 50,
+  connections: 2_000,
+});
+
+/**
+ * The smoke run's read plant (`sim bench --smoke`, CI's `bench.spec.ts`): a tenth of every count, so
+ * the allocation probes run the same read code (the copy, every field, the readout's fast path) at a
+ * fraction of the cost per read. Smoke runs prove the cases run, never measure; the full bench reads
+ * {@link READ_PLANT}.
+ */
+export const READ_SMOKE_PLANT = Object.freeze({ devices: 50, nodes: 100, branches: 150, islands: 5, connections: 200 });
 
 /**
  * The allocation gate, in bytes per read: under 1 B, so any object allocated on every read (12 B or
@@ -49,8 +84,11 @@ export interface SnapshotReadRig {
   sum(): number;
 }
 
-export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?: boolean } = {}): SnapshotReadRig {
-  const { devices, nodes, branches, islands } = plant;
+export function snapshotReadRig(
+  plant: ReadPlant = READ_PLANT,
+  options: { readonly netlist?: boolean } = {},
+): SnapshotReadRig {
+  const { devices, nodes, branches, islands, connections } = plant;
   const source: SnapshotSource = {
     topologyGeneration: 0,
     tick: 1,
@@ -71,6 +109,18 @@ export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?
     deviceDataBytes: 24 * devices,
     writeDevices(view, offset) {
       for (let i = 0; i < devices; i++) view.setFloat64(offset + 24 * i + 8, (i % 7) / 8, true);
+    },
+    connectionCount: connections,
+    connectionDataBytes: CONNECTION_RECORD_BYTES * connections,
+    writeConnections(view, offset) {
+      const o = CONNECTION_RECORD_OFFSETS;
+      for (let i = 0; i < connections; i++) {
+        const at = offset + CONNECTION_RECORD_BYTES * i;
+        view.setFloat64(at + o.currentA, 0.25, true);
+        view.setFloat64(at + o.conductorTempK, 300 + (i % 5), true);
+        view.setUint8(at + o.endAState, 1);
+        view.setUint8(at + o.status, 1);
+      }
     },
   };
   const slotBytes = slotCapacityFor(snapshotSlotBytes(source)) as number;
@@ -104,6 +154,13 @@ export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?
     islands: options.netlist ? Array.from({ length: islands }, () => ({ kind: 'dc' as const, nodes: [] })) : [],
     devices: Array.from({ length: devices }, (_, i) => ({ entity: i + 1, kind: schema.kind, recordOffset: 24 * i })),
     schemas: { [schema.kind]: schema },
+    connections: Array.from({ length: connections }, (_, i) => ({
+      connection: i + 1,
+      kind: 'conductor',
+      recordOffset: CONNECTION_RECORD_BYTES * i,
+      branch: options.netlist && i < branches ? i : -1,
+    })),
+    connectionSchemas: { conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
   };
   const index = DescriptorIndex.of(descriptor);
   const refs = descriptor.devices.map((d) => index.field(d.entity, 'lightOutputRel') as FieldRef);
@@ -131,6 +188,10 @@ export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?
       if (reading !== null) {
         for (let n = 0; n < reading.nodeVolts.length; n++) sum += reading.nodeVolts[n];
         for (let b = 0; b < reading.branchAmps.length; b++) sum += reading.branchAmps[b] * reading.branchDirection[b];
+        const temp = CONNECTION_VALUE_INDEX['conductorTempK'];
+        for (let c = 0; c < reading.connectionStatus.length; c++) {
+          sum += reading.connectionValues[c * CONNECTION_VALUE_COUNT + temp] + reading.connectionStatus[c];
+        }
       }
       return sum;
     },

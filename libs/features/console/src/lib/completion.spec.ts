@@ -33,6 +33,10 @@ describe('completeConsoleInput', () => {
     expect(at('')?.candidates.length).toBe(consoleIds(registry).length);
     expect(at('world.')).toMatchObject({ from: 0, to: 6, prefix: 'world.', candidates: ['world.hash'] });
     expect(at('netl')?.candidates).toEqual(['netlist.dump']);
+    expect(at('wire.i')?.candidates).toEqual(['wire.info']);
+    expect(at('wire.info --')?.candidates).toEqual(['--id']); // a query's flags, from CONSOLE_QUERY_ARGS
+    expect(at('wire.info --id 2 --')).toBeNull();
+    expect(at('netlist.dump --')).toBeNull();
     expect(at('  he')).toMatchObject({ from: 2, candidates: ['help'] });
     expect(at('help ent')?.candidates).toContain('entity.move');
   });

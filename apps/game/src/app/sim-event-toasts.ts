@@ -6,8 +6,10 @@ import { EVENT_TOAST_COALESCE_MS, type SimEvent } from '@controls/sim-protocol';
 /**
  * Sim event toasts (ADR 0011 §4): a `tripped` or `blown` device gets one warning toast per
  * `EVENT_TOAST_COALESCE_MS` of **wall** time (through `SIM_CLOCK`), so a burst at 60× is one toast.
- * Other kinds go to the HUD and inspector only. The window is forgotten on every source reset (a new
- * game, a load, a restart): device ids are per game.
+ * Every other kind is never toasted. In particular the connection events (`terminationOverheat`,
+ * `insulationDamaged`, protocol 7) stay silent: a loose termination is a fault the player has to find.
+ * Nothing in the game shows those kinds yet (scripts get them through `game.on('sim')`). The window is
+ * forgotten on every source reset (a new game, a load, a restart): device ids are per game.
  */
 @Injectable({ providedIn: 'root' })
 export class SimEventToasts {

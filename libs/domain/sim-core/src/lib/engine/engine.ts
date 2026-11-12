@@ -2,6 +2,8 @@ import { BUILTIN_CATALOG, type Catalog, type RegionProfile, regionProfile } from
 import type { ReplayEntry, World } from '@controls/save-format';
 import {
   compareSimEvents,
+  CONNECTION_OUTPUT_SCHEMAS,
+  type DecodedDeviceRecord,
   type DeviceOutputSchema,
   encodeSnapshot,
   ISLAND_KIND_AC,
@@ -55,7 +57,8 @@ import {
   ConnectionThermalBank,
 } from '../thermal/bank';
 import { islandNominalBands, type NominalBandReason, SOURCE_BAND_RULES } from './bands';
-import { buildTopologyDescriptor } from './descriptor';
+import { buildTopologyDescriptor, type DescriptorConnectionRecord } from './descriptor';
+import { readingStatusCode } from '../devices/readings';
 import {
   type LayerContext,
   type SimIslandStatus,
@@ -220,6 +223,17 @@ export interface SimDeviceRecord {
   readonly values: Readonly<Record<string, number | string>>;
 }
 
+/** One connection's record (protocol 7), decoded ({@link SimEngine.connectionRecord}). */
+export interface SimConnectionRecord {
+  /** The connection's model kind (`conductor`, `lead`). */
+  readonly kind: string;
+  readonly connection: number;
+  /** Its branch in the current netlist, or −1 (not netlisted: `status` is `open`). */
+  readonly branch: number;
+  /** Every field by name (`CONNECTION_OUTPUT_FIELDS`): a number, or an enum's value name. */
+  readonly values: DecodedDeviceRecord;
+}
+
 export interface SimEngineOptions {
   /** The device catalogue (default the built-in one). The world registry must use the same one. */
   readonly catalog?: Catalog;
@@ -377,6 +391,22 @@ export class SimEngine {
   }[] = [];
   private descriptorCache: TopologyDescriptor | null = null;
   private deviceDataBytes = 0;
+  // Connection records (protocol 7): per bank member, its record's byte offset and schema.
+  private connectionOffsets = new Uint32Array(0);
+  private connectionSchemas: DeviceOutputSchema[] = [];
+  private connectionDataBytes = 0;
+  /** Per bank end (2 × member + side): the node of its landed terminal in the current netlist, or −1. */
+  private connectionEndNodes = new Int32Array(0);
+  /** The bank or the netlist moved since `connectionEndNodes` was resolved. */
+  private endNodesStale = true;
+  /** Per node of the current netlist: its island. */
+  private nodeIslands = new Int32Array(0);
+  /** Per island: its reference node while its values are a reading, else −1 (`refreshIslandReadings`). */
+  private islandReadingReferences = new Int32Array(0);
+  /** The bank's `membership` the connection layout was made for (−1: none yet). */
+  private connectionMembership = -1;
+  /** The generation at the last `syncConnections`: a membership change bumps it once, unless a recompile just did. */
+  private syncedGeneration = -1;
   private slot = new Uint8Array(0);
   private events: SimEvent[] = [];
   private readonly ctx: {
@@ -520,6 +550,35 @@ export class SimEngine {
     const bank = this.connectionBank;
     bank.sync(this.world, this.current);
     this.pointConnections();
+    // Each end's terminal node is resolved before the next record write, not here: a sync runs on the
+    // re-solve path (an intermittent toggle), and the lookup is a string key per end.
+    this.endNodesStale = true;
+    if (bank.membership !== this.connectionMembership) {
+      // The descriptor lists every member (netlisted or not), so its generation follows the bank's
+      // membership as well as the topology (protocol 7): once, unless a recompile just moved it.
+      if (this.connectionMembership >= 0 && this.generation === this.syncedGeneration) this.generation++;
+      this.connectionMembership = bank.membership;
+      this.layoutConnections();
+    }
+    this.syncedGeneration = this.generation;
+  }
+
+  /** Lays out the connection section: one record per bank member, in member (connection-id) order. */
+  private layoutConnections(): void {
+    const bank = this.connectionBank;
+    const offsets = new Uint32Array(bank.count);
+    const schemas: DeviceOutputSchema[] = [];
+    let offset = 0;
+    for (let i = 0; i < bank.count; i++) {
+      const schema = CONNECTION_OUTPUT_SCHEMAS[bank.kindName(i)];
+      offsets[i] = offset;
+      schemas.push(schema);
+      offset += schema.recordBytes;
+    }
+    this.connectionOffsets = offsets;
+    this.connectionSchemas = schemas;
+    this.connectionDataBytes = offset;
+    this.descriptorCache = null;
   }
 
   /**
@@ -542,12 +601,26 @@ export class SimEngine {
   }
 
   /**
-   * The connection detections (`terminationOverheat`, `insulationDamaged`, ADR 0018 §6) since the last
-   * call, oldest first. Detected in sim-core only: protocol 7 (F3.6 part 3) publishes them as events,
-   * so they are not in {@link takeEvents} and never in any hash. Allocates.
+   * Moves the bank's connection detections (`terminationOverheat`, `insulationDamaged`, ADR 0018 §6)
+   * into the events (protocol 7, F3.6 part 3): connection events with the connection, the end (`null`
+   * for the conductor node) and `{ temperatureK }`, at the tick of the state they describe (step + 1).
+   * Called after every step that recorded one, so the ring never overflows between event batches.
+   * Allocates (only when there is a detection).
    */
-  takeConnectionDetections(): ConnectionDetection[] {
-    return this.connectionBank.takeDetections();
+  private drainDetections(): void {
+    for (const d of this.connectionBank.takeDetections()) this.emitConnection(d);
+  }
+
+  private emitConnection(d: ConnectionDetection): void {
+    this.events.push({
+      tick: d.tick,
+      kind: d.kind,
+      entity: null,
+      entities: [],
+      connection: d.connection,
+      end: d.end,
+      detail: { temperatureK: d.temperatureK },
+    });
   }
 
   /** Calls `commanded` on each netlisted device whose commanded `state` bag the command replaced. */
@@ -613,7 +686,19 @@ export class SimEngine {
    * each engine, cached until the topology changes, so readers can key their caches on identity.
    */
   topologyDescriptor(): TopologyDescriptor {
-    this.descriptorCache ??= buildTopologyDescriptor(this.current, this.generation, this.records);
+    if (this.descriptorCache === null) {
+      const bank = this.connectionBank;
+      const connections: DescriptorConnectionRecord[] = [];
+      for (let i = 0; i < bank.count; i++) {
+        connections.push({
+          connection: bank.ids[i],
+          offset: this.connectionOffsets[i],
+          branch: bank.branch[i],
+          output: this.connectionSchemas[i],
+        });
+      }
+      this.descriptorCache = buildTopologyDescriptor(this.current, this.generation, this.records, connections);
+    }
     return this.descriptorCache;
   }
 
@@ -685,6 +770,67 @@ export class SimEngine {
     ctx.solution = this.solution;
     slot.bank.bank.writeRecord?.(slot.index, view, 0, ctx);
     return { kind: schema.kind, entity, values: decodeDeviceRecord(schema, view, 0) };
+  }
+
+  /**
+   * Connection `id`'s record at this tick (protocol 7), decoded by its kind's schema: what the
+   * snapshot's connection section holds for it, field by field (an enum by name), plus its branch.
+   * `null` for a connection outside the thermal bank (an unknown kind, or no such connection). Headless
+   * only (`game.connection`, `wire.info`); the game reads records through `NetlistReadout`. Allocates.
+   */
+  connectionRecord(id: number): SimConnectionRecord | null {
+    const bank = this.connectionBank;
+    const i = bank.indexOf(id);
+    if (i < 0) return null;
+    const schema = CONNECTION_OUTPUT_SCHEMAS[bank.kindName(i)];
+    const view = new DataView(new ArrayBuffer(schema.recordBytes));
+    this.refreshIslandReadings();
+    this.writeConnectionRecord(i, view, 0);
+    return { kind: schema.kind, connection: id, branch: bank.branch[i], values: decodeDeviceRecord(schema, view, 0) };
+  }
+
+  /** Writes bank member `i`'s record at `at` (its island's status and reference from the current solution). */
+  private writeConnectionRecord(i: number, view: DataView, at: number): void {
+    const bank = this.connectionBank;
+    const b = bank.branch[i];
+    const solution = this.solved ? this.solution : null;
+    const status = b >= 0 && solution !== null ? readingStatusCode(this.status(this.current.branches[b].island)) : 0;
+    bank.writeRecord(
+      i,
+      view,
+      at,
+      solution,
+      status,
+      this.connectionEndNodes,
+      this.nodeIslands,
+      this.islandReadingReferences,
+    );
+  }
+
+  /**
+   * Each island's reference node while its values are a reading (solved, with a reference), else −1:
+   * what a connection record reads node voltages against. Before writing records (once per snapshot).
+   */
+  private refreshIslandReadings(): void {
+    if (this.endNodesStale) {
+      // Each end's terminal node (an open connection's record reads the voltages across its gap).
+      const bank = this.connectionBank;
+      if (this.connectionEndNodes.length !== 2 * bank.count) this.connectionEndNodes = new Int32Array(2 * bank.count);
+      for (let e = 0; e < 2 * bank.count; e++) {
+        const terminal = bank.endTerminal(e);
+        this.connectionEndNodes[e] = terminal === null ? -1 : (this.nodeOf.get(terminal) ?? -1);
+      }
+      this.endNodesStale = false;
+    }
+    const islands = this.current.islands;
+    if (this.islandReadingReferences.length !== islands.length) {
+      this.islandReadingReferences = new Int32Array(islands.length);
+    }
+    for (let k = 0; k < islands.length; k++) {
+      const island = islands[k];
+      this.islandReadingReferences[k] =
+        this.solved && this.status(island.index) === 'solved' ? islandReferenceNode(this.current, island) : -1;
+    }
   }
 
   /**
@@ -783,6 +929,7 @@ export class SimEngine {
         else valuesChanged = true;
         this.pointConnections();
       }
+      if (connections.hasDetections) this.drainDetections();
     }
     this.tickNow = t + 1;
     // A layer changed the topology (a fuse blew) or a value the solve reads (a PSU switching off, F2.4):
@@ -1057,7 +1204,7 @@ export class SimEngine {
     detail: Readonly<Record<string, number | string | boolean>>,
     tick: number,
   ): void {
-    this.events.push({ tick, kind, entity, entities, detail: { ...detail } });
+    this.events.push({ tick, kind, entity, entities, connection: null, end: null, detail: { ...detail } });
   }
 
   // --- devices --------------------------------------------------------------------------------
@@ -1195,6 +1342,7 @@ export class SimEngine {
       for (const node of island.nodes) for (const member of netlist.nodes[node].members) members.add(member.entity);
       return Object.freeze([...members].sort((x, y) => x - y));
     });
+    this.nodeIslands = Int32Array.from(netlist.nodes, (node) => node.island);
     this.nodeOf.clear();
     for (const node of netlist.nodes)
       for (const member of node.members) this.nodeOf.set(terminalKey(member), node.index);
@@ -1260,6 +1408,13 @@ export class SimEngine {
         ctx.netlist = netlist;
         ctx.solution = s;
         for (const record of this.records) record.bank.writeRecord?.(record.index, view, base + record.offset, ctx);
+      },
+      connectionCount: this.connectionBank.count,
+      connectionDataBytes: this.connectionDataBytes,
+      writeConnections: (view, base) => {
+        this.refreshIslandReadings();
+        const offsets = this.connectionOffsets;
+        for (let i = 0; i < offsets.length; i++) this.writeConnectionRecord(i, view, base + offsets[i]);
       },
     };
   }
