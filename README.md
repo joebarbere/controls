@@ -1,10 +1,10 @@
 # Controls
 
-![version](https://img.shields.io/badge/version-0.3.0-blue) ![status](https://img.shields.io/badge/status-Phase%202%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
+![version](https://img.shields.io/badge/version-0.3.0-blue) ![status](https://img.shields.io/badge/status-Phase%202%20shipped-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 2 (circuit engine) complete, version 0.3.0 (the v0.3.0 release is being cut; the draft awaits publication). Phase 1 (Game shell) shipped as v0.2.0 on 2026-10-29.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
+> **Status: Phase 2 (circuit engine) shipped as v0.3.0 on 2026-11-11. Phase 3 (wires, terminations, enclosures and hand tools) is next.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
 
 ## Features
 
@@ -109,7 +109,6 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
-- [ ] **P2 Circuit engine and power sources** (v0.3.0): every feature has landed and the version is 0.3.0; the v0.3.0 draft release awaits publication
 - [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0)
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox
 - [ ] **P5 Instruments, safety, faults, Apprentice career** (v0.6.0)

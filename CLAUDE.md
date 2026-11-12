@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 2 (Circuit engine) complete; version 0.3.0, the v0.3.0 release is being cut (pending the release build and the user publishing the draft).** Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer`. Landed: world v2 and catalogue v1, F2.1–F2.6 (netlist, DC/AC MNA, engine loop, sim worker, sources, loads, protection, overlays, inspector, traces) and the phase-acceptance E2E. **Next:** `release-engineer` packages and tags v0.3.0 on the user's confirmation, then the P2 Close-out and the Phase 3 kickoff. Spec: [`controls-development-plan.md`](controls-development-plan.md).
+**Phase 2 (Circuit engine) shipped as v0.3.0 (published 2026-11-11).** Plan: [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md); P2 specialists `sim-engine-engineer` and `electrical-realism-reviewer`. Landed: world v2 and catalogue v1, F2.1–F2.6 (netlist, DC/AC MNA, engine loop, sim worker, sources, loads, protection, overlays, inspector, traces) and the phase-acceptance E2E. **Next: Phase 3 kickoff** (Plan agent → `plans/phase-3-*.md`, create `content-designer`; keep test leads working alongside `wire.*`, world v3). P2 follow-ups: a permanent mid-sim save/load desktop-e2e spec, the macOS bench-lamp selection flake, the bundle-size warning (2.24 MB vs 2.00 MB), the unnamed Electron fuse, and the optional lamp τ/f recalibration. Spec: [`controls-development-plan.md`](controls-development-plan.md).
 
 ## What this project is
 
