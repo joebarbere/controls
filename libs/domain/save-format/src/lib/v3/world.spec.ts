@@ -326,7 +326,9 @@ describe('WorldV3', () => {
       }),
       { numRuns: 200 },
     );
-  });
+    // Generous: 200 arbitrary v3 worlds (routes, cables, terminations) each validated twice; CI's
+    // Windows and macOS runners took it past the 5 s default while every project tested in parallel.
+  }, 60_000);
 
   it('the arbitrary reaches every shape (generator health)', () => {
     const seen = new Set<string>();
