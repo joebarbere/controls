@@ -231,7 +231,7 @@ A save names every device by catalogue reference (`{ id, version }`); `@controls
 
 ```mermaid
 flowchart LR
-    JSON["content/devices/*.json<br/>(authoritative; every number sourced)"] -->|"builtin.spec.ts regenerates,<br/>fails when stale"| GEN["builtin-devices.generated.ts"]
+    JSON["content/devices/*.json<br/>(authoritative; every number sourced)"] -->|"content-mirrors.spec.ts regenerates,<br/>fails when stale"| GEN["builtin-devices.generated.ts"]
     GEN --> PARSE["parseCatalog(CATALOG_VERSION, docs)<br/>schema · kind · params · terminals ·<br/>controls · source coverage"]
     KINDS["MODEL_KINDS<br/>params · terminals ·<br/>state keys (owner, schema, initial)"] --> PARSE
     PARSE --> CAT["BUILTIN_CATALOG<br/>device(ref) · kindOf(ref)"]

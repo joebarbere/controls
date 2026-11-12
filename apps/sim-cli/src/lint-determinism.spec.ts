@@ -10,7 +10,8 @@ import { WORKSPACE_ROOT } from './script-loader';
  * - the determinism lint (no Math.random, wall clock or crypto) over libs/domain, libs/sim-worker
  *   except src/lib/pacing/, and apps/sim-cli except src/bench/clock.ts (P2 kickoff step 6);
  * - D6 (plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1): no engine-dependent
- *   Math functions or `**` in sim-core source;
+ *   Math functions or `**` in sim-core source, nor (P3 decisions D5 and D13, kickoff step 6) in
+ *   libs/domain/world-model/src/lib/routing/ (`Math.sqrt` is allowed);
  * - no Node built-ins in domain or sim-worker source.
  */
 
@@ -40,6 +41,8 @@ async function restrictions(source: string, file: string): Promise<string[]> {
 
 const SIM_CORE_SOURCE = 'libs/domain/sim-core/src/lib/probe.ts';
 const SIM_CORE_SPEC = 'libs/domain/sim-core/src/lib/probe.spec.ts';
+const ROUTING_SOURCE = 'libs/domain/world-model/src/lib/routing/probe.ts';
+const ROUTING_SPEC = 'libs/domain/world-model/src/lib/routing/probe.spec.ts';
 const WORKER_SOURCE = 'libs/sim-worker/src/lib/probe.ts';
 const WORKER_PACING = 'libs/sim-worker/src/lib/pacing/probe.ts';
 const WORKER_PACING_NESTED = 'libs/sim-worker/src/lib/pacing/clock/probe.ts';
@@ -60,32 +63,32 @@ const WALL_CLOCK_ERRORS = [
   'no-restricted-globals: crypto (randomUUID, getRandomValues) is banned in domain code, sim-worker and sim-cli',
 ];
 
-describe('D6: engine-dependent maths in sim-core', () => {
-  const D6_FUNCTIONS = [
-    'exp',
-    'expm1',
-    'log',
-    'log1p',
-    'log2',
-    'log10',
-    'pow',
-    'sin',
-    'cos',
-    'tan',
-    'asin',
-    'acos',
-    'atan',
-    'atan2',
-    'sinh',
-    'cosh',
-    'tanh',
-    'asinh',
-    'acosh',
-    'atanh',
-    'hypot',
-    'cbrt',
-  ];
+const D6_FUNCTIONS = [
+  'exp',
+  'expm1',
+  'log',
+  'log1p',
+  'log2',
+  'log10',
+  'pow',
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
+  'sinh',
+  'cosh',
+  'tanh',
+  'asinh',
+  'acosh',
+  'atanh',
+  'hypot',
+  'cbrt',
+];
 
+describe('D6: engine-dependent maths in sim-core', () => {
   it.each(D6_FUNCTIONS)('rejects Math.%s in sim-core source', async (fn) => {
     expect(await restrictions(`export const x = Math.${fn}(0.5, 0.5);`, SIM_CORE_SOURCE)).toEqual([
       `no-restricted-properties: Math.${fn}() is engine-dependent and banned in sim-core source`,
@@ -125,7 +128,55 @@ describe('D6: engine-dependent maths in sim-core', () => {
   });
 
   it.each(['libs/domain/sim-protocol/src/lib/probe.ts', 'libs/domain/world-model/src/lib/probe.ts', WORKER_SOURCE])(
-    'applies only to sim-core (not %s)',
+    'applies only to sim-core and world-model routing (not %s)',
+    async (file) => {
+      expect(await restrictions('export const x = [Math.exp(1), 2 ** 0.5];', file)).toEqual([]);
+    },
+  );
+});
+
+describe('D6 in world-model routing (P3 decisions D5 and D13)', () => {
+  // A route's lengthMm and baked centreline are persisted and hashed (D5), so routing maths is held
+  // to sim-core's D6 rule. One probe is nested: the router will have submodules.
+  const ROUTING_SOURCES = [ROUTING_SOURCE, 'libs/domain/world-model/src/lib/routing/bake/probe.ts'];
+
+  it.each(D6_FUNCTIONS)('rejects Math.%s in routing source', async (fn) => {
+    for (const file of ROUTING_SOURCES) {
+      expect(await restrictions(`export const x = Math.${fn}(0.5, 0.5);`, file)).toEqual([
+        `no-restricted-properties: Math.${fn}() is engine-dependent and banned in world-model routing source`,
+      ]);
+    }
+  });
+
+  it('rejects the ** and **= operators in routing source', async () => {
+    const source = 'export let x = 2 ** 0.5;\nx **= 3;';
+    for (const file of ROUTING_SOURCES) {
+      expect(await restrictions(source, file)).toEqual([
+        'no-restricted-syntax: The ** operator is engine-dependent (it is Math.pow) and banned in world-model routing source',
+        'no-restricted-syntax: The **= operator is engine-dependent (it is Math.pow) and banned in world-model routing source',
+      ]);
+    }
+  });
+
+  it('allows Math.sqrt (a polyline length) and the other IEEE-exact operations', async () => {
+    const source = [
+      'export const len = Math.round(Math.sqrt(3 * 3 + 4 * 4));',
+      'export const y = [Math.abs(len), Math.min(len, 1), Math.max(len, 1), Math.floor(len / 10) * 10];',
+    ].join('\n');
+    expect(await restrictions(source, ROUTING_SOURCE)).toEqual([]);
+  });
+
+  it('keeps the determinism lint in routing source and specs (D6 merges with it, not replaces it)', async () => {
+    expect(await restrictions(WALL_CLOCK, ROUTING_SOURCE)).toEqual(WALL_CLOCK_ERRORS);
+    expect(await restrictions(WALL_CLOCK, ROUTING_SPEC)).toEqual(WALL_CLOCK_ERRORS);
+  });
+
+  it('exempts routing specs, so a golden can compare with Math.hypot', async () => {
+    expect(await restrictions('export const x = [Math.hypot(3, 4), 2 ** 0.5];', ROUTING_SPEC)).toEqual([]);
+  });
+
+  it.each(['libs/domain/world-model/src/lib/snap/probe.ts', 'libs/domain/world-model/src/lib/routing.ts'])(
+    'covers the routing directory only (not %s)',
     async (file) => {
       expect(await restrictions('export const x = [Math.exp(1), 2 ** 0.5];', file)).toEqual([]);
     },
@@ -182,13 +233,14 @@ describe('zod namespace imports, everywhere', () => {
 
   // One file under each block that sets no-restricted-syntax (flat config replaces its options
   // wholesale): the global block, the determinism lint (domain source and specs, sim-worker,
-  // sim-cli), D6 in sim-core, and the paths the determinism lint exempts.
+  // sim-cli), D6 in sim-core and routing, and the paths the determinism lint exempts.
   it.each([
     'libs/features/palette/src/lib/probe.ts',
     'apps/game/src/probe.ts',
     'libs/domain/commands/src/lib/probe.ts',
     'libs/domain/commands/src/lib/probe.spec.ts',
     SIM_CORE_SOURCE,
+    ROUTING_SOURCE,
     WORKER_SOURCE,
     WORKER_PACING,
     'apps/sim-cli/src/probe.ts',

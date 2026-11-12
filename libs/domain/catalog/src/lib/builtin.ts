@@ -5,7 +5,7 @@ import { type Catalog, catalogOrThrow } from './catalog';
  * The device catalogue built into the game (plan P2 decision D4): `content/devices/*.json`, mirrored
  * into `builtin-devices.generated.ts` so every domain lib, the game and `sim-cli` resolve refs the same
  * way without reading files (domain code can't import `content/`). The JSON files are authoritative;
- * `builtin.spec.ts` fails when the mirror is stale (regenerate with `pnpm nx test catalog -u`).
+ * `content-mirrors.spec.ts` fails when the mirror is stale (regenerate with `pnpm nx test catalog -u`).
  */
 
 /**

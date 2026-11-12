@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Tests (P2 close-out): **saving and loading mid-sim is a permanent desktop E2E** (`apps/desktop-e2e/src/saves.spec.ts`, on the dev and packaged builds), replacing the release smoke's scratch spec. It lights the bench lamp (1.5 s of sim time, `BENCH_LAMP_LIT_HASH`), saves from the menu, starts another sandbox, loads the save, checks the lit hash and the sim time (0:00:01.500) again, then opens the switch and runs on to `BENCH_LAMP_HASH` at 0:00:02.000. The desktop bench-lamp hashes and scenario lines now live once in `apps/desktop-e2e/src/game.ts`.
+- Developer (P3 kickoff step 6, the boundary and gate PR; [workspace caveats](docs/caveats/workspace.md)):
+  - The D6 deterministic-maths lint now also covers `libs/domain/world-model/src/lib/routing/**` (P3 decisions D5 and D13): no `Math.hypot`, `**` or transcendental `Math` functions in routing source; `Math.sqrt` is allowed. Probes in `apps/sim-cli/src/lint-determinism.spec.ts` prove each rule fires there, that the determinism lint still applies, that specs are exempt, and that `snap/` is not covered.
+  - `sim bench` declares the P3 cases as pending: `tick-wired-plant` (0.3 ms, F3.6 part 1), `plant-resolve-topology-change-wired` (2 ms calibrated, F3.6 part 1), `route-bake-500-wires` (budget from ADR 0017, F3.2 part 1) and `cable-add-worst-command` (under `WATCHDOG_MS`, F3.4 part 1). They are listed under `pending` in the JSON report with a note each and printed as `PENDING` lines by `tools/print-bench-report.mjs`; they are not run and never fail `pnpm verify`. A pending case's budget may now be `null`.
+  - `apps/game-e2e/src/wiring-frame-time.spec.ts`: a frame-time scaffold for a 500-device wired plant, skipped unless `CONTROLS_MEASURE_WIRING=1` (filled in by F3.2 part 2 and F3.6 part 3).
+  - `libs/domain/catalog/src/lib/content-mirrors.spec.ts`: one generic staleness check for every generated mirror of `content/`, replacing the one in `builtin.spec.ts`. It also fails when `content/` gains a directory that is neither mirrored nor listed as unmirrored, so catalogue v2's `content/tables/` and `content/tools/` are one row each. The header of `builtin-devices.generated.ts` now names the new spec; its data is unchanged.
 
 ### Changed
 

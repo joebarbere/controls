@@ -1,15 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUILTIN_CATALOG, CATALOG_VERSION } from './builtin';
-import { BUILTIN_DEVICE_DOCUMENTS } from './builtin-devices.generated';
 import { leadResistanceOhm } from './lead';
 import { LeadParams, modelKind } from './model-kinds';
 import { parseCatalog } from './catalog';
 
 /*
  * `content/devices/*.json` is the catalogue's source of truth (plan P2 decision D4). Domain code can't
- * import `content/`, so `builtin-devices.generated.ts` mirrors it. If this test fails, the mirror is
- * stale: regenerate it with `pnpm nx test catalog -u` and commit both. In CI a missing file fails too.
+ * import `content/`, so `builtin-devices.generated.ts` mirrors it; content-mirrors.spec.ts fails when
+ * that mirror is stale (regenerate with `pnpm nx test catalog -u`).
  */
 
 const devicesDir = join(import.meta.dirname, '../../../../../content/devices');
@@ -18,27 +17,7 @@ const files = readdirSync(devicesDir)
   .sort();
 const documents = files.map((name) => JSON.parse(readFileSync(join(devicesDir, name), 'utf8')) as unknown);
 
-/** The text of the generated module: a pure function of the sorted files. */
-function generatedModule(): string {
-  const body = documents.map((document) => JSON.stringify(document, null, 2)).join(',\n');
-  return [
-    '/*',
-    ' * GENERATED from content/devices/*.json by builtin.spec.ts: do not edit. Edit the JSON files and',
-    ' * regenerate with `pnpm nx test catalog -u` (plan P2 decision D4).',
-    ' */',
-    'export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [',
-    body,
-    '];',
-    '',
-  ].join('\n');
-}
-
 describe('the built-in catalogue (content/devices)', () => {
-  it('the generated mirror is up to date', async () => {
-    await expect(generatedModule()).toMatchFileSnapshot(join(import.meta.dirname, 'builtin-devices.generated.ts'));
-    expect(BUILTIN_DEVICE_DOCUMENTS).toStrictEqual(documents);
-  });
-
   it('is catalogue version 1 and every file is a valid entry', () => {
     expect(CATALOG_VERSION).toBe(1);
     const result = parseCatalog(CATALOG_VERSION, documents);

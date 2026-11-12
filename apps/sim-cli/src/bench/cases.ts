@@ -347,5 +347,34 @@ function bagDigest(engine: SimEngine): string {
   return Object.values(sums).join(':');
 }
 
-/** Spec §4.5's cases that wait for the code they measure. Listed in the report; not run. */
-export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [];
+/**
+ * Cases that wait for the code they measure (P3 kickoff step 6; plans/phase-3-wiring.md, "Budgets").
+ * Listed in the report; not run, no timing, never fail it. The feature named in `enabledBy` moves
+ * each into `BENCH_CASES` with its real workload and removes it here.
+ */
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
+  {
+    name: 'tick-wired-plant',
+    budgetMs: 0.3,
+    enabledBy: 'F3.6 part 1',
+    note: 'Spec §4.5 per tick: 1,000 catalogue devices plus 2,000 conductors with thermal state, median, with an allocation gate.',
+  },
+  {
+    name: 'plant-resolve-topology-change-wired',
+    budgetMs: RESOLVE_BUDGET_MS,
+    enabledBy: 'F3.6 part 1',
+    note: 'Spec §4.5 re-solve after a topology change on a wired 2,000-node plant, calibrated like plant-resolve-topology-change.',
+  },
+  {
+    name: 'route-bake-500-wires',
+    budgetMs: null,
+    enabledBy: 'F3.2 part 1',
+    note: 'The analytic domain bake (D5) of 500 routed wires; ADR 0017 fixes its budget from measurement.',
+  },
+  {
+    name: 'cable-add-worst-command',
+    budgetMs: null,
+    enabledBy: 'F3.4 part 1',
+    note: 'One cable.add of the largest assembly with auto terminations plus its re-solve on the 2,000-node plant; must stay well under WATCHDOG_MS (3,000 ms), budget fixed by that PR.',
+  },
+];

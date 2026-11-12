@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Prints the `sim bench` report that `pnpm verify`'s bench target wrote (Nx hides a passing task's
-// output): first one line per gated case with its gated ratio, then the full JSON. CI's `sim bench
+// output): first one line per gated case with its gated ratio and one per pending case (declared,
+// not run), then the full JSON. CI's `sim bench
 // report` step runs it on every OS. It only prints and always exits 0, so `verify` stays == CI.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -21,6 +22,10 @@ if (!existsSync(file)) {
       console.log(
         `GATE ${c.ok ? 'pass' : 'FAIL'} ${c.name}: ratio ${c.ratio.toFixed(3)} (≤ 1 passes; budget ${c.budgetMs} ms, raw median ${c.medianMs.toFixed(3)} ms${calibration})`,
       );
+    }
+    for (const p of report.pending ?? []) {
+      const budget = p.budgetMs === null ? 'no budget yet' : `budget ${p.budgetMs} ms`;
+      console.log(`PENDING ${p.name} (${p.enabledBy}; ${budget}): not run`);
     }
   } catch (error) {
     console.log(`bench report unreadable: ${error}`);

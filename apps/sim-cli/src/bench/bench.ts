@@ -114,13 +114,20 @@ export interface BenchCaseResult {
   readonly ok: boolean;
 }
 
-/** A spec budget whose case can't run yet: listed in the report so the gap stays visible. */
+/**
+ * A planned case whose code doesn't exist yet: listed in the report, never run, so the gap stays
+ * visible. It has no timing and never affects `ok`; the feature that writes the code moves it into
+ * `BENCH_CASES` (cases.ts) and removes it here.
+ */
 export interface PendingBenchCase {
+  /** The name the real case will have. */
   readonly name: string;
-  /** The spec's budget for it (ms). */
-  readonly budgetMs: number;
-  /** The feature that switches it on (`F2.2 part 3`). */
+  /** The spec's budget for it (ms), or null when none is fixed yet (to come from measurement or an ADR). */
+  readonly budgetMs: number | null;
+  /** The feature that switches it on (`F3.2 part 1`). */
   readonly enabledBy: string;
+  /** What it will measure and how it will be gated, in a sentence. */
+  readonly note: string;
 }
 
 export interface BenchReport {
