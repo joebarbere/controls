@@ -48,8 +48,6 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       'insulation@1',
       'materials@1',
     ]);
-    expect(BUILTIN_CATALOG.cables).toStrictEqual([]);
-    expect(BUILTIN_CATALOG.accessories).toStrictEqual([]);
   });
 
   it('every P2 entry is still version 1: catalogue v2 only gave them data (ADR 0015)', () => {

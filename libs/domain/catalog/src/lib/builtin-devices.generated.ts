@@ -449,6 +449,684 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "conductor.sorrelby-bare-10-solid",
+  "version": 1,
+  "title": "10 AWG bare solid copper grounding conductor of NM-B cable",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-10B",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 10,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": null,
+    "insulationThicknessMm": null,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "bare",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-egc-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: NM-B carries an uninsulated copper equipment grounding conductor, wrapped in fire-retardant paper and laid between or beside the insulated conductors; it is the circuit conductors' size at 14 to 10 AWG and 10 AWG in 8/3 and 6/3. A bare EGC is permitted by NFPA 70-2023 Art. 250.119 (by number). The paper wrap is not modelled (no insulation row, colour bare).",
+      "covers": [
+        "conductor.awg",
+        "conductor.insulation",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "nm-egc-solid",
+      "kind": "game-design",
+      "citation": "game-design: solid, one strand. The sheet read makes 10 AWG circuit conductors solid and gives the 10 AWG grounding conductor of 8/3 and 6/3 without its stranding; solid is taken for every 10 AWG ground.",
+      "covers": [
+        "conductor.stranding",
+        "conductor.strandCount"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-bare-12-solid",
+  "version": 1,
+  "title": "12 AWG bare solid copper grounding conductor of NM-B cable",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-12B",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 12,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": null,
+    "insulationThicknessMm": null,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "bare",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-egc-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: NM-B carries an uninsulated copper equipment grounding conductor, wrapped in fire-retardant paper and laid between or beside the insulated conductors; it is the circuit conductors' size at 14 to 10 AWG and 10 AWG in 8/3 and 6/3. A bare EGC is permitted by NFPA 70-2023 Art. 250.119 (by number). The paper wrap is not modelled (no insulation row, colour bare).",
+      "covers": [
+        "conductor.awg",
+        "conductor.insulation",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "nm-egc-solid",
+      "kind": "real-world",
+      "citation": "The sheet read makes every conductor of 12 AWG NM-B solid (soft copper per ASTM B3, by number), the grounding conductor included: one strand.",
+      "covers": [
+        "conductor.stranding",
+        "conductor.strandCount"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-bare-14-solid",
+  "version": 1,
+  "title": "14 AWG bare solid copper grounding conductor of NM-B cable",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-14B",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 14,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": null,
+    "insulationThicknessMm": null,
+    "jacketThicknessMm": null,
+    "colours": [
+      {
+        "base": "bare",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-egc-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: NM-B carries an uninsulated copper equipment grounding conductor, wrapped in fire-retardant paper and laid between or beside the insulated conductors; it is the circuit conductors' size at 14 to 10 AWG and 10 AWG in 8/3 and 6/3. A bare EGC is permitted by NFPA 70-2023 Art. 250.119 (by number). The paper wrap is not modelled (no insulation row, colour bare).",
+      "covers": [
+        "conductor.awg",
+        "conductor.insulation",
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "nm-egc-solid",
+      "kind": "real-world",
+      "citation": "The sheet read makes every conductor of 14 AWG NM-B solid (soft copper per ASTM B3, by number), the grounding conductor included: one strand.",
+      "covers": [
+        "conductor.stranding",
+        "conductor.strandCount"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-nm-10-solid",
+  "version": 1,
+  "title": "10 AWG solid copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-10S",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 10,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.508,
+    "jacketThicknessMm": 0.102,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, solid copper at 14 to 10 AWG, with a total wall of about 24 mil at 10 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (20 mil PVC under 4 mil nylon, 0.508 mm and 0.102 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": [
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-nm-12-solid",
+  "version": 1,
+  "title": "12 AWG solid copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-12S",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 12,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.381,
+    "jacketThicknessMm": 0.102,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, solid copper at 14 to 10 AWG, with a total wall of about 19 mil at 12 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (15 mil PVC under 4 mil nylon, 0.381 mm and 0.102 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": [
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-nm-14-solid",
+  "version": 1,
+  "title": "14 AWG solid copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-14S",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 14,
+    "stranding": "solid",
+    "strandCount": 1,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.381,
+    "jacketThicknessMm": 0.102,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, solid copper at 14 to 10 AWG, with a total wall of about 19 mil at 14 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (15 mil PVC under 4 mil nylon, 0.381 mm and 0.102 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": [
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (solid per ASTM B3; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "solid-lay-factor",
+      "kind": "real-world",
+      "citation": "Physics definition: a solid conductor has no strand lay, so its lay factor is 1 and its resistance is that of its nominal area (ADR 0018 §2).",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-nm-6-stranded",
+  "version": 1,
+  "title": "6 AWG stranded copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-6X",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 6,
+    "stranding": "stranded",
+    "strandCount": 7,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": 0.127,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, 7-strand concentric copper at 8 and 6 AWG, with a total wall of about 35 mil at 6 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (30 mil PVC under 5 mil nylon, 0.762 mm and 0.127 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": [
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (stranded per ASTM B8; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "conductor.sorrelby-nm-8-stranded",
+  "version": 1,
+  "title": "8 AWG stranded copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-8X",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 8,
+    "stranding": "stranded",
+    "strandCount": 7,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": 0.127,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, 7-strand concentric copper at 8 and 6 AWG, with a total wall of about 35 mil at 8 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (30 mil PVC under 5 mil nylon, 0.762 mm and 0.127 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": [
+        "conductor.colours"
+      ]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (stranded per ASTM B8; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": [
+        "conductor.material"
+      ]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": [
+        "model.params.layFactor"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "conductor.tallowmere-mtw-10",
   "version": 1,
   "title": "10 AWG stranded copper MTW machine tool wire",

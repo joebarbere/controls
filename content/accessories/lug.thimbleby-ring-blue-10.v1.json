@@ -1,0 +1,43 @@
+{
+  "id": "lug.thimbleby-ring-blue-10",
+  "version": 1,
+  "title": "Insulated ring terminal, 16–14 AWG (blue), #10 stud",
+  "brand": "Thimbleby",
+  "modelName": "TR-1614-10",
+  "kind": "ringLug",
+  "awgRange": {
+    "smallest": 16,
+    "largest": 14
+  },
+  "stranding": ["solid", "stranded"],
+  "dies": ["blue"],
+  "barrelLengthMm": 10,
+  "studDiameterMm": 4.83,
+  "sources": [
+    {
+      "id": "insulated-terminal-class",
+      "kind": "real-world",
+      "citation": "A US distributor's public ring and fork terminal sheet (read), paraphrased: pre-insulated ring and fork terminals of tin-plated copper with a vinyl sleeve, colour-coded red for 22-18 AWG, blue for 16-14 AWG and yellow for 12-10 AWG (shared across makers; some mark red 22-16); crimp connectors are listed to UL 486A-B (by number). Each colour is crimped in the die nest of the same colour, so this blue terminal lists the die id \"blue\" (the dies of tool.veltmark-cr-2210, F3.4 part 1).",
+      "covers": ["awgRange", "dies"]
+    },
+    {
+      "id": "stud-size",
+      "kind": "real-world",
+      "citation": "The stud is the screw size the ring fits. A Unified numbered screw size N has a major diameter of 0.060 in + 0.013 in × N (the ASME B1.1 numbering, by number; a definition): #10 is 0.190 in, 4.83 mm.",
+      "covers": ["studDiameterMm"]
+    },
+    {
+      "id": "barrel-length",
+      "kind": "game-design",
+      "citation": "game-design: 10 mm, rounded from the 0.394 in sleeve dimension the same sheet gives for its blue terminals; its drawing does not name that dimension, so reading it as the barrel length is an interpretation.",
+      "covers": ["barrelLengthMm"]
+    },
+    {
+      "id": "stranding",
+      "kind": "game-design",
+      "citation": "game-design: the terminal takes solid and stranded conductors, as insulated terminals of this class are commonly rated; the sheet read does not say.",
+      "covers": ["stranding"]
+    }
+  ],
+  "extensions": {}
+}

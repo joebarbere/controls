@@ -1,0 +1,31 @@
+{
+  "id": "ferrule.thimbleby-14",
+  "version": 1,
+  "title": "Insulated ferrule, 14 AWG (2.5 mm²), 8 mm sleeve",
+  "brand": "Thimbleby",
+  "modelName": "TF-2.5-8",
+  "kind": "ferrule",
+  "awgRange": {
+    "smallest": 14,
+    "largest": 14
+  },
+  "stranding": ["stranded"],
+  "dies": ["square"],
+  "barrelLengthMm": 8,
+  "studDiameterMm": null,
+  "sources": [
+    {
+      "id": "ferrule-class",
+      "kind": "real-world",
+      "citation": "A ferrule maker's public catalogue (2025, read), paraphrased: insulated wire-end ferrules are tin-plated copper sleeves with a plastic collar, dimensioned to DIN 46228-4 and listed to UL 486F (both by number), for stranded conductors; the 2.5 mm² size is the one it lists for 14 AWG, made in several sleeve lengths of which 8 mm is its \"normal\" length. No table copied.",
+      "covers": ["awgRange", "stranding", "barrelLengthMm"]
+    },
+    {
+      "id": "ferrule-die",
+      "kind": "game-design",
+      "citation": "game-design: ferrules are crimped in a self-adjusting square-profile nest (one of the profiles in the same catalogue's tooling list), so every ferrule lists the die id \"square\". No catalogue tool carries that die yet (a ferrule crimper is a follow-up to F3.4 part 1); until one does, a ferrule crimped in another die is an under-crimp.",
+      "covers": ["dies"]
+    }
+  ],
+  "extensions": {}
+}

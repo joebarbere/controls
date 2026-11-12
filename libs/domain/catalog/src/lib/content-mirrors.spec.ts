@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BUILTIN_ACCESSORY_DOCUMENTS } from './builtin-accessories.generated';
+import { BUILTIN_CABLE_DOCUMENTS } from './builtin-cables.generated';
 import { BUILTIN_DEVICE_DOCUMENTS } from './builtin-devices.generated';
 import { BUILTIN_TABLE_DOCUMENTS } from './builtin-tables.generated';
 import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
@@ -12,8 +14,8 @@ import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
  * array of documents. What the documents mean (their schema, their loader) is the catalogue's business,
  * not this test's.
  *
- * Adding a mirrored directory (catalogue v2 added `content/tables/`, F3.4 part 1 `content/tools/`;
- * `content/cables/` and `content/accessories/` follow with their first entries, P3) is one row in MIRRORS, then
+ * Adding a mirrored directory (catalogue v2 added `content/tables/`, F3.4 part 1 `content/tools/`,
+ * F3.1 part 2 `content/cables/` and `content/accessories/`) is one row in MIRRORS, then
  * `pnpm nx test catalog -u`, then the generated file's path in `.prettierignore`.
  * A new `content/` directory with no row here, mirrored or not, fails the coverage test below.
  */
@@ -47,6 +49,18 @@ const MIRRORS: readonly ContentMirror[] = [
     generated: 'builtin-tools.generated.ts',
     exportName: 'BUILTIN_TOOL_DOCUMENTS',
     documents: BUILTIN_TOOL_DOCUMENTS,
+  },
+  {
+    dir: 'cables',
+    generated: 'builtin-cables.generated.ts',
+    exportName: 'BUILTIN_CABLE_DOCUMENTS',
+    documents: BUILTIN_CABLE_DOCUMENTS,
+  },
+  {
+    dir: 'accessories',
+    generated: 'builtin-accessories.generated.ts',
+    exportName: 'BUILTIN_ACCESSORY_DOCUMENTS',
+    documents: BUILTIN_ACCESSORY_DOCUMENTS,
   },
 ];
 

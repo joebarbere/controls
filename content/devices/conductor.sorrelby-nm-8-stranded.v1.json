@@ -1,0 +1,84 @@
+{
+  "id": "conductor.sorrelby-nm-8-stranded",
+  "version": 1,
+  "title": "8 AWG stranded copper conductor of NM-B cable (THHN-type)",
+  "brand": "Sorrelby",
+  "modelName": "SB-NM-8X",
+  "category": "conductor",
+  "sizeMm": null,
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": {
+    "awg": 8,
+    "stranding": "stranded",
+    "strandCount": 7,
+    "material": {
+      "table": "materials",
+      "version": 1,
+      "key": "copperAnnealed"
+    },
+    "insulation": {
+      "table": "insulation",
+      "version": 1,
+      "key": "thhnThwn2"
+    },
+    "insulationThicknessMm": 0.762,
+    "jacketThicknessMm": 0.127,
+    "colours": [
+      {
+        "base": "black",
+        "stripe": null
+      },
+      {
+        "base": "white",
+        "stripe": null
+      },
+      {
+        "base": "red",
+        "stripe": null
+      }
+    ]
+  },
+  "model": {
+    "kind": "conductor",
+    "params": {
+      "layFactor": 1.02
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "nm-conductor-construction",
+      "kind": "real-world",
+      "citation": "A US maker's public NM-B product sheet (rev. 03/2019, read; it carries no ampacity column), paraphrased: the cable is listed to UL 719 and its insulated conductors to UL 83 (both by number); they are colour-coded PVC rated 90 °C dry under a nylon covering, 7-strand concentric copper at 8 and 6 AWG, with a total wall of about 35 mil at 8 AWG. That is the THHN construction, so this entry pins the thhnThwn2 insulation row and splits the wall as the THHN maker's sheet the Tallowmere entries cite does at this size (30 mil PVC under 5 mil nylon, 0.762 mm and 0.127 mm, rounded from mils). The row's wet rating never applies: NM cable is for dry locations only (NFPA 70-2023 Art. 334.12, by number). Paraphrased; no table copied. The outer diameter is derived, never stored.",
+      "covers": [
+        "conductor.awg",
+        "conductor.stranding",
+        "conductor.strandCount",
+        "conductor.insulation",
+        "conductor.insulationThicknessMm",
+        "conductor.jacketThicknessMm"
+      ]
+    },
+    {
+      "id": "nm-conductor-colours",
+      "kind": "game-design",
+      "citation": "game-design, following the common convention for NM-B: black and white in two-conductor cable, black, red and white in three-conductor cable (white identifies the grounded conductor, NFPA 70-2023 Art. 200.6, by number; black and red for ungrounded conductors are convention, not code). The sheet read does not list the conductor colours, so the entry is made in those three only.",
+      "covers": ["conductor.colours"]
+    },
+    {
+      "id": "copper-conductor",
+      "kind": "real-world",
+      "citation": "Soft (annealed) uncoated copper, as the NM-B sheet states for the conductors (stranded per ASTM B8; the standards cited by number, not read). Its resistivity, temperature coefficient and density are the pinned materials row copperAnnealed (100 % IACS, NBS Handbook 100). The area comes from the AWG definition (AWG_GAUGES), never from a conductor table.",
+      "covers": ["conductor.material"]
+    },
+    {
+      "id": "stranding-lay-factor",
+      "kind": "real-world",
+      "citation": "A stranded conductor's resistance is its nominal area's times a lay factor of 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbook 100, Copper Wire Tables, 1966, its stranded-conductor tables and appendix; NBS Handbook 109, Aluminum Wire Tables, 1972, its twist factor of 1.02; both read in full in the P3 source pre-audit): the helical strands are longer than the conductor. Paraphrased; no table reproduced.",
+      "covers": ["model.params.layFactor"]
+    }
+  ],
+  "extensions": {}
+}

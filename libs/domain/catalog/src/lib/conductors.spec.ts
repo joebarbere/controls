@@ -9,7 +9,8 @@ import { awgName } from './gauge';
  * derived value (area, resistance, ampacity) is computed, never stored.
  */
 
-const conductors = BUILTIN_CATALOG.devices.filter((d) => d.model.kind === 'conductor');
+/** Part 1's building wire; part 2's NM-B conductors (brand Sorrelby) are checked in `cables.spec.ts`. */
+const conductors = BUILTIN_CATALOG.devices.filter((d) => d.model.kind === 'conductor' && d.brand !== 'Sorrelby');
 const summary = (d: (typeof conductors)[number]) => {
   const c = d.conductor;
   if (c === null) throw new Error(`${d.id} has no conductor data`);
