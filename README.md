@@ -4,7 +4,7 @@
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 2 (circuit engine) shipped as v0.3.0 on 2026-11-11. Phase 3 (wires, terminations, enclosures and hand tools) is next.** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
+> **Status: Phase 2 (circuit engine) shipped as v0.3.0 on 2026-11-11. Phase 3 (wires, terminations, enclosures and hand tools) is in progress ([plan](plans/phase-3-wiring.md)).** You can start a sandbox in the workshop, look around, place, move and delete props, and save and load, from the mouse, keyboard, command palette, dev console or a headless script. The circuit simulator now runs: wire a battery, a switch and a lamp on the bench with test leads (from the console or a script for now), flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. See [`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md).
 
 ## Features
 
@@ -109,7 +109,7 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
-- [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0)
+- [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0): in progress, see [the plan](plans/phase-3-wiring.md)
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox
 - [ ] **P5 Instruments, safety, faults, Apprentice career** (v0.6.0)
 - [ ] **P6 Three-phase, control circuits, relays, timers, prints** (v0.7.0)

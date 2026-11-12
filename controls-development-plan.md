@@ -1,6 +1,6 @@
 # Controls — Development Plan
 
-> **Status:** Plan v1.3 (2026-10-29). Phase 2 kickoff. v1.3 records the P2 kickoff decisions ([`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md)): commands reach the sim worker by `postMessage` with their tick, the main thread stays authoritative, and the ngspice oracle is a checked-in corpus regenerated outside `pnpm verify`. v1.1 corrected toolchain facts found during F0.1 (TS 6.0, Vitest 4.1, pnpm 11, e2e split); v1.2 records the P1 kickoff decisions (Node follows Electron's embedded Node, Vitest 4.1 kept by choice, F1.8 split, in-game `run` takes console-line files only).
+> **Status:** Plan v1.4 (2026-11-11). Phase 3 kickoff. v1.4 records the P3 kickoff decisions ([`plans/phase-3-wiring.md`](plans/phase-3-wiring.md)): ampacity is derived from the conductor thermal model and cross-checked against cited published data (never NEC table values); a wire's persisted shape is an analytic bake, with Verlet only for the live preview; the P3 acceptance demo uses the split-phase utility entity as a stand-in supply with a 120 V lamp and heater from the catalogue; test leads join the conductor thermal model. v1.3 records the P2 kickoff decisions ([`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md)): commands reach the sim worker by `postMessage` with their tick, the main thread stays authoritative, and the ngspice oracle is a checked-in corpus regenerated outside `pnpm verify`. v1.1 corrected toolchain facts found during F0.1 (TS 6.0, Vitest 4.1, pnpm 11, e2e split); v1.2 records the P1 kickoff decisions (Node follows Electron's embedded Node, Vitest 4.1 kept by choice, F1.8 split, in-game `run` takes console-line files only).
 > **This document is the spec.** If a request conflicts with it, raise the conflict instead of quietly deviating. Change the plan first, then the code.
 > The supporting research (licences, versions, solver design, domain figures) is in [`docs/research/`](docs/research/). Every version number below was checked on 2026-10-26. `release-engineer` re-checks them at the start of Phase 0.
 
@@ -358,14 +358,14 @@ Every phase has the same shape:
 
 ### P3 — Wires, terminations, enclosures and hand tools (v0.4.0)
 
-- **F3.1** Conductor catalogue: THHN/THWN-2, NM-B cable assemblies (14/2, 12/2, 12/3 with ground, …), MTW, solid vs stranded, 18 AWG to 4/0. Resistance is computed from resistivity with a temperature coefficient. Ampacity comes from cited published data. Insulation colours follow the region profile.
-- **F3.2** 3D wire routing (§4.9): Verlet sag and baking, length gives resistance, ducts, conduit (EMT-lite), staples, wire labels and numbers, cable stripping of NM jacket.
+- **F3.1** Conductor catalogue: THHN/THWN-2, NM-B cable assemblies (14/2, 12/2, 12/3 with ground, …), MTW, solid vs stranded, 18 AWG to 4/0. Resistance is computed from resistivity with a temperature coefficient. Ampacity is derived from the conductor thermal model at stated conditions and cross-checked against cited published data (never NEC table values). Insulation colours follow the region profile.
+- **F3.2** 3D wire routing (§4.9): a deterministic analytic bake (sag on free spans) with a Verlet live preview, length gives resistance, ducts, conduit (EMT-lite), staples, wire labels and numbers, cable stripping of NM jacket.
 - **F3.3** Terminations: screw, spring-cage, wire nut, ferrule, ring/fork lug, back-stab. Quality (strip length, nicked strands, torque, conductor count, aluminium on non-CO/ALR) sets contact resistance, which leads to heat and then intermittent or arcing faults.
 - **F3.4** **Hand tools** and the tool belt: strippers (gauge holes), cutters, screwdriver/torque driver, crimper (die selection), nut driver, drill/hole saw, fish tape (minigame), label maker. Owned tools carry into the career economy in P5.
 - **F3.5** Enclosures and mounting: device boxes, junction boxes, DIN-rail panel, wire duct, backplate, knockouts.
 - **F3.6** Conductor and termination thermal model, insulation damage events, voltage drop readout.
 - **Agents created:** `content-designer`.
-- **Acceptance:** the player builds a lamp circuit from supply through boxes using real tool steps. A deliberately bad termination produces a measurable voltage drop under load and heats up. The voltage drop over 30 m of 14 AWG matches a hand calculation.
+- **Acceptance:** the player builds a lamp circuit from supply through boxes using real tool steps. A deliberately bad termination produces a measurable voltage drop under load and heats up. The voltage drop over 30 m of 14 AWG matches a hand calculation. The supply is the split-phase utility entity standing in for P4's service; the lamp and heater are catalogue entries of the P2 kinds. Test leads keep working and join the conductor thermal model.
 
 ### P4 — Lights, switches, receptacles, panels and protection: first playable sandbox (v0.5.0)
 
