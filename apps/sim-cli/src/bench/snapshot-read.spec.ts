@@ -1,4 +1,10 @@
-import { bytesPerRead, READ_ALLOCATION_GATE_BYTES, READ_PLANT, snapshotReadRig } from './snapshot-read';
+import {
+  bytesPerRead,
+  READ_ALLOCATION_GATE_BYTES,
+  READ_PLANT,
+  READ_SMOKE_PLANT,
+  snapshotReadRig,
+} from './snapshot-read';
 
 /*
  * The per-frame snapshot read's rig and allocation measure (plan F2.3b, #60 review): every frame's
@@ -40,6 +46,17 @@ describe('the snapshot read rig', () => {
     expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000, 2)).toBeLessThan(
       READ_ALLOCATION_GATE_BYTES,
     );
+  });
+
+  it("the smoke run's plant is a tenth of every count, and its reads allocate nothing either", () => {
+    for (const key of Object.keys(READ_PLANT) as (keyof typeof READ_PLANT)[]) {
+      expect(READ_SMOKE_PLANT[key] * 10).toBe(READ_PLANT[key]);
+    }
+    for (const netlist of [false, true]) {
+      expect(bytesPerRead(snapshotReadRig(READ_SMOKE_PLANT, { netlist }), 1_000, 2)).toBeLessThan(
+        READ_ALLOCATION_GATE_BYTES,
+      );
+    }
   });
 
   it('the measure catches a read that allocates', () => {

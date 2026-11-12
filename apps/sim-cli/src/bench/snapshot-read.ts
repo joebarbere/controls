@@ -38,6 +38,15 @@ import { runInNewContext } from 'node:vm';
  * every record into the readout's `connectionValues`, what the heat overlay and the inspector draw from.
  */
 
+/** A read rig's plant: its counts. */
+export interface ReadPlant {
+  readonly devices: number;
+  readonly nodes: number;
+  readonly branches: number;
+  readonly islands: number;
+  readonly connections: number;
+}
+
 /**
  * The plant: 500 devices of one 24-byte record each, 1,000 nodes, 1,500 branches, 50 islands and
  * (protocol 7) 2,000 connection records.
@@ -49,6 +58,14 @@ export const READ_PLANT = Object.freeze({
   islands: 50,
   connections: 2_000,
 });
+
+/**
+ * The smoke run's read plant (`sim bench --smoke`, CI's `bench.spec.ts`): a tenth of every count, so
+ * the allocation probes run the same read code (the copy, every field, the readout's fast path) at a
+ * fraction of the cost per read. Smoke runs prove the cases run, never measure; the full bench reads
+ * {@link READ_PLANT}.
+ */
+export const READ_SMOKE_PLANT = Object.freeze({ devices: 50, nodes: 100, branches: 150, islands: 5, connections: 200 });
 
 /**
  * The allocation gate, in bytes per read: under 1 B, so any object allocated on every read (12 B or
@@ -67,7 +84,10 @@ export interface SnapshotReadRig {
   sum(): number;
 }
 
-export function snapshotReadRig(plant = READ_PLANT, options: { readonly netlist?: boolean } = {}): SnapshotReadRig {
+export function snapshotReadRig(
+  plant: ReadPlant = READ_PLANT,
+  options: { readonly netlist?: boolean } = {},
+): SnapshotReadRig {
   const { devices, nodes, branches, islands, connections } = plant;
   const source: SnapshotSource = {
     topologyGeneration: 0,

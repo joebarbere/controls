@@ -14,7 +14,7 @@ import { materialiseWorld } from '@controls/sim-protocol';
 import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import type { BenchCalibration, BenchCase } from './bench';
-import { buildWiredPlant } from './wired-plant';
+import { buildWiredPlant, WIRED_LOOPS, WIRED_SMOKE_LOOPS } from './wired-plant';
 
 /*
  * F3.6 part 1's bench cases (plan P3 "Budgets", ADR 0015, ADR 0018 §10): the connection thermal bank
@@ -35,22 +35,27 @@ import { buildWiredPlant } from './wired-plant';
 /** The cadence tick the wired plant is materialised at (a multiple of `SOLVE_INTERVAL_TICKS`). */
 export const WIRED_START = 3000;
 
-let wiredWorld: World | null = null;
+const wiredWorlds = new Map<number, World>();
 
-/** The wired plant run to {@link WIRED_START} and materialised there (lamps settled, conductors warm), built once. */
-export function wiredPlantWorld(): World {
-  if (wiredWorld === null) {
-    const world = buildWiredPlant();
+/**
+ * The wired plant of `loops` loops run to {@link WIRED_START} and materialised there (lamps settled,
+ * conductors warm), built once per size: the full plant, and the smoke run's ({@link WIRED_SMOKE_LOOPS}).
+ */
+export function wiredPlantWorld(loops = WIRED_LOOPS): World {
+  let wiredWorld = wiredWorlds.get(loops);
+  if (wiredWorld === undefined) {
+    const world = buildWiredPlant(loops);
     const engine = SimEngine.start(world);
     engine.advanceTo(WIRED_START);
     wiredWorld = materialiseWorld({ ...world, tick: WIRED_START }, engine.exportState());
+    wiredWorlds.set(loops, wiredWorld);
   }
   return wiredWorld;
 }
 
 /** A fresh engine on the wired plant that has solved at {@link WIRED_START} (`sim: null` starts with a solve). */
-function startWired(): SimEngine {
-  return SimEngine.start({ ...wiredPlantWorld(), sim: null });
+function startWired(loops = WIRED_LOOPS): SimEngine {
+  return SimEngine.start({ ...wiredPlantWorld(loops), sim: null });
 }
 
 /**
@@ -64,11 +69,12 @@ export const WIRED_ALLOCATION_GATE_BYTES = 1;
  * Bytes the engine allocates per tick on the wired plant, as `bytesPerRead` measures a read: a warm-up
  * to optimised code, a collection before each window, heap growth plus what each GC freed, the
  * smallest of several windows, and the slope between window sizes so a fixed per-window cost cancels.
+ * `loops`: the plant's size (the smoke run's is {@link WIRED_SMOKE_LOOPS}: the same code per tick).
  */
-export function wiredBytesPerTick(ticks = 5_000, windows = 4, warmup = 20_000): number {
+export function wiredBytesPerTick(ticks = 5_000, windows = 4, warmup = 20_000, loops = WIRED_LOOPS): number {
   setFlagsFromString('--expose-gc');
   const collect = runInNewContext('gc') as () => void;
-  const engine = startWired();
+  const engine = startWired(loops);
   engine.advanceTo(engine.tick + warmup);
   const window = (count: number) => {
     collect();
@@ -124,7 +130,8 @@ export const TICK_WIRED_CASE: BenchCase = {
   // A digest of what the bank's step wrote, untimed: an idle bank can't pass.
   checksum: () => connectionDigest(tickEngine as SimEngine),
   invariant: (smoke) => {
-    const bytes = smoke ? wiredBytesPerTick(2_000, 2, 5_000) : wiredBytesPerTick();
+    // Smoke: the same probe on the smoke plant (a tenth of the loops), so a CI smoke run stays cheap.
+    const bytes = smoke ? wiredBytesPerTick(2_000, 2, 5_000, WIRED_SMOKE_LOOPS) : wiredBytesPerTick();
     return {
       value: bytes,
       failure:

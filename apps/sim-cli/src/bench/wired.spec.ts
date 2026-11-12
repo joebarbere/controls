@@ -2,7 +2,7 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import { compileNetlist } from '@controls/sim-core';
 import { BENCH_CASES } from './cases';
 import { TICK_WIRED_CASE, TOGGLED_CONNECTION, WIRED_START, wiredPlantWorld } from './wired';
-import { buildWiredPlant, WIRED_LOOPS, WIRED_PARALLEL } from './wired-plant';
+import { buildWiredPlant, WIRED_LOOPS, WIRED_PARALLEL, WIRED_SMOKE_LOOPS } from './wired-plant';
 
 /*
  * F3.6 part 1's wired bench (plan P3 "Budgets"): the plant's shape and the cases' workloads. Timings
@@ -26,6 +26,18 @@ describe('the wired bench plant', () => {
 
   it('is deterministic', () => {
     expect(buildWiredPlant()).toStrictEqual(world);
+  });
+
+  it("the smoke run's plant is the same loop a tenth as many times, every conductor netlisted", () => {
+    const smoke = buildWiredPlant(WIRED_SMOKE_LOOPS);
+    expect(WIRED_SMOKE_LOOPS * 10).toBe(WIRED_LOOPS);
+    expect(smoke.entities).toHaveLength(100);
+    const conductors = smoke.connections.filter((c) => c.ref.id.startsWith('conductor.'));
+    expect(conductors).toHaveLength(WIRED_SMOKE_LOOPS * (1 + WIRED_PARALLEL));
+    expect(compileNetlist(smoke, BUILTIN_CATALOG).branches.filter((b) => b.model === 'conductor')).toHaveLength(
+      conductors.length,
+    );
+    expect(wiredPlantWorld(WIRED_SMOKE_LOOPS).tick).toBe(WIRED_START);
   });
 });
 
