@@ -297,7 +297,8 @@ export const ConductorParams = z.strictObject({
   /**
    * The stranding lay factor k_lay: a stranded conductor's strands are helices, longer than the
    * conductor, so its resistance is that factor above a solid conductor of the same nominal area.
-   * 1 for solid; 1.02 for Class B/C stranding up to 4/0 (NBS Handbooks 100 and 109).
+   * 1 for solid; 1.02 for concentric Class B/C stranding up to 4/0 (NBS Handbooks 100 and 109), also
+   * applied to bunched (flexible) MTW stranding as a game-design approximation.
    */
   layFactor: FiniteNumber.min(1).max(1.1),
 });

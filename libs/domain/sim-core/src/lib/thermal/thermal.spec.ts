@@ -139,6 +139,12 @@ describe('derivedAmpacityA (D6, ADR 0018 §9): free air, 30 °C ambient, single 
     expect(rel(at('conductor.tallowmere-thhn-4-0-stranded'), 446.89)).toBeLessThan(0.0005);
   });
 
+  it('pins the aluminium and MTW figures at 0.1 % (Al 4 AWG 120.38 A, Al 4/0 358.40 A, MTW 18 AWG 18.82 A)', () => {
+    expect(rel(at('conductor.quorvale-xhhw2-al-4-compact'), 120.38)).toBeLessThan(0.001);
+    expect(rel(at('conductor.quorvale-xhhw2-al-4-0-compact'), 358.4)).toBeLessThan(0.001);
+    expect(rel(at('conductor.tallowmere-mtw-18'), 18.82)).toBeLessThan(0.001);
+  });
+
   it('is within ±20 % of electrical-realism-reviewer’s independent recomputation (14 AWG THHN 32.17 A, 4/0 427.4 A)', () => {
     expect(rel(at('conductor.tallowmere-thhn-14-solid'), 32.17)).toBeLessThan(0.2);
     expect(rel(at('conductor.tallowmere-thhn-4-0-stranded'), 427.4)).toBeLessThan(0.2);
