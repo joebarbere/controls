@@ -1,5 +1,5 @@
 import { DeviceStateValue, FiniteNumber } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import { CatalogError, catalogOrThrow, checkControlValue, parseCatalog } from './catalog';
 import type { DeviceControl } from './device';
 import { MODEL_KINDS, type ModelKindDef } from './model-kinds';

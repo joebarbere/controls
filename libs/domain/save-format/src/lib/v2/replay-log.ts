@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { Int } from '../primitives';
 import { ReplayEntryV1 } from '../v1/replay-log';
 import { WorldV2 } from './world';

@@ -1,5 +1,5 @@
 import { type DeviceStateValue, FiniteNumber, Int } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * Device model kinds (plan P2 decision D4, ADR 0011 §1, ADR 0013). A catalogue entry names its kind

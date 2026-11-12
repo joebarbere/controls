@@ -174,3 +174,36 @@ describe('determinism lint in libs/domain (P1, unchanged)', () => {
     },
   );
 });
+
+describe('zod namespace imports, everywhere', () => {
+  const NAMED = "import { z } from 'zod';\nexport const s = z.string();";
+  const DEFAULT = "import zod from 'zod';\nexport const s = zod.string();";
+  const ERROR = "no-restricted-syntax: Import zod as a namespace (import * as z from 'zod')";
+
+  // One file under each block that sets no-restricted-syntax (flat config replaces its options
+  // wholesale): the global block, the determinism lint (domain source and specs, sim-worker,
+  // sim-cli), D6 in sim-core, and the paths the determinism lint exempts.
+  it.each([
+    'libs/features/palette/src/lib/probe.ts',
+    'apps/game/src/probe.ts',
+    'libs/domain/commands/src/lib/probe.ts',
+    'libs/domain/commands/src/lib/probe.spec.ts',
+    SIM_CORE_SOURCE,
+    WORKER_SOURCE,
+    WORKER_PACING,
+    'apps/sim-cli/src/probe.ts',
+    'apps/sim-cli/src/bench/clock.ts',
+  ])('rejects the named z and the default export in %s', async (file) => {
+    expect(await restrictions(NAMED, file)).toEqual([ERROR]);
+    expect(await restrictions(DEFAULT, file)).toEqual([ERROR]);
+  });
+
+  it.each(['libs/domain/commands/src/lib/probe.ts', 'libs/features/palette/src/lib/probe.ts'])(
+    'allows the namespace import, value and type-only, in %s',
+    async (file) => {
+      const source =
+        "import * as z from 'zod';\nimport type * as t from 'zod';\nexport const s: t.ZodString = z.string();";
+      expect(await restrictions(source, file)).toEqual([]);
+    },
+  );
+});

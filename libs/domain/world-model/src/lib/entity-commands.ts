@@ -9,7 +9,7 @@ import {
 } from '@controls/commands';
 import { BUILTIN_CATALOG, type Catalog, initialBags } from '@controls/catalog';
 import { CatalogRef, Int, MILLIDEGREES_PER_TURN, OrientationMdegV1, PositionMmV1 } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { Connection, Entity, EntityId, OrientationMdeg, World } from './types';
 
 /*

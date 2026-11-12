@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Response of {@link IpcChannel.AppInfo}: who/what is running. */
 export const AppInfoSchema = z.object({

@@ -1,5 +1,5 @@
 import { ReplayEntry, ReplayLog, World } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import { isSharedArrayBuffer } from './buffer';
 import { type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
 import { SIM_EVENT_KINDS, type SimEvent } from './events';

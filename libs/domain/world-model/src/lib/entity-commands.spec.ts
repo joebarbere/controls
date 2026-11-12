@@ -1,5 +1,5 @@
 import { ARG_REF_KEYWORD, defaultBindingDecls, defineCommand, Keymap, NoArgs, succeed } from '@controls/commands';
-import { z } from 'zod';
+import * as z from 'zod';
 import { createWorld, migrateReplayLog, ReplayLog, World } from '@controls/save-format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

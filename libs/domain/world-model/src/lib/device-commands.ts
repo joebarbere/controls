@@ -9,7 +9,7 @@ import {
   VIEWPORT_FOCUSED_KEY,
 } from '@controls/commands';
 import { DeviceStateKey, FiniteNumber, Int, MAX_DEVICE_STATE_STRING, SafeString } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import { findEntity } from './entity-commands';
 import type { World } from './types';
 

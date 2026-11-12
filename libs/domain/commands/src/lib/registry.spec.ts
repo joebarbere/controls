@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CONSOLE_AVAILABLE_KEY, editCommands, NoArgs, viewCommands } from './builtin';
 import { type CommandDef, succeed } from './command';
 import { CommandRegistrationError, CommandRegistry } from './registry';

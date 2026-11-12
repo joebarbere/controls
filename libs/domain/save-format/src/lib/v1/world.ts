@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CatalogRef, Difficulty, Extensions, Int, RegionId } from '../primitives';
 
 /*

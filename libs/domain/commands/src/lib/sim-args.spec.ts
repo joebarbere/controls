@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CommandBus } from './bus';
 import { defaultBindingDecls } from './keybindings/defaults';
 import { Keymap } from './keybindings/keymap';

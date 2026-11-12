@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CommandId, Int, jsonObject } from '../primitives';
 import { WorldV1 } from './world';
 
