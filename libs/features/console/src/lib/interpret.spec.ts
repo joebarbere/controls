@@ -50,7 +50,9 @@ describe('resolveConsoleLine', () => {
     expect(resolve('world.hash 1')).toMatchObject({ kind: 'error', column: 12 });
     expect(resolve('netlist.dump --all')).toMatchObject({ kind: 'error', message: 'netlist.dump takes no flags' });
     expect(resolve('run scenario.console')).toMatchObject({ kind: 'error', column: 5 });
-    expect((resolve('run x') as { message: string }).message).toContain('F1.8b');
+    expect((resolve('run x') as { message: string }).message).toBe(
+      "run takes no path: the game can't read files by path. Type run on its own to pick a file, or drop one on the console",
+    );
   });
 });
 

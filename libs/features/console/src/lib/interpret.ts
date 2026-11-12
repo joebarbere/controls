@@ -70,7 +70,7 @@ export function resolveConsoleLine<S>(registry: CommandRegistry<S>, source: stri
         return {
           kind: 'error',
           message:
-            "The game can't open file paths yet (save I/O arrives with F1.8b). Type run on its own to pick a file, or drop one on the console",
+            "run takes no path: the game can't read files by path. Type run on its own to pick a file, or drop one on the console",
           column: first.column,
         };
       }
