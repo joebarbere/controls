@@ -7,9 +7,18 @@ import {
   type Material,
 } from 'three/webgpu';
 import { mm } from '@controls/units';
-import { BUILTIN_CATALOG, type Catalog, type DeviceDefinition } from '@controls/catalog';
+import {
+  type BodyState,
+  BUILTIN_CATALOG,
+  type Catalog,
+  cutLengthMm,
+  deviceBodySizeMm,
+  type DeviceDefinition,
+  racewayOf,
+} from '@controls/catalog';
 import { builtinProp, type CatalogRef, type PropSpec } from '@controls/world-model';
 import {
+  buildDeviceCover,
   buildDeviceEntries,
   buildDeviceGeometry,
   buildDeviceLever,
@@ -95,29 +104,33 @@ interface Recipe {
   readonly entriesAll: BufferGeometry | null;
   /** Whether it is an enclosure: placement aims at it as a surface (its mounts). */
   readonly enclosure: boolean;
+  /** Whether it is a raceway: conduit placement aims at it as a surface (its free ends). */
+  readonly raceway: boolean;
+  /** A duct's cover (owned by the recipe), drawn as the `cover` child when `coverOn`; else `null`. */
+  readonly cover: BufferGeometry | null;
   users: number;
 }
 
-/** A catalogue device as a prop spec: its title and size, for labels, bounds and the selectable. */
-function deviceSpec(def: DeviceDefinition): PropSpec {
+/** A catalogue device as a prop spec: its title and (cut) body size, for labels, bounds and the selectable. */
+function deviceSpec(def: DeviceDefinition, state: BodyState): PropSpec {
   return {
     id: def.id,
     title: def.title,
     shape: 'box',
-    sizeMm: def.sizeMm as NonNullable<DeviceDefinition['sizeMm']>,
+    sizeMm: deviceBodySizeMm(def, state) as NonNullable<DeviceDefinition['sizeMm']>,
     kind: 'game-design',
     source: `catalogue entry ${def.id}@${def.version} (its sources)`,
   };
 }
 
-function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
+function buildRecipe(ref: CatalogRef, catalog: Catalog, state: BodyState): Recipe {
   const prop = builtinProp(ref);
   const device = prop === undefined ? deviceDefinitionFor(ref, catalog) : undefined;
   if (device !== undefined) {
     const entries = buildDeviceEntries(device);
     return {
-      spec: deviceSpec(device),
-      geometry: buildDeviceGeometry(device),
+      spec: deviceSpec(device, state),
+      geometry: buildDeviceGeometry(device, state),
       material: buildDeviceMaterials(device),
       label: deviceLabel(device),
       modelKind: device.model.kind,
@@ -125,6 +138,8 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
       entries,
       entriesAll: entries.length > 0 ? mergeEntryGeometries(entries.map((e) => e.geometry)) : null,
       enclosure: device.enclosure !== null,
+      raceway: racewayOf(device) !== null,
+      cover: buildDeviceCover(device, state),
       users: 0,
     };
   }
@@ -139,6 +154,8 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
     entries: [],
     entriesAll: null,
     enclosure: false,
+    raceway: false,
+    cover: null,
     users: 0,
   };
 }
@@ -148,6 +165,7 @@ function disposeRecipe(recipe: Recipe): void {
   recipe.lever?.geometry.dispose();
   recipe.entries.forEach((e) => e.geometry.dispose());
   recipe.entriesAll?.dispose();
+  recipe.cover?.dispose();
   if (Array.isArray(recipe.material)) recipe.material.forEach((m) => m.dispose());
   else recipe.material.dispose();
 }
@@ -156,7 +174,8 @@ function disposeRecipe(recipe: Recipe): void {
  * Shared, reference-counted prop and device geometry and materials: every instance of a prop (or of a
  * catalogue device with a recipe, `devices.ts`) draws with one geometry and its materials, and the last
  * release disposes them, so removing every entity returns GPU memory to baseline. Keyed by
- * `id@version`.
+ * `id@version`, and for a cut-to-length raceway also by its cut length (`id@version#lengthMm`, F3.5
+ * part 2): ducts and sticks cut alike share one recipe; each new length builds one more.
  */
 export class PropRecipes {
   private readonly recipes = new Map<string, Recipe>();
@@ -168,19 +187,28 @@ export class PropRecipes {
     return this.recipes.size;
   }
 
-  acquire(ref: CatalogRef): Recipe {
-    const key = `${ref.id}@${ref.version}`;
+  /** The cache key of `ref` drawn with commanded `state` (see the class comment). */
+  keyOf(ref: CatalogRef, state: BodyState = null): string {
+    const device = this.catalog.device(ref);
+    const length = device ? cutLengthMm(device, state) : null;
+    return length === null ? `${ref.id}@${ref.version}` : `${ref.id}@${ref.version}#${length}`;
+  }
+
+  /** The recipe for `ref` with commanded `state` (a cut part's length; `null`: its default length). */
+  acquire(ref: CatalogRef, state: BodyState = null): Recipe {
+    const key = this.keyOf(ref, state);
     let recipe = this.recipes.get(key);
     if (!recipe) {
-      recipe = buildRecipe(ref, this.catalog);
+      recipe = buildRecipe(ref, this.catalog, state);
       this.recipes.set(key, recipe);
     }
     recipe.users++;
     return recipe;
   }
 
-  release(ref: CatalogRef): void {
-    const key = `${ref.id}@${ref.version}`;
+  /** Releases what {@link acquire} gave for the same `ref` and `state`. */
+  release(ref: CatalogRef, state: BodyState = null): void {
+    const key = this.keyOf(ref, state);
     const recipe = this.recipes.get(key);
     if (!recipe) return;
     recipe.users--;

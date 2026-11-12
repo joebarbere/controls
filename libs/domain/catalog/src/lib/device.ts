@@ -154,6 +154,14 @@ export const DeviceMount = z.strictObject({
   type: z.string().max(32),
   /** Width along the mount's axis (integer mm), for `mount-full` and overlap. */
   widthMm: Int.min(1),
+  /**
+   * Where the device's origin sits across a `linear` mount (integer mm along the mount's +y from its
+   * origin; F3.5 part 2, an ADR 0016 amendment). A DIN rail's mount origin is where a DIN 43880
+   * modular device's bottom edge goes (45 mm below the rail centreline), so a modular device declares
+   * 0; a shorter one centred on the rail, such as a terminal block, declares 45 - floor(height / 2).
+   * Must be 0 for the other occupancies (load-checked).
+   */
+  crossMm: Int.min(-1000).max(1000),
 });
 export type DeviceMount = z.infer<typeof DeviceMount>;
 
@@ -288,7 +296,8 @@ export type DeviceSource = CatalogSource;
 
 /**
  * Device categories, for the palette and the build menu. Adding one is a catalogue change. `lead` and
- * `conductor` go with connection kinds and only with them; `enclosure` with enclosure kinds.
+ * `conductor` go with connection kinds and only with them; `enclosure` with enclosure kinds; `raceway`
+ * with raceway kinds and `terminalBlock` with the `terminalBlock.*` kinds (F3.5 part 2).
  */
 export const DeviceCategory = z.enum([
   'source',
@@ -299,6 +308,8 @@ export const DeviceCategory = z.enum([
   'conductor',
   'enclosure',
   'splice',
+  'raceway',
+  'terminalBlock',
 ]);
 export type DeviceCategory = z.infer<typeof DeviceCategory>;
 

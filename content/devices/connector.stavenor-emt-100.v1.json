@@ -1,0 +1,42 @@
+{
+  "id": "connector.stavenor-emt-100",
+  "version": 1,
+  "title": "EMT set-screw connector, 1 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SC-100",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 28,
+    "heightMm": 42,
+    "depthMm": 42
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitConnector",
+    "params": {
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45,
+      "throatLengthMm": 12
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
+    },
+    {
+      "id": "connector-body",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A steel set-screw EMT connector: a 28 mm body outside the enclosure wall, 42 mm across its locknut and gland, and a 12 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "covers": ["sizeMm", "model.params.throatLengthMm"]
+    }
+  ],
+  "extensions": {}
+}

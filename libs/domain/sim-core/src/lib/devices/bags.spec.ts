@@ -13,15 +13,26 @@ import { SimEngine } from '../engine/engine';
  * accepts (bounds, the initial value, null where allowed), then a start and 50 steps.
  */
 
-/** Values a key's schema accepts: booleans, the enum's values, or numbers at and inside its bounds. */
+/**
+ * Values a key's schema accepts: booleans, the enum's values, or numbers at and inside its bounds.
+ *
+ * Never `.filter()` a wide draw by the schema: fast-check retries a filter until it passes, so a
+ * narrow key (an integer `lengthMm` in 1..6000, F3.5 part 2) made a `fc.double` filter spin for ever
+ * and hung `pnpm verify`. Each draw is mapped instead: kept if the schema accepts it, else its
+ * rounding, else an accepted probe, so every draw terminates.
+ */
 function valueArb(def: StateKeyDef): fc.Arbitrary<DeviceStateValue> {
   if (def.type === 'boolean') return fc.boolean();
   if (def.type === 'enum') return fc.constantFrom(...(def.values ?? []));
   const probes = [0, -0, 1e-300, 1e-6, 0.5, 1, 2, 65, 200, 293.15, 3600, 1e6, 1e300, -1, null, def.initial];
   const accepted = probes.filter((v) => def.schema.safeParse(v).success);
+  const ok = (v: unknown): boolean => def.schema.safeParse(v).success;
+  const settle = ([v, i]: [number, number]): DeviceStateValue =>
+    ok(v) ? v : ok(Math.round(v)) ? Math.round(v) : accepted[i % accepted.length];
   return fc.oneof(
     fc.constantFrom(...accepted),
-    fc.double({ min: -1e7, max: 1e7, noNaN: true }).filter((v) => def.schema.safeParse(v).success),
+    fc.tuple(fc.double({ min: -1e7, max: 1e7, noNaN: true }), fc.nat()).map(settle),
+    fc.tuple(fc.integer({ min: -10_000, max: 10_000 }), fc.nat()).map(settle),
   );
 }
 

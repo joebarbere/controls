@@ -106,7 +106,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 51
+      "widthMm": 51,
+      "crossMm": 0
     }
   ],
   "enclosure": {
@@ -263,7 +264,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 102
+      "widthMm": 102,
+      "crossMm": 0
     }
   ],
   "enclosure": {
@@ -419,7 +421,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 102
+      "widthMm": 102,
+      "crossMm": 0
     }
   ],
   "enclosure": {
@@ -541,7 +544,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 102
+      "widthMm": 102,
+      "crossMm": 0
     }
   ],
   "enclosure": {
@@ -826,7 +830,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "din35",
-      "widthMm": 40
+      "widthMm": 40,
+      "crossMm": 0
     }
   ],
   "enclosure": null,
@@ -3954,6 +3959,708 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "connector.stavenor-emt-050",
+  "version": 1,
+  "title": "EMT set-screw connector, 1/2 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SC-050",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 22,
+    "heightMm": 28,
+    "depthMm": 28
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitConnector",
+    "params": {
+      "tradeSizeIn": 0.5,
+      "outsideDiameterMm": 17.93,
+      "wallThicknessMm": 1.07,
+      "throatLengthMm": 10
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "connector-body",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A steel set-screw EMT connector: a 22 mm body outside the enclosure wall, 28 mm across its locknut and gland, and a 10 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "covers": [
+        "sizeMm",
+        "model.params.throatLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "connector.stavenor-emt-075",
+  "version": 1,
+  "title": "EMT set-screw connector, 3/4 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SC-075",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 25,
+    "heightMm": 34,
+    "depthMm": 34
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitConnector",
+    "params": {
+      "tradeSizeIn": 0.75,
+      "outsideDiameterMm": 23.42,
+      "wallThicknessMm": 1.24,
+      "throatLengthMm": 11
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "connector-body",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A steel set-screw EMT connector: a 25 mm body outside the enclosure wall, 34 mm across its locknut and gland, and a 11 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "covers": [
+        "sizeMm",
+        "model.params.throatLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "connector.stavenor-emt-100",
+  "version": 1,
+  "title": "EMT set-screw connector, 1 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SC-100",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 28,
+    "heightMm": 42,
+    "depthMm": 42
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitConnector",
+    "params": {
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45,
+      "throatLengthMm": 12
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "connector-body",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A steel set-screw EMT connector: a 28 mm body outside the enclosure wall, 42 mm across its locknut and gland, and a 12 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "covers": [
+        "sizeMm",
+        "model.params.throatLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "duct.lattisby-25x40",
+  "version": 1,
+  "title": "Slotted PVC wiring duct with cover, 25 × 40 mm, 2 m",
+  "brand": "Lattisby",
+  "modelName": "LD-2540",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 2000,
+    "heightMm": 25,
+    "depthMm": 40
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "backplate",
+      "widthMm": 2000,
+      "crossMm": 0
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.duct",
+    "params": {
+      "defaultLengthMm": 300,
+      "minLengthMm": 20,
+      "wallThicknessMm": 1.6,
+      "slotWidthMm": 4.5,
+      "fingerWidthMm": 5.5
+    }
+  },
+  "controls": [
+    {
+      "id": "coverOn",
+      "label": "Cover fitted",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "duct-section-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 25 × 40 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "duct-comb",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A 1.6 mm wall and base, 4.5 mm slots between 5.5 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "covers": [
+        "model.params.wallThicknessMm",
+        "model.params.slotWidthMm",
+        "model.params.fingerWidthMm"
+      ]
+    },
+    {
+      "id": "duct-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new piece is cut to 300 mm (it fits the Pellmoor panel’s 350 mm backplate); raceway.cut makes pieces from 20 mm up to the 2 m stock length.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    },
+    {
+      "id": "duct-backplate",
+      "kind": "game-design",
+      "citation": "game-design: duct is screwed or riveted to a panel backplate (common practice), lying along the plate’s +x; its width along the mount is its cut length (the 2000 mm here is the stock, replaced by the cut).",
+      "covers": [
+        "fits.backplate"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "duct.lattisby-40x60",
+  "version": 1,
+  "title": "Slotted PVC wiring duct with cover, 40 × 60 mm, 2 m",
+  "brand": "Lattisby",
+  "modelName": "LD-4060",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 2000,
+    "heightMm": 40,
+    "depthMm": 60
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "backplate",
+      "widthMm": 2000,
+      "crossMm": 0
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.duct",
+    "params": {
+      "defaultLengthMm": 300,
+      "minLengthMm": 20,
+      "wallThicknessMm": 1.9,
+      "slotWidthMm": 6,
+      "fingerWidthMm": 6
+    }
+  },
+  "controls": [
+    {
+      "id": "coverOn",
+      "label": "Cover fitted",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "duct-section-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 40 × 60 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "duct-comb",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A 1.9 mm wall and base, 6 mm slots between 6 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "covers": [
+        "model.params.wallThicknessMm",
+        "model.params.slotWidthMm",
+        "model.params.fingerWidthMm"
+      ]
+    },
+    {
+      "id": "duct-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new piece is cut to 300 mm (it fits the Pellmoor panel’s 350 mm backplate); raceway.cut makes pieces from 20 mm up to the 2 m stock length.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    },
+    {
+      "id": "duct-backplate",
+      "kind": "game-design",
+      "citation": "game-design: duct is screwed or riveted to a panel backplate (common practice), lying along the plate’s +x; its width along the mount is its cut length (the 2000 mm here is the stock, replaced by the cut).",
+      "covers": [
+        "fits.backplate"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "duct.lattisby-60x80",
+  "version": 1,
+  "title": "Slotted PVC wiring duct with cover, 60 × 80 mm, 2 m",
+  "brand": "Lattisby",
+  "modelName": "LD-6080",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 2000,
+    "heightMm": 60,
+    "depthMm": 80
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "backplate",
+      "widthMm": 2000,
+      "crossMm": 0
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.duct",
+    "params": {
+      "defaultLengthMm": 300,
+      "minLengthMm": 20,
+      "wallThicknessMm": 2.2,
+      "slotWidthMm": 6,
+      "fingerWidthMm": 8
+    }
+  },
+  "controls": [
+    {
+      "id": "coverOn",
+      "label": "Cover fitted",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "duct-section-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 60 × 80 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "duct-comb",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A 2.2 mm wall and base, 6 mm slots between 8 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "covers": [
+        "model.params.wallThicknessMm",
+        "model.params.slotWidthMm",
+        "model.params.fingerWidthMm"
+      ]
+    },
+    {
+      "id": "duct-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new piece is cut to 300 mm (it fits the Pellmoor panel’s 350 mm backplate); raceway.cut makes pieces from 20 mm up to the 2 m stock length.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    },
+    {
+      "id": "duct-backplate",
+      "kind": "game-design",
+      "citation": "game-design: duct is screwed or riveted to a panel backplate (common practice), lying along the plate’s +x; its width along the mount is its cut length (the 2000 mm here is the stock, replaced by the cut).",
+      "covers": [
+        "fits.backplate"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "elbow.stavenor-emt-050",
+  "version": 1,
+  "title": "EMT 90° elbow, 1/2 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SE-050-90",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 114,
+    "heightMm": 114,
+    "depthMm": 18
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitElbow",
+    "params": {
+      "tradeSizeIn": 0.5,
+      "outsideDiameterMm": 17.93,
+      "wallThicknessMm": 1.07,
+      "bendRadiusMm": 105
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "elbow-bend",
+      "kind": "game-design",
+      "citation": "game-design: a 105 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "covers": [
+        "model.params.bendRadiusMm",
+        "sizeMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "elbow.stavenor-emt-075",
+  "version": 1,
+  "title": "EMT 90° elbow, 3/4 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SE-075-90",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 132,
+    "heightMm": 132,
+    "depthMm": 24
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitElbow",
+    "params": {
+      "tradeSizeIn": 0.75,
+      "outsideDiameterMm": 23.42,
+      "wallThicknessMm": 1.24,
+      "bendRadiusMm": 120
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "elbow-bend",
+      "kind": "game-design",
+      "citation": "game-design: a 120 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "covers": [
+        "model.params.bendRadiusMm",
+        "sizeMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "elbow.stavenor-emt-100",
+  "version": 1,
+  "title": "EMT 90° elbow, 1 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SE-100-90",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 165,
+    "heightMm": 165,
+    "depthMm": 30
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitElbow",
+    "params": {
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45,
+      "bendRadiusMm": 150
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "elbow-bend",
+      "kind": "game-design",
+      "citation": "game-design: a 150 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "covers": [
+        "model.params.bendRadiusMm",
+        "sizeMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "emt.stavenor-050",
+  "version": 1,
+  "title": "EMT conduit, 1/2 in trade size, 10 ft stick",
+  "brand": "Stavenor",
+  "modelName": "SE-050",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 3048,
+    "heightMm": 18,
+    "depthMm": 18
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduit",
+    "params": {
+      "defaultLengthMm": 1000,
+      "minLengthMm": 50,
+      "tradeSizeIn": 0.5,
+      "outsideDiameterMm": 17.93,
+      "wallThicknessMm": 1.07
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "emt-stick",
+      "kind": "game-design",
+      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (18 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "emt-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new stick is cut to 1000 mm; raceway.cut makes pieces from 50 mm to the full stick.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "emt.stavenor-075",
+  "version": 1,
+  "title": "EMT conduit, 3/4 in trade size, 10 ft stick",
+  "brand": "Stavenor",
+  "modelName": "SE-075",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 3048,
+    "heightMm": 24,
+    "depthMm": 24
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduit",
+    "params": {
+      "defaultLengthMm": 1000,
+      "minLengthMm": 50,
+      "tradeSizeIn": 0.75,
+      "outsideDiameterMm": 23.42,
+      "wallThicknessMm": 1.24
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "emt-stick",
+      "kind": "game-design",
+      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (24 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "emt-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new stick is cut to 1000 mm; raceway.cut makes pieces from 50 mm to the full stick.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "emt.stavenor-100",
+  "version": 1,
+  "title": "EMT conduit, 1 in trade size, 10 ft stick",
+  "brand": "Stavenor",
+  "modelName": "SE-100",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 3048,
+    "heightMm": 30,
+    "depthMm": 30
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduit",
+    "params": {
+      "defaultLengthMm": 1000,
+      "minLengthMm": 50,
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": [
+        "model.params.tradeSizeIn",
+        "model.params.outsideDiameterMm",
+        "model.params.wallThicknessMm"
+      ]
+    },
+    {
+      "id": "emt-stick",
+      "kind": "game-design",
+      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (30 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "emt-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new stick is cut to 1000 mm; raceway.cut makes pieces from 50 mm to the full stick.",
+      "covers": [
+        "model.params.defaultLengthMm",
+        "model.params.minLengthMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "fuse.emberlyn-5x20-fa-1a",
   "version": 1,
   "title": "1 A fast-acting 5 × 20 mm fuse in an inline holder on a base",
@@ -5564,7 +6271,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "mounts": [
     {
       "type": "din35",
-      "widthMm": 40
+      "widthMm": 40,
+      "crossMm": 0
     }
   ],
   "enclosure": null,
@@ -5749,6 +6457,528 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "sizeMm",
         "terminals"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tb.quennick-pe4",
+  "version": 1,
+  "title": "Screw-clamp ground (PE) terminal block, 4 mm² class, green-yellow",
+  "brand": "Quennick",
+  "modelName": "QPE 4",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 6,
+    "heightMm": 48,
+    "depthMm": 42
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 3,
+        "y": 40,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 48,
+            "z": 30
+          },
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 3,
+        "y": 8,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 0,
+            "z": 30
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 6,
+      "crossMm": 21
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.ground",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-4mm2-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are about 6.2 mm wide per pole (2.5 mm² blocks about 5.2 mm), roughly 45 to 50 mm tall and deep, as makers’ datasheets list them (recalled, not read in this PR). Drawn 6 × 48 × 42 mm: the width is rounded down to whole mm (so 10 blocks take 60 mm, not 62). Green-yellow, the colour of protective-earth blocks; a real PE block bonds its foot to the rail (P4 grounding, not modelled in P3). Two clamps, one at the top (1) and one at the bottom (2); conductors enter the top and bottom faces.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 6 mm along it, centred on the rail: its origin sits 45 − 24 = 21 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7), so its 48 mm body spans the rail centreline ± 24 mm.",
+      "covers": [
+        "fits.din35"
+      ]
+    },
+    {
+      "id": "tb-screw-rating",
+      "kind": "game-design",
+      "citation": "game-design: unverified. The 4 mm² class is marked for copper only, 22 to 10 AWG solid or stranded (bare or in a ferrule), with a rising-cage (box) clamp tightened by an M3 screw to about 0.5 to 0.8 N·m; the fictional block is marked 0.6 N·m (NFPA 70-2023 Art. 110.14(D), cited by number, requires the marked value) with a 9 ± 1 mm strip and an 8 mm cage. One conductor is rated; a second fits under the cage and makes a worse termination (D8). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "tb-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. Terminal-block clamp screws commonly take a slotted blade, many with a Pozidriv combination head (common practice, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "tb-screw-contact",
+      "kind": "game-design",
+      "citation": "game-design: the screw clamps take the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). BSS 103 measured wiring-device terminals, not terminal-block cages, so applying it is a game-design choice. The cage’s heat capacity, 0.5 J/K, is the DIN supply’s small-box-clamp estimate (about 1.3 g of brass and steel × about 380 J/(kg·K)).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm",
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tb.quennick-sc25",
+  "version": 1,
+  "title": "Spring-cage feed-through terminal block, 2.5 mm² class, grey",
+  "brand": "Quennick",
+  "modelName": "QSC 2.5",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 5,
+    "heightMm": 56,
+    "depthMm": 36
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 2,
+        "y": 48,
+        "z": 26
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 2,
+            "y": 56,
+            "z": 26
+          },
+          "exitAxis": "+y",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.3,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 2,
+        "y": 8,
+        "z": 26
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 12
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 2,
+            "y": 0,
+            "z": 26
+          },
+          "exitAxis": "-y",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.3,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 5,
+      "crossMm": 17
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.feedThrough",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-25mm2-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Spring-cage (spring-clamp) feed-through DIN-rail terminal blocks of the 2.5 mm² class are about 5.2 mm wide per pole and roughly 50 to 60 mm tall, as makers’ datasheets list them (recalled, not read in this PR). Drawn 5 × 56 × 36 mm: the width rounded down to whole mm. Two spring cages, top (1) and bottom (2); conductors enter the top and bottom faces.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.*.methods.springCage.entryMm",
+        "terminals.*.methods.springCage.exitAxis"
+      ]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 5 mm along it, centred on the rail: its origin sits 45 − 28 = 17 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7).",
+      "covers": [
+        "fits.din35"
+      ]
+    },
+    {
+      "id": "tb-spring-rating",
+      "kind": "game-design",
+      "citation": "game-design: unverified. The 2.5 mm² spring-cage class is marked for copper only, about 22 to 12 AWG solid or stranded (bare or in a ferrule), one conductor per cage, with a 10 ± 1 mm strip; the cage grips 9 mm. A spring’s force is fixed, so no torque and no drive (the release slot’s blade is not modelled).",
+      "covers": [
+        "terminals.*.methods.springCage.ratedConductors",
+        "terminals.*.methods.springCage.maxConductors",
+        "terminals.*.methods.springCage.awgRange",
+        "terminals.*.methods.springCage.stranding",
+        "terminals.*.methods.springCage.stripLengthMm",
+        "terminals.*.methods.springCage.alRated",
+        "terminals.*.methods.springCage.clampType",
+        "terminals.*.methods.springCage.clampDepthMm"
+      ]
+    },
+    {
+      "id": "tb-spring-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §3.3): R₀ 0.3 mΩ, the ADR’s spring-cage example inside NBS BSS 128’s (1980) 1.5 mΩ assembly acceptance limit; a heat path of 0.02 W/K (a physics estimate, a little below the screw class’s 0.026 W/K for a smaller clamp) and a heat capacity of 0.3 J/K (about 0.8 g of spring steel and a copper bar × about 380 J/(kg·K)).",
+      "covers": [
+        "terminals.*.methods.springCage.contactOhm",
+        "terminals.*.methods.springCage.heatPathWPerK",
+        "terminals.*.methods.springCage.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tb.quennick-st4",
+  "version": 1,
+  "title": "Screw-clamp feed-through terminal block, 4 mm² class, grey",
+  "brand": "Quennick",
+  "modelName": "QST 4",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 6,
+    "heightMm": 48,
+    "depthMm": 42
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 3,
+        "y": 40,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 48,
+            "z": 30
+          },
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 3,
+        "y": 8,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 0,
+            "z": 30
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 6,
+      "crossMm": 21
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.feedThrough",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-4mm2-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are about 6.2 mm wide per pole (2.5 mm² blocks about 5.2 mm), roughly 45 to 50 mm tall and deep, as makers’ datasheets list them (recalled, not read in this PR). Drawn 6 × 48 × 42 mm: the width is rounded down to whole mm (so 10 blocks take 60 mm, not 62). Grey, the usual colour for line conductors. Two clamps, one at the top (1) and one at the bottom (2); conductors enter the top and bottom faces.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 6 mm along it, centred on the rail: its origin sits 45 − 24 = 21 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7), so its 48 mm body spans the rail centreline ± 24 mm.",
+      "covers": [
+        "fits.din35"
+      ]
+    },
+    {
+      "id": "tb-screw-rating",
+      "kind": "game-design",
+      "citation": "game-design: unverified. The 4 mm² class is marked for copper only, 22 to 10 AWG solid or stranded (bare or in a ferrule), with a rising-cage (box) clamp tightened by an M3 screw to about 0.5 to 0.8 N·m; the fictional block is marked 0.6 N·m (NFPA 70-2023 Art. 110.14(D), cited by number, requires the marked value) with a 9 ± 1 mm strip and an 8 mm cage. One conductor is rated; a second fits under the cage and makes a worse termination (D8). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "tb-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. Terminal-block clamp screws commonly take a slotted blade, many with a Pozidriv combination head (common practice, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "tb-screw-contact",
+      "kind": "game-design",
+      "citation": "game-design: the screw clamps take the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). BSS 103 measured wiring-device terminals, not terminal-block cages, so applying it is a game-design choice. The cage’s heat capacity, 0.5 J/K, is the DIN supply’s small-box-clamp estimate (about 1.3 g of brass and steel × about 380 J/(kg·K)).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm",
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
       ]
     }
   ],

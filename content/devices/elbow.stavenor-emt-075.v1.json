@@ -1,0 +1,42 @@
+{
+  "id": "elbow.stavenor-emt-075",
+  "version": 1,
+  "title": "EMT 90° elbow, 3/4 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SE-075-90",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 132,
+    "heightMm": 132,
+    "depthMm": 24
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitElbow",
+    "params": {
+      "tradeSizeIn": 0.75,
+      "outsideDiameterMm": 23.42,
+      "wallThicknessMm": 1.24,
+      "bendRadiusMm": 120
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "game-design",
+      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
+    },
+    {
+      "id": "elbow-bend",
+      "kind": "game-design",
+      "citation": "game-design: a 120 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "covers": ["model.params.bendRadiusMm", "sizeMm"]
+    }
+  ],
+  "extensions": {}
+}

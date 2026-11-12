@@ -262,6 +262,24 @@ flowchart LR
 - **Recipes** (`geometry/devices.ts`): the breaker (a DIN-rail case facing +z, its handle a lever turned by `state.on`), the fuse (an inline holder on a base), open-fronted boxes (rectangular, or round for the ceiling box; nonmetallic ones blue), and the DIN panel (case, backplate under its area mount, a TS35 rail along each `din35` mount, its centreline 45 mm above the mount origin).
 - **Entries** (knockouts, pryouts, clamps, drill sites) are drawn from the commanded `openEntries` bits as two child meshes per enclosure, `entries:closed` (slugs and tabs) and `entries:open` (dark holes), so a box costs at most two extra draws whatever its entry count. With every entry closed it draws the recipe's shared merged geometry; with some open it owns two merged geometries, rebuilt only when the bits change and disposed on the next change or removal. Entry meshes carry `userData.unpickable` (the picker gives them no BVH) and a no-op `raycast`: a pick lands on the body. The scene-graph snapshot records `openEntries` (ids) on the entity node, and `breaker: { on }` for a breaker.
 
+## Raceways and terminal blocks (F3.5 part 2)
+
+```mermaid
+flowchart LR
+    hit["surface pick<br/>(fixtures + enclosures + raceways)"] --> piw["placeInWorld(…, { turn })"]
+    piw --> conduit{"a conduit part near an open entry<br/>or a free conduit end?"}
+    conduit -- yes --> solve["snapConduit: its end on the target,<br/>one of four turns (R cycles)"]
+    conduit -- no --> mounts["mounts (a block on a rail at its own pitch,<br/>a duct on the backplate), then fixtures"]
+    solve --> checks["overlap (all scope)"]
+    mounts --> checks
+```
+
+- **Cut-to-length parts draw their cut length.** A duct's or stick's recipe is built for its commanded `lengthMm` (`deviceBodySizeMm`), so `PropRecipes` keys it `id@version#lengthMm` (`keyOf`): pieces cut alike share a recipe, and `raceway.cut` swaps the entity's recipe like a ref change (a membership change, so both pickers rebuild) and releases the old length's. The ghost borrows the recipe for the length it shows (a new part's default, a moved part's own).
+- **A duct's cover is a child mesh** (`cover`, the recipe's geometry, the `panel` slot) shown by the commanded `coverOn`: no recipe change, no picker rebuild. The scene-graph snapshot records `duct: { coverOn, lengthMm }` and, for a cut stick, `raceway: { lengthMm }`.
+- **Conduit snapping** (`world-model` `snap/raceway-placement.ts`): a connector's entry end goes into an open enclosure entry of its trade size; any part's first joint end onto a free joint end of a placed part of its size (one no other end meets), facing it, within `RACEWAY_CAPTURE_DISTANCE` (60 mm). The four turns about that end are ranked (the part's +z, then +y, nearest world +y, +z, +x, −x, −z, −y) and the `turnPlacement` input action (R) cycles them while placing. The surface picker holds the raceways (`WorldSync.surfaceRoots()`), so the ray finds a stick's end.
+- **Terminal blocks** sit on a rail centred (their fit's `crossMm`), and a device narrower than `NARROW_RAIL_DEVICE` (17 mm) snaps at multiples of its own width from the rail's start instead of to DIN module slots, so blocks of one width pack with no gaps.
+- **Recipes**: a duct is a base and two walls of a solid band and fingers (slot and finger widths from the entry, at most 256 fingers a wall); a stick a tube in its even-rounded body with a dark bore at each end; an elbow a quarter torus from end a to end b; a connector a hex shoulder and gland outside the wall, its throat and locknut drawn inside (beyond its body box on purpose); a terminal block a body, a DIN foot at its mid-height, a marker carrier, a screw or spring release and a dark entry per terminal, green with a yellow stripe for the ground block.
+
 ## Snapping (pure, integer mm, `@controls/world-model`)
 
 `snap(target, footprint, cursorWorld)` converts the cursor into the target's surface frame and returns the footprint's lower-left **anchor** in surface and world integer mm plus the target's normal, or a typed failure (`out-of-capture`, `out-of-bounds`, `too-large`). Vertical frames face ±x or ±z (`u` = right, `v` = up); since F1.9 a horizontal frame faces `+y` (`u` = its `right`, `v` = away from the front edge). An entity's `positionMm` is that world anchor; its prop geometry spans +x, +y, +z from it, turned by `orientationForFrame`: a yaw quarter-turn on a wall, plus pitch -90° on a bench top so the prop's depth stands up.

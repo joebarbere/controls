@@ -1,0 +1,33 @@
+# F3.5 part 2: wire duct, DIN terminal blocks and an EMT-lite run on the DIN panel, as console lines.
+# Both this file and the snapping script raceway-panel.ts must end at RACEWAY_PANEL_HASH
+# (apps/sim-cli/src/raceway-panel.spec.ts).
+#   pnpm sim run apps/sim-cli/scenarios/raceway-panel.console --world content/levels/workshop.json
+#
+# It starts from the workshop level (New sandbox with seed 0). Positions are what placeInWorld
+# (@controls/world-model) gives for the cursor points the script aims at.
+# The panel on the backplate at (0, 50): it lands at (-200, -200, 0).
+entity.place --ref.id panel.pellmoor-din-400x500 --ref.version 1 --positionMm.x -200 --positionMm.y -200 --positionMm.z 0 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0
+# A 40 x 60 duct on the panel's backplate (origin (-175, -175, 14)): the cursor at (0, 90) is 175 mm along
+# and 265 mm up, so the 300 x 40 default piece snaps to (25, 245) on the 5 mm grid. Then cut to 250 mm.
+entity.place --ref.id duct.lattisby-40x60 --ref.version 1 --positionMm.x -150 --positionMm.y 70 --positionMm.z 14 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount plate
+raceway.cut --id 2 --lengthMm 250
+# Terminal blocks on rail 1 (mount origin (-165, 105, 22), centreline y = 150), centred on it (crossMm
+# 21 for the 48 mm blocks, 17 for the 56 mm one) and packed at their own width: 6 mm blocks at 96, 102
+# and 108 mm along, the 5 mm spring-cage block at 120 mm (k = round(117.5 / 5) = 24).
+entity.place --ref.id tb.quennick-st4 --ref.version 1 --positionMm.x -69 --positionMm.y 126 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+entity.place --ref.id tb.quennick-st4 --ref.version 1 --positionMm.x -63 --positionMm.y 126 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+entity.place --ref.id tb.quennick-pe4 --ref.version 1 --positionMm.x -57 --positionMm.y 126 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+entity.place --ref.id tb.quennick-sc25 --ref.version 1 --positionMm.x -45 --positionMm.y 122 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+# Knock out the 3/4 in bottom knockout ko-bottom-1 (at (-100, -200, 100), pointing in along +y).
+enclosure.openEntry --id 1 --entry ko-bottom-1 --tool.id tool.veltmark-sd-2 --tool.version 1
+# A 3/4 in connector into it: its entry end (0, 17, 17) turned onto +y (roll 270 degrees, +z kept),
+# so it sits at (-117, -200, 83) and its outer end is at (-100, -225, 100), facing down.
+entity.place --ref.id connector.stavenor-emt-075 --ref.version 1 --positionMm.x -117 --positionMm.y -200 --positionMm.z 83 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 270000
+# A 3/4 in stick on the connector's outer end, then cut to 300 mm: its free end is at (-100, -525, 100).
+entity.place --ref.id emt.stavenor-075 --ref.version 1 --positionMm.x -112 --positionMm.y -225 --positionMm.z 88 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 270000
+raceway.cut --id 8 --lengthMm 300
+# A 90 degree elbow on the stick's end (the first of its four turns: +z kept, it bends toward -x).
+entity.place --ref.id elbow.stavenor-emt-075 --ref.version 1 --positionMm.x -88 --positionMm.y -525 --positionMm.z 88 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 180000
+# Clip the duct's cover on.
+device.operate --id 2 --control coverOn --value true
+world.hash

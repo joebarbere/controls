@@ -5,4 +5,5 @@ export * from './overlap';
 export * from './wire-commands';
 export * from './cable-commands';
 export * from './enclosure-commands';
+export * from './raceway-commands';
 export * from './auto-length';

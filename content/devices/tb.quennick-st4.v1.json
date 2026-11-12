@@ -1,0 +1,156 @@
+{
+  "id": "tb.quennick-st4",
+  "version": 1,
+  "title": "Screw-clamp feed-through terminal block, 4 mm² class, grey",
+  "brand": "Quennick",
+  "modelName": "QST 4",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 6,
+    "heightMm": 48,
+    "depthMm": 42
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 3,
+        "y": 40,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": ["slotted", "pozidriv"],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 48,
+            "z": 30
+          },
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 3,
+        "y": 8,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": ["slotted", "pozidriv"],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 0,
+            "z": 30
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 6,
+      "crossMm": 21
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.feedThrough",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-4mm2-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are about 6.2 mm wide per pole (2.5 mm² blocks about 5.2 mm), roughly 45 to 50 mm tall and deep, as makers’ datasheets list them (recalled, not read in this PR). Drawn 6 × 48 × 42 mm: the width is rounded down to whole mm (so 10 blocks take 60 mm, not 62). Grey, the usual colour for line conductors. Two clamps, one at the top (1) and one at the bottom (2); conductors enter the top and bottom faces.",
+      "covers": ["sizeMm", "terminals", "terminals.*.methods.screw.entryMm", "terminals.*.methods.screw.exitAxis"]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 6 mm along it, centred on the rail: its origin sits 45 − 24 = 21 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7), so its 48 mm body spans the rail centreline ± 24 mm.",
+      "covers": ["fits.din35"]
+    },
+    {
+      "id": "tb-screw-rating",
+      "kind": "game-design",
+      "citation": "game-design: unverified. The 4 mm² class is marked for copper only, 22 to 10 AWG solid or stranded (bare or in a ferrule), with a rising-cage (box) clamp tightened by an M3 screw to about 0.5 to 0.8 N·m; the fictional block is marked 0.6 N·m (NFPA 70-2023 Art. 110.14(D), cited by number, requires the marked value) with a 9 ± 1 mm strip and an 8 mm cage. One conductor is rated; a second fits under the cage and makes a worse termination (D8). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "tb-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. Terminal-block clamp screws commonly take a slotted blade, many with a Pozidriv combination head (common practice, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "tb-screw-contact",
+      "kind": "game-design",
+      "citation": "game-design: the screw clamps take the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). BSS 103 measured wiring-device terminals, not terminal-block cages, so applying it is a game-design choice. The cage’s heat capacity, 0.5 J/K, is the DIN supply’s small-box-clamp estimate (about 1.3 g of brass and steel × about 380 J/(kg·K)).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm",
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+}

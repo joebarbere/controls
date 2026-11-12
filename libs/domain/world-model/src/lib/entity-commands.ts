@@ -7,7 +7,7 @@ import {
   succeed,
   VIEWPORT_FOCUSED_KEY,
 } from '@controls/commands';
-import { BUILTIN_CATALOG, type Catalog, initialBags } from '@controls/catalog';
+import { BUILTIN_CATALOG, type Catalog, CUT_LENGTH_KEY, cutLengthMm, initialBags } from '@controls/catalog';
 import {
   CatalogRef,
   Int,
@@ -189,6 +189,8 @@ function rotateBy(o: OrientationMdeg, d: OrientationMdeg, sign: 1 | -1): Orienta
  * which then increments; undo removes the entity and restores the counter. A catalogue device starts
  * with its model kind's initial bags (`initialBags`); a built-in prop, or a ref the catalogue doesn't
  * know, starts with empty ones. A connection kind (a test lead) can't be placed: `lead.connect` makes it.
+ * A cut-to-length raceway (F3.5 part 2) starts at its entry's `defaultLengthMm` (`raceway.cut`
+ * changes it), so its body is that long for the mount and overlap checks.
  */
 export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<EntityPlaceArgs, World>({
@@ -220,6 +222,9 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
       const overlaps = checkOverlap(state, catalog, args.ref, transform, args.mountedOn, null);
       if (overlaps) return overlaps;
       const bags = kind ? initialBags(kind) : { state: {}, sim: {} };
+      const device = catalog.device(args.ref);
+      const cut = device ? cutLengthMm(device, null) : null;
+      if (cut !== null) bags.state[CUT_LENGTH_KEY] = cut;
       const entity: Entity = {
         id,
         ref: { ...args.ref },
@@ -258,11 +263,12 @@ export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (hold !== null) return holdFailure(hold, id);
       if (entity.mountedOn !== null) {
         const { orientationMdeg } = entity.transform;
-        const refused = checkMount(state, catalog, entity.ref, positionMm, orientationMdeg, entity.mountedOn, id);
+        const { ref, mountedOn } = entity;
+        const refused = checkMount(state, catalog, ref, positionMm, orientationMdeg, mountedOn, id, entity.state);
         if (refused) return refused;
       }
       const moved = { positionMm, orientationMdeg: entity.transform.orientationMdeg };
-      const overlaps = checkOverlap(state, catalog, entity.ref, moved, entity.mountedOn, id);
+      const overlaps = checkOverlap(state, catalog, entity.ref, moved, entity.mountedOn, id, entity.state);
       if (overlaps) return overlaps;
       const before = entity.transform.positionMm;
       const after = { ...positionMm };

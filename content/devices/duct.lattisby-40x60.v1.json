@@ -1,0 +1,67 @@
+{
+  "id": "duct.lattisby-40x60",
+  "version": 1,
+  "title": "Slotted PVC wiring duct with cover, 40 × 60 mm, 2 m",
+  "brand": "Lattisby",
+  "modelName": "LD-4060",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 2000,
+    "heightMm": 40,
+    "depthMm": 60
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "backplate",
+      "widthMm": 2000,
+      "crossMm": 0
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.duct",
+    "params": {
+      "defaultLengthMm": 300,
+      "minLengthMm": 20,
+      "wallThicknessMm": 1.9,
+      "slotWidthMm": 6,
+      "fingerWidthMm": 6
+    }
+  },
+  "controls": [
+    {
+      "id": "coverOn",
+      "label": "Cover fitted",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "duct-section-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 40 × 60 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "duct-comb",
+      "kind": "game-design",
+      "citation": "game-design: unverified. A 1.9 mm wall and base, 6 mm slots between 6 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "covers": ["model.params.wallThicknessMm", "model.params.slotWidthMm", "model.params.fingerWidthMm"]
+    },
+    {
+      "id": "duct-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new piece is cut to 300 mm (it fits the Pellmoor panel’s 350 mm backplate); raceway.cut makes pieces from 20 mm up to the 2 m stock length.",
+      "covers": ["model.params.defaultLengthMm", "model.params.minLengthMm"]
+    },
+    {
+      "id": "duct-backplate",
+      "kind": "game-design",
+      "citation": "game-design: duct is screwed or riveted to a panel backplate (common practice), lying along the plate’s +x; its width along the mount is its cut length (the 2000 mm here is the stock, replaced by the cut).",
+      "covers": ["fits.backplate"]
+    }
+  ],
+  "extensions": {}
+}

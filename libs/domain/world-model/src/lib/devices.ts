@@ -3,7 +3,9 @@ import {
   type Catalog,
   checkBags,
   checkControlValue,
+  CUT_LENGTH_KEY,
   type DeviceDefinition,
+  isCutToLength,
   type ModelKindDef,
   TERMINATION_METHODS,
 } from '@controls/catalog';
@@ -106,6 +108,14 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   if (device.enclosure !== null && typeof openEntries === 'number' && Number.isInteger(openEntries)) {
     if (Math.floor(openEntries / 2 ** device.enclosure.entries.length) !== 0) {
       add(`${at}.state.openEntries`, 'Opens an entry the enclosure does not have');
+    }
+  }
+  // A cut-to-length raceway's length is one `raceway.cut` could have made (F3.5 part 2): within the
+  // entry's minimum and its stock length, which the key's own schema can't know.
+  const length = entity.state[CUT_LENGTH_KEY];
+  if (isCutToLength(device) && device.sizeMm !== null && typeof length === 'number') {
+    if (length < device.model.params['minLengthMm'] || length > device.sizeMm.widthMm) {
+      add(`${at}.state.${CUT_LENGTH_KEY}`, 'A cut length outside the entry’s minimum and stock length');
     }
   }
   if (entity.mountedOn !== null) {

@@ -6,6 +6,7 @@
  */
 import { BufferGeometry, Mesh, type Material, type Scene } from 'three/webgpu';
 import { mdegToRadians, mm } from '@controls/units';
+import type { BodyState } from '@controls/catalog';
 import type { CatalogRef, OrientationMdeg, Vec3Mm } from '@controls/world-model';
 import { buildGhostMaterial, type PropRecipes } from '../geometry/props';
 
@@ -15,6 +16,8 @@ export class PlacementGhost {
   /** Empty stand-in while no prop is borrowed, so the mesh never points at a released geometry. */
   private readonly placeholder = new BufferGeometry();
   private ref: CatalogRef | null = null;
+  /** The state the borrowed recipe was acquired with (a cut part's length), released with it. */
+  private state: BodyState = null;
 
   constructor(
     private readonly scene: Scene,
@@ -32,12 +35,17 @@ export class PlacementGhost {
     return this.mesh.visible;
   }
 
-  /** Shows `ref` at an integer-mm position and orientation (the exact command arguments). */
-  show(ref: CatalogRef, positionMm: Vec3Mm, orientationMdeg: OrientationMdeg): void {
-    if (!this.ref || this.ref.id !== ref.id || this.ref.version !== ref.version) {
+  /**
+   * Shows `ref` at an integer-mm position and orientation (the exact command arguments), drawn with
+   * commanded `state` (a cut part being moved keeps its length; `null`: a new part's default length).
+   */
+  show(ref: CatalogRef, positionMm: Vec3Mm, orientationMdeg: OrientationMdeg, state: BodyState = null): void {
+    const key = this.recipes.keyOf(ref, state);
+    if (!this.ref || this.recipes.keyOf(this.ref, this.state) !== key) {
       this.releaseGeometry();
-      this.mesh.geometry = this.recipes.acquire(ref).geometry;
+      this.mesh.geometry = this.recipes.acquire(ref, state).geometry;
       this.ref = ref;
+      this.state = state;
     }
     this.mesh.position.set(mm(positionMm.x), mm(positionMm.y), mm(positionMm.z));
     this.mesh.rotation.set(
@@ -70,7 +78,8 @@ export class PlacementGhost {
   private releaseGeometry(): void {
     if (!this.ref) return;
     this.mesh.geometry = this.placeholder;
-    this.recipes.release(this.ref);
+    this.recipes.release(this.ref, this.state);
     this.ref = null;
+    this.state = null;
   }
 }

@@ -202,8 +202,14 @@ Owners `content-designer` (entries), `renderer-engineer` (recipes, snapping, ove
   - [x] Catalogue devices on the tool belt: F3.4 part 1's Settings → Tool belt picker now offers every placeable catalogue device with a body (`beltChoices`, group `Devices`); the enclosures e2e puts the panel and breaker on the belt there.
   - [ ] **Decide before v0.4.0** (save-format review): whether `entity.rotate` checks overlap, or freeze "rotate never checks overlap" (it doesn't in part 1).
   - P4 open questions (electrical-realism review): box fill needs a separate marked-volume field sourced from manufacturer markings, or a stated rule; `interiorVolumeMm3` is geometric and above the marked volume, never the allowance unchanged. The P2 breaker's 40 mm base is about two DIN modules; a one-module entry version may come with the panel.
-- [ ] **Part 2:** slotted wire duct and cover (sourced section sizes, commanded `lengthMm`); EMT-lite (straight sticks with a commanded length, 90° elbows, connectors into entries; no bending minigame); DIN terminal blocks (screw and spring-cage feed-through, a ground block); wire nuts as placeable splice devices inside boxes. Golden scene-graph snapshots per recipe.
-- [ ] The workshop level gains nothing by default (the sandbox spawns P3 content) and its hash is unchanged by F3.5. _(Part 1: unchanged, `apps/sim-cli/src/workshop.spec.ts` and the e2e screenshot.)_
+- [x] **Part 2:** slotted wire duct and cover (sourced section sizes, commanded `lengthMm`); EMT-lite (straight sticks with a commanded length, 90° elbows, connectors into entries; no bending minigame); DIN terminal blocks (screw and spring-cage feed-through, a ground block); wire nuts as placeable splice devices inside boxes. Golden scene-graph snapshots per recipe. _Landed (PR 12, pending `electrical-realism-reviewer` and `save-format-guardian`):_
+  - [x] Three Lattisby slotted wire ducts with covers (25 × 40, 40 × 60, 60 × 80 mm, 2 m stock), cut to length by the new `raceway.cut` (commanded `lengthMm`, placed at the entry's `defaultLengthMm`) with a commanded `coverOn` toggle; fixed to a backplate (area mount); sizes game-design and **unverified** until the reviewer reads a dimension sheet.
+  - [x] EMT-lite in 1/2, 3/4 and 1 in (Stavenor): 10 ft sticks cut to length, factory 90° elbows (game-design radii, not a code table) and set-screw connectors; outside diameters and walls as published for ANSI C80.3 / UL 797 (by number; **unverified**, never NEC Chapter 9). A connector snaps into an open entry of its trade size, sticks and elbows end to end (`snapConduit`, four turns, R cycles them). No bending.
+  - [x] Quennick DIN terminal blocks: a 4 mm²-class screw feed-through, a 2.5 mm²-class spring-cage feed-through and a 4 mm²-class ground block, with ADR 0018 §8 method fields, drives on the screw clamps, centred on the rail (`DeviceMount.crossMm`, an ADR 0016 amendment) and packed at their own width; the netlist joins their two clamps.
+  - [x] Ducts and conduit hollow for `route-collides` (`obstacleBoxes`), solid for placement overlap (no block inside a duct); recipes, per-recipe geometry and scene-graph snapshots, per-length recipe and cover disposal tests; `apps/sim-cli/src/raceway-panel.spec.ts` pins the hash of a duct, four blocks and an EMT run placed on the panel by the snapping maths and by console lines.
+  - [x] Wire nuts as placeable splice devices: done by F3.3 part 1 (`splice.corvelle-tw-*`, `splice.twistOn`).
+  - [ ] Follow-ups: vertical duct on a backplate (a quarter-turn about the plate's normal; `checkMount` requires the mount's exact frame today), recording which entry a connector occupies (F3.4 part 2's `wire.pull`), duct and conduit waypoints (F3.2 part 1), a drag-to-length gesture, the reviewer's verification of every size.
+- [x] The workshop level gains nothing by default (the sandbox spawns P3 content) and its hash is unchanged by F3.5. _(Parts 1 and 2: unchanged, `apps/sim-cli/src/workshop.spec.ts` and the e2e screenshot.)_
 
 ### F3.6 Conductor and termination thermal model, insulation damage, voltage-drop readout
 
@@ -306,7 +312,7 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 | F3.2    | 3D wire routing (parts 1–4)                              | ⬜ Not started                               |
 | F3.3    | Terminations (parts 1–2)                                 | 🚧 Part 1 in review                          |
 | F3.4    | Hand tools and the tool belt (parts 1–2)                 | 🟡 Part 1 done                               |
-| F3.5    | Enclosures and mounting (parts 1–2)                      | 🟡 Part 1 done                               |
+| F3.5    | Enclosures and mounting (parts 1–2)                      | ✅ Parts 1–2 done                            |
 | F3.6    | Thermal, degradation, readouts (parts 1–3)               | 🚧 Parts 1–2 and part 3's headless half done |
 | —       | Frame-time probe (500 devices with wires)                | ⬜ Not started                               |
 | —       | Phase-acceptance scenarios and E2E                       | ⬜ Not started                               |

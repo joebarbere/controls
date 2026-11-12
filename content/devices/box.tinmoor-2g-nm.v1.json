@@ -14,7 +14,8 @@
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 102
+      "widthMm": 102,
+      "crossMm": 0
     }
   ],
   "enclosure": {

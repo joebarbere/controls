@@ -217,6 +217,26 @@ const enclosurePanel: DeviceNetlistModel = {
 };
 
 /**
+ * A raceway part (F3.5 part 2: wire duct, an EMT stick, elbow or connector): no terminals and no
+ * elements. Metal raceway isn't bonded to anything until P4's grounding.
+ */
+const raceway = (kind: string): DeviceNetlistModel => ({ kind, simTopologyKeys: [], topology: () => NO_TOPOLOGY });
+
+const TERMINAL_BLOCK: DeviceTopology = { joins: [['a', 'b']], elements: [] };
+
+/**
+ * A DIN-rail terminal block (F3.5 part 2): its bridge joins the two clamps ideally, so conductors
+ * landed in either meet at one node; each conductor's own branch carries its end's contact resistance
+ * (ADR 0018 §4). The bridge's own resistance (tens of µΩ) is far below the clamps' 0.3 mΩ, an
+ * abstraction. A ground block is the same in P3; its foot bonds to the rail with P4's grounding.
+ */
+const terminalBlock = (kind: string): DeviceNetlistModel => ({
+  kind,
+  simTopologyKeys: [],
+  topology: () => TERMINAL_BLOCK,
+});
+
+/**
  * A test lead: a resistance from resistivity × length ÷ area at the bench temperature, plus the clip
  * contact resistance at each end (`leadResistanceOhm`, ADR 0013; never from conductor tables).
  */
@@ -300,11 +320,17 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'generator.portable': generatorPortableNetlistModel,
   heater: heaterNetlistModel,
   'lamp.incandescent': lampIncandescent,
+  'raceway.conduit': raceway('raceway.conduit'),
+  'raceway.conduitConnector': raceway('raceway.conduitConnector'),
+  'raceway.conduitElbow': raceway('raceway.conduitElbow'),
+  'raceway.duct': raceway('raceway.duct'),
   resistor: resistorNetlistModel,
   'splice.twistOn': spliceTwistOn,
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,
+  'terminalBlock.feedThrough': terminalBlock('terminalBlock.feedThrough'),
+  'terminalBlock.ground': terminalBlock('terminalBlock.ground'),
   'utility.splitPhase': utilitySplitPhaseNetlistModel,
   'utility.threePhase': utilityThreePhaseNetlistModel,
 });

@@ -21,6 +21,7 @@ export const TRIGGERED_ACTIONS = [
   'clearSelection',
   'commitPlacement',
   'moveSelection',
+  'turnPlacement',
 ] as const;
 
 export type HeldAction = (typeof HELD_ACTIONS)[number];

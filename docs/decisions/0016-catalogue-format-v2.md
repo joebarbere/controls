@@ -109,6 +109,15 @@ Added after the `electrical-realism-reviewer` review of the first tools, while c
 - **`EntryTypeDef.drives`**: the tips that open an entry by `drive` (`slotted` for `knockout`, `pryout`, `clamp`; none for `drillSite`).
 - Commands refuse a misfit with `wrong-drive` (ADR 0015 implementation note 16). The P2 entries gain data only (screw drives on the breaker, the DIN supply and the stand-in service), keeping version 1 under the "gaining data keeps the version" rule.
 
+### Amendment (F3.5 part 2): `crossMm`, raceways and terminal blocks
+
+Added while catalogue 2 is still provisional (`save-format-guardian` and `electrical-realism-reviewer` to review):
+
+- **`DeviceMount.crossMm`** (required, integer mm, −1000..1000): where a device's origin sits across a `linear` mount from its origin. ADR 0015 implementation note 7 put a DIN rail's mount origin at a DIN 43880 modular device's bottom edge, so every device sat with its bottom edge there; a 48 mm terminal block would hang below the rail. Modular devices declare 0 (the breaker and the DIN supply gain `crossMm: 0` and keep version 1, gaining data only); a terminal block declares 45 − ⌊height / 2⌋ and is centred. Non-zero only on a `linear` fit (load-checked). `checkMount`'s `off-mount` check on a linear mount is `cross = crossMm` (it was `cross = 0`).
+- **Categories `raceway` and `terminalBlock`**, each going with its kinds only (`ModelKindDef.raceway`; `terminalBlock.*`).
+- **`ModelKindDef.raceway: 'duct' | 'conduit'`**: the waypoint kind a run on the part takes (ADR 0015's route shape) and the hollow flag for `route-collides`.
+- **Cut-to-length parts**: a raceway kind with the commanded `lengthMm` key. Its entry's `sizeMm.widthMm` is the uncut stock and its `model.params` carry `defaultLengthMm` and `minLengthMm`; the body is `deviceBodySizeMm(device, state)` everywhere a body is measured (mounts, overlap, placement, recipes). Load rules: the default within the stock, a conduit part's depth its tube's diameter rounded up to an even mm, an elbow's box R + D/2 square (`racewayEntryProblems`).
+
 ## Deviations from the plan and from ADR 0015
 
 1. **Insulation thickness is per conductor entry**, not a table column (the pre-audit's rule; the plan listed "thickness classes" with the insulation data).

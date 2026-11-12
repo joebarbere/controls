@@ -251,6 +251,7 @@ describe('ViewportController modes', () => {
       clearSelection: [],
       commitPlacement: [],
       moveSelection: [],
+      turnPlacement: [],
     });
     const x0 = controller.camera.position.x;
     canvas.dispatchEvent(key('keydown', 'KeyD')); // no longer bound

@@ -4,7 +4,7 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import { catalogRefArb, deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
-import { cableCommands, enclosureCommands, wireCommands } from './wiring';
+import { cableCommands, enclosureCommands, racewayCommands, wireCommands } from './wiring';
 import { worldHash } from './hash';
 import { createWorldBus, createWorldRegistry, rebaseReplayLog, replayLog, toReplayLog } from './session';
 
@@ -241,6 +241,7 @@ describe('world command properties', () => {
         ...wireCommands().map((d) => d.id),
         ...cableCommands().map((d) => d.id),
         ...enclosureCommands().map((d) => d.id),
+        ...racewayCommands().map((d) => d.id),
       ].sort(),
     );
     fc.assert(

@@ -28,6 +28,7 @@ import {
   type ToolStep,
   terminationMethod,
 } from './registries';
+import { racewayEntryProblems } from './raceway';
 import { checkCoverage } from './sources';
 import { type ColourRow, TableDocument, type TableRef, tableKind } from './tables';
 
@@ -352,6 +353,7 @@ function checkDevice(device: DeviceDefinition, kind: ModelKindDef, context: Cont
   checkTerminals(device, kind, add);
   checkCategory(device, kind, add);
   checkMounts(device, kind, add);
+  for (const [path, message] of racewayEntryProblems(device)) add(path, message);
   checkEnclosure(device, kind, add);
   checkConductor(device, kind, context, add);
   checkControls(device.controls, kind, add);
@@ -458,6 +460,12 @@ function checkCategory(device: DeviceDefinition, kind: ModelKindDef, add: Add): 
   if ((device.category === 'splice') !== (kind.kind === 'splice.twistOn')) {
     add('category', 'Category "splice" goes with the splice.twistOn kind, and only with it');
   }
+  if ((device.category === 'raceway') !== (kind.raceway !== undefined)) {
+    add('category', 'Category "raceway" goes with raceway kinds, and only with them');
+  }
+  if ((device.category === 'terminalBlock') !== kind.kind.startsWith('terminalBlock.')) {
+    add('category', 'Category "terminalBlock" goes with the terminalBlock.* kinds, and only with them');
+  }
   if (
     kind.kind === 'splice.twistOn' &&
     !device.terminals.every((t) => t.methods.every((m) => m.method === 'twistOn'))
@@ -471,6 +479,11 @@ function checkMounts(device: DeviceDefinition, kind: ModelKindDef, add: Add): vo
   const types = device.mounts.map((m) => m.type);
   if (new Set(types).size !== types.length) add('mounts', 'Each mount type is declared once');
   for (const type of types) if (!mountType(type)) add(`mounts.${type}`, 'Unknown mount type');
+  for (const fit of device.mounts) {
+    if (fit.crossMm !== 0 && mountType(fit.type)?.occupancy !== 'linear') {
+      add(`mounts.${fit.type}`, 'crossMm places a device across a linear mount only: it must be 0 here');
+    }
+  }
 }
 
 function checkEnclosure(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {

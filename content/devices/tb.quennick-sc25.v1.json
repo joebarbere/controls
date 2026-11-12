@@ -1,0 +1,154 @@
+{
+  "id": "tb.quennick-sc25",
+  "version": 1,
+  "title": "Spring-cage feed-through terminal block, 2.5 mm² class, grey",
+  "brand": "Quennick",
+  "modelName": "QSC 2.5",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 5,
+    "heightMm": 56,
+    "depthMm": 36
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 2,
+        "y": 48,
+        "z": 26
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 2,
+            "y": 56,
+            "z": 26
+          },
+          "exitAxis": "+y",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.3,
+          "combination": null
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 2,
+        "y": 8,
+        "z": 26
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded", "strandedFerrule"],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 2,
+            "y": 0,
+            "z": 26
+          },
+          "exitAxis": "-y",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.3,
+          "combination": null
+        }
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 5,
+      "crossMm": 17
+    }
+  ],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.feedThrough",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-25mm2-class",
+      "kind": "game-design",
+      "citation": "game-design: unverified product class. Spring-cage (spring-clamp) feed-through DIN-rail terminal blocks of the 2.5 mm² class are about 5.2 mm wide per pole and roughly 50 to 60 mm tall, as makers’ datasheets list them (recalled, not read in this PR). Drawn 5 × 56 × 36 mm: the width rounded down to whole mm. Two spring cages, top (1) and bottom (2); conductors enter the top and bottom faces.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.*.methods.springCage.entryMm",
+        "terminals.*.methods.springCage.exitAxis"
+      ]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 5 mm along it, centred on the rail: its origin sits 45 − 28 = 17 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7).",
+      "covers": ["fits.din35"]
+    },
+    {
+      "id": "tb-spring-rating",
+      "kind": "game-design",
+      "citation": "game-design: unverified. The 2.5 mm² spring-cage class is marked for copper only, about 22 to 12 AWG solid or stranded (bare or in a ferrule), one conductor per cage, with a 10 ± 1 mm strip; the cage grips 9 mm. A spring’s force is fixed, so no torque and no drive (the release slot’s blade is not modelled).",
+      "covers": [
+        "terminals.*.methods.springCage.ratedConductors",
+        "terminals.*.methods.springCage.maxConductors",
+        "terminals.*.methods.springCage.awgRange",
+        "terminals.*.methods.springCage.stranding",
+        "terminals.*.methods.springCage.stripLengthMm",
+        "terminals.*.methods.springCage.alRated",
+        "terminals.*.methods.springCage.clampType",
+        "terminals.*.methods.springCage.clampDepthMm"
+      ]
+    },
+    {
+      "id": "tb-spring-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §3.3): R₀ 0.3 mΩ, the ADR’s spring-cage example inside NBS BSS 128’s (1980) 1.5 mΩ assembly acceptance limit; a heat path of 0.02 W/K (a physics estimate, a little below the screw class’s 0.026 W/K for a smaller clamp) and a heat capacity of 0.3 J/K (about 0.8 g of spring steel and a copper bar × about 380 J/(kg·K)).",
+      "covers": [
+        "terminals.*.methods.springCage.contactOhm",
+        "terminals.*.methods.springCage.heatPathWPerK",
+        "terminals.*.methods.springCage.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+}
