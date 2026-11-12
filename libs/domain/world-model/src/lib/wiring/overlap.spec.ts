@@ -169,3 +169,18 @@ describe('overlaps (property)', () => {
     );
   });
 });
+
+describe('the F3.5 enclosures with the F3.4 tools', () => {
+  it('a slotted screwdriver opens a knockout and a pryout; a hex nut driver is the wrong drive', () => {
+    const b = bus();
+    expect(b.exec('entity.place', { ref: BOX_1G, positionMm: at(0, 0, 0) }).ok).toBe(true);
+    const driver = { id: 'tool.veltmark-sd-2', version: 1 };
+    const nutDriver = { id: 'tool.veltmark-nd-516', version: 1 };
+    expect(b.exec('enclosure.openEntry', { id: 1, entry: 'ko-top', tool: nutDriver })).toMatchObject(
+      refused('wrong-drive'),
+    );
+    expect(b.exec('enclosure.openEntry', { id: 1, entry: 'ko-top', tool: driver }).ok).toBe(true);
+    expect(b.exec('enclosure.openEntry', { id: 1, entry: 'clamp-top', tool: driver }).ok).toBe(true);
+    expect(b.state.entities[0].state['openEntries']).toBe(0b00101);
+  });
+});

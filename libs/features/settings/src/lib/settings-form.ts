@@ -40,7 +40,7 @@ export function parseBeltRefValue(value: string): CatalogRef | null {
 }
 
 const BELT_CHOICES: readonly BeltChoice[] = beltChoices(BUILTIN_CATALOG);
-const BELT_GROUPS = (['Props', 'Tools'] as const).map((label) => ({
+const BELT_GROUPS = (['Props', 'Devices', 'Tools'] as const).map((label) => ({
   label,
   choices: BELT_CHOICES.filter((c) => c.group === label).map((c) => ({ value: beltRefValue(c.ref), title: c.title })),
 }));

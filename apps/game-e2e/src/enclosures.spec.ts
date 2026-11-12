@@ -1,6 +1,4 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expectDrawn } from './support/console';
 import { startSandbox } from './support/sandbox';
 
@@ -12,9 +10,9 @@ import { startSandbox } from './support/sandbox';
  * `apps/sim-cli/src/din-panel-breaker.spec.ts` pins (e2e projects can't import workspace code: change
  * both or neither).
  *
- * The tool belt has no in-game editor yet (F3.4 part 1 reworks it), and settings v2 is frozen, so the
- * test seeds the stored settings with slots 4 and 5 holding the panel and the breaker. Forced WebGL2,
- * the backend CI exercises; the mouse is aimed with the `?e2e=1` hook's `projectMm`.
+ * The panel and the breaker go on the belt the way a player puts them there: Settings → Tool belt,
+ * slots 4 and 5 (the picker offers placeable catalogue devices since F3.5). Forced WebGL2, the backend
+ * CI exercises; the mouse is aimed with the `?e2e=1` hook's `projectMm`.
  */
 const DIN_PANEL_BREAKER_HASH = '7901fbdffe8ca1ee86a6a4259af12d356e79b3fa51a157f8c3ad719d0687ac15';
 
@@ -45,30 +43,19 @@ async function screen(page: Page, canvas: Locator, x: number, y: number, z: numb
   return { x: box.x + p.x, y: box.y + p.y };
 }
 
-/** The default settings with the panel in tool-belt slot 4 and the breaker in slot 5. */
-function seededSettings(): string {
-  const defaults = JSON.parse(
-    readFileSync(join(__dirname, '../../../libs/domain/save-format/fixtures/settings/v2/defaults.json'), 'utf8'),
-  ) as { toolBelt: { slots: unknown[] } };
-  defaults.toolBelt.slots[3] = PANEL;
-  defaults.toolBelt.slots[4] = BREAKER;
-  return JSON.stringify(defaults);
-}
-
 test('mouse and keyboard place a DIN panel and snap the breaker onto its rail, to the pinned hash', async ({
   page,
 }) => {
-  await page.addInitScript(
-    ({ key, value }) => {
-      if (!sessionStorage.getItem('seeded')) {
-        localStorage.setItem(key, value);
-        sessionStorage.setItem('seeded', '1');
-      }
-    },
-    { key: 'controls.settings', value: seededSettings() },
-  );
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?e2e=1&renderer=webgl2');
+  // Settings → Tool belt: the panel in slot 4, the breaker in slot 5.
+  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const belt = settings.getByRole('group', { name: 'Tool belt' });
+  await belt.getByRole('combobox', { name: 'Slot 4' }).selectOption(`${PANEL.id}@${PANEL.version}`);
+  await belt.getByRole('combobox', { name: 'Slot 5' }).selectOption(`${BREAKER.id}@${BREAKER.version}`);
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
   await startSandbox(page);
   const viewport = page.locator('ctl-viewport');
   const canvas = page.locator('ctl-viewport canvas');
