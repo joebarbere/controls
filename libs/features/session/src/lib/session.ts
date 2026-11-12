@@ -30,6 +30,21 @@ import {
 
 export type CommandHandler = (event: ExecutedEvent<World>) => void;
 
+/**
+ * A command the player triggered directly (a key binding, a viewport gesture) that the world refused
+ * (`rejected`: `occupied`, `overlaps`, `mount-full`, …), for the shell to say why (F3.5). Surfaces with
+ * their own output (the console, the palette) report their own errors and never raise this.
+ */
+export interface CommandRefusal {
+  readonly commandId: string;
+  /** The command's title (`Delete object`). */
+  readonly title: string;
+  /** The refusal code (`occupied`); API for scripts and tests. */
+  readonly code: string;
+  /** The command's own explanation, for the player. */
+  readonly message: string;
+}
+
 /** A save bound to one session's game at one tick ({@link Session.saver}). */
 export interface SessionSaver {
   /** The session it belongs to (`Session.generation` when it was taken). */
@@ -79,6 +94,8 @@ const TEST_HOOK = '__controlsSession';
  * - **Context keys** for `when` are the game's own (`history.canUndo`, `history.canRedo`), the
  *   session's `session.active`, plus whatever the UI sets with {@link setContext} (`mode`,
  *   `selection.kind`, … from F1.4/F1.7).
+ * - **Refusals from direct input** (F3.5): keys and gestures run through {@link execFromInput}, which
+ *   tells {@link onRefusal} listeners when the world refuses, so the shell can show a toast.
  * - **Saving and loading** (F1.8b): {@link save} writes the game as `.ctrl` bytes; {@link adopt}
  *   replaces the game with one `loadGame` built. The registry also holds the unlogged `file.*`
  *   commands, which the saves feature performs through {@link onCommand}.
@@ -98,6 +115,7 @@ export class Session {
   private readonly activeState = signal(false);
   private unsubscribe: () => void = () => undefined;
   private readonly handlers = new Map<string, Set<CommandHandler>>();
+  private readonly refusalListeners = new Set<(refusal: CommandRefusal) => void>();
   private readonly worldState = signal<World>(createWorld({ seed: 0 }));
   private readonly history = signal({ 'history.canUndo': false, 'history.canRedo': false });
   private readonly uiContext = signal<Readonly<Record<string, ContextValue>>>({});
@@ -255,6 +273,31 @@ export class Session {
   /** Runs a command. Invalid args or a refused command return a typed error and change nothing. */
   exec(id: string, args: unknown = {}): ExecResult {
     return this.game.exec(id, args);
+  }
+
+  /**
+   * Runs a command the player triggered directly (a key binding, a viewport gesture) exactly as
+   * {@link exec} does, and when the world refuses it (`rejected`), tells the {@link onRefusal}
+   * listeners. Invalid arguments and unknown commands aren't refusals: they are bugs, and stay quiet.
+   */
+  execFromInput(id: string, args: unknown = {}): ExecResult {
+    const result = this.exec(id, args);
+    if (!result.ok && result.error.kind === 'rejected') {
+      const refusal: CommandRefusal = {
+        commandId: id,
+        title: this.registry.get(id)?.title ?? id,
+        code: result.error.code,
+        message: result.error.message,
+      };
+      [...this.refusalListeners].forEach((listener) => listener(refusal));
+    }
+    return result;
+  }
+
+  /** Calls `listener` for each refusal of a directly triggered command ({@link execFromInput}). */
+  onRefusal(listener: (refusal: CommandRefusal) => void): () => void {
+    this.refusalListeners.add(listener);
+    return () => this.refusalListeners.delete(listener);
   }
 
   /** Whether the palette and keybindings should offer the command in the current context. */

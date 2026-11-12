@@ -358,6 +358,190 @@ exports[`ViewportController scene graph > matches the snapshot of the workshop l
 }
 `;
 
+exports[`ViewportController with enclosures (F3.5) > draws knockouts open or closed from openEntries, and the breaker handle from state.on (scene-graph snapshot) > panel, breaker and box 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        400,
+        500,
+        200,
+      ],
+      "children": [
+        {
+          "boundsMm": [
+            86,
+            0,
+            83,
+            317,
+            500,
+            117,
+          ],
+          "name": "entries:closed",
+          "positionMm": [
+            0,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": true,
+        },
+        {
+          "boundsMm": [
+            86,
+            0,
+            83,
+            317,
+            500,
+            117,
+          ],
+          "name": "entries:open",
+          "positionMm": [
+            0,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": false,
+        },
+      ],
+      "label": "Pellmoor PM-4520-D",
+      "name": "entity-1",
+      "openEntries": [],
+      "positionMm": [
+        -200,
+        -250,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        -1,
+        -1,
+        40,
+        90,
+        71,
+      ],
+      "breaker": {
+        "on": true,
+      },
+      "children": [
+        {
+          "boundsMm": [
+            -6,
+            -3,
+            -2,
+            6,
+            3,
+            12,
+          ],
+          "name": "lever",
+          "positionMm": [
+            20,
+            45,
+            70,
+          ],
+          "rotationMdeg": [
+            -25000,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": true,
+        },
+      ],
+      "label": "Saltmere SB-115",
+      "name": "entity-2",
+      "positionMm": [
+        -77,
+        55,
+        23,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        55,
+        80,
+        66,
+      ],
+      "children": [
+        {
+          "boundsMm": [
+            16,
+            0,
+            7,
+            38,
+            80,
+            52,
+          ],
+          "name": "entries:closed",
+          "positionMm": [
+            0,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": true,
+        },
+        {
+          "boundsMm": [
+            16,
+            29,
+            0,
+            38,
+            80,
+            29,
+          ],
+          "name": "entries:open",
+          "positionMm": [
+            0,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": true,
+        },
+      ],
+      "label": "Tinmoor TM-132C",
+      "name": "entity-3",
+      "openEntries": [
+        "ko-top",
+        "ko-back",
+      ],
+      "positionMm": [
+        250,
+        100,
+        0,
+      ],
+      "selectable": "device:entity-3",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
 exports[`ViewportController world sync > adds, updates and removes entity objects by id (scene-graph snapshots) > entity 1 moved 1`] = `
 {
   "children": [

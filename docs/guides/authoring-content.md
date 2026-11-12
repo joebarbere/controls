@@ -104,6 +104,7 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Larkmoor Power | Utility services (one brand for the utility)      |
 | Lumivane       | Incandescent lamps                                |
 | Orrinwood      | Power resistor                                    |
+| Pellmoor       | Control-panel enclosures                          |
 | Penmarrow      | Label printers                                    |
 | Quillfern      | Test leads                                        |
 | Quorvale       | Aluminium building wire (XHHW-2)                  |
@@ -114,4 +115,5 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Tessaline      | Toggle switch                                     |
 | Testbrand      | Test-only fixtures in specs, never in `content/`  |
 | Thimbleby      | Ferrules and insulated ring and fork lugs         |
+| Tinmoor        | Outlet and junction boxes (steel and PVC)         |
 | Veltmark       | Hand tools (strippers, cutters, drivers, crimper) |

@@ -1,0 +1,168 @@
+{
+  "id": "panel.pellmoor-din-400x500",
+  "version": 1,
+  "title": "Steel panel enclosure, 400 × 500 × 200 mm, backplate and two DIN rails",
+  "brand": "Pellmoor",
+  "modelName": "PM-4520-D",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 500,
+    "depthMm": 200
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "rail-1",
+        "type": "din35",
+        "positionMm": {
+          "x": 35,
+          "y": 305,
+          "z": 23
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 330
+      },
+      {
+        "id": "rail-2",
+        "type": "din35",
+        "positionMm": {
+          "x": 35,
+          "y": 130,
+          "z": 23
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 330
+      },
+      {
+        "id": "plate",
+        "type": "backplate",
+        "positionMm": {
+          "x": 25,
+          "y": 25,
+          "z": 15
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 350
+      }
+    ],
+    "entries": [
+      {
+        "id": "ko-bottom-1",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 100,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-2",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 200,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-3",
+        "type": "knockout",
+        "tradeSize": "1",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 300,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "drill-top-1",
+        "type": "drillSite",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 130,
+          "y": 500,
+          "z": 100
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "drill-top-2",
+        "type": "drillSite",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 270,
+          "y": 500,
+          "z": 100
+        },
+        "axis": "-y"
+      }
+    ],
+    "interiorVolumeMm3": 38890368
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.panel",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "enclosure-class",
+      "kind": "game-design",
+      "citation": "game-design: a single-door wall-mount sheet-steel enclosure for control panels, 400 mm wide, 500 mm tall and 200 mm deep outside, one of the metric sizes such enclosures are commonly sold in (industrial control enclosures are listed to UL 50 and UL 50E and rated by NEMA 250 type, cited by number); 2 mm drawn walls (about 1.5 mm steel, rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 396 × 496 × 198 = 38890368 mm³. Box fill (P4) doesn't apply to a panel enclosure; it is stored for completeness and is not from any code table.",
+      "covers": ["interiorVolumeMm3"]
+    },
+    {
+      "id": "rails",
+      "kind": "game-design",
+      "citation": "game-design: two 35 mm top-hat rails (TS 35 × 7.5, IEC 60715, cited by number), each 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 15 mm). A device clips on with its back on the rail (z = 23 mm: the rail's 7.5 mm depth rounded up) and its bottom edge 45 mm below the centreline, half the 90 mm overall height of modular devices (DIN 43880, by number), so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "covers": ["mounts.rail-1", "mounts.rail-2"]
+    },
+    {
+      "id": "backplate",
+      "kind": "game-design",
+      "citation": "game-design: a 350 × 450 mm backplate (mounting pan) standing 12 mm off the back wall on studs, 3 mm thick; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
+      "covers": ["mounts.plate"]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: two 3/4 in and one 1 in trade-size knockouts in the bottom, and two drill sites for 3/4 in connectors in the top (opened with a hole saw or punch, F3.4 part 2), one connector each; positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": [
+        "entries.ko-bottom-1",
+        "entries.ko-bottom-2",
+        "entries.ko-bottom-3",
+        "entries.drill-top-1",
+        "entries.drill-top-2"
+      ]
+    }
+  ],
+  "extensions": {}
+}

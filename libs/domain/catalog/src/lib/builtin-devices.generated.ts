@@ -91,6 +91,633 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "box.tinmoor-1g-steel",
+  "version": 1,
+  "title": "1-gang steel device box, 3 × 2 × 2-1/2 in, with cable clamps",
+  "brand": "Tinmoor",
+  "modelName": "TM-132C",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 55,
+    "heightMm": 80,
+    "depthMm": 66
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 55
+    }
+  ],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "yoke",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 2,
+          "y": 2,
+          "z": 2
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      }
+    ],
+    "entries": [
+      {
+        "id": "clamp-top",
+        "type": "pryout",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 27,
+          "y": 80,
+          "z": 46
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom",
+        "type": "pryout",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 27,
+          "y": 0,
+          "z": 46
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-top",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 80,
+          "z": 18
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-bottom",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 0,
+          "z": 18
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-back",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 40,
+          "z": 0
+        },
+        "axis": "+z"
+      }
+    ],
+    "interiorVolumeMm3": 248064
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation's nominal 2 in wide, 3 in tall and 2-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the outside is 55 × 80 × 66 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 51 × 76 × 64 = 248064 mm³ (about 15.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, clamps, ears). P4's box fill reads it.",
+      "covers": [
+        "interiorVolumeMm3"
+      ]
+    },
+    {
+      "id": "yoke",
+      "kind": "game-design",
+      "citation": "game-design: one device yoke (one wiring device per gang, UL 514A by number). A mounted device's origin sits at the inside back-lower-left corner (2, 2, 2) facing out of the box (+z), so a device fills the gang from the back wall; P4's devices are sized to the gang.",
+      "covers": [
+        "mounts.yoke"
+      ]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: a pryout behind each of the two internal cable clamps (top and bottom, toward the front, one cable each, the box clamps it) and three 1/2 in trade-size knockouts (top, bottom and back, one connector each), the usual openings of a steel device box with clamps; positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": [
+        "entries.clamp-top",
+        "entries.clamp-bottom",
+        "entries.ko-top",
+        "entries.ko-bottom",
+        "entries.ko-back"
+      ]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: nailed or screwed to the side of a stud by a bracket (common practice for device boxes in wood framing); it takes its full width along the stud.",
+      "covers": [
+        "fits.studFlange"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "box.tinmoor-2g-nm",
+  "version": 1,
+  "title": "2-gang nonmetallic new-work device box",
+  "brand": "Tinmoor",
+  "modelName": "TM-2GN",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 98,
+    "heightMm": 86,
+    "depthMm": 79
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 98
+    }
+  ],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "yoke-1",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 3,
+          "y": 3,
+          "z": 3
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      },
+      {
+        "id": "yoke-2",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 49,
+          "y": 3,
+          "z": 3
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      }
+    ],
+    "entries": [
+      {
+        "id": "clamp-top-1",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 26,
+          "y": 86,
+          "z": 40
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-top-2",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 72,
+          "y": 86,
+          "z": 40
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom-1",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 26,
+          "y": 0,
+          "z": 40
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "clamp-bottom-2",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 72,
+          "y": 0,
+          "z": 40
+        },
+        "axis": "+y"
+      }
+    ],
+    "interiorVolumeMm3": 559360
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: a two-gang nonmetallic (PVC) new-work device box for wood framing, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Inside about 3-5/8 in wide, 3-1/8 in tall and 3 in deep, taken as 92 × 80 × 76 mm, with 3 mm drawn walls on the sides and back, so the outside is 98 × 86 × 79 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 92 × 80 × 76 = 559360 mm³ (about 34.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (tapered walls, clamps). P4's box fill reads it.",
+      "covers": [
+        "interiorVolumeMm3"
+      ]
+    },
+    {
+      "id": "yokes",
+      "kind": "game-design",
+      "citation": "game-design: two device yokes 46 mm apart (about the 1-13/16 in gang spacing of multi-gang wall plates, unverified), one wiring device each (UL 514C by number). A mounted device's origin sits at the inside back corner of its gang, facing out of the box (+z).",
+      "covers": [
+        "mounts.yoke-1",
+        "mounts.yoke-2"
+      ]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: four built-in cable clamps (knock-in tabs), two in the top wall and two in the bottom, one cable each, the box clamps the cable itself; positions are on the outside wall faces, one per gang, and are not taken from a product drawing.",
+      "covers": [
+        "entries.clamp-top-1",
+        "entries.clamp-top-2",
+        "entries.clamp-bottom-1",
+        "entries.clamp-bottom-2"
+      ]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: a new-work box nailed to the side of a stud through its flange (common practice); it takes its full width along the stud.",
+      "covers": [
+        "fits.studFlange"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "box.tinmoor-4rd-nm-ceiling",
+  "version": 1,
+  "title": "4 in round nonmetallic ceiling box",
+  "brand": "Tinmoor",
+  "modelName": "TM-4RC",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 104,
+    "heightMm": 104,
+    "depthMm": 60
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 104
+    }
+  ],
+  "enclosure": {
+    "mounts": [],
+    "entries": [
+      {
+        "id": "clamp-top",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 52,
+          "y": 104,
+          "z": 30
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 52,
+          "y": 0,
+          "z": 30
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "clamp-left",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 0,
+          "y": 52,
+          "z": 30
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "clamp-right",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 104,
+          "y": 52,
+          "z": 30
+        },
+        "axis": "-x"
+      }
+    ],
+    "interiorVolumeMm3": 429949
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: a round nonmetallic (PVC) ceiling box of about 4 in diameter for a luminaire, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Inside taken as a cylinder of 98 mm diameter and 57 mm deep (about 3-7/8 in and 2-1/4 in), with 3 mm drawn walls; its bounding box is 104 × 104 × 60 mm (the round body inscribed in its square footprint). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain cylinder, π × (98 / 2)² × 57 = 429949 mm³ (about 26.2 in³), rounded to a whole mm³. It is the drawn box's volume, not a marked volume and not from any code table. P4's box fill reads it.",
+      "covers": [
+        "interiorVolumeMm3"
+      ]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: four built-in cable clamps (knock-in tabs) a quarter-turn apart around the wall, one cable each, the box clamps the cable itself. No mount for a luminaire in P3 (P4 brings luminaires). Positions are on the round wall at its quarter points and are not taken from a product drawing.",
+      "covers": [
+        "entries.clamp-top",
+        "entries.clamp-bottom",
+        "entries.clamp-left",
+        "entries.clamp-right"
+      ]
+    },
+    {
+      "id": "joist-mount",
+      "kind": "game-design",
+      "citation": "game-design: nailed to the side of a joist or stud through its bracket (studFlange, common practice); it takes its full width along the framing member.",
+      "covers": [
+        "fits.studFlange"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "box.tinmoor-4sq-steel",
+  "version": 1,
+  "title": "4 in square steel junction box, 1-1/2 in deep",
+  "brand": "Tinmoor",
+  "modelName": "TM-4S15",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 105,
+    "heightMm": 105,
+    "depthMm": 40
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 105
+    }
+  ],
+  "enclosure": {
+    "mounts": [],
+    "entries": [
+      {
+        "id": "ko-top-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 34,
+          "y": 105,
+          "z": 20
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-top-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 71,
+          "y": 105,
+          "z": 20
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-bottom-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 34,
+          "y": 0,
+          "z": 20
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 71,
+          "y": 0,
+          "z": 20
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-left-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 0,
+          "y": 34,
+          "z": 20
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "ko-left-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 0,
+          "y": 71,
+          "z": 20
+        },
+        "axis": "+x"
+      },
+      {
+        "id": "ko-right-1",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 105,
+          "y": 34,
+          "z": 20
+        },
+        "axis": "-x"
+      },
+      {
+        "id": "ko-right-2",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 105,
+          "y": 71,
+          "z": 20
+        },
+        "axis": "-x"
+      },
+      {
+        "id": "ko-back",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 52,
+          "y": 52,
+          "z": 0
+        },
+        "axis": "+z"
+      }
+    ],
+    "interiorVolumeMm3": 387638
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation's 4 in square and 1-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (101 × 101 × 38 mm), with 2 mm drawn walls on the sides and back, so the outside is 105 × 105 × 40 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 101 × 101 × 38 = 387638 mm³ (about 23.7 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, ears). P4's box fill reads it.",
+      "covers": [
+        "interiorVolumeMm3"
+      ]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: two 1/2 in trade-size knockouts in each side wall and one 3/4 in knockout in the back, one connector each (real boxes often have concentric 1/2 and 3/4 in knockouts; each is one size here). No yoke: a device needs a raised cover or mud ring (P4). Positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": [
+        "entries.ko-top-1",
+        "entries.ko-top-2",
+        "entries.ko-bottom-1",
+        "entries.ko-bottom-2",
+        "entries.ko-left-1",
+        "entries.ko-left-2",
+        "entries.ko-right-1",
+        "entries.ko-right-2",
+        "entries.ko-back"
+      ]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: fixed to the side of a stud by a bracket (common practice); it takes its full width along the stud.",
+      "covers": [
+        "fits.studFlange"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "breaker.saltmere-1p-15a",
   "version": 1,
   "title": "15 A single-pole thermal-magnetic circuit breaker on a base",
@@ -3594,6 +4221,183 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "10 mΩ at each end, where a sprung test clip grips a terminal: typical published test-clip contact ratings are roughly 6 to 15 mΩ (paraphrased from manufacturers' clip specifications; no single vendor).",
       "covers": [
         "model.params.contactResistanceOhm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "panel.pellmoor-din-400x500",
+  "version": 1,
+  "title": "Steel panel enclosure, 400 × 500 × 200 mm, backplate and two DIN rails",
+  "brand": "Pellmoor",
+  "modelName": "PM-4520-D",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 400,
+    "heightMm": 500,
+    "depthMm": 200
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "rail-1",
+        "type": "din35",
+        "positionMm": {
+          "x": 35,
+          "y": 305,
+          "z": 23
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 330
+      },
+      {
+        "id": "rail-2",
+        "type": "din35",
+        "positionMm": {
+          "x": 35,
+          "y": 130,
+          "z": 23
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 330
+      },
+      {
+        "id": "plate",
+        "type": "backplate",
+        "positionMm": {
+          "x": 25,
+          "y": 25,
+          "z": 15
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 350
+      }
+    ],
+    "entries": [
+      {
+        "id": "ko-bottom-1",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 100,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-2",
+        "type": "knockout",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 200,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-bottom-3",
+        "type": "knockout",
+        "tradeSize": "1",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 300,
+          "y": 0,
+          "z": 100
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "drill-top-1",
+        "type": "drillSite",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 130,
+          "y": 500,
+          "z": 100
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "drill-top-2",
+        "type": "drillSite",
+        "tradeSize": "3/4",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 270,
+          "y": 500,
+          "z": 100
+        },
+        "axis": "-y"
+      }
+    ],
+    "interiorVolumeMm3": 38890368
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.panel",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "enclosure-class",
+      "kind": "game-design",
+      "citation": "game-design: a single-door wall-mount sheet-steel enclosure for control panels, 400 mm wide, 500 mm tall and 200 mm deep outside, one of the metric sizes such enclosures are commonly sold in (industrial control enclosures are listed to UL 50 and UL 50E and rated by NEMA 250 type, cited by number); 2 mm drawn walls (about 1.5 mm steel, rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 396 × 496 × 198 = 38890368 mm³. Box fill (P4) doesn't apply to a panel enclosure; it is stored for completeness and is not from any code table.",
+      "covers": [
+        "interiorVolumeMm3"
+      ]
+    },
+    {
+      "id": "rails",
+      "kind": "game-design",
+      "citation": "game-design: two 35 mm top-hat rails (TS 35 × 7.5, IEC 60715, cited by number), each 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 15 mm). A device clips on with its back on the rail (z = 23 mm: the rail's 7.5 mm depth rounded up) and its bottom edge 45 mm below the centreline, half the 90 mm overall height of modular devices (DIN 43880, by number), so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "covers": [
+        "mounts.rail-1",
+        "mounts.rail-2"
+      ]
+    },
+    {
+      "id": "backplate",
+      "kind": "game-design",
+      "citation": "game-design: a 350 × 450 mm backplate (mounting pan) standing 12 mm off the back wall on studs, 3 mm thick; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
+      "covers": [
+        "mounts.plate"
+      ]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: two 3/4 in and one 1 in trade-size knockouts in the bottom, and two drill sites for 3/4 in connectors in the top (opened with a hole saw or punch, F3.4 part 2), one connector each; positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": [
+        "entries.ko-bottom-1",
+        "entries.ko-bottom-2",
+        "entries.ko-bottom-3",
+        "entries.drill-top-1",
+        "entries.drill-top-2"
       ]
     }
   ],

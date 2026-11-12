@@ -223,7 +223,7 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Placing: tool-belt slot with a prop (1–9)
+    Idle --> Placing: tool-belt slot with a prop or device (1–9)
     Placing --> Placing: click / Enter on a valid snap → intent place
     Placing --> Idle: Esc → intent cancelPlacement (no command)
     Idle --> Pressed: pointerdown on an entity (work mode)
@@ -234,11 +234,33 @@ stateDiagram-v2
     Moving --> Idle: Esc, mode change, tool change,<br/>or the entity changed in the world
 ```
 
-- **The ghost** previews the active prop (or the entity being moved) at `placeOnTargets(ref, cursor, targets)` from `@controls/world-model`: the cursor ray hits a fixture (a second picker that holds only fixtures, so props never block it), the hit converts to integer mm with `metresToMm`, and `snapToBest` picks a DIN rail before the backplate grid before wall studs before a bench top. The targets are `worldSnapTargets(world)`, the same list a script gets. A failed snap hides the ghost. The ghost is renderer-local and unpickable.
+- **The ghost** previews the active prop or catalogue device (or the entity being moved) at `placeInWorld(world, ref, cursor, targets)` from `@controls/world-model` (F3.5; `placeOnTargets` before it, props only). The cursor ray hits a surface (a second picker that holds only fixtures and drawn enclosures, so props and devices never block it), the hit converts to integer mm with `metresToMm`, and `placeInWorld` tries an enclosure mount the device fits first (see [Enclosures and mounting](#enclosures-and-mounting-f35-part-1)), then the fixtures, where `snapToBest` picks a DIN rail before the backplate grid before wall studs before a bench top. The fixture targets are `worldSnapTargets(world)`, the same list a script gets. A placement the command would refuse (`mount-full`, `overlaps`, `occupied`, `wired`, `off-mount`) is invalid and says why (`PlacementView.reason`); the ghost hides. The ghost is renderer-local and unpickable.
 - **Aiming:** the mouse pointer over the canvas, otherwise the screen-centre reticle (pointer lock in walk mode, or keyboard play with the pointer elsewhere). The crosshair shows whenever the reticle aims.
 - **Commit points only:** a click or `Enter` emits one `place` intent; releasing a drag, or `Enter`/click after `M`, emits one `move` intent if the position changed. Pointer moves and drags emit nothing. A move keeps the entity's orientation, so only targets facing the same way count (one `entity.move`, never a rotate as well).
 - **Escape, innermost first:** cancel a move, cancel placement (the workspace puts the tool away; no command), clear the selection, then fall through to the shell's menu.
-- **Intents to Commands:** the `Viewport` component runs `entity.place {ref, positionMm, orientationMdeg}` or `entity.move {id, positionMm}` through `Session.exec`. The arguments are exactly what `placeOnTargets` returned, so a script that snaps the same cursor point logs identical entries (`apps/sim-cli/scenarios/mouse-place-move-delete.ts`).
+- **Intents to Commands:** the `Viewport` component runs `entity.place {ref, positionMm, orientationMdeg, mountedOn}` or `entity.move {id, positionMm}` through `Session.execFromInput` (so a refusal reaches the shell's toasts). The arguments are exactly what `placeInWorld` returned, so a script that snaps the same cursor point logs identical entries (`apps/sim-cli/scenarios/mouse-place-move-delete.ts`, `din-panel-breaker.ts`).
+
+## Enclosures and mounting (F3.5 part 1)
+
+```mermaid
+flowchart LR
+    hit["surface pick<br/>(fixtures + enclosures)"] --> mm["metresToMm"]
+    mm --> piw["placeInWorld(world, ref, cursor, worldSnapTargets)"]
+    piw --> mounts{"cursor on a mount<br/>the device fits?"}
+    mounts -- yes --> snapm["rail: DIN module slot<br/>backplate: 5 mm grid<br/>yoke: exact"]
+    mounts -- no --> fix["fixture snap<br/>(snapToBest)"]
+    snapm --> checks["checkMount + overlap (all)<br/>+ occupied / wired (moves)"]
+    fix --> checks
+    checks --> ghost["ghost valid → intent place {…, mountedOn}"]
+    checks --> hint["invalid → reason → hint"]
+```
+
+- **Mount targets come from the world's enclosures** (`worldMountTargets(world)`): each catalogue mount of an axis-aligned enclosure entity, turned into world space (origin, and the mounted device's +x, +y and +z). A device snaps to a mount whose type it declares (`mounts[].type`, `din35` for the breaker) when the cursor is within `MOUNT_CAPTURE_DEPTH` (20 mm, game-design) of the mount's plane and over the place the device would take. Rails beat yokes beat backplates, then the nearer plane, then the target id (`entity-<id>:<mount>`). Along a rail the left edge snaps to `dinSlotStartMm(k)`, as on the workshop's rails; on an area mount to the 5 mm grid; a yoke takes the device exactly. The orientation is the canonical quarter-turn triple whose +x and +z are the mount's (`orientationForAxes`), so `checkMount` accepts it whichever way the enclosure is turned.
+- **The surface picker holds the drawn enclosures** (`WorldSync.enclosureRoots()`), so the ray finds a panel's rail or backplate, and a hit on a box's side wall is on no target (it hides what is behind it, like the backboard).
+- **Moves keep the mount:** a mounted device slides along its own mount only (`off-mount` elsewhere); a free device never moves onto a mount (`entity.move` can't change `mountedOn`: delete and place).
+- **Overlap:** the placement maths refuses every body overlap (the `all` scope of `overlappingEntity`), while the commands refuse only overlaps involving an enclosure or a mounted device (the `mounting` scope, `overlaps`), so logs written before world v3, which stack free props, still replay. See [world-model `wiring/overlap.ts`](../../libs/domain/world-model/src/lib/wiring/overlap.ts).
+- **Recipes** (`geometry/devices.ts`): the breaker (a DIN-rail case facing +z, its handle a lever turned by `state.on`), the fuse (an inline holder on a base), open-fronted boxes (rectangular, or round for the ceiling box; nonmetallic ones blue), and the DIN panel (case, backplate under its area mount, a TS35 rail along each `din35` mount, its centreline 45 mm above the mount origin).
+- **Entries** (knockouts, pryouts, clamps, drill sites) are drawn from the commanded `openEntries` bits as two child meshes per enclosure, `entries:closed` (slugs and tabs) and `entries:open` (dark holes), so a box costs at most two extra draws whatever its entry count. With every entry closed it draws the recipe's shared merged geometry; with some open it owns two merged geometries, rebuilt only when the bits change and disposed on the next change or removal. Entry meshes carry `userData.unpickable` (the picker gives them no BVH) and a no-op `raycast`: a pick lands on the body. The scene-graph snapshot records `openEntries` (ids) on the entity node, and `breaker: { on }` for a breaker.
 
 ## Snapping (pure, integer mm, `@controls/world-model`)
 
@@ -257,7 +279,7 @@ stateDiagram-v2
 
 The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` disposes the `RenderLoop` (cancels the pending frame and the idle-stats timer, releases test waiters) and removes its `webglcontextrestored` and `visibilitychange` listeners, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
 
-Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. Loading a world without fixtures does the same for fixture recipes (`fixtureRecipeCount` reaches zero). Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
+Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. An enclosure's own merged entry geometries are disposed when its open entries change and when it is removed (F3.5; measured in WebGL2: 480 boxes, 10 panels and 70 breakers placed and undone leave renderer geometries at 9 and BVHs at 8, the baseline). Loading a world without fixtures does the same for fixture recipes (`fixtureRecipeCount` reaches zero). Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
 
 ## Performance (F1.7 measurements)
 

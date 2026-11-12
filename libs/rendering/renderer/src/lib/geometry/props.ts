@@ -10,11 +10,14 @@ import { mm } from '@controls/units';
 import { BUILTIN_CATALOG, type Catalog, type DeviceDefinition } from '@controls/catalog';
 import { builtinProp, type CatalogRef, type PropSpec } from '@controls/world-model';
 import {
+  buildDeviceEntries,
   buildDeviceGeometry,
   buildDeviceLever,
   buildDeviceMaterials,
   deviceDefinitionFor,
+  mergeEntryGeometries,
   deviceLabel,
+  type DeviceEntryPart,
   type DeviceLever,
 } from './devices';
 
@@ -84,8 +87,14 @@ interface Recipe {
   readonly label: string | null;
   /** The catalogue model kind a device draws (`lamp.incandescent`, …); `null` for props. */
   readonly modelKind: string | null;
-  /** The switch's lever (its geometry is owned by the recipe), or `null`. */
+  /** The lever (a switch's lever, a breaker's handle; its geometry is owned by the recipe), or `null`. */
   readonly lever: DeviceLever | null;
+  /** An enclosure's entries (geometry owned by the recipe), in catalogue order; empty for anything else. */
+  readonly entries: readonly DeviceEntryPart[];
+  /** Every entry merged (owned by the recipe): what a new enclosure, every entry closed, draws; else `null`. */
+  readonly entriesAll: BufferGeometry | null;
+  /** Whether it is an enclosure: placement aims at it as a surface (its mounts). */
+  readonly enclosure: boolean;
   users: number;
 }
 
@@ -105,6 +114,7 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
   const prop = builtinProp(ref);
   const device = prop === undefined ? deviceDefinitionFor(ref, catalog) : undefined;
   if (device !== undefined) {
+    const entries = buildDeviceEntries(device);
     return {
       spec: deviceSpec(device),
       geometry: buildDeviceGeometry(device),
@@ -112,6 +122,9 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
       label: deviceLabel(device),
       modelKind: device.model.kind,
       lever: buildDeviceLever(device),
+      entries,
+      entriesAll: entries.length > 0 ? mergeEntryGeometries(entries.map((e) => e.geometry)) : null,
+      enclosure: device.enclosure !== null,
       users: 0,
     };
   }
@@ -123,6 +136,9 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
     label: null,
     modelKind: null,
     lever: null,
+    entries: [],
+    entriesAll: null,
+    enclosure: false,
     users: 0,
   };
 }
@@ -130,6 +146,8 @@ function buildRecipe(ref: CatalogRef, catalog: Catalog): Recipe {
 function disposeRecipe(recipe: Recipe): void {
   recipe.geometry.dispose();
   recipe.lever?.geometry.dispose();
+  recipe.entries.forEach((e) => e.geometry.dispose());
+  recipe.entriesAll?.dispose();
   if (Array.isArray(recipe.material)) recipe.material.forEach((m) => m.dispose());
   else recipe.material.dispose();
 }

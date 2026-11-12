@@ -56,6 +56,8 @@ const MODEL_KIND_TOPOLOGY = {
   breakerOff: '5b7e7d973bfcf376679cee1f29d5d298fc67ae0b5c0f5b3949f9d0df5ec5708e',
   breakerOn: 'ba3697d37256b7b5a65e4a8670c99ff69d36a30b6c3945d61c403707730efab7',
   conductor: '6d6c6e344f3d62db57a9b512402123349f268ae2bf69fb99c42e908675d805ca',
+  enclosureBox: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  enclosurePanel: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -76,6 +78,8 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   breakerOff: 'breaker.thermalMagnetic',
   breakerOn: 'breaker.thermalMagnetic',
   conductor: 'conductor',
+  enclosureBox: 'enclosure.box',
+  enclosurePanel: 'enclosure.panel',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -224,6 +228,9 @@ describe('topologyHash', () => {
         );
         return compileNetlist(bus.state, WIRING_TEST_CATALOG).topologyHash;
       })(),
+      // F3.5: an enclosure adds nothing to the netlist (both are the empty netlist's hash).
+      enclosureBox: one({ id: 'box.tinmoor-1g-steel', version: 1 }),
+      enclosurePanel: one({ id: 'panel.pellmoor-din-400x500', version: 1 }),
     }).toStrictEqual(MODEL_KIND_TOPOLOGY);
   });
 

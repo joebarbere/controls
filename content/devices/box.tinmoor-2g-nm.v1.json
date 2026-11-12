@@ -1,0 +1,142 @@
+{
+  "id": "box.tinmoor-2g-nm",
+  "version": 1,
+  "title": "2-gang nonmetallic new-work device box",
+  "brand": "Tinmoor",
+  "modelName": "TM-2GN",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 98,
+    "heightMm": 86,
+    "depthMm": 79
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 98
+    }
+  ],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "yoke-1",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 3,
+          "y": 3,
+          "z": 3
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      },
+      {
+        "id": "yoke-2",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 49,
+          "y": 3,
+          "z": 3
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      }
+    ],
+    "entries": [
+      {
+        "id": "clamp-top-1",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 26,
+          "y": 86,
+          "z": 40
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-top-2",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 72,
+          "y": 86,
+          "z": 40
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom-1",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 26,
+          "y": 0,
+          "z": 40
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "clamp-bottom-2",
+        "type": "clamp",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 72,
+          "y": 0,
+          "z": 40
+        },
+        "axis": "+y"
+      }
+    ],
+    "interiorVolumeMm3": 559360
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: a two-gang nonmetallic (PVC) new-work device box for wood framing, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Inside about 3-5/8 in wide, 3-1/8 in tall and 3 in deep, taken as 92 × 80 × 76 mm, with 3 mm drawn walls on the sides and back, so the outside is 98 × 86 × 79 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 92 × 80 × 76 = 559360 mm³ (about 34.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (tapered walls, clamps). P4's box fill reads it.",
+      "covers": ["interiorVolumeMm3"]
+    },
+    {
+      "id": "yokes",
+      "kind": "game-design",
+      "citation": "game-design: two device yokes 46 mm apart (about the 1-13/16 in gang spacing of multi-gang wall plates, unverified), one wiring device each (UL 514C by number). A mounted device's origin sits at the inside back corner of its gang, facing out of the box (+z).",
+      "covers": ["mounts.yoke-1", "mounts.yoke-2"]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: four built-in cable clamps (knock-in tabs), two in the top wall and two in the bottom, one cable each, the box clamps the cable itself; positions are on the outside wall faces, one per gang, and are not taken from a product drawing.",
+      "covers": ["entries.clamp-top-1", "entries.clamp-top-2", "entries.clamp-bottom-1", "entries.clamp-bottom-2"]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: a new-work box nailed to the side of a stud through its flange (common practice); it takes its full width along the stud.",
+      "covers": ["fits.studFlange"]
+    }
+  ],
+  "extensions": {}
+}

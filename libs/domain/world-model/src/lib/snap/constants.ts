@@ -123,3 +123,15 @@ export const SNAP_PLANE_TOLERANCE: SourcedLength = {
   kind: 'game-design',
   source: 'game-design: covers a cursor hit on a TS35 rail top (7.5 mm, EN 60715) plus 2.5 mm slack',
 };
+
+/**
+ * How far off an enclosure mount's plane (along its facing) a cursor hit may be and still aim at that
+ * mount (F3.5). A hit on a panel's rail top, on the backplate around it or on a box's back wall is
+ * within it; one far down a side wall isn't.
+ */
+export const MOUNT_CAPTURE_DEPTH: SourcedLength = {
+  valueMm: 20,
+  kind: 'game-design',
+  source:
+    'game-design: covers a hit on the backplate beside a TS35 rail (whose top stands 8 mm proud) with slack, but not far down a side wall',
+};

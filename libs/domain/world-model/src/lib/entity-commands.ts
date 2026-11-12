@@ -17,6 +17,7 @@ import {
   PositionMmV1,
 } from '@controls/save-format';
 import { checkMount } from './wiring/mounting';
+import { checkOverlap } from './wiring/overlap';
 import { unlandEnd } from './wiring/wire-commands';
 import * as z from 'zod';
 import type { Connection, Entity, EntityId, OrientationMdeg, World } from './types';
@@ -39,6 +40,11 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * turn (its wires' routes and lengths would be left behind), but deleting it unlands those ends (a
  * rest waypoint where each terminal was) in the same change, so no end dangles; undo restores the
  * entity, its leads and its conductors exactly, terminations included. Test leads behave as in v2.
+ *
+ * F3.5: `entity.place` and `entity.move` refuse a body that would overlap another entity's when
+ * either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of `wiring/overlap.ts`;
+ * pre-v3 logs stack free props, so free bodies among themselves are only kept apart by the placement
+ * maths), after the mount checks; a device never overlaps its own host.
  *
  * The argument shapes are persisted in replay logs: changing one is a save-format change.
  */
@@ -90,7 +96,7 @@ export function findEntityIndex(entities: readonly Entity[], id: EntityId): numb
   return -1;
 }
 
-export function findEntity(world: World, id: EntityId): Entity | undefined {
+export function findEntity(world: Pick<World, 'entities'>, id: EntityId): Entity | undefined {
   const index = findEntityIndex(world.entities, id);
   return index < 0 ? undefined : world.entities[index];
 }
@@ -116,7 +122,7 @@ export function isLead(connection: Connection): boolean {
  * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a cable end is in one of its
  * entries, or a route waypoint names it. An occupied entity can't move, turn or be deleted.
  */
-export function entityOccupied(world: World, id: EntityId): boolean {
+export function entityOccupied(world: Pick<World, 'entities' | 'cables' | 'connections'>, id: EntityId): boolean {
   if (world.entities.some((e) => e.mountedOn?.entity === id)) return true;
   if (world.cables.some((c) => c.a?.entity === id || c.b?.entity === id || c.route.some((w) => w.entity === id))) {
     return true;
@@ -125,7 +131,7 @@ export function entityOccupied(world: World, id: EntityId): boolean {
 }
 
 /** Whether a conductor end is landed on entity `id` (`wired`: it can't move or turn). */
-export function entityWired(world: World, id: EntityId): boolean {
+export function entityWired(world: Pick<World, 'connections'>, id: EntityId): boolean {
   return world.connections.some((c) => !isLead(c) && touchesEntity(c, id));
 }
 
@@ -133,7 +139,10 @@ export function entityWired(world: World, id: EntityId): boolean {
  * Why entity `id` can't move or turn, or `null`: `occupied` (see {@link entityOccupied}) or `wired`
  * (see {@link entityWired}).
  */
-export function entityHold(world: World, id: EntityId): 'occupied' | 'wired' | null {
+export function entityHold(
+  world: Pick<World, 'entities' | 'cables' | 'connections'>,
+  id: EntityId,
+): 'occupied' | 'wired' | null {
   if (entityOccupied(world, id)) return 'occupied';
   if (entityWired(world, id)) return 'wired';
   return null;
@@ -207,6 +216,9 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
         );
         if (refused) return refused;
       }
+      const transform = { positionMm: args.positionMm, orientationMdeg: args.orientationMdeg };
+      const overlaps = checkOverlap(state, catalog, args.ref, transform, args.mountedOn, null);
+      if (overlaps) return overlaps;
       const bags = kind ? initialBags(kind) : { state: {}, sim: {} };
       const entity: Entity = {
         id,
@@ -229,7 +241,8 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
 
 /**
  * `entity.move`: sets an entity's position (absolute, integer mm). Undo restores the old one. A
- * mounted device only slides along its own mount (`off-mount`, `mount-full` re-checked).
+ * mounted device only slides along its own mount (`off-mount`, `mount-full` re-checked); nothing may
+ * move into another entity's body (`overlaps`).
  */
 export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<EntityMoveArgs, World>({
@@ -248,6 +261,9 @@ export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
         const refused = checkMount(state, catalog, entity.ref, positionMm, orientationMdeg, entity.mountedOn, id);
         if (refused) return refused;
       }
+      const moved = { positionMm, orientationMdeg: entity.transform.orientationMdeg };
+      const overlaps = checkOverlap(state, catalog, entity.ref, moved, entity.mountedOn, id);
+      if (overlaps) return overlaps;
       const before = entity.transform.positionMm;
       const after = { ...positionMm };
       const setPosition = (position: typeof after) => (w: World) => ({

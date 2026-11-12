@@ -65,3 +65,33 @@ export function entityPointMm(transform: Transform, offsetMm: PositionMm): Posit
   const at = transform.positionMm;
   return { x: at.x + rotated.x, y: at.y + rotated.y, z: at.z + rotated.z };
 }
+
+const sameVec = (p: PositionMm, q: PositionMm): boolean => p.x === q.x && p.y === q.y && p.z === q.z;
+
+/** Every quarter-turn orientation, yaw-major then pitch then roll, each from 0 up (the canonical search order). */
+const QUARTER_TURN_ORIENTATIONS: readonly OrientationMdeg[] = (() => {
+  const list: OrientationMdeg[] = [];
+  for (let yaw = 0; yaw < 4; yaw++) {
+    for (let pitch = 0; pitch < 4; pitch++) {
+      for (let roll = 0; roll < 4; roll++) {
+        list.push({ yaw: yaw * QUARTER_TURN_MDEG, pitch: pitch * QUARTER_TURN_MDEG, roll: roll * QUARTER_TURN_MDEG });
+      }
+    }
+  }
+  return list;
+})();
+
+/**
+ * The canonical orientation that turns an entity's +x onto `x` and its +z onto `z` (integer unit axis
+ * vectors, perpendicular), or `null` if they aren't. Several yaw-pitch-roll triples give the same
+ * turn (gimbal); the first in yaw-major, pitch, roll order is returned, so the answer is one exact
+ * triple everywhere (placement onto a mount, F3.5).
+ */
+export function orientationForAxes(x: PositionMm, z: PositionMm): OrientationMdeg | null {
+  for (const o of QUARTER_TURN_ORIENTATIONS) {
+    const ox = rotateQuarterTurns(o, { x: 1, y: 0, z: 0 });
+    const oz = rotateQuarterTurns(o, { x: 0, y: 0, z: 1 });
+    if (ox !== null && oz !== null && sameVec(ox, x) && sameVec(oz, z)) return { ...o };
+  }
+  return null;
+}

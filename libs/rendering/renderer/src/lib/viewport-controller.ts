@@ -7,6 +7,9 @@
  * The controller never mutates the world. It draws world snapshots ({@link syncWorld}) and turns
  * gesture commit points into {@link ViewportIntent}s, which `feature-workspace` executes as Commands
  * (`entity.place`, `entity.move`). Hover, selection, the ghost, mode and camera pose are view state.
+ * Where the ghost goes is `placeInWorld` (`@controls/world-model`): props and catalogue devices, onto
+ * fixtures or onto the mounts of drawn enclosures (F3.5), with the commands' own checks, so a valid
+ * ghost always commits and an invalid one says why (`PlacementView.reason`).
  *
  * **Rendering is on demand.** The host draws a frame only when the controller asks through
  * {@link ViewportController.onInvalidate}, or when {@link ViewportController.update} returns `true`
@@ -19,17 +22,21 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Box3, PerspectiveCamera, Sphere, Vector3, type Object3D, type Scene } from 'three/webgpu';
 import { metresToMm, mm } from '@controls/units';
+import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import {
-  placeOnTargets,
+  placeInWorld,
   worldSnapTargets,
   type CatalogRef,
   type Entity,
   type EntityId,
+  type MountedOn,
   type OrientationMdeg,
-  type Placement,
+  type PlacementWorld,
   type SnapTarget,
   type Vec3Mm,
   type World,
+  type WorldPlacement,
+  type WorldPlacementFailure,
 } from '@controls/world-model';
 import {
   applyLook,
@@ -58,6 +65,7 @@ import { SelectionHighlight } from './overlays/highlight';
 import { SimOverlays } from './overlays/sim-overlays';
 import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
+import { PropRecipes } from './geometry/props';
 import { buildBaseScene, DEFAULT_ROOM_BOUNDS, describeSceneGraph, disposeScene, type SceneGraphNode } from './scene';
 import { FixtureSync } from './world/fixture-sync';
 import type { DrawnLamp } from './sim/lamp-display';
@@ -79,6 +87,8 @@ export interface ViewportControllerOptions {
    * first focusable selectable.
    */
   readonly initialFocus?: string;
+  /** The catalogue refs draw and place against (default the built-in one; tests pass their own). */
+  readonly catalog?: Catalog;
 }
 
 /** The ghost in progress: placing the active tool's prop, or moving an entity. */
@@ -89,6 +99,13 @@ export interface PlacementView {
   readonly entityId: EntityId | null;
   /** Whether committing now would produce a command. */
   readonly valid: boolean;
+  /**
+   * Why it isn't valid: a snap failure (`no-target`, `too-large`, …) or the refusal the command would
+   * give (`mount-full`, `overlaps`, `occupied`, …); `null` while valid or before the first aim.
+   */
+  readonly reason: WorldPlacementFailure | null;
+  /** The enclosure mount it would go on (`entity.place`'s `mountedOn`), or `null`. */
+  readonly mountedOn: MountedOn | null;
   /** The snap target under the cursor, if any. */
   readonly targetId: string | null;
   /** What aims the ghost: the mouse pointer, or the screen-centre reticle (keyboard, pointer lock). */
@@ -118,6 +135,8 @@ export type ViewportIntent =
       readonly ref: CatalogRef;
       readonly positionMm: Vec3Mm;
       readonly orientationMdeg: OrientationMdeg;
+      /** The enclosure mount it snapped to (F3.5), or `null` (a fixture). */
+      readonly mountedOn: MountedOn | null;
     }
   | { readonly kind: 'move'; readonly id: EntityId; readonly positionMm: Vec3Mm }
   | { readonly kind: 'cancelPlacement' };
@@ -135,6 +154,9 @@ interface Moving {
   /** Started by dragging (commits on release) rather than by the keyboard (commits on Enter or click). */
   readonly byPointer: boolean;
 }
+
+/** Placement in a scene with no world yet (a custom scene in tests): no entities, no mounts. */
+const NO_WORLD: PlacementWorld = { entities: [], connections: [], cables: [] };
 
 const samePosition = (a: Vec3Mm, b: Vec3Mm): boolean => a.x === b.x && a.y === b.y && a.z === b.z;
 const sameRef = (a: CatalogRef | null, b: CatalogRef | null): boolean =>
@@ -172,6 +194,9 @@ export class ViewportController {
   private readonly roomOverride: RoomBoundsMm | null;
   private room: RoomBoundsMm;
   private readonly initialFocus: string | undefined;
+  private readonly catalog: Catalog;
+  /** The world last drawn: placement checks against it. */
+  private worldValue: PlacementWorld = NO_WORLD;
 
   private modeValue: ViewMode = 'work';
   private focusIdValue: string | null = null;
@@ -180,7 +205,7 @@ export class ViewportController {
   private moving: Moving | null = null;
   /** A press on an entity that becomes a move once it drags past the click slop. */
   private press: { readonly id: EntityId; readonly pointerId: number } | null = null;
-  private ghostResult: Placement | null = null;
+  private ghostResult: WorldPlacement | null = null;
   private ghostSource: PlacementView['source'] = 'reticle';
 
   // Per-frame scratch (no allocation in update()).
@@ -202,6 +227,7 @@ export class ViewportController {
     this.roomOverride = options.room ?? null;
     this.room = this.roomOverride ?? DEFAULT_ROOM_BOUNDS;
     this.initialFocus = options.initialFocus;
+    this.catalog = options.catalog ?? BUILTIN_CATALOG;
     this.scene = options.scene ?? buildBaseScene();
     this.camera.rotation.order = 'YXZ'; // yaw then pitch, for walk mode
     // Teardown runs in reverse: scene last, after everything that references it.
@@ -217,7 +243,7 @@ export class ViewportController {
     this.fixtures = new FixtureSync(this.scene);
     this.disposer.add(() => this.fixtures.dispose());
     this.refreshSurfaces();
-    this.world = new WorldSync(this.scene);
+    this.world = new WorldSync(this.scene, new PropRecipes(this.catalog));
     this.disposer.add(() => this.world.dispose());
     this.ghost = new PlacementGhost(this.scene, this.world.recipes);
     this.disposer.add(() => this.ghost.dispose());
@@ -330,12 +356,15 @@ export class ViewportController {
       this.refreshSurfaces();
     }
     const result = this.world.sync(world);
+    this.worldValue = world;
     this.overlays.syncWorld(world);
     if (this.moving && this.world.entityOf(this.moving.id) !== this.moving.entity) this.endMove();
     if (result.membershipChanged || fixturesChanged) {
       this.refreshSelectables();
+      this.refreshSurfaces(); // enclosures are placement surfaces too
     } else if (result.transformsChanged) {
       this.picker.refit();
+      this.surfacePicker.refit();
       this.refreshHighlight();
     }
     // A level change: if the focus target went away (or there was none yet), frame the initial one.
@@ -573,6 +602,8 @@ export class ViewportController {
       ref,
       entityId: this.moving?.id ?? null,
       valid: r?.ok === true,
+      reason: r && !r.ok ? r.reason : null,
+      mountedOn: r?.ok ? r.mountedOn : null,
       targetId: r?.targetId ?? null,
       source: this.ghostSource,
     };
@@ -585,16 +616,22 @@ export class ViewportController {
     return { x: 0, y: 0, source: 'reticle' };
   }
 
-  /** Where the gesture's prop would go now. Pure maths in `@controls/world-model`. */
-  private placementNow(ref: CatalogRef): Placement {
+  /**
+   * Where the gesture's prop or device would go now: the surface under the cursor (a fixture or a
+   * drawn enclosure) turned into integer mm, then `placeInWorld` (pure maths in `@controls/world-model`,
+   * the same scripts call) against the world last drawn.
+   */
+  private placementNow(ref: CatalogRef): WorldPlacement {
     const c = this.cursorNdc();
     this.ghostSource = c.source;
     this.camera.updateMatrixWorld();
     const hit = this.surfacePicker.pick(c.x, c.y, this.camera);
     if (!hit) return { ok: false, reason: 'no-target', targetId: null };
     const cursor = { x: metresToMm(hit.point.x), y: metresToMm(hit.point.y), z: metresToMm(hit.point.z) };
-    const options = this.moving ? { orientationMdeg: this.moving.entity.transform.orientationMdeg } : {};
-    return placeOnTargets(ref, cursor, this.snapTargets, options);
+    return placeInWorld(this.worldValue, ref, cursor, this.snapTargets, {
+      catalog: this.catalog,
+      moving: this.moving?.id ?? null,
+    });
   }
 
   private updateGhost(): void {
@@ -606,7 +643,12 @@ export class ViewportController {
     if (r.ok) this.ghost.show(ref, r.positionMm, r.orientationMdeg);
     else this.ghost.hide();
     const after = this.placementView();
-    if (before?.valid !== after?.valid || before?.targetId !== after?.targetId || before?.source !== after?.source) {
+    if (
+      before?.valid !== after?.valid ||
+      before?.reason !== after?.reason ||
+      before?.targetId !== after?.targetId ||
+      before?.source !== after?.source
+    ) {
       this.emit();
     }
   }
@@ -626,7 +668,13 @@ export class ViewportController {
         this.emitIntent({ kind: 'move', id: moving.id, positionMm: r.positionMm });
       }
     } else if (r.ok) {
-      this.emitIntent({ kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg });
+      this.emitIntent({
+        kind: 'place',
+        ref,
+        positionMm: r.positionMm,
+        orientationMdeg: r.orientationMdeg,
+        mountedOn: r.mountedOn,
+      });
     }
     this.markHoverDirty();
     return true;
@@ -662,14 +710,19 @@ export class ViewportController {
 
   // --- internals -----------------------------------------------------------------------------
 
-  /** Rebuilds the snap targets and the placement picker from the fixtures (and any scene selectables). */
+  /**
+   * Rebuilds the snap targets and the placement picker from the fixtures (and any scene selectables)
+   * and the drawn enclosures, whose mounts are targets too (`placeInWorld` finds them in the world).
+   */
   private refreshSurfaces(): void {
     const sceneTargets = this.sceneSelectables.flatMap((f) => (f.info.snapTarget ? [f.info.snapTarget] : []));
     this.snapTargets = [...sceneTargets, ...worldSnapTargets(this.fixtures.worldFixtures())];
-    // Snap surfaces and the fixtures that hide them (a hit on the backboard is on no target).
+    // Snap surfaces and what hides them (a hit on the backboard, or on a box's side, is on no target).
+    // `world` is undefined while the constructor builds the first surfaces.
     this.surfacePicker.setRoots([
       ...this.sceneSelectables.filter((f) => f.info.snapTarget).map((f) => f.root),
       ...this.fixtures.surfaceRoots(),
+      ...((this.world as WorldSync | undefined)?.enclosureRoots() ?? []),
     ]);
   }
 

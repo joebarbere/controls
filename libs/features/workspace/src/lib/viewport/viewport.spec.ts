@@ -79,6 +79,7 @@ describe('Viewport', () => {
       ref: box,
       positionMm: { x: -210, y: 260, z: 0 },
       orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+      mountedOn: null,
     });
     sendIntent(viewport, { kind: 'move', id: 1, positionMm: { x: -70, y: 110, z: 0 } });
     sendIntent(viewport, { kind: 'cancelPlacement' });
@@ -97,10 +98,65 @@ describe('Viewport', () => {
       ],
       ['entity.move', { id: 1, positionMm: { x: -70, y: 110, z: 0 } }],
     ]);
+    // A refusal is the world's answer: it reaches the shell's toasts (`onRefusal`), not the console.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const refusals: unknown[] = [];
+    session.onRefusal((r) => refusals.push(r));
     sendIntent(viewport, { kind: 'move', id: 99, positionMm: { x: 0, y: 0, z: 0 } });
+    expect(refusals).toEqual([
+      { commandId: 'entity.move', title: 'Move object', code: 'not-found', message: 'No entity with id 99' },
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+    // Bad arguments are a bug in the renderer, not a refusal: the console says so.
+    sendIntent(viewport, { kind: 'move', id: 1, positionMm: { x: 0.5, y: 0, z: 0 } });
     expect(warn).toHaveBeenCalledOnce();
+    expect(refusals).toHaveLength(1);
     expect(session.entries()).toHaveLength(3);
+  });
+
+  it('passes mountedOn through to entity.place and explains a placement that breaks a rule (F3.5)', async () => {
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    const session = TestBed.inject(Session);
+    session.newSandbox({ seed: 0 });
+    const viewport = fixture.componentInstance;
+    const panel = { id: 'panel.pellmoor-din-400x500', version: 1 };
+    const breaker = { id: 'breaker.saltmere-1p-15a', version: 1 };
+    const Z = { yaw: 0, pitch: 0, roll: 0 };
+    sendIntent(viewport, {
+      kind: 'place',
+      ref: panel,
+      positionMm: { x: 0, y: 0, z: 0 },
+      orientationMdeg: Z,
+      mountedOn: null,
+    });
+    const mountedOn = { entity: 1, mount: 'rail-1' };
+    sendIntent(viewport, {
+      kind: 'place',
+      ref: breaker,
+      positionMm: { x: 35, y: 305, z: 23 },
+      orientationMdeg: Z,
+      mountedOn,
+    });
+    expect(session.world().entities.map((e) => e.mountedOn)).toEqual([null, mountedOn]);
+    expect(session.entries().at(-1)?.args).toMatchObject({ mountedOn });
+
+    const hint = () => (fixture.nativeElement as HTMLElement).querySelector('[data-testid="placement-hint"]');
+    const placement = (reason: string | null) =>
+      viewport.state.set({
+        placement: { kind: 'place', ref: breaker, reason, valid: reason === null },
+      } as unknown as ViewportState);
+    placement('mount-full');
+    await fixture.whenStable();
+    expect(hint()?.textContent?.trim()).toBe('That spot on the mount is taken.');
+    expect(hint()?.getAttribute('role')).toBe('status');
+    expect((fixture.nativeElement as HTMLElement).getAttribute('data-placement-reason')).toBe('mount-full');
+    placement('no-target'); // nothing under the cursor isn't a rule: no hint
+    await fixture.whenStable();
+    expect(hint()).toBeNull();
+    placement(null);
+    await fixture.whenStable();
+    expect(hint()).toBeNull();
   });
 
   it('applies view.mode and view.focus from any surface without touching the world', async () => {

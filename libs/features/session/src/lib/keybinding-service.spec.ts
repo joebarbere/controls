@@ -42,6 +42,35 @@ describe('KeybindingService', () => {
     expect(session.entries().map((e) => e.id)).toEqual(['entity.place', 'edit.undo']);
   });
 
+  it('reports a refusal from a key (Delete on an occupied enclosure, F3.5) to onRefusal listeners', () => {
+    const { session } = setup();
+    const panel = { id: 'panel.pellmoor-din-400x500', version: 1 };
+    const breaker = { id: 'breaker.saltmere-1p-15a', version: 1 };
+    session.exec('entity.place', { ref: panel, positionMm: { x: 0, y: 0, z: 0 } });
+    session.exec('entity.place', {
+      ref: breaker,
+      positionMm: { x: 35, y: 305, z: 23 },
+      mountedOn: { entity: 1, mount: 'rail-1' },
+    });
+    const refusals: unknown[] = [];
+    const off = session.onRefusal((r) => refusals.push(r));
+    session.setContext('viewport.focused', true);
+    session.setContext('selection.entityId', 1);
+    const event = press(document.body, { key: 'Delete', code: 'Delete' });
+    expect(event.defaultPrevented).toBe(true);
+    expect(refusals).toEqual([
+      expect.objectContaining({ commandId: 'entity.delete', title: 'Delete object', code: 'occupied' }),
+    ]);
+    expect(session.world().entities).toHaveLength(2);
+    expect(session.entries()).toHaveLength(2); // a refusal is never logged
+    // The same command from exec (the console, the palette, scripts) reports its own error instead.
+    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(false);
+    expect(refusals).toHaveLength(1);
+    off();
+    press(document.body, { key: 'Delete', code: 'Delete' });
+    expect(refusals).toHaveLength(1);
+  });
+
   it('uses Cmd for Mod on macOS', () => {
     const { session } = setup('mac');
     session.exec('entity.place', place);

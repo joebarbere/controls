@@ -1,0 +1,143 @@
+{
+  "id": "box.tinmoor-1g-steel",
+  "version": 1,
+  "title": "1-gang steel device box, 3 × 2 × 2-1/2 in, with cable clamps",
+  "brand": "Tinmoor",
+  "modelName": "TM-132C",
+  "category": "enclosure",
+  "sizeMm": {
+    "widthMm": 55,
+    "heightMm": 80,
+    "depthMm": 66
+  },
+  "terminals": [],
+  "mounts": [
+    {
+      "type": "studFlange",
+      "widthMm": 55
+    }
+  ],
+  "enclosure": {
+    "mounts": [
+      {
+        "id": "yoke",
+        "type": "deviceYoke",
+        "positionMm": {
+          "x": 2,
+          "y": 2,
+          "z": 2
+        },
+        "axis": "+x",
+        "facing": "+z",
+        "extentMm": 0
+      }
+    ],
+    "entries": [
+      {
+        "id": "clamp-top",
+        "type": "pryout",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 27,
+          "y": 80,
+          "z": 46
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "clamp-bottom",
+        "type": "pryout",
+        "tradeSize": null,
+        "maxCables": 1,
+        "internalClamp": true,
+        "positionMm": {
+          "x": 27,
+          "y": 0,
+          "z": 46
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-top",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 80,
+          "z": 18
+        },
+        "axis": "-y"
+      },
+      {
+        "id": "ko-bottom",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 0,
+          "z": 18
+        },
+        "axis": "+y"
+      },
+      {
+        "id": "ko-back",
+        "type": "knockout",
+        "tradeSize": "1/2",
+        "maxCables": 1,
+        "internalClamp": false,
+        "positionMm": {
+          "x": 27,
+          "y": 40,
+          "z": 0
+        },
+        "axis": "+z"
+      }
+    ],
+    "interiorVolumeMm3": 248064
+  },
+  "conductor": null,
+  "model": {
+    "kind": "enclosure.box",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "box-class",
+      "kind": "game-design",
+      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation's nominal 2 in wide, 3 in tall and 2-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the outside is 55 × 80 × 66 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "interior-volume",
+      "kind": "game-design",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 51 × 76 × 64 = 248064 mm³ (about 15.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, clamps, ears). P4's box fill reads it.",
+      "covers": ["interiorVolumeMm3"]
+    },
+    {
+      "id": "yoke",
+      "kind": "game-design",
+      "citation": "game-design: one device yoke (one wiring device per gang, UL 514A by number). A mounted device's origin sits at the inside back-lower-left corner (2, 2, 2) facing out of the box (+z), so a device fills the gang from the back wall; P4's devices are sized to the gang.",
+      "covers": ["mounts.yoke"]
+    },
+    {
+      "id": "entry-layout",
+      "kind": "game-design",
+      "citation": "game-design: a pryout behind each of the two internal cable clamps (top and bottom, toward the front, one cable each, the box clamps it) and three 1/2 in trade-size knockouts (top, bottom and back, one connector each), the usual openings of a steel device box with clamps; positions are on the outside wall faces and are not taken from a product drawing.",
+      "covers": ["entries.clamp-top", "entries.clamp-bottom", "entries.ko-top", "entries.ko-bottom", "entries.ko-back"]
+    },
+    {
+      "id": "stud-flange",
+      "kind": "game-design",
+      "citation": "game-design: nailed or screwed to the side of a stud by a bracket (common practice for device boxes in wood framing); it takes its full width along the stud.",
+      "covers": ["fits.studFlange"]
+    }
+  ],
+  "extensions": {}
+}
