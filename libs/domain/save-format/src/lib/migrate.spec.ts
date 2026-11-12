@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { z } from 'zod';
+import * as z from 'zod';
 import { deepFreeze, rawWorldV1Arb } from '../testing/arbitraries';
 import { createWorld, CURRENT_SCHEMA_VERSION, worldMigrator } from './documents';
 import {

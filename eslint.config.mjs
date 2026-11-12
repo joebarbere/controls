@@ -46,6 +46,26 @@ const toolingConfigs = ['**/*.config.*', 'vitest.domain.mts'];
 /** Specs and tests: they run only under Vitest in Node. */
 const specFiles = ['**/*.spec.*', '**/*.test.*'];
 
+/**
+ * zod's `z` and default exports are one namespace object, and esbuild (the Angular build and the sim
+ * worker bundle) can't tree-shake through it: `import { z } from 'zod'` bundles all of zod v4, every
+ * locale and JSON Schema in both directions (about 445 kB minified), where `import * as z from 'zod'`
+ * keeps about 100 kB. Applies to every file. Flat config replaces a rule's options wholesale, so the
+ * determinism rules below repeat these entries.
+ */
+const zodImportSyntax = [
+  {
+    selector: "ImportDeclaration[source.value='zod'] > ImportSpecifier[imported.name='z']",
+    message:
+      "Import zod as a namespace (import * as z from 'zod'). The named z export defeats esbuild tree-shaking and adds about 350 kB to the game and sim worker bundles (docs/caveats/workspace.md).",
+  },
+  {
+    selector: "ImportDeclaration[source.value='zod'] > ImportDefaultSpecifier",
+    message:
+      "Import zod as a namespace (import * as z from 'zod'). The default export defeats esbuild tree-shaking and adds about 350 kB to the game and sim worker bundles (docs/caveats/workspace.md).",
+  },
+];
+
 const determinismHint =
   'Domain code must be deterministic: use the seeded PRNG in @controls/world-model and the integer sim tick (F1.2), never the wall clock or ambient randomness.';
 
@@ -82,6 +102,7 @@ const determinismRules = {
   ],
   'no-restricted-syntax': [
     'error',
+    ...zodImportSyntax,
     {
       selector: "NewExpression[callee.name='Date']",
       message: `new Date() is banned in domain code, sim-worker and sim-cli. ${determinismHint}`,
@@ -211,6 +232,11 @@ export default [
         },
       ],
     },
+  },
+  // zod namespace imports, everywhere (see zodImportSyntax). Must stay before the determinism blocks, which repeat it.
+  {
+    files: sourceFiles,
+    rules: { 'no-restricted-syntax': ['error', ...zodImportSyntax] },
   },
   // Domain determinism (plan §4.6, phase-1 "Determinism and invariant hooks"). Applies to specs too:
   // a domain test that reads the clock or Math.random is a flaky test. Tooling configs are exempt.

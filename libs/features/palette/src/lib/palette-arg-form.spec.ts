@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Session } from '@controls/feature-session';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
-import { z } from 'zod';
+import * as z from 'zod';
 import { allFields, type ArgErrors, type ArgForm, buildArgForm, initialValues } from './arg-form';
 import { type EntityChoice, PaletteArgForm } from './palette-arg-form';
 

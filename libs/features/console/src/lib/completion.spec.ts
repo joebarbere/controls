@@ -1,6 +1,6 @@
 import { CommandRegistry, defineCommand, succeed } from '@controls/commands';
 import { createWorldRegistry } from '@controls/world-model';
-import { z } from 'zod';
+import * as z from 'zod';
 import { commonPrefix, completeConsoleInput, consoleIds, TabCompleter } from './completion';
 
 const registry = createWorldRegistry();

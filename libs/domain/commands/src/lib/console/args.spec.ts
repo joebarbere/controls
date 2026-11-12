@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { z } from 'zod';
+import * as z from 'zod';
 import { defineCommand, succeed } from '../command';
 import { CommandRegistry } from '../registry';
 import { consoleArgs, consoleFields, ConsoleFormatError, formatConsoleLine, parseConsoleCommand } from './args';

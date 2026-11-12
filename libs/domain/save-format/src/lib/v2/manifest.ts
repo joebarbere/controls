@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { Extensions, Int, SemVer } from '../primitives';
 import { CTRL_FORMAT } from '../v1/manifest';
 

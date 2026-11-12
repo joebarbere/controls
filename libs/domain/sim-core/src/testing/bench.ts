@@ -9,7 +9,7 @@ import {
 import type { CommandBus } from '@controls/commands';
 import { createWorld, FiniteNumber, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '@controls/world-model';
-import { z } from 'zod';
+import * as z from 'zod';
 import { BUILTIN_NETLIST_MODELS, type DeviceNetlistModel, type NetlistModels } from '../lib/netlist/models';
 
 /*

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** One docked panel: its size in CSS pixels (integer) and whether it is collapsed. */
 export interface PanelLayout {

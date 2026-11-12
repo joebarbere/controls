@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { Int, SafeString } from '../primitives';
 import { defaultSettingsV1, SettingsV1 } from './v1';
 

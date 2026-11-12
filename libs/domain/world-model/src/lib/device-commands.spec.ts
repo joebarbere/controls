@@ -2,7 +2,7 @@ import { BUILTIN_CATALOG, catalogOrThrow, MODEL_KINDS, type ModelKindDef } from 
 import { createWorld, FiniteNumber } from '@controls/save-format';
 import { stateBagArb } from '@controls/save-format/testing';
 import fc from 'fast-check';
-import { z } from 'zod';
+import * as z from 'zod';
 import { bindingArgs, defaultBindingDecls, SELECTION_ENTITY_ID_KEY } from '@controls/commands';
 import {
   DEVICE_OPERATE_SELECTION_BINDING,

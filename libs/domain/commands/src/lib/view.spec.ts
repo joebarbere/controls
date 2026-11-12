@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CommandBus } from './bus';
 import { formatConsoleLine } from './console/args';
 import { CommandRegistry } from './registry';

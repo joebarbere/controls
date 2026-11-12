@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { type AnyCommandDef, defineCommand, entityRefMeta, fail, succeed } from '@controls/commands';
 import { CatalogRef, Int, TerminalId } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import { terminalProblem } from './devices';
 import { findEntity, insertSorted } from './entity-commands';
 import type { Connection, ConnectionId, TerminalRef, World } from './types';

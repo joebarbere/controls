@@ -1,5 +1,5 @@
 import { DeviceStateBag, ReplayEntry, ReplayLog, SimSolutionV2, World } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import * as buffer from './buffer';
 import { TopologyDescriptorSchema } from './descriptor';
 import { DEVICE_OUTPUT_SCHEMAS, NOMINAL_BANDS, RECORD_STATUS_VALUES } from './device-output';

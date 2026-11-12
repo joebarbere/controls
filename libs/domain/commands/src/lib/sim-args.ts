@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { NoArgs } from './builtin';
 import { type AnyCommandDef, defineCommand, succeed } from './command';
 import { SESSION_ACTIVE_KEY } from './file';

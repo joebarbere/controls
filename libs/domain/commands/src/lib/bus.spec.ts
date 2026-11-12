@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { z } from 'zod';
+import * as z from 'zod';
 import { editCommands, NoArgs, viewCommands } from './builtin';
 import { CommandBus, type ExecutedEvent } from './bus';
 import { type CommandDef, defineCommand, fail, succeed } from './command';

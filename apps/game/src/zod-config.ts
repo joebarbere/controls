@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * Imported first by `main.ts` (ADR 0011 §10, plan P2 follow-up "A CSP violation on every start"). Zod

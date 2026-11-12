@@ -1,5 +1,5 @@
 import { TOOL_BELT_SLOTS } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import { type AnyCommandDef, type CommandDef, defineCommand, fail, succeed } from './command';
 import type { BindingDecl } from './keybindings/keymap';
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { DeviceDefinition } from './device';
 import { bagSchemas, MODEL_KINDS } from './model-kinds';
 

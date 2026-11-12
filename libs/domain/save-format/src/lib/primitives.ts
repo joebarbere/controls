@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Shared building blocks for every persisted document. Everything here exists to keep documents

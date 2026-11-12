@@ -6,7 +6,7 @@ import {
   type LoadError,
   type Settings,
 } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Upper bound for a settings document, in UTF-16 code units of its JSON (≈ bytes for the ASCII

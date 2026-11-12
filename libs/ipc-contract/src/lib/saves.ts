@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Save I/O contract (F1.8b, ADR 0009). Saves are **opaque bytes** here: the `.ctrl` container is

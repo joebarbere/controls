@@ -1,5 +1,5 @@
 import { ARG_REF_KEYWORD, type ArgRefKind } from '@controls/commands';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * Palette argument forms, generated from a command's Zod `args` (plan F1.3). The schema goes through

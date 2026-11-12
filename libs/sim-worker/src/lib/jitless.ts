@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * Imported first by the worker entry (ADR 0011 §10). Zod 4 probes for `eval` (`new Function('')`,

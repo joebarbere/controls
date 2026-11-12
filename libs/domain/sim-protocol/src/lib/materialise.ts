@@ -1,5 +1,5 @@
 import { DeviceStateBag, Int, SimSolutionV2, type World } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * Materialisation (ADR 0011 §1, ADR 0013 "Materialisation"): the world document a save writes, and

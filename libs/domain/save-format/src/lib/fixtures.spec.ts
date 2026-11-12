@@ -14,7 +14,7 @@ import {
 } from './documents';
 import { readCtrl, writeCtrl } from './container/ctrl';
 import type { Migrator } from './migrate';
-import type { z } from 'zod';
+import type * as z from 'zod';
 
 /*
  * Every fixture of every version must load forever (ADR 0004). Layout:

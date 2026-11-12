@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { SettingsV1 } from './settings/v1';
 import { SettingsV2 } from './settings/v2';
 import { ManifestV1 } from './v1/manifest';

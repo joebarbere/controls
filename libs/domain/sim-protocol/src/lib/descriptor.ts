@@ -1,5 +1,5 @@
 import { TerminalId } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { DeviceOutputField, DeviceOutputFieldType, DeviceOutputSchema } from './device-output';
 
 /*

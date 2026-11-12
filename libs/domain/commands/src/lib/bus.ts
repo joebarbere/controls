@@ -1,5 +1,5 @@
 import { ReplayEntry } from '@controls/save-format';
-import type { z } from 'zod';
+import type * as z from 'zod';
 import type { AnyCommandDef, Change, CommandContext, CommandFailure, CommandResult } from './command';
 import type { CommandRegistry } from './registry';
 

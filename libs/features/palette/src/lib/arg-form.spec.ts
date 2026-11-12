@@ -1,6 +1,6 @@
 import { ARG_REF_KEYWORD, entityRefMeta, fileCommands } from '@controls/commands';
 import { createWorldRegistry } from '@controls/world-model';
-import { z } from 'zod';
+import * as z from 'zod';
 import {
   allFields,
   type ArgForm,

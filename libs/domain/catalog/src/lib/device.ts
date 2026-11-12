@@ -9,7 +9,7 @@ import {
   SafeString,
   TerminalId,
 } from '@controls/save-format';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /*
  * The catalogue entry format, catalogue v1 (plan P2 decision D4, ADR 0013). One device definition per

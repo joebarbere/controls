@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type * as z from 'zod';
 import { findProtoKey, jsonDepth, MAX_DOCUMENT_DEPTH } from './primitives';
 
 /** One validation problem, with a JSON path. Never contains the offending value. */

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- **A smaller game download** (P2 follow-up). The game's initial bundle is 1.88 MB instead of 2.24 MB (brotli 441 kB instead of 491 kB), back under its 2 MB budget, and the sim worker is 307 kB instead of 664 kB (brotli 82 kB instead of 134 kB). Every file now imports zod as a namespace (`import * as z from 'zod'`): the named `z` export defeated esbuild's tree-shaking and bundled all of zod, every locale included. A lint rule rejects the named and default zod imports everywhere, with probes in `apps/sim-cli/src/lint-determinism.spec.ts`. No behaviour change.
+
 ## [0.3.0] - 2026-11-11
 
 Phase 2, "First light": the circuit engine and power sources. The simulator runs what is wired. Wire a battery, a switch and a lamp on the bench with test leads, flip the switch, and the lamp lights, with the cold filament's inrush on a live current trace. DC and AC circuit solvers run in a worker at 1 kHz; batteries, bench and DIN-rail supplies, utility services, lamps, resistors, heaters, fuses and breakers are modelled. Saves move to `schemaVersion` 2; every 0.2.0 save still loads.

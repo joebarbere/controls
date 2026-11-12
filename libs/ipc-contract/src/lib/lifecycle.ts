@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * How long main waits for the renderer to acknowledge a flush request before it closes the window
