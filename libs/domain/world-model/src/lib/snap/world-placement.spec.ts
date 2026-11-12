@@ -12,8 +12,8 @@ import { orientationForAxes, rotateQuarterTurns } from './quarter-turn';
 /*
  * F3.5 part 1: mouse (and script) placement of catalogue devices, snapping to enclosure mounts, with
  * the commands' own checks. The DIN panel (400 × 500 × 200 mm) at (-200, -250, 0) facing +z puts
- * rail-1's mount origin at (-165, 55, 23) (its centreline at y = 100) and rail-2's at (-165, -120, 23);
- * the backplate square's at (-175, -225, 15).
+ * rail-1's mount origin at (-165, 55, 22) (its centreline at y = 100) and rail-2's at (-165, -120, 22);
+ * the backplate square's at (-175, -225, 14).
  */
 
 const PANEL: CatalogRef = { id: 'panel.pellmoor-din-400x500', version: 1 };
@@ -66,9 +66,9 @@ describe('worldMountTargets', () => {
   it('lists each enclosure mount in world space, in entity then catalogue order', () => {
     const world = panelBus().state;
     expect(worldMountTargets(world).map((t) => [t.id, t.mount.type, t.occupancy, t.origin, t.axes])).toStrictEqual([
-      ['entity-1:rail-1', 'din35', 'linear', at(-165, 55, 23), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
-      ['entity-1:rail-2', 'din35', 'linear', at(-165, -120, 23), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
-      ['entity-1:plate', 'backplate', 'area', at(-175, -225, 15), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
+      ['entity-1:rail-1', 'din35', 'linear', at(-165, 55, 22), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
+      ['entity-1:rail-2', 'din35', 'linear', at(-165, -120, 22), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
+      ['entity-1:plate', 'backplate', 'area', at(-175, -225, 14), { x: at(1, 0, 0), y: at(0, 1, 0), z: at(0, 0, 1) }],
     ]);
     expect(mountTargetId(3, 'yoke')).toBe('entity-3:yoke');
   });
@@ -90,12 +90,12 @@ describe('placeInWorld onto enclosure mounts', () => {
   it('snaps the breaker onto rail 1 at a DIN module slot, with the mount frame and mountedOn, and the command takes it', () => {
     const bus = panelBus();
     // Cursor on the rail top, 100 mm along: the breaker's left edge goes to slot round(5 × 17.5) = 88.
-    const p = placeInWorld(bus.state, BREAKER, at(-65, 100, 23), []);
+    const p = placeInWorld(bus.state, BREAKER, at(-65, 100, 22), []);
     expect(p).toStrictEqual({
       ok: true,
       targetId: 'entity-1:rail-1',
       kind: 'mount',
-      positionMm: at(-77, 55, 23),
+      positionMm: at(-77, 55, 22),
       orientationMdeg: Z,
       mountedOn: { entity: 1, mount: 'rail-1' },
     });
@@ -105,11 +105,11 @@ describe('placeInWorld onto enclosure mounts', () => {
 
   it('captures a hit on the backplate beside the rail, chooses rail 2 below, and ignores a hit too far off the plane', () => {
     const world = panelBus().state;
-    expect(placeInWorld(world, BREAKER, at(-65, 70, 15), [])).toMatchObject({ ok: true, targetId: 'entity-1:rail-1' });
-    expect(placeInWorld(world, BREAKER, at(-65, -75, 23), [])).toMatchObject({
+    expect(placeInWorld(world, BREAKER, at(-65, 70, 14), [])).toMatchObject({ ok: true, targetId: 'entity-1:rail-1' });
+    expect(placeInWorld(world, BREAKER, at(-65, -75, 22), [])).toMatchObject({
       ok: true,
       targetId: 'entity-1:rail-2',
-      positionMm: at(-77, -120, 23),
+      positionMm: at(-77, -120, 22),
     });
     // 21 mm in front of the rail top: no mount, and no fixture given.
     expect(placeInWorld(world, BREAKER, at(-65, 100, 44), [])).toStrictEqual({
@@ -118,34 +118,34 @@ describe('placeInWorld onto enclosure mounts', () => {
       targetId: null,
     });
     // Between the rails: the breaker doesn't fit the backplate mount.
-    expect(placeInWorld(world, BREAKER, at(-65, 0, 15), [])).toMatchObject({ ok: false, reason: 'no-target' });
+    expect(placeInWorld(world, BREAKER, at(-65, 0, 14), [])).toMatchObject({ ok: false, reason: 'no-target' });
   });
 
   it('clamps to the ends of the rail, so the device always fits on it', () => {
     const world = panelBus().state;
     // Rail 1 runs x = -165 … 165; a 40 mm breaker's last slot is k = floor(290 / 17.5) = 16 → 280.
-    expect(placeInWorld(world, BREAKER, at(-165, 100, 23), [])).toMatchObject({ positionMm: at(-165, 55, 23) });
-    expect(placeInWorld(world, BREAKER, at(165, 100, 23), [])).toMatchObject({ positionMm: at(115, 55, 23) });
+    expect(placeInWorld(world, BREAKER, at(-165, 100, 22), [])).toMatchObject({ positionMm: at(-165, 55, 22) });
+    expect(placeInWorld(world, BREAKER, at(165, 100, 22), [])).toMatchObject({ positionMm: at(115, 55, 22) });
   });
 
   it('refuses a full slot (mount-full); the next free module slot is offered', () => {
     const bus = panelBus();
-    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 23), []));
-    expect(placeInWorld(bus.state, BREAKER, at(-65, 100, 23), [])).toStrictEqual({
+    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 22), []));
+    expect(placeInWorld(bus.state, BREAKER, at(-65, 100, 22), [])).toStrictEqual({
       ok: false,
       reason: 'mount-full',
       targetId: 'entity-1:rail-1',
     });
     // Slot 7 (123 mm) still overlaps the first breaker (88–128 mm): 40 mm isn't a whole number of 17.5 mm
     // modules. Slot 8 (140 mm) is free.
-    expect(placeInWorld(bus.state, BREAKER, at(-25, 100, 23), [])).toMatchObject({ ok: false, reason: 'mount-full' });
-    expect(placeInWorld(bus.state, BREAKER, at(-5, 100, 23), [])).toMatchObject({
+    expect(placeInWorld(bus.state, BREAKER, at(-25, 100, 22), [])).toMatchObject({ ok: false, reason: 'mount-full' });
+    expect(placeInWorld(bus.state, BREAKER, at(-5, 100, 22), [])).toMatchObject({
       ok: true,
-      positionMm: at(-25, 55, 23),
+      positionMm: at(-25, 55, 22),
     });
     // A device on rail 2 that would reach up into rail 1's breaker: the 125 mm supply fits rail 2 and
     // stays clear (its top at y = 5), so nothing in this panel can overlap across rails.
-    expect(placeInWorld(bus.state, PSU, at(-65, -75, 23), [])).toMatchObject({ ok: true });
+    expect(placeInWorld(bus.state, PSU, at(-65, -75, 22), [])).toMatchObject({ ok: true });
   });
 
   it('places a device in a box yoke and a block on a backplate grid (test catalogue)', () => {
@@ -249,13 +249,13 @@ describe('placeInWorld onto fixtures', () => {
 describe('placeInWorld for a move', () => {
   it('slides a mounted device along its own mount only, keeping orientation and mount', () => {
     const bus = panelBus();
-    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 23), []));
-    const slide = placeInWorld(bus.state, BREAKER, at(35, 100, 23), [PLATE], { moving: 2 });
+    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 22), []));
+    const slide = placeInWorld(bus.state, BREAKER, at(35, 100, 22), [PLATE], { moving: 2 });
     expect(slide).toMatchObject({ ok: true, targetId: 'entity-1:rail-1', mountedOn: { entity: 1, mount: 'rail-1' } });
     if (!slide.ok) throw new Error('unreachable');
     expect(bus.exec('entity.move', { id: 2, positionMm: slide.positionMm }).ok).toBe(true);
     // Not onto rail 2, nor off the panel onto the plate fixture.
-    expect(placeInWorld(bus.state, BREAKER, at(-65, -75, 23), [PLATE], { moving: 2 })).toMatchObject({
+    expect(placeInWorld(bus.state, BREAKER, at(-65, -75, 22), [PLATE], { moving: 2 })).toMatchObject({
       ok: false,
       reason: 'off-mount',
     });
@@ -267,7 +267,7 @@ describe('placeInWorld for a move', () => {
   it('refuses to move an occupied enclosure, and moves a free one between same-facing fixtures', () => {
     const bus = panelBus();
     expect(placeInWorld(bus.state, PANEL, at(800, 0, 0), [PLATE], { moving: 1 })).toMatchObject({ ok: true });
-    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 23), []));
+    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 22), []));
     expect(placeInWorld(bus.state, PANEL, at(800, 0, 0), [PLATE], { moving: 1 })).toStrictEqual({
       ok: false,
       reason: 'occupied',
@@ -275,7 +275,7 @@ describe('placeInWorld for a move', () => {
     });
     // A free device never moves onto a mount (entity.move can't change mountedOn).
     commit(bus, PSU, placeInWorld(bus.state, PSU, at(800, 800, 0), [PLATE]));
-    expect(placeInWorld(bus.state, PSU, at(-65, 100, 23), [PLATE], { moving: 3 })).toMatchObject({
+    expect(placeInWorld(bus.state, PSU, at(-65, 100, 22), [PLATE], { moving: 3 })).toMatchObject({
       reason: 'no-target',
     });
   });
@@ -296,7 +296,7 @@ describe('placeInWorld for a move', () => {
 describe('placeInWorld properties', () => {
   it('a placement it offers is always accepted by entity.place, and is the same for the same inputs', () => {
     const bus = panelBus();
-    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 23), []));
+    commit(bus, BREAKER, placeInWorld(bus.state, BREAKER, at(-65, 100, 22), []));
     const world = bus.state;
     const coordinate = fc.integer({ min: -400, max: 400 });
     const depth = fc.integer({ min: -10, max: 60 });

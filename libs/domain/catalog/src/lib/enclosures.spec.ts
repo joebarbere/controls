@@ -44,21 +44,22 @@ function onItsFace(e: EnclosureEntry, size: { widthMm: number; heightMm: number;
 
 describe('the F3.5 enclosures', () => {
   it('store the interior volume computed from their inside dimensions (hand calculation, 0.5 %)', () => {
-    // 1-gang steel: inside 51 × 76 × 64 mm (outside 55 × 80 × 66 less 2 mm walls on four sides and the back).
-    //   51 × 76 = 3876; 3876 × 64 = 248 064 mm³ (÷ 16 387.064 = 15.1 in³).
-    // 2-gang nonmetallic: inside 92 × 80 × 76 mm (outside 98 × 86 × 79 less 3 mm walls).
-    //   92 × 80 = 7360; 7360 × 76 = 559 360 mm³ (34.1 in³).
-    // 4 in square: inside 101 × 101 × 38 mm (outside 105 × 105 × 40 less 2 mm walls).
-    //   101 × 101 = 10 201; 10 201 × 38 = 387 638 mm³ (23.7 in³).
-    // 4 in round: a cylinder 98 mm across and 57 mm deep inside (outside 104 × 104 × 60 less 3 mm walls).
-    //   r = 49, r² = 2401, π × 2401 = 7542.96; × 57 = 429 948.9 → 429 949 mm³ (26.2 in³).
+    // Trade designations are outside sizes (electrical-realism-reviewer, 2026-11-12).
+    // 1-gang steel: outside 51 × 76 × 64 (3 × 2 × 2-1/2 in), less 2 mm walls: inside 47 × 72 × 62.
+    //   47 × 72 = 3384; 3384 × 62 = 209 808 mm³ (÷ 16 387.064 = 12.80 in³).
+    // 2-gang nonmetallic: outside 102 × 92 × 76, less 3 mm walls: inside 96 × 86 × 73.
+    //   96 × 86 = 8256; 8256 × 73 = 602 688 mm³ (36.8 in³).
+    // 4 in square: outside 102 × 102 × 40, less 2 mm walls: inside 98 × 98 × 38.
+    //   98 × 98 = 9604; 9604 × 38 = 364 952 mm³ (22.27 in³).
+    // 4 in round: outside Ø102 × 57, less 3 mm walls: a cylinder 96 mm across and 54 mm deep inside.
+    //   r = 48, r² = 2304, π × 2304 = 7238.23; × 54 = 390 864.4 → 390 864 mm³ (23.85 in³).
     // Panel: inside 396 × 496 × 198 mm (400 × 500 × 200 less 2 mm walls).
     //   396 × 496 = 196 416; 196 416 × 198 = 38 890 368 mm³.
     const hand: Record<string, number> = {
-      'box.tinmoor-1g-steel': 248_064,
-      'box.tinmoor-2g-nm': 559_360,
-      'box.tinmoor-4sq-steel': 387_638,
-      'box.tinmoor-4rd-nm-ceiling': 429_949,
+      'box.tinmoor-1g-steel': 209_808,
+      'box.tinmoor-2g-nm': 602_688,
+      'box.tinmoor-4sq-steel': 364_952,
+      'box.tinmoor-4rd-nm-ceiling': 390_864,
       'panel.pellmoor-din-400x500': 38_890_368,
     };
     for (const id of ENCLOSURES) {
@@ -66,7 +67,9 @@ describe('the F3.5 enclosures', () => {
       expect(Math.abs(stored - hand[id]) / hand[id], id).toBeLessThanOrEqual(0.005);
     }
     // The rectangular boxes are exact products of whole millimetres.
-    expect(enclosure('box.tinmoor-1g-steel').enclosure?.interiorVolumeMm3).toBe(51 * 76 * 64);
+    expect(enclosure('box.tinmoor-1g-steel').enclosure?.interiorVolumeMm3).toBe(47 * 72 * 62);
+    expect(enclosure('box.tinmoor-2g-nm').enclosure?.interiorVolumeMm3).toBe(96 * 86 * 73);
+    expect(enclosure('box.tinmoor-4sq-steel').enclosure?.interiorVolumeMm3).toBe(98 * 98 * 38);
     expect(enclosure('panel.pellmoor-din-400x500').enclosure?.interiorVolumeMm3).toBe(396 * 496 * 198);
   });
 
@@ -100,6 +103,15 @@ describe('the F3.5 enclosures', () => {
     }
   });
 
+  it('the 2-gang box holds two wiring devices: 46 mm gangs centred in its width, tall enough for 83.3 mm screw spacing', () => {
+    const box = enclosure('box.tinmoor-2g-nm');
+    const yokes = box.enclosure?.mounts.map((m) => m.positionMm.x) ?? [];
+    expect(yokes).toStrictEqual([5, 51]); // 3 mm wall + (96 − 92) / 2 = 5; 5 + 46 = 51
+    expect(yokes[1] - yokes[0]).toBe(46); // 1-13/16 in gang centres
+    expect(102 - 46 - yokes[1]).toBe(yokes[0]); // centred: 5 mm each side
+    expect((box.sizeMm?.heightMm ?? 0) - 6).toBeGreaterThan(83.3); // inside height 86 mm > 3-9/32 in
+  });
+
   it('the DIN panel: two 330 mm rails and a 350 mm backplate square; the 15 A breaker and the DIN supply fit both rails', () => {
     const panel = enclosure('panel.pellmoor-din-400x500');
     expect(panel.enclosure?.mounts.map((m) => [m.id, m.type, m.extentMm])).toStrictEqual([
@@ -117,6 +129,8 @@ describe('the F3.5 enclosures', () => {
       // Eight 40 mm devices fit along one rail.
       expect(Math.floor((rail?.extentMm ?? 0) / (d.mounts[0]?.widthMm ?? 1))).toBe(8);
     }
+    // The backplate is 2 mm thick, 10 mm off the back wall's inside face (z 12–14); rails 8 mm proud of it.
+    expect(panel.enclosure?.mounts.map((m) => m.positionMm.z)).toStrictEqual([22, 22, 14]);
     // The tallest DIN device (the 125 mm supply) on rail 2 stays clear of rail 1's devices.
     expect(130 + 125).toBeLessThan(305);
   });

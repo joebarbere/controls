@@ -15,7 +15,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `din-panel-breaker.console`. The game-e2e driver must match it. */
-export const DIN_PANEL_BREAKER_HASH = 'beeded047431bc84c0757246eac22da78476e02ec09c3c7ecf22b4a639765e5a';
+export const DIN_PANEL_BREAKER_HASH = '7901fbdffe8ca1ee86a6a4259af12d356e79b3fa51a157f8c3ad719d0687ac15';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -56,8 +56,8 @@ describe('the DIN panel and breaker scenario (F3.5 part 1)', () => {
     expect(fromScript.hash()).toBe(DIN_PANEL_BREAKER_HASH);
     expect(fromScript.world().entities.map((e) => [e.id, e.ref.id, e.transform.positionMm, e.mountedOn])).toEqual([
       [1, 'panel.pellmoor-din-400x500', { x: -200, y: -200, z: 0 }, null],
-      [2, 'breaker.saltmere-1p-15a', { x: -25, y: 105, z: 23 }, { entity: 1, mount: 'rail-1' }],
-      [3, 'breaker.saltmere-1p-15a', { x: -112, y: 105, z: 23 }, { entity: 1, mount: 'rail-1' }],
+      [2, 'breaker.saltmere-1p-15a', { x: -25, y: 105, z: 22 }, { entity: 1, mount: 'rail-1' }],
+      [3, 'breaker.saltmere-1p-15a', { x: -112, y: 105, z: 22 }, { entity: 1, mount: 'rail-1' }],
     ]);
     // The occupied panel refuses to go or move (the e2e checks the toast that says so).
     expect(fromScript.exec('entity.delete', { id: 1 })).toMatchObject({ ok: false, error: { code: 'occupied' } });

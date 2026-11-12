@@ -98,15 +98,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "TM-132C",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 55,
-    "heightMm": 80,
-    "depthMm": 66
+    "widthMm": 51,
+    "heightMm": 76,
+    "depthMm": 64
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 55
+      "widthMm": 51
     }
   ],
   "enclosure": {
@@ -132,8 +132,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 27,
-          "y": 80,
+          "x": 25,
+          "y": 76,
           "z": 46
         },
         "axis": "-y"
@@ -145,7 +145,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 27,
+          "x": 25,
           "y": 0,
           "z": 46
         },
@@ -158,8 +158,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
-          "y": 80,
+          "x": 25,
+          "y": 76,
           "z": 18
         },
         "axis": "-y"
@@ -171,7 +171,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
+          "x": 25,
           "y": 0,
           "z": 18
         },
@@ -184,14 +184,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
-          "y": 40,
+          "x": 25,
+          "y": 38,
           "z": 0
         },
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 248064
+    "interiorVolumeMm3": 209808
   },
   "conductor": null,
   "model": {
@@ -203,7 +203,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation's nominal 2 in wide, 3 in tall and 2-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the outside is 55 × 80 × 66 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation is the outside size: 3 in tall, 2 in wide and 2-1/2 in deep, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the inside is 47 × 72 × 62 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": [
         "sizeMm"
       ]
@@ -211,7 +211,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 51 × 76 × 64 = 248064 mm³ (about 15.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, clamps, ears). P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 47 × 72 × 62 = 209808 mm³ (about 12.80 in³), about 2.4 % above the volume boxes of this class are marked with (rounded corners, clamps, ears). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": [
         "interiorVolumeMm3"
       ]
@@ -255,15 +255,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "TM-2GN",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 98,
-    "heightMm": 86,
-    "depthMm": 79
+    "widthMm": 102,
+    "heightMm": 92,
+    "depthMm": 76
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 98
+      "widthMm": 102
     }
   ],
   "enclosure": {
@@ -272,7 +272,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "id": "yoke-1",
         "type": "deviceYoke",
         "positionMm": {
-          "x": 3,
+          "x": 5,
           "y": 3,
           "z": 3
         },
@@ -284,7 +284,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "id": "yoke-2",
         "type": "deviceYoke",
         "positionMm": {
-          "x": 49,
+          "x": 51,
           "y": 3,
           "z": 3
         },
@@ -301,8 +301,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 26,
-          "y": 86,
+          "x": 28,
+          "y": 92,
           "z": 40
         },
         "axis": "-y"
@@ -314,8 +314,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 72,
-          "y": 86,
+          "x": 74,
+          "y": 92,
           "z": 40
         },
         "axis": "-y"
@@ -327,7 +327,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 26,
+          "x": 28,
           "y": 0,
           "z": 40
         },
@@ -340,14 +340,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 72,
+          "x": 74,
           "y": 0,
           "z": 40
         },
         "axis": "+y"
       }
     ],
-    "interiorVolumeMm3": 559360
+    "interiorVolumeMm3": 602688
   },
   "conductor": null,
   "model": {
@@ -359,7 +359,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: a two-gang nonmetallic (PVC) new-work device box for wood framing, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Inside about 3-5/8 in wide, 3-1/8 in tall and 3 in deep, taken as 92 × 80 × 76 mm, with 3 mm drawn walls on the sides and back, so the outside is 98 × 86 × 79 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: a two-gang nonmetallic (PVC) new-work device box for wood framing, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Outside about 4 in wide, 3-5/8 in tall and 3 in deep, taken as 102 × 92 × 76 mm, with 3 mm drawn walls on the sides and back, so the inside is 96 × 86 × 73 mm: tall enough for the 3-9/32 in (83.3 mm) spacing of a wiring device's mounting screws. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": [
         "sizeMm"
       ]
@@ -367,15 +367,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 92 × 80 × 76 = 559360 mm³ (about 34.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (tapered walls, clamps). P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 96 × 86 × 73 = 602688 mm³ (about 36.8 in³), about 8 to 15 % above the 32 to 34 in³ two-gang nonmetallic boxes of this class are marked with (tapered walls, clamps). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": [
         "interiorVolumeMm3"
       ]
     },
     {
       "id": "yokes",
-      "kind": "game-design",
-      "citation": "game-design: two device yokes 46 mm apart (about the 1-13/16 in gang spacing of multi-gang wall plates, unverified), one wiring device each (UL 514C by number). A mounted device's origin sits at the inside back corner of its gang, facing out of the box (+z).",
+      "kind": "real-world",
+      "citation": "real-world: two gangs on 1-13/16 in (1.812 in, 46 mm) centres, the gang spacing of multi-gang wall plates (dimension governed by NEMA WD 6, cited by number); wall-plate makers' published dimensions, read 2026-11-12. The two gangs are centred in the 96 mm inside width; a mounted device's origin sits at the inside back corner of its gang, facing out of the box (+z) (game-design).",
       "covers": [
         "mounts.yoke-1",
         "mounts.yoke-2"
@@ -411,15 +411,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "TM-4RC",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 104,
-    "heightMm": 104,
-    "depthMm": 60
+    "widthMm": 102,
+    "heightMm": 102,
+    "depthMm": 57
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 104
+      "widthMm": 102
     }
   ],
   "enclosure": {
@@ -432,8 +432,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 52,
-          "y": 104,
+          "x": 51,
+          "y": 102,
           "z": 30
         },
         "axis": "-y"
@@ -445,7 +445,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 52,
+          "x": 51,
           "y": 0,
           "z": 30
         },
@@ -459,7 +459,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "internalClamp": true,
         "positionMm": {
           "x": 0,
-          "y": 52,
+          "y": 51,
           "z": 30
         },
         "axis": "+x"
@@ -471,14 +471,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 104,
-          "y": 52,
+          "x": 102,
+          "y": 51,
           "z": 30
         },
         "axis": "-x"
       }
     ],
-    "interiorVolumeMm3": 429949
+    "interiorVolumeMm3": 390864
   },
   "conductor": null,
   "model": {
@@ -490,7 +490,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: a round nonmetallic (PVC) ceiling box of about 4 in diameter for a luminaire, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Inside taken as a cylinder of 98 mm diameter and 57 mm deep (about 3-7/8 in and 2-1/4 in), with 3 mm drawn walls; its bounding box is 104 × 104 × 60 mm (the round body inscribed in its square footprint). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: a round nonmetallic (PVC) ceiling box of 4 in outside diameter for a luminaire, a common class listed to UL 514C and described by NEMA OS 2 (cited by number). Outside taken as a cylinder of 102 mm diameter and 57 mm deep (4 in and 2-1/4 in), with 3 mm drawn walls, so the inside is 96 mm across and 54 mm deep; its bounding box is 102 × 102 × 57 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": [
         "sizeMm"
       ]
@@ -498,7 +498,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain cylinder, π × (98 / 2)² × 57 = 429949 mm³ (about 26.2 in³), rounded to a whole mm³. It is the drawn box's volume, not a marked volume and not from any code table. P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain cylinder, π × (96 / 2)² × 54 = 390864 mm³ (about 23.85 in³), rounded to a whole mm³: about 17.5 % above the volume round nonmetallic boxes of this class are marked with, because their walls taper. It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": [
         "interiorVolumeMm3"
       ]
@@ -533,15 +533,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "TM-4S15",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 105,
-    "heightMm": 105,
+    "widthMm": 102,
+    "heightMm": 102,
     "depthMm": 40
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 105
+      "widthMm": 102
     }
   ],
   "enclosure": {
@@ -555,7 +555,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "internalClamp": false,
         "positionMm": {
           "x": 34,
-          "y": 105,
+          "y": 102,
           "z": 20
         },
         "axis": "-y"
@@ -567,8 +567,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 71,
-          "y": 105,
+          "x": 68,
+          "y": 102,
           "z": 20
         },
         "axis": "-y"
@@ -593,7 +593,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 71,
+          "x": 68,
           "y": 0,
           "z": 20
         },
@@ -620,7 +620,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "internalClamp": false,
         "positionMm": {
           "x": 0,
-          "y": 71,
+          "y": 68,
           "z": 20
         },
         "axis": "+x"
@@ -632,7 +632,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 105,
+          "x": 102,
           "y": 34,
           "z": 20
         },
@@ -645,8 +645,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 105,
-          "y": 71,
+          "x": 102,
+          "y": 68,
           "z": 20
         },
         "axis": "-x"
@@ -658,14 +658,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 52,
-          "y": 52,
+          "x": 51,
+          "y": 51,
           "z": 0
         },
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 387638
+    "interiorVolumeMm3": 364952
   },
   "conductor": null,
   "model": {
@@ -677,7 +677,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation's 4 in square and 1-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (101 × 101 × 38 mm), with 2 mm drawn walls on the sides and back, so the outside is 105 × 105 × 40 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation is the outside size, rounded to whole millimetres (102 × 102 × 40 mm), with 2 mm drawn walls on the sides and back, so the inside is 98 × 98 × 38 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": [
         "sizeMm"
       ]
@@ -685,7 +685,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 101 × 101 × 38 = 387638 mm³ (about 23.7 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, ears). P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 98 × 98 × 38 = 364952 mm³ (about 22.27 in³), about 6.1 % above the volume boxes of this class are marked with (rounded corners, ears). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": [
         "interiorVolumeMm3"
       ]
@@ -4248,7 +4248,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "positionMm": {
           "x": 35,
           "y": 305,
-          "z": 23
+          "z": 22
         },
         "axis": "+x",
         "facing": "+z",
@@ -4260,7 +4260,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "positionMm": {
           "x": 35,
           "y": 130,
-          "z": 23
+          "z": 22
         },
         "axis": "+x",
         "facing": "+z",
@@ -4272,7 +4272,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "positionMm": {
           "x": 25,
           "y": 25,
-          "z": 15
+          "z": 14
         },
         "axis": "+x",
         "facing": "+z",
@@ -4357,8 +4357,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "enclosure-class",
-      "kind": "game-design",
-      "citation": "game-design: a single-door wall-mount sheet-steel enclosure for control panels, 400 mm wide, 500 mm tall and 200 mm deep outside, one of the metric sizes such enclosures are commonly sold in (industrial control enclosures are listed to UL 50 and UL 50E and rated by NEMA 250 type, cited by number); 2 mm drawn walls (about 1.5 mm steel, rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "kind": "real-world",
+      "citation": "real-world (product class): 400 × 500 × 200 mm single-door wall-mount sheet-steel enclosures are catalogued by several makers with 1.5 mm body steel, UL Type 1/3R/4/12 ratings (UL 50/50E, NEMA 250 by number) and a 350 × 450 mm mounting plate of 2–2.5 mm galvanised steel; distributor listings read 2026-11-12. Drawn walls 2 mm (rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open).",
       "covers": [
         "sizeMm"
       ]
@@ -4372,9 +4372,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       ]
     },
     {
-      "id": "rails",
+      "id": "rail-profile",
+      "kind": "real-world",
+      "citation": "real-world: the 35 mm top-hat rail TS 35 × 7.5 (IEC 60715, cited by number), 7.5 mm deep (drawn 8 mm, so a device clipped on clears it), and the 90 mm overall height (45 mm front) of modular devices (DIN 43880, cited by number): a mounted device's bottom edge sits 45 mm below the rail centreline, so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "covers": [
+        "mounts.rail-1",
+        "mounts.rail-2"
+      ]
+    },
+    {
+      "id": "rail-layout",
       "kind": "game-design",
-      "citation": "game-design: two 35 mm top-hat rails (TS 35 × 7.5, IEC 60715, cited by number), each 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 15 mm). A device clips on with its back on the rail (z = 23 mm: the rail's 7.5 mm depth rounded up) and its bottom edge 45 mm below the centreline, half the 90 mm overall height of modular devices (DIN 43880, by number), so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "citation": "game-design: the rails are 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 14 mm), so a device's back is at z = 22 mm; not taken from a product drawing.",
       "covers": [
         "mounts.rail-1",
         "mounts.rail-2"
@@ -4383,7 +4392,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "backplate",
       "kind": "game-design",
-      "citation": "game-design: a 350 × 450 mm backplate (mounting pan) standing 12 mm off the back wall on studs, 3 mm thick; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
+      "citation": "game-design: a 350 × 450 mm backplate (mounting plate), 2 mm thick (2–2.5 mm in the class), standing 10 mm off the inside face of the back wall on studs; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
       "covers": [
         "mounts.plate"
       ]

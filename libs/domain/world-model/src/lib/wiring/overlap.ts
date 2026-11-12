@@ -19,7 +19,7 @@ import { bodyBox } from './checks';
  * device that crowds its own mount is `mount-full`, not `overlaps`. Fixtures (level geometry) aren't
  * entities and aren't bodies. `entity.rotate` doesn't check overlap in P3.
  *
- * Two scopes (decided in F3.5 part 1; a refusal can be widened later, never narrowed):
+ * Two scopes (decided in F3.5 part 1; a refusal may be relaxed later without changing any replay, and widened only to pairs no earlier log can contain):
  * - `all`: every pair of bodies. The placement maths (`placeInWorld`: the mouse, the keyboard reticle
  *   and scripts) uses it, so a snapped placement never overlaps anything.
  * - `mounting`: only pairs where at least one body is an **enclosure or a mounted device**. The

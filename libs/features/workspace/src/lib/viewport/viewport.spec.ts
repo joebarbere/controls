@@ -134,7 +134,7 @@ describe('Viewport', () => {
     sendIntent(viewport, {
       kind: 'place',
       ref: breaker,
-      positionMm: { x: 35, y: 305, z: 23 },
+      positionMm: { x: 35, y: 305, z: 22 },
       orientationMdeg: Z,
       mountedOn,
     });

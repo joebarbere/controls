@@ -1117,7 +1117,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
   const panelWorld = (...more: Entity[]) => worldWith(device(1, PANEL_REF, { x: -200, y: -250, z: 0 }), ...more);
   const RAIL = { entity: 1, mount: 'rail-1' };
   const breakerOn = (id: number, x: number, state: Record<string, boolean> = {}) => {
-    const e = device(id, BREAKER, { x, y: 55, z: 23 }, { mountedOn: RAIL });
+    const e = device(id, BREAKER, { x, y: 55, z: 22 }, { mountedOn: RAIL });
     return { ...e, state: { ...e.state, ...state } };
   };
 
@@ -1155,21 +1155,21 @@ describe('ViewportController with enclosures (F3.5)', () => {
     controller.syncWorld(panelWorld());
     const seen = intents(controller);
     controller.setPlacement(BREAKER);
-    const p = pointAt(canvas, controller, -65, 100, 23);
+    const p = pointAt(canvas, controller, -65, 100, 22);
     controller.update(1 / 60);
     expect(controller.state.placement).toMatchObject({
       valid: true,
       targetId: 'entity-1:rail-1',
       mountedOn: RAIL,
     });
-    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-77, 55, 23]);
+    expect(describeSceneGraph(ghostOf(controller)).positionMm).toEqual([-77, 55, 22]);
     canvas.dispatchEvent(pointer('pointerdown', p.x, p.y));
     canvas.dispatchEvent(pointer('pointerup', p.x, p.y));
     expect(seen).toEqual([
       {
         kind: 'place',
         ref: BREAKER,
-        positionMm: { x: -77, y: 55, z: 23 },
+        positionMm: { x: -77, y: 55, z: 22 },
         orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
         mountedOn: RAIL,
       },
@@ -1182,7 +1182,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
     controller.syncWorld(panelWorld(breakerOn(2, -77)));
     const seen = intents(controller);
     controller.setPlacement(BREAKER);
-    const p = pointAt(canvas, controller, -65, 100, 23);
+    const p = pointAt(canvas, controller, -65, 100, 22);
     controller.update(1 / 60);
     expect(controller.state.placement).toMatchObject({
       valid: false,
@@ -1214,7 +1214,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
     canvas.dispatchEvent(pointer('pointermove', grab.x, grab.y));
     canvas.dispatchEvent(pointer('pointerdown', grab.x, grab.y));
     for (let i = 1; i <= 6; i++) {
-      const q = controller.projectMm({ x: -57 + i * 25, y: 100, z: 23 });
+      const q = controller.projectMm({ x: -57 + i * 25, y: 100, z: 22 });
       canvas.dispatchEvent(pointer('pointermove', q.x, q.y));
       controller.update(1 / 60);
     }
@@ -1224,10 +1224,10 @@ describe('ViewportController with enclosures (F3.5)', () => {
       targetId: 'entity-1:rail-1',
       mountedOn: RAIL,
     });
-    const end = controller.projectMm({ x: 93, y: 100, z: 23 });
+    const end = controller.projectMm({ x: 93, y: 100, z: 22 });
     canvas.dispatchEvent(pointer('pointerup', end.x, end.y));
     // 93 + 165 = 258 along; 258 − 20 = 238 → slot round(13.6) = 14, round(14 × 17.5) = 245 → x = 80.
-    expect(seen).toEqual([{ kind: 'move', id: 2, positionMm: { x: 80, y: 55, z: 23 } }]);
+    expect(seen).toEqual([{ kind: 'move', id: 2, positionMm: { x: 80, y: 55, z: 22 } }]);
     controller.dispose();
   });
 
@@ -1270,7 +1270,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
     const furnished = (openEntries = 0) => panelWorld(breakerOn(2, -77), { ...box, state: { openEntries } });
     controller.syncWorld(furnished());
     controller.setPlacement(BREAKER);
-    pointAt(canvas, controller, 0, 100, 23);
+    pointAt(canvas, controller, 0, 100, 22);
     controller.update(1 / 60);
     expect(controller.bvhCount).toBeGreaterThan(baseline);
     // Removing every entity returns the BVHs and recipes to baseline.

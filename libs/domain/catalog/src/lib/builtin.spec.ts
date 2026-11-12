@@ -90,10 +90,10 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
 
   it('the breaker and the DIN supply fit a DIN rail; the F3.5 boxes fit a stud flange; nothing else declares a mount', () => {
     expect(BUILTIN_CATALOG.devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
-      ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 55 }]],
-      ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 98 }]],
-      ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 104 }]],
-      ['box.tinmoor-4sq-steel', [{ type: 'studFlange', widthMm: 105 }]],
+      ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 51 }]],
+      ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 102 }]],
+      ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 102 }]],
+      ['box.tinmoor-4sq-steel', [{ type: 'studFlange', widthMm: 102 }]],
       ['breaker.saltmere-1p-15a', [{ type: 'din35', widthMm: 40 }]],
       ['supply.railwick-din-24v-5a', [{ type: 'din35', widthMm: 40 }]],
     ]);

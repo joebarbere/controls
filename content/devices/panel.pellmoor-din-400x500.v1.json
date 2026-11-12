@@ -20,7 +20,7 @@
         "positionMm": {
           "x": 35,
           "y": 305,
-          "z": 23
+          "z": 22
         },
         "axis": "+x",
         "facing": "+z",
@@ -32,7 +32,7 @@
         "positionMm": {
           "x": 35,
           "y": 130,
-          "z": 23
+          "z": 22
         },
         "axis": "+x",
         "facing": "+z",
@@ -44,7 +44,7 @@
         "positionMm": {
           "x": 25,
           "y": 25,
-          "z": 15
+          "z": 14
         },
         "axis": "+x",
         "facing": "+z",
@@ -129,8 +129,8 @@
   "sources": [
     {
       "id": "enclosure-class",
-      "kind": "game-design",
-      "citation": "game-design: a single-door wall-mount sheet-steel enclosure for control panels, 400 mm wide, 500 mm tall and 200 mm deep outside, one of the metric sizes such enclosures are commonly sold in (industrial control enclosures are listed to UL 50 and UL 50E and rated by NEMA 250 type, cited by number); 2 mm drawn walls (about 1.5 mm steel, rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open). Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "kind": "real-world",
+      "citation": "real-world (product class): 400 × 500 × 200 mm single-door wall-mount sheet-steel enclosures are catalogued by several makers with 1.5 mm body steel, UL Type 1/3R/4/12 ratings (UL 50/50E, NEMA 250 by number) and a 350 × 450 mm mounting plate of 2–2.5 mm galvanised steel; distributor listings read 2026-11-12. Drawn walls 2 mm (rounded up), so the inside is 396 × 496 × 198 mm. The door is not modelled (the front is open).",
       "covers": ["sizeMm"]
     },
     {
@@ -140,15 +140,21 @@
       "covers": ["interiorVolumeMm3"]
     },
     {
-      "id": "rails",
+      "id": "rail-profile",
+      "kind": "real-world",
+      "citation": "real-world: the 35 mm top-hat rail TS 35 × 7.5 (IEC 60715, cited by number), 7.5 mm deep (drawn 8 mm, so a device clipped on clears it), and the 90 mm overall height (45 mm front) of modular devices (DIN 43880, cited by number): a mounted device's bottom edge sits 45 mm below the rail centreline, so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "covers": ["mounts.rail-1", "mounts.rail-2"]
+    },
+    {
+      "id": "rail-layout",
       "kind": "game-design",
-      "citation": "game-design: two 35 mm top-hat rails (TS 35 × 7.5, IEC 60715, cited by number), each 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 15 mm). A device clips on with its back on the rail (z = 23 mm: the rail's 7.5 mm depth rounded up) and its bottom edge 45 mm below the centreline, half the 90 mm overall height of modular devices (DIN 43880, by number), so a 90 mm device is centred on its rail and others sit off-centre (ADR 0015's mount origin).",
+      "citation": "game-design: the rails are 330 mm long from x = 35 mm, their centrelines 350 and 175 mm above the enclosure's bottom, screwed to the backplate (front face at z = 14 mm), so a device's back is at z = 22 mm; not taken from a product drawing.",
       "covers": ["mounts.rail-1", "mounts.rail-2"]
     },
     {
       "id": "backplate",
       "kind": "game-design",
-      "citation": "game-design: a 350 × 450 mm backplate (mounting pan) standing 12 mm off the back wall on studs, 3 mm thick; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
+      "citation": "game-design: a 350 × 450 mm backplate (mounting plate), 2 mm thick (2–2.5 mm in the class), standing 10 mm off the inside face of the back wall on studs; parts may be fixed anywhere on a 350 mm square of it from its lower-left corner (an area mount is a square until a backplate declares its second extent, ADR 0015 implementation note 7). The rails are drawn on it but are not bodies: a part fixed to the plate over a rail is not refused.",
       "covers": ["mounts.plate"]
     },
     {

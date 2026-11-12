@@ -14,7 +14,7 @@ toolbelt.select 5
 # Enter with the reticle on the panel's rail 1 at (0, 150): 165 mm along, the 40 mm breaker's left edge
 # goes to module slot round(145 / 17.5) = 8, round(8 x 17.5) = 140 mm, and its bottom 45 mm below the
 # rail centreline. Its frame is the rail's (+x along, front +z): no turn.
-entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -25 --positionMm.y 105 --positionMm.z 23 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -25 --positionMm.y 105 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
 # A click at (-100, 150) on the same rail: slot round(45 / 17.5) = 3, round(52.5) = 53 mm.
-entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -112 --positionMm.y 105 --positionMm.z 23 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
+entity.place --ref.id breaker.saltmere-1p-15a --ref.version 1 --positionMm.x -112 --positionMm.y 105 --positionMm.z 22 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 1 --mountedOn.mount rail-1
 world.hash

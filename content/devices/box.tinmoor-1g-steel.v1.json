@@ -6,15 +6,15 @@
   "modelName": "TM-132C",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 55,
-    "heightMm": 80,
-    "depthMm": 66
+    "widthMm": 51,
+    "heightMm": 76,
+    "depthMm": 64
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 55
+      "widthMm": 51
     }
   ],
   "enclosure": {
@@ -40,8 +40,8 @@
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 27,
-          "y": 80,
+          "x": 25,
+          "y": 76,
           "z": 46
         },
         "axis": "-y"
@@ -53,7 +53,7 @@
         "maxCables": 1,
         "internalClamp": true,
         "positionMm": {
-          "x": 27,
+          "x": 25,
           "y": 0,
           "z": 46
         },
@@ -66,8 +66,8 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
-          "y": 80,
+          "x": 25,
+          "y": 76,
           "z": 18
         },
         "axis": "-y"
@@ -79,7 +79,7 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
+          "x": 25,
           "y": 0,
           "z": 18
         },
@@ -92,14 +92,14 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 27,
-          "y": 40,
+          "x": 25,
+          "y": 38,
           "z": 0
         },
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 248064
+    "interiorVolumeMm3": 209808
   },
   "conductor": null,
   "model": {
@@ -111,13 +111,13 @@
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation's nominal 2 in wide, 3 in tall and 2-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the outside is 55 × 80 × 66 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: the 3 × 2 × 2-1/2 in sheet-steel device (switch) box, a common trade designation for one-gang outlet boxes (sheet-steel outlet boxes are listed to UL 514A and described by NEMA OS 1, cited by number). The designation is the outside size: 3 in tall, 2 in wide and 2-1/2 in deep, rounded to whole millimetres (51 × 76 × 64 mm), with 2 mm drawn walls (sheet steel of about 1.6 mm, rounded up) on the sides and back, so the inside is 47 × 72 × 62 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": ["sizeMm"]
     },
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 51 × 76 × 64 = 248064 mm³ (about 15.1 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, clamps, ears). P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 47 × 72 × 62 = 209808 mm³ (about 12.80 in³), about 2.4 % above the volume boxes of this class are marked with (rounded corners, clamps, ears). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": ["interiorVolumeMm3"]
     },
     {

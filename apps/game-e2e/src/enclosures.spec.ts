@@ -16,7 +16,7 @@ import { startSandbox } from './support/sandbox';
  * test seeds the stored settings with slots 4 and 5 holding the panel and the breaker. Forced WebGL2,
  * the backend CI exercises; the mouse is aimed with the `?e2e=1` hook's `projectMm`.
  */
-const DIN_PANEL_BREAKER_HASH = 'beeded047431bc84c0757246eac22da78476e02ec09c3c7ecf22b4a639765e5a';
+const DIN_PANEL_BREAKER_HASH = '7901fbdffe8ca1ee86a6a4259af12d356e79b3fa51a157f8c3ad719d0687ac15';
 
 const PANEL = { id: 'panel.pellmoor-din-400x500', version: 1 };
 const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
@@ -111,7 +111,7 @@ test('mouse and keyboard place a DIN panel and snap the breaker onto its rail, t
   await page.keyboard.press('Enter');
 
   // Mouse: a click further left on the same rail places a second breaker.
-  const rail = await screen(page, canvas, -100, 150, 23);
+  const rail = await screen(page, canvas, -100, 150, 22);
   await page.mouse.move(rail.x, rail.y);
   await expect(viewport).toHaveAttribute('data-placement-target', 'entity-1:rail-1');
   await expect(viewport).toHaveAttribute('data-placement-valid', 'true');

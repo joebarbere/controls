@@ -238,6 +238,39 @@ describe('topologyHash', () => {
     expect([...new Set(Object.values(PINNED_KIND))].sort()).toStrictEqual(Object.keys(MODEL_KINDS).sort());
   });
 
+  it('an enclosure, open entries or not, changes nothing electrical in the bench lamp (F3.5)', () => {
+    const plain = compileNetlist(benchLamp(true), BUILTIN_CATALOG);
+    const bus = benchBus();
+    for (const ref of [BATTERY, SPST, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
+    run(bus, 'entity.place', {
+      ref: { id: 'panel.pellmoor-din-400x500', version: 1 },
+      positionMm: { x: 5000, y: 0, z: 0 },
+    });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(1, 'pos'), b: end(2, 'a') });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(2, 'b'), b: end(3, 'a') });
+    run(bus, 'lead.connect', { ref: LEAD, a: end(3, 'b'), b: end(1, 'neg') });
+    run(bus, 'device.operate', { id: 2, control: 'closed', value: true });
+    const electrical = (n: ReturnType<typeof compileNetlist>) => ({
+      topologyHash: n.topologyHash,
+      nodes: n.nodes,
+      branches: n.branches,
+      islands: n.islands,
+      diagnostics: n.diagnostics,
+    });
+    const withPanel = compileNetlist(bus.state, BUILTIN_CATALOG);
+    expect(electrical(withPanel)).toStrictEqual(electrical(plain));
+    // The device list may name the enclosure, but only as a device with no parts (no element, no output).
+    const extra = withPanel.devices.filter((d) => !plain.devices.some((p) => p.entity === d.entity));
+    expect(extra.every((d) => d.entity === 4)).toBe(true);
+    expect(withPanel.devices.filter((d) => d.entity !== 4)).toStrictEqual(plain.devices);
+    // Opening knockouts (commanded `openEntries`, set here without a tool) changes nothing either.
+    const opened = {
+      ...bus.state,
+      entities: bus.state.entities.map((e) => (e.id === 4 ? { ...e, state: { ...e.state, openEntries: 0b10101 } } : e)),
+    };
+    expect(electrical(compileNetlist(opened, BUILTIN_CATALOG))).toStrictEqual(electrical(plain));
+  });
+
   it('names elements by entity and part, or by connection', () => {
     expect(elementKey({ kind: 'entity', entity: 12, part: 'cell' })).toBe('e12.cell');
     expect(elementKey({ kind: 'connection', connection: 7 })).toBe('c7');

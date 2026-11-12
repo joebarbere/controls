@@ -199,6 +199,8 @@ Owners `content-designer` (entries), `renderer-engineer` (recipes, snapping, ove
   - [x] An occupied enclosure refuses move and delete in the UI: the drag ghost says why, and Delete raises a warning toast (`Session.execFromInput` / `onRefusal`).
   - [ ] Knockouts opened with tools: `enclosure.openEntry` exists (PR 8) and draws, but no real tool ships until F3.4 part 1.
   - [ ] A tool-belt editor: settings v2 is frozen, so the default slots can't gain the new devices; the e2e seeds its settings. F3.4 part 1 reworks the belt.
+  - [ ] **Decide before v0.4.0** (save-format review): whether `entity.rotate` checks overlap, or freeze "rotate never checks overlap" (it doesn't in part 1).
+  - P4 open questions (electrical-realism review): box fill needs a separate marked-volume field sourced from manufacturer markings, or a stated rule; `interiorVolumeMm3` is geometric and above the marked volume, never the allowance unchanged. The P2 breaker's 40 mm base is about two DIN modules; a one-module entry version may come with the panel.
 - [ ] **Part 2:** slotted wire duct and cover (sourced section sizes, commanded `lengthMm`); EMT-lite (straight sticks with a commanded length, 90° elbows, connectors into entries; no bending minigame); DIN terminal blocks (screw and spring-cage feed-through, a ground block); wire nuts as placeable splice devices inside boxes. Golden scene-graph snapshots per recipe.
 - [ ] The workshop level gains nothing by default (the sandbox spawns P3 content) and its hash is unchanged by F3.5. _(Part 1: unchanged, `apps/sim-cli/src/workshop.spec.ts` and the e2e screenshot.)_
 

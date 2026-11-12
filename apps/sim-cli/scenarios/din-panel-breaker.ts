@@ -27,7 +27,7 @@ export default function dinPanelBreaker(game: Game): void {
   // the panel's rail 1, whose centreline is at y = 150, so the breaker clips on there.
   game.execOrThrow('view.focus', { target: 'din-rail-1' });
   game.execOrThrow('toolbelt.select', { slot: 5 });
-  place(breaker, { x: 0, y: 150, z: 23 });
+  place(breaker, { x: 0, y: 150, z: 22 });
   // A click further left on the same rail: a second breaker.
-  place(breaker, { x: -100, y: 150, z: 23 });
+  place(breaker, { x: -100, y: 150, z: 22 });
 }

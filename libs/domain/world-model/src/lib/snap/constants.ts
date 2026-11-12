@@ -133,5 +133,5 @@ export const MOUNT_CAPTURE_DEPTH: SourcedLength = {
   valueMm: 20,
   kind: 'game-design',
   source:
-    'game-design: covers a hit on the backplate beside a TS35 rail (whose top stands 8 mm proud) with slack, but not far down a side wall',
+    'game-design: covers a hit on the backplate beside a TS35 rail (7.5 mm deep, drawn 8 mm proud) with slack, but not far down a side wall',
 };

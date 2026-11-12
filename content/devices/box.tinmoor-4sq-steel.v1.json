@@ -6,15 +6,15 @@
   "modelName": "TM-4S15",
   "category": "enclosure",
   "sizeMm": {
-    "widthMm": 105,
-    "heightMm": 105,
+    "widthMm": 102,
+    "heightMm": 102,
     "depthMm": 40
   },
   "terminals": [],
   "mounts": [
     {
       "type": "studFlange",
-      "widthMm": 105
+      "widthMm": 102
     }
   ],
   "enclosure": {
@@ -28,7 +28,7 @@
         "internalClamp": false,
         "positionMm": {
           "x": 34,
-          "y": 105,
+          "y": 102,
           "z": 20
         },
         "axis": "-y"
@@ -40,8 +40,8 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 71,
-          "y": 105,
+          "x": 68,
+          "y": 102,
           "z": 20
         },
         "axis": "-y"
@@ -66,7 +66,7 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 71,
+          "x": 68,
           "y": 0,
           "z": 20
         },
@@ -93,7 +93,7 @@
         "internalClamp": false,
         "positionMm": {
           "x": 0,
-          "y": 71,
+          "y": 68,
           "z": 20
         },
         "axis": "+x"
@@ -105,7 +105,7 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 105,
+          "x": 102,
           "y": 34,
           "z": 20
         },
@@ -118,8 +118,8 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 105,
-          "y": 71,
+          "x": 102,
+          "y": 68,
           "z": 20
         },
         "axis": "-x"
@@ -131,14 +131,14 @@
         "maxCables": 1,
         "internalClamp": false,
         "positionMm": {
-          "x": 52,
-          "y": 52,
+          "x": 51,
+          "y": 51,
           "z": 0
         },
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 387638
+    "interiorVolumeMm3": 364952
   },
   "conductor": null,
   "model": {
@@ -150,13 +150,13 @@
     {
       "id": "box-class",
       "kind": "game-design",
-      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation's 4 in square and 1-1/2 in deep are taken as the inside dimensions, rounded to whole millimetres (101 × 101 × 38 mm), with 2 mm drawn walls on the sides and back, so the outside is 105 × 105 × 40 mm. Unverified: no manufacturer drawing was read for this entry; electrical-realism-reviewer to check it against public dimension drawings of the class and relabel it real-world if it holds.",
+      "citation": "game-design: the 4 in square, 1-1/2 in deep sheet-steel box, a common trade designation for junction and outlet boxes (UL 514A, NEMA OS 1, cited by number). The designation is the outside size, rounded to whole millimetres (102 × 102 × 40 mm), with 2 mm drawn walls on the sides and back, so the inside is 98 × 98 × 38 mm. Unverified against a specific manufacturer drawing; electrical-realism-reviewer checked the class dimensions (2026-11-12).",
       "covers": ["sizeMm"]
     },
     {
       "id": "interior-volume",
       "kind": "game-design",
-      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 101 × 101 × 38 = 387638 mm³ (about 23.7 in³). It is the drawn box's volume, not a marked volume and not from any code table; a real box's marked volume is smaller (rounded corners, ears). P4's box fill reads it.",
+      "citation": "game-design: computed from the inside dimensions above as a plain rectangular volume, 98 × 98 × 38 = 364952 mm³ (about 22.27 in³), about 6.1 % above the volume boxes of this class are marked with (rounded corners, ears). It is the drawn box's geometric volume, not a marked volume and not from any code table, and it must not be used unchanged as the box-fill allowance (P4 decides between a marked-volume field and a stated rule).",
       "covers": ["interiorVolumeMm3"]
     },
     {

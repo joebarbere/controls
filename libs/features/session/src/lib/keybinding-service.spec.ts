@@ -49,7 +49,7 @@ describe('KeybindingService', () => {
     session.exec('entity.place', { ref: panel, positionMm: { x: 0, y: 0, z: 0 } });
     session.exec('entity.place', {
       ref: breaker,
-      positionMm: { x: 35, y: 305, z: 23 },
+      positionMm: { x: 35, y: 305, z: 22 },
       mountedOn: { entity: 1, mount: 'rail-1' },
     });
     const refusals: unknown[] = [];

@@ -27,14 +27,14 @@ const bus = () => createWorldBus(createWorld({ seed: 0 }));
 describe('overlap bodies', () => {
   it('are the quarter-turn body box; touching faces do not overlap', () => {
     const a = refBodyBox(BUILTIN_CATALOG, BOX_1G, { positionMm: at(0, 0, 0), orientationMdeg: Z });
-    expect(a).toStrictEqual({ min: at(0, 0, 0), max: at(55, 80, 66) });
+    expect(a).toStrictEqual({ min: at(0, 0, 0), max: at(51, 76, 64) });
     const turned = refBodyBox(BUILTIN_CATALOG, BOX_1G, {
       positionMm: at(0, 0, 0),
       orientationMdeg: { yaw: 90_000, pitch: 0, roll: 0 },
     });
-    expect(turned).toStrictEqual({ min: at(0, 0, -55), max: at(66, 80, 0) });
-    expect(boxesOverlap(a as never, { min: at(55, 0, 0), max: at(100, 80, 66) })).toBe(false);
-    expect(boxesOverlap(a as never, { min: at(54, 79, 65), max: at(100, 100, 100) })).toBe(true);
+    expect(turned).toStrictEqual({ min: at(0, 0, -51), max: at(64, 76, 0) });
+    expect(boxesOverlap(a as never, { min: at(51, 0, 0), max: at(100, 76, 64) })).toBe(false);
+    expect(boxesOverlap(a as never, { min: at(50, 75, 63), max: at(100, 100, 100) })).toBe(true);
     expect(
       refBodyBox(
         BUILTIN_CATALOG,
@@ -54,7 +54,7 @@ describe('entity.place and entity.move refuse overlaps with enclosures and mount
     expect(b.exec('entity.place', { ref: BOX_1G, positionMm: at(0, 0, 0) }).ok).toBe(true);
     expect(b.exec('entity.place', { ref: LAMP, positionMm: at(5, 5, 5) })).toMatchObject(refused('overlaps'));
     expect(b.exec('entity.place', { ref: BOX_4SQ, positionMm: at(50, 0, 0) })).toMatchObject(refused('overlaps'));
-    expect(b.exec('entity.place', { ref: BOX_4SQ, positionMm: at(55, 0, 0) }).ok).toBe(true); // touching
+    expect(b.exec('entity.place', { ref: BOX_4SQ, positionMm: at(51, 0, 0) }).ok).toBe(true); // touching
     expect(b.exec('entity.place', { ref: CRATE, positionMm: at(1000, 0, 0) }).ok).toBe(true);
     // Moving the crate into the 4 in box, or the box onto the crate, is refused; the message names the other.
     expect(b.exec('entity.move', { id: 3, positionMm: at(100, 0, 0) })).toMatchObject({
@@ -69,8 +69,8 @@ describe('entity.place and entity.move refuse overlaps with enclosures and mount
     const b = bus();
     b.exec('entity.place', { ref: PANEL, positionMm: at(-200, -250, 0) });
     const mountedOn = { entity: 1, mount: 'rail-1' };
-    expect(b.exec('entity.place', { ref: BREAKER, positionMm: at(-77, 55, 23), mountedOn }).ok).toBe(true);
-    expect(b.exec('entity.place', { ref: BREAKER, positionMm: at(-77, -120, 23) })).toMatchObject(refused('overlaps'));
+    expect(b.exec('entity.place', { ref: BREAKER, positionMm: at(-77, 55, 22), mountedOn }).ok).toBe(true);
+    expect(b.exec('entity.place', { ref: BREAKER, positionMm: at(-77, -120, 22) })).toMatchObject(refused('overlaps'));
     // A prop pushed into the breaker in front of the panel is refused against the mounted breaker too.
     expect(
       overlappingEntity(
@@ -84,7 +84,7 @@ describe('entity.place and entity.move refuse overlaps with enclosures and mount
       ),
     ).toBe(1);
     // Sliding the breaker along its rail is fine, and it never overlaps its own host.
-    expect(b.exec('entity.move', { id: 2, positionMm: at(-25, 55, 23) }).ok).toBe(true);
+    expect(b.exec('entity.move', { id: 2, positionMm: at(-25, 55, 22) }).ok).toBe(true);
   });
 
   it('free props and devices may still stack through the commands (pre-v3 logs do); the placement maths refuses them', () => {
@@ -153,7 +153,7 @@ describe('overlaps (property)', () => {
             const o = panel.transform.positionMm;
             b.exec('entity.place', {
               ref: BREAKER,
-              positionMm: at(o.x + 35 + op.x, o.y + 305, o.z + 23),
+              positionMm: at(o.x + 35 + op.x, o.y + 305, o.z + 22),
               mountedOn: { entity: panel.id, mount: 'rail-1' },
             });
           } else if (op.kind === 'move') {

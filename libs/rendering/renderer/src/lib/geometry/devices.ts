@@ -339,8 +339,9 @@ export interface DeviceEntryPart {
 }
 
 /**
- * Drawn diameters of a knockout or drill site, by trade size (mm). Renderer look only: roughly the
- * clearance hole a connector of that trade size needs, not catalogue data.
+ * Drawn diameters of a knockout or drill site, by trade size (mm): the standard knockout sizes (7/8, 1-3/32,
+ * 1-23/64, 1-23/32, 1-31/32 and 2-15/32 in, rounded to whole mm). Renderer look only: the
+ * hole a connector of that trade size goes through, not catalogue data.
  */
 const ENTRY_DIAMETER_MM: Readonly<Record<string, number>> = {
   '1/2': 22,
@@ -651,7 +652,7 @@ function boxEnclosureParts(def: DeviceDefinition): Part[] {
 export const DIN_MOUNT_CENTRE_MM = 45;
 
 /**
- * The DIN panel: an open-fronted case (the body of a box), the backplate (the `panel` slot, 3 mm thick,
+ * The DIN panel: an open-fronted case (the body of a box), the backplate (the `panel` slot, 2 mm thick as the entry says,
  * its front face the area mount's plane, inside a border as wide as the mount's offset) and a TS35
  * rail (the `accent` slot) along each `din35` mount, its centreline {@link DIN_MOUNT_CENTRE_MM} above
  * the mount origin (where a mounted device's bottom edge sits) and its back on the plate.
@@ -663,7 +664,7 @@ function panelEnclosureParts(def: DeviceDefinition): Part[] {
   const plate = mounts.find((m) => m.type === 'backplate');
   if (plate) {
     const { x, y, z } = plate.positionMm;
-    parts.push({ slot: 'panel', geometry: boxBetween(x, y, z - 3, w - x, h - y, z) });
+    parts.push({ slot: 'panel', geometry: boxBetween(x, y, z - 2, w - x, h - y, z) });
   }
   for (const m of mounts) {
     if (m.type !== 'din35') continue;
