@@ -21,6 +21,10 @@
  * over 32 loaded runs, the paired median 1.7× (docs/caveats/simulation.md). A regression in the case
  * moves every tᵢ and no cᵢ, so it still fails the gate on any machine, and nothing is skipped per OS.
  *
+ * The calibration has a warm-up of its own ({@link BenchCalibration.warmup}), run before each case it
+ * calibrates: with only the case's 10 warm-up pairs, some processes timed it while V8 was still
+ * re-optimising it, and its median moved by 1.4× between processes.
+ *
  * A smoke run (`sim bench --smoke`) proves the cases run, not how fast: every case does
  * {@link SMOKE_RUNS} timed runs and no warm-up, its invariant runs in its smoke form, and budgets are
  * reported but never fail it (a cold, three-run median is not a measurement). Determinism and the
@@ -37,6 +41,12 @@ export interface BenchCalibration {
   readonly name: string;
   /** The workload's median on the reference machine, in ms (a sourced constant). */
   readonly referenceMs: number;
+  /**
+   * Untimed runs of the calibration alone before each case it calibrates (before the case's own
+   * warm-up), so its code is fully optimised before the first timed pair. A non-negative integer;
+   * default 0. Not run in a smoke run.
+   */
+  readonly warmup?: number;
   /** The workload. Returns a checksum, which must be the same on every run. Never shares code with the case. */
   run(): string;
 }
@@ -165,12 +175,19 @@ export function runBenchCase(benchCase: BenchCase, now: () => number, smoke = fa
     if (!(calibration.referenceMs > 0)) {
       throw new RangeError(`bench case "${benchCase.name}": calibration referenceMs must be positive`);
     }
+    const calibrationWarmup = calibration.warmup ?? 0;
+    if (!Number.isInteger(calibrationWarmup) || calibrationWarmup < 0) {
+      throw new RangeError(`bench case "${benchCase.name}": calibration warmup must be a non-negative integer`);
+    }
   }
   const checksums = new Set<string>();
   const calibrationChecksums = new Set<string>();
   const full = (checksum: string) => (benchCase.checksum ? `${checksum}|${benchCase.checksum()}` : checksum);
   const warmup = smoke ? 0 : benchCase.warmup;
   const runs = smoke ? SMOKE_RUNS : benchCase.runs;
+  if (calibration && !smoke) {
+    for (let i = 0; i < (calibration.warmup ?? 0); i++) calibrationChecksums.add(calibration.run());
+  }
   for (let i = 0; i < warmup; i++) {
     benchCase.prepare?.();
     checksums.add(full(benchCase.run()));

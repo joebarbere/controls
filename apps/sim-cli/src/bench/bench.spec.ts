@@ -15,7 +15,7 @@ import {
   runBenchCase,
   SMOKE_RUNS,
 } from './bench';
-import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
+import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
 import { WATCHDOG_MS } from '@controls/sim-protocol';
 import { CABLE_ADD_BENCH_CONDUCTORS, cableAddBench } from './cable-add';
 import { BENCH_CASES, CABLE_ADD_BUDGET_MS, PENDING_BENCH_CASES } from './cases';
@@ -255,6 +255,39 @@ describe('runBenchCase with a calibration (F2.2 part 3b)', () => {
     expect(order).toEqual(['prepare', 'case', 'cal', ...timedRun, ...timedRun]);
   });
 
+  it("runs the calibration's own warm-up untimed before the case's, and not in a smoke run", () => {
+    const order: string[] = [];
+    let t = 0;
+    const clock = () => {
+      order.push('clock');
+      return (t += 1);
+    };
+    const benchCase = fixedCase({
+      warmup: 1,
+      runs: 1,
+      budgetMs: 100,
+      prepare: () => order.push('prepare'),
+      run: () => (order.push('case'), 'same'),
+      calibration: calibration({ warmup: 2, run: () => (order.push('cal'), 'cal') }),
+    });
+    runBenchCase(benchCase, clock);
+    const timedRun = ['prepare', 'clock', 'case', 'clock', 'clock', 'cal', 'clock'];
+    expect(order).toEqual(['cal', 'cal', 'prepare', 'case', 'cal', ...timedRun]);
+    order.length = 0;
+    runBenchCase(benchCase, clock, true);
+    expect(order).toEqual([...timedRun, ...timedRun, ...timedRun]);
+  });
+
+  it('fails when a calibration warm-up run disagrees with the timed ones', () => {
+    let i = 0;
+    const benchCase = fixedCase({
+      budgetMs: 100,
+      calibration: calibration({ warmup: 1, run: () => (i++ === 0 ? 'cold' : 'cal') }),
+    });
+    const result = runBenchCase(benchCase, steppingClock(interleaved([1, 1, 1], [2, 2, 2])));
+    expect(result).toMatchObject({ deterministic: false, ok: false });
+  });
+
   it('fails when the calibration is not deterministic, whatever the timing', () => {
     let i = 0;
     const benchCase = fixedCase({ budgetMs: 100, calibration: calibration({ run: () => `cal-${i++}` }) });
@@ -263,10 +296,14 @@ describe('runBenchCase with a calibration (F2.2 part 3b)', () => {
     expect(result.calibration?.checksum).toBeNull();
   });
 
-  it('refuses a calibration without a budget, or with a reference that is not positive', () => {
+  it('refuses a calibration without a budget, with a reference that is not positive, or a bad warm-up', () => {
     expect(() => runBenchCase(fixedCase({ calibration: calibration() }), steppingClock([]))).toThrow(RangeError);
     for (const referenceMs of [0, -1, Number.NaN]) {
       const benchCase = fixedCase({ budgetMs: 1, calibration: calibration({ referenceMs }) });
+      expect(() => runBenchCase(benchCase, steppingClock([]))).toThrow(RangeError);
+    }
+    for (const warmup of [-1, 1.5, Number.NaN]) {
+      const benchCase = fixedCase({ budgetMs: 1, calibration: calibration({ warmup }) });
       expect(() => runBenchCase(benchCase, steppingClock([]))).toThrow(RangeError);
     }
   });
@@ -276,6 +313,23 @@ describe('the calibration loop', () => {
   it('returns the same checksum on every run', () => {
     const first = runCalibration();
     for (let i = 0; i < 3; i++) expect(runCalibration()).toBe(first);
+  });
+
+  it('pins its workload by its checksum, so a change to it is seen (and re-baselined)', () => {
+    // gather : mix : allocate : walk. A different workload gives a different checksum: re-measure
+    // CALIBRATION_REFERENCE_MS (docs/caveats/simulation.md, "Re-baselining the calibration").
+    expect(runCalibration()).toBe('2258154.3884277344:472909995:539960:2068072');
+  });
+
+  it('warms up before every calibrated case', () => {
+    const calibrated = BENCH_CASES.filter((benchCase) => benchCase.calibration !== undefined);
+    expect(calibrated.map((benchCase) => benchCase.name)).toStrictEqual([
+      'plant-resolve-topology-change',
+      'plant-resolve-topology-change-wired',
+      'intermittent-toggle-wired',
+    ]);
+    for (const benchCase of calibrated) expect(benchCase.calibration?.warmup).toBe(CALIBRATION_WARMUP_RUNS);
+    expect(CALIBRATION_WARMUP_RUNS).toBeGreaterThan(0);
   });
 
   it('shares no code with what it calibrates: it imports nothing but a type', () => {

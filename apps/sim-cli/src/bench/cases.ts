@@ -17,7 +17,7 @@ import { materialiseWorld } from '@controls/sim-protocol';
 import { cableAddBench, type CableAddBench } from './cable-add';
 import { intermittentToggleCase, resolveWiredCase, TICK_WIRED_CASE } from './wired';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
-import { CALIBRATION_REFERENCE_MS, runCalibration } from './calibration';
+import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
 import {
   bytesPerRead,
@@ -46,6 +46,7 @@ const RESOLVE_BUDGET_MS = 2;
 const CALIBRATION: BenchCalibration = {
   name: 'calibration-loop',
   referenceMs: CALIBRATION_REFERENCE_MS.value,
+  warmup: CALIBRATION_WARMUP_RUNS,
   run: runCalibration,
 };
 
