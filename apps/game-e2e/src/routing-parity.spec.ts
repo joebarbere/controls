@@ -4,11 +4,13 @@ import { join } from 'node:path';
 
 /**
  * F3.2 part 1 (ADR 0017): the routing maths gives the same answers in Chromium as in Node. The routing
- * panel world (two ducts and a riser, twenty screw blocks, eight auto-routed wires) and its two digests
+ * parity world (two ducts and a riser, twenty screw blocks, eight auto-routed wires, a wire cut long
+ * enough to coil, a conductor pulled through an EMT stick and elbow, and a stud wall) and its two digests
  * are the files `libs/domain/world-model/src/lib/routing/parity.spec.ts` pins under Node:
  *
  * - `centreline`: the hash of the analytic bake (lanes, lead-outs, sag, elbows, the 0.1 mm quantum);
- * - `proposals`: the hash of what `autoRoute` and `snapWaypoint` propose on that world.
+ * - `proposals`: the hash of what `autoRoute` and `snapWaypoint` (duct, conduit, elbow port, staple and
+ *   bore, from fractional cursors) propose on that world.
  *
  * Here the bundled game computes both through the `?e2e=1` session hook. Regenerate the files with
  * `pnpm nx test world-model -u`, never here alone.

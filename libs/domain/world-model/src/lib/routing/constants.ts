@@ -40,16 +40,18 @@ export const ROUTE_FALLBACK_LEAD: SourcedLength = {
 };
 
 /**
- * The largest extra length a free span shows as sag, in percent of its chord. ADR 0010 measured 3 %
- * slack on a 300 mm span sagging 55 mm, "too much for panel wiring, which is dressed fairly taut"; 1 %
- * draws about 18 mm on the same span (h = √(3 c e / 8)).
+ * The largest extra length a free span shows as sag, in percent of its chord. game-design: ADR 0010's
+ * Verlet rope (which also stretches) sagged 55 mm on a 300 mm span at 3 % slack, "too much for panel
+ * wiring, which is dressed fairly taut"; this parabola gives 31.8 mm at 3 % and about 18 mm at 1 %
+ * (h = √(3 c e / 8)). A drawing abstraction: solid 14–12 AWG holds a bent shape rather than hanging.
  */
 export const FREE_SPAN_SAG_CAP_PERCENT = 1;
 
 /**
  * The largest extra length a run along a raceway takes up out of sight (loose in the duct or tube), in
- * percent of the run's length (game-design: a duct is where panel builders leave their spare; the
- * default 5 % slack of `routeDefaultLengthMm` always fits, so a default wire never coils).
+ * percent of the run's length (game-design: a duct is where panel builders leave their spare). With
+ * the default 5 % slack this takes all the spare only when raceway runs are at least about 40 % of the
+ * route; any rest is simply not drawn, and a default-length wire never coils (`COIL_MIN_PERCENT`).
  */
 export const RACEWAY_SLACK_CAP_PERCENT = 10;
 
@@ -85,7 +87,11 @@ export const AUTO_ROUTE_MAX_PAIRS = 16;
 /** The most candidate ducts per terminal the auto-router considers (nearest first). */
 export const AUTO_ROUTE_MAX_DUCTS = 4;
 
-/** A lane's width when the catalogue can't say how thick an occupant is (tenths of mm). */
+/**
+ * A lane's width when the catalogue can't say how thick an occupant is (tenths of mm). game-design: a
+ * fallback only (real widths come from the conductor or cable entry); about the outside diameter of a
+ * 14 AWG THHN conductor (about 2.8 mm, typical makers' spec sheets), rounded to 3 mm. Drawing only.
+ */
 export const DEFAULT_LANE_WIDTH_TENTHS = 30;
 
 /**

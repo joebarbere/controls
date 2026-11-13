@@ -2,6 +2,8 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import type { CommandBus } from '@controls/commands';
 import { createWorld, type World } from '@controls/save-format';
 import { autoRoute } from '../lib/routing/auto-route';
+import { routeDefaultLengthMm } from '../lib/routing/length';
+import { racewayPaths } from '../lib/routing/raceways';
 import { createWorldBus, createWorldRegistry } from '../lib/session';
 
 /*
@@ -120,4 +122,104 @@ export function racewayPanelBus(): CommandBus<World> {
   place('elbow.stavenor-emt-075', -88, -525, 88, 180_000);
   bus.clearHistory();
   return bus;
+}
+
+/** A drill bit ref for the parity snaps' bores (the snapper stores it, never checks it). */
+export const PARITY_BORE_TOOL = { id: 'tool.parity-bit', version: 1 };
+
+/** The parity world's stud wall (`studs`), well away from the panel. */
+export const PARITY_STUD_WALL = {
+  id: 'studs',
+  ref: { id: 'prop.stud-wall', version: 1 },
+  transform: { positionMm: at(-3000, 0, -1000), orientationMdeg: Z },
+  extensions: {},
+};
+
+/**
+ * The routing-parity world (F3.2 part 1, ADR 0017 §10): the wired routing panel plus what the bake and
+ * the snapper must also agree on across runtimes:
+ *
+ * - an EMT-lite run beside the panel: a 3/4 in stick (24) turned to run down, cut to 300 mm, and an
+ *   elbow (25) on its end, the raceway-panel scenario's pair moved 1 m along +x;
+ * - a conductor pulled through them (both ends free, built directly: no catalogue tool can pull yet),
+ *   so the bake draws a tube lane and the elbow's legs and arc;
+ * - a wire cut 5 m long on a short route (row A block 9's b to row B block 6's a), so the bake draws a
+ *   coil;
+ * - a stud wall fixture, so the digests include staple and bore snaps.
+ */
+export function routingParityWorld(): World {
+  const bus = routingPanelBus(true);
+  const run = (id: string, args: Record<string, unknown>) => {
+    const result = bus.exec(id, args);
+    if (!result.ok) throw new Error(`routingParityWorld: ${id} failed: ${result.error.message}`);
+  };
+  const quarter = (roll: number) => ({ yaw: 0, pitch: 0, roll });
+  run('entity.place', {
+    ref: { id: 'emt.stavenor-075', version: 1 },
+    positionMm: at(888, -225, 88),
+    orientationMdeg: quarter(270_000),
+  });
+  run('raceway.cut', { id: 24, lengthMm: 300 });
+  run('entity.place', {
+    ref: { id: 'elbow.stavenor-emt-075', version: 1 },
+    positionMm: at(912, -525, 88),
+    orientationMdeg: quarter(180_000),
+  });
+  const a = { entity: rowA(9), terminal: 'b', termination: 'auto' as const };
+  const b = { entity: rowB(6), terminal: 'a', termination: 'auto' as const };
+  const routed = autoRoute(bus.state, BUILTIN_CATALOG, a, b);
+  if (!routed.ok) throw new Error(`routingParityWorld: ${routed.message}`);
+  run('wire.add', {
+    ref: ROUTING_PANEL_REFS.wire,
+    a,
+    b,
+    route: routed.route,
+    lengthMm: 5000,
+    colour: { base: 'red', stripe: null },
+    tool: ROUTING_PANEL_REFS.cutter,
+  });
+  const world = bus.state;
+  const paths = racewayPaths(world, BUILTIN_CATALOG);
+  const stick = paths.find((p) => p.entity === 24);
+  const elbow = paths.find((p) => p.entity === 25);
+  if (!stick || !elbow) throw new Error('routingParityWorld: the conduit run is missing');
+  const conduit = (entity: number, positionMm: { x: number; y: number; z: number }) => ({
+    kind: 'conduit' as const,
+    positionMm,
+    entity,
+    fixture: null,
+    tool: null,
+  });
+  const free = (positionMm: { x: number; y: number; z: number }) => ({
+    kind: 'free' as const,
+    positionMm,
+    entity: null,
+    fixture: null,
+    tool: null,
+  });
+  const template = world.connections[0];
+  const id = world.nextConnectionId;
+  const route = [
+    free(at(900, -150, 100)),
+    conduit(24, stick.a),
+    conduit(25, elbow.a),
+    conduit(25, elbow.b),
+    free(at(elbow.b.x + 100, elbow.b.y, elbow.b.z)),
+  ];
+  const pulled = {
+    ...template,
+    id,
+    a: null,
+    b: null,
+    route,
+    lengthMm: routeDefaultLengthMm(route.map((w) => w.positionMm)),
+    colour: { base: 'blue', stripe: null },
+    label: null,
+  };
+  return {
+    ...world,
+    fixtures: [PARITY_STUD_WALL],
+    connections: [...world.connections, pulled],
+    nextConnectionId: id + 1,
+  };
 }

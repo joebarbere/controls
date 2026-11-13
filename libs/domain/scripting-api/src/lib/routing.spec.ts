@@ -145,7 +145,9 @@ describe('--route auto and game.autoRoute (F3.2 part 1, ADR 0017)', () => {
       { entity: 8, terminal: 'a' },
     );
     expect(g.autoRoute('5:a', '8:a')).toStrictEqual(direct);
-    expect(direct.ok && direct.lengthMm).toBe(direct.ok && routeDefaultLengthMm(direct.points));
+    expect(direct.ok).toBe(true);
+    if (!direct.ok) return;
+    expect(direct.lengthMm).toBe(routeDefaultLengthMm(direct.points));
     expect(() => g.autoRoute('5', '8:a')).toThrow(/entityId/);
     expect(g.autoRoute('5:a', '99:a')).toMatchObject({ ok: false, code: 'not-found' });
   });

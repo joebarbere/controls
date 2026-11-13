@@ -7,6 +7,12 @@ import { autoRoute } from './auto-route';
 import { bakeWorldRoutes, centrelineHash } from './bake';
 import { racewayPaths } from './raceways';
 import { snapWaypoint } from './snap';
+import { fixtureSnapTarget, fixtureSpec } from '../fixtures';
+import { studCentres, type WallStudsTarget } from '../snap/snap';
+import { surfaceToWorld } from '../snap/surface';
+
+/** The bit the parity digests' bore snaps name (the snapper stores it, never checks it). */
+const PARITY_BORE = { id: 'tool.parity-bit', version: 1 };
 
 /*
  * The routing goldens that must be equal in Node and Chromium (ADR 0017; plan F3.2 part 1,
@@ -21,8 +27,9 @@ export interface RoutingDigests {
   readonly centreline: string;
   /**
    * SHA-256 of the canonical JSON of `autoRoute` between the two landed ends of every routed conductor
-   * (by id, with its stored termination methods), and `snapWaypoint` at a point 7, 5 and 3 mm off each
-   * raceway's axis midpoint.
+   * (by id, with its stored termination methods), `snapWaypoint` at a fractional point off each
+   * raceway's axis midpoint and near its b end (ducts, conduit sticks, elbow ports), and staple and bore snaps either side
+   * of each stud wall's first two studs.
    */
   readonly proposals: string;
 }
@@ -36,10 +43,32 @@ export function routingDigests(world: World, catalog: Catalog): RoutingDigests {
     const b = { entity: c.b.entity, terminal: c.b.terminal, termination: { method: c.b.termination.method } };
     routes.push([c.id, autoRoute(world, catalog, a, b)]);
   }
-  const snaps = racewayPaths(world, catalog).map((p) => {
-    const cursor = { x: (p.a.x + p.b.x) / 2 + 7, y: (p.a.y + p.b.y) / 2 + 5, z: (p.a.z + p.b.z) / 2 + 3 };
-    return [p.entity, snapWaypoint(world, catalog, cursor)];
+  const snaps: unknown[] = racewayPaths(world, catalog).flatMap((p) => {
+    const middle = { x: (p.a.x + p.b.x) / 2 + 7.3, y: (p.a.y + p.b.y) / 2 + 5.5, z: (p.a.z + p.b.z) / 2 + 3.2 };
+    const nearB = { x: p.b.x + 2.6, y: p.b.y - 1.4, z: p.b.z + 0.7 };
+    return [
+      [p.entity, 'middle', snapWaypoint(world, catalog, middle)],
+      [p.entity, 'b', snapWaypoint(world, catalog, nearB)],
+    ];
   });
+  // Staples and bores: either side of each stud wall's first two studs, at a fractional height.
+  for (const fixture of world.fixtures) {
+    if (fixtureSpec(fixture.ref)?.kind !== 'stud-wall') continue;
+    const target = fixtureSnapTarget(fixture) as WallStudsTarget | null;
+    if (target === null) continue;
+    for (const u of studCentres(target).slice(0, 2)) {
+      for (const du of [-9.4, 12.6]) {
+        const cursor = surfaceToWorld(target.frame, { u: u + du, v: 1200 }, -30);
+        const at = { ...cursor, y: cursor.y + 0.4 };
+        snaps.push([
+          fixture.id,
+          u,
+          du,
+          snapWaypoint(world, catalog, at, { kinds: ['staple', 'bore'], boreTool: PARITY_BORE }),
+        ]);
+      }
+    }
+  }
   return {
     centreline: centrelineHash(bakeWorldRoutes(world, catalog)),
     proposals: sha256Hex(canonicalJson({ routes, snaps })),

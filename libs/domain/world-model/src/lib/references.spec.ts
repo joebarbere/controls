@@ -1,6 +1,7 @@
 import { LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { WIRING_TEST_CATALOG } from '../testing/wiring-catalog';
 import { at, BIT, type Doc, FERRULE, LEAD, termination, wiredWorldDoc as base, WIRE } from '../testing/wired-world';
+import { BENCH_STUD_WALL } from '../testing/wiring-bench';
 import { checkWorldReferences } from './devices';
 
 /*
@@ -122,15 +123,42 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
     ]);
   });
 
-  it('a bore waypoint names a tool that can bore; a known host is axis-aligned', () => {
-    const bore = (tool: object) =>
-      edit((d) =>
+  it('a bore waypoint names a tool that can bore, on a stud wall; a known host is axis-aligned', () => {
+    const bore = (tool: object, host: object = { entity: null, fixture: 'studs' }) =>
+      edit((d) => {
+        d['fixtures'] = [BENCH_STUD_WALL];
         Object.assign(d.connections[0], {
-          route: [{ kind: 'bore', positionMm: at(50, 1150, -1700), entity: 3, fixture: null, tool }],
-        }),
-      );
+          route: [{ kind: 'bore', positionMm: at(50, 1150, -1700), tool, ...host }],
+        });
+      });
     expect(check(bore(BIT))).toStrictEqual([]);
     expect(messages(bore(FERRULE))).toContain('connections[0].route[0].tool: Not a tool');
+    // ADR 0017's host rule at load: a bore in an entity (the panel) is refused, as the commands refuse it.
+    expect(messages(bore(BIT, { entity: 3, fixture: null }))).toStrictEqual([
+      'connections[0].route[0].entity: Not a host for this waypoint: a bore waypoint is on a stud wall, not an entity',
+    ]);
+    // A duct waypoint on a known device that isn't a duct (the battery), or on the stud wall.
+    const duct = (host: object) =>
+      edit((d) => {
+        d['fixtures'] = [BENCH_STUD_WALL];
+        Object.assign(d.connections[0], {
+          route: [{ kind: 'duct', positionMm: at(50, 1150, -1700), tool: null, ...host }],
+        });
+      });
+    expect(messages(duct({ entity: 5, fixture: null }))).toStrictEqual([
+      "connections[0].route[0].entity: Not a host for this waypoint: entity 5 isn't a duct part",
+    ]);
+    expect(messages(duct({ entity: null, fixture: 'studs' }))).toStrictEqual([
+      'connections[0].route[0].fixture: Not a host for this waypoint: a duct waypoint is on a duct part, not a fixture',
+    ]);
+    // A host the catalogue doesn't know is left alone.
+    const modHost = edit((d) => {
+      Object.assign(d.connections[0], {
+        route: [{ kind: 'duct', positionMm: at(50, 1150, -1700), entity: 5, fixture: null, tool: null }],
+      });
+      Object.assign(d.entities[4], { ref: { id: 'duct.mod-x', version: 1 }, state: {}, sim: {} });
+    });
+    expect(messages(modHost).filter((m) => m.startsWith('connections[0].route'))).toStrictEqual([]);
     const tilted = edit((d) => {
       Object.assign(d.connections[0], {
         route: [{ kind: 'duct', positionMm: at(50, 1150, -1700), entity: 5, fixture: null, tool: null }],

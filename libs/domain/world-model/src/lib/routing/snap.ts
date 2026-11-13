@@ -1,7 +1,7 @@
 import type { Catalog } from '@controls/catalog';
 import { fixtureSnapTarget, fixtureSpec } from '../fixtures';
 import { WALL_STUD_DEPTH } from '../snap/constants';
-import { studCentres, type WallStudsTarget } from '../snap/snap';
+import { SNAP_STEPS, studCentres, type WallStudsTarget } from '../snap/snap';
 import { surfaceToWorld, worldToSurface } from '../snap/surface';
 import type { CatalogRef, PositionMm, Waypoint, World } from '../types';
 import { ROUTE_SNAP_CAPTURE } from './constants';
@@ -16,9 +16,13 @@ import { distance2 } from './vec';
  * - `duct`: the nearest point of a duct's axis (the middle of its trough, `racewayPath`);
  * - `conduit`: the nearest point of an EMT-lite stick's or connector's axis, or the nearer port of an
  *   elbow (a waypoint mid-bend would cut the corner);
- * - `staple`: on a stud's face (a `prop.stud-wall` fixture), at the stud's centre line and the cursor's
- *   height (whole mm, on the wall);
- * - `bore`: on a stud's axis at its mid-depth (⌊88.9 / 2⌉ = 44 mm behind the face), at the cursor's
+ * - `staple`: on the side face of a stud (a `prop.stud-wall` fixture) that faces the cursor (half a
+ *   stud's thickness, rounded up as `snapToWallStuds` does, either side of its centre line; the side
+ *   inside the wall at an end stud), set back to the stud's mid-depth like a bore, at the cursor's
+ *   height. A cable run along a stud is set back from its nailing edge, never on it (NFPA 70 Art.
+ *   300.4(D), cited by number: at least 1-1/4 in (31.75 mm) from the edge, or a steel plate); the
+ *   mid-depth gives 44 mm;
+ * - `bore`: on a stud's axis at its mid-depth ({@link BORE_DEPTH_MM} behind the face), at the cursor's
  *   height; only when the caller names the bit or hole saw (`boreTool`), which a bore stores.
  *
  * The nearest candidate within {@link ROUTE_SNAP_CAPTURE} wins (ties: duct, conduit, staple, bore, then
@@ -39,7 +43,12 @@ export interface SnapWaypointOptions {
 
 const KIND_ORDER: readonly HostedWaypointKind[] = ['duct', 'conduit', 'staple', 'bore'];
 
-/** A bore's depth behind the stud face: the stud's mid-plane, whole mm. */
+/**
+ * A bore's (and a staple's) depth behind the stud face: the stud's mid-depth, round(88.9 / 2) = 44 mm.
+ * Source: common practice; centring maximises both edge distances, which NFPA 70 Art. 300.4(A)(1)
+ * (cited by number) requires to be at least 1-1/4 in (31.75 mm), or a 1/16 in steel plate. A bit wider
+ * than about 24.9 mm leaves less than that on the face side (F3.2 part 4's edge-distance check).
+ */
 export const BORE_DEPTH_MM = Math.round(WALL_STUD_DEPTH.valueMm / 2);
 
 interface Candidate {
@@ -94,10 +103,18 @@ export function snapWaypoint(
       if (target === null || target.kind !== 'wall-studs') continue;
       const local = worldToSurface(target.frame, at);
       const v = Math.min(Math.max(local.v, 0), target.heightMm);
+      const half = SNAP_STEPS.studHalfThicknessMm;
       for (const [index, u] of studCentres(target).entries()) {
         const host = `${fixture.id}\u0000${String(index).padStart(4, '0')}`;
         const base = { entity: null, fixture: fixture.id, tool: null };
-        if (staples) offer('staple', { ...base, positionMm: surfaceToWorld(target.frame, { u, v }) }, host);
+        if (staples) {
+          // The side face towards the cursor, unless that side is outside the wall (an end stud).
+          let side = local.u >= u ? u + half : u - half;
+          if (side < 0) side = u + half;
+          if (side > target.widthMm) side = u - half;
+          const positionMm = surfaceToWorld(target.frame, { u: side, v }, -BORE_DEPTH_MM);
+          offer('staple', { ...base, positionMm }, host);
+        }
         if (bores) {
           offer(
             'bore',

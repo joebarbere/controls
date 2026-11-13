@@ -2,14 +2,35 @@
   "schemaVersion": 3,
   "seed": 0,
   "tick": 0,
-  "nextEntityId": 24,
-  "nextConnectionId": 9,
+  "nextEntityId": 26,
+  "nextConnectionId": 11,
   "nextCableId": 1,
-  "nextTerminationId": 17,
+  "nextTerminationId": 19,
   "regionId": "nec",
   "difficulty": "trainee",
   "assisted": false,
-  "fixtures": [],
+  "fixtures": [
+    {
+      "id": "studs",
+      "ref": {
+        "id": "prop.stud-wall",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": -3000,
+          "y": 0,
+          "z": -1000
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "extensions": {}
+    }
+  ],
   "entities": [
     {
       "id": 1,
@@ -564,6 +585,56 @@
           "yaw": 0,
           "pitch": 0,
           "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 24,
+      "ref": {
+        "id": "emt.stavenor-075",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 888,
+          "y": -225,
+          "z": 88
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 270000
+        }
+      },
+      "state": {
+        "lengthMm": 300
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 25,
+      "ref": {
+        "id": "elbow.stavenor-emt-075",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 912,
+          "y": -525,
+          "z": 88
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 180000
         }
       },
       "state": {},
@@ -1312,6 +1383,215 @@
       "lengthMm": 614,
       "colour": {
         "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 9,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 13,
+        "terminal": "b",
+        "termination": {
+          "id": 17,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 20,
+        "terminal": "a",
+        "termination": {
+          "id": 18,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 77,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 359,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 5000,
+      "colour": {
+        "base": "red",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 10,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": null,
+      "b": null,
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 900,
+            "y": -150,
+            "z": 100
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "conduit",
+          "positionMm": {
+            "x": 900,
+            "y": -225,
+            "z": 100
+          },
+          "entity": 24,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "conduit",
+          "positionMm": {
+            "x": 900,
+            "y": -525,
+            "z": 100
+          },
+          "entity": 25,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "conduit",
+          "positionMm": {
+            "x": 722,
+            "y": -703,
+            "z": 100
+          },
+          "entity": 25,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 822,
+            "y": -703,
+            "z": 100
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 764,
+      "colour": {
+        "base": "blue",
         "stripe": null
       },
       "label": null,

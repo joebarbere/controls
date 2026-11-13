@@ -9,10 +9,6 @@ const at = (x: number, y: number, z: number) => ({ x, y, z });
 const free = (x: number, y: number, z: number) => ({ p: at(x, y, z), host: null });
 /** Point k of a baked route, in tenths of mm. */
 const point = (points: readonly number[], k: number) => points.slice(3 * k, 3 * k + 3);
-const containsPoint = (points: readonly number[], p: readonly number[]) =>
-  Array.from({ length: points.length / 3 }, (_, k) => point(points, k)).some(
-    (q) => q[0] === p[0] && q[1] === p[1] && q[2] === p[2],
-  );
 
 /** A pulled 14 AWG conductor with both ends free on `route` (built directly: the bake reads any world). */
 function pulled(world: World, id: number, route: Waypoint[], lengthMm: number): Connection {
@@ -110,13 +106,15 @@ describe('bakeWorldRoutes', () => {
     ];
     const world = { ...bus.state, connections: [pulled(bus.state, 1, route, 1000)], nextConnectionId: 2 };
     const [baked] = bakeWorldRoutes(world, BUILTIN_CATALOG).routes;
-    // A lone conductor's lane is the tube's axis: free, the stick's two ends, the elbow's 7 arc points
-    // and its far leg end (its near leg end is the stick's end), then the free rest point. The stick and
-    // the elbow are taut, so the only sag samples are on the two free spans.
-    const inside = bakeWorldRoutes(world, BUILTIN_CATALOG).routes[0].points;
-    expect(inside).toStrictEqual(baked.points);
-    const arc = (elbow?.centreline ?? []).map((c) => [c.x, c.y, c.z].map((v) => Math.round(v * 10) + 0));
-    for (const p of arc) expect(containsPoint(baked.points, p)).toBe(true);
+    // A lone conductor's lane is the tube's axis, and inside the conduit the run is taut: from the
+    // stick's entry end the baked points are exactly the stick's far end (the elbow's near port), the
+    // elbow's seven arc points and its far port, with no sag sample in between.
+    const q = (c: { x: number; y: number; z: number }) => [c.x, c.y, c.z].map((v) => Math.round(v * 10) + 0);
+    const inside = [stick?.a, ...(elbow?.centreline ?? [])].map((c) => q(c ?? at(0, 0, 0)));
+    const points = Array.from({ length: baked.points.length / 3 }, (_, k) => point(baked.points, k));
+    const from = points.findIndex((p) => p.join() === inside[0].join());
+    expect(from).toBeGreaterThan(0); // after the free span's sag samples
+    expect(points.slice(from, from + inside.length)).toStrictEqual(inside);
   });
 
   it('a tube stacks its occupants about its axis, centred', () => {

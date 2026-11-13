@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { racewayPanelBus, routingPanelBus } from '../../testing/routing-panel';
 import { createWorldBus } from '../session';
 import { connectorEntries, connectorEntry } from './connector-entry';
-import { racewayPaths } from './raceways';
+import { nearestOnAxis, racewayPaths } from './raceways';
 import { BORE_DEPTH_MM, snapWaypoint } from './snap';
 
 const at = (x: number, y: number, z: number) => ({ x, y, z });
@@ -64,17 +64,24 @@ describe('snapWaypoint (ADR 0017)', () => {
     });
   });
 
-  it('captures a staple on a stud face and, given a bit, a bore at the stud’s mid-depth', () => {
+  it('captures a staple on the stud side facing the cursor, set back to mid-depth, and a bore on the stud axis', () => {
     const world = { ...panel, fixtures: [studWall] };
-    // The first stud's centre is 19 mm along the wall: (−2981, ·, −3000).
-    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2975, 1203.6, -2990))).toStrictEqual({
+    expect(BORE_DEPTH_MM).toBe(44);
+    // The first stud's centre is 19 mm along the wall (x = −2981); its sides are 20 mm either way
+    // (half of 38.1 rounded up, as snapToWallStuds sets boxes against studs), 44 mm behind the face.
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2965, 1203.6, -3040))).toStrictEqual({
       kind: 'staple',
-      positionMm: at(-2981, 1204, -3000),
+      positionMm: at(-2961, 1204, -3044),
       entity: null,
       fixture: 'studs',
       tool: null,
     });
-    expect(BORE_DEPTH_MM).toBe(44);
+    // Left of the end stud, its left side would be outside the wall: the right side is used.
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2995, 1204, -3040)).positionMm).toStrictEqual(
+      at(-2961, 1204, -3044),
+    );
+    // The second stud (u = round(19 + 406.4) = 425, x = −2575), approached from its left.
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2590, 500, -3040)).positionMm).toStrictEqual(at(-2595, 500, -3044));
     const bore = snapWaypoint(world, BUILTIN_CATALOG, at(-2981, 1204, -3040), { kinds: ['bore'], boreTool: BIT });
     expect(bore).toStrictEqual({
       kind: 'bore',
@@ -87,15 +94,40 @@ describe('snapWaypoint (ADR 0017)', () => {
     expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2981, 1204, -3040), { kinds: ['bore'] }).kind).toBe('free');
   });
 
-  it('always returns integer positions within the capture distance of the cursor (property)', () => {
-    const coordinate = fc.integer({ min: -200, max: 900 });
+  it('gives integer points within the capture distance, a captured one on its host’s axis (property)', () => {
+    // Fractional cursors as a ray hit gives them, mostly near a duct (mapped draws, never filtered).
+    const paths = racewayPaths(panel, BUILTIN_CATALOG);
+    const offset = fc.double({ min: -45, max: 45, noNaN: true });
+    const near = fc
+      .record({
+        i: fc.integer({ min: 0, max: paths.length - 1 }),
+        t: fc.double({ min: 0, max: 1, noNaN: true }),
+        dx: offset,
+        dy: offset,
+        dz: offset,
+      })
+      .map(({ i, t, dx, dy, dz }) => {
+        const { a, b } = paths[i];
+        return { x: a.x + (b.x - a.x) * t + dx, y: a.y + (b.y - a.y) * t + dy, z: a.z + (b.z - a.z) * t + dz };
+      });
+    const anywhere = fc.record({
+      x: fc.double({ min: -200, max: 900, noNaN: true }),
+      y: fc.double({ min: -200, max: 900, noNaN: true }),
+      z: fc.double({ min: -50, max: 120, noNaN: true }),
+    });
     fc.assert(
-      fc.property(fc.record({ x: coordinate, y: coordinate, z: fc.integer({ min: -50, max: 120 }) }), (cursor) => {
+      fc.property(fc.oneof({ arbitrary: near, weight: 4 }, { arbitrary: anywhere, weight: 1 }), (cursor) => {
         const w = snapWaypoint(panel, BUILTIN_CATALOG, cursor);
-        for (const v of Object.values(w.positionMm)) expect(Number.isSafeInteger(v)).toBe(true);
+        for (const v of Object.values(w.positionMm)) expect(Number.isSafeInteger(v) && !Object.is(v, -0)).toBe(true);
         const d = w.positionMm;
-        const d2 = (d.x - cursor.x) ** 2 + (d.y - cursor.y) ** 2 + (d.z - cursor.z) ** 2;
-        expect(d2).toBeLessThanOrEqual(40 * 40);
+        const r = { x: Math.round(cursor.x) + 0, y: Math.round(cursor.y) + 0, z: Math.round(cursor.z) + 0 };
+        expect((d.x - r.x) ** 2 + (d.y - r.y) ** 2 + (d.z - r.z) ** 2).toBeLessThanOrEqual(40 * 40);
+        if (w.kind === 'duct') {
+          const host = paths.find((p) => p.entity === w.entity);
+          expect(host && nearestOnAxis(host, d).d2).toBe(0);
+        } else {
+          expect(w).toMatchObject({ kind: 'free', positionMm: r });
+        }
         expect(snapWaypoint(panel, BUILTIN_CATALOG, cursor)).toStrictEqual(w);
       }),
     );

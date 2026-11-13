@@ -2,7 +2,7 @@ import { BUILTIN_CATALOG } from '@controls/catalog';
 import { createWorld } from '@controls/save-format';
 import { racewayPanelBus, ROUTING_PANEL_REFS, routingPanelBus, rowA, rowB } from '../../testing/routing-panel';
 import { createWorldBus, createWorldRegistry } from '../session';
-import { autoRoute, ductJunction } from './auto-route';
+import { autoRoute, type AutoRouteResult, ductJunction } from './auto-route';
 import { routeCollision } from './collide';
 import { routeFloorMm } from './floor';
 import { racewayPaths } from './raceways';
@@ -16,6 +16,12 @@ const duct = (entity: number, x: number, y: number, z: number) => ({
   tool: null,
 });
 const end = (entity: number, terminal: string) => ({ entity, terminal, termination: 'auto' as const });
+/** The proposal of a result that must be one (fails the test, rather than comparing two failures, otherwise). */
+function proposed(result: AutoRouteResult): Extract<AutoRouteResult, { ok: true }> {
+  expect(result).toMatchObject({ ok: true });
+  if (!result.ok) throw new Error(result.message);
+  return result;
+}
 
 describe('autoRoute (ADR 0017)', () => {
   it('a hand-measured route: two screw blocks on rail 1 down into the duct below (raceway-panel)', () => {
@@ -32,7 +38,6 @@ describe('autoRoute (ADR 0017)', () => {
       floorMm: 80,
       points: [at(-66, 126, 52), at(-66, 90, 44), at(-60, 90, 44), at(-60, 126, 52)],
     });
-    expect(Math.sqrt(36 * 36 + 8 * 8)).toBeCloseTo(36.878, 3);
     // The command takes exactly what the router proposed, and nothing shorter than the floor.
     const args = {
       ref: ROUTING_PANEL_REFS.wire,
@@ -44,16 +49,20 @@ describe('autoRoute (ADR 0017)', () => {
     };
     expect(bus.exec('wire.add', { ...args, lengthMm: 79 })).toMatchObject({ ok: false, error: { code: 'too-short' } });
     expect(bus.exec('wire.add', { ...args, lengthMm: 84 }).ok).toBe(true);
+    // The boundary is the floor (80), not the default (84).
+    expect(bus.exec('edit.undo').ok).toBe(true);
+    expect(bus.exec('wire.add', { ...args, lengthMm: 80 }).ok).toBe(true);
   });
 
   it('enters the duct ahead of each terminal, and crosses between ducts through the riser', () => {
     const bus = routingPanelBus();
     // Row A's terminal a (y = 108, exit +y) goes up into D2 (axis y = 320) though D1 (y = 20) is nearer.
     const up = autoRoute(bus.state, BUILTIN_CATALOG, end(rowA(1), 'a'), end(rowB(1), 'a'));
-    expect(up.ok && up.route).toStrictEqual([duct(2, 29, 320, 30), duct(2, 329, 320, 30)]);
+    expect(proposed(up).route).toStrictEqual([duct(2, 29, 320, 30), duct(2, 329, 320, 30)]);
     // a into D2, b into D1: along D2 to its end, across to the riser, down it, across to D1 and back.
     const round = autoRoute(bus.state, BUILTIN_CATALOG, end(rowA(2), 'a'), end(rowB(2), 'b'));
-    expect(round.ok && round.route).toStrictEqual([
+    const riser = proposed(round);
+    expect(riser.route).toStrictEqual([
       duct(2, 35, 320, 30),
       duct(2, 600, 320, 30),
       duct(3, 620, 320, 30),
@@ -62,14 +71,23 @@ describe('autoRoute (ADR 0017)', () => {
       duct(1, 335, 20, 30),
     ]);
     // The floor: 212 up, 565 along, 20 across, 300 down the riser, 20 across, 265 along, 180 down.
-    expect(round.ok && round.floorMm).toBe(212 + 565 + 20 + 300 + 20 + 265 + 180);
-    expect(round.ok && round.lengthMm).toBe(1562 + Math.ceil((1562 * 5) / 100));
+    expect(riser.floorMm).toBe(212 + 565 + 20 + 300 + 20 + 265 + 180);
+    expect(riser.lengthMm).toBe(1562 + Math.ceil((1562 * 5) / 100));
   });
 
   it('every proposal is one the command accepts (the whole routing panel wires)', () => {
     const bus = routingPanelBus(true);
     expect(bus.state.connections).toHaveLength(8);
     for (const c of bus.state.connections) expect(c.route?.every((w) => w.kind === 'duct')).toBe(true);
+  });
+
+  it('a duct that hosts a route is occupied: it can be neither moved nor deleted', () => {
+    const bus = routingPanelBus(true);
+    expect(bus.exec('entity.move', { id: 1, positionMm: at(0, -100, 0) })).toMatchObject({
+      ok: false,
+      error: { code: 'occupied' },
+    });
+    expect(bus.exec('entity.delete', { id: 1 })).toMatchObject({ ok: false, error: { code: 'occupied' } });
   });
 
   it('with no duct: the direct line, else a lead-out from each terminal, else route-collides', () => {
@@ -88,7 +106,7 @@ describe('autoRoute (ADR 0017)', () => {
     // A block in the way (x 50 … 56) between the two a terminals: out 50 mm along +y and across.
     place(50, 20);
     const around = autoRoute(bus.state, BUILTIN_CATALOG, end(1, 'a'), end(2, 'a'));
-    expect(around.ok && around.route.map((w) => [w.kind, w.positionMm])).toStrictEqual([
+    expect(proposed(around).route.map((w) => [w.kind, w.positionMm])).toStrictEqual([
       ['free', at(3, 98, 30)],
       ['free', at(103, 98, 30)],
     ]);
@@ -125,7 +143,8 @@ describe('autoRoute (ADR 0017)', () => {
     const bus = routingPanelBus();
     const once = autoRoute(bus.state, BUILTIN_CATALOG, end(rowB(5), 'a'), end(rowA(5), 'b'));
     expect(autoRoute(bus.state, BUILTIN_CATALOG, end(rowB(5), 'a'), end(rowA(5), 'b'))).toStrictEqual(once);
-    expect(once.ok && routeFloorMm(once.points)).toBe(once.ok && once.floorMm);
+    const pure = proposed(once);
+    expect(routeFloorMm(pure.points)).toBe(pure.floorMm);
   });
 });
 
