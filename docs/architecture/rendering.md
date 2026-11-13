@@ -280,6 +280,37 @@ flowchart LR
 - **Terminal blocks** sit on a rail centred (their fit's `crossMm`), and a device narrower than `NARROW_RAIL_DEVICE` (17 mm) snaps at multiples of its own width from the rail's start instead of to DIN module slots, so blocks of one width pack with no gaps.
 - **Recipes**: a duct is a base and two walls of a solid band and fingers (slot and finger widths from the entry, at most 256 fingers a wall); a stick a tube in its even-rounded body with a dark bore at each end; an elbow a straight leg, a quarter torus and another leg from end a to end b; a connector a hex shoulder and gland outside the wall, its throat and locknut drawn inside (beyond its body box on purpose); a terminal block a body, a DIN foot at its mid-height, a marker carrier, a screw or spring release and a dark entry per terminal, green with a yellow stripe for the ground block.
 
+## Routing maths and the bake (F3.2 part 1)
+
+Headless and GPU-free, in `@controls/world-model` `routing/` under the D6 lint ([ADR 0017](../decisions/0017-routing-and-bake.md)). The renderer draws what it produces (F3.2 part 2) and binds its pickers to it (part 3); it never routes or bakes on its own.
+
+```mermaid
+flowchart LR
+  subgraph surfaces [Surfaces: propose, then log explicit waypoints]
+    M[Mouse two-click<br/>F3.2 part 3]
+    C["Console --route auto"]
+    S[game.autoRoute]
+  end
+  M --> AR[autoRoute]
+  C --> AR
+  S --> AR
+  AR --> TP[terminalPlace<br/>entry point + exit axis]
+  AR --> RP[racewayPaths<br/>duct axes, junctions, riser]
+  AR --> RC[routeCollision<br/>same check as the command]
+  AR --> L["wire.add {route, lengthMm}"]
+  SW[snapWaypoint<br/>duct, conduit, staple, bore] --> L
+  L --> W[(World v3:<br/>waypoints + lengthMm)]
+  W --> LA[assignLanes<br/>by cable id, then connection id]
+  W --> B[bakeWorldRoutes<br/>taut in raceways, parabolic sag,<br/>0.1 mm quantum]
+  LA --> B
+  B --> R[Wire renderer<br/>F3.2 part 2]
+  B --> H[centrelineHash<br/>Node = Chromium golden]
+```
+
+- **Auto-route:** each terminal enters the nearest duct ahead of its exit direction (then nearest, then lowest id) at the axis point nearest it; ducts whose bodies touch join where their axes come closest; Dijkstra finds the path; the first candidate pair clear of every body wins; fallbacks are the direct line and a 50 mm lead-out from each terminal.
+- **Bake:** a straight 12 mm lead-out from each landed terminal; hosted waypoints moved onto their lanes; taut segments between hosted waypoints (an elbow's legs and arc between two of its ports); spare length as parabolic sag on free spans (at most 1 % of each chord), then hidden in raceway runs (up to 10 %), then a coil only when more than 20 % of the cut length is left. 500 wires bake in about 2 ms (`route-bake-500-wires`, budget 16 ms).
+- **Never persisted:** the bake, lanes and proposals; the world stores waypoints and `lengthMm` only.
+
 ## Snapping (pure, integer mm, `@controls/world-model`)
 
 `snap(target, footprint, cursorWorld)` converts the cursor into the target's surface frame and returns the footprint's lower-left **anchor** in surface and world integer mm plus the target's normal, or a typed failure (`out-of-capture`, `out-of-bounds`, `too-large`). Vertical frames face ±x or ±z (`u` = right, `v` = up); since F1.9 a horizontal frame faces `+y` (`u` = its `right`, `v` = away from the front edge). An entity's `positionMm` is that world anchor; its prop geometry spans +x, +y, +z from it, turned by `orientationForFrame`: a yaw quarter-turn on a wall, plus pitch -90° on a bench top so the prop's depth stands up.

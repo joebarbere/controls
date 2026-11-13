@@ -255,7 +255,7 @@ function call(world: World, op: Op): [string, Record<string, unknown>] | null {
       const conduit = (x: number) => ({
         kind: 'conduit',
         positionMm: at(x, 2500, 0),
-        entity: 5,
+        entity: 6, // the bench's conduit stick (ADR 0017 host rule)
         fixture: null,
         tool: null,
       });
@@ -349,7 +349,7 @@ describe('world v3 command properties', () => {
   it('every reachable world is valid; undo-all restores it; replay reaches the live hash', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {
-        const bus = wiringBench();
+        const bus = wiringBench('trainee', 7, { conduit: true });
         const initial = bus.state;
         for (const op of ops) {
           run(bus, op);
@@ -370,7 +370,7 @@ describe('world v3 command properties', () => {
   it('new ids are exactly their counters; counters never go down except by undo; only undo and redo re-add old ids', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {
-        const bus = wiringBench();
+        const bus = wiringBench('trainee', 7, { conduit: true });
         for (const op of ops) {
           const before = bus.state;
           const result = run(bus, op);
@@ -411,7 +411,7 @@ describe('world v3 command properties', () => {
   it('land and unland never change a route’s waypoints plus landed ends', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {
-        const bus = wiringBench();
+        const bus = wiringBench('trainee', 7, { conduit: true });
         for (const op of ops) {
           const before = routeCounts(bus.state);
           const result = run(bus, op);
@@ -454,7 +454,7 @@ describe('world v3 command properties', () => {
     });
     fc.assert(
       fc.property(opsArb, opArb, fc.integer({ min: 1, max: 9 }), (prefix, op, n) => {
-        const setup = wiringBench();
+        const setup = wiringBench('trainee', 7, { conduit: true });
         prefix.forEach((p) => run(setup, p));
         const plain = createWorldBus(setup.state, createWorldRegistry({ catalog: WIRING_TEST_CATALOG }));
         const scrambled = createWorldBus(
@@ -474,7 +474,7 @@ describe('world v3 command properties', () => {
   it('the generator reaches every command (generator health)', () => {
     const succeeded = new Map<string, number>();
     for (const ops of fc.sample(opsArb, { seed: 20261112, numRuns: 500 })) {
-      const bus = wiringBench();
+      const bus = wiringBench('trainee', 7, { conduit: true });
       for (const op of ops) {
         const exec = call(bus.state, op);
         if (exec && bus.exec(exec[0], exec[1]).ok) succeeded.set(exec[0], (succeeded.get(exec[0]) ?? 0) + 1);

@@ -48,9 +48,32 @@ export function screwTermination(torqueNm = 4, hole = 'h14s', lengthMm = 13) {
   };
 }
 
+/** A stud wall fixture (`studs`) behind the bench, for staple and bore waypoints (ADR 0017's host rule). */
+export const BENCH_STUD_WALL = {
+  id: 'studs',
+  ref: { id: 'prop.stud-wall', version: 1 },
+  transform: { positionMm: at(-3000, 0, -3000), orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
+  extensions: {},
+};
+
+/** An EMT-lite 3/4 in stick (entity 6 with `conduit`), its axis along +x at y = 2500, z = 0 from x = 400 to 1400. */
+export const BENCH_CONDUIT = { id: 'emt.stavenor-075', version: 1 };
+
+/** Extras a spec can add to the bench: a stud wall fixture, and a conduit stick placed last (entity 6). */
+export interface WiringBenchExtras {
+  readonly studWall?: boolean;
+  readonly conduit?: boolean;
+}
+
 /** The bench at `difficulty` (default Trainee, where `'auto'` terminations are allowed), with `seed`. */
-export function wiringBench(difficulty: Difficulty = 'trainee', seed = 7): CommandBus<World> {
-  const bus = createWorldBus(createWorld({ seed, difficulty }), createWorldRegistry({ catalog: WIRING_TEST_CATALOG }));
+export function wiringBench(
+  difficulty: Difficulty = 'trainee',
+  seed = 7,
+  extras: WiringBenchExtras = {},
+): CommandBus<World> {
+  const world = createWorld({ seed, difficulty });
+  const start = extras.studWall ? { ...world, fixtures: [BENCH_STUD_WALL] } : world;
+  const bus = createWorldBus(start, createWorldRegistry({ catalog: WIRING_TEST_CATALOG }));
   const steps: [string, Record<string, unknown>][] = [
     ['entity.place', { ref: SPLIT, positionMm: at(0, 0, 0) }],
     ['entity.place', { ref: PANEL, positionMm: at(1000, 0, 0) }],
@@ -60,6 +83,7 @@ export function wiringBench(difficulty: Difficulty = 'trainee', seed = 7): Comma
     ['enclosure.openEntry', { id: 5, entry: 'top', tool: TORQUE }],
     ['enclosure.openEntry', { id: 5, entry: 'ko1', tool: PUNCH }],
   ];
+  if (extras.conduit) steps.push(['entity.place', { ref: BENCH_CONDUIT, positionMm: at(400, 2488, -12) }]);
   for (const [id, args] of steps) {
     const result = bus.exec(id, args);
     if (!result.ok) throw new Error(`wiringBench: ${id} failed: ${result.error.message}`);

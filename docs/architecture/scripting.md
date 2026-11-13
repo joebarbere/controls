@@ -105,7 +105,7 @@ Loading verifies a save's log with an engine replaying it from its initial world
 
 ## Console shorthand (P3)
 
-`expandConsoleArgs` (`scripting-api`) runs each registered `ConsoleExpander` on a line's args on the live world just before `exec`, so only explicit arguments are logged and a replay never needs the expander. `CONSOLE_EXPANDERS` holds `--lengthMm auto` for `wire.add`, `wire.pull` and `cable.add` (P3 PR 8): `defaultWireLengthMm` / `defaultCableLengthMm` in `world-model` compute the route's points as the command does and call `routeDefaultLengthMm` (the floor, 5 % slack and the tails). `--route auto` waits for F3.2 part 1's router.
+`expandConsoleArgs` (`scripting-api`) runs each registered `ConsoleExpander` on a line's args on the live world just before `exec`, so only explicit arguments are logged and a replay never needs the expander. `CONSOLE_EXPANDERS` holds `--lengthMm auto` for `wire.add`, `wire.pull` and `cable.add` (P3 PR 8): `defaultWireLengthMm` / `defaultCableLengthMm` in `world-model` compute the route's points as the command does and call `routeDefaultLengthMm` (the floor, 5 % slack and the tails). Since F3.2 part 1 it also holds `--route auto` for `wire.add` and `wire.reroute`, registered first so a line's `--lengthMm auto` measures the routed waypoints: it calls `autoRoute` (`world-model/src/lib/routing/`, ADR 0017), the same function as `Game.autoRoute` and the mouse.
 
 ## Reserved queries
 

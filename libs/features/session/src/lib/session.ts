@@ -24,6 +24,7 @@ import {
   loadLevel,
   newGameWorld,
   type NewGameOptions,
+  routingDigestsOfDocument,
   type World,
   worldHash,
 } from '@controls/world-model';
@@ -364,7 +365,8 @@ export class Session {
    * `?e2e=1` only (ADR 0011 §9.4): exposes exec, the asynchronous world and snapshot hashes (from the
    * sim worker), the bus world, the sim's tick and status, and a pure hash-of-JSON function on
    * `window`, so Playwright can drive commands and prove the hashes match the Node golden values in
-   * Chromium (the world hash since F1.2; the worker's snapshot, D6, since F2.3b).
+   * Chromium (the world hash since F1.2; the worker's snapshot, D6, since F2.3b; the routing digests,
+   * the baked centreline and the router's proposals, since F3.2 part 1).
    */
   private exposeTestHook(): void {
     const view = inject(DOCUMENT).defaultView;
@@ -388,6 +390,8 @@ export class Session {
         const result = hashWorldDocument(json);
         return result.ok ? result.hash : null;
       },
+      // F3.2 part 1 (ADR 0017): the routing goldens of a world document, computed in Chromium.
+      routingDigests: (json: unknown) => routingDigestsOfDocument(json),
     };
     inject(DestroyRef).onDestroy(() => delete target[TEST_HOOK]);
   }

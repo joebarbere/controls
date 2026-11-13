@@ -13,12 +13,15 @@ import {
 } from '@controls/commands';
 import type { ReplayEntry } from '@controls/save-format';
 import {
+  autoRoute,
   CableAddArgs,
   defaultCableLengthMm,
   defaultWireLengthMm,
+  type RouteTerminal,
   type Waypoint,
   WireAddArgs,
   WirePullArgs,
+  WireRerouteArgs,
   type World,
 } from '@controls/world-model';
 import * as z from 'zod';
@@ -163,14 +166,72 @@ function lengthAuto(
   };
 }
 
+/** The ends `--route auto` reads on `wire.add`, typed loosely: the line hasn't been validated yet. */
+const AutoRouteWire = z.looseObject({ a: WireAddArgs.shape.a, b: WireAddArgs.shape.b });
+const AutoRouteReroute = z.looseObject({ id: WireRerouteArgs.shape.id });
+
+/** A landed end argument as the router reads it: its entity, terminal and method (`'auto'`: the first). */
+function routeEnd(end: {
+  readonly entity: number;
+  readonly terminal: string;
+  readonly termination: 'auto' | { readonly method: string } | null;
+}): RouteTerminal {
+  const t = end.termination;
+  return {
+    entity: end.entity,
+    terminal: end.terminal,
+    termination: t === null || t === 'auto' ? 'auto' : { method: t.method },
+  };
+}
+
+/**
+ * `--route auto` (ADR 0015, ADR 0017): the auto-router's waypoints (`autoRoute`, the one function behind
+ * `game.autoRoute` and the mouse) between the two landed ends, on the live world. `wire.add` reads its
+ * `a` and `b` arguments; `wire.reroute` its connection's landed ends (their stored methods). Any other
+ * `route` is left alone; a free end has nowhere to route from.
+ */
+function routeAuto(id: 'wire.add' | 'wire.reroute'): ConsoleExpander {
+  return {
+    id,
+    paths: ['route'],
+    expand: (world, catalog, args) => {
+      if (args['route'] !== 'auto') return { ok: true, args: { ...args } };
+      const parsed = (id === 'wire.add' ? AutoRouteWire : AutoRouteReroute).safeParse(args);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        return { ok: false, message: `--route auto needs the ends first: ${issue.path.join('.')}: ${issue.message}` };
+      }
+      let ends: readonly [RouteTerminal, RouteTerminal];
+      if (id === 'wire.add') {
+        const { a, b } = parsed.data as {
+          a: Parameters<typeof routeEnd>[0] | null;
+          b: Parameters<typeof routeEnd>[0] | null;
+        };
+        if (a === null || b === null) return { ok: false, message: '--route auto routes between two landed ends' };
+        ends = [routeEnd(a), routeEnd(b)];
+      } else {
+        const wire = world.connections.find((c) => c.id === (parsed.data as { id: number }).id);
+        if (!wire || wire.a === null || wire.b === null) {
+          return { ok: false, message: '--route auto reroutes a wire with both ends landed' };
+        }
+        ends = [routeEnd(wire.a), routeEnd(wire.b)];
+      }
+      const routed = autoRoute(world as World, catalog, ends[0], ends[1]);
+      if (!routed.ok) return { ok: false, message: `--route auto: ${routed.message}` };
+      return { ok: true, args: { ...args, route: routed.route } };
+    },
+  };
+}
+
 /**
  * The console shorthand every console surface (the in-game console, `runConsoleScript`, `sim-cli`)
- * applies (ADR 0015): `--lengthMm auto` on `wire.add`, `wire.pull` and `cable.add`.
- *
- * TODO(F3.2 part 1): `--route auto` arrives with the shared router (`game.autoRoute`, ADR 0017); until
- * then a route is always explicit waypoints, and `auto` there is a parse error.
+ * applies (ADR 0015, ADR 0017): `--route auto` on `wire.add` and `wire.reroute` (expanded first, so a
+ * `--lengthMm auto` on the same line measures the routed waypoints), and `--lengthMm auto` on
+ * `wire.add`, `wire.pull` and `cable.add`.
  */
 export const CONSOLE_EXPANDERS: readonly ConsoleExpander[] = [
+  routeAuto('wire.add'),
+  routeAuto('wire.reroute'),
   lengthAuto('wire.add', AutoLengthWire, defaultWireLengthMm),
   lengthAuto('wire.pull', AutoLengthPull, (world, catalog, args: { route: Waypoint[] }) =>
     defaultWireLengthMm(world, catalog, { a: null, b: null, route: args.route }),

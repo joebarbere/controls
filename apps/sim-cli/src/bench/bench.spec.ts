@@ -18,7 +18,7 @@ import {
 import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
 import { WATCHDOG_MS } from '@controls/sim-protocol';
 import { CABLE_ADD_BENCH_CONDUCTORS, cableAddBench } from './cable-add';
-import { BENCH_CASES, CABLE_ADD_BUDGET_MS, PENDING_BENCH_CASES } from './cases';
+import { BENCH_CASES, CABLE_ADD_BUDGET_MS, PENDING_BENCH_CASES, ROUTE_BAKE_BUDGET_MS } from './cases';
 import { buildPlant } from './plant';
 
 /** A fake clock: each run of a case takes the next duration from the list (ms). */
@@ -142,6 +142,14 @@ describe('runBenchCase', () => {
     expect(order).toEqual(['prepare', 'run', 'prepare', 'run', 'prepare', 'run']);
     // The clock is read after each prepare and before the next: prepare is never inside a timing.
     expect(reads).toEqual([3, 4, 5, 6]);
+  });
+
+  it('tells prepare whether this is a smoke run (a case may set up a smaller workload)', () => {
+    const seen: boolean[] = [];
+    const benchCase = fixedCase({ warmup: 1, runs: 1, prepare: (smoke) => seen.push(smoke === true) });
+    runBenchCase(benchCase, steppingClock([1]));
+    runBenchCase(benchCase, steppingClock([1, 1, 1]), true);
+    expect(seen).toEqual([false, false, true, true, true]);
   });
 
   it('counts warm-up checksums too', () => {
@@ -394,6 +402,21 @@ describe('the shipped bench cases', () => {
     expect(first?.startsWith(`1:${rig.world.connections.length + CABLE_ADD_BENCH_CONDUCTORS}:`)).toBe(true);
   });
 
+  it('gate the 500-wire route bake at one 60 Hz frame (ADR 0017, from measurement), with a cheap smoke form', () => {
+    expect(ROUTE_BAKE_BUDGET_MS).toBe(16);
+    const gate = BENCH_CASES.find((c) => c.name === 'route-bake-500-wires');
+    expect(gate).toMatchObject({ budgetMs: ROUTE_BAKE_BUDGET_MS });
+    expect(gate?.calibration).toBeUndefined();
+    // The smoke form bakes one row (50 wires); two runs agree on the checksum (count, points, hash).
+    gate?.prepare?.(true);
+    expect(gate?.run()).toBe('50');
+    const first = gate?.checksum?.();
+    gate?.prepare?.(true);
+    gate?.run();
+    expect(gate?.checksum?.()).toBe(first);
+    expect(first).toMatch(/^50:[0-9]+:[0-9a-f]{64}$/);
+  });
+
   it('gate the re-solve at spec §4.5’s 2 ms, scaled by the calibration loop; nothing else is calibrated', () => {
     const calibrated = BENCH_CASES.filter((c) => c.calibration !== undefined);
     expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([
@@ -409,13 +432,11 @@ describe('the shipped bench cases', () => {
 });
 
 describe('the pending bench cases (P3 kickoff step 6)', () => {
-  it('declare the P3 budgets with the feature that implements each, and no timing', () => {
-    expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([
-      // (F3.6 part 1 moved tick-wired-plant and plant-resolve-topology-change-wired into BENCH_CASES,
-      // F3.6 part 2 intermittent-toggle-wired.) No spec budget: ADR 0017 fixes one from measurement. (F3.4 part 1 moved the single-command gate,
-      // cable-add-worst-command, into BENCH_CASES.)
-      ['route-bake-500-wires', null, 'F3.2 part 1'],
-    ]);
+  it('are all real now: none is left pending', () => {
+    // F3.6 part 1 moved tick-wired-plant and plant-resolve-topology-change-wired into BENCH_CASES,
+    // F3.6 part 2 intermittent-toggle-wired, F3.4 part 1 cable-add-worst-command and F3.2 part 1
+    // route-bake-500-wires (its budget from ADR 0017's measurement).
+    expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([]);
     for (const c of PENDING_BENCH_CASES) {
       expect(c.note).not.toBe('');
       expect(Object.keys(c).sort()).toStrictEqual(['budgetMs', 'enabledBy', 'name', 'note']);

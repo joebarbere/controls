@@ -1,0 +1,1337 @@
+{
+  "schemaVersion": 3,
+  "seed": 0,
+  "tick": 0,
+  "nextEntityId": 24,
+  "nextConnectionId": 9,
+  "nextCableId": 1,
+  "nextTerminationId": 17,
+  "regionId": "nec",
+  "difficulty": "trainee",
+  "assisted": false,
+  "fixtures": [],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "duct.lattisby-40x60",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "coverOn": false,
+        "lengthMm": 600
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "duct.lattisby-40x60",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 300,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "coverOn": false,
+        "lengthMm": 600
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "duct.lattisby-40x60",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 640,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 90000
+        }
+      },
+      "state": {
+        "coverOn": false,
+        "lengthMm": 340
+      },
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 20,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 26,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 6,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 32,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 7,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 38,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 8,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 44,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 9,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 50,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 10,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 56,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 11,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 62,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 12,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 68,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 13,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 74,
+          "y": 60,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 14,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 320,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 15,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 326,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 16,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 332,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 17,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 338,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 18,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 344,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 19,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 350,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 20,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 356,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 21,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 362,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 22,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 368,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    },
+    {
+      "id": 23,
+      "ref": {
+        "id": "tb.quennick-st4",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 374,
+          "y": 200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "label": null,
+      "extensions": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 4,
+        "terminal": "b",
+        "termination": {
+          "id": 1,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 14,
+        "terminal": "b",
+        "termination": {
+          "id": 2,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 23,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 323,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 546,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 5,
+        "terminal": "a",
+        "termination": {
+          "id": 3,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 15,
+        "terminal": "a",
+        "termination": {
+          "id": 4,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 29,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 329,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 614,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 6,
+        "terminal": "a",
+        "termination": {
+          "id": 5,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 16,
+        "terminal": "b",
+        "termination": {
+          "id": 6,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 35,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 335,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1641,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 7,
+        "terminal": "b",
+        "termination": {
+          "id": 7,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 8,
+        "terminal": "b",
+        "termination": {
+          "id": 8,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 41,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 47,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 91,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 19,
+        "terminal": "a",
+        "termination": {
+          "id": 9,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 9,
+        "terminal": "b",
+        "termination": {
+          "id": 10,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 353,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 53,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1309,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 6,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 10,
+        "terminal": "a",
+        "termination": {
+          "id": 11,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 10,
+        "terminal": "b",
+        "termination": {
+          "id": 12,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 59,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 620,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 3,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 600,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 59,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1758,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 7,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 21,
+        "terminal": "b",
+        "termination": {
+          "id": 13,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 23,
+        "terminal": "b",
+        "termination": {
+          "id": 14,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 365,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 377,
+            "y": 20,
+            "z": 30
+          },
+          "entity": 1,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 391,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    },
+    {
+      "id": 8,
+      "ref": {
+        "id": "conductor.tallowmere-thhn-14-solid",
+        "version": 1
+      },
+      "a": {
+        "entity": 12,
+        "terminal": "a",
+        "termination": {
+          "id": 15,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 22,
+        "terminal": "a",
+        "termination": {
+          "id": 16,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 9,
+          "nickedStrandFraction": 0,
+          "torqueNm": 0.6,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 71,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "duct",
+          "positionMm": {
+            "x": 371,
+            "y": 320,
+            "z": 30
+          },
+          "entity": 2,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 614,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "insulationDamaged": false
+      },
+      "extensions": {}
+    }
+  ],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}
