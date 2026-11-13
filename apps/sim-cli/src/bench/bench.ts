@@ -65,8 +65,11 @@ export interface BenchCase {
   readonly budgetMs: number | null;
   /** Scales `budgetMs` to this machine (see the file comment). Needs a budget. */
   readonly calibration?: BenchCalibration;
-  /** Untimed set-up before every run, warm-up included (putting a compiler back in a known state). */
-  prepare?(): void;
+  /**
+   * Untimed set-up before every run, warm-up included (putting a compiler back in a known state).
+   * `smoke`: a smoke run, so the case may set up a smaller workload (it proves the case runs).
+   */
+  prepare?(smoke?: boolean): void;
   /** The workload. Returns a checksum of its result, which must be the same on every run. */
   run(): string;
   /**
@@ -189,14 +192,14 @@ export function runBenchCase(benchCase: BenchCase, now: () => number, smoke = fa
     for (let i = 0; i < (calibration.warmup ?? 0); i++) calibrationChecksums.add(calibration.run());
   }
   for (let i = 0; i < warmup; i++) {
-    benchCase.prepare?.();
+    benchCase.prepare?.(smoke);
     checksums.add(full(benchCase.run()));
     if (calibration) calibrationChecksums.add(calibration.run());
   }
   const durations: number[] = [];
   const calibrationDurations: number[] = [];
   for (let i = 0; i < runs; i++) {
-    benchCase.prepare?.();
+    benchCase.prepare?.(smoke);
     const start = now();
     const checksum = benchCase.run();
     durations.push(now() - start);

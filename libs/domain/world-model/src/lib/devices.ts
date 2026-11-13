@@ -11,7 +11,9 @@ import {
 } from '@controls/catalog';
 import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
 import { findEntity } from './entity-commands';
+import { fixtureSpec } from './fixtures';
 import { coversChord, routeFloorMm } from './routing/floor';
+import { waypointHostProblem } from './routing/hosts';
 import { entityPointMm, isAxisAligned } from './snap/quarter-turn';
 import { checkMount } from './wiring/mounting';
 import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
@@ -273,8 +275,20 @@ function checkRouteReferences(
     }
     if (waypoint.entity !== null) {
       const host = findEntity(world, waypoint.entity) as Entity; // the schema guarantees it exists
-      if (catalog.device(host.ref) && !isAxisAligned(host.transform.orientationMdeg)) {
-        add(`${at}[${index}].entity`, 'A hosted waypoint is on an axis-aligned entity');
+      if (catalog.device(host.ref)) {
+        if (!isAxisAligned(host.transform.orientationMdeg)) {
+          add(`${at}[${index}].entity`, 'A hosted waypoint is on an axis-aligned entity');
+        }
+        // ADR 0017's host rule, as the commands apply it; a host the catalogue doesn't know is left alone.
+        const problem = waypointHostProblem(catalog, waypoint, { entity: host });
+        if (problem) add(`${at}[${index}].entity`, `Not a host for this waypoint: ${problem}`);
+      }
+    }
+    if (waypoint.fixture !== null) {
+      const fixture = world.fixtures.find((f) => f.id === waypoint.fixture);
+      if (fixture && fixtureSpec(fixture.ref)) {
+        const problem = waypointHostProblem(catalog, waypoint, { fixture });
+        if (problem) add(`${at}[${index}].fixture`, `Not a host for this waypoint: ${problem}`);
       }
     }
   });

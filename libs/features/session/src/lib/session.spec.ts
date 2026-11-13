@@ -363,6 +363,7 @@ describe('Session', () => {
       simStats(): { misses: number };
       entries(): unknown[];
       hashWorld(json: unknown): string | null;
+      routingDigests(json: unknown): { centreline: string; proposals: string } | null;
     };
     expect(hook.exec('entity.place', place).ok).toBe(true);
     expect(hook.entries()).toHaveLength(1);
@@ -376,6 +377,10 @@ describe('Session', () => {
     expect(await hook.snapshotHash()).toMatch(/^[0-9a-f]{64}$/);
     expect(hook.hashWorld(createWorld({ seed: 0 }))).toBe(worldHash(createWorld({ seed: 0 })));
     expect(hook.hashWorld({ schemaVersion: 1 })).toBeNull();
+    expect(hook.routingDigests(createWorld({ seed: 0 }))).toMatchObject({
+      centreline: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    expect(hook.routingDigests({ schemaVersion: 1 })).toBeNull();
     TestBed.resetTestingModule();
     expect(fakeWindow['__controlsSession']).toBeUndefined();
 

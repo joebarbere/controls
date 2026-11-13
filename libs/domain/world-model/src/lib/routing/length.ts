@@ -9,19 +9,21 @@ import { routeFloorMm } from './floor';
  * console file using the shorthand logs (its hashes are re-pinned then).
  *
  * Integer arithmetic on top of `routeFloorMm` (D6), so `routeDefaultLengthMm ≥ routeFloorMm` exactly.
- * ADR 0017 (F3.2 part 1) may refine the slack with routing data; these defaults are game-design.
+ * These defaults are game-design (ADR 0017 §5).
  */
 
 /**
- * Slack on top of the route's polyline, in percent (game-design: a run is cut a little long so it
- * can follow the route's bends and be dressed; ADR 0017 may replace it with a sourced allowance).
+ * Slack on top of the route's polyline, in percent. game-design: ADR 0017 §5 found no citable cutting
+ * allowance along a route (a run is cut a little long so it can follow its bends and be dressed);
+ * NFPA 70 Art. 300.14 (cited by number) governs free length at boxes only, which
+ * {@link DEFAULT_CABLE_TAIL_MM} covers.
  */
 export const ROUTE_SLACK_PERCENT = 5;
 
 /**
  * Cable left past each enclosure entry by default, in mm (game-design, chosen so the conductors keep
  * the 150 mm (6 in) of free length NFPA 70-2023 Art. 300.14 asks for at a box, cited by number, with
- * room for the jacket inside the clamp; ADR 0017 may tighten the reach rule).
+ * room for the jacket inside the clamp; F3.2 part 4 may tighten the reach rule, ADR 0017 §5).
  */
 export const DEFAULT_CABLE_TAIL_MM = 200;
 

@@ -351,23 +351,32 @@ describe('wire.add', () => {
     expect(add).toMatchObject(refused('not-axis-aligned'));
   });
 
-  it('a bore waypoint names a tool that can bore, on a host that exists', () => {
-    const bus = wiringBench();
+  it('a bore waypoint names a tool that can bore, on a stud wall that exists (ADR 0017 host rule)', () => {
+    const bus = wiringBench('trainee', 7, { studWall: true });
     const bore = (tool: object, host: object) => ({ ...freeAt(50, 500, 300), kind: 'bore', tool, ...host });
     expect(bus.exec('wire.add', autoWireArgs({ route: [bore(BIT, { fixture: 'nope' })] }))).toMatchObject(
       refused('bad-waypoint'),
     );
-    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(CUTTER, { entity: 2 })] }))).toMatchObject(
+    // A bore is in a stud, never in an entity (the panel), and a duct waypoint is on a duct.
+    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(BIT, { entity: 2 })] }))).toMatchObject(
+      refused('bad-waypoint'),
+    );
+    const duct = { ...freeAt(50, 500, 300), kind: 'duct', entity: 2 };
+    expect(bus.exec('wire.add', autoWireArgs({ route: [duct, L1_TO_LINE_ROUTE[1]] }))).toMatchObject(
+      refused('bad-waypoint'),
+    );
+    expect(bus.exec('wire.add', autoWireArgs({ route: [{ ...duct, entity: null, fixture: 'studs' }] }))).toMatchObject(
+      refused('bad-waypoint'),
+    );
+    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(CUTTER, { fixture: 'studs' })] }))).toMatchObject(
       refused('wrong-tool'),
     );
-    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(WIRE, { entity: 2 })] }))).toMatchObject(
+    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(WIRE, { fixture: 'studs' })] }))).toMatchObject(
       refused('unknown-tool'),
     );
-    expect(bus.exec('wire.add', autoWireArgs({ route: [bore(BIT, { entity: 2 }), L1_TO_LINE_ROUTE[1]] })).ok).toBe(
-      true,
-    );
-    // The panel now hosts a route: it is occupied.
-    expect(bus.exec('entity.move', { id: 2, positionMm: at(0, 0, 0) })).toMatchObject(refused('occupied'));
+    expect(
+      bus.exec('wire.add', autoWireArgs({ route: [bore(BIT, { fixture: 'studs' }), L1_TO_LINE_ROUTE[1]] })).ok,
+    ).toBe(true);
   });
 });
 
@@ -464,7 +473,7 @@ describe('wire.pull', () => {
   const conduit = (x: number) => ({
     kind: 'conduit',
     positionMm: at(x, 2500, 0),
-    entity: 5,
+    entity: 6, // the bench's conduit stick (ADR 0017: a conduit waypoint is on a conduit part)
     fixture: null,
     tool: null,
   });
@@ -473,7 +482,7 @@ describe('wire.pull', () => {
   const white = { ref: WIRE, colour: { base: 'white', stripe: null } };
 
   it('pulls conductors through conduit with free ends, one id each in order', () => {
-    const bus = wiringBench();
+    const bus = wiringBench('trainee', 7, { conduit: true });
     const before = bus.state;
     expect(
       bus.exec('wire.pull', { route: pullRoute, lengthMm: 2100, conductors: [black, white], tool: FISH_TAPE }).ok,
@@ -496,11 +505,15 @@ describe('wire.pull', () => {
   });
 
   it('refuses a route without conduit, an unavailable colour, a tool that cannot pull, and a short length', () => {
-    const bus = wiringBench();
+    const bus = wiringBench('trainee', 7, { conduit: true });
     const pull = (args: Record<string, unknown>) =>
       bus.exec('wire.pull', { route: pullRoute, lengthMm: 2100, conductors: [black], tool: FISH_TAPE, ...args });
     expect(pull({ route: [freeAt(0, 2500, 0), freeAt(2000, 2500, 0)] })).toMatchObject(refused('bad-waypoint'));
     expect(pull({ route: [conduit(0), freeAt(2000, 2500, 0)] })).toMatchObject(refused('bad-waypoint'));
+    // A conduit waypoint on something that isn't a conduit part (the box, entity 5).
+    expect(pull({ route: [freeAt(0, 2500, 0), { ...conduit(500), entity: 5 }, freeAt(2000, 2500, 0)] })).toMatchObject(
+      refused('bad-waypoint'),
+    );
     expect(pull({ conductors: [{ ref: WIRE, colour: { base: 'red', stripe: null } }] })).toMatchObject(
       refused('unavailable-colour'),
     );
