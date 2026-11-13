@@ -6,8 +6,8 @@
   "modelName": "SE-075-90",
   "category": "raceway",
   "sizeMm": {
-    "widthMm": 132,
-    "heightMm": 132,
+    "widthMm": 190,
+    "heightMm": 190,
     "depthMm": 24
   },
   "terminals": [],
@@ -20,22 +20,29 @@
       "tradeSizeIn": 0.75,
       "outsideDiameterMm": 23.42,
       "wallThicknessMm": 1.24,
-      "bendRadiusMm": 120
+      "bendRadiusMm": 114,
+      "legLengthMm": 64
     }
   },
   "controls": [],
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 3/4 trade size steel EMT, outside diameter 0.922 in = 23.42 mm, nominal wall 0.049 in = 1.24 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
       "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
     },
     {
       "id": "elbow-bend",
+      "kind": "real-world",
+      "citation": "real-world (product data): makers’ standard 90° steel EMT elbows for ANSI C80.3 / UL 797 tubing (cited by number) have a 114 mm centreline radius (4.50 in) and straight legs of 64 mm (2.5 in) at each end (makers’ elbow sheets, read 2026-11-12; a second maker gives 5.80 in for 1 in). Product data, not a code table of minimum bend radii; bends are not checked in P3.",
+      "covers": ["model.params.bendRadiusMm", "model.params.legLengthMm"]
+    },
+    {
+      "id": "elbow-box",
       "kind": "game-design",
-      "citation": "game-design: a 120 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
-      "covers": ["model.params.bendRadiusMm", "sizeMm"]
+      "citation": "game-design: the elbow’s box is its leg plus its bend radius plus half its body diameter, square; its ends are on the box’s faces so joined parts touch.",
+      "covers": ["sizeMm"]
     }
   ],
   "extensions": {}

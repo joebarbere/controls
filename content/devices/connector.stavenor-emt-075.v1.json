@@ -27,14 +27,14 @@
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 3/4 trade size steel EMT, outside diameter 0.922 in = 23.42 mm, nominal wall 0.049 in = 1.24 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
       "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
     },
     {
       "id": "connector-body",
       "kind": "game-design",
-      "citation": "game-design: unverified. A steel set-screw EMT connector: a 25 mm body outside the enclosure wall, 34 mm across its locknut and gland, and a 11 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "citation": "game-design within makers’ ranges: a steel set-screw EMT connector with a 25 mm body outside the enclosure wall (makers’ overall length less thread spans about 19 to 43 mm across the three sizes), 34 mm across (one maker lists 28.6, 35.1 and 41.4 mm), and a 11 mm threaded throat with its locknut inside the wall (makers list thread lengths of 9.5 to 14.3 mm); connector dimension sheets read 2026-11-12. The body’s length is a game-design pick inside those ranges.",
       "covers": ["sizeMm", "model.params.throatLengthMm"]
     }
   ],

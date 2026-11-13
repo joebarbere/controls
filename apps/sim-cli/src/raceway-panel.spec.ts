@@ -1,15 +1,25 @@
-import { createGame, runConsoleScript } from '@controls/scripting-api';
+import { createGame, loadGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import racewayPanel from '../scenarios/raceway-panel';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
  * F3.5 part 2: wire duct, DIN terminal blocks and an EMT-lite run on the DIN panel. The snapping
  * script (`placeInWorld`, the renderer's maths) and the console lines that spell its entries out
- * reach one pinned `world.hash`, and log identical entries.
+ * reach one pinned `world.hash`, and log identical entries. Its save is a frozen fixture (save-format
+ * review): a cut duct with its cover on, a cut EMT stick, terminal blocks at a non-zero `crossMm`, a
+ * connector at an entry and an enclosure with an open entry, written by
+ *
+ *   pnpm sim run apps/sim-cli/scenarios/raceway-panel.console --world content/levels/workshop.json \
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/raceway-panel-engine-7-catalog-2.ctrl
+ *
+ * and rebuilt from the scenario by `sources.spec.ts`'s fixture-rebuild check.
  */
 
 /** world.hash after `raceway-panel.console`. */
@@ -78,5 +88,27 @@ describe('the raceway panel scenario (F3.5 part 2)', () => {
       error: { code: 'occupied' },
     });
     expect(fromScript.hash()).toBe(RACEWAY_PANEL_HASH);
+  });
+
+  it('its checked-in save loads continued with every raceway key, through the container, the migration and the load check', () => {
+    const loaded = loadGame(new Uint8Array(readFileSync(currentFixture('raceway-panel'))));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
+    expect(loaded.game.hash()).toBe(RACEWAY_PANEL_HASH);
+    const entities = loaded.game.world().entities;
+    expect(entities.map((e) => [e.id, e.state])).toEqual([
+      [1, { openEntries: 1 }],
+      [2, { coverOn: true, lengthMm: 250 }],
+      [3, {}],
+      [4, {}],
+      [5, {}],
+      [6, {}],
+      [7, {}],
+      [8, { lengthMm: 300 }],
+      [9, {}],
+    ]);
+    // The blocks sit at their crossMm above rail 1's mount origin (y = 105): 21 for the 48 mm ones, 17 for the 56 mm one.
+    expect(entities.slice(2, 6).map((e) => e.transform.positionMm.y - 105)).toEqual([21, 21, 21, 17]);
   });
 });

@@ -559,10 +559,10 @@ describe('F3.5 part 2 recipes', () => {
   });
 
   it('an elbow’s tube runs from its end a to its end b inside its box', () => {
-    const elbow = def(ELBOWS[1]); // R 120, D 24: box 132 × 132 × 24
+    const elbow = def(ELBOWS[1]); // L 64, R 114, D 24: box 190 × 190 × 24
     const b = bounds(buildDeviceGeometry(elbow));
     expect(toMm(b.min).map((n) => Math.round(n) + 0)).toStrictEqual([0, 0, 0]);
-    expect(toMm(b.max).map((n) => Math.round(n) + 0)).toStrictEqual([132, 132, 24]);
+    expect(toMm(b.max).map((n) => Math.round(n) + 0)).toStrictEqual([190, 190, 24]);
   });
 
   it('a terminal block reaches its height, and its entries are at entryMm', () => {

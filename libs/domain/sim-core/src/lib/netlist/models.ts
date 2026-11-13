@@ -227,8 +227,9 @@ const TERMINAL_BLOCK: DeviceTopology = { joins: [['a', 'b']], elements: [] };
 /**
  * A DIN-rail terminal block (F3.5 part 2): its bridge joins the two clamps ideally, so conductors
  * landed in either meet at one node; each conductor's own branch carries its end's contact resistance
- * (ADR 0018 §4). The bridge's own resistance (tens of µΩ) is far below the clamps' 0.3 mΩ, an
- * abstraction. A ground block is the same in P3; its foot bonds to the rail with P4's grounding.
+ * (ADR 0018 §4). The bridge's own resistance (about 0.1 mΩ: a copper bar of about 30 mm × 5 mm²)
+ * is left out, an abstraction: it is a third of one clamp's 0.3 mΩ, and the block stays inside the
+ * terminal-block voltage-drop acceptance either way (content: `tb-screw-contact`). A ground block is the same in P3; its foot bonds to the rail with P4's grounding.
  */
 const terminalBlock = (kind: string): DeviceNetlistModel => ({
   kind,

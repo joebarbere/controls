@@ -1,5 +1,5 @@
 import type { DeviceDefinition, PointMm } from './device';
-import { CUT_LENGTH_KEY, modelKind, TRADE_SIZE_INCHES } from './model-kinds';
+import { CUT_LENGTH_KEY, MAX_RACEWAY_LENGTH_MM, modelKind, TRADE_SIZE_INCHES } from './model-kinds';
 import type { Axis, TradeSize } from './registries';
 
 /*
@@ -87,7 +87,7 @@ export interface RacewayPort {
  * The ends of a conduit part (F3.5 part 2), in its own frame, `a` first; empty for anything else
  * (ducts are laid, not joined, in P3):
  * - a stick of cut length L and body diameter D: `a` at (0, D/2, D/2) facing −x, `b` at (L, D/2, D/2) facing +x;
- * - an elbow of bend radius R: `a` at (D/2, 0, D/2) facing −y, `b` at (R + D/2, R, D/2) facing +x;
+ * - an elbow of bend radius R and legs L: `a` at (D/2, 0, D/2) facing −y, `b` at (L + R + D/2, L + R, D/2) facing +x;
  * - a connector of body length W: `a`, the entry end, at (0, D/2, D/2) facing −x (into the
  *   enclosure), `b` at (W, D/2, D/2) facing +x.
  * Each end lies on a face of the body box, so parts joined end to end touch and never overlap.
@@ -103,10 +103,10 @@ export function racewayPorts(device: Pick<DeviceDefinition, 'model' | 'sizeMm'>,
         { id: 'b', kind: 'joint', positionMm: { x: size.widthMm, y: r, z: r }, axis: '+x' },
       ];
     case 'raceway.conduitElbow': {
-      const bend = device.model.params['bendRadiusMm'];
+      const reach = device.model.params['legLengthMm'] + device.model.params['bendRadiusMm'];
       return [
         { id: 'a', kind: 'joint', positionMm: { x: r, y: 0, z: r }, axis: '-y' },
-        { id: 'b', kind: 'joint', positionMm: { x: bend + r, y: bend, z: r }, axis: '+x' },
+        { id: 'b', kind: 'joint', positionMm: { x: reach + r, y: reach, z: r }, axis: '+x' },
       ];
     }
     case 'raceway.conduitConnector':
@@ -123,15 +123,23 @@ export function racewayPorts(device: Pick<DeviceDefinition, 'model' | 'sizeMm'>,
  * The load-time geometry rules of a raceway entry (F3.5 part 2), as `[path, message]` pairs. A cut
  * part's lengths fit its stock (`minLengthMm ≤ defaultLengthMm ≤ sizeMm.widthMm`); a conduit part's
  * body diameter (`depthMm`) is its tube's outside diameter rounded up to an even whole mm, so its ends
- * sit on whole millimetres; a stick and a connector are as tall as deep; an elbow's box is R + D/2
- * square; a duct's walls leave an inside.
+ * sit on whole millimetres; a stick and a connector are as tall as deep; an elbow's box is L + R + D/2
+ * square; a duct's walls leave an inside. Every raceway has a body, and a cut part's stock is at most
+ * {@link MAX_RACEWAY_LENGTH_MM} (what `raceway.cut` accepts).
  */
 export function racewayEntryProblems(device: DeviceDefinition): [string, string][] {
   const raceway = racewayOf(device);
   const size = device.sizeMm;
-  if (raceway === null || size === null) return [];
+  if (raceway === null) return [];
+  if (size === null) return [['sizeMm', 'A raceway has a body: sizeMm must not be null']];
   const p = device.model.params;
   const problems: [string, string][] = [];
+  if (isCutToLength(device) && size.widthMm > MAX_RACEWAY_LENGTH_MM) {
+    problems.push([
+      'sizeMm',
+      `A cut-to-length part's stock is at most ${MAX_RACEWAY_LENGTH_MM} mm (what raceway.cut accepts)`,
+    ]);
+  }
   if (isCutToLength(device) && !(p['defaultLengthMm'] <= size.widthMm)) {
     problems.push([
       'model.params.defaultLengthMm',
@@ -155,9 +163,9 @@ export function racewayEntryProblems(device: DeviceDefinition): [string, string]
     problems.push(['sizeMm', "A connector's depth is an even whole mm, at least the tube's outside diameter"]);
   }
   if (kind === 'raceway.conduitElbow') {
-    const box = p['bendRadiusMm'] + d / 2;
+    const box = p['legLengthMm'] + p['bendRadiusMm'] + d / 2;
     if (size.widthMm !== box || size.heightMm !== box) {
-      problems.push(['sizeMm', "An elbow's width and height are its bend radius plus half its depth"]);
+      problems.push(['sizeMm', "An elbow's width and height are its leg plus its bend radius plus half its depth"]);
     }
   } else if (size.heightMm !== d) {
     problems.push(['sizeMm', 'A conduit stick or connector is as tall as it is deep']);

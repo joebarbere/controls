@@ -836,23 +836,31 @@ function conduitParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
 }
 
 /**
- * A 90° elbow: a quarter torus of the bend radius about (R + D/2, 0, D/2) in the part's xy-plane, from
- * its end a at (D/2, 0) to its end b at (R + D/2, R) (`racewayPorts`), with a bore at each end.
+ * A 90° elbow: a straight leg L up from its end a at (D/2, 0), a quarter torus of the bend radius
+ * about (R + D/2, L, D/2) in the part's xy-plane, and a leg out to its end b at (L + R + D/2, L + R)
+ * (`racewayPorts`), with a bore at each end.
  */
 function elbowParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
   const r = size.depthMm / 2;
   const bend = def.model.params['bendRadiusMm'];
+  const leg = def.model.params['legLengthMm'];
   const od = def.model.params['outsideDiameterMm'];
   const inner = od / 2 - def.model.params['wallThicknessMm'];
   const torus = new TorusGeometry(mm(bend), mm(od / 2), 16, 24, Math.PI / 2);
   // The arc runs from angle 0 to 90°; turned by 90° it runs from +y to −x about the centre.
   torus.rotateZ(Math.PI / 2);
-  torus.translate(mm(bend + r), 0, mm(r));
-  return [
+  torus.translate(mm(bend + r), mm(leg), mm(r));
+  const end = leg + bend + r; // end b's x
+  const parts: Part[] = [
     { slot: 'body', geometry: torus },
     { slot: 'opening', geometry: cylinderY(r, r, inner, -0.3, 0) }, // end a (y = 0), facing −y
-    { slot: 'opening', geometry: cylinderX(bend, r, inner, bend + r, bend + r + 0.3) }, // end b, facing +x
+    { slot: 'opening', geometry: cylinderX(leg + bend, r, inner, end, end + 0.3) }, // end b, facing +x
   ];
+  if (leg > 0) {
+    parts.push({ slot: 'body', geometry: cylinderY(r, r, od / 2, 0, leg) });
+    parts.push({ slot: 'body', geometry: cylinderX(leg + bend, r, od / 2, bend + r, end) });
+  }
+  return parts;
 }
 
 /** A hexagonal prism along +x (a nut), across-corners diameter `d`, centred at (y, z). */

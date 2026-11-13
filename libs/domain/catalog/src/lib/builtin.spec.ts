@@ -206,10 +206,10 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       ['duct.lattisby-25x40', 'Lattisby', 'raceway', 'raceway.duct', size(2000, 25, 40)],
       ['duct.lattisby-40x60', 'Lattisby', 'raceway', 'raceway.duct', size(2000, 40, 60)],
       ['duct.lattisby-60x80', 'Lattisby', 'raceway', 'raceway.duct', size(2000, 60, 80)],
-      // An elbow's box is R + D/2 square: 105 + 9, 120 + 12, 150 + 15.
-      ['elbow.stavenor-emt-050', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(114, 114, 18)],
-      ['elbow.stavenor-emt-075', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(132, 132, 24)],
-      ['elbow.stavenor-emt-100', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(165, 165, 30)],
+      // An elbow's box is L + R + D/2 square: 64 + 102 + 9, 64 + 114 + 12, 76 + 146 + 15.
+      ['elbow.stavenor-emt-050', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(175, 175, 18)],
+      ['elbow.stavenor-emt-075', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(190, 190, 24)],
+      ['elbow.stavenor-emt-100', 'Stavenor', 'raceway', 'raceway.conduitElbow', size(237, 237, 30)],
       ['emt.stavenor-050', 'Stavenor', 'raceway', 'raceway.conduit', size(3048, 18, 18)],
       ['emt.stavenor-075', 'Stavenor', 'raceway', 'raceway.conduit', size(3048, 24, 24)],
       ['emt.stavenor-100', 'Stavenor', 'raceway', 'raceway.conduit', size(3048, 30, 30)],
@@ -228,6 +228,20 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       [0.5, 17.93, 1.07],
       [0.75, 23.42, 1.24],
       [1, 29.54, 1.45],
+    ]);
+    // Makers' standard 90° elbows (realism review 2026-11-12): 4.00, 4.50, 5.75 in radius → 102, 114,
+    // 146 mm (× 25.4, rounded); legs 2.5, 2.5, 3.0 in → 64, 64, 76 mm.
+    const elbows = raceways.filter((d) => d.model.kind === 'raceway.conduitElbow');
+    expect(elbows.map((d) => [d.model.params['bendRadiusMm'], d.model.params['legLengthMm']])).toStrictEqual([
+      [102, 64],
+      [114, 64],
+      [146, 76],
+    ]);
+    // Terminal blocks: the 4 mm² class is 47.5 mm high on the rail, drawn 47 (review required change 1).
+    expect(terminalBlocks.map((d) => [d.id, d.sizeMm])).toStrictEqual([
+      ['tb.quennick-pe4', size(6, 48, 47)],
+      ['tb.quennick-sc25', size(5, 56, 36)],
+      ['tb.quennick-st4', size(6, 48, 47)],
     ]);
     expect(terminalBlocks.map((d) => [d.id, d.brand, d.category, d.model.kind])).toStrictEqual([
       ['tb.quennick-pe4', 'Quennick', 'terminalBlock', 'terminalBlock.ground'],

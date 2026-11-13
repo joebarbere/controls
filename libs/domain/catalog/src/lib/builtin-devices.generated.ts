@@ -3987,8 +3987,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1/2 trade size steel EMT, outside diameter 0.706 in = 17.93 mm, nominal wall 0.042 in = 1.07 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -3998,7 +3998,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "connector-body",
       "kind": "game-design",
-      "citation": "game-design: unverified. A steel set-screw EMT connector: a 22 mm body outside the enclosure wall, 28 mm across its locknut and gland, and a 10 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "citation": "game-design within makers’ ranges: a steel set-screw EMT connector with a 22 mm body outside the enclosure wall (makers’ overall length less thread spans about 19 to 43 mm across the three sizes), 28 mm across (one maker lists 28.6, 35.1 and 41.4 mm), and a 10 mm threaded throat with its locknut inside the wall (makers list thread lengths of 9.5 to 14.3 mm); connector dimension sheets read 2026-11-12. The body’s length is a game-design pick inside those ranges.",
       "covers": [
         "sizeMm",
         "model.params.throatLengthMm"
@@ -4036,8 +4036,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 3/4 trade size steel EMT, outside diameter 0.922 in = 23.42 mm, nominal wall 0.049 in = 1.24 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4047,7 +4047,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "connector-body",
       "kind": "game-design",
-      "citation": "game-design: unverified. A steel set-screw EMT connector: a 25 mm body outside the enclosure wall, 34 mm across its locknut and gland, and a 11 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "citation": "game-design within makers’ ranges: a steel set-screw EMT connector with a 25 mm body outside the enclosure wall (makers’ overall length less thread spans about 19 to 43 mm across the three sizes), 34 mm across (one maker lists 28.6, 35.1 and 41.4 mm), and a 11 mm threaded throat with its locknut inside the wall (makers list thread lengths of 9.5 to 14.3 mm); connector dimension sheets read 2026-11-12. The body’s length is a game-design pick inside those ranges.",
       "covers": [
         "sizeMm",
         "model.params.throatLengthMm"
@@ -4085,8 +4085,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1 trade size steel EMT, outside diameter 1.163 in = 29.54 mm, nominal wall 0.057 in = 1.45 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4096,7 +4096,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "connector-body",
       "kind": "game-design",
-      "citation": "game-design: unverified. A steel set-screw EMT connector: a 28 mm body outside the enclosure wall, 42 mm across its locknut and gland, and a 12 mm threaded throat with its locknut inside the wall, which fits a knockout of its trade size (common practice; dimensions not read from a product sheet).",
+      "citation": "game-design within makers’ ranges: a steel set-screw EMT connector with a 28 mm body outside the enclosure wall (makers’ overall length less thread spans about 19 to 43 mm across the three sizes), 42 mm across (one maker lists 28.6, 35.1 and 41.4 mm), and a 12 mm threaded throat with its locknut inside the wall (makers list thread lengths of 9.5 to 14.3 mm); connector dimension sheets read 2026-11-12. The body’s length is a game-design pick inside those ranges.",
       "covers": [
         "sizeMm",
         "model.params.throatLengthMm"
@@ -4132,9 +4132,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     "params": {
       "defaultLengthMm": 300,
       "minLengthMm": 20,
-      "wallThicknessMm": 1.6,
-      "slotWidthMm": 4.5,
-      "fingerWidthMm": 5.5
+      "wallThicknessMm": 2,
+      "slotWidthMm": 4,
+      "fingerWidthMm": 6
     }
   },
   "controls": [
@@ -4147,16 +4147,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "duct-section-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 25 × 40 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "kind": "real-world",
+      "citation": "real-world (product class): slotted PVC wiring duct is catalogued by several makers in width × height sections including 25 × 40, 40 × 60 and 60 × 80 mm, in 2 m lengths with a clip-on cover (makers’ datasheets, read 2026-11-12). This entry is the 25 × 40 mm section on 2000 mm stock. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
       "covers": [
         "sizeMm"
       ]
     },
     {
       "id": "duct-comb",
-      "kind": "game-design",
-      "citation": "game-design: unverified. A 1.6 mm wall and base, 4.5 mm slots between 5.5 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "kind": "real-world",
+      "citation": "real-world (product class): makers publish a narrow slot pattern (4 mm slots between 6 mm fingers) and a wide one (8 mm slots between 12 mm fingers), with walls of about 2 mm (one maker’s drawing; 2.3 mm on another listing), datasheets read 2026-11-12. This section takes the narrow pattern and a 2 mm wall; which section gets which pattern is a game-design choice. Drawn, and read by F3.2 for the inside.",
       "covers": [
         "model.params.wallThicknessMm",
         "model.params.slotWidthMm",
@@ -4210,8 +4210,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     "params": {
       "defaultLengthMm": 300,
       "minLengthMm": 20,
-      "wallThicknessMm": 1.9,
-      "slotWidthMm": 6,
+      "wallThicknessMm": 2,
+      "slotWidthMm": 4,
       "fingerWidthMm": 6
     }
   },
@@ -4225,16 +4225,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "duct-section-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 40 × 60 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "kind": "real-world",
+      "citation": "real-world (product class): slotted PVC wiring duct is catalogued by several makers in width × height sections including 25 × 40, 40 × 60 and 60 × 80 mm, in 2 m lengths with a clip-on cover (makers’ datasheets, read 2026-11-12). This entry is the 40 × 60 mm section on 2000 mm stock. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
       "covers": [
         "sizeMm"
       ]
     },
     {
       "id": "duct-comb",
-      "kind": "game-design",
-      "citation": "game-design: unverified. A 1.9 mm wall and base, 6 mm slots between 6 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "kind": "real-world",
+      "citation": "real-world (product class): makers publish a narrow slot pattern (4 mm slots between 6 mm fingers) and a wide one (8 mm slots between 12 mm fingers), with walls of about 2 mm (one maker’s drawing; 2.3 mm on another listing), datasheets read 2026-11-12. This section takes the narrow pattern and a 2 mm wall; which section gets which pattern is a game-design choice. Drawn, and read by F3.2 for the inside.",
       "covers": [
         "model.params.wallThicknessMm",
         "model.params.slotWidthMm",
@@ -4288,9 +4288,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     "params": {
       "defaultLengthMm": 300,
       "minLengthMm": 20,
-      "wallThicknessMm": 2.2,
-      "slotWidthMm": 6,
-      "fingerWidthMm": 8
+      "wallThicknessMm": 2,
+      "slotWidthMm": 8,
+      "fingerWidthMm": 12
     }
   },
   "controls": [
@@ -4303,16 +4303,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "duct-section-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 60 × 80 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "kind": "real-world",
+      "citation": "real-world (product class): slotted PVC wiring duct is catalogued by several makers in width × height sections including 25 × 40, 40 × 60 and 60 × 80 mm, in 2 m lengths with a clip-on cover (makers’ datasheets, read 2026-11-12). This entry is the 60 × 80 mm section on 2000 mm stock. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
       "covers": [
         "sizeMm"
       ]
     },
     {
       "id": "duct-comb",
-      "kind": "game-design",
-      "citation": "game-design: unverified. A 2.2 mm wall and base, 6 mm slots between 8 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "kind": "real-world",
+      "citation": "real-world (product class): makers publish a narrow slot pattern (4 mm slots between 6 mm fingers) and a wide one (8 mm slots between 12 mm fingers), with walls of about 2 mm (one maker’s drawing; 2.3 mm on another listing), datasheets read 2026-11-12. This section takes the wide pattern and a 2 mm wall; which section gets which pattern is a game-design choice. Drawn, and read by F3.2 for the inside.",
       "covers": [
         "model.params.wallThicknessMm",
         "model.params.slotWidthMm",
@@ -4347,8 +4347,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "SE-050-90",
   "category": "raceway",
   "sizeMm": {
-    "widthMm": 114,
-    "heightMm": 114,
+    "widthMm": 175,
+    "heightMm": 175,
     "depthMm": 18
   },
   "terminals": [],
@@ -4361,15 +4361,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "tradeSizeIn": 0.5,
       "outsideDiameterMm": 17.93,
       "wallThicknessMm": 1.07,
-      "bendRadiusMm": 105
+      "bendRadiusMm": 102,
+      "legLengthMm": 64
     }
   },
   "controls": [],
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1/2 trade size steel EMT, outside diameter 0.706 in = 17.93 mm, nominal wall 0.042 in = 1.07 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4378,10 +4379,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "elbow-bend",
-      "kind": "game-design",
-      "citation": "game-design: a 105 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "kind": "real-world",
+      "citation": "real-world (product data): makers’ standard 90° steel EMT elbows for ANSI C80.3 / UL 797 tubing (cited by number) have a 102 mm centreline radius (4.00 in) and straight legs of 64 mm (2.5 in) at each end (makers’ elbow sheets, read 2026-11-12; a second maker gives 5.80 in for 1 in). Product data, not a code table of minimum bend radii; bends are not checked in P3.",
       "covers": [
         "model.params.bendRadiusMm",
+        "model.params.legLengthMm"
+      ]
+    },
+    {
+      "id": "elbow-box",
+      "kind": "game-design",
+      "citation": "game-design: the elbow’s box is its leg plus its bend radius plus half its body diameter, square; its ends are on the box’s faces so joined parts touch.",
+      "covers": [
         "sizeMm"
       ]
     }
@@ -4396,8 +4405,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "SE-075-90",
   "category": "raceway",
   "sizeMm": {
-    "widthMm": 132,
-    "heightMm": 132,
+    "widthMm": 190,
+    "heightMm": 190,
     "depthMm": 24
   },
   "terminals": [],
@@ -4410,15 +4419,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "tradeSizeIn": 0.75,
       "outsideDiameterMm": 23.42,
       "wallThicknessMm": 1.24,
-      "bendRadiusMm": 120
+      "bendRadiusMm": 114,
+      "legLengthMm": 64
     }
   },
   "controls": [],
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 3/4 trade size steel EMT, outside diameter 0.922 in = 23.42 mm, nominal wall 0.049 in = 1.24 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4427,10 +4437,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "elbow-bend",
-      "kind": "game-design",
-      "citation": "game-design: a 120 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "kind": "real-world",
+      "citation": "real-world (product data): makers’ standard 90° steel EMT elbows for ANSI C80.3 / UL 797 tubing (cited by number) have a 114 mm centreline radius (4.50 in) and straight legs of 64 mm (2.5 in) at each end (makers’ elbow sheets, read 2026-11-12; a second maker gives 5.80 in for 1 in). Product data, not a code table of minimum bend radii; bends are not checked in P3.",
       "covers": [
         "model.params.bendRadiusMm",
+        "model.params.legLengthMm"
+      ]
+    },
+    {
+      "id": "elbow-box",
+      "kind": "game-design",
+      "citation": "game-design: the elbow’s box is its leg plus its bend radius plus half its body diameter, square; its ends are on the box’s faces so joined parts touch.",
+      "covers": [
         "sizeMm"
       ]
     }
@@ -4445,8 +4463,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "modelName": "SE-100-90",
   "category": "raceway",
   "sizeMm": {
-    "widthMm": 165,
-    "heightMm": 165,
+    "widthMm": 237,
+    "heightMm": 237,
     "depthMm": 30
   },
   "terminals": [],
@@ -4459,15 +4477,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "tradeSizeIn": 1,
       "outsideDiameterMm": 29.54,
       "wallThicknessMm": 1.45,
-      "bendRadiusMm": 150
+      "bendRadiusMm": 146,
+      "legLengthMm": 76
     }
   },
   "controls": [],
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1 trade size steel EMT, outside diameter 1.163 in = 29.54 mm, nominal wall 0.057 in = 1.45 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4476,10 +4495,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "elbow-bend",
-      "kind": "game-design",
-      "citation": "game-design: a 150 mm centreline radius, a quarter circle with no straight legs; chosen for play, not taken from a product drawing or from any code table of minimum bend radii (bends are not checked in P3). The box is the radius plus half the body diameter square.",
+      "kind": "real-world",
+      "citation": "real-world (product data): makers’ standard 90° steel EMT elbows for ANSI C80.3 / UL 797 tubing (cited by number) have a 146 mm centreline radius (5.75 in) and straight legs of 76 mm (3.0 in) at each end (makers’ elbow sheets, read 2026-11-12; a second maker gives 5.80 in for 1 in). Product data, not a code table of minimum bend radii; bends are not checked in P3.",
       "covers": [
         "model.params.bendRadiusMm",
+        "model.params.legLengthMm"
+      ]
+    },
+    {
+      "id": "elbow-box",
+      "kind": "game-design",
+      "citation": "game-design: the elbow’s box is its leg plus its bend radius plus half its body diameter, square; its ends are on the box’s faces so joined parts touch.",
+      "covers": [
         "sizeMm"
       ]
     }
@@ -4516,8 +4543,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.706 in = 17.93 mm) and nominal wall (0.042 in = 1.07 mm) of 1/2 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1/2 trade size steel EMT, outside diameter 0.706 in = 17.93 mm, nominal wall 0.042 in = 1.07 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4526,8 +4553,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "emt-stick",
-      "kind": "game-design",
-      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (18 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "kind": "real-world",
+      "citation": "real-world: EMT is sold in 10 ft (3048 mm) lengths (makers’ packaging tables, read 2026-11-12); sizeMm is the uncut stick along +x and the body diameter (18 mm). Cut ends are taken as square and reamed (no burr modelled).",
       "covers": [
         "sizeMm"
       ]
@@ -4574,8 +4601,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (0.922 in = 23.42 mm) and nominal wall (0.049 in = 1.24 mm) of 3/4 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 3/4 trade size steel EMT, outside diameter 0.922 in = 23.42 mm, nominal wall 0.049 in = 1.24 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 24 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4584,8 +4611,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "emt-stick",
-      "kind": "game-design",
-      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (24 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "kind": "real-world",
+      "citation": "real-world: EMT is sold in 10 ft (3048 mm) lengths (makers’ packaging tables, read 2026-11-12); sizeMm is the uncut stick along +x and the body diameter (24 mm). Cut ends are taken as square and reamed (no burr modelled).",
       "covers": [
         "sizeMm"
       ]
@@ -4632,8 +4659,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "emt-tube",
-      "kind": "game-design",
-      "citation": "game-design: unverified (recalled, not read in this PR). The outside diameter (1.163 in = 29.54 mm) and nominal wall (0.057 in = 1.45 mm) of 1 trade size electrical metallic tubing as commonly published by makers for ANSI C80.3 / UL 797 EMT (cited by number only; no NEC Chapter 9 table is used). electrical-realism-reviewer to check against a manufacturer dimension sheet, then relabel real-world. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "kind": "real-world",
+      "citation": "real-world: 1 trade size steel EMT, outside diameter 1.163 in = 29.54 mm, nominal wall 0.057 in = 1.45 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
       "covers": [
         "model.params.tradeSizeIn",
         "model.params.outsideDiameterMm",
@@ -4642,8 +4669,8 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "emt-stick",
-      "kind": "game-design",
-      "citation": "game-design: unverified. EMT is sold in 10 ft (3048 mm) sticks (common practice); sizeMm is the uncut stick along +x and the body diameter (30 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "kind": "real-world",
+      "citation": "real-world: EMT is sold in 10 ft (3048 mm) lengths (makers’ packaging tables, read 2026-11-12); sizeMm is the uncut stick along +x and the body diameter (30 mm). Cut ends are taken as square and reamed (no burr modelled).",
       "covers": [
         "sizeMm"
       ]
@@ -6472,7 +6499,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sizeMm": {
     "widthMm": 6,
     "heightMm": 48,
-    "depthMm": 42
+    "depthMm": 47
   },
   "terminals": [
     {
@@ -6587,10 +6614,17 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "tb-4mm2-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are about 6.2 mm wide per pole (2.5 mm² blocks about 5.2 mm), roughly 45 to 50 mm tall and deep, as makers’ datasheets list them (recalled, not read in this PR). Drawn 6 × 48 × 42 mm: the width is rounded down to whole mm (so 10 blocks take 60 mm, not 62). Green-yellow, the colour of protective-earth blocks; a real PE block bonds its foot to the rail (P4 grounding, not modelled in P3). Two clamps, one at the top (1) and one at the bottom (2); conductors enter the top and bottom faces.",
+      "kind": "real-world",
+      "citation": "real-world (product class): screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are 6.2 mm wide, about 47.7 mm long and 47.5 mm high on a 35 × 7.5 rail (a maker’s published datasheet, read 2026-11-12). Drawn 6 × 48 × 47 mm: the width rounded down to whole mm (so 10 blocks take 60 mm, not 62). Green-yellow, the colour of protective-earth blocks; a real PE block bonds its foot to the rail (P4 grounding, not modelled in P3).",
       "covers": [
-        "sizeMm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "tb-layout",
+      "kind": "game-design",
+      "citation": "game-design: two clamps, one at the top (1) and one at the bottom (2), 30 mm off the rail; conductors enter the top and bottom faces. Not taken from a product drawing.",
+      "covers": [
         "terminals",
         "terminals.*.methods.screw.entryMm",
         "terminals.*.methods.screw.exitAxis"
@@ -6605,19 +6639,26 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       ]
     },
     {
-      "id": "tb-screw-rating",
-      "kind": "game-design",
-      "citation": "game-design: unverified. The 4 mm² class is marked for copper only, 22 to 10 AWG solid or stranded (bare or in a ferrule), with a rising-cage (box) clamp tightened by an M3 screw to about 0.5 to 0.8 N·m; the fictional block is marked 0.6 N·m (NFPA 70-2023 Art. 110.14(D), cited by number, requires the marked value) with a 9 ± 1 mm strip and an 8 mm cage. One conductor is rated; a second fits under the cage and makes a worse termination (D8). No UL 486A-B torque table is used.",
+      "id": "tb-screw-class",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 4 mm² screw feed-through class takes 26–10 AWG copper (of which 22–10 is used here; UL/CSA 30 A, 600 V), solid or stranded, stranded in a ferrule up to 4 mm², with a 9 mm strip and an M3 clamp screw tightened to 0.6–0.8 N·m (a maker’s datasheet, read 2026-11-12). The marked 0.6 N·m is the fictional block’s, at the low end of that range; NFPA 70-2023 Art. 110.14(D) (cited by number) requires the marked value. No UL 486A-B torque table is used.",
       "covers": [
-        "terminals.*.methods.screw.ratedConductors",
-        "terminals.*.methods.screw.maxConductors",
         "terminals.*.methods.screw.awgRange",
         "terminals.*.methods.screw.stranding",
-        "terminals.*.methods.screw.stripLengthMm",
         "terminals.*.methods.screw.torqueNm",
-        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "tb-screw-rules",
+      "kind": "game-design",
+      "citation": "game-design: the ±1 mm strip tolerance, the 8 mm cage depth (inside the 9 mm strip), the rising-cage (box) clamp type and the 1-rated / 2-fit rule. The real class allows two conductors of equal size only up to 1.5 mm² (about 16 AWG); the game lets two of any size fit and shares the clamp force (a documented abstraction, content caveats).",
+      "covers": [
+        "terminals.*.methods.screw.stripLengthMm",
         "terminals.*.methods.screw.clampType",
-        "terminals.*.methods.screw.clampDepthMm"
+        "terminals.*.methods.screw.clampDepthMm",
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors"
       ]
     },
     {
@@ -6631,7 +6672,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "tb-screw-contact",
       "kind": "game-design",
-      "citation": "game-design: the screw clamps take the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). BSS 103 measured wiring-device terminals, not terminal-block cages, so applying it is a game-design choice. The cage’s heat capacity, 0.5 J/K, is the DIN supply’s small-box-clamp estimate (about 1.3 g of brass and steel × about 380 J/(kg·K)).",
+      "citation": "game-design: each screw clamp takes the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). A terminal-block voltage-drop acceptance (at most 3.2 mV per block, two clamps, at a DC test current of 0.1 × the rated section’s current) gives at most 1.0 mΩ per block at 4 mm² (3.2 A); the model’s two clamps at 0.3 mΩ (0.6 mΩ, plus the ideal bridge) sit inside it. Read on a maker’s terminal-block test page (read 2026-11-12: https://www.phoenixcontact.com/en-ch/quality-tests-for-terminal-blocks/electrical-tests-terminal-blocks), which attributes the test to IEC 60947-7-1, IEC 61984 and UL 1059 (cited by number only; the standards themselves unverified). The cage’s heat capacity, 0.5 J/K, is a physics estimate: about 1.3 g of brass and steel × about 380 J/(kg·K).",
       "covers": [
         "terminals.*.methods.screw.contactOhm",
         "terminals.*.methods.screw.heatPathWPerK",
@@ -6693,7 +6734,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "clampDepthMm": 9,
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.02,
-          "hotSpotHeatCapacityJPerK": 0.3,
+          "hotSpotHeatCapacityJPerK": 0.35,
           "combination": null
         }
       ]
@@ -6737,7 +6778,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "clampDepthMm": 9,
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.02,
-          "hotSpotHeatCapacityJPerK": 0.3,
+          "hotSpotHeatCapacityJPerK": 0.35,
           "combination": null
         }
       ]
@@ -6760,10 +6801,17 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "tb-25mm2-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Spring-cage (spring-clamp) feed-through DIN-rail terminal blocks of the 2.5 mm² class are about 5.2 mm wide per pole and roughly 50 to 60 mm tall, as makers’ datasheets list them (recalled, not read in this PR). Drawn 5 × 56 × 36 mm: the width rounded down to whole mm. Two spring cages, top (1) and bottom (2); conductors enter the top and bottom faces.",
+      "kind": "real-world",
+      "citation": "real-world (product class): 2.5 mm² spring-cage feed-through blocks are 5.1–5.2 mm wide, about 48.5–59.5 mm long and 36.5–38.5 mm high (makers’ datasheets, read 2026-11-12). Drawn 5 × 56 × 36 mm: the width rounded down to whole mm, the length inside the band, the height 0.5 mm under it (rounded to whole mm).",
       "covers": [
-        "sizeMm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "tb-layout",
+      "kind": "game-design",
+      "citation": "game-design: two spring cages, top (1) and bottom (2), 26 mm off the rail; conductors enter the top and bottom faces. Not taken from a product drawing.",
+      "covers": [
         "terminals",
         "terminals.*.methods.springCage.entryMm",
         "terminals.*.methods.springCage.exitAxis"
@@ -6779,15 +6827,22 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "tb-spring-rating",
-      "kind": "game-design",
-      "citation": "game-design: unverified. The 2.5 mm² spring-cage class is marked for copper only, about 22 to 12 AWG solid or stranded (bare or in a ferrule), one conductor per cage, with a 10 ± 1 mm strip; the cage grips 9 mm. A spring’s force is fixed, so no torque and no drive (the release slot’s blade is not modelled).",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 2.5 mm² spring-cage class takes 26/28–12 AWG copper (of which 22–12 is used here; UL/CSA 20 A, 600 V), solid or stranded, stranded in a ferrule, with an 8–10 mm strip (makers’ datasheets, read 2026-11-12); one conductor per cage. A spring’s force is fixed, so no torque and no drive (the release slot’s blade is not modelled).",
       "covers": [
-        "terminals.*.methods.springCage.ratedConductors",
-        "terminals.*.methods.springCage.maxConductors",
         "terminals.*.methods.springCage.awgRange",
         "terminals.*.methods.springCage.stranding",
-        "terminals.*.methods.springCage.stripLengthMm",
         "terminals.*.methods.springCage.alRated",
+        "terminals.*.methods.springCage.ratedConductors",
+        "terminals.*.methods.springCage.maxConductors"
+      ]
+    },
+    {
+      "id": "tb-spring-rules",
+      "kind": "game-design",
+      "citation": "game-design: a 10 ± 1 mm strip (inside the class’s 8–10 mm), the spring-cage clamp type and a 9 mm cage depth.",
+      "covers": [
+        "terminals.*.methods.springCage.stripLengthMm",
         "terminals.*.methods.springCage.clampType",
         "terminals.*.methods.springCage.clampDepthMm"
       ]
@@ -6795,7 +6850,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "tb-spring-contact",
       "kind": "game-design",
-      "citation": "game-design (ADR 0018 §4.1, §3.3): R₀ 0.3 mΩ, the ADR’s spring-cage example inside NBS BSS 128’s (1980) 1.5 mΩ assembly acceptance limit; a heat path of 0.02 W/K (a physics estimate, a little below the screw class’s 0.026 W/K for a smaller clamp) and a heat capacity of 0.3 J/K (about 0.8 g of spring steel and a copper bar × about 380 J/(kg·K)).",
+      "citation": "game-design (ADR 0018 §4.1, §3.3): R₀ 0.3 mΩ, the ADR’s spring-cage example inside NBS BSS 128’s (1980) 1.5 mΩ assembly acceptance limit. A terminal-block voltage-drop acceptance (at most 3.2 mV per block, two clamps, at a DC test current of 0.1 × the rated section’s current) gives at most 1.33 mΩ per block at 2.5 mm² (2.4 A); the model’s two clamps at 0.3 mΩ (0.6 mΩ, plus the ideal bridge) sit inside it. Read on a maker’s terminal-block test page (read 2026-11-12: https://www.phoenixcontact.com/en-ch/quality-tests-for-terminal-blocks/electrical-tests-terminal-blocks), which attributes the test to IEC 60947-7-1, IEC 61984 and UL 1059 (cited by number only; the standards themselves unverified). The heat path, 0.02 W/K, is a game-design scaling below the screw class’s calibrated 0.026 W/K for a smaller clamp (no derivation); the heat capacity, 0.35 J/K, is about 0.8 g of spring steel (about 460–490 J/(kg·K)) and a copper bar (about 385 J/(kg·K)).",
       "covers": [
         "terminals.*.methods.springCage.contactOhm",
         "terminals.*.methods.springCage.heatPathWPerK",
@@ -6815,7 +6870,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sizeMm": {
     "widthMm": 6,
     "heightMm": 48,
-    "depthMm": 42
+    "depthMm": 47
   },
   "terminals": [
     {
@@ -6930,10 +6985,17 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "sources": [
     {
       "id": "tb-4mm2-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are about 6.2 mm wide per pole (2.5 mm² blocks about 5.2 mm), roughly 45 to 50 mm tall and deep, as makers’ datasheets list them (recalled, not read in this PR). Drawn 6 × 48 × 42 mm: the width is rounded down to whole mm (so 10 blocks take 60 mm, not 62). Grey, the usual colour for line conductors. Two clamps, one at the top (1) and one at the bottom (2); conductors enter the top and bottom faces.",
+      "kind": "real-world",
+      "citation": "real-world (product class): screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are 6.2 mm wide, about 47.7 mm long and 47.5 mm high on a 35 × 7.5 rail (a maker’s published datasheet, read 2026-11-12). Drawn 6 × 48 × 47 mm: the width rounded down to whole mm (so 10 blocks take 60 mm, not 62). Grey, the usual colour for line conductors.",
       "covers": [
-        "sizeMm",
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "tb-layout",
+      "kind": "game-design",
+      "citation": "game-design: two clamps, one at the top (1) and one at the bottom (2), 30 mm off the rail; conductors enter the top and bottom faces. Not taken from a product drawing.",
+      "covers": [
         "terminals",
         "terminals.*.methods.screw.entryMm",
         "terminals.*.methods.screw.exitAxis"
@@ -6948,19 +7010,26 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       ]
     },
     {
-      "id": "tb-screw-rating",
-      "kind": "game-design",
-      "citation": "game-design: unverified. The 4 mm² class is marked for copper only, 22 to 10 AWG solid or stranded (bare or in a ferrule), with a rising-cage (box) clamp tightened by an M3 screw to about 0.5 to 0.8 N·m; the fictional block is marked 0.6 N·m (NFPA 70-2023 Art. 110.14(D), cited by number, requires the marked value) with a 9 ± 1 mm strip and an 8 mm cage. One conductor is rated; a second fits under the cage and makes a worse termination (D8). No UL 486A-B torque table is used.",
+      "id": "tb-screw-class",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 4 mm² screw feed-through class takes 26–10 AWG copper (of which 22–10 is used here; UL/CSA 30 A, 600 V), solid or stranded, stranded in a ferrule up to 4 mm², with a 9 mm strip and an M3 clamp screw tightened to 0.6–0.8 N·m (a maker’s datasheet, read 2026-11-12). The marked 0.6 N·m is the fictional block’s, at the low end of that range; NFPA 70-2023 Art. 110.14(D) (cited by number) requires the marked value. No UL 486A-B torque table is used.",
       "covers": [
-        "terminals.*.methods.screw.ratedConductors",
-        "terminals.*.methods.screw.maxConductors",
         "terminals.*.methods.screw.awgRange",
         "terminals.*.methods.screw.stranding",
-        "terminals.*.methods.screw.stripLengthMm",
         "terminals.*.methods.screw.torqueNm",
-        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "tb-screw-rules",
+      "kind": "game-design",
+      "citation": "game-design: the ±1 mm strip tolerance, the 8 mm cage depth (inside the 9 mm strip), the rising-cage (box) clamp type and the 1-rated / 2-fit rule. The real class allows two conductors of equal size only up to 1.5 mm² (about 16 AWG); the game lets two of any size fit and shares the clamp force (a documented abstraction, content caveats).",
+      "covers": [
+        "terminals.*.methods.screw.stripLengthMm",
         "terminals.*.methods.screw.clampType",
-        "terminals.*.methods.screw.clampDepthMm"
+        "terminals.*.methods.screw.clampDepthMm",
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors"
       ]
     },
     {
@@ -6974,7 +7043,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "tb-screw-contact",
       "kind": "game-design",
-      "citation": "game-design: the screw clamps take the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). BSS 103 measured wiring-device terminals, not terminal-block cages, so applying it is a game-design choice. The cage’s heat capacity, 0.5 J/K, is the DIN supply’s small-box-clamp estimate (about 1.3 g of brass and steel × about 380 J/(kg·K)).",
+      "citation": "game-design: each screw clamp takes the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). A terminal-block voltage-drop acceptance (at most 3.2 mV per block, two clamps, at a DC test current of 0.1 × the rated section’s current) gives at most 1.0 mΩ per block at 4 mm² (3.2 A); the model’s two clamps at 0.3 mΩ (0.6 mΩ, plus the ideal bridge) sit inside it. Read on a maker’s terminal-block test page (read 2026-11-12: https://www.phoenixcontact.com/en-ch/quality-tests-for-terminal-blocks/electrical-tests-terminal-blocks), which attributes the test to IEC 60947-7-1, IEC 61984 and UL 1059 (cited by number only; the standards themselves unverified). The cage’s heat capacity, 0.5 J/K, is a physics estimate: about 1.3 g of brass and steel × about 380 J/(kg·K).",
       "covers": [
         "terminals.*.methods.screw.contactOhm",
         "terminals.*.methods.screw.heatPathWPerK",

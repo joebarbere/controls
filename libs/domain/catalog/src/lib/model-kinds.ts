@@ -254,15 +254,17 @@ export const ConduitParams = z
 export type ConduitParams = z.infer<typeof ConduitParams>;
 
 /**
- * A factory 90° elbow (F3.5 part 2): a quarter circle of centreline radius `bendRadiusMm` in the
- * part's xy-plane, no straight legs (game-design). Its `sizeMm` is the bend's box: `depthMm` the
- * even-rounded tube diameter D, `widthMm` = `heightMm` = R + D/2. Its ends are at (D/2, 0, D/2)
- * facing −y and at (R + D/2, R, D/2) facing +x (`racewayPorts`).
+ * A factory 90° elbow (F3.5 part 2): a straight leg of `legLengthMm`, a quarter circle of centreline
+ * radius `bendRadiusMm` in the part's xy-plane, and another leg. Its `sizeMm` is the elbow's box:
+ * `depthMm` the even-rounded tube diameter D, `widthMm` = `heightMm` = L + R + D/2. Its ends are at
+ * (D/2, 0, D/2) facing −y and at (L + R + D/2, L + R, D/2) facing +x (`racewayPorts`).
  */
 export const ConduitElbowParams = z.strictObject({
   ...ConduitTube,
   /** The centreline radius of the bend (integer mm). */
   bendRadiusMm: Int.min(1),
+  /** The straight leg at each end of the bend (integer mm; 0 for a bare quarter circle). */
+  legLengthMm: Int.min(0),
 });
 export type ConduitElbowParams = z.infer<typeof ConduitElbowParams>;
 

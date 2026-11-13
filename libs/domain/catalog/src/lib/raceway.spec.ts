@@ -68,10 +68,10 @@ describe('raceway geometry', () => {
       { id: 'a', kind: 'joint', positionMm: { x: 0, y: 12, z: 12 }, axis: '-x' },
       { id: 'b', kind: 'joint', positionMm: { x: 750, y: 12, z: 12 }, axis: '+x' },
     ]);
-    // A 1/2 elbow: R = 105, r = 9, box 114 square.
+    // A 1/2 elbow: L = 64, R = 102, r = 9, box 175 square; end b at (64 + 102 + 9, 64 + 102).
     expect(racewayPorts(device('elbow.stavenor-emt-050'), null)).toStrictEqual([
       { id: 'a', kind: 'joint', positionMm: { x: 9, y: 0, z: 9 }, axis: '-y' },
-      { id: 'b', kind: 'joint', positionMm: { x: 114, y: 105, z: 9 }, axis: '+x' },
+      { id: 'b', kind: 'joint', positionMm: { x: 175, y: 166, z: 9 }, axis: '+x' },
     ]);
     // A 1 in connector: a 28 mm body, 42 mm across (r = 21).
     expect(racewayPorts(device('connector.stavenor-emt-100'), null)).toStrictEqual([
@@ -116,11 +116,20 @@ describe('the raceway and terminal-block load rules', () => {
     odd['sizeMm'] = { widthMm: 3048, heightMm: 23, depthMm: 23 };
     expect(messages(odd).join()).toMatch(/rounded up to an even whole mm/);
     const elbow = clone('elbow.stavenor-emt-075');
-    elbow['sizeMm'] = { widthMm: 130, heightMm: 132, depthMm: 24 };
-    expect(messages(elbow).join()).toMatch(/bend radius plus half its depth/);
+    elbow['sizeMm'] = { widthMm: 130, heightMm: 190, depthMm: 24 };
+    expect(messages(elbow).join()).toMatch(/leg plus its bend radius plus half its depth/);
     const bad = clone(STICK);
     (bad['model'] as { params: Record<string, number> }).params['tradeSizeIn'] = 0.6;
     expect(messages(bad).join()).toMatch(/tradeSizeIn must be a trade size/);
+  });
+
+  it('refuses a raceway without a body, and a cut part whose stock is longer than raceway.cut accepts', () => {
+    const bodiless = clone(DUCT);
+    bodiless['sizeMm'] = null;
+    expect(messages(bodiless).join()).toMatch(/A raceway has a body/);
+    const long = clone(STICK);
+    long['sizeMm'] = { widthMm: 6001, heightMm: 24, depthMm: 24 };
+    expect(messages(long).join()).toMatch(/stock is at most 6000 mm/);
   });
 
   it('refuses a crossMm on a mount that isn’t linear, and categories on the wrong kinds', () => {

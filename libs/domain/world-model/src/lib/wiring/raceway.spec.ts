@@ -100,6 +100,40 @@ describe('wire duct on a backplate', () => {
     expect(checkWorldReferences(world).map((i) => i.path)).toStrictEqual(['entities[1].state.lengthMm']);
     expect(checkWorldReferences(bus.state)).toStrictEqual([]);
   });
+
+  it('the load check re-runs the mount check with each mounted body’s own state (guardian N1)', () => {
+    const bus = panelBus();
+    place(bus, DUCT, at(-25, 90, 14)); // along 0..300 on the 350 mm plate
+    place(bus, ST4, at(-65, 150, 22));
+    place(bus, ST4, at(-59, 150, 22));
+    expect(checkWorldReferences(bus.state)).toStrictEqual([]);
+    const crafted = (update: (e: (typeof bus.state.entities)[number]) => (typeof bus.state.entities)[number]) => ({
+      ...bus.state,
+      entities: bus.state.entities.map(update),
+    });
+    // A 2000 mm duct (a length the entry allows) on the 350 mm plate: off the mount.
+    const long = crafted((e) => (e.id === 2 ? { ...e, state: { ...e.state, lengthMm: 2000 } } : e));
+    expect(checkWorldReferences(long)).toStrictEqual([
+      { path: 'entities[1].mountedOn', message: 'Not a place the mount allows (off-mount)' },
+    ]);
+    // A block at the modular-device line (cross 0) instead of its crossMm 21: off the mount, and (as
+    // checkMount has always counted a neighbour that isn't on the mount) its neighbour reports no room.
+    const low = crafted((e) =>
+      e.id === 3 ? { ...e, transform: { ...e.transform, positionMm: at(-69, 105, 22) } } : e,
+    );
+    expect(checkWorldReferences(low).map((i) => [i.path, i.message])).toStrictEqual([
+      ['entities[2].mountedOn', 'Not a place the mount allows (off-mount)'],
+      ['entities[3].mountedOn', 'Not a place the mount allows (mount-full)'],
+    ]);
+    // Two blocks on one 6 mm slot: both crowd the rail.
+    const stacked = crafted((e) =>
+      e.id === 4 ? { ...e, transform: { ...e.transform, positionMm: at(-69, 126, 22) } } : e,
+    );
+    expect(checkWorldReferences(stacked).map((i) => [i.path, i.message])).toStrictEqual([
+      ['entities[2].mountedOn', 'Not a place the mount allows (mount-full)'],
+      ['entities[3].mountedOn', 'Not a place the mount allows (mount-full)'],
+    ]);
+  });
 });
 
 describe('DIN terminal blocks', () => {

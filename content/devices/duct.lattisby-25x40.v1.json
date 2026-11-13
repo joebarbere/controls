@@ -25,9 +25,9 @@
     "params": {
       "defaultLengthMm": 300,
       "minLengthMm": 20,
-      "wallThicknessMm": 1.6,
-      "slotWidthMm": 4.5,
-      "fingerWidthMm": 5.5
+      "wallThicknessMm": 2,
+      "slotWidthMm": 4,
+      "fingerWidthMm": 6
     }
   },
   "controls": [
@@ -40,14 +40,14 @@
   "sources": [
     {
       "id": "duct-section-class",
-      "kind": "game-design",
-      "citation": "game-design: unverified product class. Slotted rigid-PVC wiring duct for control panels is catalogued in metric width × height sections (25 × 40, 40 × 60 and 60 × 80 mm among them) and sold in 2 m lengths with a clip-on cover; the class was recalled, not read from a dimension sheet in this PR, so the 25 × 40 mm section and 2000 mm stock length stay game-design until electrical-realism-reviewer checks them against public manufacturer dimension data. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
+      "kind": "real-world",
+      "citation": "real-world (product class): slotted PVC wiring duct is catalogued by several makers in width × height sections including 25 × 40, 40 × 60 and 60 × 80 mm, in 2 m lengths with a clip-on cover (makers’ datasheets, read 2026-11-12). This entry is the 25 × 40 mm section on 2000 mm stock. sizeMm: the stock length along +x, the width on the plate (+y), the height off it (+z).",
       "covers": ["sizeMm"]
     },
     {
       "id": "duct-comb",
-      "kind": "game-design",
-      "citation": "game-design: unverified. A 1.6 mm wall and base, 4.5 mm slots between 5.5 mm fingers (the class has walls of roughly 1.5 to 2.5 mm and slots of 4 to 8 mm; not read from one sheet). Drawn, and read by F3.2 for the inside.",
+      "kind": "real-world",
+      "citation": "real-world (product class): makers publish a narrow slot pattern (4 mm slots between 6 mm fingers) and a wide one (8 mm slots between 12 mm fingers), with walls of about 2 mm (one maker’s drawing; 2.3 mm on another listing), datasheets read 2026-11-12. This section takes the narrow pattern and a 2 mm wall; which section gets which pattern is a game-design choice. Drawn, and read by F3.2 for the inside.",
       "covers": ["model.params.wallThicknessMm", "model.params.slotWidthMm", "model.params.fingerWidthMm"]
     },
     {
