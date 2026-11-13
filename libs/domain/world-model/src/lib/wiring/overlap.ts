@@ -1,4 +1,4 @@
-import type { Catalog } from '@controls/catalog';
+import { type BodyState, type Catalog, deviceBodySizeMm } from '@controls/catalog';
 import { type CommandFailure, fail } from '@controls/commands';
 import { builtinProp } from '../props';
 import type { BoxMm } from '../routing/collide';
@@ -19,6 +19,11 @@ import { bodyBox } from './checks';
  * device that crowds its own mount is `mount-full`, not `overlaps`. Fixtures (level geometry) aren't
  * entities and aren't bodies. `entity.rotate` doesn't check overlap in P3.
  *
+ * Raceways (F3.5 part 2) are solid here, though hollow for `route-collides`: a terminal block may not
+ * be placed inside a duct. A cut-to-length part's body is its cut length wide (`deviceBodySizeMm`),
+ * from its commanded state; a part not placed yet is its entry's default length. Conduit parts joined
+ * end to end, and a connector at an entry, only touch (their ends lie on their bodies' faces).
+ *
  * Two scopes (decided in F3.5 part 1; a refusal may be relaxed later without changing any replay, and widened only to pairs no earlier log can contain):
  * - `all`: every pair of bodies. The placement maths (`placeInWorld`: the mouse, the keyboard reticle
  *   and scripts) uses it, so a snapped placement never overlaps anything.
@@ -33,10 +38,18 @@ import { bodyBox } from './checks';
 /** Which pairs of bodies count: every pair, or only those with an enclosure or a mounted device. */
 export type OverlapScope = 'all' | 'mounting';
 
-/** The body box of `ref` at `transform`, or `null` for a ref with no size (an unknown ref, a connection). */
-export function refBodyBox(catalog: Catalog, ref: CatalogRef, transform: Transform): BoxMm | null {
+/**
+ * The body box of `ref` at `transform` with commanded `state` (a cut part's length; `null` for one
+ * not placed yet), or `null` for a ref with no size (an unknown ref, a connection).
+ */
+export function refBodyBox(
+  catalog: Catalog,
+  ref: CatalogRef,
+  transform: Transform,
+  state: BodyState = null,
+): BoxMm | null {
   const device = catalog.device(ref);
-  const size = device ? device.sizeMm : (builtinProp(ref)?.sizeMm ?? null);
+  const size = device ? deviceBodySizeMm(device, state) : (builtinProp(ref)?.sizeMm ?? null);
   return size === null ? null : bodyBox({ transform }, size);
 }
 
@@ -60,7 +73,8 @@ function mountingBody(catalog: Catalog, ref: CatalogRef, mountedOn: MountedOn | 
 /**
  * The first entity (in id order) whose body `ref` at `transform` would overlap in `scope`, or `null`.
  * `self` is the entity being moved (it never overlaps itself or what is mounted on it); `mountedOn` is
- * where the body is mounted (its host isn't an obstacle to it).
+ * where the body is mounted (its host isn't an obstacle to it); `state` its commanded state (a cut
+ * part's length), `null` for a part not placed yet.
  */
 export function overlappingEntity(
   world: Pick<World, 'entities'>,
@@ -70,15 +84,16 @@ export function overlappingEntity(
   mountedOn: MountedOn | null,
   self: EntityId | null,
   scope: OverlapScope = 'all',
+  state: BodyState = null,
 ): EntityId | null {
-  const mine = refBodyBox(catalog, ref, transform);
+  const mine = refBodyBox(catalog, ref, transform, state);
   if (mine === null) return null;
   const counts = scope === 'all' || mountingBody(catalog, ref, mountedOn);
   for (const other of world.entities) {
     if (other.id === self || other.id === mountedOn?.entity) continue;
     if (self !== null && other.mountedOn?.entity === self) continue;
     if (!counts && !mountingBody(catalog, other.ref, other.mountedOn)) continue;
-    const theirs = refBodyBox(catalog, other.ref, other.transform);
+    const theirs = refBodyBox(catalog, other.ref, other.transform, other.state);
     if (theirs !== null && boxesOverlap(mine, theirs)) return other.id;
   }
   return null;
@@ -95,7 +110,8 @@ export function checkOverlap(
   transform: Transform,
   mountedOn: MountedOn | null,
   self: EntityId | null,
+  state: BodyState = null,
 ): CommandFailure | null {
-  const other = overlappingEntity(world, catalog, ref, transform, mountedOn, self, 'mounting');
+  const other = overlappingEntity(world, catalog, ref, transform, mountedOn, self, 'mounting', state);
   return other === null ? null : fail('overlaps', `It would overlap entity ${other}`);
 }

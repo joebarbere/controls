@@ -17,6 +17,7 @@ import { WorldSync } from '../world/world-sync';
 import {
   BULB_SLOT,
   BULB_TINTS,
+  buildDeviceCover,
   buildDeviceEntries,
   buildDeviceGeometry,
   buildDeviceLever,
@@ -513,5 +514,159 @@ describe('F3.5 recipes', () => {
     expect(recipes.size).toBe(0);
     expect(recipes.acquire(BREAKER).enclosure).toBe(false);
     recipes.dispose();
+  });
+});
+
+// --- F3.5 part 2: wire duct, EMT-lite and DIN terminal blocks ---------------------------------
+
+const DUCTS = ['duct.lattisby-25x40', 'duct.lattisby-40x60', 'duct.lattisby-60x80'].map((id) => ({ id, version: 1 }));
+const EMT = ['emt.stavenor-050', 'emt.stavenor-075', 'emt.stavenor-100'].map((id) => ({ id, version: 1 }));
+const ELBOWS = ['elbow.stavenor-emt-050', 'elbow.stavenor-emt-075', 'elbow.stavenor-emt-100'].map((id) => ({
+  id,
+  version: 1,
+}));
+const CONNECTORS = ['connector.stavenor-emt-050', 'connector.stavenor-emt-075', 'connector.stavenor-emt-100'].map(
+  (id) => ({ id, version: 1 }),
+);
+const BLOCKS = ['tb.quennick-st4', 'tb.quennick-sc25', 'tb.quennick-pe4'].map((id) => ({ id, version: 1 }));
+const PART_2 = [...DUCTS, ...EMT, ...ELBOWS, ...CONNECTORS, ...BLOCKS];
+const DUCT_40 = DUCTS[1];
+
+describe('F3.5 part 2 recipes', () => {
+  it('draw every duct, EMT part and terminal block, with its fictional label', () => {
+    for (const ref of PART_2) expect(deviceDefinitionFor(ref)?.id).toBe(ref.id);
+    expect(BLOCKS.map((ref) => deviceLabel(def(ref)))).toStrictEqual([
+      'Quennick QST 4',
+      'Quennick QSC 2.5',
+      'Quennick QPE 4',
+    ]);
+  });
+
+  it('a duct and a stick are drawn at their cut length (default when not placed), within their body box', () => {
+    const duct = def(DUCT_40);
+    const atDefault = bounds(buildDeviceGeometry(duct));
+    expect(toMm(atDefault.min)).toStrictEqual([0, 0, 0]);
+    expect(toMm(atDefault.max)).toStrictEqual([300, 40, 58]); // 60 deep, less the 2 mm cover
+    const cut = buildDeviceGeometry(duct, { lengthMm: 125, coverOn: true });
+    expect(toMm(bounds(cut).max)[0]).toBe(125);
+    const cover = buildDeviceCover(duct, { lengthMm: 125 }) as BufferGeometry;
+    expect([...toMm(bounds(cover).min), ...toMm(bounds(cover).max)]).toStrictEqual([0, 0, 58, 125, 40, 60]);
+    expect(buildDeviceCover(def(EMT[0]))).toBeNull();
+    const stick = bounds(buildDeviceGeometry(def(EMT[1]), { lengthMm: 750 }));
+    // A 23.42 mm tube centred in its 24 mm body, its bore discs 0.3 mm proud of each cut end.
+    expect(toMm(stick.min)).toStrictEqual([-0.3, 0.29, 0.29]);
+    expect(toMm(stick.max)).toStrictEqual([750.3, 23.71, 23.71]);
+  });
+
+  it('an elbow’s tube runs from its end a to its end b inside its box', () => {
+    const elbow = def(ELBOWS[1]); // L 64, R 114, D 24: box 190 × 190 × 24
+    const b = bounds(buildDeviceGeometry(elbow));
+    expect(toMm(b.min).map((n) => Math.round(n) + 0)).toStrictEqual([0, 0, 0]);
+    expect(toMm(b.max).map((n) => Math.round(n) + 0)).toStrictEqual([190, 190, 24]);
+  });
+
+  it('a terminal block reaches its height, and its entries are at entryMm', () => {
+    for (const ref of BLOCKS) {
+      const d = def(ref);
+      const size = d.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+      const b = bounds(buildDeviceGeometry(d));
+      expect(toMm(b.max)[1], ref.id).toBeCloseTo(size.heightMm, 0);
+      for (const t of d.terminals) {
+        const e = t.methods[0].entryMm;
+        const point = new Vector3(e.x, e.y, e.z).multiplyScalar(0.001);
+        expect(b.clone().expandByScalar(0.001).containsPoint(point), `${ref.id} ${t.id}`).toBe(true);
+      }
+    }
+    const green = buildDeviceMaterials(def(BLOCKS[2]))[DEVICE_SLOTS.indexOf('body')];
+    expect(green.color.getHex()).toBe(0x2e8b3a);
+  });
+
+  it('match the geometry snapshot (bounds, vertices and slots per entry, at the default length)', () => {
+    const summary = PART_2.map((ref) => {
+      const d = def(ref);
+      const g = buildDeviceGeometry(d);
+      const b = bounds(g);
+      const out = {
+        id: ref.id,
+        boundsMm: [...toMm(b.min), ...toMm(b.max)],
+        vertices: g.getAttribute('position').count,
+        slots: g.groups.map((group) => [DEVICE_SLOTS[group.materialIndex as number], group.count]),
+      };
+      g.dispose();
+      return out;
+    });
+    expect(summary).toMatchSnapshot('F3.5 part 2 recipes');
+  });
+
+  it('caches one recipe per cut length, and disposes each (cover included) with its last release', () => {
+    const recipes = new PropRecipes();
+    const a = recipes.acquire(DUCT_40, { lengthMm: 200, coverOn: false });
+    const b = recipes.acquire(DUCT_40, { lengthMm: 200, coverOn: true }); // the cover is a child, not the recipe
+    const c = recipes.acquire(DUCT_40, null);
+    expect(a).toBe(b);
+    expect(c).not.toBe(a);
+    expect(recipes.keyOf(DUCT_40, { lengthMm: 200 })).toBe('duct.lattisby-40x60@1#200');
+    expect(recipes.keyOf(DUCT_40, null)).toBe('duct.lattisby-40x60@1#300');
+    expect(recipes.keyOf(BLOCKS[0], { lengthMm: 5 })).toBe('tb.quennick-st4@1');
+    expect(recipes.size).toBe(2);
+    const owned = [a.geometry, a.cover as BufferGeometry, ...(a.material as Material[])];
+    const spies = owned.map((r) => vi.spyOn(r, 'dispose'));
+    recipes.release(DUCT_40, { lengthMm: 200 });
+    spies.forEach((s) => expect(s).not.toHaveBeenCalled());
+    recipes.release(DUCT_40, { lengthMm: 200 });
+    spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    recipes.release(DUCT_40, null);
+    expect(recipes.size).toBe(0);
+  });
+});
+
+describe('F3.5 part 2 in the scene', () => {
+  const panelWorld = (duct: Record<string, unknown>): World =>
+    worldOf(deviceEntity(1, DUCT_40, 100, duct), deviceEntity(2, EMT[1], 500), deviceEntity(3, BLOCKS[0], 900));
+
+  it('draws a duct, a stick and a block (scene-graph snapshot); the cover follows coverOn', () => {
+    const scene = new Scene();
+    const sync = new WorldSync(scene);
+    sync.sync(panelWorld({ lengthMm: 300, coverOn: false }));
+    const graph = describeSceneGraph(scene.getObjectByName('world') as Group);
+    expect(graph).toMatchSnapshot('F3.5 part 2 devices');
+    expect(node(sync, scene, 1)?.duct).toStrictEqual({ coverOn: false, lengthMm: 300 });
+    expect(node(sync, scene, 2)?.raceway).toStrictEqual({ lengthMm: 1000 });
+    const cover = () => (sync.objectOf(1) as Mesh).getObjectByName('cover') as Mesh;
+    expect(cover().visible).toBe(false);
+    const result = sync.sync(panelWorld({ lengthMm: 300, coverOn: true }));
+    expect(cover().visible).toBe(true);
+    expect(result.membershipChanged).toBe(false); // the same recipe: no picker rebuild
+    expect(sync.surfaceRoots().map((o) => o.name)).toStrictEqual(['entity-1', 'entity-2']);
+    expect(sync.enclosureRoots()).toStrictEqual([]);
+    sync.dispose();
+  });
+
+  it('a cut swaps the recipe (a picker rebuild) and frees the old length; teardown returns to baseline', () => {
+    const scene = new Scene();
+    const sync = new WorldSync(scene);
+    sync.sync(panelWorld({ lengthMm: 300, coverOn: false }));
+    const old = (sync.objectOf(1) as Mesh).geometry;
+    const oldSpy = vi.spyOn(old, 'dispose');
+    const result = sync.sync(panelWorld({ lengthMm: 120, coverOn: false }));
+    expect(result.membershipChanged).toBe(true);
+    expect(oldSpy).toHaveBeenCalledTimes(1);
+    expect(bounds((sync.objectOf(1) as Mesh).geometry).max.x * 1000).toBeCloseTo(120, 3);
+    expect(sync.recipes.size).toBe(3);
+
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    scene.traverse((o) => {
+      if (o instanceof Mesh) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    expect(geometries.size).toBe(4); // the duct, its cover, the stick and the block
+    const spies = [...geometries, ...materials].map((r) => vi.spyOn(r, 'dispose'));
+    sync.dispose();
+    spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(sync.recipes.size).toBe(0);
+    expect(scene.children).toHaveLength(0);
   });
 });

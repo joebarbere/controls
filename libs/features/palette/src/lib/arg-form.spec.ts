@@ -520,6 +520,7 @@ describe('every registered command', () => {
       'entity.rotate:id',
       'lead.connect:a.entity',
       'lead.connect:b.entity',
+      'raceway.cut:id',
       'wire.land:at.entity',
     ]);
   });

@@ -104,7 +104,8 @@ export function wiredWorldDoc(): Doc {
       entity(1, SPLIT, at(0, 900, -2000)),
       entity(2, BOX, at(1000, 1000, -2000), { state: { openEntries: 2 } }),
       entity(3, PANEL, at(0, 0, -2000), { state: { openEntries: 0 } }),
-      entity(4, BREAKER, at(100, 255, -1955), {
+      entity(4, BREAKER, at(100, 300, -1900), {
+        // 50 mm along rail-1 (origin (50, 300, -1900))
         state: { on: false },
         sim: { thermal: 0, tripped: false },
         mountedOn: { entity: 3, mount: 'rail-1' },

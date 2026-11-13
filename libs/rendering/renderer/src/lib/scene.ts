@@ -61,7 +61,8 @@ export function disposeScene(scene: Scene): void {
  * size shows up, and `drawn: false` when their material is never drawn (snap proxies). A lamp records
  * what it is drawn as (`lamp`: integer level 0…255 and status, by the validity rule), a switch its
  * lever's commanded state (`switch`), a breaker its handle's (`breaker`), and an enclosure which of
- * its entries are drawn open (`openEntries`).
+ * its entries are drawn open (`openEntries`); a duct its cut length and cover (`duct`) and a cut
+ * conduit stick its length (`raceway`, F3.5 part 2).
  */
 export interface SceneGraphNode {
   name: string;
@@ -80,6 +81,10 @@ export interface SceneGraphNode {
   breaker?: { on: boolean };
   /** An enclosure's entries drawn open (catalogue ids, catalogue order), from `state.openEntries`. */
   openEntries?: string[];
+  /** A duct's cut length and whether its cover is drawn, from `state.lengthMm` and `state.coverOn`. */
+  duct?: { coverOn: boolean; lengthMm: number | null };
+  /** A cut conduit stick's length, from `state.lengthMm`. */
+  raceway?: { lengthMm: number };
   boundsMm?: [number, number, number, number, number, number];
   drawn?: false;
   children?: SceneGraphNode[];
@@ -111,6 +116,10 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
   if (handle) node.breaker = { on: handle.on };
   const openEntries = object.userData['openEntries'] as string[] | undefined;
   if (openEntries) node.openEntries = [...openEntries];
+  const duct = object.userData['duct'] as { coverOn: boolean; lengthMm: number | null } | undefined;
+  if (duct) node.duct = { coverOn: duct.coverOn, lengthMm: duct.lengthMm };
+  const raceway = object.userData['raceway'] as { lengthMm: number } | undefined;
+  if (raceway) node.raceway = { lengthMm: raceway.lengthMm };
   if (object instanceof Mesh) {
     const geometry = object.geometry as BufferGeometry;
     if ((geometry.getAttribute('position')?.count ?? 0) > 0) {

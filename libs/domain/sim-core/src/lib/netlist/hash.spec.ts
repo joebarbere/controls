@@ -62,6 +62,12 @@ const MODEL_KIND_TOPOLOGY = {
   enclosurePanel: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
   spliceTwistOn: '4b84f762f1ccf0f8beabf60c49f4cea3f29de9f8c3f543e1b991e7442a78789e',
   spliceTwistOnSpliced: 'bb58f915c2e8cf15d9f306b622b527cb565002b2966bc456c9b7f19a884c5092',
+  racewayDuct: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  racewayConduit: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  racewayConduitElbow: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  racewayConduitConnector: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
+  terminalBlockFeedThrough: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
+  terminalBlockGround: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -86,6 +92,12 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   enclosurePanel: 'enclosure.panel',
   spliceTwistOn: 'splice.twistOn',
   spliceTwistOnSpliced: 'splice.twistOn',
+  racewayDuct: 'raceway.duct',
+  racewayConduit: 'raceway.conduit',
+  racewayConduitElbow: 'raceway.conduitElbow',
+  racewayConduitConnector: 'raceway.conduitConnector',
+  terminalBlockFeedThrough: 'terminalBlock.feedThrough',
+  terminalBlockGround: 'terminalBlock.ground',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -239,6 +251,14 @@ describe('topologyHash', () => {
       enclosurePanel: one({ id: 'panel.pellmoor-din-400x500', version: 1 }),
       // F3.3: a lone wire nut, and one splicing L1 to the breaker's line screw through two conductors.
       spliceTwistOn: one(WIRE_NUT_M),
+      // F3.5 part 2: raceways add nothing to the netlist (the empty netlist's hash); a lone terminal
+      // block joins its two clamps into one node (a ground block is the same in P3).
+      racewayDuct: one({ id: 'duct.lattisby-40x60', version: 1 }),
+      racewayConduit: one({ id: 'emt.stavenor-075', version: 1 }),
+      racewayConduitElbow: one({ id: 'elbow.stavenor-emt-075', version: 1 }),
+      racewayConduitConnector: one({ id: 'connector.stavenor-emt-075', version: 1 }),
+      terminalBlockFeedThrough: one({ id: 'tb.quennick-st4', version: 1 }),
+      terminalBlockGround: one({ id: 'tb.quennick-pe4', version: 1 }),
       spliceTwistOnSpliced: (() => {
         const bus = wiredBus();
         run(bus, 'entity.place', { ref: SPLIT_PHASE, positionMm: origin });

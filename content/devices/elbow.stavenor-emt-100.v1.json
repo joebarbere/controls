@@ -1,0 +1,49 @@
+{
+  "id": "elbow.stavenor-emt-100",
+  "version": 1,
+  "title": "EMT 90° elbow, 1 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SE-100-90",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 237,
+    "heightMm": 237,
+    "depthMm": 30
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitElbow",
+    "params": {
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45,
+      "bendRadiusMm": 146,
+      "legLengthMm": 76
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "real-world",
+      "citation": "real-world: 1 trade size steel EMT, outside diameter 1.163 in = 29.54 mm, nominal wall 0.057 in = 1.45 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
+    },
+    {
+      "id": "elbow-bend",
+      "kind": "real-world",
+      "citation": "real-world (product data): makers’ standard 90° steel EMT elbows for ANSI C80.3 / UL 797 tubing (cited by number) have a 146 mm centreline radius (5.75 in) and straight legs of 76 mm (3.0 in) at each end (makers’ elbow sheets, read 2026-11-12; a second maker gives 5.80 in for 1 in). Product data, not a code table of minimum bend radii; bends are not checked in P3.",
+      "covers": ["model.params.bendRadiusMm", "model.params.legLengthMm"]
+    },
+    {
+      "id": "elbow-box",
+      "kind": "game-design",
+      "citation": "game-design: the elbow’s box is its leg plus its bend radius plus half its body diameter, square; its ends are on the box’s faces so joined parts touch.",
+      "covers": ["sizeMm"]
+    }
+  ],
+  "extensions": {}
+}

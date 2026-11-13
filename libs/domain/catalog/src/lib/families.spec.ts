@@ -125,7 +125,7 @@ function box(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     category: 'enclosure',
     sizeMm: { widthMm: 50, heightMm: 75, depthMm: 60 },
     terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [screw] }],
-    mounts: [{ type: 'studFlange', widthMm: 50 }],
+    mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0 }],
     enclosure: {
       mounts: [
         { id: 'yoke', type: 'deviceYoke', positionMm: { x: 25, y: 37, z: 60 }, axis: '+x', facing: '+z', extentMm: 0 },
@@ -633,12 +633,20 @@ describe('catalogue format v2: the families on test fixtures', () => {
   it('a connection mounts on nothing; mount types are registered and declared once', () => {
     expect(
       messages({
-        devices: [conductor('conductor.test-14', { mounts: [{ type: 'din35', widthMm: 9 }] }), bareConductor(), box()],
+        devices: [
+          conductor('conductor.test-14', { mounts: [{ type: 'din35', widthMm: 9, crossMm: 0 }] }),
+          bareConductor(),
+          box(),
+        ],
       }).join(),
     ).toContain('A connection mounts on nothing');
     expect(
       messages({
-        devices: [conductor('conductor.test-14'), bareConductor(), box({ mounts: [{ type: 'shelf', widthMm: 9 }] })],
+        devices: [
+          conductor('conductor.test-14'),
+          bareConductor(),
+          box({ mounts: [{ type: 'shelf', widthMm: 9, crossMm: 0 }] }),
+        ],
       }).join(),
     ).toContain('mounts.shelf: Unknown mount type');
   });

@@ -61,6 +61,14 @@ export interface ModelKindDef {
    * entries offer mounts and entries; it declares the commanded `openEntries` key). Absent: neither.
    */
   readonly requires?: 'conductor' | 'enclosure';
+  /**
+   * A raceway kind (F3.5 part 2): the route waypoint kind a conductor run on it takes (ADR 0015,
+   * `duct` or `conduit`). Raceways are **hollow** for `route-collides` (conductors run inside them,
+   * like enclosures) but solid for placement overlap (nothing else may be placed inside one). Absent:
+   * not a raceway. A raceway kind with the commanded `lengthMm` key is cut to length
+   * ({@link CUT_LENGTH_KEY}).
+   */
+  readonly raceway?: 'duct' | 'conduit';
   /** The terminal ids every device of this kind has, sorted. Empty for connections. */
   readonly terminals: readonly string[];
   /** Validates `model.params` of a catalogue entry (a strict object of numbers). */
@@ -167,6 +175,119 @@ export type AcSourceParams = z.infer<typeof AcSourceParams>;
 /** SPST switch parameters: none in P2 (a closed switch is an ideal merge, F2.1). Ratings arrive with P4. */
 export const SwitchSpstParams = z.strictObject({});
 export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
+
+/**
+ * The commanded key of a cut-to-length raceway (F3.5 part 2): the cut length in integer mm along the
+ * part's own +x, which replaces its catalogue `sizeMm.widthMm` (the uncut stock length) as its body's
+ * width wherever a body is measured (`deviceBodySizeMm`). `entity.place` starts it at the entry's
+ * `defaultLengthMm` parameter; `raceway.cut` changes it.
+ */
+export const CUT_LENGTH_KEY = 'lengthMm';
+
+/** The longest cut a raceway entry may declare (integer mm): a 10 ft (3048 mm) EMT stick fits. */
+export const MAX_RACEWAY_LENGTH_MM = 6000;
+
+const raceLengthMm = Int.min(1).max(MAX_RACEWAY_LENGTH_MM);
+
+/** The cut-length parameters every cut-to-length raceway entry carries (integer mm). */
+const CutLengthParams = {
+  /** What `entity.place` cuts a new part to: at least `minLengthMm`, at most the stock length (`sizeMm.widthMm`). */
+  defaultLengthMm: raceLengthMm,
+  /** The shortest piece `raceway.cut` makes. */
+  minLengthMm: raceLengthMm,
+};
+
+/**
+ * Slotted wire duct parameters (F3.5 part 2): the section is the entry's `sizeMm` (`heightMm` the
+ * duct's width on the plate, `depthMm` how far it stands off it), the stock length its `widthMm`.
+ * The walls and the comb of fingers and slots are drawn from these (and F3.2 reads the inside).
+ */
+export const DuctParams = z
+  .strictObject({
+    ...CutLengthParams,
+    /** Side-wall and base thickness (mm). */
+    wallThicknessMm: positive,
+    /** Width of a slot between two fingers (mm). */
+    slotWidthMm: positive,
+    /** Width of a finger (mm); the slot pitch is slot + finger. */
+    fingerWidthMm: positive,
+  })
+  .refine((p) => p.minLengthMm <= p.defaultLengthMm, { message: 'minLengthMm must not exceed defaultLengthMm' });
+export type DuctParams = z.infer<typeof DuctParams>;
+
+/**
+ * The trade sizes (`TradeSize`) as numbers, for the numeric `model.params` of conduit parts. Exact
+ * binary fractions, so equality is exact. A trade size is a name, not a measurement.
+ */
+export const TRADE_SIZE_INCHES: Readonly<Record<string, number>> = Object.freeze({
+  '1/2': 0.5,
+  '3/4': 0.75,
+  '1': 1,
+  '1-1/4': 1.25,
+  '1-1/2': 1.5,
+  '2': 2,
+});
+
+/** A conduit trade size as a number of inches (`0.5` for 1/2): one of {@link TRADE_SIZE_INCHES}' values. */
+const tradeSizeIn = FiniteNumber.refine((n) => Object.values(TRADE_SIZE_INCHES).includes(n), {
+  message: 'tradeSizeIn must be a trade size in inches (0.5, 0.75, 1, 1.25, 1.5 or 2)',
+});
+
+/** The tube every conduit part is made for. */
+const ConduitTube = {
+  /** The trade size (inches, {@link TRADE_SIZE_INCHES}): parts join, and connectors fit entries, of equal size. */
+  tradeSizeIn,
+  /** The tube's outside diameter (mm), as published; the body box rounds it up to an even whole mm. */
+  outsideDiameterMm: positive,
+  /** The tube's nominal wall (mm). */
+  wallThicknessMm: positive,
+};
+
+/**
+ * EMT-lite straight stick parameters (F3.5 part 2): a tube along the part's +x, cut to length. Its
+ * `sizeMm` is the uncut stick (`widthMm`) and the tube's even-rounded outside diameter (`heightMm` =
+ * `depthMm`).
+ */
+export const ConduitParams = z
+  .strictObject({ ...CutLengthParams, ...ConduitTube })
+  .refine((p) => p.minLengthMm <= p.defaultLengthMm, { message: 'minLengthMm must not exceed defaultLengthMm' });
+export type ConduitParams = z.infer<typeof ConduitParams>;
+
+/**
+ * A factory 90° elbow (F3.5 part 2): a straight leg of `legLengthMm`, a quarter circle of centreline
+ * radius `bendRadiusMm` in the part's xy-plane, and another leg. Its `sizeMm` is the elbow's box:
+ * `depthMm` the even-rounded tube diameter D, `widthMm` = `heightMm` = L + R + D/2. Its ends are at
+ * (D/2, 0, D/2) facing −y and at (L + R + D/2, L + R, D/2) facing +x (`racewayPorts`).
+ */
+export const ConduitElbowParams = z.strictObject({
+  ...ConduitTube,
+  /** The centreline radius of the bend (integer mm). */
+  bendRadiusMm: Int.min(1),
+  /** The straight leg at each end of the bend (integer mm; 0 for a bare quarter circle). */
+  legLengthMm: Int.min(0),
+});
+export type ConduitElbowParams = z.infer<typeof ConduitElbowParams>;
+
+/**
+ * A set-screw connector (F3.5 part 2): fixes a conduit end into an enclosure entry of its trade size.
+ * Its body (`sizeMm`) is the part outside the wall, along +x from the wall face (x = 0) to where the
+ * tube goes in (x = `widthMm`); `throatLengthMm` of thread and a locknut reach in through the wall,
+ * drawn but not a body (the enclosure's own wall and inside).
+ */
+export const ConduitConnectorParams = z.strictObject({
+  ...ConduitTube,
+  /** How far the threaded throat and its locknut reach inside the enclosure wall (integer mm). */
+  throatLengthMm: Int.min(1),
+});
+export type ConduitConnectorParams = z.infer<typeof ConduitConnectorParams>;
+
+/**
+ * DIN-rail terminal block parameters (F3.5 part 2): none. A feed-through or ground block joins its
+ * two clamps by its bridge (ideally: the bridge's resistance is far below the clamps' contacts), and
+ * everything a conductor needs is on its terminals' method specs (ADR 0018 §8).
+ */
+export const TerminalBlockParams = z.strictObject({});
+export type TerminalBlockParams = z.infer<typeof TerminalBlockParams>;
 
 /**
  * Twist-on splice parameters (F3.3 part 1): none. A wire nut is one splice terminal whose rated
@@ -382,6 +503,37 @@ const OPEN_ENTRIES_KEY: StateKeyDef = {
     "Which of the enclosure's entries are open: bit i is entries[i] in catalogue order (enclosure.openEntry sets one). A new enclosure starts with every entry closed.",
 };
 
+/** The cut length of a cut-to-length raceway ({@link CUT_LENGTH_KEY}). */
+const CUT_LENGTH_STATE_KEY: StateKeyDef = {
+  owner: 'commanded',
+  type: 'number',
+  schema: raceLengthMm,
+  initial: 1000,
+  values: null,
+  description:
+    "The part's cut length (integer mm along its +x), its body's width. entity.place sets it to the entry's defaultLengthMm (this kind-level initial is a placeholder no placed part keeps) and raceway.cut changes it, within the entry's minLengthMm and stock length.",
+};
+
+/** Whether a duct's cover is fitted (`device.operate`, the entry's `coverOn` toggle). */
+const COVER_ON_KEY: StateKeyDef = {
+  owner: 'commanded',
+  type: 'boolean',
+  schema: z.boolean(),
+  initial: false,
+  values: null,
+  description:
+    'Whether the cover is clipped onto the duct (device.operate). A new duct starts open: duct is fitted before it is wired and covered after.',
+};
+
+/** A conduit fitting kind: no terminals and no state. */
+function conduitFitting(
+  kind: string,
+  params: z.ZodType<Readonly<Record<string, number>>>,
+  description: string,
+): ModelKindDef {
+  return { kind, placement: 'entity', raceway: 'conduit', terminals: [], params, keys: {}, description };
+}
+
 /** A connection end's contact state (ADR 0015); `intermittentOpen` takes the connection out of the netlist. */
 export const CONNECTION_END_STATES = ['ok', 'intermittentClosed', 'intermittentOpen', 'arcing'] as const;
 
@@ -448,8 +600,9 @@ export const CONNECTION_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
  * heater, and part 2's fuse and thermal-magnetic breaker. P3: F3.1's conductor, whose sim keys are the
- * lead's ten connection keys, and F3.5's enclosure kinds (`enclosure.box`,
- * `enclosure.panel`); adding a kind needs no `schemaVersion` bump.
+ * lead's ten connection keys, F3.5's enclosure kinds (`enclosure.box`, `enclosure.panel`), F3.3's
+ * twist-on splice, and F3.5 part 2's raceways (`raceway.*`) and terminal blocks (`terminalBlock.*`);
+ * adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -601,6 +754,36 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     keys: CONNECTION_SIM_KEYS,
     description: 'A test lead: a resistive connection between two terminals, made with lead.connect.',
   },
+  'raceway.conduit': {
+    kind: 'raceway.conduit',
+    placement: 'entity',
+    raceway: 'conduit',
+    terminals: [],
+    params: ConduitParams,
+    keys: { [CUT_LENGTH_KEY]: CUT_LENGTH_STATE_KEY },
+    description:
+      'An EMT-lite conduit stick (F3.5 part 2): a straight tube cut to length (raceway.cut); conductors are pulled through it (F3.4 part 2). No electrical model (P4 bonds metal raceways).',
+  },
+  'raceway.conduitConnector': conduitFitting(
+    'raceway.conduitConnector',
+    ConduitConnectorParams,
+    'An EMT set-screw connector (F3.5 part 2): fixes a conduit end into an open enclosure entry of its trade size. No electrical model.',
+  ),
+  'raceway.conduitElbow': conduitFitting(
+    'raceway.conduitElbow',
+    ConduitElbowParams,
+    'A factory 90° EMT elbow (F3.5 part 2): joins two conduit ends at a right angle; no bending minigame. No electrical model.',
+  ),
+  'raceway.duct': {
+    kind: 'raceway.duct',
+    placement: 'entity',
+    raceway: 'duct',
+    terminals: [],
+    params: DuctParams,
+    keys: { coverOn: COVER_ON_KEY, [CUT_LENGTH_KEY]: CUT_LENGTH_STATE_KEY },
+    description:
+      'Slotted wire duct with its cover (F3.5 part 2): fixed to a backplate, cut to length (raceway.cut); conductors are laid in it (F3.2). No electrical model.',
+  },
   resistor: {
     kind: 'resistor',
     placement: 'entity',
@@ -693,6 +876,24 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       ),
     },
     description: 'A single-pole, single-throw switch: closed joins its two terminals, open separates them.',
+  },
+  'terminalBlock.feedThrough': {
+    kind: 'terminalBlock.feedThrough',
+    placement: 'entity',
+    terminals: ['a', 'b'],
+    params: TerminalBlockParams,
+    keys: {},
+    description:
+      'A DIN-rail feed-through terminal block (F3.5 part 2): two clamps joined by a bridge, so conductors landed in either meet at one node. No state.',
+  },
+  'terminalBlock.ground': {
+    kind: 'terminalBlock.ground',
+    placement: 'entity',
+    terminals: ['a', 'b'],
+    params: TerminalBlockParams,
+    keys: {},
+    description:
+      'A DIN-rail ground (protective earth) terminal block (F3.5 part 2): two clamps joined like a feed-through block; its foot bonds to the rail with P4 grounding, not in P3. No state.',
   },
   'utility.splitPhase': {
     kind: 'utility.splitPhase',

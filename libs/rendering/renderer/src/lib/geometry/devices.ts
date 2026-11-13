@@ -1,7 +1,22 @@
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CylinderGeometry, DoubleSide, MeshStandardMaterial, SphereGeometry, type BufferGeometry } from 'three/webgpu';
+import {
+  CylinderGeometry,
+  DoubleSide,
+  MeshStandardMaterial,
+  SphereGeometry,
+  TorusGeometry,
+  type BufferGeometry,
+} from 'three/webgpu';
 import { mm } from '@controls/units';
-import { BUILTIN_CATALOG, type Catalog, type DeviceDefinition, type EnclosureEntry } from '@controls/catalog';
+import {
+  type BodySizeMm,
+  type BodyState,
+  BUILTIN_CATALOG,
+  type Catalog,
+  deviceBodySizeMm,
+  type DeviceDefinition,
+  type EnclosureEntry,
+} from '@controls/catalog';
 import type { CatalogRef } from '@controls/world-model';
 import type { DrawnLamp } from '../sim/lamp-display';
 import { buildDinRailGeometry } from './din-rail';
@@ -39,6 +54,11 @@ import { boxBetween } from './fixtures';
  * enclosure's entries (knockouts, pryouts, clamps, drill sites) are drawn as two child meshes per
  * entity (`WorldSync`): the closed ones (a slug or tab, the `accent` slot) and the open ones (a dark
  * hole, the `opening` slot), from the entity's commanded `openEntries` bit set ({@link buildDeviceEntries}).
+ *
+ * F3.5 part 2: wire duct (a slotted comb on a base; its cover is a child mesh shown by the commanded
+ * `coverOn`, {@link buildDeviceCover}), EMT-lite sticks, elbows and connectors, and DIN terminal blocks.
+ * A cut-to-length part's recipe is built for its cut length (`deviceBodySizeMm`), so the recipe cache
+ * keys it by length too (`PropRecipes`); every other recipe ignores the state.
  */
 
 /** Material slots, by group index. */
@@ -60,8 +80,11 @@ export const OPENING_SLOT: number = DEVICE_SLOTS.indexOf('opening');
 /** The material index a closed entry is drawn with (the slug or tab). */
 export const CLOSED_ENTRY_SLOT: number = DEVICE_SLOTS.indexOf('accent');
 
-/** Which recipe draws a model kind. Kinds without one are drawn as unknown objects. */
-const RECIPES: Readonly<Record<string, (def: DeviceDefinition) => Part[]>> = {
+/** The duct model kind, whose cover follows `state.coverOn`. */
+export const DUCT_KIND = 'raceway.duct';
+
+/** Which recipe draws a model kind (given its body size: a cut part's length). Kinds without one are drawn as unknown objects. */
+const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm) => Part[]>> = {
   battery: batteryParts,
   'supply.bench': benchSupplyParts,
   'supply.dinPsu': dinPsuParts,
@@ -73,6 +96,12 @@ const RECIPES: Readonly<Record<string, (def: DeviceDefinition) => Part[]>> = {
   fuse: fuseParts,
   'enclosure.box': boxEnclosureParts,
   'enclosure.panel': panelEnclosureParts,
+  [DUCT_KIND]: ductParts,
+  'raceway.conduit': conduitParts,
+  'raceway.conduitElbow': elbowParts,
+  'raceway.conduitConnector': connectorParts,
+  'terminalBlock.feedThrough': terminalBlockParts,
+  'terminalBlock.ground': terminalBlockParts,
 };
 
 interface Part {
@@ -92,9 +121,12 @@ export function deviceLabel(def: DeviceDefinition): string {
   return `${def.brand} ${def.modelName}`;
 }
 
-/** The device's merged geometry, in metres, one group per material slot used (see {@link DEVICE_SLOTS}). */
-export function buildDeviceGeometry(def: DeviceDefinition): BufferGeometry {
-  const parts = RECIPES[def.model.kind](def);
+/**
+ * The device's merged geometry, in metres, one group per material slot used (see {@link DEVICE_SLOTS}),
+ * for commanded `state` (a cut part's length; `null`: a part not placed yet, at its default length).
+ */
+export function buildDeviceGeometry(def: DeviceDefinition, state: BodyState = null): BufferGeometry {
+  const parts = RECIPES[def.model.kind](def, deviceBodySizeMm(def, state) as BodySizeMm);
   const bySlot = DEVICE_SLOTS.map((slot) => parts.filter((p) => p.slot === slot).map((p) => p.geometry));
   // One merged geometry per slot (empty slots skipped), then all of them with groups.
   const slots: { index: number; geometry: BufferGeometry }[] = [];
@@ -244,6 +276,66 @@ const LOOKS: Readonly<Record<string, Look>> = {
     positive: unused,
     negative: unused,
     accent: metal(0x9aa1a8), // knockout slugs, pryouts and clamp tabs
+    bulb: unused,
+    opening: hole,
+  },
+  [DUCT_KIND]: {
+    body: plastic(0xb9bcbf), // light grey rigid PVC
+    panel: plastic(0xa7abae), // the cover
+    label: unused,
+    positive: unused,
+    negative: unused,
+    accent: unused,
+    bulb: unused,
+    opening: unused,
+  },
+  'raceway.conduit': {
+    body: metal(0xc3c7cb), // galvanised steel tube
+    panel: unused,
+    label: unused,
+    positive: unused,
+    negative: unused,
+    accent: unused,
+    bulb: unused,
+    opening: hole, // the open bore at each cut end
+  },
+  'raceway.conduitElbow': {
+    body: metal(0xc3c7cb),
+    panel: unused,
+    label: unused,
+    positive: unused,
+    negative: unused,
+    accent: unused,
+    bulb: unused,
+    opening: hole,
+  },
+  'raceway.conduitConnector': {
+    body: metal(0xb7bbbf), // zinc die-cast body
+    panel: unused,
+    label: unused,
+    positive: unused,
+    negative: unused,
+    accent: metal(0x8d9196), // locknut, gland and set screw
+    bulb: unused,
+    opening: hole,
+  },
+  'terminalBlock.feedThrough': {
+    body: plastic(0x9da3a8), // grey polyamide
+    panel: plastic(0x2f3338), // DIN foot
+    label: plastic(0xf0f0f0), // marker carrier
+    positive: unused,
+    negative: unused,
+    accent: metal(0xc9ccd0), // clamp screws and spring releases
+    bulb: unused,
+    opening: hole, // conductor entries
+  },
+  'terminalBlock.ground': {
+    body: plastic(0x2e8b3a), // green
+    panel: plastic(0x2f3338),
+    label: plastic(0xf0f0f0),
+    positive: plastic(0xe8c51a), // the yellow stripe of a green-yellow PE block
+    negative: unused,
+    accent: metal(0xc9ccd0),
     bulb: unused,
     opening: hole,
   },
@@ -675,6 +767,176 @@ function panelEnclosureParts(def: DeviceDefinition): Part[] {
     const back = plate?.positionMm.z ?? m.positionMm.z - 8;
     rail.translate(mm(m.positionMm.x + m.extentMm / 2), mm(m.positionMm.y + DIN_MOUNT_CENTRE_MM), mm(back));
     parts.push({ slot: 'accent', geometry: rail });
+  }
+  return parts;
+}
+
+/** How deep the solid band along the bottom of a duct's walls is, below the slots (mm, game-design look). */
+const DUCT_BAND_MM = 10;
+/** The cover's thickness (mm, game-design look): it sits inside the body's depth, on top of the fingers. */
+const DUCT_COVER_MM = 2;
+/** At most this many fingers are drawn per wall (a 2 m duct at a 10 mm pitch is 200): a vertex budget. */
+const MAX_DUCT_FINGERS = 256;
+
+/**
+ * Slotted wire duct, lying along +x for its cut length: a base on the plate (z = 0) and two walls
+ * (y = 0 and y = height) of a solid band and fingers up to the cover, from the entry's wall, slot and
+ * finger widths. The cover is not here ({@link buildDeviceCover}).
+ */
+function ductParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const { widthMm: l, heightMm: w, depthMm: d } = size;
+  const p = def.model.params;
+  const t = p['wallThicknessMm'];
+  const top = d - DUCT_COVER_MM;
+  const band = Math.min(DUCT_BAND_MM, top / 3);
+  const parts: Part[] = [
+    { slot: 'body', geometry: boxBetween(0, 0, 0, l, w, t) },
+    { slot: 'body', geometry: boxBetween(0, 0, t, l, t, band) },
+    { slot: 'body', geometry: boxBetween(0, w - t, t, l, w, band) },
+  ];
+  const pitch = p['slotWidthMm'] + p['fingerWidthMm'];
+  const fingers = Math.min(MAX_DUCT_FINGERS, Math.floor((l - p['fingerWidthMm']) / pitch) + 1);
+  // Fingers centred along the cut, so a cut piece looks the same at both ends.
+  const start = (l - ((fingers - 1) * pitch + p['fingerWidthMm'])) / 2;
+  for (let k = 0; k < fingers; k++) {
+    const x0 = start + k * pitch;
+    const x1 = x0 + p['fingerWidthMm'];
+    parts.push({ slot: 'body', geometry: boxBetween(x0, 0, band, x1, t, top) });
+    parts.push({ slot: 'body', geometry: boxBetween(x0, w - t, band, x1, w, top) });
+  }
+  return parts;
+}
+
+/**
+ * A duct's cover, its cut length (shared geometry owned by the recipe, drawn as the child mesh
+ * `cover` in the `panel` slot when the entity's commanded `coverOn` is true), or `null` for anything
+ * else.
+ */
+export function buildDeviceCover(def: DeviceDefinition, state: BodyState = null): BufferGeometry | null {
+  if (def.model.kind !== DUCT_KIND) return null;
+  const { widthMm: l, heightMm: w, depthMm: d } = deviceBodySizeMm(def, state) as BodySizeMm;
+  return boxBetween(0, 0, d - DUCT_COVER_MM, l, w, d);
+}
+
+/** A tube's open bore at an end: a dark disc just proud of the end face, at x = `x` (mm). */
+function boreDisc(r: number, inner: number, x: number, out: 1 | -1): BufferGeometry {
+  return cylinderX(r, r, inner, x - (out < 0 ? 0.3 : 0), x + (out > 0 ? 0.3 : 0));
+}
+
+/** An EMT stick: a tube along +x for its cut length, centred in its body box, with its bore drawn at each end. */
+function conduitParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const r = size.depthMm / 2;
+  const od = def.model.params['outsideDiameterMm'];
+  const inner = od / 2 - def.model.params['wallThicknessMm'];
+  return [
+    { slot: 'body', geometry: cylinderX(r, r, od / 2, 0, size.widthMm) },
+    { slot: 'opening', geometry: boreDisc(r, inner, 0, -1) },
+    { slot: 'opening', geometry: boreDisc(r, inner, size.widthMm, 1) },
+  ];
+}
+
+/**
+ * A 90° elbow: a straight leg L up from its end a at (D/2, 0), a quarter torus of the bend radius
+ * about (R + D/2, L, D/2) in the part's xy-plane, and a leg out to its end b at (L + R + D/2, L + R)
+ * (`racewayPorts`), with a bore at each end.
+ */
+function elbowParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const r = size.depthMm / 2;
+  const bend = def.model.params['bendRadiusMm'];
+  const leg = def.model.params['legLengthMm'];
+  const od = def.model.params['outsideDiameterMm'];
+  const inner = od / 2 - def.model.params['wallThicknessMm'];
+  const torus = new TorusGeometry(mm(bend), mm(od / 2), 16, 24, Math.PI / 2);
+  // The arc runs from angle 0 to 90°; turned by 90° it runs from +y to −x about the centre.
+  torus.rotateZ(Math.PI / 2);
+  torus.translate(mm(bend + r), mm(leg), mm(r));
+  const end = leg + bend + r; // end b's x
+  const parts: Part[] = [
+    { slot: 'body', geometry: torus },
+    { slot: 'opening', geometry: cylinderY(r, r, inner, -0.3, 0) }, // end a (y = 0), facing −y
+    { slot: 'opening', geometry: cylinderX(leg + bend, r, inner, end, end + 0.3) }, // end b, facing +x
+  ];
+  if (leg > 0) {
+    parts.push({ slot: 'body', geometry: cylinderY(r, r, od / 2, 0, leg) });
+    parts.push({ slot: 'body', geometry: cylinderX(leg + bend, r, od / 2, bend + r, end) });
+  }
+  return parts;
+}
+
+/** A hexagonal prism along +x (a nut), across-corners diameter `d`, centred at (y, z). */
+function hexX(y: number, z: number, d: number, x0: number, x1: number): BufferGeometry {
+  const g = new CylinderGeometry(mm(d / 2), mm(d / 2), mm(x1 - x0), 6);
+  g.rotateZ(Math.PI / 2);
+  g.translate(mm((x0 + x1) / 2), mm(y), mm(z));
+  return g;
+}
+
+/**
+ * A set-screw connector: outside the wall (0 ≤ x ≤ width) a hex shoulder against the wall and a
+ * gland the tube enters, with its set screw; inside (x < 0, through the knockout) the threaded throat
+ * and a locknut, which reach past the body box on purpose (they are inside the enclosure's own wall).
+ */
+function connectorParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const { widthMm: w, depthMm: d } = size;
+  const r = d / 2;
+  const od = def.model.params['outsideDiameterMm'];
+  const throat = def.model.params['throatLengthMm'];
+  const shoulder = Math.round(w * 0.35);
+  const inner = od / 2 - def.model.params['wallThicknessMm'];
+  return [
+    { slot: 'body', geometry: hexX(r, r, d, 0, shoulder) },
+    { slot: 'body', geometry: cylinderX(r, r, od / 2 + 2, shoulder, w) },
+    { slot: 'accent', geometry: cylinderY(shoulder + (w - shoulder) / 2, r, 2, r, r + od / 2 + 4) },
+    { slot: 'body', geometry: cylinderX(r, r, od / 2 + 1, -throat, 0) },
+    { slot: 'accent', geometry: hexX(r, r, d, -throat, -throat + 3) },
+    { slot: 'opening', geometry: boreDisc(r, inner, -throat, -1) },
+  ];
+}
+
+/**
+ * A DIN terminal block standing on its rail, facing +z: a body, a DIN foot across the back at the
+ * rail's centreline (the body's mid-height, as `crossMm` centres it), a marker carrier on the front,
+ * and per terminal a clamp screw (or a spring release) on the front and a dark conductor entry where
+ * its method's `entryMm` is. A ground block carries a yellow stripe on its green body.
+ */
+function terminalBlockParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const { widthMm: w, heightMm: h, depthMm: d } = size;
+  const front = d - 6;
+  const mid = Math.floor(h / 2);
+  const parts: Part[] = [
+    { slot: 'body', geometry: boxBetween(0, 0, 0, w, h, front) },
+    { slot: 'body', geometry: boxBetween(0.4, h * 0.3, front, w - 0.4, h * 0.7, d - 1) },
+    { slot: 'label', geometry: boxBetween(0.6, mid - 4, d - 1, w - 0.6, mid + 4, d) },
+    { slot: 'panel', geometry: boxBetween(0, mid - 12, -0.5, w, mid + 12, 4) },
+  ];
+  if (def.model.kind === 'terminalBlock.ground') {
+    parts.push({ slot: 'positive', geometry: boxBetween(-0.2, h * 0.3, 8, w + 0.2, h * 0.3 + 4, front) });
+  }
+  for (const t of def.terminals) {
+    const m = t.methods[0];
+    const p = t.positionMm;
+    const screw = m?.method === 'screw';
+    parts.push({
+      slot: 'accent',
+      geometry: screw
+        ? cylinderZ(p.x, p.y, Math.min(w / 2 - 0.4, 2.5), front - 1, front + 0.5)
+        : boxBetween(p.x - w / 2 + 1, p.y - 3, front - 1, p.x + w / 2 - 1, p.y + 3, front + 0.5),
+    });
+    if (m) {
+      const e = m.entryMm;
+      const out = m.exitAxis === '+y' ? 0.3 : -0.3;
+      parts.push({
+        slot: 'opening',
+        geometry: boxBetween(
+          e.x - w / 2 + 1,
+          Math.min(e.y, e.y + out),
+          e.z - 2.5,
+          e.x + w / 2 - 1,
+          Math.max(e.y, e.y + out),
+          e.z + 2.5,
+        ),
+      });
+    }
   }
   return parts;
 }

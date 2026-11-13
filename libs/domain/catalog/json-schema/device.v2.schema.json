@@ -37,7 +37,9 @@
         "lead",
         "conductor",
         "enclosure",
-        "splice"
+        "splice",
+        "raceway",
+        "terminalBlock"
       ]
     },
     "sizeMm": {
@@ -385,11 +387,17 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 9007199254740991
+          },
+          "crossMm": {
+            "type": "integer",
+            "minimum": -1000,
+            "maximum": 1000
           }
         },
         "required": [
           "type",
-          "widthMm"
+          "widthMm",
+          "crossMm"
         ],
         "additionalProperties": false
       }

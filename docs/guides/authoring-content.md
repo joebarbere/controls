@@ -73,6 +73,17 @@ Ferrules (`ferrule.*`, kind `ferrule`) and insulated ring and fork lugs (`lug.*`
 - `awgRange` and `stranding` are what the accessory fits (`wrong-accessory` otherwise); ferrules are stranded only. `barrelLengthMm` is what the strip length must match; `studDiameterMm` is a lug's screw size (`null` for a ferrule), computed for Unified numbered sizes as (0.060 + 0.013 N) in.
 - **Twist-on wire nuts are not accessories.** ADR 0018 §4.4 makes them `splice.twistOn` devices with a `twistOn` terminal method whose `combination` bounds (conductor count, AWG range, total `areaUm2`) are paraphrased from public packaging data under a fictional brand, never a reproduced chart. They arrive with F3.3 part 1, which adds the fields.
 
+## Raceways and terminal blocks
+
+From F3.5 part 2. Wire duct (`duct.*`, kind `raceway.duct`), EMT-lite parts (`emt.*` sticks, `elbow.*` and `connector.*`, kinds `raceway.conduit`, `raceway.conduitElbow`, `raceway.conduitConnector`) and DIN terminal blocks (`tb.*`, kinds `terminalBlock.feedThrough`, `terminalBlock.ground`), all in `content/devices/` with categories `raceway` and `terminalBlock`.
+
+- **A cut-to-length part's `sizeMm.widthMm` is the uncut stock** (a 2 m duct, a 10 ft stick); the placed body is its commanded `lengthMm` wide. `model.params` gives `defaultLengthMm` (what a new piece is cut to; at most the stock) and `minLengthMm`.
+- **A conduit part's body diameter (`depthMm`) is its tube's outside diameter rounded up to an even whole mm**, so its ends sit on whole millimetres (load-checked); the drawn tube uses the published `outsideDiameterMm`. A stick and a connector are as tall as deep; an elbow's box is its `legLengthMm` plus its `bendRadiusMm` plus half the depth, square. Trade sizes are `tradeSizeIn` numbers (`TRADE_SIZE_INCHES`: 0.5, 0.75, 1, …).
+- **Cite EMT dimensions to ANSI C80.3 / UL 797 by number, from a maker's dimension sheet; never a NEC Chapter 9 table** (Table 4 lists EMT inside areas). Elbow radii and legs come from makers' standard elbow sheets (cite the sheet and the standards by number), never from a code table of minimum bend radii.
+- **A terminal block centred on a DIN rail declares `crossMm` = 45 − ⌊height / 2⌋** on its `din35` fit (a DIN 43880 modular device declares 0; any non-linear fit must be 0). Its width is the pole pitch rounded down to whole mm (5.2 → 5, 6.2 → 6), and a block narrower than 17 mm snaps at multiples of its own width.
+- Terminal-block clamps carry ADR 0018 §8's fields like any method: a screw clamp is a rising cage (`boxLug`) with a marked torque and drives, a spring cage `springCage` with no torque or drives.
+- **An id must not be a prefix of another before a `-`**: the ground block is `tb.quennick-pe4`, not `tb.quennick-st4-pe`.
+
 ## Termination specs
 
 - A terminal's `methods` is empty for a clip-only terminal. Give a terminal methods only where a conductor really lands on that product.
@@ -103,15 +114,18 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Ferrovane      | Sealed lead-acid battery                          |
 | Hearthvale     | Heater elements                                   |
 | Larkmoor Power | Utility services (one brand for the utility)      |
+| Lattisby       | Slotted wire duct                                 |
 | Lumivane       | Incandescent lamps                                |
 | Orrinwood      | Power resistor                                    |
 | Pellmoor       | Control-panel enclosures                          |
 | Penmarrow      | Label printers                                    |
+| Quennick       | DIN-rail terminal blocks                          |
 | Quillfern      | Test leads                                        |
 | Quorvale       | Aluminium building wire (XHHW-2)                  |
 | Railwick       | DIN-rail power supply                             |
 | Saltmere       | Circuit breaker                                   |
 | Sorrelby       | NM-B cable and its conductors                     |
+| Stavenor       | EMT conduit, elbows and connectors                |
 | Tallowmere     | Copper building wire (THHN/THWN-2) and MTW        |
 | Tessaline      | Toggle switch                                     |
 | Testbrand      | Test-only fixtures in specs, never in `content/`  |

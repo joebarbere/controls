@@ -1,0 +1,42 @@
+{
+  "id": "connector.stavenor-emt-050",
+  "version": 1,
+  "title": "EMT set-screw connector, 1/2 in trade size",
+  "brand": "Stavenor",
+  "modelName": "SC-050",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 22,
+    "heightMm": 28,
+    "depthMm": 28
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduitConnector",
+    "params": {
+      "tradeSizeIn": 0.5,
+      "outsideDiameterMm": 17.93,
+      "wallThicknessMm": 1.07,
+      "throatLengthMm": 10
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "real-world",
+      "citation": "real-world: 1/2 trade size steel EMT, outside diameter 0.706 in = 17.93 mm, nominal wall 0.042 in = 1.07 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 18 mm (even, so the ends sit on whole millimetres).",
+      "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
+    },
+    {
+      "id": "connector-body",
+      "kind": "game-design",
+      "citation": "game-design within makers’ ranges: a steel set-screw EMT connector with a 22 mm body outside the enclosure wall (makers’ overall length less thread spans about 19 to 43 mm across the three sizes), 28 mm across (one maker lists 28.6, 35.1 and 41.4 mm), and a 10 mm threaded throat with its locknut inside the wall (makers list thread lengths of 9.5 to 14.3 mm); connector dimension sheets read 2026-11-12. The body’s length is a game-design pick inside those ranges.",
+      "covers": ["sizeMm", "model.params.throatLengthMm"]
+    }
+  ],
+  "extensions": {}
+}

@@ -5,11 +5,17 @@
  * reticle and scripts all call {@link placeInWorld}, so they produce identical commands and hashes.
  *
  * Order of preference, all pure integer maths (no trigonometry, no clock):
+ * 0. **A conduit end or an open entry** (F3.5 part 2), for an EMT-lite part being placed: within
+ *    `RACEWAY_CAPTURE_DISTANCE` of an open enclosure entry of its trade size (a connector) or of a free
+ *    end of a placed conduit part of its size, the part's end goes there, facing it (`snapConduit`;
+ *    `options.turn` picks among the four turns about that end). Otherwise it is placed like any part.
  * 1. **An enclosure mount the device fits** (a breaker onto a panel's DIN rail, a device into a box's
  *    yoke), when the cursor is on it: within {@link MOUNT_CAPTURE_DEPTH} of the mount's plane and over
  *    the place the device would take. Rails win over yokes, yokes over backplates (most specific
  *    first, as `SNAP_PRIORITY` does for fixtures), then the nearer plane, then the target id. The
- *    position snaps to DIN module slots along a rail (`dinSlotStartMm`, as on the workshop's rails) and
+ *    position snaps to DIN module slots along a rail (`dinSlotStartMm`, as on the workshop's rails; a
+ *    device narrower than `NARROW_RAIL_DEVICE`, a terminal block, to multiples of its own width, at
+ *    its declared `crossMm`) and
  *    to the 5 mm backplate grid on an area mount; a yoke takes the device exactly. The orientation is
  *    the mount's frame composed with the host's (`orientationForAxes`), so `checkMount` accepts it.
  * 2. **A fixture** (the workshop's backplate, rails, stud wall and bench top), as `placeOnTargets`
@@ -24,13 +30,22 @@
  * Moving keeps the orientation and the mount (`entity.move` changes the position only): a mounted
  * device slides along its own mount, a free one moves between fixtures that mount it the same way.
  */
-import { BUILTIN_CATALOG, type Catalog, type EnclosureMount, mountType } from '@controls/catalog';
+import {
+  type BodyState,
+  BUILTIN_CATALOG,
+  type Catalog,
+  deviceBodySizeMm,
+  deviceMountWidthMm,
+  type EnclosureMount,
+  mountType,
+} from '@controls/catalog';
 import { entityHold, findEntity } from '../entity-commands';
 import { builtinProp, propFootprint } from '../props';
 import type { CatalogRef, EntityId, MountedOn, OrientationMdeg, World } from '../types';
 import { checkMount, mountFrame } from '../wiring/mounting';
 import { overlappingEntity } from '../wiring/overlap';
-import { MOUNT_CAPTURE_DEPTH } from './constants';
+import { MOUNT_CAPTURE_DEPTH, NARROW_RAIL_DEVICE } from './constants';
+import { snapConduit } from './raceway-placement';
 import { isMountedOrientation, orientationForFrame, type PlacementFailure } from './placement';
 import { entityPointMm, orientationForAxes } from './quarter-turn';
 import { snapToBest } from './resolve';
@@ -116,7 +131,7 @@ export type WorldPlacement =
   | {
       readonly ok: true;
       readonly targetId: string;
-      readonly kind: SnapTarget['kind'] | 'mount';
+      readonly kind: SnapTarget['kind'] | 'mount' | 'raceway';
       /** Exactly the `entity.place` / `entity.move` position. */
       readonly positionMm: Vec3Mm;
       /** Exactly the `entity.place` orientation (a move keeps the entity's). */
@@ -131,13 +146,16 @@ export interface WorldPlacementOptions {
   readonly catalog?: Catalog;
   /** Move this entity instead of placing `ref`: it keeps its orientation and mount. */
   readonly moving?: EntityId | null;
+  /** Which of the four turns a conduit part snapped to an end takes (any integer, modulo 4; default 0). */
+  readonly turn?: number;
 }
 
-/** A body's outline: width along its +x, height along its +y (integer mm). */
-function bodyFootprint(catalog: Catalog, ref: CatalogRef): Footprint | undefined {
+/** A body's outline: width along its +x (a cut part's length), height along its +y (integer mm). */
+function bodyFootprint(catalog: Catalog, ref: CatalogRef, state: BodyState): Footprint | undefined {
   const prop = propFootprint(ref);
   if (prop) return prop;
-  const size = catalog.device(ref)?.sizeMm;
+  const device = catalog.device(ref);
+  const size = device && deviceBodySizeMm(device, state);
   return size ? { widthMm: size.widthMm, heightMm: size.heightMm } : undefined;
 }
 
@@ -156,18 +174,21 @@ function snapOnMount(
   height: number,
   along: number,
   cross: number,
+  crossMm: number,
 ): { along: number; cross: number } | null {
   const extent = target.mount.extentMm;
   switch (target.occupancy) {
     case 'single':
       return along >= 0 && along <= width && cross >= 0 && cross <= height ? { along: 0, cross: 0 } : null;
     case 'linear': {
-      if (along < 0 || along > extent || cross < 0 || cross > height) return null;
+      if (along < 0 || along > extent || cross < crossMm || cross > crossMm + height) return null;
       const free = extent - width;
       if (free < 0) return null;
-      const pitch = SNAP_STEPS.dinModulePitchMm;
+      // A terminal block packs at its own width; a modular device takes DIN module slots.
+      const narrow = width < NARROW_RAIL_DEVICE.valueMm;
+      const pitch = narrow ? width : SNAP_STEPS.dinModulePitchMm;
       const k = clamp(Math.round((along - width / 2) / pitch), 0, Math.floor(free / pitch));
-      return { along: dinSlotStartMm(k), cross: 0 };
+      return { along: narrow ? k * width : dinSlotStartMm(k), cross: crossMm };
     }
     case 'area': {
       if (along < 0 || along > extent || cross < 0 || cross > extent) return null;
@@ -192,7 +213,8 @@ interface MountCandidate {
 /**
  * The best mount for `ref` under the cursor (see the module comment), with the device's snapped
  * offset on it, or `null` when the cursor is on no mount the device fits. `only` restricts the
- * search to one mount (sliding a mounted device).
+ * search to one mount (sliding a mounted device); `state` is the device's commanded state (a cut
+ * part's length), `null` for one not placed yet.
  */
 function bestMount(
   catalog: Catalog,
@@ -200,19 +222,21 @@ function bestMount(
   cursor: Vec3Mm,
   targets: readonly MountTarget[],
   only: MountedOn | null,
+  state: BodyState,
 ): MountCandidate | null {
   const device = catalog.device(ref);
-  const height = device?.sizeMm?.heightMm;
+  const height = device ? deviceBodySizeMm(device, state)?.heightMm : undefined;
   if (!device || height === undefined) return null;
   const candidates: MountCandidate[] = [];
   for (const target of targets) {
     if (only !== null && (target.entity !== only.entity || target.mount.id !== only.mount)) continue;
-    const width = device.mounts.find((m) => m.type === target.mount.type)?.widthMm;
-    if (width === undefined) continue;
+    const fit = device.mounts.find((m) => m.type === target.mount.type);
+    const width = deviceMountWidthMm(device, target.mount.type, state);
+    if (fit === undefined || width === undefined) continue;
     const d = { x: cursor.x - target.origin.x, y: cursor.y - target.origin.y, z: cursor.z - target.origin.z };
     const depth = Math.abs(dot(d, target.axes.z));
     if (depth > MOUNT_CAPTURE_DEPTH.valueMm) continue;
-    const at = snapOnMount(target, width, height, dot(d, target.axes.x), dot(d, target.axes.y));
+    const at = snapOnMount(target, width, height, dot(d, target.axes.x), dot(d, target.axes.y), fit.crossMm);
     if (at !== null) candidates.push({ target, depth, ...at });
   }
   candidates.sort(
@@ -254,7 +278,8 @@ export function placeInWorld(
   if (moving !== null && !entity) return { ok: false, reason: 'not-found', targetId: null };
   const placed = entity?.ref ?? ref;
   if (catalog.kindOf(placed)?.placement === 'connection') return { ok: false, reason: 'unknown-prop', targetId: null };
-  const footprint = bodyFootprint(catalog, placed);
+  const state = entity?.state ?? null;
+  const footprint = bodyFootprint(catalog, placed, state);
   if (!footprint) return { ok: false, reason: 'unknown-prop', targetId: null };
   if (entity) {
     const hold = entityHold(world, entity.id);
@@ -262,9 +287,18 @@ export function placeInWorld(
   }
   const keepMount = entity?.mountedOn ?? null;
 
+  // 0. A conduit part being placed, near an open entry or a free conduit end (never on a move).
+  if (!entity) {
+    const conduit = snapConduit(world, catalog, placed, cursorWorld, options.turn ?? 0);
+    if (conduit) {
+      const { targetId, positionMm, orientationMdeg } = conduit;
+      return checked(world, catalog, placed, targetId, 'raceway', positionMm, orientationMdeg, null, null, null);
+    }
+  }
+
   // 1. An enclosure mount (only the entity's own when it is mounted; none for a free entity's move).
   if (!entity || keepMount !== null) {
-    const found = bestMount(catalog, placed, cursorWorld, worldMountTargets(world, catalog), keepMount);
+    const found = bestMount(catalog, placed, cursorWorld, worldMountTargets(world, catalog), keepMount, state);
     if (found) {
       const { target } = found;
       const { x, y, z } = target.axes;
@@ -275,7 +309,7 @@ export function placeInWorld(
       };
       const orientationMdeg = entity?.transform.orientationMdeg ?? orientationForAxes(x, z);
       const mountedOn = { entity: target.entity, mount: target.mount.id };
-      return checked(world, catalog, placed, target.id, 'mount', positionMm, orientationMdeg, mountedOn, moving);
+      return checked(world, catalog, placed, target.id, 'mount', positionMm, orientationMdeg, mountedOn, moving, state);
     }
     if (keepMount !== null) return { ok: false, reason: 'off-mount', targetId: null };
   }
@@ -292,7 +326,7 @@ export function placeInWorld(
   if (!result.ok) return { ok: false, reason: result.reason, targetId: result.targetId };
   const target = candidates.find((t) => t.id === result.targetId && t.kind === result.kind) as SnapTarget;
   const orientationMdeg = keep ?? orientationForFrame(target.frame);
-  return checked(world, catalog, placed, target.id, target.kind, result.world, orientationMdeg, null, moving);
+  return checked(world, catalog, placed, target.id, target.kind, result.world, orientationMdeg, null, moving, state);
 }
 
 /** The snapped placement, unless the command would refuse it (mount rules) or it overlaps a body. */
@@ -301,19 +335,20 @@ function checked(
   catalog: Catalog,
   ref: CatalogRef,
   targetId: string,
-  kind: SnapTarget['kind'] | 'mount',
+  kind: SnapTarget['kind'] | 'mount' | 'raceway',
   positionMm: Vec3Mm,
   orientationMdeg: OrientationMdeg | null,
   mountedOn: MountedOn | null,
   self: EntityId | null,
+  state: BodyState,
 ): WorldPlacement {
   if (orientationMdeg === null) return { ok: false, reason: 'not-axis-aligned', targetId };
   if (mountedOn !== null) {
-    const refused = checkMount(world, catalog, ref, positionMm, orientationMdeg, mountedOn, self);
+    const refused = checkMount(world, catalog, ref, positionMm, orientationMdeg, mountedOn, self, state);
     if (refused) return { ok: false, reason: refused.code as WorldPlacementFailure, targetId };
   }
   const transform = { positionMm, orientationMdeg };
-  if (overlappingEntity(world, catalog, ref, transform, mountedOn, self, 'all') !== null) {
+  if (overlappingEntity(world, catalog, ref, transform, mountedOn, self, 'all', state) !== null) {
     return { ok: false, reason: 'overlaps', targetId };
   }
   return { ok: true, targetId, kind, positionMm, orientationMdeg, mountedOn };

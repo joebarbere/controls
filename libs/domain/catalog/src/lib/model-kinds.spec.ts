@@ -13,7 +13,7 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure kinds and F3.3’s twist-on splice, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds and F3.3’s twist-on splice, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.thermalMagnetic',
@@ -25,11 +25,17 @@ describe('MODEL_KINDS', () => {
       'heater',
       'lamp.incandescent',
       'lead',
+      'raceway.conduit',
+      'raceway.conduitConnector',
+      'raceway.conduitElbow',
+      'raceway.duct',
       'resistor',
       'splice.twistOn',
       'supply.bench',
       'supply.dinPsu',
       'switch.spst',
+      'terminalBlock.feedThrough',
+      'terminalBlock.ground',
       'utility.splitPhase',
       'utility.threePhase',
     ]);
@@ -84,6 +90,12 @@ describe('MODEL_KINDS', () => {
         endBTerminationId: 'sim number null',
         insulationDamaged: 'sim boolean false',
       },
+      // F3.5 part 2: the cut length (placed at the entry's defaultLengthMm, so this initial is a
+      // placeholder) and the duct's cover; provisional until v0.4.0.
+      'raceway.conduit': { lengthMm: 'commanded number 1000' },
+      'raceway.conduitConnector': {},
+      'raceway.conduitElbow': {},
+      'raceway.duct': { coverOn: 'commanded boolean false', lengthMm: 'commanded number 1000' },
       resistor: {},
       'splice.twistOn': {},
       'supply.bench': {
@@ -94,6 +106,8 @@ describe('MODEL_KINDS', () => {
       },
       'supply.dinPsu': { mode: 'sim enum ok', phaseTicks: 'sim number 0' },
       'switch.spst': { closed: 'commanded boolean false' },
+      'terminalBlock.feedThrough': {},
+      'terminalBlock.ground': {},
       'utility.splitPhase': {},
       'utility.threePhase': {},
     });

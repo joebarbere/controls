@@ -114,9 +114,10 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
   });
 
   it('a conductor landed at both ends covers the straight line between them (exact integers)', () => {
-    // L1's screw entry is (50, 1150, -1800); the breaker's line entry (120, 345, -1935): d² = 671 150 (d ≈ 819.2).
-    expect(check(edit((d) => Object.assign(d.connections[0], { lengthMm: 820 })))).toStrictEqual([]);
-    expect(messages(edit((d) => Object.assign(d.connections[0], { lengthMm: 819 })))).toStrictEqual([
+    // L1's screw entry is (50, 1150, -1800); the breaker's line entry (120, 390, -1880), the breaker on
+    // its rail since F3.5 part 2's load check: d² = 70² + 760² + 80² = 588 900 (d ≈ 767.4).
+    expect(check(edit((d) => Object.assign(d.connections[0], { lengthMm: 768 })))).toStrictEqual([]);
+    expect(messages(edit((d) => Object.assign(d.connections[0], { lengthMm: 767 })))).toStrictEqual([
       'connections[0].lengthMm: Shorter than the straight line between its landed ends',
     ]);
   });

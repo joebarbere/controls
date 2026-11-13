@@ -1,0 +1,49 @@
+{
+  "id": "emt.stavenor-100",
+  "version": 1,
+  "title": "EMT conduit, 1 in trade size, 10 ft stick",
+  "brand": "Stavenor",
+  "modelName": "SE-100",
+  "category": "raceway",
+  "sizeMm": {
+    "widthMm": 3048,
+    "heightMm": 30,
+    "depthMm": 30
+  },
+  "terminals": [],
+  "mounts": [],
+  "enclosure": null,
+  "conductor": null,
+  "model": {
+    "kind": "raceway.conduit",
+    "params": {
+      "defaultLengthMm": 1000,
+      "minLengthMm": 50,
+      "tradeSizeIn": 1,
+      "outsideDiameterMm": 29.54,
+      "wallThicknessMm": 1.45
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "emt-tube",
+      "kind": "real-world",
+      "citation": "real-world: 1 trade size steel EMT, outside diameter 1.163 in = 29.54 mm, nominal wall 0.057 in = 1.45 mm; steel-EMT makers’ published dimension tables for ANSI C80.3 / UL 797 tubing (cited by number), read 2026-11-12. No NEC Chapter 9 table is used. The body box rounds the diameter up to 30 mm (even, so the ends sit on whole millimetres).",
+      "covers": ["model.params.tradeSizeIn", "model.params.outsideDiameterMm", "model.params.wallThicknessMm"]
+    },
+    {
+      "id": "emt-stick",
+      "kind": "real-world",
+      "citation": "real-world: EMT is sold in 10 ft (3048 mm) lengths (makers’ packaging tables, read 2026-11-12); sizeMm is the uncut stick along +x and the body diameter (30 mm). Cut ends are taken as square and reamed (no burr modelled).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "emt-cut",
+      "kind": "game-design",
+      "citation": "game-design: a new stick is cut to 1000 mm; raceway.cut makes pieces from 50 mm to the full stick.",
+      "covers": ["model.params.defaultLengthMm", "model.params.minLengthMm"]
+    }
+  ],
+  "extensions": {}
+}

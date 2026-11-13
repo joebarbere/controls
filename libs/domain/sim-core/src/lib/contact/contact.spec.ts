@@ -323,8 +323,9 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
     const methods = BUILTIN_CATALOG.devices
       .flatMap((d) => d.terminals.flatMap((t) => t.methods))
       .filter((m) => m.method === 'screw');
-    // The breaker (2), the DIN supply (2), the stand-in service (3) and D12's heater (2) and lamp (2).
-    expect(methods.length).toBe(11);
+    // The breaker (2), the DIN supply (2), the stand-in service (3), D12's heater (2) and lamp (2), and
+    // F3.5 part 2's screw and ground terminal blocks (2 each).
+    expect(methods.length).toBe(15);
     for (const m of methods) {
       expect(m.contactOhm).toBe(3e-4);
       expect(m.heatPathWPerK).toBe(0.026);

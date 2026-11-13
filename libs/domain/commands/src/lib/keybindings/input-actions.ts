@@ -16,6 +16,8 @@
  * Overrides players stored under `input.toggleMode` / `input.focusSelection` are unknown binding
  * ids now, which the keymap ignores (and leaves in the file). `commitPlacement` and `moveSelection`
  * are gestures, like a click: the workspace turns their commit into `entity.place` / `entity.move`.
+ * F3.5 part 2: `turnPlacement` cycles the four turns of a conduit part snapped to an end (view state
+ * only; the turn ends up in the logged `entity.place` orientation).
  */
 
 /** Binding-id namespace of input actions. */
@@ -60,4 +62,5 @@ export const INPUT_ACTIONS: readonly InputActionDef[] = [
   def('clearSelection', 'Cancel placement, or clear the selection', false, ['Escape']),
   def('commitPlacement', 'Place or drop at the reticle', false, ['Enter', 'NumpadEnter']),
   def('moveSelection', 'Pick up the selection to move it', false, ['M']),
+  def('turnPlacement', 'Turn the conduit part being placed', false, ['R']),
 ];

@@ -3,10 +3,12 @@ import {
   awgInRange,
   type Catalog,
   type ConductorSpec,
+  deviceBodySizeMm,
   type DeviceDefinition,
   type DriveType,
   drivesFit,
   type ModelKindDef,
+  racewayOf,
   type TerminalMethodSpec,
   terminationMethod,
   type ToolDefinition,
@@ -239,15 +241,15 @@ export function checkGeometry(
 
 /**
  * The body boxes of the world's solid things (ADR 0015, "Mounting and occupancy"): catalogue devices
- * with a size and built-in props. Enclosures are hollow (routes run inside them), so they are never
- * obstacles; connections have no body.
+ * with a size and built-in props. Enclosures and raceways (ducts and conduit, F3.5 part 2) are
+ * hollow (routes run inside them), so they are never obstacles; connections have no body.
  */
 export function obstacleBoxes(world: World, catalog: Catalog): { readonly entity: EntityId; readonly box: BoxMm }[] {
   const boxes: { entity: EntityId; box: BoxMm }[] = [];
   for (const entity of world.entities) {
     const device = catalog.device(entity.ref);
-    const size = device ? device.sizeMm : (builtinProp(entity.ref)?.sizeMm ?? null);
-    if (size === null || device?.enclosure) continue;
+    const size = device ? deviceBodySizeMm(device, entity.state) : (builtinProp(entity.ref)?.sizeMm ?? null);
+    if (size === null || device?.enclosure || (device && racewayOf(device) !== null)) continue;
     boxes.push({ entity: entity.id, box: bodyBox(entity, size) });
   }
   return boxes;

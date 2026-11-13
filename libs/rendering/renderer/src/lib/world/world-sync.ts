@@ -15,6 +15,11 @@
  * merged geometry; once one is open the entity owns two merged geometries, rebuilt only when the bits
  * change and disposed on the next change or on removal. Entry meshes are never picked (the body is).
  * Enclosure roots are also what placement aims at ({@link WorldSync.enclosureRoots}).
+ *
+ * Raceways (F3.5 part 2): a cut-to-length part draws its cut length's recipe, so a `raceway.cut` swaps
+ * its recipe like a ref change (a membership change for the pickers); a duct's cover is a child mesh
+ * (`cover`) shown by its commanded `coverOn`. Raceway roots are placement surfaces too (conduit parts
+ * snap to free ends), with the enclosures ({@link WorldSync.surfaceRoots}).
  */
 import {
   Group,
@@ -26,10 +31,11 @@ import {
   type Scene,
 } from 'three/webgpu';
 import { mdegToRadians, mm } from '@controls/units';
-import type { CatalogRef, Entity, EntityId, Transform, World } from '@controls/world-model';
+import type { Entity, EntityId, Transform, World } from '@controls/world-model';
 import {
   applyBulbLook,
   BULB_SLOT,
+  DEVICE_SLOTS,
   CLOSED_ENTRY_SLOT,
   entryIsOpen,
   LAMP_KIND,
@@ -68,6 +74,12 @@ interface Drawn {
   readonly entries: EntryDrawing | null;
   /** Whether it is an enclosure (placement aims at it). */
   readonly enclosure: boolean;
+  /** Whether it is a raceway (conduit placement aims at it). */
+  readonly raceway: boolean;
+  /** A duct's cover mesh (child of `object`, geometry owned by the recipe), or `null`. */
+  readonly cover: Mesh | null;
+  /** The recipe cache key it was drawn with (a cut part's length is in it). */
+  readonly recipeKey: string;
 }
 
 /** An enclosure's entries as two meshes: the closed ones and the open ones. */
@@ -83,12 +95,13 @@ interface EntryDrawing {
   owned: BufferGeometry[];
 }
 
+/** The material slot a duct's cover is drawn with. */
+const PANEL_SLOT = DEVICE_SLOTS.indexOf('panel');
+
 /** Lamp outputs by entity id (see {@link WorldSync.setLampOutputs}). */
 export type LampOutputs = ReadonlyMap<EntityId, LampOutput>;
 
 const NO_OUTPUTS: LampOutputs = new Map();
-
-const sameRef = (a: CatalogRef, b: CatalogRef): boolean => a.id === b.id && a.version === b.version;
 
 export class WorldSync {
   /** Parent of every entity object; named so the scene-graph snapshot shows it. */
@@ -129,6 +142,14 @@ export class WorldSync {
     return [...this.drawn.values()].filter((d) => d.enclosure).map((d) => d.object);
   }
 
+  /**
+   * Every placement surface among the entities, in entity id order: the enclosures (their mounts and
+   * entries) and the raceways (conduit ends, F3.5 part 2).
+   */
+  surfaceRoots(): Object3D[] {
+    return [...this.drawn.values()].filter((d) => d.enclosure || d.raceway).map((d) => d.object);
+  }
+
   /** What lamp `id` is drawn as, or `undefined` when it is not a drawn lamp. */
   lampOf(id: EntityId): DrawnLamp | undefined {
     return this.drawn.get(id)?.lamp ?? undefined;
@@ -159,7 +180,7 @@ export class WorldSync {
         this.add(entity);
         membershipChanged = true;
       } else if (drawn.entity !== entity) {
-        if (!sameRef(drawn.entity.ref, entity.ref)) {
+        if (drawn.recipeKey !== this.recipes.keyOf(entity.ref, entity.state)) {
           this.remove(entity.id);
           this.add(entity);
           membershipChanged = true;
@@ -168,6 +189,7 @@ export class WorldSync {
           applyTransform(drawn.object, entity);
           applyLever(drawn);
           applyEntries(drawn);
+          applyCover(drawn);
           transformsChanged = true;
         }
       }
@@ -189,7 +211,8 @@ export class WorldSync {
   }
 
   private add(entity: Entity): void {
-    const recipe = this.recipes.acquire(entity.ref);
+    const recipe = this.recipes.acquire(entity.ref, entity.state);
+    const recipeKey = this.recipes.keyOf(entity.ref, entity.state);
     // A lamp draws its bulb with its own material, so it glows on its own; other slots stay shared.
     let bulb: MeshStandardMaterial | null = null;
     let material = recipe.material;
@@ -204,8 +227,14 @@ export class WorldSync {
     applyTransform(object, entity);
     let lever: Drawn['lever'] = null;
     let entries: EntryDrawing | null = null;
+    let cover: Mesh | null = null;
     if (Array.isArray(recipe.material)) {
       const materials = recipe.material;
+      if (recipe.cover !== null) {
+        cover = new Mesh(recipe.cover, materials[PANEL_SLOT] as Material);
+        cover.name = 'cover';
+        object.add(cover);
+      }
       if (recipe.lever !== null) {
         const mesh = new Mesh(recipe.lever.geometry, materials[recipe.lever.slot] as Material);
         mesh.name = 'lever';
@@ -236,9 +265,22 @@ export class WorldSync {
       entityId: entity.id,
     });
     this.group.add(object);
-    const drawn: Drawn = { entity, object, bulb, lamp: null, lever, entries, enclosure: recipe.enclosure };
+    const drawn: Drawn = {
+      entity,
+      object,
+      bulb,
+      lamp: null,
+      lever,
+      entries,
+      enclosure: recipe.enclosure,
+      raceway: recipe.raceway,
+      cover,
+      recipeKey,
+    };
     applyLever(drawn);
     applyEntries(drawn);
+    applyCover(drawn);
+    applyRaceway(drawn);
     this.applyLamp(drawn);
     this.drawn.set(entity.id, drawn);
   }
@@ -262,7 +304,7 @@ export class WorldSync {
     this.group.remove(drawn.object);
     drawn.bulb?.dispose();
     drawn.entries?.owned.forEach((g) => g.dispose());
-    this.recipes.release(drawn.entity.ref);
+    this.recipes.release(drawn.entity.ref, drawn.entity.state);
     this.drawn.delete(id);
   }
 }
@@ -287,6 +329,25 @@ function applyLever(drawn: Drawn): void {
   const value = drawn.entity.state[stateKey] === true;
   drawn.lever.mesh.rotation.x = leverAngle(value);
   drawn.object.userData[userKey] = { [stateKey]: value };
+}
+
+/**
+ * Shows a duct's cover when its commanded `coverOn` is true. Published with the cut length as
+ * `userData.duct` for the scene-graph snapshot.
+ */
+function applyCover(drawn: Drawn): void {
+  if (drawn.cover === null) return;
+  const coverOn = drawn.entity.state['coverOn'] === true;
+  drawn.cover.visible = coverOn;
+  drawn.object.userData['duct'] = { coverOn, lengthMm: drawn.entity.state['lengthMm'] ?? null };
+}
+
+/** Publishes a cut stick's length as `userData.raceway` (scene-graph snapshot; a duct's is in `duct`). */
+function applyRaceway(drawn: Drawn): void {
+  const length = drawn.entity.state['lengthMm'];
+  if (drawn.raceway && drawn.cover === null && typeof length === 'number') {
+    drawn.object.userData['raceway'] = { lengthMm: length };
+  }
 }
 
 /**

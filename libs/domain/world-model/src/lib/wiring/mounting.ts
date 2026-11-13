@@ -1,4 +1,12 @@
-import { type Axis, type Catalog, type EnclosureMount, mountType } from '@controls/catalog';
+import {
+  type Axis,
+  type BodyState,
+  type Catalog,
+  deviceBodySizeMm,
+  deviceMountWidthMm,
+  type EnclosureMount,
+  mountType,
+} from '@controls/catalog';
 import { type CommandFailure, fail } from '@controls/commands';
 import { findEntity } from '../entity-commands';
 import { entityPointMm, isAxisAligned, rotateQuarterTurns } from '../snap/quarter-turn';
@@ -13,11 +21,14 @@ import type { CatalogRef, Entity, EntityId, MountedOn, OrientationMdeg, Position
  * corner its body spans +x, +y, +z from) lies on the mount, offset from the mount's `positionMm` by
  * `along` in the axis direction and `cross` in the +y direction, with nothing along `facing`:
  * - `single` (a device yoke): exactly at the mount's position (along = cross = 0);
- * - `linear` (a DIN rail): cross = 0 and 0 ≤ along ≤ extentMm − widthMm (the device's declared width);
+ * - `linear` (a DIN rail): cross = the device's declared `crossMm` (0 for a DIN 43880 modular device; a
+ *   terminal block declares the offset that centres it on the rail, F3.5 part 2) and
+ *   0 ≤ along ≤ extentMm − widthMm (the device's declared width);
  * - `area` (a backplate): 0 ≤ along ≤ extentMm − widthMm and 0 ≤ cross ≤ extentMm − heightMm (a square
  *   of side `extentMm` until a backplate declares its second extent, F3.5).
  * Room (`mount-full`): a `single` mount holds one device; on a `linear` mount the devices' spans
- * [along, along + width) don't overlap; on an `area` mount their footprints don't.
+ * [along, along + width) don't overlap; on an `area` mount their footprints don't. A cut-to-length
+ * raceway (a duct on a backplate) takes its cut length as its width (`deviceMountWidthMm`).
  */
 
 const UNIT: Readonly<Record<Axis, PositionMm>> = {
@@ -90,19 +101,21 @@ function footprint(
   mount: EnclosureMount,
   ref: CatalogRef,
   position: PositionMm,
+  state: BodyState,
 ): Footprint | null {
   const device = catalog.device(ref);
-  const width = device?.mounts.find((m) => m.type === mount.type)?.widthMm;
+  const fit = device?.mounts.find((m) => m.type === mount.type);
+  const width = device && deviceMountWidthMm(device, mount.type, state);
   const offset = mountOffset(host, mount, position);
-  if (!device || width === undefined || offset === null || offset.normal !== 0) return null;
-  const height = device.sizeMm?.heightMm ?? 0;
+  if (!device || !fit || width === undefined || offset === null || offset.normal !== 0) return null;
+  const height = deviceBodySizeMm(device, state)?.heightMm ?? 0;
   const occupancy = mountType(mount.type)?.occupancy ?? 'single';
   const { along, cross: across } = offset;
   const fits =
     occupancy === 'single'
       ? along === 0 && across === 0
       : occupancy === 'linear'
-        ? across === 0 && along >= 0 && along + width <= mount.extentMm
+        ? across === fit.crossMm && along >= 0 && along + width <= mount.extentMm
         : along >= 0 && along + width <= mount.extentMm && across >= 0 && across + height <= mount.extentMm;
   return fits ? { along, cross: across, width, height } : null;
 }
@@ -114,7 +127,8 @@ const overlap = (a0: number, a1: number, b0: number, b1: number): boolean => a0 
  * (ADR 0015): the host exists (`not-found`) and is axis-aligned (`not-axis-aligned`), has the mount
  * (`unknown-mount`), the device fits its type (`mount-mismatch`), is axis-aligned itself
  * (`not-axis-aligned`), sits in the mount's frame and on the mount (`off-mount`), and the mount has room
- * (`mount-full`). `self` is the device being slid (it doesn't crowd itself), or `null`.
+ * (`mount-full`). `self` is the device being slid (it doesn't crowd itself), or `null`; `state` the
+ * device's commanded state (a cut part's length), `null` for one not placed yet.
  */
 export function checkMount(
   world: Pick<World, 'entities'>,
@@ -124,6 +138,7 @@ export function checkMount(
   orientation: OrientationMdeg,
   mountedOn: MountedOn,
   self: EntityId | null,
+  state: BodyState = null,
 ): CommandFailure | null {
   const host = findEntity(world, mountedOn.entity);
   if (!host) return fail('not-found', `No entity with id ${mountedOn.entity}`);
@@ -142,12 +157,12 @@ export function checkMount(
       `The device isn't turned to mount "${mount.id}": its +x along ${mount.axis}, front ${mount.facing}`,
     );
   }
-  const mine = footprint(catalog, host, mount, ref, position);
+  const mine = footprint(catalog, host, mount, ref, position, state);
   if (mine === null) return fail('off-mount', `The device's position isn't on mount "${mount.id}"`);
   const occupancy = mountType(mount.type)?.occupancy ?? 'single';
   for (const other of world.entities) {
     if (other.id === self || other.mountedOn?.entity !== host.id || other.mountedOn.mount !== mount.id) continue;
-    const theirs = footprint(catalog, host, mount, other.ref, other.transform.positionMm);
+    const theirs = footprint(catalog, host, mount, other.ref, other.transform.positionMm, other.state);
     const crowded =
       occupancy === 'single' ||
       theirs === null ||

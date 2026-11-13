@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Duct or conduit"
+    },
+    "lengthMm": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6000,
+      "title": "Length (mm)",
+      "description": "The cut length along the part, integer mm"
+    }
+  },
+  "required": [
+    "id",
+    "lengthMm"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of raceway.cut"
+}

@@ -294,6 +294,498 @@ exports[`F2.5 devices in the scene > draw the four devices; lamps start unknown,
 }
 `;
 
+exports[`F3.5 part 2 in the scene > draws a duct, a stick and a block (scene-graph snapshot); the cover follows coverOn > F3.5 part 2 devices 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        300,
+        40,
+        58,
+      ],
+      "children": [
+        {
+          "boundsMm": [
+            0,
+            0,
+            58,
+            300,
+            40,
+            60,
+          ],
+          "name": "cover",
+          "positionMm": [
+            0,
+            0,
+            0,
+          ],
+          "type": "Mesh",
+          "visible": false,
+        },
+      ],
+      "duct": {
+        "coverOn": false,
+        "lengthMm": 300,
+      },
+      "label": "Lattisby LD-4060",
+      "name": "entity-1",
+      "positionMm": [
+        100,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        1000,
+        24,
+        24,
+      ],
+      "label": "Stavenor SE-075",
+      "name": "entity-2",
+      "positionMm": [
+        500,
+        900,
+        200,
+      ],
+      "raceway": {
+        "lengthMm": 1000,
+      },
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        6,
+        48,
+        47,
+      ],
+      "label": "Quennick QST 4",
+      "name": "entity-3",
+      "positionMm": [
+        900,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-3",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
+exports[`F3.5 part 2 recipes > match the geometry snapshot (bounds, vertices and slots per entry, at the default length) > F3.5 part 2 recipes 1`] = `
+[
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      300,
+      25,
+      38,
+    ],
+    "id": "duct.lattisby-25x40",
+    "slots": [
+      [
+        "body",
+        2268,
+      ],
+    ],
+    "vertices": 1512,
+  },
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      300,
+      40,
+      58,
+    ],
+    "id": "duct.lattisby-40x60",
+    "slots": [
+      [
+        "body",
+        2268,
+      ],
+    ],
+    "vertices": 1512,
+  },
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      300,
+      60,
+      78,
+    ],
+    "id": "duct.lattisby-60x80",
+    "slots": [
+      [
+        "body",
+        1188,
+      ],
+    ],
+    "vertices": 792,
+  },
+  {
+    "boundsMm": [
+      -0.3,
+      0.035,
+      0.035,
+      1000.3,
+      17.965,
+      17.965,
+    ],
+    "id": "emt.stavenor-050",
+    "slots": [
+      [
+        "body",
+        288,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 444,
+  },
+  {
+    "boundsMm": [
+      -0.3,
+      0.29,
+      0.29,
+      1000.3,
+      23.71,
+      23.71,
+    ],
+    "id": "emt.stavenor-075",
+    "slots": [
+      [
+        "body",
+        288,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 444,
+  },
+  {
+    "boundsMm": [
+      -0.3,
+      0.23,
+      0.23,
+      1000.3,
+      29.77,
+      29.77,
+    ],
+    "id": "emt.stavenor-100",
+    "slots": [
+      [
+        "body",
+        288,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 444,
+  },
+  {
+    "boundsMm": [
+      0.035,
+      -0.3,
+      0.035,
+      175.3,
+      174.965,
+      17.965,
+    ],
+    "id": "elbow.stavenor-emt-050",
+    "slots": [
+      [
+        "body",
+        2880,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 1017,
+  },
+  {
+    "boundsMm": [
+      0.29,
+      -0.3,
+      0.29,
+      190.3,
+      189.71,
+      23.71,
+    ],
+    "id": "elbow.stavenor-emt-075",
+    "slots": [
+      [
+        "body",
+        2880,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 1017,
+  },
+  {
+    "boundsMm": [
+      0.23,
+      -0.3,
+      0.23,
+      237.3,
+      236.77,
+      29.77,
+    ],
+    "id": "elbow.stavenor-emt-100",
+    "slots": [
+      [
+        "body",
+        2880,
+      ],
+      [
+        "opening",
+        576,
+      ],
+    ],
+    "vertices": 1017,
+  },
+  {
+    "boundsMm": [
+      -10.3,
+      1.876,
+      0,
+      22,
+      26.965,
+      28,
+    ],
+    "id": "connector.stavenor-emt-050",
+    "slots": [
+      [
+        "body",
+        648,
+      ],
+      [
+        "accent",
+        360,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 672,
+  },
+  {
+    "boundsMm": [
+      -11.3,
+      2.278,
+      0,
+      25,
+      32.71,
+      34,
+    ],
+    "id": "connector.stavenor-emt-075",
+    "slots": [
+      [
+        "body",
+        648,
+      ],
+      [
+        "accent",
+        360,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 672,
+  },
+  {
+    "boundsMm": [
+      -12.3,
+      2.813,
+      0,
+      28,
+      39.77,
+      42,
+    ],
+    "id": "connector.stavenor-emt-100",
+    "slots": [
+      [
+        "body",
+        648,
+      ],
+      [
+        "accent",
+        360,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 672,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.3,
+      -0.5,
+      6,
+      48.3,
+      47,
+    ],
+    "id": "tb.quennick-st4",
+    "slots": [
+      [
+        "body",
+        72,
+      ],
+      [
+        "panel",
+        36,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        576,
+      ],
+      [
+        "opening",
+        72,
+      ],
+    ],
+    "vertices": 440,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.3,
+      -0.5,
+      5,
+      56.3,
+      36,
+    ],
+    "id": "tb.quennick-sc25",
+    "slots": [
+      [
+        "body",
+        72,
+      ],
+      [
+        "panel",
+        36,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        72,
+      ],
+      [
+        "opening",
+        72,
+      ],
+    ],
+    "vertices": 192,
+  },
+  {
+    "boundsMm": [
+      -0.2,
+      -0.3,
+      -0.5,
+      6.2,
+      48.3,
+      47,
+    ],
+    "id": "tb.quennick-pe4",
+    "slots": [
+      [
+        "body",
+        72,
+      ],
+      [
+        "panel",
+        36,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "positive",
+        36,
+      ],
+      [
+        "accent",
+        576,
+      ],
+      [
+        "opening",
+        72,
+      ],
+    ],
+    "vertices": 464,
+  },
+]
+`;
+
 exports[`F3.5 recipes > match the geometry snapshot (bounds, vertices, slots, entries and levers per entry) > F3.5 recipes 1`] = `
 [
   {

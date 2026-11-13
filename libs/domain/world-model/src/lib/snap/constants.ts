@@ -135,3 +135,26 @@ export const MOUNT_CAPTURE_DEPTH: SourcedLength = {
   source:
     'game-design: covers a hit on the backplate beside a TS35 rail (7.5 mm deep, drawn 8 mm proud) with slack, but not far down a side wall',
 };
+
+/**
+ * How near the cursor must be to an open enclosure entry or a free conduit end for a conduit part to
+ * snap to it (F3.5 part 2): a straight-line distance in integer mm (compared squared, exact).
+ */
+export const RACEWAY_CAPTURE_DISTANCE: SourcedLength = {
+  valueMm: 60,
+  kind: 'game-design',
+  source:
+    'game-design: about two 1 in connector bodies, so a click on a box wall near a knockout, or on the last few centimetres of a stick, finds the end, but one across a 4 in box does not reach the far side',
+};
+
+/**
+ * Below this width along a DIN rail a device is not a DIN 43880 modular device (a terminal block,
+ * 5 to 6 mm a pole), so it snaps to multiples of its own width from the rail's start instead of to
+ * 17.5 mm module slots, and blocks of one width pack with no gaps (F3.5 part 2).
+ */
+export const NARROW_RAIL_DEVICE: SourcedLength = {
+  valueMm: 17,
+  kind: 'game-design',
+  source:
+    'game-design: under one 17.5 mm DIN 43880 module (rounded down), so every modular device keeps module slots and terminal blocks of the 5.2 and 6.2 mm classes get their own pitch',
+};

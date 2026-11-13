@@ -25,6 +25,7 @@ describe('paletteItems', () => {
       'entity.rotate',
       'lead.connect', // Lead, by title: Connect a test lead, Disconnect a test lead
       'lead.disconnect',
+      'raceway.cut', // Raceway: Cut raceway to length
       'toolbelt.select',
       'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',

@@ -3,7 +3,9 @@ import {
   type Catalog,
   checkBags,
   checkControlValue,
+  CUT_LENGTH_KEY,
   type DeviceDefinition,
+  isCutToLength,
   type ModelKindDef,
   TERMINATION_METHODS,
 } from '@controls/catalog';
@@ -11,6 +13,7 @@ import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@contro
 import { findEntity } from './entity-commands';
 import { coversChord, routeFloorMm } from './routing/floor';
 import { entityPointMm, isAxisAligned } from './snap/quarter-turn';
+import { checkMount } from './wiring/mounting';
 import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
 
 /*
@@ -108,6 +111,14 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
       add(`${at}.state.openEntries`, 'Opens an entry the enclosure does not have');
     }
   }
+  // A cut-to-length raceway's length is one `raceway.cut` could have made (F3.5 part 2): within the
+  // entry's minimum and its stock length, which the key's own schema can't know.
+  const length = entity.state[CUT_LENGTH_KEY];
+  if (isCutToLength(device) && device.sizeMm !== null && typeof length === 'number') {
+    if (length < device.model.params['minLengthMm'] || length > device.sizeMm.widthMm) {
+      add(`${at}.state.${CUT_LENGTH_KEY}`, 'A cut length outside the entry’s minimum and stock length');
+    }
+  }
   if (entity.mountedOn !== null) {
     const host = findEntity(world, entity.mountedOn.entity) as Entity; // the schema guarantees it exists
     const hostDevice = catalog.device(host.ref);
@@ -122,6 +133,23 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
     }
     if (!isAxisAligned(host.transform.orientationMdeg) || !isAxisAligned(entity.transform.orientationMdeg)) {
       add(`${at}.mountedOn`, 'A mounted device and its host are axis-aligned');
+      return;
+    }
+    // Where it sits on the mount and whether the mount has room, with its own state (a cut duct's
+    // length, F3.5 part 2): exactly the commands' check, so a crafted save can't hold a body the
+    // commands would refuse (a 2000 mm duct on a 350 mm backplate). Both crowding devices are reported.
+    const refused = checkMount(
+      world,
+      catalog,
+      entity.ref,
+      entity.transform.positionMm,
+      entity.transform.orientationMdeg,
+      entity.mountedOn,
+      entity.id,
+      entity.state,
+    );
+    if (refused?.code === 'off-mount' || refused?.code === 'mount-full') {
+      add(`${at}.mountedOn`, `Not a place the mount allows (${refused.code})`);
     }
   }
 }

@@ -588,6 +588,9 @@ export class ViewportController {
 
   // --- gestures ------------------------------------------------------------------------------
 
+  /** Which of the four turns a conduit part being placed takes (`turnPlacement`, R); view state. */
+  private placementTurn = 0;
+
   /** The prop the ghost shows, or `null` when no gesture is active. */
   private gestureRef(): CatalogRef | null {
     return this.moving?.entity.ref ?? this.armed;
@@ -631,6 +634,7 @@ export class ViewportController {
     return placeInWorld(this.worldValue, ref, cursor, this.snapTargets, {
       catalog: this.catalog,
       moving: this.moving?.id ?? null,
+      turn: this.placementTurn,
     });
   }
 
@@ -640,7 +644,7 @@ export class ViewportController {
     const before = this.placementView();
     const r = this.placementNow(ref);
     this.ghostResult = r;
-    if (r.ok) this.ghost.show(ref, r.positionMm, r.orientationMdeg);
+    if (r.ok) this.ghost.show(ref, r.positionMm, r.orientationMdeg, this.moving?.entity.state ?? null);
     else this.ghost.hide();
     const after = this.placementView();
     if (
@@ -722,7 +726,7 @@ export class ViewportController {
     this.surfacePicker.setRoots([
       ...this.sceneSelectables.filter((f) => f.info.snapTarget).map((f) => f.root),
       ...this.fixtures.surfaceRoots(),
-      ...((this.world as WorldSync | undefined)?.enclosureRoots() ?? []),
+      ...((this.world as WorldSync | undefined)?.surfaceRoots() ?? []),
     ]);
   }
 
@@ -823,6 +827,12 @@ export class ViewportController {
         if (this.armed || this.moving || id === undefined) return false;
         return this.startMove(id, false);
       }
+      case 'turnPlacement':
+        // Only while placing: the next of the four turns a conduit part snapped to an end can take.
+        if (!this.armed || this.moving) return false;
+        this.placementTurn = (this.placementTurn + 1) % 4;
+        this.markHoverDirty();
+        return true;
     }
   }
 

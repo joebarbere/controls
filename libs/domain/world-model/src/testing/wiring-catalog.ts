@@ -143,7 +143,7 @@ const box = {
   category: 'enclosure',
   sizeMm: { widthMm: 50, heightMm: 75, depthMm: 60 },
   terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [screw] }],
-  mounts: [{ type: 'studFlange', widthMm: 50 }],
+  mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0 }],
   enclosure: {
     mounts: [
       { id: 'yoke', type: 'deviceYoke', positionMm: { x: 25, y: 37, z: 60 }, axis: '+x', facing: '+z', extentMm: 0 },
@@ -285,8 +285,8 @@ const block = {
     },
   ],
   mounts: [
-    { type: 'din35', widthMm: 20 },
-    { type: 'backplate', widthMm: 20 },
+    { type: 'din35', widthMm: 20, crossMm: 0 },
+    { type: 'backplate', widthMm: 20, crossMm: 0 },
   ],
   enclosure: null,
   conductor: null,
@@ -300,7 +300,7 @@ const block = {
 const yokeDevice = {
   ...block,
   id: 'tb.test-yoke',
-  mounts: [{ type: 'deviceYoke', widthMm: 20 }],
+  mounts: [{ type: 'deviceYoke', widthMm: 20, crossMm: 0 }],
   sources: source(['sizeMm', 'terminals', 'terminals.*.methods', 'fits.deviceYoke']),
 };
 

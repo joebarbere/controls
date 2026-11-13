@@ -95,7 +95,8 @@
   "mounts": [
     {
       "type": "din35",
-      "widthMm": 40
+      "widthMm": 40,
+      "crossMm": 0
     }
   ],
   "enclosure": null,

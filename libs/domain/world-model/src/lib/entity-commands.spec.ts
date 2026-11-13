@@ -248,6 +248,7 @@ describe('world registry, replay log and cheats', () => {
       'lead.connect:true',
       'lead.disconnect:true',
       'palette.open:false',
+      'raceway.cut:true',
       'sim.resume:false',
       'sim.setSpeed:false',
       'sim.step:false',
