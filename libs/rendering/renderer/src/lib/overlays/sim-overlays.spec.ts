@@ -8,6 +8,7 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three/webgpu';
+import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { createWorld } from '@controls/save-format';
 import {
   CONNECTION_OUTPUT_FIELDS,
@@ -28,7 +29,7 @@ import { runInNewContext } from 'node:vm';
 import { ManualFrameClock } from '../loop/manual-frame-clock';
 import { RenderLoop } from '../loop/render-loop';
 import { describeSceneGraph } from '../scene';
-import { heatStep, heatStepColour } from '../sim/heat-scale';
+import { HEAT_LEGEND, heatStep, heatStepColour } from '../sim/heat-scale';
 import { cssColour, OVER_RANGE_BIN, OVER_RANGE_COLOUR, STEP_UNKNOWN, UNKNOWN_COLOUR } from '../sim/overlay-scale';
 import { ViewportController } from '../viewport-controller';
 import { SimOverlays, type SnapshotFeed } from './sim-overlays';
@@ -221,6 +222,8 @@ describe('SimOverlays in the viewport', () => {
       voltage: true,
       current: true,
       heat: false,
+      heatLegend: null,
+      heatUnavailable: null,
       bands: [],
       noScale: true,
       unknown: true,
@@ -554,6 +557,8 @@ describe('SimOverlays with a synthetic band table', () => {
       voltage: true,
       current: false,
       heat: false,
+      heatLegend: null,
+      heatUnavailable: null,
       bands: ['dc12'],
       noScale: false,
       unknown: true,
@@ -792,13 +797,13 @@ describe('SimOverlays heat overlay (F3.6 part 3)', () => {
     expect(graph.inScene).toBe(true);
     expect(graph.conductors.map((c) => c.heat)).toStrictEqual([
       [16, 1], // the loose end's half at the overheat point; the good end's half its 302 K
-      [0, 16], // open, not netlisted: its free end shows the conductor at ambient, its open end 450 K
+      [0, 20], // open, not netlisted: its free end shows the conductor at ambient, its open end 450 K (past oxidation onset)
       ...Array.from({ length: 6 }, () => ['unknown', 'unknown']),
     ]);
     const routes = controller.wireGraph().routes;
     expect(routes.map((r) => r.tint)).toStrictEqual([
       [hex(16), hex(1)],
-      [hex(0), hex(16)],
+      [hex(0), hex(20)],
       ...Array.from({ length: 6 }, () => [cssColour(UNKNOWN_COLOUR), cssColour(UNKNOWN_COLOUR)]),
     ]);
     expect(hex(0)).not.toBe(cssColour(UNKNOWN_COLOUR));
@@ -806,6 +811,8 @@ describe('SimOverlays heat overlay (F3.6 part 3)', () => {
       voltage: false,
       current: false,
       heat: true,
+      heatLegend: HEAT_LEGEND,
+      heatUnavailable: null,
       bands: [],
       noScale: false,
       unknown: true,
@@ -945,6 +952,32 @@ describe('SimOverlays heat overlay (F3.6 part 3)', () => {
     expect(colour.getHex()).toBe(OVER_RANGE_COLOUR);
     expect(describeSceneGraph(overlays.group)).toMatchSnapshot();
     controller.dispose();
+  });
+
+  it('a catalogue with no usable heat scale makes heat unavailable with a reason, never a crash', () => {
+    const scene = new Scene();
+    const modded: Catalog = { ...BUILTIN_CATALOG, tables: [] };
+    const legend = vi.fn();
+    const overlays = new SimOverlays(scene, () => undefined, modded);
+    overlays.onLegendChange(legend);
+    overlays.syncWorld(benchWorld());
+    const feed = new FakeFeed();
+    overlays.attach(feed);
+    overlays.setOverlay('heat', true);
+    feed.publish(benchSnapshot(benchDescriptor()));
+    expect(overlays.describe().leads.map((l) => l.heat)).toStrictEqual([
+      ['unknown', 'unknown'],
+      ['unknown', 'unknown'],
+    ]);
+    expect(legend).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        heat: true,
+        heatLegend: null,
+        heatUnavailable: 'the catalogue has no insulation rating or no melting point',
+        unknown: true,
+      }),
+    );
+    overlays.dispose();
   });
 
   it('disposes everything with heat on, and leaves no tint behind', () => {

@@ -348,6 +348,21 @@ describe('world registry, replay log and cheats', () => {
     expect(replayed.ok && replayed.hash).toBe(worldHash(bus.state));
   });
 
+  it('logs and replays view.overlay heat (F3.6 part 3) without changing the world', () => {
+    const initial = createWorld({ seed: 7 });
+    const bus = createWorldBus(initial);
+    expect(bus.exec('view.overlay', { name: 'heat', on: true }).ok).toBe(true);
+    expect(bus.exec('view.overlay', { name: 'heat', on: false }).ok).toBe(true);
+    const loaded = migrateReplayLog(JSON.parse(JSON.stringify(toReplayLog(initial, bus))));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.value.entries.map((e) => e.args)).toEqual([
+      { name: 'heat', on: true },
+      { name: 'heat', on: false },
+    ]);
+    const replayed = replayLog(loaded.value);
+    expect(replayed.ok && replayed.hash).toBe(worldHash(initial));
+  });
+
   it('marks the world assisted after a cheat, once, and undo keeps the mark', () => {
     const registry = createWorldRegistry().register(
       defineCommand<NoArgs, World>({

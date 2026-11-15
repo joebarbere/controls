@@ -87,12 +87,13 @@ describe('heat steps (F3.6 part 3)', () => {
     expect(updateHeatSteps(steps, reading, join)).toBe(true);
     const fresh = (t: number) => heatStep(t, STEP_UNKNOWN);
     // Wire 1: the loose end's half is hot (bin 16, the overheat point), the good end's shows its 302 K.
+    // Wire 2's open end b at 450 K is past the oxidation onset (bin 20).
     // Wire 2: open, not netlisted, still has temperatures (own state): its free end's half shows the
     // conductor at ambient (bin 0, a reading), its open end's half the 450 K end.
     // The lead: both halves its conductor. Connection 4: no record, so no reading (never cold).
     expect([Array.from(steps.a), Array.from(steps.b)]).toStrictEqual([
       [16, fresh(293.15), fresh(317), STEP_UNKNOWN],
-      [fresh(303.033), 16, fresh(317), STEP_UNKNOWN],
+      [fresh(303.033), 20, fresh(317), STEP_UNKNOWN],
     ]);
     expect(fresh(303.033)).toBe(1);
     expect(fresh(293.15)).toBe(0);

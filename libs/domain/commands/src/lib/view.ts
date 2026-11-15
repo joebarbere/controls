@@ -130,9 +130,9 @@ export function viewFocusCommand<S>(): CommandDef<ViewFocusArgs, S> {
 /**
  * `view.overlay --name voltage|current|heat --on true|false` (plan F2.6, F3.6 part 3): switches a
  * debug overlay in the viewport, |V| against the island reference on the leads and terminals, |I|
- * animated along the leads, or conductor and termination temperatures. A view command: logged, never a world change. Offered where the console is
- * (`console.available`: sandbox and dev builds) until F5.3 gates debug tools by difficulty. No
- * default key.
+ * animated along the leads, or conductor and termination temperatures. A view command: logged,
+ * never a world change. Offered where the console is (`console.available`: sandbox and dev builds)
+ * until F5.3 gates debug tools by difficulty. No default key.
  */
 export function viewOverlayCommand<S>(): CommandDef<ViewOverlayArgs, S> {
   return defineViewCommand<ViewOverlayArgs, S>({

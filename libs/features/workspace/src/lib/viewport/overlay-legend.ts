@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import {
   cssColour,
   currentLegend,
-  heatLegend,
   NO_SCALE_COLOUR,
   OVER_RANGE_COLOUR,
   UNKNOWN_COLOUR,
@@ -102,8 +101,18 @@ export class LegendScaleBar {
       }
       @if (state().heat) {
         <h2>Heat overlay</h2>
-        <ctl-legend-scale data-testid="legend-heat-scale" [scale]="heatScale" />
-        <p data-testid="legend-heat-note">{{ heatNote() }}</p>
+        @if (state().heatLegend; as heatScale) {
+          <ctl-legend-scale data-testid="legend-heat-scale" [scale]="heatScale" />
+          <p data-testid="legend-heat-note">{{ heatNote() }}</p>
+          @for (note of heatScale.omitted; track note) {
+            <p data-testid="legend-heat-omitted">Not marked: {{ note }}.</p>
+          }
+        }
+        @if (state().heatUnavailable; as reason) {
+          <p data-testid="legend-heat-unavailable">
+            No heat scale for this catalogue ({{ reason }}): wires and leads show no reading.
+          </p>
+        }
       }
       @if (state().unknown) {
         <p data-testid="legend-unknown">
@@ -160,7 +169,6 @@ export class OverlayLegend {
     ),
   );
   protected readonly currentScale = currentLegend();
-  protected readonly heatScale = heatLegend();
   protected readonly heatNote = computed(
     () =>
       `Wires and leads are coloured by heat while this overlay is on${this.state().voltage ? '; terminals still show voltage' : ''}. Each half shows its hottest point: its end's termination or the conductor. A cable shows no reading.`,

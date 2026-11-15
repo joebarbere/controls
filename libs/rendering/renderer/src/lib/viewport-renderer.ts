@@ -213,6 +213,8 @@ export class ViewportRenderer {
         voltage: this.overlayState.voltage,
         current: this.overlayState.current,
         heat: this.overlayState.heat,
+        heatLegend: null,
+        heatUnavailable: null,
         bands: [],
         noScale: false,
         unknown: false,

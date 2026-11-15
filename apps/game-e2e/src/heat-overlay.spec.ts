@@ -89,8 +89,10 @@ test('the heat overlay shows the bad termination’s hot end, with a legend (F3.
   const scale = legend.getByTestId('legend-heat-scale');
   for (const tick of [
     '293 K (20 °C) ambient',
-    '363 K (90 °C) insulation rating',
-    '393 K (120 °C) overheat',
+    '363 K (90 °C) lowest insulation rating in the catalogue',
+    '393 K (120 °C) termination overheat',
+    '403 K (130 °C) insulation damage (lowest rating + 40 K)',
+    '422 K (149 °C) contact oxidation onset',
     '933 K (660 °C) aluminium melts',
   ]) {
     await expect(scale.getByText(tick)).toBeVisible();

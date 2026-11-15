@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { BUILTIN_CATALOG } from '@controls/catalog';
 import { Session } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
-import { ViewportRenderer, type OverlayLegendState } from '@controls/renderer';
+import { HEAT_LEGEND, heatLegend, heatScale, ViewportRenderer, type OverlayLegendState } from '@controls/renderer';
 import { OverlayLegend } from './overlay-legend';
 import { Viewport } from './viewport';
 
@@ -9,6 +10,8 @@ const state = (s: Partial<OverlayLegendState>): OverlayLegendState => ({
   voltage: false,
   current: false,
   heat: false,
+  heatLegend: null,
+  heatUnavailable: null,
   bands: [],
   noScale: false,
   unknown: false,
@@ -66,18 +69,47 @@ describe('OverlayLegend', () => {
   });
 
   it('names the heat scale’s sourced points in text, and says what it colours (F3.6 part 3)', async () => {
-    const el = await legend({ heat: true, unknown: true });
+    const el = await legend({ heat: true, heatLegend: HEAT_LEGEND, unknown: true });
     expect(text(el.querySelector('[data-testid="legend-heat-scale"]'))).toBe(
-      'Conductor temperature: the hottest node in each half (its end or its body) 293 K (20 °C) ambient 363 K (90 °C) insulation rating 393 K (120 °C) overheat 933 K (660 °C) aluminium melts 1358 K (1085 °C) and above: copper melts (magenta)',
+      'Conductor temperature: the hottest node in each half (its end or its body) 293 K (20 °C) ambient 363 K (90 °C) lowest insulation rating in the catalogue 393 K (120 °C) termination overheat 403 K (130 °C) insulation damage (lowest rating + 40 K) 422 K (149 °C) contact oxidation onset 933 K (660 °C) aluminium melts 1358 K (1085 °C) and above: copper melts (magenta)',
     );
     expect(text(el.querySelector('[data-testid="legend-heat-note"]'))).toBe(
       "Wires and leads are coloured by heat while this overlay is on. Each half shows its hottest point: its end's termination or the conductor. A cable shows no reading.",
     );
     expect(text(el.querySelector('[data-testid="legend-unknown"]'))).toContain('No reading');
     expect(el.querySelector('[data-testid="legend-voltage-scale"]')).toBeNull();
-    const both = await legend({ heat: true, voltage: true, bands: ['dc12'] });
+    expect(el.querySelector('[data-testid="legend-heat-omitted"]')).toBeNull();
+    const both = await legend({ heat: true, heatLegend: HEAT_LEGEND, voltage: true, bands: ['dc12'] });
     expect(text(both.querySelector('[data-testid="legend-heat-note"]'))).toContain('; terminals still show voltage.');
     expect(both.querySelector('[data-testid="legend-voltage-scale"]')).not.toBeNull();
+  });
+
+  it('lists the catalogue points a heat scale had to leave out, and says when there is no heat scale', async () => {
+    const tables = BUILTIN_CATALOG.tables;
+    const hot = heatLegend(
+      heatScale({
+        tables: tables.map((t) =>
+          t.table !== 'insulation'
+            ? t
+            : {
+                ...t,
+                rows: Object.fromEntries(Object.entries(t.rows).map(([k, r]) => [k, { ...r, ratedTempDryK: 398.15 }])),
+              },
+        ),
+      }),
+    );
+    const el = await legend({ heat: true, heatLegend: hot });
+    const omitted = Array.from(el.querySelectorAll('[data-testid="legend-heat-omitted"]')).map((p) => text(p));
+    expect(omitted).toHaveLength(2);
+    expect(omitted[0]).toMatch(/^Not marked: the lowest insulation rating \(125 °C\)/);
+    const none = await legend({
+      heat: true,
+      heatUnavailable: 'the catalogue has no insulation rating or no melting point',
+    });
+    expect(none.querySelector('[data-testid="legend-heat-scale"]')).toBeNull();
+    expect(text(none.querySelector('[data-testid="legend-heat-unavailable"]'))).toBe(
+      'No heat scale for this catalogue (the catalogue has no insulation rating or no melting point): wires and leads show no reading.',
+    );
   });
 });
 

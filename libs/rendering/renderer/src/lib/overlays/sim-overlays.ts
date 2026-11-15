@@ -70,7 +70,15 @@ import {
   type OverlayJoin,
   type OverlaySteps,
 } from '../sim/overlay-steps';
-import { HEAT_SCALE, heatScale, heatStepColour, type HeatScale } from '../sim/heat-scale';
+import {
+  HEAT_LEGEND,
+  HEAT_SCALE,
+  heatLegend,
+  heatScale,
+  heatStepColour,
+  type HeatLegendScale,
+  type HeatScale,
+} from '../sim/heat-scale';
 import { createHeatSteps, joinHeat, updateHeatSteps, type HeatSteps } from '../sim/heat-steps';
 
 /** The overlays `view.overlay` switches. */
@@ -98,6 +106,10 @@ export interface OverlayLegendState {
   readonly current: boolean;
   /** The heat overlay (F3.6 part 3): conductor and lead colours by temperature. */
   readonly heat: boolean;
+  /** The heat scale's legend (the overlays' catalogue's), while heat is on and available; else `null`. */
+  readonly heatLegend: HeatLegendScale | null;
+  /** Why heat can't be shown (the catalogue gives no usable scale), while heat is on; else `null`. */
+  readonly heatUnavailable: string | null;
   /** `NOMINAL_BANDS` names of the voltage scales in use (solved islands with a scale), in band order. */
   readonly bands: readonly string[];
   /** Some drawn item is in a solved island with no voltage scale (band 0, `none`). */
@@ -238,7 +250,10 @@ export class SimOverlays {
   };
   private highlightRefs: readonly OverlayTerminalRef[] = [];
   /** Heat (F3.6 part 3): per drawn lead and per conductor, joined to records by connection id. */
-  private readonly heatScale: HeatScale;
+  /** `null` when the catalogue gives no usable heat scale: heat then shows no reading and says why. */
+  private readonly heatScale: HeatScale | null;
+  private readonly heatLegendScale: HeatLegendScale | null;
+  private readonly heatProblem: string | null;
   private leadConnections: number[] = [];
   private conductorConnections: number[] = [];
   private leadHeatRecords: Int32Array = new Int32Array(0);
@@ -264,6 +279,8 @@ export class SimOverlays {
     voltage: false,
     current: false,
     heat: false,
+    heatLegend: null,
+    heatUnavailable: null,
     bands: [],
     noScale: false,
     unknown: false,
@@ -291,7 +308,17 @@ export class SimOverlays {
   ) {
     this.group.name = 'overlay:sim';
     this.scales = scalesByBand(bands);
-    this.heatScale = catalog === BUILTIN_CATALOG ? HEAT_SCALE : heatScale(catalog);
+    // A modded catalogue may give no usable scale: heat is then unavailable (with a reason), never a crash.
+    let scale: HeatScale | null = null;
+    let problem: string | null = null;
+    try {
+      scale = catalog === BUILTIN_CATALOG ? HEAT_SCALE : heatScale(catalog);
+    } catch (e) {
+      problem = e instanceof Error ? e.message.replace(/^heatScale: /, '') : String(e);
+    }
+    this.heatScale = scale;
+    this.heatProblem = problem;
+    this.heatLegendScale = scale === null ? null : scale === HEAT_SCALE ? HEAT_LEGEND : heatLegend(scale);
     this.stepInputs = { readout: null, reading: null, join: this.join, scales: this.scales };
     this.conductorInputs = { readout: null, reading: null, join: this.conductorJoin, scales: this.scales };
     // Geometry factories: each pool mesh owns its geometry (instanced-pool: that frees its instance buffers).
@@ -560,13 +587,11 @@ export class SimOverlays {
     let conductorsChanged = updateOverlaySteps(this.conductorSteps, conductors);
     // Heat steps always follow the reading (so switching heat on draws at once); a heat change counts
     // as a drawing change only while heat is shown.
-    const leadHeatChanged = updateHeatSteps(this.leadHeat, this.reading, this.leadHeatRecords, this.heatScale);
-    const conductorHeatChanged = updateHeatSteps(
-      this.conductorHeat,
-      this.reading,
-      this.conductorHeatRecords,
-      this.heatScale,
-    );
+    // Without a usable scale the heat steps stay unknown (created so, never updated).
+    const heat = this.heatScale;
+    const leadHeatChanged = heat !== null && updateHeatSteps(this.leadHeat, this.reading, this.leadHeatRecords, heat);
+    const conductorHeatChanged =
+      heat !== null && updateHeatSteps(this.conductorHeat, this.reading, this.conductorHeatRecords, heat);
     if (this.heatOn) {
       changed = changed || leadHeatChanged;
       conductorsChanged = conductorsChanged || conductorHeatChanged;
@@ -635,6 +660,8 @@ export class SimOverlays {
       voltage: this.voltageOn,
       current: this.currentOn,
       heat: this.heatOn,
+      heatLegend: this.heatOn ? this.heatLegendScale : null,
+      heatUnavailable: this.heatOn ? this.heatProblem : null,
       bands,
       noScale,
       unknown,
@@ -644,6 +671,8 @@ export class SimOverlays {
       prev.voltage === next.voltage &&
       prev.current === next.current &&
       prev.heat === next.heat &&
+      prev.heatLegend === next.heatLegend &&
+      prev.heatUnavailable === next.heatUnavailable &&
       prev.noScale === next.noScale &&
       prev.unknown === next.unknown &&
       prev.bands.join() === next.bands.join()

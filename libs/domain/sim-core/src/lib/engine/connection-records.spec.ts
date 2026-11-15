@@ -7,6 +7,8 @@ import {
   CONNECTION_READING_END_B_DROP,
   CONNECTION_READING_END_B_VOLTS,
   CONNECTION_AMBIENT_K,
+  CONNECTION_INSULATION_DAMAGE_MARGIN_K,
+  CONNECTION_OXIDATION_ONSET_K,
   CONNECTION_OUTPUT_SCHEMAS,
   CONNECTION_OVERHEAT_RISE_K,
   CONNECTION_RECORD_BYTES,
@@ -22,7 +24,7 @@ import { engineBus } from '../../testing/engine';
 import { SourceHost } from '../../testing/sources';
 import { wiredLoopWorld } from '../../testing/wired-loop';
 import { AMBIENT_TEMPERATURE_K } from '../constants';
-import { TERMINATION_OVERHEAT_RISE_K } from '../contact/regimes';
+import { INSULATION_DAMAGE_MARGIN_K, OXIDATION_ONSET_K, TERMINATION_OVERHEAT_RISE_K } from '../contact/regimes';
 import { READING_SOLVED } from '../devices/readings';
 import { READING_SOLVED_CODE } from '../thermal/bank';
 import type { SimConnectionRecord } from './engine';
@@ -403,9 +405,12 @@ describe('connection events (protocol 7)', () => {
 });
 
 describe('the record contract against sim-core', () => {
-  it("the writer's inlined solved code is READING_SOLVED; sim-protocol's ambient and overheat rise are sim-core's", () => {
+  it("the writer's inlined solved code is READING_SOLVED; sim-protocol's thermal copies are sim-core's", () => {
     expect(READING_SOLVED_CODE).toBe(READING_SOLVED);
     expect(CONNECTION_AMBIENT_K).toBe(AMBIENT_TEMPERATURE_K.value);
     expect(CONNECTION_OVERHEAT_RISE_K).toBe(TERMINATION_OVERHEAT_RISE_K.value);
+    // The renderer's heat-scale copies (thermal-thresholds.ts, outside the protocol fingerprint).
+    expect(CONNECTION_INSULATION_DAMAGE_MARGIN_K).toBe(INSULATION_DAMAGE_MARGIN_K.value);
+    expect(CONNECTION_OXIDATION_ONSET_K).toBe(OXIDATION_ONSET_K.value);
   });
 });
