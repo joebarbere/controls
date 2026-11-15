@@ -47,6 +47,10 @@ exports[`WireRenderer > draws the bake: one instanced mesh per look, one instanc
 
 exports[`WireRenderer > draws the bake: one instanced mesh per look, one instance per segment (scene-graph snapshot) > wire graph 1`] = `
 {
+  "highlight": {
+    "hover": null,
+    "selected": null,
+  },
   "inScene": true,
   "looks": [
     {

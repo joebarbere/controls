@@ -194,7 +194,10 @@ export function workOrbitFor(focus: FocusTarget, verticalFovDeg: number, aspect:
   return {
     target: { ...focus.center },
     position: { x: focus.center.x + n.x * h, y: focus.center.y + d * Math.sin(e), z: focus.center.z + n.z * h },
-    minDistance: Math.min(WORK_LIMITS.minDistanceM, d),
+    // Never the framing distance itself: a camera placed exactly on the clamp is re-clamped by a
+    // rounding error every update, so OrbitControls reports a change every frame and the on-demand
+    // loop never idles (a small target: a terminal block focused for its terminals, F3.2 part 3).
+    minDistance: d > WORK_LIMITS.minDistanceM ? WORK_LIMITS.minDistanceM : d / 2,
     maxDistance: d * WORK_LIMITS.maxDistanceFactor,
     minPolarAngle: Math.PI / 2 - WORK_LIMITS.polarHalfRangeRad,
     maxPolarAngle: Math.PI / 2 + WORK_LIMITS.polarHalfRangeRad,

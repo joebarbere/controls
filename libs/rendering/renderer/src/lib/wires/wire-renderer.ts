@@ -23,14 +23,21 @@
  *   pins the routing gesture gives (F3.2 part 3), drawn in its own small instanced mesh and stepped in
  *   {@link WireRenderer.update} until it settles. It is view state: never committed, stored or hashed.
  *
+ * - **Picking** (F3.2 part 3, ADR 0017 §9): {@link WireRenderer.pick} casts a ray against a
+ *   {@link SegmentBvh} over the drawn segments (coils included, sleeves and the preview not), built
+ *   lazily on the first pick after a change, with the ray-to-capsule test widened to 4 px on screen.
+ *   The meshes themselves are never raycast. {@link WireRenderer.setHighlight} draws the hovered and
+ *   selected wires as a translucent sleeve over their segments (`wires:highlight`).
+ *
  * The group is in the scene only while something is drawn, so a world without wires has exactly the
- * scene it had before F3.2. Never pickable here: wire picking is F3.2 part 3's BVH.
+ * scene it had before F3.2.
  */
 import {
   Color,
   CylinderGeometry,
   Group,
   Matrix4,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Quaternion,
   Vector3,
@@ -48,6 +55,7 @@ import {
   type World,
 } from '@controls/world-model';
 import { InstancedPool } from '../instancing/instanced-pool';
+import { emptySegmentHit, SegmentBvh, WIRE_PICK_MIN_RADIUS_PX } from '../picking/segment-bvh';
 import { VerletRope } from './rope';
 import { cableAppearance, conductorAppearance, hexString, lookFinish, type WireAppearance } from './wire-looks';
 import {
@@ -104,6 +112,8 @@ export interface WireGraph {
     readonly tint: readonly [string, string] | null;
   }[];
   readonly sleeves: number;
+  /** The highlighted wires (`c<id>` / `k<id>`): hovered and selected. */
+  readonly highlight: { readonly hover: string | null; readonly selected: string | null };
   readonly preview: {
     readonly particles: number;
     readonly settled: boolean;
@@ -111,6 +121,32 @@ export interface WireGraph {
     readonly look: string;
   } | null;
 }
+
+/** A drawn conductor or cable: what wire picking returns and highlighting takes. */
+export interface WireRef {
+  readonly kind: 'connection' | 'cable';
+  readonly id: number;
+}
+
+/** A wire under a ray ({@link WireRenderer.pick}). */
+export interface WirePick {
+  readonly wire: WireRef;
+  /** Distance along the ray to the closest approach, mm. */
+  readonly depthMm: number;
+  /** How far the ray passes from the centreline there, CSS px. */
+  readonly offsetPx: number;
+  /** Whether the ray passes through the insulation itself (not only the widened 4 px target). */
+  readonly exact: boolean;
+}
+
+/** `c<id>` / `k<id>` (the bake's owner) for a wire ref. */
+export const wireOwner = (wire: WireRef): string => `${wire.kind === 'connection' ? 'c' : 'k'}${wire.id}`;
+
+/** Highlight colours (hover matches the selection outline's hover blue, selection its amber). */
+const HIGHLIGHT_HOVER = 0x7fb8ff;
+const HIGHLIGHT_SELECTED = 0xffb000;
+/** The highlight sleeve's radius as a multiple of the wire's (game-design). */
+const HIGHLIGHT_SCALE = 1.8;
 
 /** One drawn route: what it is, how it looks, and where its instances are. */
 interface DrawnRoute {
@@ -155,9 +191,20 @@ export class WireRenderer {
   /** Per route (index), the tint colour of each half, or −1. */
   private tintA = new Int32Array(0);
   private tintB = new Int32Array(0);
+  private highlightLayer: { pool: InstancedPool; material: MeshBasicMaterial } | null = null;
+  private highlightHover: string | null = null;
+  private highlightSelected: string | null = null;
   private inScene = false;
   private disposed = false;
   private seen: { entities: unknown; connections: unknown; cables: unknown } | null = null;
+  // Picking: every drawn segment (mm, 6 per segment), its radius and its route; the BVH over them.
+  private segPoints = new Float64Array(0);
+  private segRadius = new Float64Array(0);
+  private segRoute = new Int32Array(0);
+  private segCount = 0;
+  private readonly bvh = new SegmentBvh();
+  private bvhDirty = false;
+  private readonly hit = emptySegmentHit();
 
   // Scratch: writes allocate nothing per instance.
   private readonly m = new Matrix4();
@@ -195,6 +242,60 @@ export class WireRenderer {
     if (sameRoutes(next, this.routes)) return false;
     this.routes = next;
     this.writeRoutes();
+    this.writeHighlight();
+    return true;
+  }
+
+  /**
+   * The wire under the ray from `origin` along the unit vector `direction` (both world mm), by the
+   * BVH and the ray-to-capsule test (`picking/segment-bvh`), or `null`. `pxAngle` is the world size
+   * of one CSS pixel per mm of depth (`2 tan(fov / 2) / heightPx`): no wire is a thinner target than
+   * {@link WIRE_PICK_MIN_RADIUS_PX} on screen. Allocation-free except for the answer; the BVH is
+   * rebuilt here, once, after the drawn wires changed.
+   */
+  pick(
+    origin: { readonly x: number; readonly y: number; readonly z: number },
+    direction: { readonly x: number; readonly y: number; readonly z: number },
+    pxAngle: number,
+  ): WirePick | null {
+    if (this.disposed || this.segCount === 0) return null;
+    if (this.bvhDirty) {
+      this.bvh.build(this.segPoints, this.segRadius, this.segCount);
+      this.bvhDirty = false;
+    }
+    const h = this.hit;
+    const { x, y, z } = origin;
+    if (!this.bvh.raycast(x, y, z, direction.x, direction.y, direction.z, pxAngle, h, WIRE_PICK_MIN_RADIUS_PX)) {
+      return null;
+    }
+    const owner = this.routes[this.segRoute[h.segment]].baked.owner;
+    return {
+      wire: { kind: owner.startsWith('c') ? 'connection' : 'cable', id: Number(owner.slice(1)) },
+      depthMm: h.depthMm,
+      offsetPx: h.offsetPx,
+      exact: h.exact,
+    };
+  }
+
+  /** Whether `wire` is drawn. */
+  drawn(wire: WireRef): boolean {
+    const owner = wireOwner(wire);
+    return this.routes.some((r) => r.baked.owner === owner);
+  }
+
+  /**
+   * Draws the hovered and the selected wire (either `null`) as a translucent sleeve over their
+   * segments. A wire that isn't drawn draws nothing. Returns whether the highlight changed.
+   */
+  setHighlight(hover: WireRef | null, selected: WireRef | null): boolean {
+    if (this.disposed) return false;
+    const h = hover && wireOwner(hover);
+    const s = selected && wireOwner(selected);
+    if (h === this.highlightHover && s === this.highlightSelected) return false;
+    this.highlightHover = h;
+    this.highlightSelected = s;
+    this.writeHighlight();
+    this.onInvalidate();
     return true;
   }
 
@@ -304,6 +405,7 @@ export class WireRenderer {
         };
       }),
       sleeves: this.sleeves?.pool.mesh.count ?? 0,
+      highlight: { hover: this.highlightHover, selected: this.highlightSelected },
       preview: this.previewLayer && {
         particles: this.rope.count,
         settled: this.rope.settled,
@@ -314,11 +416,13 @@ export class WireRenderer {
   }
 
   /**
-   * GPU resources alive: each look's, the sleeves' and the preview's mesh, its own geometry and its
-   * material (3 each). 0 when nothing is drawn (the disposal baseline).
+   * GPU resources alive: each look's, the sleeves', the preview's and the highlight's mesh, its own
+   * geometry and its material (3 each). 0 when nothing is drawn (the disposal baseline).
    */
   get resourceCount(): number {
-    return 3 * (this.looks.size + (this.sleeves ? 1 : 0) + (this.previewLayer ? 1 : 0));
+    const layers =
+      this.looks.size + (this.sleeves ? 1 : 0) + (this.previewLayer ? 1 : 0) + (this.highlightLayer ? 1 : 0);
+    return 3 * layers;
   }
 
   /** Releases every mesh, geometry and material, and leaves the scene. Idempotent. */
@@ -328,6 +432,9 @@ export class WireRenderer {
     for (const look of [...this.looks.keys()]) this.disposeLook(look);
     this.disposeSleeves();
     this.disposePreviewLayer();
+    this.disposeHighlight();
+    this.segCount = 0;
+    this.bvh.clear();
     if (this.inScene) this.scene.remove(this.group);
     this.inScene = false;
     this.tint = null;
@@ -403,6 +510,14 @@ export class WireRenderer {
       }
       layer.pool.mesh.userData['wires'] = { look, instances: count };
     }
+    const total = this.routes.reduce((n, r) => n + r.segments, 0);
+    if (this.segRadius.length < total || this.segRadius.length > 4 * Math.max(total, 64)) {
+      const capacity = Math.max(total, 64);
+      this.segPoints = new Float64Array(6 * capacity);
+      this.segRadius = new Float64Array(capacity);
+      this.segRoute = new Int32Array(capacity);
+    }
+    let seg = 0;
     const next = new Map<string, number>();
     this.tintA = new Int32Array(this.routes.length).fill(-1);
     this.tintB = new Int32Array(this.routes.length).fill(-1);
@@ -410,6 +525,7 @@ export class WireRenderer {
       const layer = this.looks.get(r.appearance.look);
       if (!layer) return;
       const radius = mm(r.appearance.diameterMm / 2);
+      const radiusMm = r.appearance.diameterMm / 2;
       let k = next.get(r.appearance.look) ?? 0;
       const write = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, half: 0 | 1) => {
         this.segmentMatrix(ax, ay, az, bx, by, bz, radius);
@@ -417,6 +533,17 @@ export class WireRenderer {
         layer.route[k] = ri;
         layer.half[k] = half;
         k++;
+        const j = 6 * seg;
+        const p = this.segPoints;
+        p[j] = ax;
+        p[j + 1] = ay;
+        p[j + 2] = az;
+        p[j + 3] = bx;
+        p[j + 4] = by;
+        p[j + 5] = bz;
+        this.segRadius[seg] = radiusMm;
+        this.segRoute[seg] = ri;
+        seg++;
       };
       forEachRouteSegment(r.baked.points, write);
       const coil = coils[ri];
@@ -429,6 +556,8 @@ export class WireRenderer {
       }
       next.set(r.appearance.look, k);
     });
+    this.segCount = seg;
+    this.bvhDirty = true;
     this.readTint();
     for (const layer of this.looks.values()) {
       layer.pool.mesh.instanceMatrix.needsUpdate = true;
@@ -540,6 +669,55 @@ export class WireRenderer {
     layer.pool.mesh.instanceMatrix.needsUpdate = true;
   }
 
+  /** The highlight sleeves over the hovered and selected routes' segments; none: no mesh. */
+  private writeHighlight(): void {
+    let count = 0;
+    for (let i = 0; i < this.segCount; i++) if (this.highlightOf(i) !== 0) count++;
+    if (count === 0) {
+      if (this.highlightLayer) {
+        this.disposeHighlight();
+        this.applyScene();
+      }
+      return;
+    }
+    if (!this.highlightLayer) {
+      const material = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false });
+      material.name = 'wires:highlight';
+      const pool = new InstancedPool('wires:highlight', segmentGeometry, material, this.group, {
+        minCapacity: MIN_LOOK_CAPACITY,
+        unpickable: false,
+        shrink: true,
+      });
+      this.highlightLayer = { pool, material };
+    }
+    const pool = this.highlightLayer.pool;
+    pool.ensure(count);
+    const mesh = pool.mesh;
+    const p = this.segPoints;
+    let k = 0;
+    for (let i = 0; i < this.segCount; i++) {
+      const which = this.highlightOf(i);
+      if (which === 0) continue;
+      const j = 6 * i;
+      const radius = mm(this.segRadius[i] * HIGHLIGHT_SCALE);
+      this.segmentMatrix(p[j], p[j + 1], p[j + 2], p[j + 3], p[j + 4], p[j + 5], radius);
+      mesh.setMatrixAt(k, this.m);
+      mesh.setColorAt(k, this.colour.setHex(which === 2 ? HIGHLIGHT_SELECTED : HIGHLIGHT_HOVER));
+      k++;
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.userData['wires'] = { hover: this.highlightHover, selected: this.highlightSelected, instances: count };
+    this.applyScene();
+  }
+
+  /** Segment `i`'s highlight: 2 selected (wins), 1 hovered, 0 none. */
+  private highlightOf(i: number): 0 | 1 | 2 {
+    const owner = this.routes[this.segRoute[i]].baked.owner;
+    if (owner === this.highlightSelected) return 2;
+    return owner === this.highlightHover ? 1 : 0;
+  }
+
   // --- GPU helpers -----------------------------------------------------------------------------
 
   /**
@@ -580,6 +758,13 @@ export class WireRenderer {
     this.sleeves = null;
   }
 
+  private disposeHighlight(): void {
+    if (!this.highlightLayer) return;
+    this.highlightLayer.pool.dispose();
+    this.highlightLayer.material.dispose();
+    this.highlightLayer = null;
+  }
+
   private disposePreviewLayer(): void {
     if (!this.previewLayer) return;
     this.previewLayer.pool.dispose();
@@ -589,11 +774,13 @@ export class WireRenderer {
 
   /**
    * The group's children in a fixed order, whatever the history (pools rebuilt, sleeves or the
-   * preview added and removed): the looks by name, then `wires:sleeves`, then `wires:preview`.
+   * preview added and removed): the looks by name, then `wires:sleeves`, `wires:highlight`, then
+   * `wires:preview`.
    */
   private orderChildren(): void {
     const wanted = [...this.looks.keys()].sort().map((look) => (this.looks.get(look) as LookLayer).pool.mesh);
     if (this.sleeves) wanted.push(this.sleeves.pool.mesh);
+    if (this.highlightLayer) wanted.push(this.highlightLayer.pool.mesh);
     if (this.previewLayer) wanted.push(this.previewLayer.pool.mesh);
     const children = this.group.children;
     if (children.length === wanted.length && wanted.every((m, i) => children[i] === m)) return;
@@ -606,7 +793,8 @@ export class WireRenderer {
   /** In the scene only while some route, sleeve or preview is drawn; children in a fixed order. */
   private applyScene(): void {
     this.orderChildren();
-    const wanted = this.looks.size > 0 || this.sleeves !== null || this.previewLayer !== null;
+    const wanted =
+      this.looks.size > 0 || this.sleeves !== null || this.previewLayer !== null || this.highlightLayer !== null;
     if (wanted && !this.inScene) this.scene.add(this.group);
     else if (!wanted && this.inScene) this.scene.remove(this.group);
     this.inScene = wanted;

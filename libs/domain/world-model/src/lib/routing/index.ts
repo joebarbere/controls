@@ -6,6 +6,7 @@ export * from './ends';
 export * from './raceways';
 export * from './hosts';
 export * from './auto-route';
+export * from './propose';
 export * from './snap';
 export * from './lanes';
 export * from './bake';
