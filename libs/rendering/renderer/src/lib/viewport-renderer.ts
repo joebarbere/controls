@@ -15,6 +15,7 @@ import type {
   SnapshotFeed,
 } from './overlays/sim-overlays';
 import { RenderLoop, windowFrameClock } from './loop/render-loop';
+import type { WireGraph, WirePreview } from './wires/wire-renderer';
 import type { FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,
@@ -225,6 +226,16 @@ export class ViewportRenderer {
   /** What the overlays draw (tests and the `?e2e=1` hook), or `undefined` before `init`. */
   overlayGraph(): OverlayGraph | undefined {
     return this.controller?.overlays.describe();
+  }
+
+  /** What the wire renderer draws (tests and the `?e2e=1` hook), or `undefined` before `init`. */
+  wireGraph(): WireGraph | undefined {
+    return this.controller?.wireGraph();
+  }
+
+  /** Shows (or hides, `null`) the live preview rope of a wire being routed (F3.2 part 3). View state. */
+  setWirePreview(preview: WirePreview | null): void {
+    this.controller?.setWirePreview(preview);
   }
 
   /** Arms placement of the active tool's prop, or disarms it (`null`). */

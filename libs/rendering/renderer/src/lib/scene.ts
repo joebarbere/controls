@@ -62,7 +62,8 @@ export function disposeScene(scene: Scene): void {
  * what it is drawn as (`lamp`: integer level 0…255 and status, by the validity rule), a switch its
  * lever's commanded state (`switch`), a breaker its handle's (`breaker`), and an enclosure which of
  * its entries are drawn open (`openEntries`); a duct its cut length and cover (`duct`) and a cut
- * conduit stick its length (`raceway`, F3.5 part 2).
+ * conduit stick its length (`raceway`, F3.5 part 2), and a wire mesh its look and instance count
+ * (`wires`, F3.2 part 2).
  */
 export interface SceneGraphNode {
   name: string;
@@ -85,6 +86,11 @@ export interface SceneGraphNode {
   duct?: { coverOn: boolean; lengthMm: number | null };
   /** A cut conduit stick's length, from `state.lengthMm`. */
   raceway?: { lengthMm: number };
+  /**
+   * A wire mesh's instances (F3.2 part 2): its look and the segments drawn, or the sleeve markers'
+   * labels (`<owner> <text>`), from `userData.wires`.
+   */
+  wires?: { look?: string; instances: number; labels?: string[] };
   boundsMm?: [number, number, number, number, number, number];
   drawn?: false;
   children?: SceneGraphNode[];
@@ -120,6 +126,12 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
   if (duct) node.duct = { coverOn: duct.coverOn, lengthMm: duct.lengthMm };
   const raceway = object.userData['raceway'] as { lengthMm: number } | undefined;
   if (raceway) node.raceway = { lengthMm: raceway.lengthMm };
+  const wires = object.userData['wires'] as SceneGraphNode['wires'] | undefined;
+  if (wires) {
+    node.wires = { instances: wires.instances };
+    if (wires.look !== undefined) node.wires.look = wires.look;
+    if (wires.labels !== undefined) node.wires.labels = [...wires.labels];
+  }
   if (object instanceof Mesh) {
     const geometry = object.geometry as BufferGeometry;
     if ((geometry.getAttribute('position')?.count ?? 0) > 0) {

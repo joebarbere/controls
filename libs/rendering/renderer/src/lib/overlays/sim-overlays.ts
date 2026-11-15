@@ -4,12 +4,14 @@
  * only read, and the overlays are switched by the `view.overlay` view command, which the workspace
  * applies through {@link SimOverlays.setOverlay}.
  *
- * **What is drawn.** Leads aren't drawn by the scene yet (wire routing is P3), so the overlays draw
- * their own: each world connection between two catalogue terminals is a straight segment in two
- * halves (one per end, so a voltage drop along the lead shows), each terminal a marker. Everything is
- * instanced (one draw per mesh, whatever the plant size), unpickable (a no-op `raycast`, never among
- * the picker's roots) and outside the scene until an overlay or a highlight is on, so turning the
- * overlays off returns the scene to exactly what it was.
+ * **What is drawn.** Test leads aren't drawn by the scene, so the overlays draw their own: each lead
+ * between two catalogue terminals is a straight segment in two halves (one per end, so a voltage drop
+ * along the lead shows), each terminal a marker. Routed conductors are the wire renderer's (F3.2
+ * part 2): the overlays only recolour their instances (D15, {@link SimOverlays.setConductorTint}),
+ * each end's half by that end's voltage step, or by the current step when only current is on.
+ * Everything is instanced (one draw per mesh, whatever the plant size), unpickable (a no-op
+ * `raycast`, never among the picker's roots) and outside the scene until an overlay or a highlight
+ * is on, so turning the overlays off returns the scene to exactly what it was.
  *
  * **Reading.** {@link SimOverlays.attach} subscribes to a {@link SnapshotFeed} (`SimHost` in the game).
  * Each snapshot is read with `NetlistReadout` (once-per-descriptor lookups, an allocation-free read)
@@ -42,6 +44,8 @@ import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { NOMINAL_BANDS, NetlistReadout, type NetlistReading, type SnapshotView } from '@controls/sim-protocol';
 import { mdegToRadians, metresToMm, mm } from '@controls/units';
 import type { World } from '@controls/world-model';
+import { InstancedPool } from '../instancing/instanced-pool';
+import type { WireTint } from '../wires/wire-renderer';
 import {
   arrowCount,
   arrowFraction,
@@ -111,6 +115,15 @@ export interface OverlayGraph {
     readonly volts: number | 'noScale' | 'unknown';
     readonly highlighted: boolean;
   }[];
+  /**
+   * Routed single conductors (D15): the overlays recolour the wire renderer's instances, each end's
+   * half by that end's voltage step (or both by the current step when only current is on). No arrows.
+   */
+  readonly conductors: readonly {
+    readonly connection: number;
+    readonly volts: readonly [number | 'noScale' | 'unknown', number | 'noScale' | 'unknown'];
+    readonly amps: number | 'unknown';
+  }[];
   readonly leads: readonly {
     readonly connection: number;
     readonly volts: readonly [number | 'noScale' | 'unknown', number | 'noScale' | 'unknown'];
@@ -140,6 +153,15 @@ const stepName = (step: number): number | 'noScale' | 'unknown' =>
 
 const UP = new Vector3(0, 1, 0);
 
+/** Where the overlays send conductor colours (D15): the wire renderer. */
+export interface ConductorTintTarget {
+  setTint(tint: WireTint | null): void;
+  refreshTint(): void;
+}
+
+/** A conductor end the netlist can't have (an unlanded end): its node is −1, so its step is unknown. */
+const NO_END = Object.freeze({ entity: -1, terminal: '' });
+
 interface DrawnLead {
   readonly connection: number;
   readonly a: OverlayTerminalRef;
@@ -156,63 +178,17 @@ interface DrawnLead {
   readonly backward: Quaternion;
 }
 
-/** One instanced mesh that grows by doubling (a full re-upload, never `addUpdateRange`). */
-class InstancedLayer {
-  mesh: InstancedMesh;
-
-  constructor(
-    private readonly name: string,
-    private readonly geometry: BufferGeometry,
-    private readonly material: Material,
-    private readonly parent: Group,
-  ) {
-    this.mesh = this.create(1);
-    this.mesh.count = 0;
-  }
-
-  /** Makes room for `count` instances (rebuilding the mesh, doubled, if it has too few). */
-  ensure(count: number): void {
-    const capacity = this.mesh.instanceMatrix.count;
-    if (count > capacity) {
-      let next = capacity;
-      while (next < count) next *= 2;
-      const old = this.mesh;
-      this.mesh = this.create(next);
-      this.mesh.visible = old.visible;
-      this.parent.remove(old);
-      old.dispose();
-    }
-    this.mesh.count = count;
-  }
-
-  dispose(): void {
-    this.parent.remove(this.mesh);
-    this.mesh.dispose();
-  }
-
-  private create(capacity: number): InstancedMesh {
-    const mesh = new InstancedMesh(this.geometry, this.material, capacity);
-    mesh.name = this.name;
-    mesh.frustumCulled = false; // instances span the room; the base geometry's bounds don't
-    mesh.raycast = () => undefined; // never pickable (rendering caveats: overlays)
-    const white = new Color(1, 1, 1);
-    for (let i = 0; i < capacity; i++) mesh.setColorAt(i, white); // the attribute exists before the first draw
-    this.parent.add(mesh);
-    return mesh;
-  }
-}
-
 export class SimOverlays {
   /** Parent of every overlay mesh; in the scene only while an overlay or a highlight is shown. */
   readonly group = new Group();
   private readonly geometries: BufferGeometry[];
   private readonly materials: Material[];
-  private readonly leads: InstancedLayer;
-  private readonly terminalsKnown: InstancedLayer;
-  private readonly terminalsUnknown: InstancedLayer;
-  private readonly arrowsDc: InstancedLayer;
-  private readonly arrowsAc: InstancedLayer;
-  private readonly highlight: InstancedLayer;
+  private readonly leads: InstancedPool;
+  private readonly terminalsKnown: InstancedPool;
+  private readonly terminalsUnknown: InstancedPool;
+  private readonly arrowsDc: InstancedPool;
+  private readonly arrowsAc: InstancedPool;
+  private readonly highlight: InstancedPool;
 
   private voltageOn = false;
   private currentOn = false;
@@ -230,6 +206,21 @@ export class SimOverlays {
   private items: OverlayItems = { terminals: [], leads: [] };
   private arrowSlots = 0;
   private highlighted: Uint8Array = new Uint8Array(0);
+  /** Routed single conductors (D15), as overlay items: joined and stepped like leads, drawn by the wires. */
+  private conductorItems: OverlayItems = { terminals: [], leads: [] };
+  private readonly conductorIndex = new Map<number, number>();
+  private conductorJoin: OverlayJoin = joinOverlayItems(this.conductorItems, null);
+  private conductorSteps: OverlaySteps = createOverlaySteps(0, 0);
+  private readonly conductorInputs: {
+    readout: NetlistReadout | null;
+    reading: NetlistReading | null;
+    join: OverlayJoin;
+    scales: readonly (VoltageScale | null)[];
+  };
+  private tintTarget: ConductorTintTarget | null = null;
+  private tinting = false;
+  /** The colours the wires draw conductors in while an overlay is on (one object, so a refresh allocates nothing). */
+  private readonly tintSource: WireTint = { colour: (connection, end) => this.conductorColour(connection, end) };
   private highlightRefs: readonly OverlayTerminalRef[] = [];
 
   // Sim side (rebuilt per descriptor).
@@ -271,6 +262,7 @@ export class SimOverlays {
     this.group.name = 'overlay:sim';
     this.scales = scalesByBand(bands);
     this.stepInputs = { readout: null, reading: null, join: this.join, scales: this.scales };
+    this.conductorInputs = { readout: null, reading: null, join: this.conductorJoin, scales: this.scales };
     const lead = new CylinderGeometry(1, 1, 1, 6, 1); // unit, along +y; scaled per instance (6 sides: a 2.5 mm lead)
     const sphere = new SphereGeometry(1, 8, 6); // a 6 mm marker needs no more
     const diamond = new OctahedronGeometry(1);
@@ -287,12 +279,12 @@ export class SimOverlays {
     });
     const materials = [solid(), solid(), solid(), solid(), solid(), highlightMaterial];
     this.materials = materials;
-    this.leads = new InstancedLayer('overlay:sim-leads', lead, materials[0], this.group);
-    this.terminalsKnown = new InstancedLayer('overlay:sim-terminals', sphere, materials[1], this.group);
-    this.terminalsUnknown = new InstancedLayer('overlay:sim-terminals-unknown', diamond, materials[2], this.group);
-    this.arrowsDc = new InstancedLayer('overlay:sim-arrows-dc', cone, materials[3], this.group);
-    this.arrowsAc = new InstancedLayer('overlay:sim-arrows-ac', sway, materials[4], this.group);
-    this.highlight = new InstancedLayer('overlay:sim-highlight', ring, materials[5], this.group);
+    this.leads = new InstancedPool('overlay:sim-leads', lead, materials[0], this.group);
+    this.terminalsKnown = new InstancedPool('overlay:sim-terminals', sphere, materials[1], this.group);
+    this.terminalsUnknown = new InstancedPool('overlay:sim-terminals-unknown', diamond, materials[2], this.group);
+    this.arrowsDc = new InstancedPool('overlay:sim-arrows-dc', cone, materials[3], this.group);
+    this.arrowsAc = new InstancedPool('overlay:sim-arrows-ac', sway, materials[4], this.group);
+    this.highlight = new InstancedPool('overlay:sim-highlight', ring, materials[5], this.group);
     this.applyVisibility();
   }
 
@@ -306,6 +298,18 @@ export class SimOverlays {
 
   get reducedMotion(): boolean {
     return this.reducedMotionValue;
+  }
+
+  /**
+   * Where conductor colours go (D15: the overlays recolour the wire renderer's conductor instances,
+   * never a lead layer of their own). `null` detaches (the conductors go back to their own colours).
+   */
+  setConductorTint(target: ConductorTintTarget | null): void {
+    if (target === this.tintTarget) return;
+    if (this.tinting) this.tintTarget?.setTint(null);
+    this.tinting = false;
+    this.tintTarget = target;
+    this.applyVisibility();
   }
 
   /** The legend's state now. */
@@ -370,6 +374,8 @@ export class SimOverlays {
     this.rebuildItems(world);
     this.join = joinOverlayItems(this.items, this.readout);
     this.steps = createOverlaySteps(this.terminals.length, this.drawnLeads.length);
+    this.conductorJoin = joinOverlayItems(this.conductorItems, this.readout);
+    this.conductorSteps = createOverlaySteps(0, this.conductorItems.leads.length);
     this.phases = new Float64Array(this.drawnLeads.length);
     this.writeStaticMatrices();
     this.applyHighlight();
@@ -422,6 +428,11 @@ export class SimOverlays {
         volts: stepName(s.terminalVolts[i]),
         highlighted: this.highlighted[i] === 1,
       })),
+      conductors: this.conductorItems.leads.map((c, j) => ({
+        connection: c.connection,
+        volts: [stepName(this.conductorSteps.leadVoltsA[j]), stepName(this.conductorSteps.leadVoltsB[j])],
+        amps: this.conductorSteps.leadAmps[j] === STEP_UNKNOWN ? 'unknown' : this.conductorSteps.leadAmps[j],
+      })),
       leads: this.drawnLeads.map((l, j) => ({
         connection: l.connection,
         volts: [stepName(s.leadVoltsA[j]), stepName(s.leadVoltsB[j])],
@@ -438,6 +449,9 @@ export class SimOverlays {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.feed = null;
+    if (this.tinting) this.tintTarget?.setTint(null);
+    this.tinting = false;
+    this.tintTarget = null;
     for (const layer of [
       this.leads,
       this.terminalsKnown,
@@ -463,6 +477,7 @@ export class SimOverlays {
       this.reading = null;
       this.readout = null;
       this.join = joinOverlayItems(this.items, null);
+      this.conductorJoin = joinOverlayItems(this.conductorItems, null);
     } else {
       if (view.descriptor !== this.readout?.descriptor) {
         // A new generation (or worker): lookups once per descriptor, CPU-side index arrays only. The
@@ -471,7 +486,9 @@ export class SimOverlays {
         this.readout = NetlistReadout.of(view.descriptor);
         this.reading = this.readout.createReading();
         this.join = joinOverlayItems(this.items, this.readout);
+        this.conductorJoin = joinOverlayItems(this.conductorItems, this.readout);
         resetOverlaySteps(this.steps);
+        resetOverlaySteps(this.conductorSteps);
       }
       this.readout.read(view, this.reading as NetlistReading);
     }
@@ -488,8 +505,15 @@ export class SimOverlays {
     inputs.readout = this.readout;
     inputs.reading = this.reading;
     inputs.join = this.join;
-    const changed = updateOverlaySteps(this.steps, inputs);
+    let changed = updateOverlaySteps(this.steps, inputs);
+    const conductors = this.conductorInputs;
+    conductors.readout = this.readout;
+    conductors.reading = this.reading;
+    conductors.join = this.conductorJoin;
+    const conductorsChanged = updateOverlaySteps(this.conductorSteps, conductors);
     if (changed || force) this.writeStepped();
+    if ((conductorsChanged || force) && this.tinting) this.tintTarget?.refreshTint();
+    changed = changed || conductorsChanged;
     return changed;
   }
 
@@ -524,7 +548,17 @@ export class SimOverlays {
         consider(s.leadVoltsB[j], this.join.leadNodeB[j]);
       }
     }
-    if (this.currentOn) for (let j = 0; j < s.leadAmps.length; j++) if (s.leadAmps[j] === STEP_UNKNOWN) unknown = true;
+    const cs = this.conductorSteps;
+    if (this.voltageOn) {
+      for (let j = 0; j < cs.leadVoltsA.length; j++) {
+        consider(cs.leadVoltsA[j], this.conductorJoin.leadNodeA[j]);
+        consider(cs.leadVoltsB[j], this.conductorJoin.leadNodeB[j]);
+      }
+    }
+    if (this.currentOn) {
+      for (let j = 0; j < s.leadAmps.length; j++) if (s.leadAmps[j] === STEP_UNKNOWN) unknown = true;
+      for (let j = 0; j < cs.leadAmps.length; j++) if (cs.leadAmps[j] === STEP_UNKNOWN) unknown = true;
+    }
     const bands: string[] = [];
     this.bandsUsed.forEach((used, band) => {
       const scale = band < this.scales.length ? this.scales[band] : null;
@@ -603,6 +637,28 @@ export class SimOverlays {
       leads: this.drawnLeads.map((l) => ({ connection: l.connection, a: l.a, b: l.b })),
     };
     this.highlighted = new Uint8Array(this.terminals.length);
+    // Routed single conductors (D15): their colours go to the wire renderer, which draws them from the bake.
+    const conductors: OverlayItems['leads'][number][] = [];
+    this.conductorIndex.clear();
+    for (const c of world.connections) {
+      if (c.lengthMm === null || c.route === null) continue; // a lead, or a cable's conductor (drawn as its cable)
+      this.conductorIndex.set(c.id, conductors.length);
+      conductors.push({
+        connection: c.id,
+        a: c.a ? { entity: c.a.entity, terminal: c.a.terminal } : NO_END,
+        b: c.b ? { entity: c.b.entity, terminal: c.b.terminal } : NO_END,
+      });
+    }
+    this.conductorItems = { terminals: [], leads: conductors };
+  }
+
+  /** Conductor `connection`'s colour at end `end` (the wires' tint): its step's colour, or −1 (not drawn here). */
+  private conductorColour(connection: number, end: 'a' | 'b'): number {
+    const j = this.conductorIndex.get(connection);
+    if (j === undefined) return -1;
+    const s = this.conductorSteps;
+    const step = this.voltageOn ? (end === 'a' ? s.leadVoltsA[j] : s.leadVoltsB[j]) : s.leadAmps[j];
+    return stepColour(step);
   }
 
   /** Instance capacities for this world (each layer then draws only the instances in use). */
@@ -779,6 +835,12 @@ export class SimOverlays {
     if (wanted && !this.inScene) this.scene.add(this.group);
     else if (!wanted && this.inScene) this.scene.remove(this.group);
     this.inScene = wanted;
+    // D15: while voltage or current is shown, the wires draw conductors in the overlay's colours.
+    const tint = this.voltageOn || this.currentOn;
+    if (tint !== this.tinting && this.tintTarget) {
+      this.tinting = tint;
+      this.tintTarget.setTint(tint ? this.tintSource : null);
+    }
   }
 }
 

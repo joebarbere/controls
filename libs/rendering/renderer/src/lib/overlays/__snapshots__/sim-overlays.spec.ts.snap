@@ -2,6 +2,7 @@
 
 exports[`SimOverlays in the viewport > voltage and current on the bench (band 0: no voltage scale; the unwired lamp: no reading) 1`] = `
 {
+  "conductors": [],
   "current": true,
   "inScene": true,
   "leads": [

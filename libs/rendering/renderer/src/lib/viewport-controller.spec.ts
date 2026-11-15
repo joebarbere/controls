@@ -8,6 +8,7 @@ import {
   type Entity,
   type World,
 } from '@controls/world-model';
+import { routingPanelBus } from '@controls/world-model/testing';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ManualFrameClock } from './loop/manual-frame-clock';
@@ -1301,5 +1302,90 @@ describe('ViewportController with enclosures (F3.5)', () => {
     expect(controller.recipeCount).toBe(0);
     expect(controller.bvhCount).toBe(0);
     expect(canvas.live.size).toBe(0);
+  });
+});
+
+// --- F3.2 part 2: the wire renderer in the viewport -------------------------------------------
+
+describe('ViewportController wires (F3.2 part 2)', () => {
+  /** The routing panel's ducts, blocks and eight auto-routed wires, on the workshop panel's fixtures. */
+  const WIRED: World = { ...routingPanelBus(true).state, fixtures: PANEL.fixtures };
+  const UNWIRED: World = { ...WIRED, connections: [] };
+  const preview = {
+    pointsMm: [
+      { x: 0, y: 400, z: 60 },
+      { x: 250, y: 400, z: 60 },
+    ],
+    ref: { id: 'conductor.tallowmere-thhn-14-solid', version: 1 },
+    colour: { base: 'blue', stripe: null },
+  };
+
+  it('draws the wires beside the entities and keeps them out of picking and the scene when there are none', () => {
+    const { controller } = setup(WIRED);
+    const wires = controller.scene.getObjectByName('wires');
+    expect(wires?.parent).toBe(controller.scene);
+    expect(controller.wireGraph().routes).toHaveLength(8);
+    // Not selectable: the keyboard list holds the fixtures and the entities only.
+    expect(controller.selection.all.some((s) => s.id.startsWith('wires'))).toBe(false);
+    controller.syncWorld(UNWIRED);
+    expect(controller.scene.getObjectByName('wires')).toBeUndefined();
+    expect(controller.wireResourceCount).toBe(0);
+    // A world without wires has exactly the scene it had before F3.2.
+    const plain = setup(UNWIRED).controller;
+    expect(controller.sceneGraph()).toStrictEqual(plain.sceneGraph());
+    plain.dispose();
+    controller.dispose();
+  });
+
+  it('disposal with wires and a preview rope disposes every geometry, material and instance buffer exactly once', () => {
+    const { canvas, controller } = setup(WIRED);
+    controller.setWirePreview(preview);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    const instanced: Mesh[] = [];
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh || o instanceof Box3Helper) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+      if (o instanceof Mesh && o.name.startsWith('wires:')) instanced.push(o);
+    });
+    expect(instanced.map((m) => m.name).sort()).toStrictEqual(['wires:preview', 'wires:thhnThwn2']);
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    const meshDisposed = vi.fn();
+    instanced.forEach((m) => m.addEventListener('dispose', meshDisposed));
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(meshDisposed).toHaveBeenCalledTimes(2);
+    expect(controller.wireResourceCount).toBe(0);
+    expect(controller.scene.getObjectByName('wires')).toBeUndefined();
+    expect(canvas.live.size).toBe(0);
+  });
+
+  it('the preview rope draws until it settles, then the viewport idles; clearing it draws once more', () => {
+    const { controller } = setup(WIRED);
+    const clock = new ManualFrameClock();
+    const draw = vi.fn();
+    const loop = new RenderLoop({ clock, update: (dt) => controller.update(dt), draw });
+    controller.onInvalidate(() => loop.requestRender());
+    loop.requestRender();
+    clock.ticks(5);
+    draw.mockClear();
+    controller.setWirePreview(preview);
+    clock.ticks(600);
+    const settling = draw.mock.calls.length;
+    expect(settling).toBeGreaterThan(10); // animated frame by frame…
+    expect(settling).toBeLessThan(300); // …and then stopped
+    expect(controller.wireGraph().preview?.settled).toBe(true);
+    expect(clock.pendingFrames).toBe(0);
+    draw.mockClear();
+    controller.setWirePreview(null);
+    clock.ticks(5);
+    expect(draw).toHaveBeenCalledTimes(1);
+    expect(controller.wireGraph().preview).toBeNull();
+    loop.dispose();
+    controller.dispose();
   });
 });

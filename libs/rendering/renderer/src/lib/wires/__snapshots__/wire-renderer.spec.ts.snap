@@ -1,0 +1,286 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WireRenderer > draws the bake: one instanced mesh per look, one instance per segment (scene-graph snapshot) > scene graph 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "wires:thhnThwn2",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+      "wires": {
+        "instances": 211,
+        "look": "thhnThwn2",
+      },
+    },
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "wires:sleeves",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+      "wires": {
+        "instances": 2,
+        "labels": [
+          "c3 X1-3",
+        ],
+      },
+    },
+  ],
+  "name": "wires",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
+exports[`WireRenderer > draws the bake: one instanced mesh per look, one instance per segment (scene-graph snapshot) > wire graph 1`] = `
+{
+  "inScene": true,
+  "looks": [
+    {
+      "capacity": 256,
+      "instances": 211,
+      "look": "thhnThwn2",
+    },
+  ],
+  "preview": null,
+  "routes": [
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        23,
+        60,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c1",
+      "segments": 5,
+      "tint": null,
+      "toMm": [
+        323,
+        200,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        29,
+        108,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c2",
+      "segments": 20,
+      "tint": null,
+      "toMm": [
+        329,
+        248,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        35,
+        108,
+        30,
+      ],
+      "label": "X1-3",
+      "look": "thhnThwn2",
+      "owner": "c3",
+      "segments": 33,
+      "tint": null,
+      "toMm": [
+        335,
+        200,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        41,
+        60,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c4",
+      "segments": 5,
+      "tint": null,
+      "toMm": [
+        47,
+        60,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        353,
+        248,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c5",
+      "segments": 15,
+      "tint": null,
+      "toMm": [
+        53,
+        60,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        59,
+        108,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c6",
+      "segments": 23,
+      "tint": null,
+      "toMm": [
+        59,
+        60,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        365,
+        200,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c7",
+      "segments": 27,
+      "tint": null,
+      "toMm": [
+        377,
+        200,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        71,
+        108,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c8",
+      "segments": 21,
+      "tint": null,
+      "toMm": [
+        371,
+        248,
+        30,
+      ],
+    },
+    {
+      "coil": {
+        "atMm": [
+          359,
+          286.5,
+          13.2,
+        ],
+        "turns": 3,
+      },
+      "colour": "#c62828",
+      "diameterMm": 2.6,
+      "fromMm": [
+        77,
+        60,
+        30,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c9",
+      "segments": 51,
+      "tint": null,
+      "toMm": [
+        359,
+        248,
+        30,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1f4fbf",
+      "diameterMm": 2.6,
+      "fromMm": [
+        900,
+        -150,
+        100,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c10",
+      "segments": 11,
+      "tint": null,
+      "toMm": [
+        822,
+        -703,
+        100,
+      ],
+    },
+  ],
+  "sleeves": 2,
+}
+`;
