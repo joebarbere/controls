@@ -3,6 +3,7 @@ import {
   defineCommand,
   entityRefMeta,
   fail,
+  ROUTING_ACTIVE_KEY,
   SELECTION_ENTITY_ID_KEY,
   succeed,
   VIEWPORT_FOCUSED_KEY,
@@ -338,7 +339,9 @@ export function entityDeleteCommand(catalog: Catalog = BUILTIN_CATALOG) {
         category: 'Entity',
         target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: SELECTION_ENTITY_ID_KEY } },
         defaults: ['Delete', 'Backspace'],
-        when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_ENTITY_ID_KEY}`,
+        // Never while routing (F3.2 part 3): there Backspace is `routing.back`, and the selection is
+        // the device being wired, not something to delete.
+        when: `${VIEWPORT_FOCUSED_KEY} && ${SELECTION_ENTITY_ID_KEY} && !${ROUTING_ACTIVE_KEY}`,
       },
     ],
     run: ({ state }, { id }) => {

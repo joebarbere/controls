@@ -249,6 +249,10 @@ describe('world registry, replay log and cheats', () => {
       'lead.disconnect:true',
       'palette.open:false',
       'raceway.cut:true',
+      'routing.back:false',
+      'routing.cancel:false',
+      'routing.terminalNext:false',
+      'routing.terminalPrevious:false',
       'sim.resume:false',
       'sim.setSpeed:false',
       'sim.step:false',
@@ -274,7 +278,7 @@ describe('world registry, replay log and cheats', () => {
       expect.objectContaining({
         id: 'entity.delete.selection',
         defaults: ['Delete', 'Backspace'],
-        when: 'viewport.focused && selection.entityId',
+        when: 'viewport.focused && selection.entityId && !routing.active',
         target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: 'selection.entityId' } },
       }),
     ]);

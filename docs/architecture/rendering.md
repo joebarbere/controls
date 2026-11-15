@@ -347,7 +347,7 @@ flowchart LR
 
 ## Pickers and the routing gesture (F3.2 part 3)
 
-The renderer half of F3.2 part 3 ([ADR 0017 §9](../decisions/0017-routing-and-bake.md), [ADR 0010](../decisions/0010-wire-routing-spike.md)'s measured design): screen-space terminal picking, a wire BVH, keyboard terminal cycling, and the routing gesture's view. **The UI owns the gesture** (the spool on the belt, the clicks so far, Backspace, the one `wire.add`); the controller only draws it and reports picks. Nothing here mutates the world or logs a command.
+The renderer half of F3.2 part 3 ([ADR 0017 §9](../decisions/0017-routing-and-bake.md), [ADR 0010](../decisions/0010-wire-routing-spike.md)'s measured design): screen-space terminal picking, a wire BVH, keyboard terminal cycling, and the routing gesture's view. **The UI owns the gesture** (the spool on the belt, the clicks so far, Backspace, the one `wire.add`; see [UI shell](ui-shell.md#routing-a-wire-f32-part-3)); the controller only draws it and reports picks. Nothing here mutates the world or logs a command.
 
 ```mermaid
 sequenceDiagram

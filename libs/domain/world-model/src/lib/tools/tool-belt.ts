@@ -67,14 +67,16 @@ export interface BeltChoice {
   readonly ref: CatalogRef;
   readonly title: string;
   /** For grouping in a picker. */
-  readonly group: 'Props' | 'Devices' | 'Tools';
+  readonly group: 'Props' | 'Devices' | 'Spools' | 'Tools';
 }
 
 /**
  * What a belt editor offers (F3.4 part 1): the built-in props, then (F3.5 part 1) every placeable
  * catalogue device with a body, so the mouse can place it (`beltSlotKind` says `placeable`: the
- * enclosures, the breaker, the supplies, …), then every catalogue tool; each group sorted by id, the
- * newest version of each id. Conductor spools and cables join with F3.1 part 2.
+ * enclosures, the breaker, the supplies, …), then (F3.2 part 3) every conductor sold as building wire
+ * (a spool: a conductor no cable entry lists, so not one of NM-B's inner conductors), then every
+ * catalogue tool; each group sorted by id, the newest version of each id. Cable spools join with
+ * F3.2 part 4 (`cable.add`); test leads stay `lead.connect`'s.
  */
 export function beltChoices(catalog: Catalog): BeltChoice[] {
   const props = BUILTIN_PROPS.map((p) => ({
@@ -94,6 +96,22 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
     title: d.title,
     group: 'Devices' as const,
   }));
+  const inCables = new Set(catalog.cables.flatMap((c) => c.conductors.map((k) => k.conductor.id)));
+  const newestSpool = new Map<string, DeviceDefinition>();
+  for (const d of catalog.devices) {
+    if (
+      d.conductor &&
+      !inCables.has(d.id) &&
+      catalog.kindOf({ id: d.id, version: d.version })?.requires === 'conductor'
+    ) {
+      newestSpool.set(d.id, d);
+    }
+  }
+  const spools = [...newestSpool.values()].map((d) => ({
+    ref: { id: d.id, version: d.version },
+    title: d.title,
+    group: 'Spools' as const,
+  }));
   const newest = new Map<string, ToolDefinition>();
   for (const tool of catalog.tools) newest.set(tool.id, tool); // sorted by id, then version
   const tools = [...newest.values()].map((t) => ({
@@ -101,7 +119,7 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
     title: t.title,
     group: 'Tools' as const,
   }));
-  return [...props, ...devices, ...tools];
+  return [...props, ...devices, ...spools, ...tools];
 }
 
 /**

@@ -32,7 +32,9 @@ describe('Viewport', () => {
       '3D workspace. Click to select. [ and ] cycle selection, F focuses it, V toggles walk and work mode, W A S D walk. ' +
         'Number keys pick a tool-belt slot; a prop is placed with a click or Enter at the pointer or the centre, a tool is held. ' +
         'Drag an object, or M then Enter, to move it; E or a double-click operates a selected switch; ' +
-        'Delete deletes it; Escape cancels.',
+        'Delete deletes it; Escape cancels. ' +
+        "With a spool, pick two terminals to add a wire: Tab and Shift+Tab cycle a device's terminals, Enter picks, " +
+        'a click elsewhere adds a waypoint, Backspace steps back, Z zooms to crowded terminals.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
