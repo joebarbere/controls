@@ -15,6 +15,8 @@ import {
 } from '@controls/sim-core';
 import { materialiseWorld } from '@controls/sim-protocol';
 import { cableAddBench, type CableAddBench } from './cable-add';
+import { bakeChecksum, bakeRoutes, buildRouteBakePanel, ROUTE_BAKE_SMOKE_ROWS } from './route-bake';
+import type { BakedWorld } from '@controls/world-model';
 import { intermittentToggleCase, resolveWiredCase, TICK_WIRED_CASE } from './wired';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
@@ -296,6 +298,38 @@ export const CABLE_ADD_CASE: BenchCase = {
   },
 };
 
+/**
+ * `route-bake-500-wires`'s budget (ADR 0017, fixed from measurement as plan P3 "Budgets" asks): one
+ * 60 Hz frame. The bake of the 500-wire panel measured 1.92 ms median (p90 2.59, p99 3.37 ms; 21 runs,
+ * the developer's desktop, 2026-11-12), so a load or a rebuild of every wire fits in a frame with 8×
+ * headroom, more than CI's 5× runner spread; ADR 0010's Verlet bake took about 4 s for the same count.
+ * Uncalibrated: a load-time ceiling, not a solver gate.
+ */
+export const ROUTE_BAKE_BUDGET_MS = 16;
+
+const routeBakeWorlds: { full: World | null; smoke: World | null } = { full: null, smoke: null };
+let routeBakeWorld: World | null = null;
+let routeBaked: BakedWorld | null = null;
+
+/** F3.2 part 1: the analytic bake of a panel with 500 auto-routed wires (route-bake.ts). */
+export const ROUTE_BAKE_CASE: BenchCase = {
+  name: 'route-bake-500-wires',
+  warmup: 3,
+  runs: 21,
+  budgetMs: ROUTE_BAKE_BUDGET_MS,
+  prepare: (smoke) => {
+    // Built once per form, untimed; the smoke form is one row (50 wires).
+    if (smoke) routeBakeWorld = routeBakeWorlds.smoke ??= buildRouteBakePanel(ROUTE_BAKE_SMOKE_ROWS);
+    else routeBakeWorld = routeBakeWorlds.full ??= buildRouteBakePanel();
+    routeBaked = null;
+  },
+  run: () => {
+    routeBaked = bakeRoutes(routeBakeWorld as World);
+    return `${routeBaked.routes.length}`;
+  },
+  checksum: () => bakeChecksum(routeBaked as BakedWorld),
+};
+
 export const BENCH_CASES: readonly BenchCase[] = [
   {
     // A from-scratch compile, as on a load or a session start: a new compiler, no cached fragments.
@@ -399,6 +433,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
   SNAPSHOT_READ_CASE,
   OVERLAY_READ_CASE,
   CABLE_ADD_CASE,
+  ROUTE_BAKE_CASE,
 ];
 
 let plantEngine: SimEngine | null = null;
@@ -420,11 +455,4 @@ function bagDigest(engine: SimEngine): string {
  * Listed in the report; not run, no timing, never fail it. The feature named in `enabledBy` moves
  * each into `BENCH_CASES` with its real workload and removes it here.
  */
-export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
-  {
-    name: 'route-bake-500-wires',
-    budgetMs: null,
-    enabledBy: 'F3.2 part 1',
-    note: 'The analytic domain bake (D5) of 500 routed wires; ADR 0017 fixes its budget from measurement.',
-  },
-];
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [];

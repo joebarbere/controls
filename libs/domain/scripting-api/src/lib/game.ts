@@ -8,7 +8,7 @@ import {
   type ReplayError,
   SIM_STEP_COMMAND,
 } from '@controls/commands';
-import { CATALOG_VERSION } from '@controls/catalog';
+import { BUILTIN_CATALOG, CATALOG_VERSION, type Catalog } from '@controls/catalog';
 import {
   createManifest,
   createWorld,
@@ -43,11 +43,15 @@ import {
 } from '@controls/sim-core';
 import { materialiseWorld, type SimEvent, type SimStateExport } from '@controls/sim-protocol';
 import {
+  autoRoute,
+  type AutoRouteOptions,
+  type AutoRouteResult,
   checkWorldReferences,
   createWorldBus,
   createWorldRegistry,
   rebaseReplayLog,
   replayLog as replayWorldLog,
+  type RouteTerminal,
   toReplayLog,
   type World,
   worldHash,
@@ -300,6 +304,17 @@ export interface Game {
    * such connection, or a kind the catalogue doesn't know). A script and test query (plan D16).
    */
   connection(id: number): SimConnectionRecord | null;
+  /**
+   * The auto-router (F3.2 part 1, ADR 0017): the route the mouse's two-click gesture and the console's
+   * `--route auto` propose from terminal `a` to terminal `b` on the current world, out of each terminal
+   * along its exit direction, through the ducts (and their risers) between them. An end is
+   * `{ entity, terminal, termination? }` (`'auto'` or absent: the terminal's first method; else
+   * `{ method }`) or `"<entityId>:<terminalId>"`. It only proposes: pass `route` and `lengthMm` (the
+   * route's default cut length; any length from `floorMm` up is accepted) to `wire.add`, whose logged
+   * arguments then carry the explicit waypoints. Read-only and never logged. The catalogue is the
+   * engine's (default the built-in one), or `options.catalog`.
+   */
+  autoRoute(a: RouteTerminal | string, b: RouteTerminal | string, options?: GameAutoRouteOptions): AutoRouteResult;
   /** The snapshot at this tick: the hashed bytes of its slot (ADR 0011 §5, §11), a fresh copy. */
   snapshot(): Uint8Array;
   /** SHA-256 of {@link snapshot}'s bytes, lower-case hex (`snapshotHash`, ADR 0011 §5.2). */
@@ -342,6 +357,20 @@ export interface Game {
    * {@link NotAvailableError} until then.
    */
   tag(path: string): never;
+}
+
+/** `game.autoRoute`'s options: the router's, and the catalogue to route on. */
+export interface GameAutoRouteOptions extends AutoRouteOptions {
+  /** The catalogue (default the engine's, else the built-in one). */
+  readonly catalog?: Catalog;
+}
+
+/** A route end from its object or `"<entityId>:<terminalId>"` form. */
+function routeTerminal(end: RouteTerminal | string, name: 'a' | 'b'): RouteTerminal {
+  if (typeof end !== 'string') return end;
+  const match = /^([1-9][0-9]*):(.+)$/.exec(end);
+  if (!match) throw new RangeError(`autoRoute: end ${name} must be "<entityId>:<terminalId>", got "${end}"`);
+  return { entity: Number(match[1]), terminal: match[2] };
 }
 
 function deepFreeze<T>(value: T): T {
@@ -548,6 +577,14 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
         throw error;
       }
     },
+    autoRoute: (a, b, options = {}) =>
+      autoRoute(
+        bus.state,
+        options.catalog ?? engine?.options.catalog ?? BUILTIN_CATALOG,
+        routeTerminal(a, 'a'),
+        routeTerminal(b, 'b'),
+        options,
+      ),
     islands: () => needEngine('islands').islands(),
     device: (id) => needEngine('device').deviceRecord(id),
     connection: (id) => needEngine('connection').connectionRecord(id),

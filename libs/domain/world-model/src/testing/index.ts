@@ -5,3 +5,4 @@
 export * from './wiring-catalog';
 export * from './wired-world';
 export * from './wiring-bench';
+export * from './routing-panel';

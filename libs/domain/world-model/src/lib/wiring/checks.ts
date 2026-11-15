@@ -19,8 +19,9 @@ import { MAX_ROUTE_WAYPOINTS } from '@controls/save-format';
 import { terminalProblem } from '../devices';
 import { findEntity, isLead } from '../entity-commands';
 import { builtinProp } from '../props';
-import { type BoxMm, boxFromCorners, conservativeCube, segmentCrossesBox } from '../routing/collide';
+import { type BoxMm, boxFromCorners, conservativeCube, routeCollision } from '../routing/collide';
 import { routeFloorMm } from '../routing/floor';
+import { waypointHostProblem } from '../routing/hosts';
 import { entityPointMm, isAxisAligned } from '../snap/quarter-turn';
 import { combinationProblem } from '../termination/combination';
 import {
@@ -142,7 +143,7 @@ export type ConduitRule = 'refuse' | 'require';
  * waypoint at each null end, and conduit only in `wire.pull` (`needs-pull`; `wire.pull` needs one,
  * `bad-waypoint`). At most `MAX_ROUTE_WAYPOINTS` minus the landed ends, so unlanding (which adds a
  * rest waypoint) never overflows a route. Which host kinds a waypoint kind accepts (a duct waypoint
- * on a duct) is ADR 0017's, with F3.5 part 2's raceways: not checked yet.
+ * on a duct, a staple on a stud wall) is ADR 0017's `waypointHostProblem` (F3.2 part 1).
  */
 export function checkRoute(
   world: World,
@@ -176,9 +177,14 @@ export function checkRoute(
       if (!isAxisAligned(host.transform.orientationMdeg)) {
         return fail('not-axis-aligned', `${at}: entity ${w.entity} isn't at quarter-turns`);
       }
+      const problem = waypointHostProblem(catalog, w, { entity: host });
+      if (problem) return fail('bad-waypoint', `${at}: ${problem}`);
     }
-    if (w.fixture !== null && !world.fixtures.some((f) => f.id === w.fixture)) {
-      return fail('bad-waypoint', `${at}: no fixture "${w.fixture}"`);
+    if (w.fixture !== null) {
+      const fixture = world.fixtures.find((f) => f.id === w.fixture);
+      if (!fixture) return fail('bad-waypoint', `${at}: no fixture "${w.fixture}"`);
+      const problem = waypointHostProblem(catalog, w, { fixture });
+      if (problem) return fail('bad-waypoint', `${at}: ${problem}`);
     }
     if (w.tool !== null) {
       const tool = checkTool(catalog, w.tool, 'bore');
@@ -267,21 +273,10 @@ export function bodyBox(
   return boxFromCorners(entity.transform.positionMm, far);
 }
 
-/** `route-collides` if a segment passes through a body, other than those of the entities at its two ends. */
+/** `route-collides` if a segment passes through a body, other than those of the entities at its two ends (`routeCollision`, ADR 0017). */
 export function checkCollisions(world: World, catalog: Catalog, points: readonly RoutePoint[]): CommandFailure | null {
-  const boxes = obstacleBoxes(world, catalog);
-  if (boxes.length === 0) return null;
-  for (let i = 1; i < points.length; i++) {
-    const p = points[i - 1];
-    const q = points[i];
-    for (const { entity, box } of boxes) {
-      if (entity === p.entity || entity === q.entity) continue;
-      if (segmentCrossesBox(p.positionMm, q.positionMm, box)) {
-        return fail('route-collides', `Route segment ${i} passes through entity ${entity}`);
-      }
-    }
-  }
-  return null;
+  const hit = routeCollision(points, obstacleBoxes(world, catalog));
+  return hit && fail('route-collides', `Route segment ${hit.segment} passes through entity ${hit.entity}`);
 }
 
 /** The method spec a landed end's termination names, or `undefined` (an unknown device or method). */

@@ -275,7 +275,21 @@ wire.add --ref.id conductor.test-14 --ref.version 1 --a.entity 1 --a.terminal l1
 wire.land 1 --end b --at.entity 3 --at.terminal line --at.termination auto
 ```
 
-`--a.termination auto` (the ideal termination) is accepted only at Trainee; at other difficulties spell out the steps (`--a.termination.method screw --a.termination.strip.tool.id … --a.termination.strip.hole … --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id … --a.termination.clamp.torqueNm 4`). The ids above are from the TEST-ONLY wiring catalogue (`@controls/world-model/testing`): the game's catalogue has no conductors, cables or tools until the P3 content lands, so `libs/domain/scripting-api/src/lib/wiring.spec.ts` is the worked example (a console file and a TypeScript script reaching one pinned hash). `--route auto` arrives with the router (F3.2 part 1).
+`--a.termination auto` (the ideal termination) is accepted only at Trainee; at other difficulties spell out the steps (`--a.termination.method screw --a.termination.strip.tool.id … --a.termination.strip.hole … --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id … --a.termination.clamp.torqueNm 4`). The ids above are from the TEST-ONLY wiring catalogue (`@controls/world-model/testing`); `libs/domain/scripting-api/src/lib/wiring.spec.ts` is that worked example (a console file and a TypeScript script reaching one pinned hash).
+
+**Auto-routing (F3.2 part 1, [ADR 0017](../decisions/0017-routing-and-bake.md)).** `--route auto` on `wire.add` (between its two landed ends) or `wire.reroute` (between the wire's landed ends) asks the router for the waypoints, out of each terminal into the nearest duct, along the ducts and through any riser joining them, to the other terminal; put it before `--lengthMm auto` on the same line and the length is measured along the routed waypoints. A script calls the same function, `game.autoRoute(a, b)`, with each end as `"<entityId>:<terminalId>"` or `{ entity, terminal, termination? }`; it returns `{ ok: true, route, lengthMm, floorMm, points }` or `{ ok: false, code, message }` and changes nothing:
+
+```text
+wire.add --ref.id conductor.tallowmere-thhn-14-solid --ref.version 1 --a.entity 4 --a.terminal b --a.termination auto --b.entity 7 --b.terminal b --b.termination auto --route auto --lengthMm auto --colour.base black --colour.stripe null --tool.id tool.veltmark-dc-8 --tool.version 1
+```
+
+```ts
+const routed = game.autoRoute('4:b', '7:b');
+if (routed.ok)
+  game.execOrThrow('wire.add', { ref, a, b, route: routed.route, lengthMm: routed.lengthMm, colour, tool });
+```
+
+Either way the log holds the explicit waypoints, so a replay never routes; a console file using `--route auto` re-pins its hashes if the router changes. `libs/domain/scripting-api/src/lib/routing.spec.ts` is the worked example (real catalogue: two ducts, a riser and six screw blocks).
 
 ## Time and probes (F2.3a)
 

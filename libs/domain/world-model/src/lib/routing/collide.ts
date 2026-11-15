@@ -58,3 +58,40 @@ export function segmentCrossesBox(p: PositionMm, q: PositionMm, box: BoxMm): boo
   }
   return enter < exit;
 }
+
+/** A body a route may not pass through, with the entity it belongs to. */
+export interface Obstacle {
+  readonly entity: number;
+  readonly box: BoxMm;
+}
+
+/** A route point, as far as `route-collides` sees it: where it is and the entity there (excluded from its segments). */
+export interface CollisionPoint {
+  readonly positionMm: PositionMm;
+  readonly entity: number | null;
+}
+
+/**
+ * `route-collides` (ADR 0015, ADR 0017): the first segment (1-based, `i` joins points `i − 1` and `i`)
+ * of the route's **stored polyline** that passes through an obstacle's open interior, and the entity,
+ * or `null` when the route is clear. The obstacles are the catalogue `sizeMm` bodies (`obstacleBoxes`:
+ * devices and built-in props; enclosures and raceways are hollow); a segment never collides with the
+ * entities at its own two ends (a landed end's device, a cable end's enclosure, a waypoint's host).
+ * The bake's lead-outs, lanes and sag are a picture and are never checked. Shared by the commands and
+ * the auto-router, so the router never proposes a route a command refuses.
+ */
+export function routeCollision(
+  points: readonly CollisionPoint[],
+  obstacles: readonly Obstacle[],
+): { readonly segment: number; readonly entity: number } | null {
+  if (obstacles.length === 0) return null;
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i - 1];
+    const q = points[i];
+    for (const { entity, box } of obstacles) {
+      if (entity === p.entity || entity === q.entity) continue;
+      if (segmentCrossesBox(p.positionMm, q.positionMm, box)) return { segment: i, entity };
+    }
+  }
+  return null;
+}
