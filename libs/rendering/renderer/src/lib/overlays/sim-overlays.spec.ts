@@ -1,4 +1,12 @@
-import { Box3Helper, InstancedMesh, Mesh, Scene, type BufferGeometry, type Material } from 'three/webgpu';
+import {
+  Box3Helper,
+  BufferAttribute,
+  InstancedMesh,
+  Mesh,
+  Scene,
+  type BufferGeometry,
+  type Material,
+} from 'three/webgpu';
 import { createWorld } from '@controls/save-format';
 import {
   fakeSnapshotView,
@@ -9,6 +17,7 @@ import {
   type TopologyDescriptor,
 } from '@controls/sim-protocol';
 import { createWorldBus, type World } from '@controls/world-model';
+import { routingPanelBus, rowA, rowB } from '@controls/world-model/testing';
 import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { ManualFrameClock } from '../loop/manual-frame-clock';
@@ -16,6 +25,16 @@ import { RenderLoop } from '../loop/render-loop';
 import { describeSceneGraph } from '../scene';
 import { ViewportController } from '../viewport-controller';
 import { SimOverlays, type SnapshotFeed } from './sim-overlays';
+
+// ADR 0010's r186 gotcha: no partial upload of an instanced attribute, ever (also an ESLint rule).
+let updateRange: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  updateRange = vi.spyOn(BufferAttribute.prototype, 'addUpdateRange');
+});
+afterEach(() => {
+  expect(updateRange).not.toHaveBeenCalled();
+  updateRange.mockRestore();
+});
 
 /** A canvas stand-in with live-listener tracking (the controller spec's pattern). */
 class TrackingTarget extends EventTarget {
@@ -520,6 +539,166 @@ describe('SimOverlays with a synthetic band table', () => {
     });
     overlays.dispose();
     expect(scene.children).toHaveLength(0);
+  });
+});
+
+// --- D15: the overlays recolour conductor instances (F3.2 part 2) ------------------------------
+
+/**
+ * The routing panel's wire 1 (row A block 0's b to row B block 0's b) compiled to a branch between two
+ * nodes of one DC island, at 12 V and 6 V with 2 A, and wire 2 left out of the netlist (unknown).
+ */
+const panelDescriptor = (): TopologyDescriptor => ({
+  protocol: SIM_PROTOCOL_VERSION,
+  generation: 3,
+  topologyHash: '7c'.repeat(32),
+  nodes: [
+    { island: 0, members: [{ entity: rowA(0), terminal: 'b' }] },
+    { island: 0, members: [{ entity: rowB(0), terminal: 'b' }] },
+  ],
+  branches: [{ element: { kind: 'connection', connection: 1 }, a: 0, b: 1, island: 0 }],
+  islands: [{ kind: 'dc', nodes: [0, 1] }],
+  devices: [],
+  schemas: {},
+  connections: [],
+  connectionSchemas: {},
+});
+const panelSnapshot = () =>
+  fakeSnapshotView({
+    descriptor: panelDescriptor(),
+    tick: 7,
+    nodes: [
+      [12, 0],
+      [6, 0],
+    ],
+    branches: [[2, 0]],
+    islands: [{ reference: 1, band: 1 }],
+  });
+
+describe('SimOverlays recolour the wire renderer’s conductors (D15)', () => {
+  const panelSetup = () => {
+    const canvas = new FakeCanvas();
+    const controller = new ViewportController(canvas as unknown as HTMLElement);
+    controller.syncWorld(routingPanelBus(true).state);
+    const feed = new FakeFeed();
+    controller.overlays.attach(feed);
+    return { controller, feed, overlays: controller.overlays };
+  };
+
+  it('draws no lead segment of its own for a conductor; colours its halves by its ends instead', () => {
+    const { controller, feed, overlays } = panelSetup();
+    const own = controller.wireGraph().routes.map((r) => r.colour);
+    expect(controller.wireGraph().routes.every((r) => r.tint === null)).toBe(true);
+    feed.publish(panelSnapshot());
+    overlays.setOverlay('voltage', true);
+    const graph = overlays.describe();
+    expect(graph.leads).toStrictEqual([]); // conductors are the wire renderer's, never an overlay lead
+    expect(graph.conductors).toHaveLength(8);
+    // Wire 1's ends have readings; the wires outside the netlist are unknown, never 0 V.
+    expect(graph.conductors[0].volts.every((v) => v !== 'unknown')).toBe(true);
+    expect(graph.conductors.slice(1).every((c) => c.volts.every((v) => v === 'unknown'))).toBe(true);
+    const wires = controller.wireGraph();
+    expect(wires.routes.every((r) => r.tint !== null)).toBe(true);
+    expect(wires.routes[0].tint).not.toStrictEqual(wires.routes[1].tint);
+    // The unknown conductors are all drawn in the unknown colour, both halves.
+    expect(new Set(wires.routes.slice(1).map((r) => r.tint?.join()))).toHaveProperty('size', 1);
+    // Current only: one colour per conductor (its current's bin), both halves.
+    overlays.setOverlay('voltage', false);
+    overlays.setOverlay('current', true);
+    expect(overlays.describe().conductors[0].amps).not.toBe('unknown');
+    const [a, b] = controller.wireGraph().routes[0].tint ?? [];
+    expect(a).toBe(b);
+    // Both off: back to the insulation colours.
+    overlays.setOverlay('current', false);
+    expect(controller.wireGraph().routes.map((r) => (r.tint === null ? r.colour : 'tinted'))).toStrictEqual(own);
+    controller.dispose();
+  });
+
+  it('tints a wire added while the voltage overlay is on (unknown until the netlist has it)', () => {
+    const bus = routingPanelBus(true);
+    const seven = { ...bus.state, connections: bus.state.connections.slice(0, 7) };
+    const canvas = new FakeCanvas();
+    const controller = new ViewportController(canvas as unknown as HTMLElement);
+    controller.syncWorld(seven);
+    const feed = new FakeFeed();
+    controller.overlays.attach(feed);
+    feed.publish(panelSnapshot());
+    controller.overlays.setOverlay('voltage', true);
+    expect(controller.wireGraph().routes).toHaveLength(7);
+    controller.syncWorld(bus.state); // wire 8 lands while the overlay is on
+    const routes = controller.wireGraph().routes;
+    expect(routes).toHaveLength(8);
+    expect(routes[7].tint).not.toBeNull();
+    // Not in this descriptor: drawn unknown, like wires 2–7, never in its insulation colour.
+    expect(routes[7].tint).toStrictEqual(routes[1].tint);
+    expect(controller.overlays.describe().conductors[7].volts).toStrictEqual(['unknown', 'unknown']);
+    controller.dispose();
+  });
+
+  it('draws a cable in the unknown colour while an overlay is on: no reading for its jacket (R1)', () => {
+    const { controller, feed, overlays } = panelSetup();
+    const free = (x: number) => ({
+      kind: 'free' as const,
+      positionMm: { x, y: 600, z: 40 },
+      entity: null,
+      fixture: null,
+      tool: null,
+    });
+    const world = routingPanelBus(true).state;
+    controller.syncWorld({
+      ...world,
+      cables: [
+        {
+          id: 1,
+          ref: { id: 'cable.sorrelby-nmb-12-2', version: 1 },
+          a: null,
+          b: null,
+          route: [free(0), free(400)],
+          lengthMm: 404,
+          tailsMm: { a: 0, b: 0 },
+          jacketStripMm: { a: 0, b: 0 },
+          label: null,
+          extensions: {},
+        },
+      ],
+      nextCableId: 2,
+    });
+    feed.publish(panelSnapshot());
+    const cable = () => controller.wireGraph().routes.find((r) => r.owner === 'k1');
+    expect(cable()?.tint).toBeNull();
+    overlays.setOverlay('current', true);
+    const unknownConductor = controller.wireGraph().routes[1].tint; // wire 2 is outside the netlist
+    expect(cable()?.tint).toStrictEqual(unknownConductor);
+    overlays.setOverlay('current', false);
+    expect(cable()?.tint).toBeNull();
+    controller.dispose();
+  });
+
+  it('a snapshot that moves a conductor’s colour recolours it; one that does not rewrites nothing', () => {
+    const { controller, feed, overlays } = panelSetup();
+    overlays.setOverlay('current', true);
+    feed.publish(panelSnapshot());
+    const first = controller.wireGraph().routes[0].tint;
+    const mesh = controller.scene.getObjectByName('wires:thhnThwn2') as InstancedMesh;
+    const version = mesh.instanceColor?.version;
+    feed.publish(panelSnapshot());
+    expect(mesh.instanceColor?.version).toBe(version);
+    feed.publish(
+      fakeSnapshotView({
+        descriptor: panelDescriptor(),
+        tick: 8,
+        nodes: [
+          [12, 0],
+          [6, 0],
+        ],
+        branches: [[200, 0]],
+        islands: [{ reference: 1, band: 1 }],
+      }),
+    );
+    // 2 A → 200 A moves the current bin: the wires rewrite their colours (and only then).
+    expect(controller.wireGraph().routes[0].tint).not.toStrictEqual(first);
+    expect(mesh.instanceColor?.version).toBeGreaterThan(version ?? 0);
+    controller.dispose();
   });
 });
 

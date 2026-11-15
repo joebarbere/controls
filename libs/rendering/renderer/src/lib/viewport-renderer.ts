@@ -15,6 +15,7 @@ import type {
   SnapshotFeed,
 } from './overlays/sim-overlays';
 import { RenderLoop, windowFrameClock } from './loop/render-loop';
+import type { WireGraph, WirePreview } from './wires/wire-renderer';
 import type { FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,
@@ -225,6 +226,31 @@ export class ViewportRenderer {
   /** What the overlays draw (tests and the `?e2e=1` hook), or `undefined` before `init`. */
   overlayGraph(): OverlayGraph | undefined {
     return this.controller?.overlays.describe();
+  }
+
+  /**
+   * The renderer's GPU memory counters (three's `info.memory`): geometries and vertex attributes, by
+   * count and bytes. E2E proves disposal with it (wires: back to baseline after delete), never pixels.
+   */
+  memory(): { geometries: number; attributes: number; attributesSize: number } | undefined {
+    const memory = this.renderer?.info.memory as
+      { geometries: number; attributes?: number; attributesSize?: number } | undefined;
+    if (!memory) return undefined;
+    return {
+      geometries: memory.geometries,
+      attributes: memory.attributes ?? 0,
+      attributesSize: memory.attributesSize ?? 0,
+    };
+  }
+
+  /** What the wire renderer draws (tests and the `?e2e=1` hook), or `undefined` before `init`. */
+  wireGraph(): WireGraph | undefined {
+    return this.controller?.wireGraph();
+  }
+
+  /** Shows (or hides, `null`) the live preview rope of a wire being routed (F3.2 part 3). View state. */
+  setWirePreview(preview: WirePreview | null): void {
+    this.controller?.setWirePreview(preview);
   }
 
   /** Arms placement of the active tool's prop, or disarms it (`null`). */

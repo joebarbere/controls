@@ -63,6 +63,7 @@ import { KeyboardInput } from './input/keyboard-input';
 import { PlacementGhost } from './overlays/ghost';
 import { SelectionHighlight } from './overlays/highlight';
 import { SimOverlays } from './overlays/sim-overlays';
+import { WireRenderer, type WireGraph, type WirePreview } from './wires/wire-renderer';
 import { findSelectables, Picker } from './picking/picker';
 import { SelectionModel, type SelectableInfo } from './picking/selection';
 import { PropRecipes } from './geometry/props';
@@ -181,6 +182,8 @@ export class ViewportController {
   private readonly highlight: SelectionHighlight;
   /** The debug overlays (F2.6: voltage, current) and the netlist inspector's terminal highlight. */
   readonly overlays: SimOverlays;
+  /** Routed conductors and cables from the domain bake, and the live preview rope (F3.2 part 2). */
+  private readonly wires: WireRenderer;
   private readonly orbit: OrbitControls;
   private readonly keyboard: KeyboardInput;
   private readonly look: PointerLockLook;
@@ -248,9 +251,14 @@ export class ViewportController {
     this.ghost = new PlacementGhost(this.scene, this.world.recipes);
     this.disposer.add(() => this.ghost.dispose());
 
+    // Wires own their geometry, materials and instance buffers, and leave the scene before it is disposed.
+    this.wires = new WireRenderer(this.scene, this.catalog, () => this.invalidate());
+    this.disposer.add(() => this.wires.dispose());
+
     this.highlight = new SelectionHighlight(this.scene);
     this.disposer.add(() => this.highlight.dispose());
     this.overlays = new SimOverlays(this.scene, () => this.invalidate());
+    this.overlays.setConductorTint(this.wires); // D15: the overlays recolour conductor instances
     this.disposer.add(() => this.overlays.dispose());
     this.refreshSelectables();
     const offSelection = this.selection.onChange(() => {
@@ -357,6 +365,7 @@ export class ViewportController {
     }
     const result = this.world.sync(world);
     this.worldValue = world;
+    this.wires.sync(world); // before the overlays, whose tint reads the drawn conductors
     this.overlays.syncWorld(world);
     if (this.moving && this.world.entityOf(this.moving.id) !== this.moving.entity) this.endMove();
     if (result.membershipChanged || fixturesChanged) {
@@ -536,6 +545,7 @@ export class ViewportController {
         animating = true; // damping: keep going until OrbitControls reports no change
       }
       if (this.overlays.update(dtSeconds)) animating = true; // current arrows while the sim runs
+      if (this.wires.update()) animating = true; // the preview rope, until it settles
       if (this.hoverDirty) {
         this.hoverDirty = false;
         this.updateHover();
@@ -550,6 +560,24 @@ export class ViewportController {
   /** JSON-plain scene summary for snapshot tests. */
   sceneGraph(): SceneGraphNode {
     return describeSceneGraph(this.scene);
+  }
+
+  /**
+   * Shows the live preview rope of a wire being routed through `preview.pointsMm`, or hides it
+   * (`null`). View state only (F3.2 part 3's gesture drives it): the rope is never committed.
+   */
+  setWirePreview(preview: WirePreview | null): void {
+    this.wires.setPreview(preview);
+  }
+
+  /** What the wire renderer draws (scene-graph tests, the e2e hook). */
+  wireGraph(): WireGraph {
+    return this.wires.describe();
+  }
+
+  /** Live wire GPU resources (geometry, meshes, materials); 0 when no wire is drawn. */
+  get wireResourceCount(): number {
+    return this.wires.resourceCount;
   }
 
   /** Number of geometry BVHs held (0 after dispose). */

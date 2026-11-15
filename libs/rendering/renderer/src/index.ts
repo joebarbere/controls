@@ -28,6 +28,12 @@ export {
   type OverlayName,
   type OverlayTerminalRef,
   type SnapshotFeed,
+  type ConductorTintTarget,
 } from './lib/overlays/sim-overlays';
 export * from './lib/sim/overlay-scale';
 export * from './lib/sim/overlay-steps';
+export { WireRenderer, type WireGraph, type WirePreview, type WireTint } from './lib/wires/wire-renderer';
+export * from './lib/wires/wire-looks';
+export * from './lib/wires/wire-segments';
+export { VerletRope, ROPE_TUNING, type RopePoint } from './lib/wires/rope';
+export { InstancedPool, type InstancedPoolOptions } from './lib/instancing/instanced-pool';

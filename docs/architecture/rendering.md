@@ -1,6 +1,6 @@
 # Rendering and interaction
 
-> **Status (P1, F1.7 and F1.9 done; P2: device recipes in F2.4, the debug overlays in F2.6):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. Since F1.9 the scene is the **workshop level**: its floor, stud wall, backboard, backplate, DIN rails and bench are the world's **fixtures**, drawn by procedural recipes, and walls and benches are focus and snap targets. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
+> **Status (P1, F1.7 and F1.9 done; P2: device recipes in F2.4, the debug overlays in F2.6; P3: enclosures and raceways in F3.5, routing maths in F3.2 part 1, the [wire renderer](#the-wire-renderer-f32-part-2) in F3.2 part 2):** cameras, BVH picking, selection, scene sync from world snapshots, the placement ghost and gestures as Commands (`entity.place`, `entity.move`, `entity.delete`, `view.mode`, `view.focus`) have shipped. Since F1.9 the scene is the **workshop level**: its floor, stud wall, backboard, backplate, DIN rails and bench are the world's **fixtures**, drawn by procedural recipes, and walls and benches are focus and snap targets. The snap maths lives in `@controls/world-model` so scripts snap like the mouse. Gotchas: [rendering caveats](../caveats/rendering.md). Spec: plan §4.9 and [phase 1 F1.7](../../plans/phase-1-game-shell.md#f17-cameras-and-interaction).
 
 `@controls/renderer` (`type:rendering`) is framework-free imperative Three.js r186. It **draws the world model and never owns it**: the world arrives as read-only snapshots, and everything the renderer keeps (camera pose, mode, hover, selection, the ghost, overlays) is view state. Gestures leave it as **intents**, which `feature-workspace` executes as Commands.
 
@@ -26,12 +26,14 @@ flowchart TB
         PK["picking/picker ×2<br/>all selectables · snap surfaces"]
         HL["overlays/highlight"]
         SO["overlays/sim-overlays<br/>voltage · current · terminal highlight (F2.6)"]
+        WR["wires/wire-renderer<br/>baked wires · preview rope (F3.2)"]
         subgraph pure["Pure modules (lint-fenced: no three, DOM or clock)"]
             CM["cameras/camera-math"]
             IA["input/input-actions"]
             SEL["picking/selection"]
             FT["stats/frame-timer"]
             OS["sim/overlay-scale · sim/overlay-steps"]
+            WP["wires/wire-looks · wire-segments · rope"]
         end
     end
 
@@ -47,8 +49,11 @@ flowchart TB
     VR --> VC & RL
     VC -.->|"onInvalidate → requestRender"| RL
     RL -->|"update(dt) → draw"| VC
-    VC --> FS & WS & GH & PK & HL & CM & IA & SEL & SO
+    VC --> FS & WS & GH & PK & HL & CM & IA & SEL & SO & WR
     SO --> OS
+    SO -.->|"setTint (D15)"| WR
+    WR --> WP
+    WR -->|"bakeWorldRoutes(world)"| WM
     FS --> FR
     FS -->|"fixtureSnapTarget()"| WM
     WS --> PR
@@ -303,13 +308,42 @@ flowchart LR
   W --> LA[assignLanes<br/>by cable id, then connection id]
   W --> B[bakeWorldRoutes<br/>taut in raceways, parabolic sag,<br/>0.1 mm quantum]
   LA --> B
-  B --> R[Wire renderer<br/>F3.2 part 2]
+  B --> R[Wire renderer<br/>instanced segments, F3.2 part 2]
   B --> H[centrelineHash<br/>Node = Chromium golden]
 ```
 
 - **Auto-route:** each terminal enters the nearest duct ahead of its exit direction (then nearest, then lowest id) at the axis point nearest it; ducts whose bodies touch join where their axes come closest; Dijkstra finds the path; the first candidate pair clear of every body wins; fallbacks are the direct line and a 50 mm lead-out from each terminal.
 - **Bake:** a straight 12 mm lead-out from each landed terminal; hosted waypoints moved onto their lanes; taut segments between hosted waypoints (an elbow's legs and arc between two of its ports); spare length as parabolic sag on free spans (at most 1 % of each chord), then hidden in raceway runs (up to 10 %), then a coil only when more than 20 % of the cut length is left. 500 wires bake in about 2 ms (`route-bake-500-wires`, budget 16 ms).
 - **Never persisted:** the bake, lanes and proposals; the world stores waypoints and `lengthMm` only.
+
+## The wire renderer (F3.2 part 2)
+
+`wires/wire-renderer.ts` draws every routed conductor and cable **from the domain bake only** (`bakeWorldRoutes`, ADR 0017): it computes no route shape. The live preview rope is the one wire it simulates. Its pure parts (`wire-looks`, `wire-segments`, `rope`) are lint-fenced like the other pure modules.
+
+```mermaid
+flowchart LR
+  W[(World snapshot)] -->|"connections · cables · entities<br/>changed by identity"| B[bakeWorldRoutes]
+  B --> D{same drawing?<br/>points, coil, look,<br/>colour, label}
+  D -->|yes| N[nothing written]
+  D -->|no| L["per look (insulation / jacket):<br/>InstancedPool of 6-sided segments<br/>capacity ×2 when full, ÷4 at a quarter"]
+  L --> M["instanceMatrix, instanceColor<br/>full needsUpdate uploads"]
+  B --> C[coil rings<br/>same look mesh]
+  B --> S["wires:sleeves<br/>2 per labelled route"]
+  O[SimOverlays<br/>voltage · current] -->|"setTint / refreshTint (D15)"| T[per-route half colours]
+  T --> M
+  G[Routing gesture<br/>F3.2 part 3] -->|"setWirePreview(pins)"| R[VerletRope<br/>2 substeps, 12 passes, tethers]
+  R -->|"update() until settled"| P[wires:preview]
+```
+
+- **Looks.** A look is the conductor's insulation table key (`thhnThwn2`, `mtw`, `xhhw2`), `bare`, a cable's jacket key (`nmbJacket`), or `unknown`. Each look is one `InstancedMesh` (`wires:<look>`) with one `MeshStandardMaterial` whose finish comes from `WIRE_LOOK_FINISHES` (game-design); the colour is per instance, from the catalogue's `colours` table (a conductor's stored base colour, a cable's jacket colour). Draw calls follow the looks in use, never the number of wires: 500 THHN wires are one draw. A tracer stripe isn't drawn yet.
+- **Segments.** Each link of the baked polyline (integer tenths of a millimetre, divided by 10 once, then `mm()`) is one instance of a 6-sided unit cylinder (`CylinderGeometry(1, 1, 1, 6, 1)`, one per pool mesh): positioned at the link's midpoint, turned from +y onto it, scaled to the wire's radius and the link's length plus one radius so a bend has no gap on its outside. The drawn diameter is the routing lane's (`laneSizeTenths`), so a wire is exactly as wide as the lane the bake packed it into (the lane takes a solid conductor's diameter, so stranded wire is drawn about 8 % thin: a lane-maths follow-up); a flat NM-B cable is drawn round at the mean of its width and height until F3.2 part 4.
+- **Pools** (`instancing/instanced-pool.ts`, shared with the debug overlays) double their capacity when full and, for wires, rebuild at a quarter when at most a quarter is used (first size 64). Each pool mesh owns its geometry: a rebuild disposes the old mesh **and its geometry** (in three r186 only a geometry dispose frees a large mesh's interleaved instance attributes; see the [caveats](../caveats/rendering.md)) and builds a new pair; writes are always a full `needsUpdate`, never `addUpdateRange` ([ADR 0010](../decisions/0010-wire-routing-spike.md)'s r186 gotcha, now an ESLint rule). The group's children keep a fixed order (looks by name, sleeves, preview). A look with no instances left is disposed with its geometry and material, so a world without wires holds **no** wire resource (`wireResourceCount` 0) and the `wires` group is out of the scene: every pre-F3.2 scene-graph snapshot is unchanged.
+- **Coils** (the bake's `coil`: a cut well past its route) are drawn as up to three 150 mm rings hanging from the coil point, in the route's look mesh. **Labels** (`connection.label`, `cable.label`) are two white sleeve markers per labelled route, 25 mm in from each end, in one `wires:sleeves` mesh; the text is data on it (`userData.wires.labels`), as a device's label is: no canvas text.
+- **When it redraws.** `sync(world)` re-bakes only when the world's `connections`, `cables` or `entities` array changed, and writes the GPU side only when some route's points, coil, look, colour or label changed. Measured in Node on the 500-wire bench panel (5 877 segments in one look, capacity 8 192): a first sync (bake and every write) about 5.2 ms median; a re-tint of every instance 0.4 ms. A world change that leaves the wires alone (a switch toggled) still pays the bake (about 2 ms at 500 wires) to find that out.
+- **Overlays recolour conductors (D15).** `SimOverlays` joins each routed single conductor to the netlist like a lead (its own `OverlaySteps`) and, while voltage or current is on, gives the wire renderer a `WireTint`: end `a`'s half of the conductor in its end-`a` voltage step's colour and end `b`'s half in its end-`b` one (or both in the current step's colour when only current is on; a mid-length split is an abstraction, a real IR drop is linear along the conductor). Cables, which have no reading until part 4, draw in the unknown colour while a tint is on. The overlays draw no lead segment of their own for a conductor (test leads keep theirs). A conductor outside the netlist or in an unsolved island is drawn in the unknown colour, never as 0 V. Instance colours are rewritten only when a half's colour changed. The heat overlay (F3.6 part 3) uses the same hook.
+- **The preview rope** (`VerletRope`): pinned at every point the gesture gives (terminal points, waypoints, the cursor), particles every 15 mm (at most 1 024), 1 % slack (the bake's sag cap), two fixed 1/120 s substeps a frame with 12 alternating constraint passes and long-range tethers to each span's pins (a nearly taut Verlet rope otherwise stretches: 48 mm of sag on a 300 mm span instead of the parabola's 18; with tethers about 22 mm). It settles in about 20 frames and then asks for none; re-pinning lays the old sag onto the new chords, so moving the cursor doesn't pop the rope straight. A pure function of its pins and the frame count; never committed, stored or hashed.
+- **Not pickable here.** Wire meshes are never among the picker's roots; F3.2 part 3 adds a BVH over the baked segments.
+- **Frame time** (`apps/game-e2e/src/wiring-frame-time.spec.ts`, a manual tool: `CONTROLS_MEASURE_WIRING=1`): `sim bench`'s 500-wire panel (512 blocks and ducts, 500 THHN wires routed `--route auto` in Chromium, 5 877 segments, the same count as Node's bake) in front of the backplate. Headless SwiftShader WebGL2 at 1280 × 720 on the loaded developer desktop, 2026-11-15: 2 022 draw calls (the blocks and ducts; the wires are one), main-thread cost 5.3 ms a frame and 170 ms wall per frame (software rasterising); with both overlays on (every conductor recoloured) 6.5 ms and 189 ms. Not a GPU figure; the real-GPU and 2020-era iGPU numbers are the user's manual run, as in P2.
 
 ## Snapping (pure, integer mm, `@controls/world-model`)
 
@@ -326,7 +360,7 @@ flowchart LR
 
 ## Disposal
 
-The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` disposes the `RenderLoop` (cancels the pending frame and the idle-stats timer, releases test waiters) and removes its `webglcontextrestored` and `visibilitychange` listeners, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
+The controller registers each resource owner with a LIFO `Disposer`, scene first so it's disposed last: the scene's geometries and materials, both pickers (they delete `boundsTree` and the own `raycast`), `FixtureSync` (removes fixture groups and disposes every fixture recipe), `WorldSync` (removes entity meshes and disposes every prop recipe), the ghost (returns its borrowed geometry, disposes its material and placeholder), the overlay helpers, the wire renderer (every look, sleeve and preview mesh with its own geometry and its material; it leaves the scene first, since its geometry isn't the scene's to dispose), the `SelectionModel` listeners, the pointer listeners, `OrbitControls`, the keyboard and pointer-lock listeners, and the state and intent listeners. `ViewportRenderer.dispose()` disposes the `RenderLoop` (cancels the pending frame and the idle-stats timer, releases test waiters) and removes its `webglcontextrestored` and `visibilitychange` listeners, then disposes the controller, then the `WebGPURenderer`. The Angular host disconnects its `ResizeObserver` and removes the test hook.
 
 Removing every entity (without disposing the viewport) also returns to baseline: recipes reach zero and the picker drops BVHs for geometry no longer under a root. An enclosure's own merged entry geometries are disposed when its open entries change and when it is removed (F3.5; measured in WebGL2: 480 boxes, 10 panels and 70 breakers placed and undone leave renderer geometries at 9 and BVHs at 8, the baseline). Loading a world without fixtures does the same for fixture recipes (`fixtureRecipeCount` reaches zero). Unit tests (`viewport-controller.spec.ts`) and `apps/game-e2e/src/placement.spec.ts` (renderer `info` geometry count) check both.
 

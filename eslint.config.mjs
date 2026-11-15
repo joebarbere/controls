@@ -68,7 +68,7 @@ const specFiles = ['**/*.spec.*', '**/*.test.*'];
  * keeps about 100 kB. Applies to every file. Flat config replaces a rule's options wholesale, so the
  * determinism rules below repeat these entries.
  */
-const zodImportSyntax = [
+export const zodImportSyntax = [
   {
     selector: "ImportDeclaration[source.value='zod'] > ImportSpecifier[imported.name='z']",
     message:
