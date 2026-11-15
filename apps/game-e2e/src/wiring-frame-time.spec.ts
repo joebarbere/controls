@@ -18,7 +18,9 @@ import { startSandbox } from './support/sandbox';
  * (frames forced back to back with `afterFrames`), then 240 with the voltage and current overlays on
  * (D15: the wire instances recoloured; nothing is solved here, so every conductor draws "unknown").
  * `CONTROLS_MEASURE_RENDERER=webgpu` drops `?renderer=webgl2`; run headed (`--headed`) on a desktop to
- * measure the real GPU. The thermal readouts (F3.6 part 3) are added to this tool with the heat overlay.
+ * measure the real GPU. Then 240 frames with the heat overlay alone (F3.6 part 3): the conductors read
+ * their records' temperatures (ambient, a reading: the bank holds every wire, netlisted or not), so
+ * every instance is recoloured from the heat ramp.
  */
 const enabled = process.env['CONTROLS_MEASURE_WIRING'] === '1';
 const backend = process.env['CONTROLS_MEASURE_RENDERER'] === 'webgpu' ? '' : '&renderer=webgl2';
@@ -76,8 +78,9 @@ type Hooks = {
   __controlsViewport?: {
     stats(): Stats;
     afterFrames(n: number): Promise<void>;
-    setOverlay(name: 'voltage' | 'current', on: boolean): void;
+    setOverlay(name: 'voltage' | 'current' | 'heat', on: boolean): void;
     wireGraph(): { routes: unknown[]; looks: { look: string; instances: number }[] } | undefined;
+    overlayGraph(): { conductors: { heat: (number | 'unknown')[] }[] } | undefined;
     focus(id: string): boolean;
   };
 };
@@ -135,8 +138,34 @@ for (const size of [
     });
     await measure(page, 30); // warm-up: overlay shaders compile
     const overlays = await measure(page, 240);
+    await page.evaluate(() => {
+      const viewport = (window as unknown as Hooks).__controlsViewport;
+      viewport?.setOverlay('voltage', false);
+      viewport?.setOverlay('current', false);
+      viewport?.setOverlay('heat', true);
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (window as unknown as Hooks).__controlsViewport
+            ?.overlayGraph()
+            ?.conductors.every((c) => c.heat.every((h) => h !== 'unknown')),
+        ),
+      )
+      .toBe(true);
+    await measure(page, 30); // warm-up
+    const heat = await measure(page, 240);
     console.log(
-      JSON.stringify({ size, devices: 512, wires: 500, looks, backend: backend ? 'webgl2' : 'auto', drawn, overlays }),
+      JSON.stringify({
+        size,
+        devices: 512,
+        wires: 500,
+        looks,
+        backend: backend ? 'webgl2' : 'auto',
+        drawn,
+        overlays,
+        heat,
+      }),
     );
   });
 }

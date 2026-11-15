@@ -84,6 +84,7 @@ export class ViewportRenderer {
   private readonly overlayState = {
     voltage: false,
     current: false,
+    heat: false,
     reducedMotion: false,
     feed: null as SnapshotFeed | null,
     highlight: null as readonly OverlayTerminalRef[] | null,
@@ -211,6 +212,7 @@ export class ViewportRenderer {
       this.controller?.overlays.legendState ?? {
         voltage: this.overlayState.voltage,
         current: this.overlayState.current,
+        heat: this.overlayState.heat,
         bands: [],
         noScale: false,
         unknown: false,
@@ -407,6 +409,7 @@ export class ViewportRenderer {
     overlays.attach(o.feed);
     overlays.setOverlay('voltage', o.voltage);
     overlays.setOverlay('current', o.current);
+    overlays.setOverlay('heat', o.heat);
     if (o.highlight) overlays.highlightTerminals(o.highlight);
   }
 }

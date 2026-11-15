@@ -81,11 +81,13 @@ describe('view.overlay (F2.6)', () => {
     const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
     expect(bus.exec('view.overlay', { name: 'current', on: true }).ok).toBe(true);
     expect(bus.exec('view.overlay', { name: 'voltage', on: false }).ok).toBe(true);
-    expect(bus.exec('view.overlay', { name: 'heat', on: true }).ok).toBe(false);
+    expect(bus.exec('view.overlay', { name: 'heat', on: true }).ok).toBe(true); // F3.6 part 3
+    expect(bus.exec('view.overlay', { name: 'pressure', on: true }).ok).toBe(false);
     expect(bus.state).toEqual({ n: 1 });
     expect(bus.entries.map((e) => [e.id, e.args])).toEqual([
       ['view.overlay', { name: 'current', on: true }],
       ['view.overlay', { name: 'voltage', on: false }],
+      ['view.overlay', { name: 'heat', on: true }],
     ]);
     expect(bus.contextKeys()).toEqual({ 'history.canUndo': false, 'history.canRedo': false });
   });

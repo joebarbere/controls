@@ -9,6 +9,9 @@
  * along the lead shows), each terminal a marker. Routed conductors are the wire renderer's (F3.2
  * part 2): the overlays only recolour their instances (D15, {@link SimOverlays.setConductorTint}),
  * each end's half by that end's voltage step, or by the current step when only current is on.
+ * The heat overlay (F3.6 part 3) colours the same halves, and the leads' own segments, by temperature
+ * from the protocol 7 connection records (`sim/heat-steps`: each half's hottest node); while it is on
+ * it takes the conductor and lead colours, and the terminals keep showing voltage.
  * Everything is instanced (one draw per mesh, whatever the plant size), unpickable (a no-op
  * `raycast`, never among the picker's roots) and outside the scene until an overlay or a highlight
  * is on, so turning the overlays off returns the scene to exactly what it was.
@@ -67,9 +70,11 @@ import {
   type OverlayJoin,
   type OverlaySteps,
 } from '../sim/overlay-steps';
+import { HEAT_SCALE, heatScale, heatStepColour, type HeatScale } from '../sim/heat-scale';
+import { createHeatSteps, joinHeat, updateHeatSteps, type HeatSteps } from '../sim/heat-steps';
 
 /** The overlays `view.overlay` switches. */
-export type OverlayName = 'voltage' | 'current';
+export type OverlayName = 'voltage' | 'current' | 'heat';
 
 /**
  * Where the renderer gets snapshots (ADR 0011 §9.2's `SnapshotSource`; `SimHost` implements it):
@@ -91,6 +96,8 @@ export interface OverlayTerminalRef {
 export interface OverlayLegendState {
   readonly voltage: boolean;
   readonly current: boolean;
+  /** The heat overlay (F3.6 part 3): conductor and lead colours by temperature. */
+  readonly heat: boolean;
   /** `NOMINAL_BANDS` names of the voltage scales in use (solved islands with a scale), in band order. */
   readonly bands: readonly string[];
   /** Some drawn item is in a solved island with no voltage scale (band 0, `none`). */
@@ -103,6 +110,7 @@ export interface OverlayLegendState {
 export interface OverlayGraph {
   readonly voltage: boolean;
   readonly current: boolean;
+  readonly heat: boolean;
   readonly reducedMotion: boolean;
   /** Whether the overlay group is in the scene. */
   readonly inScene: boolean;
@@ -122,6 +130,8 @@ export interface OverlayGraph {
     readonly connection: number;
     readonly volts: readonly [number | 'noScale' | 'unknown', number | 'noScale' | 'unknown'];
     readonly amps: number | 'unknown';
+    /** Heat steps of its `a` and `b` halves (a bin 0–32, or `unknown`), whether or not heat is shown. */
+    readonly heat: readonly [number | 'unknown', number | 'unknown'];
   }[];
   readonly leads: readonly {
     readonly connection: number;
@@ -132,6 +142,8 @@ export interface OverlayGraph {
     readonly direction: 'a→b' | 'b→a' | 'none';
     /** Arrow slots drawn on this lead (0 when the current overlay is off or nothing flows). */
     readonly arrows: number;
+    /** Heat steps of its halves (a lead's clips have no termination node, so both show its conductor). */
+    readonly heat: readonly [number | 'unknown', number | 'unknown'];
   }[];
 }
 
@@ -149,6 +161,7 @@ const SWAY_HZ_MAX = 2;
 
 const stepName = (step: number): number | 'noScale' | 'unknown' =>
   step === STEP_UNKNOWN ? 'unknown' : step === STEP_NO_SCALE ? 'noScale' : step;
+const heatName = (step: number): number | 'unknown' => (step === STEP_UNKNOWN ? 'unknown' : step);
 
 const UP = new Vector3(0, 1, 0);
 
@@ -190,6 +203,7 @@ export class SimOverlays {
 
   private voltageOn = false;
   private currentOn = false;
+  private heatOn = false;
   private reducedMotionValue = false;
   private inScene = false;
   private feed: SnapshotFeed | null = null;
@@ -223,6 +237,14 @@ export class SimOverlays {
     unknownColour: stepColour(STEP_UNKNOWN), // a cable: no reading for its jacket (R1, until F3.2 part 4)
   };
   private highlightRefs: readonly OverlayTerminalRef[] = [];
+  /** Heat (F3.6 part 3): per drawn lead and per conductor, joined to records by connection id. */
+  private readonly heatScale: HeatScale;
+  private leadConnections: number[] = [];
+  private conductorConnections: number[] = [];
+  private leadHeatRecords: Int32Array = new Int32Array(0);
+  private conductorHeatRecords: Int32Array = new Int32Array(0);
+  private leadHeat: HeatSteps = createHeatSteps(0);
+  private conductorHeat: HeatSteps = createHeatSteps(0);
 
   // Sim side (rebuilt per descriptor).
   private readout: NetlistReadout | null = null;
@@ -238,7 +260,14 @@ export class SimOverlays {
     scales: readonly (VoltageScale | null)[];
   };
   private readonly bandsUsed = new Uint8Array(256);
-  private legend: OverlayLegendState = { voltage: false, current: false, bands: [], noScale: false, unknown: false };
+  private legend: OverlayLegendState = {
+    voltage: false,
+    current: false,
+    heat: false,
+    bands: [],
+    noScale: false,
+    unknown: false,
+  };
   private readonly legendListeners = new Set<(state: OverlayLegendState) => void>();
 
   // Animation (per lead) and per-frame scratch: update() allocates nothing.
@@ -262,6 +291,7 @@ export class SimOverlays {
   ) {
     this.group.name = 'overlay:sim';
     this.scales = scalesByBand(bands);
+    this.heatScale = catalog === BUILTIN_CATALOG ? HEAT_SCALE : heatScale(catalog);
     this.stepInputs = { readout: null, reading: null, join: this.join, scales: this.scales };
     this.conductorInputs = { readout: null, reading: null, join: this.conductorJoin, scales: this.scales };
     // Geometry factories: each pool mesh owns its geometry (instanced-pool: that frees its instance buffers).
@@ -295,6 +325,10 @@ export class SimOverlays {
 
   get current(): boolean {
     return this.currentOn;
+  }
+
+  get heat(): boolean {
+    return this.heatOn;
   }
 
   get reducedMotion(): boolean {
@@ -336,9 +370,10 @@ export class SimOverlays {
 
   /** Switches an overlay. Returns whether anything changed. View state only. */
   setOverlay(name: OverlayName, on: boolean): boolean {
-    if ((name === 'voltage' ? this.voltageOn : this.currentOn) === on) return false;
+    if ((name === 'voltage' ? this.voltageOn : name === 'current' ? this.currentOn : this.heatOn) === on) return false;
     if (name === 'voltage') this.voltageOn = on;
-    else this.currentOn = on;
+    else if (name === 'current') this.currentOn = on;
+    else this.heatOn = on;
     this.refreshSteps(true);
     this.applyVisibility();
     this.publishLegend();
@@ -377,6 +412,10 @@ export class SimOverlays {
     this.steps = createOverlaySteps(this.terminals.length, this.drawnLeads.length);
     this.conductorJoin = joinOverlayItems(this.conductorItems, this.readout);
     this.conductorSteps = createOverlaySteps(0, this.conductorItems.leads.length);
+    this.leadHeatRecords = joinHeat(this.leadConnections, this.readout);
+    this.conductorHeatRecords = joinHeat(this.conductorConnections, this.readout);
+    this.leadHeat = createHeatSteps(this.leadConnections.length);
+    this.conductorHeat = createHeatSteps(this.conductorConnections.length);
     this.phases = new Float64Array(this.drawnLeads.length);
     this.writeStaticMatrices();
     this.applyHighlight();
@@ -420,6 +459,7 @@ export class SimOverlays {
     return {
       voltage: this.voltageOn,
       current: this.currentOn,
+      heat: this.heatOn,
       reducedMotion: this.reducedMotionValue,
       inScene: this.inScene,
       terminals: this.terminals.map((t, i) => ({
@@ -433,6 +473,7 @@ export class SimOverlays {
         connection: c.connection,
         volts: [stepName(this.conductorSteps.leadVoltsA[j]), stepName(this.conductorSteps.leadVoltsB[j])],
         amps: this.conductorSteps.leadAmps[j] === STEP_UNKNOWN ? 'unknown' : this.conductorSteps.leadAmps[j],
+        heat: [heatName(this.conductorHeat.a[j]), heatName(this.conductorHeat.b[j])],
       })),
       leads: this.drawnLeads.map((l, j) => ({
         connection: l.connection,
@@ -440,6 +481,7 @@ export class SimOverlays {
         amps: s.leadAmps[j] === STEP_UNKNOWN ? 'unknown' : s.leadAmps[j],
         direction: s.leadDirection[j] > 0 ? 'a→b' : s.leadDirection[j] < 0 ? 'b→a' : 'none',
         arrows: this.arrowsShown(j) ? l.arrowCount : 0,
+        heat: [heatName(this.leadHeat.a[j]), heatName(this.leadHeat.b[j])],
       })),
     };
   }
@@ -478,6 +520,8 @@ export class SimOverlays {
       this.readout = null;
       this.join = joinOverlayItems(this.items, null);
       this.conductorJoin = joinOverlayItems(this.conductorItems, null);
+      this.leadHeatRecords.fill(-1);
+      this.conductorHeatRecords.fill(-1);
     } else {
       if (view.descriptor !== this.readout?.descriptor) {
         // A new generation (or worker): lookups once per descriptor, CPU-side index arrays only. The
@@ -489,10 +533,13 @@ export class SimOverlays {
         this.conductorJoin = joinOverlayItems(this.conductorItems, this.readout);
         resetOverlaySteps(this.steps);
         resetOverlaySteps(this.conductorSteps);
+        // Heat is per connection (ADR 0011 amendment §6): re-joined by id, its steps kept.
+        this.leadHeatRecords = joinHeat(this.leadConnections, this.readout);
+        this.conductorHeatRecords = joinHeat(this.conductorConnections, this.readout);
       }
       this.readout.read(view, this.reading as NetlistReading);
     }
-    if (!this.voltageOn && !this.currentOn) return; // read (for when one is switched on), draw nothing
+    if (!this.voltageOn && !this.currentOn && !this.heatOn) return; // read (for when one is switched on), draw nothing
     if (this.refreshSteps(false)) {
       this.publishLegend();
       this.onInvalidate();
@@ -510,7 +557,20 @@ export class SimOverlays {
     conductors.readout = this.readout;
     conductors.reading = this.reading;
     conductors.join = this.conductorJoin;
-    const conductorsChanged = updateOverlaySteps(this.conductorSteps, conductors);
+    let conductorsChanged = updateOverlaySteps(this.conductorSteps, conductors);
+    // Heat steps always follow the reading (so switching heat on draws at once); a heat change counts
+    // as a drawing change only while heat is shown.
+    const leadHeatChanged = updateHeatSteps(this.leadHeat, this.reading, this.leadHeatRecords, this.heatScale);
+    const conductorHeatChanged = updateHeatSteps(
+      this.conductorHeat,
+      this.reading,
+      this.conductorHeatRecords,
+      this.heatScale,
+    );
+    if (this.heatOn) {
+      changed = changed || leadHeatChanged;
+      conductorsChanged = conductorsChanged || conductorHeatChanged;
+    }
     if (changed || force) this.writeStepped();
     if ((conductorsChanged || force) && this.tinting) this.tintTarget?.refreshTint();
     changed = changed || conductorsChanged;
@@ -559,16 +619,31 @@ export class SimOverlays {
       for (let j = 0; j < s.leadAmps.length; j++) if (s.leadAmps[j] === STEP_UNKNOWN) unknown = true;
       for (let j = 0; j < cs.leadAmps.length; j++) if (cs.leadAmps[j] === STEP_UNKNOWN) unknown = true;
     }
+    if (this.heatOn) {
+      for (const heat of [this.leadHeat, this.conductorHeat]) {
+        for (let j = 0; j < heat.a.length; j++) {
+          if (heat.a[j] === STEP_UNKNOWN || heat.b[j] === STEP_UNKNOWN) unknown = true;
+        }
+      }
+    }
     const bands: string[] = [];
     this.bandsUsed.forEach((used, band) => {
       const scale = band < this.scales.length ? this.scales[band] : null;
       if (used === 1 && scale) bands.push(scale.band);
     });
-    const next: OverlayLegendState = { voltage: this.voltageOn, current: this.currentOn, bands, noScale, unknown };
+    const next: OverlayLegendState = {
+      voltage: this.voltageOn,
+      current: this.currentOn,
+      heat: this.heatOn,
+      bands,
+      noScale,
+      unknown,
+    };
     const prev = this.legend;
     if (
       prev.voltage === next.voltage &&
       prev.current === next.current &&
+      prev.heat === next.heat &&
       prev.noScale === next.noScale &&
       prev.unknown === next.unknown &&
       prev.bands.join() === next.bands.join()
@@ -650,12 +725,15 @@ export class SimOverlays {
       });
     }
     this.conductorItems = { terminals: [], leads: conductors };
+    this.leadConnections = this.drawnLeads.map((l) => l.connection);
+    this.conductorConnections = conductors.map((c) => c.connection);
   }
 
   /** Conductor `connection`'s colour at end `end` (the wires' tint): its step's colour, or −1 (not drawn here). */
   private conductorColour(connection: number, end: 'a' | 'b'): number {
     const j = this.conductorIndex.get(connection);
     if (j === undefined) return -1;
+    if (this.heatOn) return heatStepColour(end === 'a' ? this.conductorHeat.a[j] : this.conductorHeat.b[j]);
     const s = this.conductorSteps;
     const step = this.voltageOn ? (end === 'a' ? s.leadVoltsA[j] : s.leadVoltsB[j]) : s.leadAmps[j];
     return stepColour(step);
@@ -710,7 +788,15 @@ export class SimOverlays {
     this.drawnLeads.forEach((lead, j) => {
       const mid = this.v.addVectors(lead.start, lead.end).multiplyScalar(0.5);
       for (const half of [0, 1] as const) {
-        const step = this.voltageOn ? (half === 0 ? s.leadVoltsA[j] : s.leadVoltsB[j]) : s.leadAmps[j];
+        const step = this.heatOn
+          ? half === 0
+            ? this.leadHeat.a[j]
+            : this.leadHeat.b[j]
+          : this.voltageOn
+            ? half === 0
+              ? s.leadVoltsA[j]
+              : s.leadVoltsB[j]
+            : s.leadAmps[j];
         const radius = mm(step === STEP_UNKNOWN ? UNKNOWN_LEAD_RADIUS_MM : LEAD_RADIUS_MM);
         const from = half === 0 ? lead.start : mid;
         const to = half === 0 ? mid : lead.end;
@@ -721,7 +807,7 @@ export class SimOverlays {
         const cz = (from.z + to.z) / 2;
         this.m.compose(this.s.set(cx, cy, cz), lead.forward, this.scale.set(radius, length, radius));
         leadMesh.setMatrixAt(2 * j + half, this.m);
-        leadMesh.setColorAt(2 * j + half, this.colour.setHex(stepColour(step)));
+        leadMesh.setColorAt(2 * j + half, this.colour.setHex(this.heatOn ? heatStepColour(step) : stepColour(step)));
       }
     });
     leadMesh.instanceMatrix.needsUpdate = true;
@@ -825,18 +911,18 @@ export class SimOverlays {
 
   private applyVisibility(): void {
     const anyHighlight = this.highlighted.some((h) => h === 1);
-    this.leads.mesh.visible = this.voltageOn || this.currentOn;
+    this.leads.mesh.visible = this.voltageOn || this.currentOn || this.heatOn;
     this.terminalsKnown.mesh.visible = this.voltageOn;
     this.terminalsUnknown.mesh.visible = this.voltageOn;
     this.arrowsDc.mesh.visible = this.currentOn;
     this.arrowsAc.mesh.visible = this.currentOn;
     this.highlight.mesh.visible = anyHighlight;
-    const wanted = this.voltageOn || this.currentOn || anyHighlight;
+    const wanted = this.voltageOn || this.currentOn || this.heatOn || anyHighlight;
     if (wanted && !this.inScene) this.scene.add(this.group);
     else if (!wanted && this.inScene) this.scene.remove(this.group);
     this.inScene = wanted;
-    // D15: while voltage or current is shown, the wires draw conductors in the overlay's colours.
-    const tint = this.voltageOn || this.currentOn;
+    // D15: while voltage, current or heat is shown, the wires draw conductors in the overlay's colours.
+    const tint = this.voltageOn || this.currentOn || this.heatOn;
     if (tint !== this.tinting && this.tintTarget) {
       this.tinting = tint;
       this.tintTarget.setTint(tint ? this.tintSource : null);
