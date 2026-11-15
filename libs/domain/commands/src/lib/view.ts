@@ -44,8 +44,11 @@ export const ViewTargetId = z
 export const ViewFocusArgs = z.strictObject({ target: ViewTargetId });
 export type ViewFocusArgs = z.infer<typeof ViewFocusArgs>;
 
-/** The debug overlays `view.overlay` switches (plan F2.6). */
-export const ViewOverlayName = z.enum(['voltage', 'current']);
+/**
+ * The debug overlays `view.overlay` switches (plan F2.6; `heat` since F3.6 part 3). Save format:
+ * adding a name is additive (older logs never hold it), removing one is never allowed.
+ */
+export const ViewOverlayName = z.enum(['voltage', 'current', 'heat']);
 export type ViewOverlayName = z.infer<typeof ViewOverlayName>;
 
 /**
@@ -55,7 +58,8 @@ export type ViewOverlayName = z.infer<typeof ViewOverlayName>;
 export const ViewOverlayArgs = z.strictObject({
   name: ViewOverlayName.meta({
     title: 'Overlay',
-    description: 'voltage: |V| on leads and terminals; current: |I| along the leads',
+    description:
+      'voltage: |V| on leads and terminals; current: |I| along the leads; heat: conductor and termination temperatures',
   }),
   on: z.boolean().meta({ title: 'Show', description: 'true shows the overlay, false hides it' }),
 });
@@ -124,11 +128,11 @@ export function viewFocusCommand<S>(): CommandDef<ViewFocusArgs, S> {
 }
 
 /**
- * `view.overlay --name voltage|current --on true|false` (plan F2.6): switches a debug overlay in the
- * viewport, |V| against the island reference on the leads and terminals, or |I| animated along the
- * leads. A view command: logged, never a world change. Offered where the console is
- * (`console.available`: sandbox and dev builds) until F5.3 gates debug tools by difficulty. No
- * default key.
+ * `view.overlay --name voltage|current|heat --on true|false` (plan F2.6, F3.6 part 3): switches a
+ * debug overlay in the viewport, |V| against the island reference on the leads and terminals, |I|
+ * animated along the leads, or conductor and termination temperatures. A view command: logged,
+ * never a world change. Offered where the console is (`console.available`: sandbox and dev builds)
+ * until F5.3 gates debug tools by difficulty. No default key.
  */
 export function viewOverlayCommand<S>(): CommandDef<ViewOverlayArgs, S> {
   return defineViewCommand<ViewOverlayArgs, S>({

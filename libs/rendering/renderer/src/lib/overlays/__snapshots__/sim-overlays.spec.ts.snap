@@ -1,9 +1,133 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`SimOverlays heat overlay (F3.6 part 3) > colours test leads by their conductor temperature, both halves 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "overlay:sim-leads",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-terminals",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-terminals-unknown",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -951,
+        1000,
+        1000,
+        951,
+      ],
+      "name": "overlay:sim-highlight",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
+      "boundsMm": [
+        -866,
+        -500,
+        -1000,
+        866,
+        500,
+        1000,
+      ],
+      "name": "overlay:sim-arrows-dc",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+    {
+      "boundsMm": [
+        -1000,
+        -1000,
+        -1000,
+        1000,
+        1000,
+        1000,
+      ],
+      "name": "overlay:sim-arrows-ac",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": false,
+    },
+  ],
+  "name": "overlay:sim",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
 exports[`SimOverlays in the viewport > voltage and current on the bench (band 0: no voltage scale; the unwired lamp: no reading) 1`] = `
 {
   "conductors": [],
   "current": true,
+  "heat": false,
   "inScene": true,
   "leads": [
     {
@@ -11,6 +135,10 @@ exports[`SimOverlays in the viewport > voltage and current on the bench (band 0:
       "arrows": 1,
       "connection": 1,
       "direction": "a→b",
+      "heat": [
+        "unknown",
+        "unknown",
+      ],
       "volts": [
         "noScale",
         "noScale",
@@ -21,6 +149,10 @@ exports[`SimOverlays in the viewport > voltage and current on the bench (band 0:
       "arrows": 4,
       "connection": 2,
       "direction": "a→b",
+      "heat": [
+        "unknown",
+        "unknown",
+      ],
       "volts": [
         "noScale",
         "noScale",

@@ -32,6 +32,8 @@ export {
 } from './lib/overlays/sim-overlays';
 export * from './lib/sim/overlay-scale';
 export * from './lib/sim/overlay-steps';
+export * from './lib/sim/heat-scale';
+export * from './lib/sim/heat-steps';
 export { WireRenderer, type WireGraph, type WirePreview, type WireTint } from './lib/wires/wire-renderer';
 export * from './lib/wires/wire-looks';
 export * from './lib/wires/wire-segments';

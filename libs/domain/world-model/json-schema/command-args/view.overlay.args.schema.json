@@ -6,10 +6,11 @@
       "type": "string",
       "enum": [
         "voltage",
-        "current"
+        "current",
+        "heat"
       ],
       "title": "Overlay",
-      "description": "voltage: |V| on leads and terminals; current: |I| along the leads"
+      "description": "voltage: |V| on leads and terminals; current: |I| along the leads; heat: conductor and termination temperatures"
     },
     "on": {
       "type": "boolean",

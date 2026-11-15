@@ -11,7 +11,7 @@ export interface ViewportOverlays {
   readonly legend: Signal<OverlayLegendState>;
   /** Whether current arrows are static: settings `display.reducedMotion`, `system` following `prefers-reduced-motion`. */
   readonly reducedMotion: Signal<boolean>;
-  /** The overlays on, for the host's `data-overlays` (`current voltage`), or `null`. */
+  /** The overlays on, for the host's `data-overlays` (`current heat voltage`), or `null`. */
   readonly active: Signal<string | null>;
 }
 
@@ -57,7 +57,9 @@ export function connectViewportOverlays(renderer: ViewportRenderer): ViewportOve
 
   const active = computed(() => {
     const s = legend();
-    const on = [s.current ? 'current' : null, s.voltage ? 'voltage' : null].filter((n) => n !== null);
+    const on = [s.current ? 'current' : null, s.heat ? 'heat' : null, s.voltage ? 'voltage' : null].filter(
+      (n) => n !== null,
+    );
     return on.length > 0 ? on.join(' ') : null;
   });
   return { legend: legend.asReadonly(), reducedMotion, active };

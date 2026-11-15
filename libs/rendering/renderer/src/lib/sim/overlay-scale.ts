@@ -197,13 +197,18 @@ export function stepColour(step: number): number {
   if (step === STEP_UNKNOWN) return UNKNOWN_COLOUR;
   if (step === STEP_NO_SCALE) return NO_SCALE_COLOUR;
   if (step >= OVER_RANGE_BIN) return OVER_RANGE_COLOUR;
-  const t = (Math.max(0, step) / (OVERLAY_BINS - 1)) * (RAMP.length - 1);
-  const i = Math.min(RAMP.length - 2, Math.floor(t));
+  return rampColour(RAMP, step);
+}
+
+/** Bin `bin` (0 to 31) of a ramp through `controls` (evenly spaced control colours, low to high). */
+export function rampColour(controls: readonly number[], bin: number): number {
+  const t = (Math.max(0, Math.min(OVERLAY_BINS - 1, bin)) / (OVERLAY_BINS - 1)) * (controls.length - 1);
+  const i = Math.min(controls.length - 2, Math.floor(t));
   const f = t - i;
   let out = 0;
-  for (const shift of [16, 8, 0]) {
-    const a = channel(RAMP[i], shift);
-    const b = channel(RAMP[i + 1], shift);
+  for (let shift = 16; shift >= 0; shift -= 8) {
+    const a = channel(controls[i], shift);
+    const b = channel(controls[i + 1], shift);
     out |= Math.round(a + (b - a) * f) << shift;
   }
   return out;

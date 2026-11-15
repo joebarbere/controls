@@ -1,14 +1,20 @@
 import {
   Box3Helper,
   BufferAttribute,
+  Color,
   InstancedMesh,
   Mesh,
   Scene,
   type BufferGeometry,
   type Material,
 } from 'three/webgpu';
+import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { createWorld } from '@controls/save-format';
 import {
+  CONNECTION_OUTPUT_FIELDS,
+  CONNECTION_OUTPUT_SCHEMAS,
+  CONNECTION_RECORD_BYTES,
+  CONNECTION_RECORD_OPEN,
   fakeSnapshotView,
   NetlistReadout,
   SIM_PROTOCOL_VERSION,
@@ -23,6 +29,8 @@ import { runInNewContext } from 'node:vm';
 import { ManualFrameClock } from '../loop/manual-frame-clock';
 import { RenderLoop } from '../loop/render-loop';
 import { describeSceneGraph } from '../scene';
+import { HEAT_LEGEND, heatStep, heatStepColour } from '../sim/heat-scale';
+import { cssColour, OVER_RANGE_BIN, OVER_RANGE_COLOUR, STEP_UNKNOWN, UNKNOWN_COLOUR } from '../sim/overlay-scale';
 import { ViewportController } from '../viewport-controller';
 import { SimOverlays, type SnapshotFeed } from './sim-overlays';
 
@@ -213,6 +221,9 @@ describe('SimOverlays in the viewport', () => {
     expect(overlays.legendState).toStrictEqual({
       voltage: true,
       current: true,
+      heat: false,
+      heatLegend: null,
+      heatUnavailable: null,
       bands: [],
       noScale: true,
       unknown: true,
@@ -453,6 +464,13 @@ describe('SimOverlays allocation', () => {
         { element: { kind: 'connection' as const, connection: 2 + 2 * i }, a: 3 * i + 2, b: 3 * i, island: i },
       ]).flat(),
       islands: Array.from({ length: pairs }, (_, i) => ({ kind: 'dc' as const, nodes: [3 * i, 3 * i + 1, 3 * i + 2] })),
+      connections: Array.from({ length: 2 * pairs }, (_, k) => ({
+        connection: k + 1,
+        kind: 'lead',
+        recordOffset: k * CONNECTION_RECORD_BYTES,
+        branch: 3 * Math.floor(k / 2) + 1 + (k % 2),
+      })),
+      connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'] },
     };
     const view = (amps: number) =>
       fakeSnapshotView({
@@ -476,6 +494,9 @@ describe('SimOverlays allocation', () => {
             ] as const,
         ).flat(),
         islands: Array.from({ length: pairs }, (_, i) => ({ reference: 3 * i, band: 1 })),
+        connections: connectionBytes(
+          Array.from({ length: 2 * pairs }, () => ({ conductorTempK: 300 + amps / 1000, status: 1 })),
+        ),
       });
     const overlays = new SimOverlays(new Scene(), () => undefined, undefined, ['none', 'dc12']);
     overlays.syncWorld(bus.state);
@@ -483,6 +504,7 @@ describe('SimOverlays allocation', () => {
     overlays.attach(feed);
     overlays.setOverlay('voltage', true);
     overlays.setOverlay('current', true);
+    overlays.setOverlay('heat', true);
     // Two views of one generation, values within one bin's hysteresis: the steady per-snapshot path
     // (the readout, then the step update finding nothing to redraw).
     const [a, b] = [view(5), view(5.01)];
@@ -490,6 +512,7 @@ describe('SimOverlays allocation', () => {
     const graph = overlays.describe();
     expect(graph.leads.every((l) => typeof l.amps === 'number' && l.amps > 0)).toBe(true);
     expect(graph.terminals.some((t) => t.volts === 24)).toBe(true);
+    expect(graph.leads.every((l) => l.heat.every((h) => h === 1))).toBe(true);
     // Call the subscribed listener itself, as SimHost does: the fake's `publish` loop isn't measured.
     const [listener] = [...feed.listeners];
     let flip = false;
@@ -533,6 +556,9 @@ describe('SimOverlays with a synthetic band table', () => {
     expect(legend).toHaveBeenLastCalledWith({
       voltage: true,
       current: false,
+      heat: false,
+      heatLegend: null,
+      heatUnavailable: null,
       bands: ['dc12'],
       noScale: false,
       unknown: true,
@@ -701,6 +727,301 @@ describe('SimOverlays recolour the wire renderer’s conductors (D15)', () => {
     controller.dispose();
   });
 });
+
+// --- F3.6 part 3: the heat overlay -------------------------------------------------------------
+
+/** Connection record bytes: per record, values by field name (u8 fields by code). */
+function connectionBytes(records: readonly Readonly<Record<string, number>>[]): Uint8Array {
+  const bytes = new Uint8Array(records.length * CONNECTION_RECORD_BYTES);
+  const view = new DataView(bytes.buffer);
+  records.forEach((record, i) => {
+    for (const [name, value] of Object.entries(record)) {
+      const field = CONNECTION_OUTPUT_FIELDS.find((f) => f.name === name);
+      if (field === undefined) throw new Error(`no field ${name}`);
+      const at = i * CONNECTION_RECORD_BYTES + field.offset;
+      if (field.type === 'f64') view.setFloat64(at, value, true);
+      else view.setUint8(at, value);
+    }
+  });
+  return bytes;
+}
+
+/** The routing panel's netlist with records for wires 1 (netlisted) and 2 (open); wires 3–8 have none. */
+const heatDescriptor = (): TopologyDescriptor => ({
+  ...panelDescriptor(),
+  connections: [
+    { connection: 1, kind: 'conductor', recordOffset: 0, branch: 0 },
+    { connection: 2, kind: 'conductor', recordOffset: CONNECTION_RECORD_BYTES, branch: -1 },
+  ],
+  connectionSchemas: { conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
+});
+/** One generation: a new descriptor object is a new generation (steps restart), which the game never sends per snapshot. */
+const HEAT_DESCRIPTOR = heatDescriptor();
+/** Wire 1: a 394 K loose end a on a 303 K conductor (the bad-termination figures). Wire 2: open, end b at `openEndK`. */
+const heatSnapshot = (looseEndK = 393.822, openEndK = 450) =>
+  fakeSnapshotView({
+    descriptor: HEAT_DESCRIPTOR,
+    tick: 9,
+    nodes: [
+      [12, 0],
+      [6, 0],
+    ],
+    branches: [[2, 0]],
+    islands: [{ reference: 1, band: 1 }],
+    connections: connectionBytes([
+      { conductorTempK: 303.033, endATempK: looseEndK, endAState: 1, endBTempK: 301.709, endBState: 1, status: 1 },
+      { conductorTempK: 293.15, endBTempK: openEndK, endBState: 3, status: CONNECTION_RECORD_OPEN },
+    ]),
+  });
+
+describe('SimOverlays heat overlay (F3.6 part 3)', () => {
+  const panelSetup = (world: World = routingPanelBus(true).state) => {
+    const canvas = new FakeCanvas();
+    const controller = new ViewportController(canvas as unknown as HTMLElement);
+    controller.syncWorld(world);
+    const feed = new FakeFeed();
+    controller.overlays.attach(feed);
+    const legend = vi.fn();
+    controller.overlays.onLegendChange(legend);
+    return { controller, feed, overlays: controller.overlays, legend };
+  };
+  const hex = (step: number) => cssColour(heatStepColour(step));
+
+  it('colours each conductor half by its hottest node; no record is unknown, never cold', () => {
+    const { controller, feed, overlays, legend } = panelSetup();
+    const own = controller.wireGraph().routes.map((r) => r.colour);
+    feed.publish(heatSnapshot());
+    overlays.setOverlay('heat', true);
+    const graph = overlays.describe();
+    expect(graph.heat).toBe(true);
+    expect(graph.inScene).toBe(true);
+    expect(graph.conductors.map((c) => c.heat)).toStrictEqual([
+      [16, 1], // the loose end's half at the overheat point; the good end's half its 302 K
+      [0, 20], // open, not netlisted: its free end shows the conductor at ambient, its open end 450 K (past oxidation onset)
+      ...Array.from({ length: 6 }, () => ['unknown', 'unknown']),
+    ]);
+    const routes = controller.wireGraph().routes;
+    expect(routes.map((r) => r.tint)).toStrictEqual([
+      [hex(16), hex(1)],
+      [hex(0), hex(20)],
+      ...Array.from({ length: 6 }, () => [cssColour(UNKNOWN_COLOUR), cssColour(UNKNOWN_COLOUR)]),
+    ]);
+    expect(hex(0)).not.toBe(cssColour(UNKNOWN_COLOUR));
+    expect(legend).toHaveBeenLastCalledWith({
+      voltage: false,
+      current: false,
+      heat: true,
+      heatLegend: HEAT_LEGEND,
+      heatUnavailable: null,
+      bands: [],
+      noScale: false,
+      unknown: true,
+    });
+    // Off: back to the insulation colours, and out of the scene.
+    overlays.setOverlay('heat', false);
+    expect(controller.wireGraph().routes.map((r) => (r.tint === null ? r.colour : 'tinted'))).toStrictEqual(own);
+    expect(overlays.describe().inScene).toBe(false);
+    expect(controller.scene.getObjectByName('overlay:sim')).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('takes the conductor colours from voltage and current while it is on, and gives them back', () => {
+    const { controller, feed, overlays } = panelSetup();
+    feed.publish(heatSnapshot());
+    overlays.setOverlay('voltage', true);
+    const voltageTint = controller.wireGraph().routes[0].tint;
+    overlays.setOverlay('heat', true);
+    expect(controller.wireGraph().routes[0].tint).toStrictEqual([hex(16), hex(1)]);
+    expect(overlays.legendState).toMatchObject({ voltage: true, heat: true });
+    overlays.setOverlay('heat', false);
+    expect(controller.wireGraph().routes[0].tint).toStrictEqual(voltageTint);
+    controller.dispose();
+  });
+
+  it('draws a cable as no reading: there is no record for its jacket', () => {
+    const { controller, feed, overlays } = panelSetup();
+    const free = (x: number) => ({
+      kind: 'free' as const,
+      positionMm: { x, y: 600, z: 40 },
+      entity: null,
+      fixture: null,
+      tool: null,
+    });
+    const world = routingPanelBus(true).state;
+    controller.syncWorld({
+      ...world,
+      cables: [
+        {
+          id: 1,
+          ref: { id: 'cable.sorrelby-nmb-12-2', version: 1 },
+          a: null,
+          b: null,
+          route: [free(0), free(400)],
+          lengthMm: 404,
+          tailsMm: { a: 0, b: 0 },
+          jacketStripMm: { a: 0, b: 0 },
+          label: null,
+          extensions: {},
+        },
+      ],
+      nextCableId: 2,
+    });
+    feed.publish(heatSnapshot());
+    overlays.setOverlay('heat', true);
+    const cable = controller.wireGraph().routes.find((r) => r.owner === 'k1');
+    expect(cable?.tint).toStrictEqual([cssColour(UNKNOWN_COLOUR), cssColour(UNKNOWN_COLOUR)]);
+    controller.dispose();
+  });
+
+  it('rewrites conductor colours only when a heat step moves, and asks for a frame only then', () => {
+    const { controller, feed, overlays } = panelSetup();
+    const invalidations = vi.fn();
+    controller.onInvalidate(invalidations);
+    overlays.setOverlay('heat', true);
+    feed.publish(heatSnapshot());
+    const mesh = controller.scene.getObjectByName('wires:thhnThwn2') as InstancedMesh;
+    const version = mesh.instanceColor?.version ?? 0;
+    const frames = invalidations.mock.calls.length;
+    // Within the hysteresis: nothing is rewritten and no frame is requested.
+    feed.publish(heatSnapshot(394.4, 451));
+    expect(mesh.instanceColor?.version).toBe(version);
+    expect(invalidations.mock.calls.length).toBe(frames);
+    // Voltage moves while heat is shown: the conductors' colours are heat's, so nothing changes either.
+    feed.publish(
+      fakeSnapshotView({
+        ...heatSnapshotInput(),
+        nodes: [
+          [11, 0],
+          [1, 0],
+        ],
+      }),
+    );
+    expect(mesh.instanceColor?.version).toBe(version);
+    // The loose end runs away: its half is rewritten.
+    feed.publish(heatSnapshot(700));
+    expect(controller.wireGraph().routes[0].tint?.[0]).toBe(hex(overlays.describe().conductors[0].heat[0] as number));
+    expect(overlays.describe().conductors[0].heat[0]).toBeGreaterThan(16);
+    expect(mesh.instanceColor?.version).toBeGreaterThan(version);
+    expect(invalidations.mock.calls.length).toBeGreaterThan(frames);
+    controller.dispose();
+  });
+
+  it('colours test leads by their conductor temperature, both halves', () => {
+    const { controller, feed, overlays } = setup();
+    const descriptor: TopologyDescriptor = {
+      ...benchDescriptor(),
+      connections: [
+        { connection: 1, kind: 'lead', recordOffset: 0, branch: 1 },
+        { connection: 2, kind: 'lead', recordOffset: CONNECTION_RECORD_BYTES, branch: 2 },
+      ],
+      connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'] },
+    };
+    const view = (leadK: number) =>
+      fakeSnapshotView({
+        descriptor,
+        tick: 1234,
+        nodes: [
+          [0, 0],
+          [11.5, 0],
+          [5.75, 0],
+        ],
+        branches: [
+          [-50, 0],
+          [50, 0],
+          [50, 0],
+        ],
+        islands: [{ reference: 0 }, { iterations: 0, reference: -1 }],
+        connections: connectionBytes([
+          { conductorTempK: leadK, status: 1 },
+          { conductorTempK: 1357.77, status: 1 }, // a shorted lead at copper's melting point
+        ]),
+      });
+    feed.publish(view(317));
+    overlays.setOverlay('heat', true);
+    const graph = overlays.describe();
+    expect(graph.leads.map((l) => l.heat)).toStrictEqual([
+      [heatStep(317, STEP_UNKNOWN), heatStep(317, STEP_UNKNOWN)],
+      [OVER_RANGE_BIN, OVER_RANGE_BIN],
+    ]);
+    // Lead segments are drawn; terminal markers are voltage's, so they stay hidden.
+    expect(controller.scene.getObjectByName('overlay:sim-leads')?.visible).toBe(true);
+    expect(controller.scene.getObjectByName('overlay:sim-terminals')?.visible).toBe(false);
+    const leads = controller.scene.getObjectByName('overlay:sim-leads') as InstancedMesh;
+    const colour = new Color();
+    leads.getColorAt(3, colour);
+    expect(colour.getHex()).toBe(OVER_RANGE_COLOUR);
+    expect(describeSceneGraph(overlays.group)).toMatchSnapshot();
+    controller.dispose();
+  });
+
+  it('a catalogue with no usable heat scale makes heat unavailable with a reason, never a crash', () => {
+    const scene = new Scene();
+    const modded: Catalog = { ...BUILTIN_CATALOG, tables: [] };
+    const legend = vi.fn();
+    const overlays = new SimOverlays(scene, () => undefined, modded);
+    overlays.onLegendChange(legend);
+    overlays.syncWorld(benchWorld());
+    const feed = new FakeFeed();
+    overlays.attach(feed);
+    overlays.setOverlay('heat', true);
+    feed.publish(benchSnapshot(benchDescriptor()));
+    expect(overlays.describe().leads.map((l) => l.heat)).toStrictEqual([
+      ['unknown', 'unknown'],
+      ['unknown', 'unknown'],
+    ]);
+    expect(legend).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        heat: true,
+        heatLegend: null,
+        heatUnavailable: 'the catalogue has no insulation rating or no melting point',
+        unknown: true,
+      }),
+    );
+    overlays.dispose();
+  });
+
+  it('disposes everything with heat on, and leaves no tint behind', () => {
+    const { controller, feed, overlays } = panelSetup();
+    feed.publish(heatSnapshot());
+    overlays.setOverlay('heat', true);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    controller.scene.traverse((o) => {
+      if (o instanceof Mesh) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    const gSpies = [...geometries].map((g) => vi.spyOn(g, 'dispose'));
+    const mSpies = [...materials].map((m) => vi.spyOn(m, 'dispose'));
+    controller.dispose();
+    controller.dispose();
+    gSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    mSpies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(feed.listeners.size).toBe(0);
+    expect(controller.scene.getObjectByName('overlay:sim')).toBeUndefined();
+    expect(controller.scene.getObjectByName('wires')).toBeUndefined();
+    expect(() => feed.publish(heatSnapshot(900))).not.toThrow();
+  });
+});
+
+/** {@link heatSnapshot}'s input, for variants. */
+function heatSnapshotInput() {
+  return {
+    descriptor: HEAT_DESCRIPTOR,
+    tick: 10,
+    nodes: [
+      [12, 0],
+      [6, 0],
+    ] as [number, number][],
+    branches: [[2, 0]] as [number, number][],
+    islands: [{ reference: 1, band: 1 }],
+    connections: connectionBytes([
+      { conductorTempK: 303.033, endATempK: 393.822, endAState: 1, endBTempK: 301.709, endBState: 1, status: 1 },
+      { conductorTempK: 293.15, endBTempK: 450, endBState: 3, status: CONNECTION_RECORD_OPEN },
+    ]),
+  };
+}
 
 describe('SimOverlays disposal', () => {
   it('disposes every geometry and material exactly once, unsubscribes and leaves the scene', () => {

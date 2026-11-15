@@ -6,7 +6,7 @@ const pureHint =
 
 /** The same rule for the overlay display modules (F2.6). */
 const overlayHint =
-  'The overlay scales and display steps (sim/overlay-scale, sim/overlay-steps) must stay GPU-, DOM- and clock-free so they are unit-testable and deterministic; the GPU side is overlays/sim-overlays.';
+  'The overlay scales and display steps (sim/overlay-scale, sim/overlay-steps, sim/heat-scale, sim/heat-steps) must stay GPU-, DOM- and clock-free so they are unit-testable and deterministic; the GPU side is overlays/sim-overlays.';
 
 /** The same rule for the wire renderer's pure modules (F3.2 part 2). */
 const wireHint =
@@ -62,7 +62,12 @@ export default [
   // F2.6: the overlay scales and display steps (ADR 0011 §9.2 "Display modules"), fenced like the
   // modules above. A separate block so each sim display module can be listed without touching another's.
   {
-    files: ['src/lib/sim/overlay-scale*.ts', 'src/lib/sim/overlay-steps*.ts'],
+    files: [
+      'src/lib/sim/overlay-scale*.ts',
+      'src/lib/sim/overlay-steps*.ts',
+      'src/lib/sim/heat-scale*.ts',
+      'src/lib/sim/heat-steps*.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
