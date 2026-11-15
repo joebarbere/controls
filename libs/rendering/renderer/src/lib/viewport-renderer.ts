@@ -228,6 +228,21 @@ export class ViewportRenderer {
     return this.controller?.overlays.describe();
   }
 
+  /**
+   * The renderer's GPU memory counters (three's `info.memory`): geometries and vertex attributes, by
+   * count and bytes. E2E proves disposal with it (wires: back to baseline after delete), never pixels.
+   */
+  memory(): { geometries: number; attributes: number; attributesSize: number } | undefined {
+    const memory = this.renderer?.info.memory as
+      { geometries: number; attributes?: number; attributesSize?: number } | undefined;
+    if (!memory) return undefined;
+    return {
+      geometries: memory.geometries,
+      attributes: memory.attributes ?? 0,
+      attributesSize: memory.attributesSize ?? 0,
+    };
+  }
+
   /** What the wire renderer draws (tests and the `?e2e=1` hook), or `undefined` before `init`. */
   wireGraph(): WireGraph | undefined {
     return this.controller?.wireGraph();

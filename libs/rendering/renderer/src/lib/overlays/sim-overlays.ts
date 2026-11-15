@@ -36,7 +36,6 @@ import {
   SphereGeometry,
   Vector3,
   Color,
-  type BufferGeometry,
   type Material,
   type Scene,
 } from 'three/webgpu';
@@ -181,7 +180,6 @@ interface DrawnLead {
 export class SimOverlays {
   /** Parent of every overlay mesh; in the scene only while an overlay or a highlight is shown. */
   readonly group = new Group();
-  private readonly geometries: BufferGeometry[];
   private readonly materials: Material[];
   private readonly leads: InstancedPool;
   private readonly terminalsKnown: InstancedPool;
@@ -220,7 +218,10 @@ export class SimOverlays {
   private tintTarget: ConductorTintTarget | null = null;
   private tinting = false;
   /** The colours the wires draw conductors in while an overlay is on (one object, so a refresh allocates nothing). */
-  private readonly tintSource: WireTint = { colour: (connection, end) => this.conductorColour(connection, end) };
+  private readonly tintSource: WireTint = {
+    colour: (connection, end) => this.conductorColour(connection, end),
+    unknownColour: stepColour(STEP_UNKNOWN), // a cable: no reading for its jacket (R1, until F3.2 part 4)
+  };
   private highlightRefs: readonly OverlayTerminalRef[] = [];
 
   // Sim side (rebuilt per descriptor).
@@ -263,13 +264,13 @@ export class SimOverlays {
     this.scales = scalesByBand(bands);
     this.stepInputs = { readout: null, reading: null, join: this.join, scales: this.scales };
     this.conductorInputs = { readout: null, reading: null, join: this.conductorJoin, scales: this.scales };
-    const lead = new CylinderGeometry(1, 1, 1, 6, 1); // unit, along +y; scaled per instance (6 sides: a 2.5 mm lead)
-    const sphere = new SphereGeometry(1, 8, 6); // a 6 mm marker needs no more
-    const diamond = new OctahedronGeometry(1);
-    const cone = new ConeGeometry(1, 1, 6); // apex along +y
-    const sway = new OctahedronGeometry(1);
-    const ring = new SphereGeometry(1, 10, 6);
-    this.geometries = [lead, sphere, diamond, cone, sway, ring];
+    // Geometry factories: each pool mesh owns its geometry (instanced-pool: that frees its instance buffers).
+    const lead = () => new CylinderGeometry(1, 1, 1, 6, 1); // unit, along +y; scaled per instance (6 sides: a 2.5 mm lead)
+    const sphere = () => new SphereGeometry(1, 8, 6); // a 6 mm marker needs no more
+    const diamond = () => new OctahedronGeometry(1);
+    const cone = () => new ConeGeometry(1, 1, 6); // apex along +y
+    const sway = () => new OctahedronGeometry(1);
+    const ring = () => new SphereGeometry(1, 10, 6);
     const solid = () => new MeshBasicMaterial({ color: 0xffffff });
     const highlightMaterial = new MeshBasicMaterial({
       color: 0xffffff,
@@ -462,7 +463,6 @@ export class SimOverlays {
     ]) {
       layer.dispose();
     }
-    this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
     if (this.inScene) this.scene.remove(this.group);
     this.inScene = false;

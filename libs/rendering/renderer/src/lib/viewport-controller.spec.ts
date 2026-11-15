@@ -1364,6 +1364,29 @@ describe('ViewportController wires (F3.2 part 2)', () => {
     expect(canvas.live.size).toBe(0);
   });
 
+  it('dispose in mid-settle releases the preview rope and asks for no further frame', () => {
+    const { controller } = setup(WIRED);
+    const clock = new ManualFrameClock();
+    const draw = vi.fn();
+    const loop = new RenderLoop({ clock, update: (dt) => controller.update(dt), draw });
+    controller.onInvalidate(() => loop.requestRender());
+    controller.setWirePreview(preview);
+    clock.ticks(3);
+    expect(controller.wireGraph().preview?.settled).toBe(false);
+    const rope = controller.scene.getObjectByName('wires:preview') as Mesh;
+    const meshDisposed = vi.fn();
+    rope.addEventListener('dispose', meshDisposed);
+    const geometry = vi.spyOn(rope.geometry, 'dispose');
+    const material = vi.spyOn(rope.material as Material, 'dispose');
+    controller.dispose();
+    expect(meshDisposed).toHaveBeenCalledTimes(1);
+    expect(geometry).toHaveBeenCalledTimes(1);
+    expect(material).toHaveBeenCalledTimes(1);
+    expect(controller.wireResourceCount).toBe(0);
+    expect(controller.update(1 / 60)).toBe(false); // nothing left to animate
+    loop.dispose();
+  });
+
   it('the preview rope draws until it settles, then the viewport idles; clearing it draws once more', () => {
     const { controller } = setup(WIRED);
     const clock = new ManualFrameClock();

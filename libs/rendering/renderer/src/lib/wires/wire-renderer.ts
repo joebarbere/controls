@@ -8,7 +8,8 @@
  * - **One `InstancedMesh` per conductor look** (`wire-looks`: the insulation or jacket material), each
  *   a pool of 6-sided unit cylinders, one instance per segment, coloured per instance, whose capacity
  *   doubles when full and shrinks when a quarter used; a look with no instances left is disposed
- *   (mesh, material), and the shared segment geometry with the last look. Every write is a full
+ *   (mesh, its own segment geometry, material); every pool mesh owns its geometry, since in three
+ *   r186 that is what frees a large mesh's instance buffers (`instancing/instanced-pool`). Every write is a full
  *   `needsUpdate` upload, never `addUpdateRange` (three r186, rendering caveats). Draw calls follow
  *   the number of looks in use, never the number of wires.
  * - **Coils** (a cut much longer than its route, ADR 0017 §7) are drawn as rings at the bake's coil
@@ -53,6 +54,7 @@ import {
   coilDrawnTurns,
   coilPolylineMm,
   forEachRouteSegment,
+  halfAt,
   SLEEVE_EXTRA_DIAMETER_MM,
   SLEEVE_LENGTH_MM,
   sleevePlacements,
@@ -62,6 +64,12 @@ import {
 export interface WireTint {
   /** The colour of connection `connection`'s half at end `end`. Called once per conductor and end per refresh. */
   colour(connection: number, end: 'a' | 'b'): number;
+  /**
+   * What a cable is drawn in while the tint is on (`0xrrggbb`): the overlay's "unknown" colour, since
+   * the overlays have no reading for a jacket (its conductors are coloured from F3.2 part 4). Without
+   * it a yellow NM-B jacket would read as a value on the overlay's scale.
+   */
+  readonly unknownColour: number;
 }
 
 /** What the live preview rope is drawn through and as (F3.2 part 3 drives it). */
@@ -133,7 +141,6 @@ const UP = new Vector3(0, 1, 0);
 export class WireRenderer {
   /** Parent of every wire mesh; in the scene only while something is drawn. */
   readonly group = new Group();
-  private geometry: BufferGeometry | null = null;
   private readonly looks = new Map<string, LookLayer>();
   private sleeves: { pool: InstancedPool; material: MeshStandardMaterial } | null = null;
   private previewLayer: {
@@ -208,8 +215,8 @@ export class WireRenderer {
     let changed = false;
     for (let r = 0; r < this.routes.length; r++) {
       const c = this.routes[r].connection;
-      const a = this.tint && c !== null ? this.tint.colour(c, 'a') : -1;
-      const b = this.tint && c !== null ? this.tint.colour(c, 'b') : -1;
+      const a = this.tintColour(c, 'a');
+      const b = this.tintColour(c, 'b');
       if (a !== this.tintA[r] || b !== this.tintB[r]) changed = true;
       this.tintA[r] = a;
       this.tintB[r] = b;
@@ -236,7 +243,7 @@ export class WireRenderer {
     if (this.previewLayer && this.previewLayer.look !== appearance.look) this.disposePreviewLayer();
     if (!this.previewLayer) {
       const material = lookMaterial(appearance.look);
-      const pool = new InstancedPool('wires:preview', this.segmentGeometry(), material, this.group, {
+      const pool = new InstancedPool('wires:preview', segmentGeometry, material, this.group, {
         minCapacity: MIN_LOOK_CAPACITY,
         unpickable: false,
       });
@@ -307,21 +314,20 @@ export class WireRenderer {
   }
 
   /**
-   * GPU resources alive: the segment geometry, each look's mesh and material, the sleeve and preview
-   * meshes and materials. 0 when nothing is drawn (the disposal baseline).
+   * GPU resources alive: each look's, the sleeves' and the preview's mesh, its own geometry and its
+   * material (3 each). 0 when nothing is drawn (the disposal baseline).
    */
   get resourceCount(): number {
-    return (this.geometry ? 1 : 0) + 2 * this.looks.size + (this.sleeves ? 2 : 0) + (this.previewLayer ? 2 : 0);
+    return 3 * (this.looks.size + (this.sleeves ? 1 : 0) + (this.previewLayer ? 1 : 0));
   }
 
-  /** Releases every mesh, material and the geometry, and leaves the scene. Idempotent. */
+  /** Releases every mesh, geometry and material, and leaves the scene. Idempotent. */
   dispose(): void {
     if (this.disposed) return;
     this.routes = [];
     for (const look of [...this.looks.keys()]) this.disposeLook(look);
     this.disposeSleeves();
     this.disposePreviewLayer();
-    this.releaseGeometry();
     if (this.inScene) this.scene.remove(this.group);
     this.inScene = false;
     this.tint = null;
@@ -381,7 +387,7 @@ export class WireRenderer {
       let layer = this.looks.get(look);
       if (!layer) {
         const material = lookMaterial(look);
-        const pool = new InstancedPool(`wires:${look}`, this.segmentGeometry(), material, this.group, {
+        const pool = new InstancedPool(`wires:${look}`, segmentGeometry, material, this.group, {
           minCapacity: MIN_LOOK_CAPACITY,
           unpickable: false,
           shrink: true,
@@ -396,12 +402,6 @@ export class WireRenderer {
         layer.half = new Uint8Array(layer.pool.capacity);
       }
       layer.pool.mesh.userData['wires'] = { look, instances: count };
-    }
-    // Keep the looks in sorted order in the group (a stable scene graph whatever the insertion order).
-    for (const look of sorted) {
-      const mesh = (this.looks.get(look) as LookLayer).pool.mesh;
-      this.group.remove(mesh);
-      this.group.add(mesh);
     }
     const next = new Map<string, number>();
     this.tintA = new Int32Array(this.routes.length).fill(-1);
@@ -420,9 +420,11 @@ export class WireRenderer {
       };
       forEachRouteSegment(r.baked.points, write);
       const coil = coils[ri];
-      if (coil) {
+      if (coil && r.baked.coil) {
+        // The coil hangs in one half of the route: the half its point is in.
+        const half = halfAt(r.baked.points, r.baked.coil.at);
         for (let i = 3; i + 2 < coil.length; i += 3) {
-          write(coil[i - 3], coil[i - 2], coil[i - 1], coil[i], coil[i + 1], coil[i + 2], 1);
+          write(coil[i - 3], coil[i - 2], coil[i - 1], coil[i], coil[i + 1], coil[i + 2], half);
         }
       }
       next.set(r.appearance.look, k);
@@ -436,13 +438,19 @@ export class WireRenderer {
     this.applyScene();
   }
 
+  /** A route's tint colour at one end: its conductor's, the unknown colour for a cable, or −1 (no tint). */
+  private tintColour(connection: number | null, end: 'a' | 'b'): number {
+    if (this.tint === null) return -1;
+    return connection === null ? this.tint.unknownColour : this.tint.colour(connection, end);
+  }
+
   /** Reads the tint's colours for every route (after a re-bake: the route indices changed). */
   private readTint(): void {
     if (this.tint === null) return;
     for (let r = 0; r < this.routes.length; r++) {
       const c = this.routes[r].connection;
-      this.tintA[r] = c === null ? -1 : this.tint.colour(c, 'a');
-      this.tintB[r] = c === null ? -1 : this.tint.colour(c, 'b');
+      this.tintA[r] = this.tintColour(c, 'a');
+      this.tintB[r] = this.tintColour(c, 'b');
     }
   }
 
@@ -468,7 +476,7 @@ export class WireRenderer {
     }
     if (!this.sleeves) {
       const material = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0 });
-      const pool = new InstancedPool('wires:sleeves', this.segmentGeometry(), material, this.group, {
+      const pool = new InstancedPool('wires:sleeves', segmentGeometry, material, this.group, {
         minCapacity: 16,
         unpickable: false,
         shrink: true,
@@ -513,7 +521,9 @@ export class WireRenderer {
     if (!layer) return;
     const appearance = layer.appearance;
     const n = Math.max(0, this.rope.count - 1);
-    if (layer.pool.ensure(n) || layer.pool.mesh.userData['colour'] !== appearance.colour) {
+    const rebuilt = layer.pool.ensure(n);
+    if (rebuilt) this.orderChildren();
+    if (rebuilt || layer.pool.mesh.userData['colour'] !== appearance.colour) {
       for (let i = 0; i < layer.pool.capacity; i++)
         layer.pool.mesh.setColorAt(i, this.colour.setHex(appearance.colour));
       layer.pool.mesh.userData['colour'] = appearance.colour;
@@ -555,28 +565,12 @@ export class WireRenderer {
     this.m.compose(this.p, this.q, this.s.set(radius, length + overlap * radius, radius));
   }
 
-  /** The shared 6-sided unit cylinder, built on first use and released with the last mesh. */
-  private segmentGeometry(): BufferGeometry {
-    if (!this.geometry) {
-      this.geometry = new CylinderGeometry(1, 1, 1, 6, 1);
-      this.geometry.name = 'wires:segment';
-    }
-    return this.geometry;
-  }
-
-  private releaseGeometry(): void {
-    if (this.looks.size > 0 || this.sleeves || this.previewLayer || !this.geometry) return;
-    this.geometry.dispose();
-    this.geometry = null;
-  }
-
   private disposeLook(look: string): void {
     const layer = this.looks.get(look);
     if (!layer) return;
     layer.pool.dispose();
     layer.material.dispose();
     this.looks.delete(look);
-    this.releaseGeometry();
   }
 
   private disposeSleeves(): void {
@@ -584,7 +578,6 @@ export class WireRenderer {
     this.sleeves.pool.dispose();
     this.sleeves.material.dispose();
     this.sleeves = null;
-    this.releaseGeometry();
   }
 
   private disposePreviewLayer(): void {
@@ -592,16 +585,39 @@ export class WireRenderer {
     this.previewLayer.pool.dispose();
     this.previewLayer.material.dispose();
     this.previewLayer = null;
-    this.releaseGeometry();
   }
 
-  /** In the scene only while some route, sleeve or preview is drawn. */
+  /**
+   * The group's children in a fixed order, whatever the history (pools rebuilt, sleeves or the
+   * preview added and removed): the looks by name, then `wires:sleeves`, then `wires:preview`.
+   */
+  private orderChildren(): void {
+    const wanted = [...this.looks.keys()].sort().map((look) => (this.looks.get(look) as LookLayer).pool.mesh);
+    if (this.sleeves) wanted.push(this.sleeves.pool.mesh);
+    if (this.previewLayer) wanted.push(this.previewLayer.pool.mesh);
+    const children = this.group.children;
+    if (children.length === wanted.length && wanted.every((m, i) => children[i] === m)) return;
+    for (const mesh of wanted) {
+      this.group.remove(mesh);
+      this.group.add(mesh);
+    }
+  }
+
+  /** In the scene only while some route, sleeve or preview is drawn; children in a fixed order. */
   private applyScene(): void {
+    this.orderChildren();
     const wanted = this.looks.size > 0 || this.sleeves !== null || this.previewLayer !== null;
     if (wanted && !this.inScene) this.scene.add(this.group);
     else if (!wanted && this.inScene) this.scene.remove(this.group);
     this.inScene = wanted;
   }
+}
+
+/** A 6-sided unit cylinder (along +y, radius 1, height 1): one per pool mesh, disposed with it. */
+function segmentGeometry(): BufferGeometry {
+  const geometry = new CylinderGeometry(1, 1, 1, 6, 1);
+  geometry.name = 'wires:segment';
+  return geometry;
 }
 
 /** A look's material: white (instances carry the colour), with the look's finish. */

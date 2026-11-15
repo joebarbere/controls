@@ -35,8 +35,8 @@ describe('VerletRope (the live preview)', () => {
     expect(frames).toBeLessThan(ROPE_TUNING.maxFrames);
     // The bake's parabola for 1 % extra on 300 mm: √(3 · 300 · 3 / 8) ≈ 18.4 mm (ADR 0017 §7).
     const sag = -lowest(rope);
-    expect(sag).toBeGreaterThan(15); // measured 21.6 (a 20-link chain with tethers, not the parabola)
-    expect(sag).toBeLessThan(25);
+    expect(sag).toBeGreaterThan(18); // measured 21.6 (a 20-link chain with tethers, not the parabola)
+    expect(sag).toBeLessThan(23);
     // The pins never move.
     expect([rope.x(0), rope.y(0), rope.x(rope.count - 1), rope.y(rope.count - 1)]).toStrictEqual([0, 0, 300, 0]);
     expect(rope.step()).toBe(false);
@@ -52,6 +52,18 @@ describe('VerletRope (the live preview)', () => {
       b.step();
     }
     expect(points(a)).toStrictEqual(points(b));
+  });
+
+  it('stays deterministic across a re-pin in mid-settle', () => {
+    const run = () => {
+      const rope = new VerletRope();
+      rope.setPins(SPAN);
+      for (let i = 0; i < 7; i++) rope.step();
+      rope.setPins([SPAN[0], { x: 260, y: -40, z: 15 }, { x: 420, y: 10, z: 0 }]);
+      settle(rope);
+      return { points: points(rope), frames: rope.frames };
+    };
+    expect(run()).toStrictEqual(run());
   });
 
   it('keeps its shape when the cursor pin moves (no pop back to straight)', () => {

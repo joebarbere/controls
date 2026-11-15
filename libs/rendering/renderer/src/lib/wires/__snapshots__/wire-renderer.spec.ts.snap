@@ -4,14 +4,6 @@ exports[`WireRenderer > draws the bake: one instanced mesh per look, one instanc
 {
   "children": [
     {
-      "boundsMm": [
-        -866,
-        -500,
-        -1000,
-        866,
-        500,
-        1000,
-      ],
       "name": "wires:thhnThwn2",
       "positionMm": [
         0,
@@ -26,14 +18,6 @@ exports[`WireRenderer > draws the bake: one instanced mesh per look, one instanc
       },
     },
     {
-      "boundsMm": [
-        -866,
-        -500,
-        -1000,
-        866,
-        500,
-        1000,
-      ],
       "name": "wires:sleeves",
       "positionMm": [
         0,

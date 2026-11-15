@@ -1,9 +1,10 @@
-import { InstancedMesh, Mesh, Scene, type BufferGeometry, type Material } from 'three/webgpu';
+import { BufferAttribute, Color, InstancedMesh, Mesh, Scene, type BufferGeometry, type Material } from 'three/webgpu';
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { bakeWorldRoutes, type World } from '@controls/world-model';
 import { routingPanelBus, routingParityWorld } from '@controls/world-model/testing';
 import { describeSceneGraph } from '../scene';
 import { WireRenderer, type WireTint } from './wire-renderer';
+import { halfAt } from './wire-segments';
 
 /** The routing-parity world (ADR 0017 §10): eight duct-routed THHN wires, a coiled one, one through EMT. */
 const PARITY = routingParityWorld();
@@ -45,6 +46,55 @@ const spyAll = (root: Scene) => {
     meshes: meshes.map((m) => vi.spyOn(m, 'dispose')),
   };
 };
+
+/** A cable on two free waypoints, ends free (a crafted world: its conductors and entries don't matter to drawing). */
+const withCable = (world: World): World => {
+  const free = (x: number) => ({
+    kind: 'free' as const,
+    positionMm: { x, y: 600, z: 40 },
+    entity: null,
+    fixture: null,
+    tool: null,
+  });
+  return {
+    ...world,
+    cables: [
+      {
+        id: 1,
+        ref: { id: 'cable.sorrelby-nmb-12-2', version: 1 },
+        a: null,
+        b: null,
+        route: [free(0), free(400)],
+        lengthMm: 404,
+        tailsMm: { a: 0, b: 0 },
+        jacketStripMm: { a: 0, b: 0 },
+        label: null,
+        extensions: {},
+      },
+    ],
+    nextCableId: 2,
+  };
+};
+
+/** Conductor `c`'s end `a` is 0x0000c0 + 2c, end `b` 0x0000c1 + 2c: every half its own colour. */
+const perConnection: WireTint = { colour: (c, end) => 0xc0 + 2 * c + (end === 'a' ? 0 : 1), unknownColour: 0x777777 };
+const hex = (v: number) => `#${v.toString(16).padStart(6, '0')}`;
+/** Instance `i`'s colour as a hex value (instanceColor holds linear sRGB). */
+const instanceHex = (mesh: InstancedMesh, i: number) => {
+  const c = new Color();
+  mesh.getColorAt(i, c);
+  return c.getHex();
+};
+
+// ADR 0010's r186 gotcha: no partial upload of an instanced attribute, ever (also an ESLint rule).
+let updateRange: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  updateRange = vi.spyOn(BufferAttribute.prototype, 'addUpdateRange');
+});
+afterEach(() => {
+  expect(updateRange).not.toHaveBeenCalled();
+  updateRange.mockRestore();
+});
 
 describe('WireRenderer', () => {
   it('draws the bake: one instanced mesh per look, one instance per segment (scene-graph snapshot)', () => {
@@ -150,7 +200,7 @@ describe('WireRenderer', () => {
 
   it('wire removal and world unload release every mesh, material, instance buffer and the geometry', () => {
     const { scene, wires } = setup(labelled(PARITY, 3, 'X1-3'));
-    expect(wires.resourceCount).toBe(5); // the segment geometry, one look, the sleeves
+    expect(wires.resourceCount).toBe(6); // one look and the sleeves: a mesh, its own geometry and a material each
     const spies = spyAll(scene);
     expect(spies.meshes).toHaveLength(2);
     // Remove one wire: the rest stay drawn, nothing is disposed but replaced pools.
@@ -204,6 +254,7 @@ describe('WireRenderer', () => {
         calls.push([connection, end]);
         return connection === 1 ? (end === 'a' ? 0x00ff00 : 0x0000ff) : -1;
       },
+      unknownColour: 0x777777,
     };
     invalidate.mockClear();
     wires.setTint(tint);
@@ -231,7 +282,7 @@ describe('WireRenderer', () => {
 
   it('keeps a tint across a re-bake', () => {
     const { wires } = setup();
-    wires.setTint({ colour: () => 0x123456 });
+    wires.setTint({ colour: () => 0x123456, unknownColour: 0x777777 });
     wires.sync(labelled(PARITY, 2, 'B'));
     expect(wires.describe().routes.every((r) => r.tint !== null && r.tint[0] === '#123456')).toBe(true);
   });
@@ -262,5 +313,123 @@ describe('WireRenderer', () => {
     expect(wires.describe().preview).toBeNull();
     expect(wires.resourceCount).toBe(0);
     expect(scene.getObjectByName('wires')).toBeUndefined();
+  });
+
+  it('a pool rebuild disposes the old mesh and its own geometry, never the shared material', () => {
+    const one = { ...PARITY, connections: PARITY.connections.slice(0, 1) };
+    const { scene, wires } = setup(one);
+    const small = lookMesh(scene, 'thhnThwn2');
+    const geometry = vi.spyOn(small.geometry, 'dispose');
+    const material = vi.spyOn(small.material as Material, 'dispose');
+    wires.sync(PARITY);
+    const big = lookMesh(scene, 'thhnThwn2');
+    expect(big).not.toBe(small);
+    expect(big.geometry).not.toBe(small.geometry); // each pool mesh owns its geometry
+    expect(big.material).toBe(small.material);
+    expect(geometry).toHaveBeenCalledTimes(1);
+    expect(material).not.toHaveBeenCalled();
+  });
+
+  it('keeps its children in a fixed order whatever the history (A → B → A equals a fresh A)', () => {
+    const MTW = { id: 'conductor.tallowmere-mtw-14', version: 1 };
+    const a = labelled(
+      { ...PARITY, connections: PARITY.connections.map((c) => (c.id === 2 ? { ...c, ref: MTW } : c)) },
+      3,
+      'X',
+    );
+    // B: one THHN wire only, so the THHN pool shrinks (crosses a capacity) and the sleeves and MTW go.
+    const b: World = { ...PARITY, connections: PARITY.connections.slice(0, 1) };
+    const fresh = setup(a);
+    const { scene, wires } = setup(a);
+    wires.setPreview({
+      pointsMm: [
+        { x: 0, y: 0, z: 0 },
+        { x: 100, y: 0, z: 0 },
+      ],
+      ref: MTW,
+      colour: null,
+    });
+    wires.sync(b);
+    wires.setPreview(null);
+    wires.sync(a);
+    const graph = (sc: Scene) => describeSceneGraph(sc.getObjectByName('wires') as Scene);
+    expect(graph(scene)).toStrictEqual(graph(fresh.scene));
+    expect(graph(scene).children?.map((c) => c.name)).toStrictEqual(['wires:mtw', 'wires:thhnThwn2', 'wires:sleeves']);
+  });
+
+  it('tints by connection id: each route keeps its own colours after a middle wire is deleted', () => {
+    const { scene, wires } = setup();
+    wires.setTint(perConnection);
+    wires.sync({ ...PARITY, connections: PARITY.connections.filter((c) => c.id !== 4) });
+    const graph = wires.describe();
+    for (const r of graph.routes) {
+      const c = Number(r.owner.slice(1));
+      expect(r.tint).toStrictEqual([hex(0xc0 + 2 * c), hex(0xc1 + 2 * c)]);
+    }
+    // The route after the deleted one shifted down in the buffer: read its first and last instance.
+    const mesh = lookMesh(scene, 'thhnThwn2');
+    const before = graph.routes.slice(0, 3).reduce((n, r) => n + r.segments, 0); // c1, c2, c3
+    const c5 = graph.routes[3];
+    expect(c5.owner).toBe('c5');
+    expect(instanceHex(mesh, before)).toBe(0xc0 + 10);
+    expect(instanceHex(mesh, before + c5.segments - 1)).toBe(0xc1 + 10);
+  });
+
+  it('keeps a tint through a pool reallocation and through a look freed and re-created', () => {
+    const MTW = { id: 'conductor.tallowmere-mtw-14', version: 1 };
+    const mixed: World = {
+      ...PARITY,
+      connections: PARITY.connections.map((c) => (c.id === 2 ? { ...c, ref: MTW } : c)),
+    };
+    const one = { ...PARITY, connections: PARITY.connections.slice(0, 1) };
+    const { scene, wires } = setup(one);
+    wires.setTint(perConnection);
+    wires.sync(PARITY); // the pool reallocates
+    const mesh = lookMesh(scene, 'thhnThwn2');
+    expect(instanceHex(mesh, 0)).toBe(0xc0 + 2);
+    expect(instanceHex(mesh, mesh.count - 1)).toBe(0xc1 + 2 * PARITY.connections.at(-1)!.id);
+    wires.sync(mixed);
+    const first = lookMesh(scene, 'mtw');
+    const firstMaterial = vi.spyOn(first.material as Material, 'dispose');
+    wires.sync(PARITY);
+    expect(scene.getObjectByName('wires:mtw')).toBeUndefined();
+    expect(firstMaterial).toHaveBeenCalledTimes(1);
+    expect(wires.resourceCount).toBe(3);
+    wires.sync(mixed);
+    const again = lookMesh(scene, 'mtw');
+    expect(again).not.toBe(first);
+    expect(again.material).not.toBe(first.material);
+    expect(again.geometry).not.toBe(first.geometry);
+    expect(wires.resourceCount).toBe(6);
+    expect(instanceHex(again, 0)).toBe(0xc0 + 4);
+    expect(instanceHex(again, again.count - 1)).toBe(0xc1 + 4);
+  });
+
+  it('draws a cable in the unknown colour while a tint is on (no reading for a jacket), its own colour after', () => {
+    const { wires } = setup(withCable(PARITY));
+    const cable = () => wires.describe().routes.find((r) => r.owner === 'k1');
+    expect(cable()).toMatchObject({ look: 'nmbJacket', colour: '#f2c200', tint: null });
+    wires.setTint(perConnection);
+    expect(cable()?.tint).toStrictEqual(['#777777', '#777777']);
+    wires.setTint(null);
+    expect(cable()?.tint).toBeNull();
+  });
+
+  it('draws a coil in the half of the route its point is in', () => {
+    const { scene, wires } = setup();
+    wires.setTint(perConnection);
+    const graph = wires.describe();
+    const i = graph.routes.findIndex((r) => r.coil !== null);
+    const route = graph.routes[i];
+    const baked = bakeWorldRoutes(PARITY, BUILTIN_CATALOG).routes[i];
+    const links = baked.points.length / 3 - 1;
+    const start = graph.routes.slice(0, i).reduce((n, r) => n + r.segments, 0);
+    const mesh = lookMesh(scene, 'thhnThwn2');
+    const c = Number(route.owner.slice(1));
+    // The coil hangs mid-way along the longest free span; every coil instance takes that point's half.
+    const halves = Array.from({ length: route.segments - links }, (_, k) => instanceHex(mesh, start + links + k));
+    expect(new Set(halves).size).toBe(1);
+    const half = halfAt(baked.points, baked.coil!.at);
+    expect(halves[0]).toBe(half === 0 ? 0xc0 + 2 * c : 0xc1 + 2 * c);
   });
 });

@@ -56,6 +56,28 @@ export function forEachRouteSegment(points: readonly number[], visit: SegmentVis
   return n;
 }
 
+/**
+ * Which half of a baked route (tenths) a point (tenths) is in: by the length along the route to the
+ * route vertex nearest it (the bake's coil point lies on the route). 0 is end `a`'s half.
+ */
+export function halfAt(points: readonly number[], at: readonly [number, number, number]): 0 | 1 {
+  const n = points.length / 3;
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < n; i++) {
+    const dx = points[3 * i] - at[0];
+    const dy = points[3 * i + 1] - at[1];
+    const dz = points[3 * i + 2] - at[2];
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  const along = polylineLengthMm(points.slice(0, 3 * (best + 1)));
+  return along < polylineLengthMm(points) / 2 ? 0 : 1;
+}
+
 /** Diameter of a drawn coil (mm; game-design: a hand-wound loop of panel wire, about 6 in). */
 export const COIL_DIAMETER_MM = 150;
 /** Most turns drawn, however long the coil (game-design: more reads as a blob, and costs instances). */

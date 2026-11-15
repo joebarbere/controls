@@ -1,4 +1,12 @@
-import { Box3Helper, InstancedMesh, Mesh, Scene, type BufferGeometry, type Material } from 'three/webgpu';
+import {
+  Box3Helper,
+  BufferAttribute,
+  InstancedMesh,
+  Mesh,
+  Scene,
+  type BufferGeometry,
+  type Material,
+} from 'three/webgpu';
 import { createWorld } from '@controls/save-format';
 import {
   fakeSnapshotView,
@@ -17,6 +25,16 @@ import { RenderLoop } from '../loop/render-loop';
 import { describeSceneGraph } from '../scene';
 import { ViewportController } from '../viewport-controller';
 import { SimOverlays, type SnapshotFeed } from './sim-overlays';
+
+// ADR 0010's r186 gotcha: no partial upload of an instanced attribute, ever (also an ESLint rule).
+let updateRange: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  updateRange = vi.spyOn(BufferAttribute.prototype, 'addUpdateRange');
+});
+afterEach(() => {
+  expect(updateRange).not.toHaveBeenCalled();
+  updateRange.mockRestore();
+});
 
 /** A canvas stand-in with live-listener tracking (the controller spec's pattern). */
 class TrackingTarget extends EventTarget {
@@ -593,6 +611,66 @@ describe('SimOverlays recolour the wire renderer’s conductors (D15)', () => {
     // Both off: back to the insulation colours.
     overlays.setOverlay('current', false);
     expect(controller.wireGraph().routes.map((r) => (r.tint === null ? r.colour : 'tinted'))).toStrictEqual(own);
+    controller.dispose();
+  });
+
+  it('tints a wire added while the voltage overlay is on (unknown until the netlist has it)', () => {
+    const bus = routingPanelBus(true);
+    const seven = { ...bus.state, connections: bus.state.connections.slice(0, 7) };
+    const canvas = new FakeCanvas();
+    const controller = new ViewportController(canvas as unknown as HTMLElement);
+    controller.syncWorld(seven);
+    const feed = new FakeFeed();
+    controller.overlays.attach(feed);
+    feed.publish(panelSnapshot());
+    controller.overlays.setOverlay('voltage', true);
+    expect(controller.wireGraph().routes).toHaveLength(7);
+    controller.syncWorld(bus.state); // wire 8 lands while the overlay is on
+    const routes = controller.wireGraph().routes;
+    expect(routes).toHaveLength(8);
+    expect(routes[7].tint).not.toBeNull();
+    // Not in this descriptor: drawn unknown, like wires 2–7, never in its insulation colour.
+    expect(routes[7].tint).toStrictEqual(routes[1].tint);
+    expect(controller.overlays.describe().conductors[7].volts).toStrictEqual(['unknown', 'unknown']);
+    controller.dispose();
+  });
+
+  it('draws a cable in the unknown colour while an overlay is on: no reading for its jacket (R1)', () => {
+    const { controller, feed, overlays } = panelSetup();
+    const free = (x: number) => ({
+      kind: 'free' as const,
+      positionMm: { x, y: 600, z: 40 },
+      entity: null,
+      fixture: null,
+      tool: null,
+    });
+    const world = routingPanelBus(true).state;
+    controller.syncWorld({
+      ...world,
+      cables: [
+        {
+          id: 1,
+          ref: { id: 'cable.sorrelby-nmb-12-2', version: 1 },
+          a: null,
+          b: null,
+          route: [free(0), free(400)],
+          lengthMm: 404,
+          tailsMm: { a: 0, b: 0 },
+          jacketStripMm: { a: 0, b: 0 },
+          label: null,
+          extensions: {},
+        },
+      ],
+      nextCableId: 2,
+    });
+    feed.publish(panelSnapshot());
+    const cable = () => controller.wireGraph().routes.find((r) => r.owner === 'k1');
+    expect(cable()?.tint).toBeNull();
+    overlays.setOverlay('current', true);
+    const unknownConductor = controller.wireGraph().routes[1].tint; // wire 2 is outside the netlist
+    expect(cable()?.tint).toStrictEqual(unknownConductor);
+    overlays.setOverlay('current', false);
+    expect(cable()?.tint).toBeNull();
     controller.dispose();
   });
 

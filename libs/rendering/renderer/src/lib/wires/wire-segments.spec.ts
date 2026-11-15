@@ -7,6 +7,7 @@ import {
   COIL_MAX_DRAWN_TURNS,
   COIL_SEGMENTS_PER_TURN,
   forEachRouteSegment,
+  halfAt,
   polylineLengthMm,
   SLEEVE_OFFSET_MM,
   sleevePlacements,
@@ -64,6 +65,13 @@ describe('wire segments', () => {
         expect(halves.join('')).toMatch(/^0*1*$/);
       }),
     );
+  });
+
+  it('finds the half of the route a point is in (a coil hangs in one half)', () => {
+    expect(halfAt(L, [200, 0, 0])).toBe(0); // 20 mm along of 150
+    expect(halfAt(L, [1000, 0, 0])).toBe(1); // the corner, 100 mm along
+    expect(halfAt(L, [1000, 450, 0])).toBe(1);
+    expect(halfAt([0, 0, 0, 1000, 0, 0, 2000, 0, 0], [900, 0, 0])).toBe(1); // nearest vertex exactly half way: b
   });
 
   it('draws a coil as rings from its hanging point, at most three turns', () => {

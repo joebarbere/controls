@@ -134,7 +134,8 @@ export function describeSceneGraph(object: Object3D): SceneGraphNode {
   }
   if (object instanceof Mesh) {
     const geometry = object.geometry as BufferGeometry;
-    if ((geometry.getAttribute('position')?.count ?? 0) > 0) {
+    // A wire mesh's geometry is a unit cylinder its instances are scaled from: its bounds say nothing.
+    if (!wires && (geometry.getAttribute('position')?.count ?? 0) > 0) {
       geometry.computeBoundingBox();
       const b = geometry.boundingBox;
       if (b)
