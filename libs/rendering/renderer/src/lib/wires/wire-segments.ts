@@ -162,3 +162,85 @@ export function sleevePlacements(points: readonly number[]): SleevePlacement[] {
   const b = alongMm(points, distance, true);
   return a && b ? [a, b] : [];
 }
+
+/**
+ * Above this |y| component a segment counts as vertical for {@link flatThinAxis} (game-design: about
+ * 25° from vertical; a sagging span's samples near its ends stay on the horizontal rule).
+ */
+export const FLAT_VERTICAL_Y = 0.9;
+
+/**
+ * The axis a flat cable's segment is thin along (the normal of its wide faces), for a segment along
+ * the unit direction (dx, dy, dz): world +y made perpendicular to the segment, so a horizontal run
+ * lies flat; a vertical run (|dy| > {@link FLAT_VERTICAL_Y}) uses the cable's **face axis**
+ * (`face`, from the domain's `cableFaceAxis`: the stud wall's across-the-wall `u` axis, the normal of
+ * a stud's side face), so a run stapled up a stud lies with its wide face against the stud, as NM-B
+ * is installed; with no stud wall it is world +z. A drawing abstraction (a free NM-B twists as it is
+ * pulled), deterministic, and the same frame `bakeCableEnds` fans tails across (`fanAxis`). Writes the
+ * unit axis into `out[0..2]`; allocation-free.
+ */
+export function flatThinAxis(
+  dx: number,
+  dy: number,
+  dz: number,
+  out: Float64Array | number[],
+  faceX = 0,
+  faceY = 0,
+  faceZ = 1,
+): void {
+  const vertical = Math.abs(dy) > FLAT_VERTICAL_Y;
+  const rx = vertical ? faceX : 0;
+  const ry = vertical ? faceY : 1;
+  const rz = vertical ? faceZ : 0;
+  const dot = rx * dx + ry * dy + rz * dz;
+  let nx = rx - dot * dx;
+  let ny = ry - dot * dy;
+  let nz = rz - dot * dz;
+  const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  if (length < 1e-9) {
+    // Exactly along the reference: any perpendicular will do (+x).
+    nx = 1;
+    ny = 0;
+    nz = 0;
+  } else {
+    nx /= length;
+    ny /= length;
+    nz /= length;
+  }
+  out[0] = nx;
+  out[1] = ny;
+  out[2] = nz;
+}
+
+/**
+ * Where a cable conductor's tail sleeve goes: one marker {@link SLEEVE_OFFSET_MM} back from the tail's
+ * far end (its terminal, or a stub's tip), at most a third of the way. `[]` for a tail with no segment.
+ */
+export function tailSleevePlacement(points: readonly number[]): SleevePlacement[] {
+  const distance = Math.min(SLEEVE_OFFSET_MM, polylineLengthMm(points) / 3);
+  const at = alongMm(points, distance, true);
+  return at ? [at] : [];
+}
+
+/**
+ * A cable's drawn jacket as one polyline (tenths): end `a`'s jacket stub reversed (from where the
+ * jacket ends to the entry), the baked run, then end `b`'s stub (entry to jacket end), with the
+ * shared entry points once. The run and the stubs come from the domain bake (`bakeWorldRoutes`,
+ * `bakeCableEnds`); this only joins them.
+ */
+export function joinCableJacket(
+  a: readonly number[] | null,
+  run: readonly number[],
+  b: readonly number[] | null,
+): number[] {
+  const out: number[] = [];
+  const push = (x: number, y: number, z: number) => {
+    const n = out.length;
+    if (n >= 3 && out[n - 3] === x && out[n - 2] === y && out[n - 1] === z) return;
+    out.push(x, y, z);
+  };
+  if (a) for (let i = a.length - 3; i >= 0; i -= 3) push(a[i], a[i + 1], a[i + 2]);
+  for (let i = 0; i + 2 < run.length; i += 3) push(run[i], run[i + 1], run[i + 2]);
+  if (b) for (let i = 0; i + 2 < b.length; i += 3) push(b[i], b[i + 1], b[i + 2]);
+  return out;
+}

@@ -12,3 +12,4 @@ export * from './lanes';
 export * from './bake';
 export * from './connector-entry';
 export * from './parity';
+export * from './tails';

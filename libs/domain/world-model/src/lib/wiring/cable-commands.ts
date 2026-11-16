@@ -18,6 +18,7 @@ import {
   type RoutePoint,
   routePoints,
 } from './checks';
+import { cableInFraming, checkCableSupport, maxStripAtBoxMm, MIN_SHEATH_IN_BOX } from './framing';
 
 /*
  * The cable commands (ADR 0015, "CableV3"): `cable.add`, `cable.strip`, `cable.delete`,
@@ -57,7 +58,8 @@ function cablePoints(world: World, catalog: Catalog, cable: Pick<Cable, 'a' | 'b
  * `cable.add {ref, a, b, route, lengthMm, tailsMm, tool}`: cuts a cable assembly to `lengthMm` with a
  * tool that can `cut` its largest conductor, from entry `a` to entry `b` (each an open entry with
  * room, or `null` for a free end resting on the route's first or last waypoint) with `tailsMm` left
- * past each entry. The cut must cover the route's floor plus both tails (`too-short`).
+ * past each entry. The cut must cover the route's floor plus both tails (`too-short`); a run in
+ * framing must be supported often enough (`staple-spacing`, `framing.ts`, F3.2 part 4).
  */
 export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<CableAddArgs, World>({
@@ -101,6 +103,9 @@ export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
       const points = routePoints(ends[0], args.route, ends[1]);
       const geometry = checkGeometry(state, catalog, points, args.lengthMm, args.tailsMm.a + args.tailsMm.b);
       if (geometry) return geometry;
+      const framing = cableInFraming(state, catalog, args.a, args.route, args.b);
+      const support = checkCableSupport(ends[0]?.positionMm ?? null, args.route, ends[1]?.positionMm ?? null, framing);
+      if (support) return support;
       const cable: Cable = {
         id,
         ref: { ...args.ref },
@@ -154,7 +159,8 @@ export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
 /**
  * `cable.strip {id, end, jacketMm, tool}`: strips the jacket at one end to `jacketMm` with a tool that
  * can `stripJacket` the cable's largest conductor. Only more (`cannot-unstrip`), and at most the tail
- * (`strip-too-long`).
+ * (`strip-too-long`); at a box end at least `MIN_SHEATH_IN_BOX` (6.35 mm, NFPA 70 Art. 314.17 by number)
+ * of jacket stays inside the box (`strip-too-long`, F3.2 part 4).
  */
 export function cableStripCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<CableStripArgs, World>({
@@ -177,6 +183,12 @@ export function cableStripCommand(catalog: Catalog = BUILTIN_CATALOG) {
       }
       if (jacketMm > cable.tailsMm[end]) {
         return fail('strip-too-long', `End ${end} of cable ${id} has a ${cable.tailsMm[end]} mm tail`);
+      }
+      if (cable[end] !== null && jacketMm > maxStripAtBoxMm(cable.tailsMm[end])) {
+        return fail(
+          'strip-too-long',
+          `At least ${MIN_SHEATH_IN_BOX.valueMm} mm of jacket stays inside the box at end ${end} of cable ${id}: strip at most ${maxStripAtBoxMm(cable.tailsMm[end])} mm`,
+        );
       }
       return swap(cable, { ...cable, jacketStripMm: { ...cable.jacketStripMm, [end]: jacketMm } });
     },
@@ -211,7 +223,8 @@ export const cableDelete = defineCommand<CableDeleteArgs, World>({
 
 /**
  * `cable.reroute {id, route}`: gives a cable a new route between the same ends, keeping its cut length
- * (the route's floor plus both tails must still fit, `too-short`). Its conductors follow it.
+ * (the route's floor plus both tails must still fit, `too-short`; supports as `cable.add`,
+ * `staple-spacing`). Its conductors follow it.
  */
 export function cableRerouteCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<CableRerouteArgs, World>({
@@ -230,6 +243,10 @@ export function cableRerouteCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (points === null) return fail('unknown-entry', `The catalogue can't place an end of cable ${id}`);
       const geometry = checkGeometry(state, catalog, points, cable.lengthMm, cable.tailsMm.a + cable.tailsMm.b);
       if (geometry) return geometry;
+      const a = cable.a === null ? null : points[0].positionMm;
+      const b = cable.b === null ? null : (points.at(-1) as RoutePoint).positionMm;
+      const support = checkCableSupport(a, route, b, cableInFraming(state, catalog, cable.a, route, cable.b));
+      if (support) return support;
       const copy = route.map((w) => ({ ...w, positionMm: { ...w.positionMm }, tool: w.tool && { ...w.tool } }));
       const after = { ...cable, route: copy };
       // A conductor landed at a free cable end reaches from the rest waypoint, which may have moved.

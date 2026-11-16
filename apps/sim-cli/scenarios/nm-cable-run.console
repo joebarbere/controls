@@ -1,0 +1,21 @@
+# F3.2 part 4: a box-to-panel NM-B run on the workshop stud wall, as console lines. Both this file
+# and the script nm-cable-run.ts must end at NM_CABLE_RUN_HASH (apps/sim-cli/src/nm-cable-run.spec.ts).
+#   pnpm sim run apps/sim-cli/scenarios/nm-cable-run.console --world content/levels/workshop.json
+# Its save is the frozen fixture fixtures/v3/ctrl/nm-cable-run-engine-7-catalog-2.ctrl (--save).
+#
+# Positions are what placeInWorld and snapWaypoint (@controls/world-model) give for the script's
+# cursor points; the cut length is routeDefaultLengthMm through the entry points and the staples.
+entity.place --ref.id box.tinmoor-2g-nm --ref.version 1 --positionMm.x -835 --positionMm.y -850 --positionMm.z -21 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn null
+enclosure.openEntry --id 1 --entry clamp-top-1 --tool.id tool.veltmark-sd-2 --tool.version 1
+entity.place --ref.id panel.pellmoor-din-400x500 --ref.version 1 --positionMm.x -1010 --positionMm.y 800 --positionMm.z -21 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn null
+enclosure.openEntry --id 2 --entry ko-bottom-2 --tool.id tool.veltmark-sd-2 --tool.version 1
+entity.place --ref.id tb.quennick-st4 --ref.version 1 --positionMm.x -819 --positionMm.y 951 --positionMm.z 1 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 2 --mountedOn.mount rail-2
+entity.place --ref.id tb.quennick-st4 --ref.version 1 --positionMm.x -813 --positionMm.y 951 --positionMm.z 1 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 2 --mountedOn.mount rail-2
+entity.place --ref.id tb.quennick-pe4 --ref.version 1 --positionMm.x -807 --positionMm.y 951 --positionMm.z 1 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --mountedOn.entity 2 --mountedOn.mount rail-2
+cable.add --ref.id cable.sorrelby-nmb-14-2 --ref.version 1 --a.entity 1 --a.entry clamp-top-1 --b.entity 2 --b.entry ko-bottom-2 --route [{"kind":"staple","positionMm":{"x":-835,"y":-500,"z":-65},"entity":null,"fixture":"stud-wall","tool":null},{"kind":"staple","positionMm":{"x":-835,"y":600,"z":-65},"entity":null,"fixture":"stud-wall","tool":null}] --lengthMm 2303 --tailsMm.a 200 --tailsMm.b 400 --tool.id tool.veltmark-dc-8 --tool.version 1
+cable.strip --id 1 --end a --jacketMm 150 --tool.id tool.veltmark-ws-nm12 --tool.version 1
+cable.strip --id 1 --end b --jacketMm 300 --tool.id tool.veltmark-ws-nm12 --tool.version 1
+wire.land --id 1 --end b --at.entity 3 --at.terminal b --at.termination.method screw --at.termination.strip.tool.id tool.veltmark-ws-nm12 --at.termination.strip.tool.version 1 --at.termination.strip.hole sol14 --at.termination.strip.lengthMm 9 --at.termination.accessory null --at.termination.clamp.tool.id tool.calderyn-ts-03 --at.termination.clamp.tool.version 1 --at.termination.clamp.torqueNm 0.6
+wire.land --id 2 --end b --at.entity 4 --at.terminal b --at.termination.method screw --at.termination.strip.tool.id tool.veltmark-ws-nm12 --at.termination.strip.tool.version 1 --at.termination.strip.hole sol14 --at.termination.strip.lengthMm 9 --at.termination.accessory null --at.termination.clamp.tool.id tool.calderyn-ts-03 --at.termination.clamp.tool.version 1 --at.termination.clamp.torqueNm 0.6
+wire.land --id 3 --end b --at.entity 5 --at.terminal b --at.termination.method screw --at.termination.strip.tool.id tool.veltmark-ws-nm12 --at.termination.strip.tool.version 1 --at.termination.strip.hole sol14 --at.termination.strip.lengthMm 9 --at.termination.accessory null --at.termination.clamp.tool.id tool.calderyn-ts-03 --at.termination.clamp.tool.version 1 --at.termination.clamp.torqueNm 0.6
+world.hash

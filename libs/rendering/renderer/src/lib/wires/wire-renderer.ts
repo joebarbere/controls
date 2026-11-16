@@ -12,10 +12,17 @@
  *   r186 that is what frees a large mesh's instance buffers (`instancing/instanced-pool`). Every write is a full
  *   `needsUpdate` upload, never `addUpdateRange` (three r186, rendering caveats). Draw calls follow
  *   the number of looks in use, never the number of wires.
+ * - **Cables** (F3.2 part 4) are drawn flat, at their jacket's width × height (`flatThinAxis`), from
+ *   where the jacket ends in one box, along the baked run, to where it ends in the other
+ *   (`bakeCableEnds`' jacket stubs joined to the run); each conductor's **tail** is its own drawn
+ *   route (owner `c<id>`, in its conductor's look and colour) from the jacket end to its terminal, or
+ *   a stub as long as the strip. Tails are tinted from their own conductor's end; the jacket stays
+ *   the tint's unknown colour.
  * - **Coils** (a cut much longer than its route, ADR 0017 §7) are drawn as rings at the bake's coil
  *   point, in the same look mesh; **labels** (`connection.label`, `cable.label`) as two sleeve
- *   markers per labelled route in one more instanced mesh, the text as data on it (`userData.wires`,
- *   the scene-graph snapshot) like a device's label plate: no canvas text.
+ *   markers per labelled route (one, near the terminal, per labelled cable conductor's tail) in one
+ *   more instanced mesh, the text as data on it (`userData.wires`, the scene-graph snapshot) like a
+ *   device's label plate: no canvas text.
  * - **Overlays recolour conductor instances** (D15): {@link WireRenderer.setTint} takes a
  *   {@link WireTint} that gives each single conductor's end-`a` and end-`b` halves a colour (or `-1`
  *   for its own). The debug overlays drive it; the heat overlay (F3.6 part 3) will too.
@@ -47,7 +54,10 @@ import {
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import { mm } from '@controls/units';
 import {
+  bakeCableEnds,
   bakeWorldRoutes,
+  cableFaceAxis,
+  type BakedCableEnd,
   type BakedRoute,
   type CatalogRef,
   type ConductorColour,
@@ -61,11 +71,14 @@ import { cableAppearance, conductorAppearance, hexString, lookFinish, type WireA
 import {
   coilDrawnTurns,
   coilPolylineMm,
+  flatThinAxis,
   forEachRouteSegment,
   halfAt,
+  joinCableJacket,
   SLEEVE_EXTRA_DIAMETER_MM,
   SLEEVE_LENGTH_MM,
   sleevePlacements,
+  tailSleevePlacement,
 } from './wire-segments';
 
 /** Colours for the halves of single conductors (D15): `0xrrggbb`, or `-1` to draw the conductor's own. */
@@ -73,9 +86,9 @@ export interface WireTint {
   /** The colour of connection `connection`'s half at end `end`. Called once per conductor and end per refresh. */
   colour(connection: number, end: 'a' | 'b'): number;
   /**
-   * What a cable is drawn in while the tint is on (`0xrrggbb`): the overlay's "unknown" colour, since
-   * the overlays have no reading for a jacket (its conductors are coloured from F3.2 part 4). Without
-   * it a yellow NM-B jacket would read as a value on the overlay's scale.
+   * What a cable's jacket is drawn in while the tint is on (`0xrrggbb`): the overlay's "unknown"
+   * colour, since the overlays have no reading for a jacket (its conductors' tails are tinted by their
+   * own records, F3.2 part 4). Without it a yellow NM-B jacket would read as a value on the scale.
    */
   readonly unknownColour: number;
 }
@@ -102,6 +115,10 @@ export interface WireGraph {
     /** sRGB `#rrggbb`: its insulation (or jacket) colour, before any tint. */
     readonly colour: string;
     readonly diameterMm: number;
+    /** A flat cable's section `[width, height]` (mm); absent when round. */
+    readonly flatMm?: readonly [number, number];
+    /** A cable conductor's tail: the cable end it is at; absent for a whole route. */
+    readonly tail?: 'a' | 'b';
     readonly segments: number;
     /** First and last baked point (mm, to 0.1 mm). */
     readonly fromMm: readonly [number, number, number];
@@ -151,8 +168,12 @@ const HIGHLIGHT_SCALE = 1.8;
 /** One drawn route: what it is, how it looks, and where its instances are. */
 interface DrawnRoute {
   readonly baked: BakedRoute;
-  /** The single conductor's id (for a tint), or `null` for a cable. */
+  /** The conductor's id (for a tint), or `null` for a cable's jacket. */
   readonly connection: number | null;
+  /** A cable conductor's tail: which cable end it is at (its whole tint is that end's); `null` otherwise. */
+  readonly tailEnd: 'a' | 'b' | null;
+  /** A flat cable's face axis on vertical runs (`cableFaceAxis`), or `null` (world +z). */
+  readonly face: { readonly x: number; readonly y: number; readonly z: number } | null;
   readonly appearance: WireAppearance;
   readonly label: string | null;
   segments: number;
@@ -213,6 +234,9 @@ export class WireRenderer {
   private readonly s = new Vector3();
   private readonly q = new Quaternion();
   private readonly colour = new Color();
+  private readonly bx = new Vector3();
+  private readonly bz = new Vector3();
+  private readonly thin = new Float64Array(3);
 
   constructor(
     private readonly scene: Scene,
@@ -316,8 +340,9 @@ export class WireRenderer {
     let changed = false;
     for (let r = 0; r < this.routes.length; r++) {
       const c = this.routes[r].connection;
-      const a = this.tintColour(c, 'a');
-      const b = this.tintColour(c, 'b');
+      const tail = this.routes[r].tailEnd;
+      const a = this.tintColour(c, tail ?? 'a');
+      const b = this.tintColour(c, tail ?? 'b');
       if (a !== this.tintA[r] || b !== this.tintB[r]) changed = true;
       this.tintA[r] = a;
       this.tintB[r] = b;
@@ -390,6 +415,10 @@ export class WireRenderer {
           look: r.appearance.look,
           colour: hexString(r.appearance.colour),
           diameterMm: round(r.appearance.diameterMm),
+          ...(r.appearance.flat && {
+            flatMm: [round(r.appearance.flat.widthMm), round(r.appearance.flat.heightMm)] as const,
+          }),
+          ...(r.tailEnd && { tail: r.tailEnd }),
           segments: r.segments,
           fromMm: point(r.baked.points, 0),
           toMm: point(r.baked.points, Math.max(0, n - 1)),
@@ -443,11 +472,21 @@ export class WireRenderer {
 
   // --- baking ----------------------------------------------------------------------------------
 
-  /** The world's baked routes with their looks and labels (bake order: conductors, then cables, by id). */
+  /**
+   * The world's baked routes with their looks and labels (bake order: conductors, then cables, by id),
+   * each cable's jacket joined to its end stubs and followed by its conductors' tails (end `a`'s, then
+   * end `b`'s, in assembly order).
+   */
   private drawnRoutes(world: World): DrawnRoute[] {
     const { routes } = bakeWorldRoutes(world, this.catalog);
     const connections = new Map(world.connections.map((c) => [c.id, c]));
     const cables = new Map(world.cables.map((c) => [c.id, c]));
+    const ends = new Map<number, BakedCableEnd[]>();
+    for (const end of bakeCableEnds(world, this.catalog)) {
+      const list = ends.get(end.cable) ?? [];
+      list.push(end);
+      ends.set(end.cable, list);
+    }
     const out: DrawnRoute[] = [];
     for (const baked of routes) {
       const id = Number(baked.owner.slice(1));
@@ -457,20 +496,41 @@ export class WireRenderer {
         out.push({
           baked,
           connection: c.id,
+          tailEnd: null,
+          face: null,
           appearance: conductorAppearance(this.catalog, c.ref, c.colour),
           label: c.label,
           segments: 0,
         });
-      } else {
-        const k = cables.get(id);
-        if (!k) continue;
-        out.push({
-          baked,
-          connection: null,
-          appearance: cableAppearance(this.catalog, k.ref),
-          label: k.label,
-          segments: 0,
-        });
+        continue;
+      }
+      const k = cables.get(id);
+      if (!k) continue;
+      const cableEnds = ends.get(id) ?? [];
+      const stub = (end: 'a' | 'b') => cableEnds.find((e) => e.end === end)?.jacket ?? null;
+      out.push({
+        baked: { ...baked, points: joinCableJacket(stub('a'), baked.points, stub('b')) },
+        connection: null,
+        tailEnd: null,
+        face: cableFaceAxis(world, k),
+        appearance: cableAppearance(this.catalog, k.ref),
+        label: k.label,
+        segments: 0,
+      });
+      for (const end of cableEnds) {
+        for (const tail of end.tails) {
+          const c = connections.get(tail.connection);
+          if (!c || tail.points.length < 6) continue;
+          out.push({
+            baked: { owner: `c${c.id}`, points: tail.points, coil: null },
+            connection: c.id,
+            tailEnd: end.end,
+            face: null,
+            appearance: conductorAppearance(this.catalog, c.ref, c.colour),
+            label: c.label,
+            segments: 0,
+          });
+        }
       }
     }
     return out;
@@ -526,9 +586,12 @@ export class WireRenderer {
       if (!layer) return;
       const radius = mm(r.appearance.diameterMm / 2);
       const radiusMm = r.appearance.diameterMm / 2;
+      const flat = r.appearance.flat;
+      const face = r.face;
       let k = next.get(r.appearance.look) ?? 0;
       const write = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, half: 0 | 1) => {
-        this.segmentMatrix(ax, ay, az, bx, by, bz, radius);
+        if (flat) this.flatSegmentMatrix(ax, ay, az, bx, by, bz, flat.widthMm, flat.heightMm, face);
+        else this.segmentMatrix(ax, ay, az, bx, by, bz, radius);
         layer.pool.mesh.setMatrixAt(k, this.m);
         layer.route[k] = ri;
         layer.half[k] = half;
@@ -567,7 +630,10 @@ export class WireRenderer {
     this.applyScene();
   }
 
-  /** A route's tint colour at one end: its conductor's, the unknown colour for a cable, or −1 (no tint). */
+  /**
+   * A route's tint colour at one end: its conductor's (a cable conductor's tail asks for its own cable
+   * end for both halves), the unknown colour for a cable's jacket, or −1 (no tint).
+   */
   private tintColour(connection: number | null, end: 'a' | 'b'): number {
     if (this.tint === null) return -1;
     return connection === null ? this.tint.unknownColour : this.tint.colour(connection, end);
@@ -578,8 +644,9 @@ export class WireRenderer {
     if (this.tint === null) return;
     for (let r = 0; r < this.routes.length; r++) {
       const c = this.routes[r].connection;
-      this.tintA[r] = this.tintColour(c, 'a');
-      this.tintB[r] = this.tintColour(c, 'b');
+      const tail = this.routes[r].tailEnd;
+      this.tintA[r] = this.tintColour(c, tail ?? 'a');
+      this.tintB[r] = this.tintColour(c, tail ?? 'b');
     }
   }
 
@@ -594,10 +661,16 @@ export class WireRenderer {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
-  /** Two sleeve markers per labelled route, in one instanced mesh; the labels as data on it. */
+  /**
+   * Two sleeve markers per labelled route (one near the terminal for a cable conductor's tail), in one
+   * instanced mesh; the labels as data on it.
+   */
   private writeSleeves(): void {
     const labelled = this.routes.filter((r) => r.label !== null);
-    const placements = labelled.map((r) => ({ r, at: sleevePlacements(r.baked.points) }));
+    const placements = labelled.map((r) => ({
+      r,
+      at: r.tailEnd === null ? sleevePlacements(r.baked.points) : tailSleevePlacement(r.baked.points),
+    }));
     const count = placements.reduce((n, p) => n + p.at.length, 0);
     if (count === 0) {
       this.disposeSleeves();
@@ -639,7 +712,7 @@ export class WireRenderer {
     pool.instanceMatrix.needsUpdate = true;
     if (pool.instanceColor) pool.instanceColor.needsUpdate = true;
     pool.userData['wires'] = {
-      labels: labelled.map((r) => `${r.baked.owner} ${r.label as string}`),
+      labels: labelled.map((r) => `${r.baked.owner}${r.tailEnd ? `:${r.tailEnd}` : ''} ${r.label as string}`),
       instances: count,
     };
   }
@@ -743,6 +816,51 @@ export class WireRenderer {
     this.m.compose(this.p, this.q, this.s.set(radius, length + overlap * radius, radius));
   }
 
+  /**
+   * `this.m` = the unit cylinder stood on the segment from a to b (mm) as a flat cable: its local x
+   * (wide) across the run and its local z (thin) along `flatThinAxis`, scaled to half the section
+   * (`widthMm` × `heightMm`), its vertical runs facing `face` (the stud wall's `u`), lengthened by half the height so a bend has no gap. Right-handed
+   * (x × y = z), so the faces keep their winding. Allocation-free.
+   */
+  private flatSegmentMatrix(
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    widthMm: number,
+    heightMm: number,
+    face: { readonly x: number; readonly y: number; readonly z: number } | null = null,
+  ): void {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dz = bz - az;
+    const lengthMm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (lengthMm === 0) {
+      this.segmentMatrix(ax, ay, az, bx, by, bz, mm(Math.max(widthMm, heightMm) / 2));
+      return;
+    }
+    const ux = dx / lengthMm;
+    const uy = dy / lengthMm;
+    const uz = dz / lengthMm;
+    const n = this.thin;
+    if (face) flatThinAxis(ux, uy, uz, n, face.x, face.y, face.z);
+    else flatThinAxis(ux, uy, uz, n);
+    // wide = along × thin
+    const wx = uy * n[2] - uz * n[1];
+    const wy = uz * n[0] - ux * n[2];
+    const wz = ux * n[1] - uy * n[0];
+    const along = mm(lengthMm + heightMm / 2);
+    const halfW = mm(widthMm / 2);
+    const halfH = mm(heightMm / 2);
+    this.bx.set(wx * halfW, wy * halfW, wz * halfW);
+    this.d.set(ux * along, uy * along, uz * along);
+    this.bz.set(n[0] * halfH, n[1] * halfH, n[2] * halfH);
+    this.m.makeBasis(this.bx, this.d, this.bz);
+    this.m.setPosition(mm((ax + bx) / 2), mm((ay + by) / 2), mm((az + bz) / 2));
+  }
+
   private disposeLook(look: string): void {
     const layer = this.looks.get(look);
     if (!layer) return;
@@ -830,6 +948,12 @@ function sameRoutes(a: readonly DrawnRoute[], b: readonly DrawnRoute[]): boolean
       p.baked.owner !== q.baked.owner ||
       p.label !== q.label ||
       p.connection !== q.connection ||
+      p.tailEnd !== q.tailEnd ||
+      p.face?.x !== q.face?.x ||
+      p.face?.y !== q.face?.y ||
+      p.face?.z !== q.face?.z ||
+      p.appearance.flat?.widthMm !== q.appearance.flat?.widthMm ||
+      p.appearance.flat?.heightMm !== q.appearance.flat?.heightMm ||
       p.appearance.look !== q.appearance.look ||
       p.appearance.colour !== q.appearance.colour ||
       p.appearance.diameterMm !== q.appearance.diameterMm ||

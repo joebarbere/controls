@@ -1,6 +1,17 @@
 import { LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { WIRING_TEST_CATALOG } from '../testing/wiring-catalog';
-import { at, BIT, type Doc, FERRULE, LEAD, termination, wiredWorldDoc as base, WIRE } from '../testing/wired-world';
+import {
+  at,
+  BIT,
+  BIT_29,
+  BIT_38,
+  type Doc,
+  FERRULE,
+  LEAD,
+  termination,
+  wiredWorldDoc as base,
+  WIRE,
+} from '../testing/wired-world';
 import { BENCH_STUD_WALL } from '../testing/wiring-bench';
 import { checkWorldReferences } from './devices';
 
@@ -96,7 +107,9 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
         transform: { positionMm: at(0, 900, -2000), orientationMdeg: { yaw: 90_000, pitch: 0, roll: 0 } },
       }),
     );
-    expect(check(quarter)).toStrictEqual([]);
+    // The turn is fine (exact integer geometry); it only swings the split's L2 out of the cable's
+    // stripped reach (F3.2 part 4's load check), which the cable's own tests cover.
+    expect(messages(quarter)).toStrictEqual(["connections[1].a: Out of reach of the cable's stripped tail"]);
   });
 
   it("a conductor's colour is in the colour table and one its entry is made in", () => {
@@ -237,5 +250,53 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
       });
     expect(check(cut(1644))).toStrictEqual([]);
     expect(messages(cut(1643))).toStrictEqual(['cables[0].lengthMm: Shorter than its route and tails']);
+  });
+
+  // F3.2 part 4 (save-format-guardian 3): the load check refuses what the commands refuse.
+  it('a bore waypoint within the bored-hole limit', () => {
+    const bore = (tool: object) =>
+      edit((d) => {
+        d['fixtures'] = [BENCH_STUD_WALL];
+        Object.assign(d.connections[0], {
+          route: [{ kind: 'bore', positionMm: at(50, 1150, -1700), tool, entity: null, fixture: 'studs' }],
+        });
+      });
+    expect(check(bore(BIT_29))).toStrictEqual([]);
+    expect(messages(bore(BIT_38))).toStrictEqual([
+      'connections[0].route[0].tool: The bit is over the bored-hole limit (35.56 mm)',
+    ]);
+  });
+
+  it('a framing run within the NM support spacing (staple-spacing)', () => {
+    // A staple at (500, 1100, -1800) on the stud wall is about 561 mm from ko1 at (1025, 1000, -1970),
+    // over 304.8; one at (900, 1000, -1900) is about 143 mm away.
+    const stapled = (x: number, y: number, z: number) =>
+      edit((d) => {
+        d['fixtures'] = [BENCH_STUD_WALL];
+        const staple = { kind: 'staple', positionMm: at(x, y, z), entity: null, fixture: 'studs', tool: null };
+        Object.assign(d.cables[0], { route: [...(d.cables[0]['route'] as object[]), staple] });
+      });
+    expect(check(stapled(900, 1000, -1900))).toStrictEqual([]);
+    expect(messages(stapled(500, 1100, -1800))).toStrictEqual([
+      'cables[0].route: NM cable supported farther apart than the support spacing',
+    ]);
+  });
+
+  it('at least 6.35 mm of jacket inside a box (Art. 314.17)', () => {
+    const strip = (b: number) => edit((d) => Object.assign(d.cables[0], { jacketStripMm: { a: 150, b } }));
+    expect(check(strip(293))).toStrictEqual([]);
+    expect(messages(strip(294))).toStrictEqual([
+      'cables[0].jacketStripMm.b: Less than the minimum sheath left inside the box',
+    ]);
+  });
+
+  it("a landed cable conductor within the cable's stripped reach", () => {
+    // End a is free: the black's L2 reaches from the rest waypoint by the whole 300 mm tail; 100 is short.
+    const tail = (a: number) =>
+      edit((d) =>
+        Object.assign(d.cables[0], { tailsMm: { a, b: 300 }, jacketStripMm: { a: Math.min(a, 150), b: 150 } }),
+      );
+    expect(check(tail(300))).toStrictEqual([]);
+    expect(messages(tail(100))).toStrictEqual(["connections[1].a: Out of reach of the cable's stripped tail"]);
   });
 });

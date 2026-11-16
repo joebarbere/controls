@@ -291,6 +291,8 @@ if (routed.ok)
 
 Either way the log holds the explicit waypoints, so a replay never routes; a console file using `--route auto` re-pins its hashes if the router changes. `libs/domain/scripting-api/src/lib/routing.spec.ts` is the worked example (real catalogue: two ducts, a riser and six screw blocks).
 
+**Cables in a stud wall (F3.2 part 4).** `apps/sim-cli/scenarios/nm-cable-run.ts` is the worked example: a box on the workshop stud wall feeds a DIN panel with 14/2 NM-B, its staples snapped with `snapWaypoint(world, catalog, cursor, { kinds: ['staple'] })` (as the routing gesture snaps them), its length from `routeDefaultLengthMm(points, undefined, tailsMm)` through the entry points (`checkCableEnd`), then `cable.strip` at both ends and one `wire.land` per conductor. A framing run (any `staple` or `bore` waypoint) is supported within 304.8 mm of each box and every 1371.6 mm, or `cable.add` refuses `staple-spacing`; a cable conductor lands only within the stripped length of where the jacket ends (`cableJacketEnd`), so strip enough first (`tail-too-short`). `apps/sim-cli/src/nm-cable-run.spec.ts` pins its hash.
+
 ## Time and probes (F2.3a)
 
 The engine follows every command, so a script can let time pass and measure the circuit it built. A worked example (`apps/sim-cli/scenarios/sim-step.console` is the console-file version):

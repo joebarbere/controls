@@ -15,6 +15,8 @@ import { fixtureSpec } from './fixtures';
 import { coversChord, routeFloorMm } from './routing/floor';
 import { waypointHostProblem } from './routing/hosts';
 import { entityPointMm, isAxisAligned } from './snap/quarter-turn';
+import { checkTailReach, landedPoint } from './wiring/checks';
+import { boredHoleTooLarge, BORED_HOLE_MAX, cableInFraming, maxStripAtBoxMm, supportGap } from './wiring/framing';
 import { checkMount } from './wiring/mounting';
 import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
 
@@ -44,7 +46,8 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  * - each landed end's terminal exists (props have none); a termination's method is one of that
  *   terminal's methods, and its accessory (if the catalogue knows it) is an accessory the method takes;
  * - a conductor's colour is in the colour table and one its entry is made in;
- * - a bore waypoint's tool (if known) is a tool that can bore; a hosted waypoint's known host and a
+ * - a bore waypoint's tool (if known) is a tool that can bore, within the bored-hole limit
+ *   (`BORED_HOLE_MAX`, F3.2 part 4); a hosted waypoint's known host and a
  *   known device with a landed end are axis-aligned;
  * - a conductor landed at both ends is at least as long as the straight line between them
  *   (`lengthMm² ≥ Δx² + Δy² + Δz²`, exact integers).
@@ -54,7 +57,11 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  *   conductor entry and colour;
  * - each end is an open entry of an enclosure with room for it (`maxCables`), axis-aligned;
  * - the cut length covers the route's floor plus both tails (`routeFloorMm` through the entry points
- *   and waypoints, ADR 0015).
+ *   and waypoints, ADR 0015);
+ * - (F3.2 part 4, as the commands refuse them) a run in framing is supported within the spacing
+ *   (`supportGap`, `staple-spacing`); at least 6.35 mm of jacket stays inside each box
+ *   (`maxStripAtBoxMm`); each landed conductor is within its stripped reach (`checkTailReach`). These
+ *   need the assembly and the end geometry, so they run only where the catalogue knows both.
  *
  * Tool hole and die ids aren't stored in the world (they are `wire.add`/`wire.land` arguments), so
  * they are checked by those commands, not here.
@@ -271,6 +278,8 @@ function checkRouteReferences(
       const tool = catalog.tool(waypoint.tool);
       if (tool && !tool.capabilities.some((c) => c.step === 'bore')) {
         add(`${at}[${index}].tool`, 'The tool cannot bore');
+      } else if (tool && tool.boreDiameterMm !== null && boredHoleTooLarge(tool.boreDiameterMm)) {
+        add(`${at}[${index}].tool`, `The bit is over the bored-hole limit (${BORED_HOLE_MAX.valueMm} mm)`);
       }
     }
     if (waypoint.entity !== null) {
@@ -363,6 +372,33 @@ function checkCable(world: World, cable: Cable, at: string, catalog: Catalog, ad
   checkRouteReferences(world, cable.route, `${at}.route`, catalog, add);
   if (geometryKnown && routeFloorMm(points) + cable.tailsMm.a + cable.tailsMm.b > cable.lengthMm) {
     add(`${at}.lengthMm`, 'Shorter than its route and tails');
+  }
+  if (!geometryKnown || !assembly) return;
+  // F3.2 part 4: the framing, sheath and reach rules the commands apply.
+  const aPoint = cable.a === null ? null : points[0];
+  const bPoint = cable.b === null ? null : (points.at(-1) as PositionMm);
+  const framing = cableInFraming(world, catalog, cable.a, cable.route, cable.b);
+  if (supportGap(aPoint, cable.route, bPoint, { framing }) !== null) {
+    add(`${at}.route`, 'NM cable supported farther apart than the support spacing');
+  }
+  for (const end of ['a', 'b'] as const) {
+    if (cable[end] !== null && cable.jacketStripMm[end] > maxStripAtBoxMm(cable.tailsMm[end])) {
+      add(`${at}.jacketStripMm.${end}`, 'Less than the minimum sheath left inside the box');
+    }
+  }
+  for (const connection of world.connections) {
+    if (connection.cable?.id !== cable.id) continue;
+    for (const end of ['a', 'b'] as const) {
+      const landed = connection[end];
+      const point = landed && landedPoint(world, catalog, landed);
+      if (!point) continue;
+      if (checkTailReach(world, catalog, cable, end, point) !== null) {
+        add(
+          `connections[${world.connections.indexOf(connection)}].${end}`,
+          "Out of reach of the cable's stripped tail",
+        );
+      }
+    }
   }
 }
 

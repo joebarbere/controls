@@ -40,7 +40,29 @@ interface Occupant {
   readonly route: readonly Waypoint[];
 }
 
-/** An occupant's width and height in tenths of mm: a conductor's overall diameter, a cable's jacket. */
+/**
+ * How much wider a stranded conductor is than the solid one of the same area (geometry): a concentric
+ * lay of `n = 1 + 3k(k + 1)` round strands in `k` layers lies `2k + 1` strands across, each of
+ * diameter `d / √n`, so the bundle is `(2k + 1) / √n` times `d`: 3/√7 ≈ 1.134 for 7 strands, 5/√19 ≈
+ * 1.147 for 19, 7/√37 ≈ 1.151 for 37 (the 7-strand factor is the one `resolveTermination`'s nick cap
+ * uses, ADR 0018 implementation note 8). Any other count is a bunched or rope lay (MTW's 16 and 26
+ * strands), whose fine strands pack closer than the next full concentric layer would suggest: it is
+ * capped at the 7-strand factor (`(2k + 1)/√n` would draw 26 strands 1.37× wide). Compact stranding
+ * (pressed nearly round, narrower still) isn't marked in the catalogue and is drawn as concentric.
+ * Both are follow-ups for a catalogue flag. 1 for a solid conductor. Drawing only.
+ */
+export function strandedDiameterFactor(strandCount: number): number {
+  const seven = 3 / Math.sqrt(7);
+  if (strandCount <= 1) return 1;
+  let k = 1;
+  while (1 + 3 * k * (k + 1) < strandCount) k++;
+  return 1 + 3 * k * (k + 1) === strandCount ? (2 * k + 1) / Math.sqrt(strandCount) : seven;
+}
+
+/**
+ * An occupant's width and height in tenths of mm: a conductor's overall diameter (its metal, stranded
+ * as {@link strandedDiameterFactor}, plus twice its insulation and jacket walls), a cable's jacket.
+ */
 export function laneSizeTenths(
   catalog: Catalog,
   kind: 'cable' | 'conductor',
@@ -57,7 +79,8 @@ export function laneSizeTenths(
   const spec = catalog.device(ref)?.conductor;
   const bare = spec ? gaugeRow(spec.awg)?.diameterMm : undefined;
   if (!spec || bare === undefined) return { width: DEFAULT_LANE_WIDTH_TENTHS, height: DEFAULT_LANE_WIDTH_TENTHS };
-  const diameter = bare + 2 * ((spec.insulationThicknessMm ?? 0) + (spec.jacketThicknessMm ?? 0));
+  const metal = spec.stranding === 'stranded' ? bare * strandedDiameterFactor(spec.strandCount) : bare;
+  const diameter = metal + 2 * ((spec.insulationThicknessMm ?? 0) + (spec.jacketThicknessMm ?? 0));
   const d = Math.ceil(diameter * BAKE_UNITS_PER_MM);
   return { width: d, height: d };
 }
