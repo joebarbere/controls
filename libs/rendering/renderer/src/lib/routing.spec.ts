@@ -195,6 +195,37 @@ describe('terminal occlusion by its own device', () => {
     expect(controller.terminalAt(b.x, b.y).hit).toStrictEqual({ entity: rowA(0), terminal: 'b' });
     controller.dispose();
   });
+
+  it("a wire nut's splice terminal, at its open end, is pickable from the side and below, not through its tip", () => {
+    // A large nut (24 × 34 × 24 mm) alone at (500, 0, 0), standing up +y: the splice entry is the
+    // centre of its open end, (512, 0, 12). Its skirt is at most 12 mm in front of that point from the
+    // side, inside the 15 mm own-device tolerance; from above, the whole 34 mm shell is in the way.
+    const bus = routingPanelBus();
+    const placed = bus.exec('entity.place', {
+      ref: { id: 'splice.corvelle-tw-l', version: 1 },
+      positionMm: { x: 500, y: 0, z: 0 },
+    });
+    expect(placed.ok).toBe(true);
+    const nut = bus.state.entities[bus.state.entities.length - 1].id;
+    const world: World = { ...bus.state, entities: bus.state.entities.filter((e) => e.id === nut), connections: [] };
+    const { controller } = setup(world);
+    const orbit = (controller as unknown as { orbit: { target: Vector3; update(): boolean } }).orbit;
+    const lookFrom = (x: number, y: number, z: number) => {
+      controller.camera.position.set(x, y, z);
+      orbit.target.set(0.512, 0.0, 0.012);
+      orbit.update();
+      controller.camera.updateMatrixWorld();
+      const p = controller.projectTerminal({ entity: nut, terminal: 'splice' }) as { x: number; y: number };
+      return controller.terminalAt(p.x, p.y).hit;
+    };
+    const splice = { entity: nut, terminal: 'splice' };
+    expect(lookFrom(0.512, 0, 0.3)).toStrictEqual(splice); // head-on, level with the mouth
+    expect(lookFrom(0.512, 0.15, 0.3)).toStrictEqual(splice); // from the front, about 27° above
+    expect(lookFrom(0.7, 0.05, 0.25)).toStrictEqual(splice); // from the front right, a little above
+    expect(lookFrom(0.512, -0.25, 0.1)).toStrictEqual(splice); // from below, into the mouth
+    expect(lookFrom(0.513, 0.3, 0.013)).toBeNull(); // straight down through its tip
+    controller.dispose();
+  });
 });
 
 describe('keyboard terminal cycling (ADR 0010 decision 4)', () => {

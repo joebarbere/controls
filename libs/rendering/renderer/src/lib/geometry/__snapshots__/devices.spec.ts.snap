@@ -1341,3 +1341,164 @@ exports[`device recipes in the scene (scene-graph snapshot) > draws each placed 
   "visible": true,
 }
 `;
+
+exports[`wire nut recipes > match the geometry snapshot (bounds, vertices and slots per size) > wire nut recipes 1`] = `
+[
+  {
+    "boundsMm": [
+      0,
+      -0.3,
+      0,
+      16,
+      22,
+      16,
+    ],
+    "id": "splice.corvelle-tw-s",
+    "slots": [
+      [
+        "body",
+        1656,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 669,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.3,
+      0,
+      20,
+      28,
+      20,
+    ],
+    "id": "splice.corvelle-tw-m",
+    "slots": [
+      [
+        "body",
+        1656,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 669,
+  },
+  {
+    "boundsMm": [
+      0,
+      -0.3,
+      0,
+      24,
+      34,
+      24,
+    ],
+    "id": "splice.corvelle-tw-l",
+    "slots": [
+      [
+        "body",
+        1656,
+      ],
+      [
+        "opening",
+        288,
+      ],
+    ],
+    "vertices": 669,
+  },
+]
+`;
+
+exports[`wire nuts in the scene > draws three nuts (scene-graph snapshot) and disposes every recipe exactly once at teardown > wire nuts 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        16,
+        22,
+        16,
+      ],
+      "label": "Corvelle TW-S",
+      "name": "entity-1",
+      "positionMm": [
+        100,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        20,
+        28,
+        20,
+      ],
+      "label": "Corvelle TW-M",
+      "name": "entity-2",
+      "positionMm": [
+        140,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        24,
+        34,
+        24,
+      ],
+      "label": "Corvelle TW-L",
+      "name": "entity-3",
+      "positionMm": [
+        180,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-3",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;

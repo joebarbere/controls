@@ -88,6 +88,21 @@ describe('paletteItems', () => {
     expect(paletteItems(registry, idle, 'no such thing', [])).toEqual([]);
   });
 
+  it('on an equal score, prefers the command that opens a prompt (title ending in …)', () => {
+    const cables = { ...idle, 'wiring.cables': true, 'wiring.wires': true };
+    // "Strip a cable jacket" ties the world command and its prompt; the player gets the prompt.
+    const strip = paletteItems(registry, cables, 'Strip a cable jacket', []);
+    expect(ids(strip).slice(0, 2)).toEqual(['wiring.strip', 'cable.strip']);
+    expect(strip[0].score).toBe(strip[1].score);
+    expect(ids(paletteItems(registry, cables, 'strip', []))[0]).toBe('wiring.strip');
+    expect(ids(paletteItems(registry, cables, 'Label a wire', []))[0]).toBe('wiring.label');
+    // The world command stays reachable by its id, and a recent use still wins.
+    expect(ids(paletteItems(registry, cables, 'cable.strip', []))[0]).toBe('cable.strip');
+    expect(ids(paletteItems(registry, cables, 'Strip a cable jacket', ['cable.strip']))[0]).toBe('cable.strip');
+    // With no cable the prompt is disabled, so the world command leads.
+    expect(ids(paletteItems(registry, idle, 'Strip a cable jacket', []))[0]).toBe('cable.strip');
+  });
+
   it('searches ids and categories', () => {
     expect(ids(paletteItems(registry, idle, 'resetLayout', []))).toEqual(['view.resetLayout']);
     expect(ids(paletteItems(registry, idle, 'tool belt', []))).toEqual(['toolbelt.select']);

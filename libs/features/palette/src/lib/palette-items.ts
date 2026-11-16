@@ -66,11 +66,21 @@ export function paletteItems<S>(
   return items.sort(
     (a, b) =>
       Number(b.enabled) - Number(a.enabled) ||
-      (searching ? b.score - a.score : recentOrder(a) - recentOrder(b)) ||
+      (searching
+        ? b.score - a.score || Number(opensPrompt(b)) - Number(opensPrompt(a))
+        : recentOrder(a) - recentOrder(b)) ||
       compare(a.def.category, b.def.category) ||
       compare(a.def.title, b.def.title) ||
       compare(a.def.id, b.def.id),
   );
 }
+
+/**
+ * Whether a command's title says it opens a prompt (it ends in an ellipsis, the menu convention).
+ * Searching, a prompt beats an equally scored command without one: "Strip a cable jacket" finds the
+ * strip prompt (`wiring.strip`, "Strip a cable jacket…"), not the bare world command `cable.strip`
+ * and its generated argument form; the world command stays reachable by its id and the console.
+ */
+const opensPrompt = <S>(item: PaletteItem<S>): boolean => item.def.title.endsWith('…');
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

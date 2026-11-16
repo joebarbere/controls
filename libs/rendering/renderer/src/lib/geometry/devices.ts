@@ -59,6 +59,9 @@ import { boxBetween } from './fixtures';
  * `coverOn`, {@link buildDeviceCover}), EMT-lite sticks, elbows and connectors, and DIN terminal blocks.
  * A cut-to-length part's recipe is built for its cut length (`deviceBodySizeMm`), so the recipe cache
  * keys it by length too (`PropRecipes`); every other recipe ignores the state.
+ *
+ * Twist-on wire nuts (`splice.twistOn`, F3.3): a flared skirt and a tapered shell up to a domed tip,
+ * with a dark mouth at the open end, where the splice terminal's entry point is.
  */
 
 /** Material slots, by group index. */
@@ -83,6 +86,9 @@ export const CLOSED_ENTRY_SLOT: number = DEVICE_SLOTS.indexOf('accent');
 /** The duct model kind, whose cover follows `state.coverOn`. */
 export const DUCT_KIND = 'raceway.duct';
 
+/** The twist-on wire nut model kind. */
+export const WIRE_NUT_KIND = 'splice.twistOn';
+
 /** Which recipe draws a model kind (given its body size: a cut part's length). Kinds without one are drawn as unknown objects. */
 const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm) => Part[]>> = {
   battery: batteryParts,
@@ -102,6 +108,7 @@ const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm)
   'raceway.conduitConnector': connectorParts,
   'terminalBlock.feedThrough': terminalBlockParts,
   'terminalBlock.ground': terminalBlockParts,
+  [WIRE_NUT_KIND]: wireNutParts,
 };
 
 interface Part {
@@ -338,6 +345,18 @@ const LOOKS: Readonly<Record<string, Look>> = {
     accent: metal(0xc9ccd0),
     bulb: unused,
     opening: hole,
+  },
+  [WIRE_NUT_KIND]: {
+    // A neutral grey-tan shell: the catalogue entry carries no colour (no maker's size colour code is
+    // read or copied), so every size draws alike and its label tells them apart. game-design look.
+    body: plastic(0xb9ad97),
+    panel: unused,
+    label: unused,
+    positive: unused,
+    negative: unused,
+    accent: unused,
+    bulb: unused,
+    opening: hole, // the open end, where the conductors go in
   },
   'enclosure.panel': {
     body: { ...plastic(0xd7d8d2), side: DoubleSide }, // light grey powder-coated steel
@@ -939,4 +958,39 @@ function terminalBlockParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
     }
   }
   return parts;
+}
+
+/** A cone frustum along +y from y0 (radius r0) to y1 (radius r1), centred at (x, z), its ends closed. */
+function frustumY(x: number, z: number, r0: number, r1: number, y0: number, y1: number): BufferGeometry {
+  const g = new CylinderGeometry(mm(r1), mm(r0), mm(y1 - y0), 24);
+  g.translate(mm(x), mm((y0 + y1) / 2), mm(z));
+  return g;
+}
+
+/**
+ * A twist-on wire nut standing up +y from its open end (a game-design look inside the entry's body
+ * box): a flared skirt over the bottom quarter, a shell tapering from the skirt to a domed tip at
+ * y = height, and a dark mouth disc just below the splice terminal's entry point (the centre of the
+ * open end; conductors enter along −y). Seen from the side or below, the nut's own body is at most the
+ * skirt's radius (8 to 12 mm) in front of that point, inside the terminal picker's 15 mm own-device
+ * tolerance, so the terminal stays pickable with the mouse.
+ */
+function wireNutParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
+  const { widthMm: w, heightMm: h, depthMm: d } = size;
+  const cx = w / 2;
+  const cz = d / 2;
+  const r = Math.min(w, d) / 2; // the skirt's rim
+  const skirtTop = Math.round(h / 4);
+  const shoulder = r * 0.8;
+  const tip = r * 0.4;
+  // The tip's dome: the upper half of a sphere.
+  const dome = new SphereGeometry(mm(tip), 24, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  dome.translate(mm(cx), mm(h - tip), mm(cz));
+  const e = def.terminals[0]?.methods[0]?.entryMm ?? { x: cx, y: 0, z: cz };
+  return [
+    { slot: 'body', geometry: frustumY(cx, cz, r, shoulder, 0, skirtTop) },
+    { slot: 'body', geometry: frustumY(cx, cz, shoulder, tip, skirtTop, h - tip) },
+    { slot: 'body', geometry: dome },
+    { slot: 'opening', geometry: cylinderY(e.x, e.z, r * 0.7, e.y - 0.3, e.y) },
+  ];
 }

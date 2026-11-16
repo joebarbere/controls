@@ -20,9 +20,8 @@ import { enterSeed, startSandbox } from './support/sandbox';
  *   (reopened with Shift+N and J, so cable 1's strips, typed into the console, come first as in the
  *   script); its five conductor ends are landed with the landing flow's termination prompts: three
  *   twist-on wire nuts and the lamp's two screws, with the NM stripper and the 1-5 N·m torque
- *   screwdriver chosen in the prompts. The lamp's screws are clicked; the nuts are picked with `]`,
- *   Tab and Enter, because the renderer has no recipe for a wire nut yet and draws the 100 mm
- *   placeholder cube, which hides the splice terminal from the mouse (docs/caveats/ui.md). Waypoints are aimed at world points the snapper resolves to the
+ *   screwdriver chosen in the prompts. Every terminal is clicked: a nut's splice terminal at the mouth
+ *   of its open end, the lamp's screws. Waypoints are aimed at world points the snapper resolves to the
  *   script's (cursors are rounded to whole mm, so a click projected from the exact point lands on it).
  *   Every other line is typed into the console, interleaved where the script interleaves.
  * - **Keyboard only** (no pointer event at all, counted from the first document script): the panel's
@@ -220,10 +219,10 @@ async function palette(page: Page, title: string, command: string, field: string
 }
 
 /**
- * With the landing flow running (the palette's `wiring.land`), picks `terminal` (a click on it, or `]`
- * to its device, Tab and Enter) and fills the prompt as the script's line does: the NM stripper's
- * 14 AWG solid hole at `stripMm`, then (for a screw) the 1-5 N·m driver at `torque`. The flow moves
- * on to the cable's next conductor.
+ * With the landing flow running (the palette's `wiring.land`), clicks `terminal` and fills the prompt
+ * as the script's line does: the NM stripper's 14 AWG solid hole at `stripMm`, then (for a screw) the
+ * 1-5 N·m driver at `torque`. The flow moves on to the cable's next conductor. (Tab and Enter picking
+ * is the keyboard-only test's.)
  */
 async function land(
   page: Page,
@@ -231,19 +230,9 @@ async function land(
   stripMm: string,
   end: 'a' | 'b',
   torque: string | null,
-  pick: 'click' | 'select' = 'click',
 ): Promise<void> {
-  if (pick === 'click') {
-    const t = await terminalOnPage(page, terminal);
-    await page.mouse.click(t.x, t.y);
-  } else {
-    // `]` until the device is selected, Tab holds its terminal, Enter picks it.
-    await selectEntity(page, terminal.entity);
-    await page.keyboard.press('Tab');
-    await expect(page.getByTestId('routing-status')).toContainText(`#${terminal.entity}, terminal`);
-    await expect(page.getByTestId('routing-status')).toContainText('Enter picks it.');
-    await page.keyboard.press('Enter');
-  }
+  const t = await terminalOnPage(page, terminal);
+  await page.mouse.click(t.x, t.y);
   const strip = page.getByRole('dialog', { name: `End ${end}: strip and finish` });
   await expect(strip).toBeVisible();
   await strip.getByRole('combobox', { name: 'Stripper' }).selectOption(NM_STRIPPER);
@@ -377,7 +366,7 @@ for (const { transport, query } of [
       await frame(page, 7);
       await palette(page, 'Land a cable conductor', 'wiring.land', 'Conductor', wire);
       await expect(status).toContainText(`(wire ${wire})`);
-      await land(page, { entity: nut, terminal: 'splice' }, '13', 'a', null, 'select');
+      await land(page, { entity: nut, terminal: 'splice' }, '13', 'a', null);
       await expect(status).toContainText(`Wire ${wire} end a landed on`);
       await page.keyboard.press('Escape'); // stop: the script's next line is the console's
       await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
