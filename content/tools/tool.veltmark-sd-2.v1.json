@@ -11,6 +11,8 @@
   "torque": null,
   "boreDiameterMm": null,
   "drives": ["slotted", "phillips"],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "plain-screwdriver",

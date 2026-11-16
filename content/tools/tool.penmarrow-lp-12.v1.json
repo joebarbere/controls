@@ -16,6 +16,8 @@
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "label-printer",

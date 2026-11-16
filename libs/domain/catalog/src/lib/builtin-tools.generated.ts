@@ -34,6 +34,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     "pozidriv",
     "square"
   ],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "torque-driver-capabilities",
@@ -93,6 +95,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     "pozidriv",
     "square"
   ],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "torque-driver-capabilities",
@@ -122,6 +126,314 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "tool.corriden-hs-14",
+  "version": 1,
+  "title": "Bi-metal hole saw, 7/8 in (for 1/2 in conduit)",
+  "brand": "Corriden",
+  "modelName": "HS-14",
+  "kind": "holeSaw",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    },
+    {
+      "step": "openEntry",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 22.225,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "hole-saw-kit",
+      "kind": "real-world",
+      "citation": "Electrician's bi-metal hole saw kits (two makers' product pages, read 2026-11-15; makers not named in content) carry 7/8, 1-1/8, 1-3/8 and 1-3/4 in saws (with 2 and 2-1/2 in) as the most used sizes for electrical work; the class cuts mild and stainless steel, wood and plastic and bores a 2x4 in one pass, so it both bores a stud and opens a steel enclosure wall. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811). Which trade size's entry it opens follows from KNOCKOUT_HOLES and the game-design fit tolerance; no conductor size is involved.",
+      "covers": [
+        "capabilities",
+        "boreDiameterMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-hs-18",
+  "version": 1,
+  "title": "Bi-metal hole saw, 1-1/8 in (for 3/4 in conduit)",
+  "brand": "Corriden",
+  "modelName": "HS-18",
+  "kind": "holeSaw",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    },
+    {
+      "step": "openEntry",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 28.575,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "hole-saw-kit",
+      "kind": "real-world",
+      "citation": "Electrician's bi-metal hole saw kits (two makers' product pages, read 2026-11-15; makers not named in content) carry 7/8, 1-1/8, 1-3/8 and 1-3/4 in saws (with 2 and 2-1/2 in) as the most used sizes for electrical work; the class cuts mild and stainless steel, wood and plastic and bores a 2x4 in one pass, so it both bores a stud and opens a steel enclosure wall. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811). Which trade size's entry it opens follows from KNOCKOUT_HOLES and the game-design fit tolerance; no conductor size is involved.",
+      "covers": [
+        "capabilities",
+        "boreDiameterMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-hs-22",
+  "version": 1,
+  "title": "Bi-metal hole saw, 1-3/8 in (for 1 in conduit)",
+  "brand": "Corriden",
+  "modelName": "HS-22",
+  "kind": "holeSaw",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    },
+    {
+      "step": "openEntry",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 34.925,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "hole-saw-kit",
+      "kind": "real-world",
+      "citation": "Electrician's bi-metal hole saw kits (two makers' product pages, read 2026-11-15; makers not named in content) carry 7/8, 1-1/8, 1-3/8 and 1-3/4 in saws (with 2 and 2-1/2 in) as the most used sizes for electrical work; the class cuts mild and stainless steel, wood and plastic and bores a 2x4 in one pass, so it both bores a stud and opens a steel enclosure wall. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811). Which trade size's entry it opens follows from KNOCKOUT_HOLES and the game-design fit tolerance; no conductor size is involved.",
+      "covers": [
+        "capabilities",
+        "boreDiameterMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-hs-28",
+  "version": 1,
+  "title": "Bi-metal hole saw, 1-3/4 in (for 1-1/4 in conduit)",
+  "brand": "Corriden",
+  "modelName": "HS-28",
+  "kind": "holeSaw",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    },
+    {
+      "step": "openEntry",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 44.45,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "hole-saw-kit",
+      "kind": "real-world",
+      "citation": "Electrician's bi-metal hole saw kits (two makers' product pages, read 2026-11-15; makers not named in content) carry 7/8, 1-1/8, 1-3/8 and 1-3/4 in saws (with 2 and 2-1/2 in) as the most used sizes for electrical work; the class cuts mild and stainless steel, wood and plastic and bores a 2x4 in one pass, so it both bores a stud and opens a steel enclosure wall. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811). Which trade size's entry it opens follows from KNOCKOUT_HOLES and the game-design fit tolerance; no conductor size is involved.",
+      "covers": [
+        "capabilities",
+        "boreDiameterMm"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-sa-12",
+  "version": 1,
+  "title": "Ship auger bit, 3/4 in x 18 in",
+  "brand": "Corriden",
+  "modelName": "SA-12",
+  "kind": "drill",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 19.05,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "ship-auger-class",
+      "kind": "real-world",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "covers": [
+        "boreDiameterMm"
+      ]
+    },
+    {
+      "id": "wood-bit-steps",
+      "kind": "game-design",
+      "citation": "game-design: a wood-boring bit bores studs (step bore; no conductor size is involved, so no size limit). It cuts no steel box wall, so it opens no enclosure entry. Whether its hole suits a stud is the bored-hole limit and the edge distance (IRC R602.6 and NFPA 70 Art. 300.4(A)(1), by number), which the commands check.",
+      "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-sa-14",
+  "version": 1,
+  "title": "Ship auger bit, 7/8 in x 18 in",
+  "brand": "Corriden",
+  "modelName": "SA-14",
+  "kind": "drill",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 22.225,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "ship-auger-class",
+      "kind": "real-world",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "covers": [
+        "boreDiameterMm"
+      ]
+    },
+    {
+      "id": "wood-bit-steps",
+      "kind": "game-design",
+      "citation": "game-design: a wood-boring bit bores studs (step bore; no conductor size is involved, so no size limit). It cuts no steel box wall, so it opens no enclosure entry. Whether its hole suits a stud is the bored-hole limit and the edge distance (IRC R602.6 and NFPA 70 Art. 300.4(A)(1), by number), which the commands check.",
+      "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-sa-16",
+  "version": 1,
+  "title": "Ship auger bit, 1 in x 18 in",
+  "brand": "Corriden",
+  "modelName": "SA-16",
+  "kind": "drill",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 25.4,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "ship-auger-class",
+      "kind": "real-world",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "covers": [
+        "boreDiameterMm"
+      ]
+    },
+    {
+      "id": "wood-bit-steps",
+      "kind": "game-design",
+      "citation": "game-design: a wood-boring bit bores studs (step bore; no conductor size is involved, so no size limit). It cuts no steel box wall, so it opens no enclosure entry. Whether its hole suits a stud is the bored-hole limit and the edge distance (IRC R602.6 and NFPA 70 Art. 300.4(A)(1), by number), which the commands check.",
+      "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.corriden-sa-18",
+  "version": 1,
+  "title": "Ship auger bit, 1-1/8 in x 18 in",
+  "brand": "Corriden",
+  "modelName": "SA-18",
+  "kind": "drill",
+  "capabilities": [
+    {
+      "step": "bore",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 28.575,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "ship-auger-class",
+      "kind": "real-world",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "covers": [
+        "boreDiameterMm"
+      ]
+    },
+    {
+      "id": "wood-bit-steps",
+      "kind": "game-design",
+      "citation": "game-design: a wood-boring bit bores studs (step bore; no conductor size is involved, so no size limit). It cuts no steel box wall, so it opens no enclosure entry. Whether its hole suits a stud is the bored-hole limit and the edge distance (IRC R602.6 and NFPA 70 Art. 300.4(A)(1), by number), which the commands check.",
+      "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "tool.penmarrow-lp-12",
   "version": 1,
   "title": "Label printer, 12 mm tape",
@@ -139,6 +451,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "label-printer",
@@ -194,6 +508,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "insulated-terminal-colour-code",
@@ -232,6 +548,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "diagonal-cutter-capacity",
@@ -239,6 +557,94 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: unverified product-class figure. Diagonal cutting nippers are specified in ISO 5749 (cited by number); makers of 180-200 mm (7-8 in) high-leverage models state cutting capacities for medium-hard, hard and piano wire (a few millimetres, smallest for piano wire), and soft copper cuts more easily than any of them. The cut is capped at 8 AWG solid copper, 3.26 mm across (the AWG formula, NBS Handbook 100 section 2), a figure chosen for play inside that class.",
       "covers": [
         "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.veltmark-ft-50",
+  "version": 1,
+  "title": "Steel fish tape, 1/8 in x 50 ft",
+  "brand": "Veltmark",
+  "modelName": "FT-50",
+  "kind": "fishTape",
+  "capabilities": [
+    {
+      "step": "pull",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "punches": [],
+  "pull": {
+    "lengthMm": 15240,
+    "maxBendDeg": 360
+  },
+  "sources": [
+    {
+      "id": "fish-tape-class",
+      "kind": "real-world",
+      "citation": "Steel fish tapes 1/8 in wide in a 50 ft length, wound in a case (two makers' product pages read 2026-11-15, makers not named in content: 1/8 x 0.045 in and 1/8 x 0.060 in tapes with a formed or double-loop end). 50 ft = 15 240 mm exactly (NIST SP 811): the longest conduit run it reaches.",
+      "covers": [
+        "pull.lengthMm"
+      ]
+    },
+    {
+      "id": "fish-tape-bends",
+      "kind": "game-design",
+      "citation": "game-design: the tape is taken to push round at most four quarter bends (360 degrees) in one run, the same total a code-compliant EMT run may have between pull points (NFPA 70-2023 Art. 358.26, cited by number and paraphrased). A real tape's limit depends on bend radius, fill and lubricant; no published figure was read. P3 checks no conduit code rule; P4's inspector will.",
+      "covers": [
+        "pull.maxBendDeg"
+      ]
+    },
+    {
+      "id": "fish-tape-steps",
+      "kind": "game-design",
+      "citation": "game-design: a fish tape pulls conductors through conduit (step pull) with no conductor size limit: its end takes any building-wire size the conduit holds. Conduit fill is P4's inspector's; P3 stores what it needs and checks none of it (plan, P3 fence).",
+      "covers": [
+        "capabilities"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
+  "id": "tool.veltmark-kp-3",
+  "version": 1,
+  "title": "Knockout punch set, 1/2, 3/4 and 1 in conduit",
+  "brand": "Veltmark",
+  "modelName": "KP-3",
+  "kind": "knockoutPunch",
+  "capabilities": [
+    {
+      "step": "openEntry",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "punches": [
+    "1/2",
+    "3/4",
+    "1"
+  ],
+  "pull": null,
+  "sources": [
+    {
+      "id": "knockout-punch-class",
+      "kind": "real-world",
+      "citation": "Standard round knockout punch units (punch, die and draw stud) for 1/2, 3/4 and 1 in conduit, as in one maker's catalogue read 2026-11-15 (maker not named in content): driven by a wrench, ratchet or hydraulic driver, they cut mild steel up to 10 gauge (3.5 mm) and make the 0.885, 1.115 and 1.362 in holes of KNOCKOUT_HOLES. Entry walls are taken to be within that capacity (not checked); no conductor size is involved.",
+      "covers": [
+        "capabilities",
+        "punches"
       ]
     }
   ],
@@ -264,6 +670,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "drives": [
     "hex"
   ],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "nut-driver",
@@ -305,6 +713,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     "slotted",
     "phillips"
   ],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "plain-screwdriver",
@@ -398,6 +808,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "stripper-hole-pattern",
@@ -465,6 +877,8 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "nm-stripper-class",

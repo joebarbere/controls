@@ -686,8 +686,17 @@ function checkTool(tool: ToolDefinition, add: Add): void {
     [can('torque'), tool.torque !== null, 'A tool has a torque range exactly when it can torque'],
     [can('bore'), tool.boreDiameterMm !== null, 'A tool has a bore diameter exactly when it can bore'],
     [can('drive'), tool.drives.length > 0, 'A tool has drive types exactly when it can drive'],
+    [can('pull'), tool.pull !== null, 'A tool has a pull reach exactly when it can pull'],
   ];
   for (const [capable, has, message] of consistent) if (capable !== has) add('capabilities', message);
+  // F3.4 part 2: an entry is opened by a punch of its size or by a hole saw whose hole fits it.
+  if (can('openEntry') && tool.punches.length === 0 && tool.boreDiameterMm === null) {
+    add('capabilities', 'A tool that can openEntry has punches or a bore diameter (a hole saw)');
+  }
+  if (tool.punches.length > 0 && !can('openEntry')) add('punches', 'A tool has punches only if it can openEntry');
+  if (tool.punches.length > 0 && tool.boreDiameterMm !== null) {
+    add('punches', 'A tool has punches or a bore diameter, not both');
+  }
   const holeIds = tool.holes.map((h) => h.id);
   if (new Set(holeIds).size !== holeIds.length) add('holes', 'Hole ids must be unique');
   const dieIds = tool.dies.map((d) => d.id);
@@ -699,6 +708,8 @@ function checkTool(tool: ToolDefinition, add: Add): void {
     ...(tool.torque !== null ? ['torque'] : []),
     ...(tool.boreDiameterMm !== null ? ['boreDiameterMm'] : []),
     ...(tool.drives.length > 0 ? ['drives'] : []),
+    ...(tool.punches.length > 0 ? ['punches'] : []),
+    ...(tool.pull !== null ? ['pull.lengthMm', 'pull.maxBendDeg'] : []),
   ];
   for (const issue of checkCoverage(tool.sources, required)) add(issue.path, issue.message);
 }

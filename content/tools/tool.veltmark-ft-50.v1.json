@@ -1,0 +1,37 @@
+{
+  "id": "tool.veltmark-ft-50",
+  "version": 1,
+  "title": "Steel fish tape, 1/8 in x 50 ft",
+  "brand": "Veltmark",
+  "modelName": "FT-50",
+  "kind": "fishTape",
+  "capabilities": [{ "step": "pull", "maxAwg": null }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "punches": [],
+  "pull": { "lengthMm": 15240, "maxBendDeg": 360 },
+  "sources": [
+    {
+      "id": "fish-tape-class",
+      "kind": "real-world",
+      "citation": "Steel fish tapes 1/8 in wide in a 50 ft length, wound in a case (two makers' product pages read 2026-11-15, makers not named in content: 1/8 x 0.045 in and 1/8 x 0.060 in tapes with a formed or double-loop end). 50 ft = 15 240 mm exactly (NIST SP 811): the longest conduit run it reaches.",
+      "covers": ["pull.lengthMm"]
+    },
+    {
+      "id": "fish-tape-bends",
+      "kind": "game-design",
+      "citation": "game-design: the tape is taken to push round at most four quarter bends (360 degrees) in one run, the same total a code-compliant EMT run may have between pull points (NFPA 70-2023 Art. 358.26, cited by number and paraphrased). A real tape's limit depends on bend radius, fill and lubricant; no published figure was read. P3 checks no conduit code rule; P4's inspector will.",
+      "covers": ["pull.maxBendDeg"]
+    },
+    {
+      "id": "fish-tape-steps",
+      "kind": "game-design",
+      "citation": "game-design: a fish tape pulls conductors through conduit (step pull) with no conductor size limit: its end takes any building-wire size the conduit holds. Conduit fill is P4's inspector's; P3 stores what it needs and checks none of it (plan, P3 fence).",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

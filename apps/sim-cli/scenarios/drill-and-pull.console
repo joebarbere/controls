@@ -1,0 +1,28 @@
+# F3.4 part 2: the hole saw, the fish tape and the drill on the workshop stud wall, as console lines.
+# Both this file and the script drill-and-pull.ts must end at DRILL_AND_PULL_HASH
+# (apps/sim-cli/src/drill-and-pull.spec.ts).
+#   pnpm sim run apps/sim-cli/scenarios/drill-and-pull.console --world content/levels/workshop.json
+#
+# Positions are what placeInWorld and snapWaypoint (@controls/world-model) give for the script's cursor
+# points; the cut lengths are routeDefaultLengthMm along the waypoints (and the cable's entry points).
+#
+# 1. The DIN panel on the stud faces; its 3/4 in top drill site cut with the 1-1/8 in hole saw (28.575 mm,
+#    within 1/16 in of the 1.115 in (28.321 mm) 3/4 in knockout hole).
+entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --orientationMdeg.yaw 0 --positionMm.x -1010 --positionMm.y 800 --positionMm.z -21 --ref.id panel.pellmoor-din-400x500 --ref.version 1
+enclosure.openEntry --entry drill-top-1 --id 1 --tool.id tool.corriden-hs-18 --tool.version 1
+# 2. A 3/4 in connector in the new hole, a stick on its outer end, cut to 1.2 m.
+entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 90000 --orientationMdeg.yaw 0 --positionMm.x -863 --positionMm.y 1300 --positionMm.z 62 --ref.id connector.stavenor-emt-075 --ref.version 1
+entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 90000 --orientationMdeg.yaw 0 --positionMm.x -868 --positionMm.y 1325 --positionMm.z 67 --ref.id emt.stavenor-075 --ref.version 1
+raceway.cut --id 3 --lengthMm 1200
+# 3. Black and white 12 AWG THHN pulled from inside the panel up through the run with the 50 ft fish tape
+#    (1 224 mm of conduit run, no elbows: well inside 15 240 mm and 360 degrees). Both ends stay free.
+wire.pull --conductors [{"colour":{"base":"black","stripe":null},"ref":{"id":"conductor.tallowmere-thhn-12-solid","version":1}},{"colour":{"base":"white","stripe":null},"ref":{"id":"conductor.tallowmere-thhn-12-solid","version":1}}] --lengthMm 1812 --route [{"entity":null,"fixture":null,"kind":"free","positionMm":{"x":-880,"y":1100,"z":79},"tool":null},{"entity":2,"fixture":null,"kind":"conduit","positionMm":{"x":-880,"y":1300,"z":79},"tool":null},{"entity":3,"fixture":null,"kind":"conduit","positionMm":{"x":-880,"y":2524,"z":79},"tool":null},{"entity":null,"fixture":null,"kind":"free","positionMm":{"x":-880,"y":2825,"z":79},"tool":null}] --tool.id tool.veltmark-ft-50 --tool.version 1
+# 4. Two 2-gang boxes beside studs 4 and 6, their top clamps opened, joined by 14/2 NM-B stapled near each
+#    box and passed through stud 5 in a hole bored with the 3/4 in ship auger (19.05 mm leaves 34.925 mm to
+#    the stud face: no nail plate).
+entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --orientationMdeg.yaw 0 --positionMm.x -835 --positionMm.y -850 --positionMm.z -21 --ref.id box.tinmoor-2g-nm --ref.version 1
+entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --orientationMdeg.yaw 0 --positionMm.x -23 --positionMm.y -850 --positionMm.z -21 --ref.id box.tinmoor-2g-nm --ref.version 1
+enclosure.openEntry --entry clamp-top-1 --id 4 --tool.id tool.veltmark-sd-2 --tool.version 1
+enclosure.openEntry --entry clamp-top-1 --id 5 --tool.id tool.veltmark-sd-2 --tool.version 1
+cable.add --a.entity 4 --a.entry clamp-top-1 --b.entity 5 --b.entry clamp-top-1 --lengthMm 1729 --ref.id cable.sorrelby-nmb-14-2 --ref.version 1 --route [{"entity":null,"fixture":"stud-wall","kind":"staple","positionMm":{"x":-835,"y":-550,"z":-65},"tool":null},{"entity":null,"fixture":"stud-wall","kind":"bore","positionMm":{"x":-449,"y":-550,"z":-65},"tool":{"id":"tool.corriden-sa-12","version":1}},{"entity":null,"fixture":"stud-wall","kind":"staple","positionMm":{"x":-23,"y":-550,"z":-65},"tool":null}] --tailsMm.a 200 --tailsMm.b 200 --tool.id tool.veltmark-dc-8 --tool.version 1
+world.hash

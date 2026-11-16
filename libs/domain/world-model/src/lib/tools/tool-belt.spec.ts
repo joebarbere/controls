@@ -125,7 +125,14 @@ describe('defaultTool (ADR 0015: the first matching tool on the belt, else the f
   it('skips belt slots that are not tools, unknown or can’t reach the size', () => {
     const belt = [ref('prop.box'), ref('tool.nothing'), CUTTERS, null];
     expect(defaultTool(BUILTIN_CATALOG, belt, 'cut', 6)).toBeNull();
-    expect(defaultTool(BUILTIN_CATALOG, belt, 'bore')).toBeNull();
+    // F3.4 part 2: no bit on the belt, so the first catalogue tool that can bore a stud, by id (the 7/8 in hole saw).
+    expect(defaultTool(BUILTIN_CATALOG, belt, 'bore')).toMatchObject({
+      ref: { id: 'tool.corriden-hs-14', version: 1 },
+      slot: null,
+    });
+    expect(defaultTool(BUILTIN_CATALOG, belt, 'pull')).toMatchObject({
+      ref: { id: 'tool.veltmark-ft-50', version: 1 },
+    });
     expect(defaultTool(BUILTIN_CATALOG, belt, 'strip', 14)).toMatchObject({ ref: STRIPPERS, slot: null });
   });
 

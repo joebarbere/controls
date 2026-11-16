@@ -1,0 +1,25 @@
+{
+  "id": "tool.veltmark-kp-3",
+  "version": 1,
+  "title": "Knockout punch set, 1/2, 3/4 and 1 in conduit",
+  "brand": "Veltmark",
+  "modelName": "KP-3",
+  "kind": "knockoutPunch",
+  "capabilities": [{ "step": "openEntry", "maxAwg": null }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": null,
+  "drives": [],
+  "punches": ["1/2", "3/4", "1"],
+  "pull": null,
+  "sources": [
+    {
+      "id": "knockout-punch-class",
+      "kind": "real-world",
+      "citation": "Standard round knockout punch units (punch, die and draw stud) for 1/2, 3/4 and 1 in conduit, as in one maker's catalogue read 2026-11-15 (maker not named in content): driven by a wrench, ratchet or hydraulic driver, they cut mild steel up to 10 gauge (3.5 mm) and make the 0.885, 1.115 and 1.362 in holes of KNOCKOUT_HOLES. Entry walls are taken to be within that capacity (not checked); no conductor size is involved.",
+      "covers": ["capabilities", "punches"]
+    }
+  ],
+  "extensions": {}
+}

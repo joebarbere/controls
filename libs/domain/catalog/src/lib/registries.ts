@@ -329,18 +329,97 @@ export const ENTRY_TYPES: Readonly<Record<string, EntryTypeDef>> = Object.freeze
   },
   drillSite: {
     id: 'drillSite',
-    opens: ['bore', 'openEntry'],
+    opens: ['openEntry'],
     drives: [],
-    description: 'A place on a blank enclosure wall where a hole may be drilled, sawn or punched.',
+    description: 'A place on a blank enclosure wall where a hole may be sawn or punched for a conduit trade size.',
     kind: 'game-design',
     source:
-      'game-design abstraction of practice: a blank wall is opened with a hole saw, step drill or knockout punch at a place the catalogue entry declares (ADR 0015: custom entries are catalogue drill sites, not a world list).',
+      "game-design abstraction of practice: a blank wall is opened with a hole saw or knockout punch at a place the catalogue entry declares (ADR 0015: custom entries are catalogue drill sites, not a world list). A wood-boring bit (step `bore` alone) cuts no steel box wall; the hole must fit the site's trade size (`KNOCKOUT_HOLES`, F3.4 part 2).",
   },
 } satisfies Record<string, EntryTypeDef>);
 
 /** An entry type by id (own properties only), or `undefined`. */
 export function entryType(id: string): EntryTypeDef | undefined {
   return Object.prototype.hasOwnProperty.call(ENTRY_TYPES, id) ? ENTRY_TYPES[id] : undefined;
+}
+
+export interface KnockoutHoleDef extends Provenance {
+  readonly tradeSize: TradeSize;
+  /** The hole a conduit-size knockout punch of this trade size makes, in inches as published. */
+  readonly diameterIn: number;
+}
+
+const KNOCKOUT_PUNCH_CLASS =
+  "One maker's standard round knockout punch catalogue (read 2026-11-15; maker not named in content): conduit-size punches make a hole about the outside diameter of the conduit's connector thread, published as 0.885 in (1/2), 1.115 in (3/4), 1.362 in (1), 1.701 in (1-1/4), 1.951 in (1-1/2) and 2.416 in (2), for mild steel up to 10 gauge (3.5 mm). Another maker's individual 1 in die page gives the same 1.362 in. Product data, not a code table; the mm values are the exact inch conversion (NIST SP 811).";
+
+/**
+ * The hole an entry of each conduit trade size takes (F3.4 part 2): what a knockout punch of that size
+ * makes, from published punch data. A hole saw opens a drill site of a trade size only when its
+ * diameter is within {@link HOLE_FIT_TOLERANCE_MM} of it (`wrong-size`); the mm value is
+ * {@link knockoutHoleMm}.
+ */
+export const KNOCKOUT_HOLES: Readonly<Record<TradeSize, KnockoutHoleDef>> = Object.freeze({
+  '1/2': {
+    tradeSize: '1/2',
+    diameterIn: 0.885,
+    description: '7/8 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+  '3/4': {
+    tradeSize: '3/4',
+    diameterIn: 1.115,
+    description: '1-1/8 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+  '1': {
+    tradeSize: '1',
+    diameterIn: 1.362,
+    description: '1-3/8 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+  '1-1/4': {
+    tradeSize: '1-1/4',
+    diameterIn: 1.701,
+    description: '1-11/16 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+  '1-1/2': {
+    tradeSize: '1-1/2',
+    diameterIn: 1.951,
+    description: '1-15/16 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+  '2': {
+    tradeSize: '2',
+    diameterIn: 2.416,
+    description: '2-3/8 in nominal',
+    kind: 'real-world',
+    source: KNOCKOUT_PUNCH_CLASS,
+  },
+} satisfies Record<TradeSize, KnockoutHoleDef>);
+
+/** The knockout hole of trade size `size` in mm: its published inches × 25.4 (exact, NIST SP 811). */
+export function knockoutHoleMm(size: TradeSize): number {
+  return KNOCKOUT_HOLES[size].diameterIn * 25.4;
+}
+
+/**
+ * How far a sawn hole may be from a trade size's knockout hole and still take that size's connector:
+ * 1/16 in = 1.5875 mm either way. game-design: a connector's locknut covers a slightly large hole and
+ * a hole a little small is filed out; the electrician's hole saw sizes (7/8, 1-1/8, 1-3/8, 1-3/4 in)
+ * all fall within it of the 1/2, 3/4, 1 and 1-1/4 punch holes, the next size up or down never does.
+ */
+export const HOLE_FIT_TOLERANCE_MM = 1.5875;
+
+/** Whether a hole of `diameterMm` fits an entry of trade size `size` ({@link HOLE_FIT_TOLERANCE_MM}). */
+export function holeFitsTradeSize(diameterMm: number, size: TradeSize): boolean {
+  const off = diameterMm - knockoutHoleMm(size);
+  return off <= HOLE_FIT_TOLERANCE_MM && -off <= HOLE_FIT_TOLERANCE_MM;
 }
 
 /** Id prefixes reserved for the non-device families (one catalogue namespace, ADR 0015). */

@@ -8,6 +8,7 @@ import {
 } from '@controls/catalog';
 import { BUILTIN_PROP_VERSION, BUILTIN_PROPS, builtinProp } from '../props';
 import type { CatalogRef } from '../types';
+import { boredHoleTooLarge } from '../wiring/framing';
 
 /*
  * The tool belt's rules (F3.4 part 1, D10, ADR 0015 "Consequences" for the UI). The belt is a player
@@ -125,9 +126,11 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
 /**
  * Whether `tool` can perform `step` on a conductor of size `awg` (an integer AWG designation, or `null`
  * when no conductor is involved). The same rule the commands check (`checkTool`): a capability with no
- * size limit reaches every size; otherwise it reaches sizes up to its `maxAwg` (smaller is thicker).
+ * size limit reaches every size; otherwise it reaches sizes up to its `maxAwg` (smaller is thicker); a
+ * bit or hole saw over the bored-hole limit can't `bore` a stud (F3.2 part 4, `BORED_HOLE_MAX`).
  */
 export function toolCan(tool: ToolDefinition, step: ToolStep, awg: number | null = null): boolean {
+  if (step === 'bore' && tool.boreDiameterMm !== null && boredHoleTooLarge(tool.boreDiameterMm)) return false;
   return tool.capabilities.some((c) => c.step === step && (awg === null || c.maxAwg === null || awg >= c.maxAwg));
 }
 

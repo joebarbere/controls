@@ -11,6 +11,7 @@ import {
   HoleId,
   ToolKind,
   ToolStep,
+  TradeSize,
 } from './registries';
 import { CatalogSource } from './sources';
 import { TableRef } from './tables';
@@ -124,6 +125,20 @@ export const ToolTorque = z
   .refine((t) => t.maxNm > t.minNm, { message: 'maxNm must be above minNm' });
 export type ToolTorque = z.infer<typeof ToolTorque>;
 
+/**
+ * A fish tape's reach (F3.4 part 2): how far it can be pushed through conduit and round how much bend.
+ * `wire.pull` refuses a run past either (`beyond-tool-capacity`).
+ */
+export const ToolPull = z.strictObject({
+  /** The tape's length (integer mm): the longest conduit run it reaches through. */
+  lengthMm: Int.min(1).max(1_000_000),
+  /** The most total bend (degrees, a whole number of quarter bends) it can be pushed round in one run. */
+  maxBendDeg: Int.min(0)
+    .max(3600)
+    .refine((d) => d % 90 === 0, { message: 'maxBendDeg is a whole number of quarter bends (a multiple of 90)' }),
+});
+export type ToolPull = z.infer<typeof ToolPull>;
+
 /** A hand tool (D10, ADR 0015). Commands check its capabilities, never its kind alone. */
 export const ToolDefinition = z
   .strictObject({
@@ -143,10 +158,18 @@ export const ToolDefinition = z
      * when it can `drive`. Sizes are names, not modelled.
      */
     drives: z.array(DriveType).max(5),
+    /**
+     * The conduit trade sizes its punches and dies make knockout holes for (F3.4 part 2); non-empty only
+     * when it can `openEntry`. A tool that can `openEntry` has punches or a `boreDiameterMm` (a hole saw).
+     */
+    punches: z.array(TradeSize).max(6),
+    /** A fish tape's reach (F3.4 part 2); non-null exactly when it can `pull`. */
+    pull: ToolPull.nullable(),
     sources: z.array(CatalogSource).min(1),
     extensions: Extensions,
   })
   .refine((t) => new Set(t.drives).size === t.drives.length, { message: 'drives must be unique' })
+  .refine((t) => new Set(t.punches).size === t.punches.length, { message: 'punches must be unique' })
   .meta({
     title: 'Controls tool, catalogue format v2',
     description:

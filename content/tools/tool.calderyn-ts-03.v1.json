@@ -14,6 +14,8 @@
   "torque": { "minNm": 0.3, "maxNm": 1.2, "accuracyFraction": 0.06 },
   "boreDiameterMm": null,
   "drives": ["slotted", "phillips", "pozidriv", "square"],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "torque-driver-capabilities",

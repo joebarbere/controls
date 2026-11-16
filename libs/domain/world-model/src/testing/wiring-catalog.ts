@@ -383,6 +383,8 @@ const bit = {
   drives: [],
   torque: null,
   boreDiameterMm: 19,
+  punches: [],
+  pull: null,
   sources: source(['capabilities', 'boreDiameterMm']),
   extensions: {},
 };
@@ -396,7 +398,16 @@ const bitOf = (id: string, diameterMm: number) => ({
 });
 
 const tool = (id: string, kind: string, capabilities: object[], extra: Record<string, unknown> = {}) => {
-  const fields = { holes: [], dies: [], drives: [], torque: null, boreDiameterMm: null, ...extra };
+  const fields = {
+    holes: [],
+    dies: [],
+    drives: [],
+    torque: null,
+    boreDiameterMm: null,
+    punches: [],
+    pull: null,
+    ...extra,
+  };
   const covers = ['capabilities', ...Object.keys(extra)];
   return {
     id,
@@ -437,8 +448,8 @@ const tools = [
   }),
   tool('tool.test-nutdriver', 'nutDriver', [can('drive')], { drives: ['hex'] }),
   tool('tool.test-labeller', 'labelMaker', [can('label')]),
-  tool('tool.test-fishtape', 'fishTape', [can('pull', 10)]),
-  tool('tool.test-punch', 'knockoutPunch', [can('openEntry')]),
+  tool('tool.test-fishtape', 'fishTape', [can('pull', 10)], { pull: { lengthMm: 15240, maxBendDeg: 360 } }),
+  tool('tool.test-punch', 'knockoutPunch', [can('openEntry')], { punches: ['1/2', '3/4', '1'] }),
 ];
 
 const ferrule = {

@@ -26,13 +26,13 @@ How to add or change a device, conductor, cable, tool, accessory or table in `co
 
 One id namespace covers the whole catalogue (ADR 0015); the prefix says the family:
 
-| Family    | Id prefix            | Directory              | Notes                                                                              |
-| --------- | -------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
-| device    | anything else        | `content/devices/`     | Placed devices, enclosures, leads; conductors use `conductor.*` and only they      |
-| cable     | `cable.*`            | `content/cables/`      | From F3.1 part 2: an assembly of pinned conductor entries in a jacket              |
-| tool      | `tool.*`             | `content/tools/`       | From F3.4 part 1: capabilities, holes, dies, torque range, bore size               |
-| accessory | `ferrule.*`, `lug.*` | `content/accessories/` | From F3.1 part 2: ferrules and ring or fork lugs, with the die ids that crimp them |
-| (table)   | —                    | `content/tables/`      | Pinned by `{ table, version, key }`; not entries                                   |
+| Family    | Id prefix            | Directory              | Notes                                                                                             |
+| --------- | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| device    | anything else        | `content/devices/`     | Placed devices, enclosures, leads; conductors use `conductor.*` and only they                     |
+| cable     | `cable.*`            | `content/cables/`      | From F3.1 part 2: an assembly of pinned conductor entries in a jacket                             |
+| tool      | `tool.*`             | `content/tools/`       | From F3.4 part 1: capabilities, holes, dies, torque range, bore size; part 2: punches, pull reach |
+| accessory | `ferrule.*`, `lug.*` | `content/accessories/` | From F3.1 part 2: ferrules and ring or fork lugs, with the die ids that crimp them                |
+| (table)   | —                    | `content/tables/`      | Pinned by `{ table, version, key }`; not entries                                                  |
 
 `prop.*` is reserved for the built-in props. A new `content/` directory needs a row in `MIRRORS` (or `UNMIRRORED`) in `libs/domain/catalog/src/lib/content-mirrors.spec.ts`, a `.prettierignore` line for its generated mirror, and its documents passed to `parseCatalog` in `builtin.ts`.
 
@@ -41,7 +41,7 @@ One id namespace covers the whole catalogue (ADR 0015); the prefix says the fami
 A `covers` path covers itself and everything below it; `*` (not first) matches one segment. The bare `terminals` path is only the terminal layout.
 
 - **Device:** `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`ratedConductors`, `maxConductors`, `awgRange`, `stranding`, `stripLengthMm`, `torqueNm`, `drives`, `alRated`, `entryMm`, `exitAxis`), `fits.<mountType>`, `mounts.<id>`, `entries.<id>`, `interiorVolumeMm3`, `conductor.<field>`.
-- **Cable:** `conductors.<index>`, `jacket.<field>`. **Tool:** `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`. **Accessory:** `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`.
+- **Cable:** `conductors.<index>`, `jacket.<field>`. **Tool:** `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`, `punches`, `pull.lengthMm`, `pull.maxBendDeg`. **Accessory:** `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`.
 - **Table:** `rows.<key>.<field>`, or `rows.<key>` for a row, or `rows.*.<field>` for a column.
 
 Shortcuts: `terminals.*.methods.screw` covers every field of both terminals' screw specs; split it when the fields have different sources (a real torque, a game-design strip length).
@@ -72,6 +72,15 @@ Ferrules (`ferrule.*`, kind `ferrule`) and insulated ring and fork lugs (`lug.*`
 - `dies` lists the crimper die ids that crimp it properly; any other die is an under-crimp (ADR 0018 §4.3). Lugs use the colour-code ids `red`, `blue`, `yellow`, the dies of `tool.veltmark-cr-2210`; ferrules use `square` (a ferrule crimper is still to come, F3.4 follow-up).
 - `awgRange` and `stranding` are what the accessory fits (`wrong-accessory` otherwise); ferrules are stranded only. `barrelLengthMm` is what the strip length must match; `studDiameterMm` is a lug's screw size (`null` for a ferrule), computed for Unified numbered sizes as (0.060 + 0.013 N) in.
 - **Twist-on wire nuts are not accessories.** ADR 0018 §4.4 makes them `splice.twistOn` devices with a `twistOn` terminal method whose `combination` bounds (conductor count, AWG range, total `areaUm2`) are paraphrased from public packaging data under a fictional brand, never a reproduced chart. They arrive with F3.3 part 1, which adds the fields.
+
+## Bits, hole saws, punches and fish tapes
+
+From F3.4 part 2. Each field is written out (`[]` or `null` when absent) and load-checked against the capabilities:
+
+- **A drill bit or hole saw is one entry per size** with `boreDiameterMm` (the nominal inch size × 25.4, exactly). A wood bit has `bore` only; a hole saw `bore` and `openEntry`. Over 35.56 mm a tool still loads but can't bore a stud (`BORED_HOLE_MAX`); over 25.4 mm a bore needs a nail plate (a warning).
+- **A knockout punch lists `punches`** (trade sizes) and has `openEntry`; its holes come from `KNOCKOUT_HOLES`, not the entry. A tool that can `openEntry` has punches or a `boreDiameterMm`, not both.
+- **A fish tape has `pull`** (`lengthMm`, an integer; `maxBendDeg`, a multiple of 90) exactly when it can `pull`. Cover the two fields separately when one is product data and the other game-design.
+- `tools.spec.ts` recomputes every diameter, edge distance and hole-saw fit; add a new size there.
 
 ## Raceways and terminal blocks
 
@@ -105,30 +114,31 @@ From F3.5 part 2. Wire duct (`duct.*`, kind `raceway.duct`), EMT-lite parts (`em
 
 Fictional, one per maker. Add new ones here in the PR that uses them.
 
-| Brand          | Makes                                             |
-| -------------- | ------------------------------------------------- |
-| Brindlecore    | Bench DC supply                                   |
-| Corvelle       | Twist-on wire connectors (wire nuts)              |
-| Calderyn       | Torque screwdrivers                               |
-| Emberlyn       | Cartridge fuse                                    |
-| Ferrovane      | Sealed lead-acid battery                          |
-| Hearthvale     | Heater elements                                   |
-| Larkmoor Power | Utility services (one brand for the utility)      |
-| Lattisby       | Slotted wire duct                                 |
-| Lumivane       | Incandescent lamps                                |
-| Orrinwood      | Power resistor                                    |
-| Pellmoor       | Control-panel enclosures                          |
-| Penmarrow      | Label printers                                    |
-| Quennick       | DIN-rail terminal blocks                          |
-| Quillfern      | Test leads                                        |
-| Quorvale       | Aluminium building wire (XHHW-2)                  |
-| Railwick       | DIN-rail power supply                             |
-| Saltmere       | Circuit breaker                                   |
-| Sorrelby       | NM-B cable and its conductors                     |
-| Stavenor       | EMT conduit, elbows and connectors                |
-| Tallowmere     | Copper building wire (THHN/THWN-2) and MTW        |
-| Tessaline      | Toggle switch                                     |
-| Testbrand      | Test-only fixtures in specs, never in `content/`  |
-| Thimbleby      | Ferrules and insulated ring and fork lugs         |
-| Tinmoor        | Outlet and junction boxes (steel and PVC)         |
-| Veltmark       | Hand tools (strippers, cutters, drivers, crimper) |
+| Brand          | Makes                                                                        |
+| -------------- | ---------------------------------------------------------------------------- |
+| Brindlecore    | Bench DC supply                                                              |
+| Corvelle       | Twist-on wire connectors (wire nuts)                                         |
+| Calderyn       | Torque screwdrivers                                                          |
+| Corriden       | Drill bits (ship augers) and bi-metal hole saws                              |
+| Emberlyn       | Cartridge fuse                                                               |
+| Ferrovane      | Sealed lead-acid battery                                                     |
+| Hearthvale     | Heater elements                                                              |
+| Larkmoor Power | Utility services (one brand for the utility)                                 |
+| Lattisby       | Slotted wire duct                                                            |
+| Lumivane       | Incandescent lamps                                                           |
+| Orrinwood      | Power resistor                                                               |
+| Pellmoor       | Control-panel enclosures                                                     |
+| Penmarrow      | Label printers                                                               |
+| Quennick       | DIN-rail terminal blocks                                                     |
+| Quillfern      | Test leads                                                                   |
+| Quorvale       | Aluminium building wire (XHHW-2)                                             |
+| Railwick       | DIN-rail power supply                                                        |
+| Saltmere       | Circuit breaker                                                              |
+| Sorrelby       | NM-B cable and its conductors                                                |
+| Stavenor       | EMT conduit, elbows and connectors                                           |
+| Tallowmere     | Copper building wire (THHN/THWN-2) and MTW                                   |
+| Tessaline      | Toggle switch                                                                |
+| Testbrand      | Test-only fixtures in specs, never in `content/`                             |
+| Thimbleby      | Ferrules and insulated ring and fork lugs                                    |
+| Tinmoor        | Outlet and junction boxes (steel and PVC)                                    |
+| Veltmark       | Hand tools (strippers, cutters, drivers, crimper, knockout punch, fish tape) |

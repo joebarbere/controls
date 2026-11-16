@@ -118,6 +118,17 @@ Added while catalogue 2 is still provisional (`save-format-guardian` and `electr
 - **`ModelKindDef.raceway: 'duct' | 'conduit'`**: the waypoint kind a run on the part takes (ADR 0015's route shape) and the hollow flag for `route-collides`.
 - **Cut-to-length parts**: a raceway kind with the commanded `lengthMm` key. Its entry's `sizeMm.widthMm` is the uncut stock and its `model.params` carry `defaultLengthMm` and `minLengthMm`; the body is `deviceBodySizeMm(device, state)` everywhere a body is measured (mounts, overlap, placement, recipes). Load rules: the default within the stock, a conduit part's depth its tube's diameter rounded up to an even mm, an elbow's box R + D/2 square (`racewayEntryProblems`).
 
+### Amendment (F3.4 part 2): punches and pull reach
+
+Added while catalogue 2 is still provisional (`save-format-guardian` and `electrical-realism-reviewer` to review):
+
+- **`ToolDefinition.punches`** (required, `TradeSize[]`, unique, at most 6, coverage path `punches`): the conduit trade sizes a knockout punch's punches and dies cut. Non-empty only for a tool that can `openEntry`, and never together with a `boreDiameterMm`.
+- **`ToolDefinition.pull`** (required, `{ lengthMm, maxBendDeg } | null`, coverage paths `pull.lengthMm` and `pull.maxBendDeg`): a fish tape's reach, non-null exactly when the tool can `pull`. `lengthMm` is an integer 1..1 000 000; `maxBendDeg` a whole number of quarter bends (a multiple of 90, at most 3 600).
+- **A tool that can `openEntry` has punches or a bore diameter** (a hole saw), load-checked: what an entry needs is a hole of its trade size, so an `openEntry` tool must say which holes it makes.
+- **`KNOCKOUT_HOLES`** (`registries.ts`, `real-world`): the hole a conduit-size knockout punch makes for each trade size, in inches as published (0.885, 1.115, 1.362, 1.701, 1.951, 2.416 in for 1/2 to 2), from one maker's standard round punch catalogue read 2026-11-15 (product data, not a code table); `knockoutHoleMm` converts exactly. **`HOLE_FIT_TOLERANCE_MM`** (1/16 in, game-design) is how far a hole saw may be from it and still fit (`holeFitsTradeSize`).
+- **`ENTRY_TYPES.drillSite.opens` is `['openEntry']`** (it was `['bore', 'openEntry']`): a wood-boring bit can bore a stud but not cut a steel enclosure wall. It can only refuse commands accepted before, and no shipped log holds a catalogue-2 tool.
+- The nine F3.4 part 1 tools gain `punches: []` and `pull: null` and keep version 1 (gaining data only). Commands refuse a hole that doesn't fit with `wrong-size` and a fish tape that doesn't reach the run with `beyond-tool-capacity` ([ADR 0015 implementation notes, F3.4 part 2](0015-world-document-v3.md#implementation-notes-f34-part-2)).
+
 ## Deviations from the plan and from ADR 0015
 
 1. **Insulation thickness is per conductor entry**, not a table column (the pre-audit's rule; the plan listed "thickness classes" with the insulation data).

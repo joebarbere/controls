@@ -206,6 +206,48 @@
         ]
       }
     },
+    "punches": {
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "1",
+          "2",
+          "1/2",
+          "3/4",
+          "1-1/4",
+          "1-1/2"
+        ]
+      }
+    },
+    "pull": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "lengthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            },
+            "maxBendDeg": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3600
+            }
+          },
+          "required": [
+            "lengthMm",
+            "maxBendDeg"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "sources": {
       "minItems": 1,
       "type": "array",
@@ -265,6 +307,8 @@
     "torque",
     "boreDiameterMm",
     "drives",
+    "punches",
+    "pull",
     "sources",
     "extensions"
   ],
