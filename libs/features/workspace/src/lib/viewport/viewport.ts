@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  linkedSignal,
   DestroyRef,
   effect,
   ElementRef,
@@ -23,6 +24,8 @@ import {
   VIEW_FOCUS_SELECTION_BINDING,
   VIEW_FOCUS_TERMINALS_BINDING,
   VIEW_MODE_WALK_BINDING,
+  VIEW_WIRE_NEXT_BINDING,
+  VIEW_WIRE_PREVIOUS_BINDING,
   type ViewFocusArgs,
   type ViewModeArgs,
   VIEWPORT_FOCUSED_KEY,
@@ -35,6 +38,8 @@ import {
   type ViewportIntent,
   type ViewportState,
   type ViewportStats,
+  type WireRef,
+  wireOwner,
 } from '@controls/renderer';
 import {
   DEVICE_OPERATE_SELECTION_BINDING,
@@ -50,6 +55,8 @@ import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
 import { OverlayLegend } from './overlay-legend';
 import { connectViewportOverlays } from './viewport-overlays';
+import { connectWireReadout, WireReadoutPanel } from './wire-readout';
+import { wireCycleCandidates, wireCycleOrder } from './wire-readout-model';
 
 export type ViewportStatus = 'loading' | 'ready' | 'error';
 
@@ -96,6 +103,12 @@ const TEST_HOOK = '__controlsViewport';
  * Trainee each terminal pick opens that end's termination prompt (`ctl-termination-prompt`, F3.3 part
  * 2, D9) first; its arguments become the end's `termination` in the same one `wire.add`.
  *
+ * **Wire readout** (F3.6 part 3, `connectWireReadout`): in work mode with the console available, the
+ * hovered (else selected) wire's connection record as text (`ctl-wire-readout`, top right, never
+ * taking the pointer). N and Shift+N (`view.wireNext`, `view.wirePrevious`) select wires from the
+ * keyboard; a selection is announced once in the polite `wire-status` region. The host carries
+ * `data-wire-hovered` and `data-wire-selected` (`c2`, `k1`).
+ *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
  * context keys `mode`, `selection.id`, `selection.kind`, `selection.focusable` and
@@ -108,7 +121,7 @@ const TEST_HOOK = '__controlsViewport';
 @Component({
   selector: 'ctl-viewport',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OverlayLegend, TerminationPromptDialog],
+  imports: [OverlayLegend, TerminationPromptDialog, WireReadoutPanel],
   template: `
     <canvas
       #canvas
@@ -153,6 +166,12 @@ const TEST_HOOK = '__controlsViewport';
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
     }
+    @if (wireReadout.view(); as readout) {
+      <ctl-wire-readout [readout]="readout" [corner]="wireReadout.corner()" />
+    }
+    <p class="ctl-visually-hidden" role="status" aria-live="polite" data-testid="wire-status">
+      {{ wireStatus() }}
+    </p>
   `,
   styles: `
     :host {
@@ -243,6 +262,8 @@ const TEST_HOOK = '__controlsViewport';
     '[attr.data-placement-reason]': 'state()?.placement?.reason ?? null',
     '[attr.data-overlays]': 'overlays.active()',
     '[attr.data-routing]': 'routing.phase()',
+    '[attr.data-wire-hovered]': 'wireKey(state()?.hoveredWire)',
+    '[attr.data-wire-selected]': 'wireKey(state()?.selectedWire)',
   },
 })
 export class Viewport {
@@ -280,6 +301,29 @@ export class Viewport {
    * the `routing.*` keys step it; a completed route is one `wire.add`.
    */
   protected readonly routing = connectRouting(this.renderer, this.state);
+  /**
+   * The wire readout (F3.6 part 3): the hovered, else the selected, wire's connection record in work
+   * mode while the console is available (D16).
+   */
+  protected readonly wireReadout = connectWireReadout(this.state);
+  /** The selected wire, changing only when another wire (or none) is selected. */
+  private readonly selectedWire = computed(() => this.state()?.selectedWire ?? null, {
+    equal: (a, b) => a === b || (a !== null && b !== null && wireOwner(a) === wireOwner(b)),
+  });
+  /**
+   * How many times in a row N / Shift+N found no wire to select (0: none since the selection last
+   * changed). Reset by any change of the selected wire, however it was made (a click, N, Escape).
+   */
+  private readonly wireCycleMisses = linkedSignal({ source: this.selectedWire, computation: () => 0 });
+  /** A wire as the host's `data-wire-*` attributes write it (`c2`, `k1`; the wire renderer's owner), or absent. */
+  protected readonly wireKey = (wire: WireRef | null | undefined): string | null => (wire ? wireOwner(wire) : null);
+  /** The wire live region: a selection's announcement, or why N selected nothing. */
+  protected readonly wireStatus = computed(() => {
+    const misses = this.wireCycleMisses();
+    // Each miss alternates a trailing no-break space, so a repeated miss changes the text and is announced again.
+    if (misses > 0) return `No wire to select.${misses % 2 === 0 ? '\u00a0' : ''}`;
+    return this.wireReadout.announcement();
+  });
   protected readonly session = inject(Session);
   protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
   private readonly keys = inject(KeybindingService);
@@ -310,7 +354,8 @@ export class Viewport {
       `With a spool, pick two terminals to add a wire: ${binding('routing.terminalNext')} and ` +
       `${binding('routing.terminalPrevious')} cycle a device's terminals, ${key('commitPlacement')} picks, ` +
       `a click elsewhere adds a waypoint, ${binding('routing.back')} steps back, ` +
-      `${binding(VIEW_FOCUS_TERMINALS_BINDING)} zooms to crowded terminals.`
+      `${binding(VIEW_FOCUS_TERMINALS_BINDING)} zooms to crowded terminals. ` +
+      `${binding(VIEW_WIRE_NEXT_BINDING)} and ${binding(VIEW_WIRE_PREVIOUS_BINDING)} select the next and previous wire.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */
@@ -335,9 +380,13 @@ export class Viewport {
     const offFocus = this.session.onCommand('view.focus', (e) =>
       this.renderer.focus((e.command.args as ViewFocusArgs).target),
     );
+    const offWireNext = this.session.onCommand(VIEW_WIRE_NEXT_BINDING, () => this.cycleWire(1));
+    const offWirePrevious = this.session.onCommand(VIEW_WIRE_PREVIOUS_BINDING, () => this.cycleWire(-1));
     destroyRef.onDestroy(() => {
       offMode();
       offFocus();
+      offWireNext();
+      offWirePrevious();
     });
     // Pushing bindings, the world and the active prop into the framework-free renderer is an
     // imperative side effect. The renderer keeps them until it has started.
@@ -414,6 +463,18 @@ export class Viewport {
   /** Highlights terminals in 3D (the netlist inspector's selected node; view state only), `null` clears. */
   highlightTerminals(terminals: readonly { readonly entity: number; readonly terminal: string }[] | null): void {
     this.renderer.highlightTerminals(terminals);
+  }
+
+  /**
+   * `view.wireNext` / `view.wirePrevious` (N, Shift+N): selects the next or previous drawn wire, as a
+   * click on it does (view state, no world change). The world's order is routed conductors then cables
+   * by id; one not drawn is skipped. With none, the wire live region says so.
+   */
+  private cycleWire(step: 1 | -1): void {
+    const current = this.state()?.selectedWire ?? null;
+    const candidates = wireCycleCandidates(wireCycleOrder(this.session.world()), current, step);
+    const picked = candidates.find((wire) => this.renderer.selectWire(wire));
+    if (picked === undefined) this.wireCycleMisses.update((n) => n + 1);
   }
 
   /** A gesture's commit point → exactly one Command (or, for a cancelled placement, none). */

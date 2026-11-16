@@ -3,7 +3,7 @@ import type { AnyCommandDef, CommandDef } from './command';
 import { CONSOLE_AVAILABLE_KEY, defineViewCommand, NoArgs } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
-import { ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
+import { ROUTING_STARTED_KEY, ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
 
 /*
  * The viewport's view commands (plan F1.7, ADR 0006 "View commands versus world commands"): switching
@@ -175,9 +175,58 @@ export function viewNetlistInspectorCommand<S>(): CommandDef<NoArgs, S> {
   });
 }
 
+/** Binding ids of the wire-cycling keys (settings `controls.keybindings` keys; stable). */
+export const VIEW_WIRE_NEXT_BINDING = 'view.wireNext';
+export const VIEW_WIRE_PREVIOUS_BINDING = 'view.wirePrevious';
+
+/** Where N and Shift+N apply: the viewport is running and no route is started. */
+const WIRE_CYCLE_WHEN = `${MODE_KEY} && !${ROUTING_STARTED_KEY}`;
+
 /**
- * `view.mode`, `view.focus`, `view.overlay`, `view.netlistInspector` and the routing gesture's keys
- * (`routing.*`, F3.2 part 3), for registering with any state type (world registries add them).
+ * `view.wireNext` (N) and `view.wirePrevious` (Shift+N), F3.6 part 3: select the next or previous
+ * drawn wire (routed conductors, then cables, each by id), wrapping, as a click on it does. They are
+ * the keyboard's way to a wire (selection cycling, `[` and `]`, holds entities only), so a keyboard
+ * player gets its highlight and hover readout. Selection is view state: UI chrome, `logged: false`,
+ * never in the replay log, and the ids are not save format (the binding ids are settings keys, so keep
+ * them stable). Offered while the viewport runs (`mode` is set) and no route is started
+ * (`!routing.started`, like `entity.delete.selection`: N never changes the selection mid-route); the
+ * workspace applies them through `Session.onCommand`.
+ */
+function viewWireCycleCommand<S>(id: string, title: string, chord: string): CommandDef<NoArgs, S> {
+  return defineViewCommand<NoArgs, S>({
+    id,
+    title,
+    category: 'View',
+    args: NoArgs,
+    when: WIRE_CYCLE_WHEN,
+    bindings: [
+      {
+        id,
+        title,
+        category: 'View',
+        target: { kind: 'command', command: id, args: {} },
+        defaults: [chord],
+        when: viewportAnd(WIRE_CYCLE_WHEN),
+      },
+    ],
+    logged: false,
+  });
+}
+
+/** `view.wireNext` (N): selects the next drawn wire. */
+export function viewWireNextCommand<S>(): CommandDef<NoArgs, S> {
+  return viewWireCycleCommand<S>(VIEW_WIRE_NEXT_BINDING, 'Select next wire', 'N');
+}
+
+/** `view.wirePrevious` (Shift+N): selects the previous drawn wire. */
+export function viewWirePreviousCommand<S>(): CommandDef<NoArgs, S> {
+  return viewWireCycleCommand<S>(VIEW_WIRE_PREVIOUS_BINDING, 'Select previous wire', 'Shift+N');
+}
+
+/**
+ * `view.mode`, `view.focus`, `view.overlay`, `view.netlistInspector`, `view.wireNext`,
+ * `view.wirePrevious` and the routing gesture's keys (`routing.*`, F3.2 part 3), for registering with
+ * any state type (world registries add them).
  */
 export function viewportCommands<S>(): AnyCommandDef<S>[] {
   return [
@@ -185,6 +234,8 @@ export function viewportCommands<S>(): AnyCommandDef<S>[] {
     viewFocusCommand<S>(),
     viewOverlayCommand<S>(),
     viewNetlistInspectorCommand<S>(),
+    viewWireNextCommand<S>(),
+    viewWirePreviousCommand<S>(),
     ...routingCommands<S>(),
   ];
 }

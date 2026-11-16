@@ -42,7 +42,9 @@ describe('paletteItems', () => {
       'sim.resume', // disabled here: no game (session.active); Sim, by title
       'sim.setSpeed',
       'sim.step',
-      'view.overlay', // disabled here: console.available is unset; View, by title: Show or hide a debug overlay, Toggle console
+      'view.wireNext', // disabled here: no viewport (mode); View, by title: Select next wire, Select previous wire,
+      'view.wirePrevious',
+      'view.overlay', // (console.available is unset) Show or hide a debug overlay, Toggle console
       'console.toggle',
       'view.netlistInspector', // Toggle netlist inspector
       'routing.cancel', // disabled here: no spool (routing.active); Wiring, by title

@@ -12,7 +12,11 @@ import {
   ViewOverlayArgs,
   viewOverlayCommand,
   viewportCommands,
+  viewWireNextCommand,
+  viewWirePreviousCommand,
 } from './view';
+import { defaultBindingDecls } from './keybindings/defaults';
+import { Keymap } from './keybindings/keymap';
 
 describe('view.mode and view.focus (F1.7)', () => {
   it('take strict, save-format argument shapes', () => {
@@ -111,5 +115,43 @@ describe('view.netlistInspector (F2.6)', () => {
     expect(bus.exec('view.netlistInspector', { open: true }).ok).toBe(false);
     expect(bus.state).toEqual({ n: 1 });
     expect(bus.entries).toEqual([]);
+  });
+});
+
+describe('view.wireNext and view.wirePrevious (F3.6 part 3)', () => {
+  const registry = new CommandRegistry<{ n: number }>().registerAll(viewportCommands());
+  const keymap = Keymap.create(defaultBindingDecls(registry), {}, 'other');
+
+  it('are unlogged view commands with no args, offered while the viewport runs', () => {
+    for (const def of [viewWireNextCommand(), viewWirePreviousCommand()]) {
+      expect(def.logged).toBe(false);
+      expect(def.undoable).toBe(false);
+      expect(def.when).toBe('mode && !routing.started');
+      expect(registry.has(def.id)).toBe(true);
+    }
+    const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
+    expect(bus.exec('view.wireNext').ok).toBe(true);
+    expect(bus.exec('view.wirePrevious').ok).toBe(true);
+    expect(bus.exec('view.wireNext', { id: 2 }).ok).toBe(false);
+    expect(bus.state).toEqual({ n: 1 });
+    expect(bus.entries).toEqual([]);
+  });
+
+  it('N and Shift+N cycle wires only while the viewport has focus, and the defaults are conflict-free', () => {
+    const work = { 'viewport.focused': true, mode: 'work' };
+    expect(keymap.resolve('N', work)?.id).toBe('view.wireNext');
+    expect(keymap.resolve('Shift+N', work)?.id).toBe('view.wirePrevious');
+    expect(keymap.resolve('N', { mode: 'work' })).toBeNull();
+    expect(keymap.conflicts).toStrictEqual([]);
+  });
+
+  it('never fire mid-route: a started routing gesture keeps its selection (like Delete)', () => {
+    const routing = { 'viewport.focused': true, mode: 'work', 'routing.active': true };
+    expect(keymap.resolve('N', routing)?.id).toBe('view.wireNext'); // a spool merely armed
+    expect(keymap.resolve('N', { ...routing, 'routing.started': true })).toBeNull();
+    expect(keymap.resolve('Shift+N', { ...routing, 'routing.started': true })).toBeNull();
+    const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
+    expect(registry.isEnabled('view.wireNext', { mode: 'work', 'routing.started': true })).toBe(false);
+    expect(bus.exec('view.wireNext').ok).toBe(true); // the bus doesn't gate on when; the palette and keys do
   });
 });
