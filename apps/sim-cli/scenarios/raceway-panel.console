@@ -21,8 +21,9 @@ entity.place --ref.id tb.quennick-sc25 --ref.version 1 --positionMm.x -45 --posi
 # Knock out the 3/4 in bottom knockout ko-bottom-1 (at (-100, -200, 100), pointing in along +y).
 enclosure.openEntry --id 1 --entry ko-bottom-1 --tool.id tool.veltmark-sd-2 --tool.version 1
 # A 3/4 in connector into it: its entry end (0, 17, 17) turned onto +y (roll 270 degrees, +z kept),
-# so it sits at (-117, -200, 83) and its outer end is at (-100, -225, 100), facing down.
-entity.place --ref.id connector.stavenor-emt-075 --ref.version 1 --positionMm.x -117 --positionMm.y -200 --positionMm.z 83 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 270000
+# so it sits at (-117, -200, 83) and its outer end is at (-100, -225, 100), facing down. It is placed in
+# the entry (inEntry), so the panel is occupied while it is there.
+entity.place --ref.id connector.stavenor-emt-075 --ref.version 1 --positionMm.x -117 --positionMm.y -200 --positionMm.z 83 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 270000 --inEntry.entity 1 --inEntry.entry ko-bottom-1
 # A 3/4 in stick on the connector's outer end, then cut to 300 mm: its free end is at (-100, -525, 100).
 entity.place --ref.id emt.stavenor-075 --ref.version 1 --positionMm.x -112 --positionMm.y -225 --positionMm.z 88 --orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 270000
 raceway.cut --id 8 --lengthMm 300

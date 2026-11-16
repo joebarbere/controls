@@ -20,7 +20,7 @@ import { workshopWorld } from './testing/workshop';
  * carries `fused: true` with `ok` ends through the container, the migration and the load check, and
  * loads open. The fixture-rebuild check in `sources.spec.ts` rebuilds it from the scenario.
  */
-export const FUSED_CONDUCTOR_HASH = 'ad34200aed3e4a88d2e24605e3affe02020d5851b97d84eb2d8cca5251948191';
+export const FUSED_CONDUCTOR_HASH = 'e2aed0b0ca746bf535818a36fb3d60a371699a0ce668f7a976480f9f422c64e7';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/fused-conductor.console');
 

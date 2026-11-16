@@ -519,6 +519,7 @@ describe('picking a cable conductor’s tail (F3.2 part 4)', () => {
       ref: ref(id),
       positionMm: { x, y: 351, z: 1 },
       mountedOn: { entity: 2, mount: 'rail-2' },
+      inEntry: null,
     });
     const steps: [string, Record<string, unknown>][] = [
       ['entity.place', { ref: ref('box.tinmoor-2g-nm'), positionMm: { x: -835, y: -150, z: -21 } }],

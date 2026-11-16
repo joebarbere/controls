@@ -34,6 +34,7 @@
         "stateOfCharge": 0.30000000000000004
       },
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     },
@@ -62,6 +63,7 @@
         "heat": 5e-324
       },
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     }

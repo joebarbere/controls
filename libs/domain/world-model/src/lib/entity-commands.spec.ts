@@ -27,6 +27,7 @@ function entity(id: number, x = 0): Entity {
     state: {},
     sim: {},
     mountedOn: null,
+    inEntry: null,
     label: null,
     extensions: {},
   };
@@ -47,6 +48,7 @@ describe('entity.place', () => {
           positionMm: { x: 5, y: 6, z: -7 },
           orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
           mountedOn: null,
+          inEntry: null,
         },
       },
     });
@@ -59,6 +61,7 @@ describe('entity.place', () => {
       state: {},
       sim: {},
       mountedOn: null,
+      inEntry: null,
       label: null,
       extensions: {},
     });
@@ -341,6 +344,7 @@ describe('world registry, replay log and cheats', () => {
         state: {},
         sim: {},
         mountedOn: null,
+        inEntry: null,
         label: null,
         extensions: {},
       },

@@ -17,8 +17,9 @@ import {
   racewayPorts,
   type RacewayPort,
 } from '@controls/catalog';
-import type { CatalogRef, EntityId, OrientationMdeg, PositionMm, World } from '../types';
+import type { CatalogRef, EntityId, InEntry, OrientationMdeg, PositionMm, World } from '../types';
 import { entryOpen } from '../wiring/checks';
+import { entryUse } from '../wiring/in-entry';
 import { RACEWAY_CAPTURE_DISTANCE } from './constants';
 import { entityPointMm, orientationForAxes, rotateQuarterTurns } from './quarter-turn';
 
@@ -68,12 +69,14 @@ export interface RacewayTarget {
   readonly id: string;
   readonly kind: 'entry' | 'joint';
   readonly entity: EntityId;
+  /** The enclosure entry's catalogue id (an `entry` target), else `null`. */
+  readonly entry: string | null;
   readonly pointMm: PositionMm;
   /** The direction the arriving end must point: into the enclosure, or into the part it meets. */
   readonly arriveAlong: PositionMm;
 }
 
-type TargetWorld = Pick<World, 'entities'>;
+type TargetWorld = Pick<World, 'entities' | 'cables'>;
 
 /** The world ends of every conduit part (axis-aligned ones only), with their entity. */
 function placedEnds(world: TargetWorld, catalog: Catalog) {
@@ -91,8 +94,9 @@ function placedEnds(world: TargetWorld, catalog: Catalog) {
 }
 
 /**
- * Where a conduit part of trade size `size` may go: each open enclosure entry of that size (for a
- * connector), and each free joint end of a placed conduit part of that size (one no other part's end
+ * Where a conduit part of trade size `size` may go: each open enclosure entry of that size with room
+ * for a connector (none in it yet, and under its `maxCables` with its cable ends; for a connector), and
+ * each free joint end of a placed conduit part of that size (one no other part's end
  * meets), in entity id order then catalogue order.
  */
 export function racewayTargets(
@@ -107,6 +111,7 @@ export function racewayTargets(
     const enclosure = forConnector ? catalog.device(host.ref)?.enclosure : null;
     enclosure?.entries.forEach((entry, index) => {
       if (entry.tradeSize !== size || !entryOpen(host, index)) return;
+      if (entryUse(world, host.id, entry.id) >= entry.maxCables) return;
       const point = entityPointMm(host.transform, entry.positionMm);
       const inward = rotateQuarterTurns(host.transform.orientationMdeg, UNIT[entry.axis]);
       if (point && inward) {
@@ -114,6 +119,7 @@ export function racewayTargets(
           id: `entity-${host.id}:${entry.id}`,
           kind: 'entry',
           entity: host.id,
+          entry: entry.id,
           pointMm: point,
           arriveAlong: inward,
         });
@@ -127,6 +133,7 @@ export function racewayTargets(
       id: `entity-${end.entity}:end-${end.port.id}`,
       kind: 'joint',
       entity: end.entity,
+      entry: null,
       pointMm: end.point,
       arriveAlong: neg(end.axis),
     });
@@ -139,6 +146,8 @@ export interface RacewaySnap {
   readonly targetId: string;
   readonly positionMm: PositionMm;
   readonly orientationMdeg: OrientationMdeg;
+  /** Exactly the `entity.place` `inEntry`: the entry a connector snapped into, else `null`. */
+  readonly inEntry: InEntry | null;
 }
 
 /**
@@ -183,5 +192,6 @@ export function snapConduit(
     targetId: target.id,
     positionMm: { x: p.x - offset.x + 0, y: p.y - offset.y + 0, z: p.z - offset.z + 0 },
     orientationMdeg,
+    inEntry: target.kind === 'entry' && target.entry !== null ? { entity: target.entity, entry: target.entry } : null,
   };
 }

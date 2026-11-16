@@ -1,7 +1,9 @@
 import { BUILTIN_CATALOG, ENTRY_TYPES, knockoutHoleMm } from '@controls/catalog';
 import { createWorld, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '../session';
-import type { Waypoint } from '../types';
+import type { PositionMm, Waypoint } from '../types';
+import { routeDefaultLengthMm } from '../routing/length';
+import { snapConduit } from '../snap/raceway-placement';
 import { checkPullReach, ELBOW_BEND_DEG, elbowArcExcessMm, pullRun } from './checks';
 import { racewayPaths } from '../routing/raceways';
 import { boreNeedsNailPlate } from './framing';
@@ -49,6 +51,52 @@ function bench(fixtures: World['fixtures'] = []) {
     if (!result.ok) throw new Error(result.error.message);
   };
   return { bus, place };
+}
+
+const STICK = 'emt.stavenor-075';
+const ELBOW = 'elbow.stavenor-emt-075';
+const lengthOf = (route: readonly Waypoint[]) => routeDefaultLengthMm(route.map((w) => w.positionMm));
+const samePoint = (p: PositionMm, q: PositionMm) => p.x === q.x && p.y === q.y && p.z === q.z;
+
+/**
+ * EMT-lite parts placed end to end the way the mouse snaps them (`snapConduit` onto the last part's
+ * free end, with its `turn`), the first a stick at the origin along +x; each stick cut to its
+ * `lengthMm`. Returns the bus, the part ids and the route through them as the snapper gives it: a free
+ * point before, the first stick's start, each part's far end on that part, a free point after.
+ */
+function conduitRun(parts: readonly { id: string; lengthMm?: number; turn?: number }[]) {
+  const { bus } = bench();
+  const ids: number[] = [];
+  const route: Waypoint[] = [];
+  let end: PositionMm | null = null;
+  for (const part of parts) {
+    const id = bus.state.nextEntityId;
+    const placed =
+      end === null
+        ? { positionMm: at(0, 0, 0), orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } }
+        : snapConduit(bus.state, BUILTIN_CATALOG, ref(part.id), end, part.turn ?? 0);
+    if (!placed) throw new Error(`nowhere to put ${part.id}`);
+    const { positionMm, orientationMdeg } = placed;
+    const result = bus.exec('entity.place', { ref: ref(part.id), positionMm, orientationMdeg });
+    if (!result.ok) throw new Error(result.error.message);
+    if (part.lengthMm !== undefined) {
+      const cut = bus.exec('raceway.cut', { id, lengthMm: part.lengthMm });
+      if (!cut.ok) throw new Error(cut.error.message);
+    }
+    const path = racewayPaths(bus.state, BUILTIN_CATALOG).find((p) => p.entity === id);
+    if (!path) throw new Error(`no path for ${part.id}`);
+    if (end === null) {
+      route.push(free(path.a.x - 100, path.a.y, path.a.z), conduit(id, path.a.x, path.a.y, path.a.z));
+      end = path.a;
+    }
+    const far: PositionMm = samePoint(path.a, end) ? path.b : path.a;
+    route.push(conduit(id, far.x, far.y, far.z));
+    ids.push(id);
+    end = far;
+  }
+  if (end === null) throw new Error('no parts');
+  route.push(free(end.x, end.y, end.z + 100));
+  return { bus, ids, route };
 }
 
 describe('enclosure.openEntry with a hole saw or knockout punch (F3.4 part 2)', () => {
@@ -185,38 +233,64 @@ describe('wire.pull with the fish tape (F3.4 part 2)', () => {
   });
 
   it('pulls through a run the tape reaches, and refuses one longer than 50 ft or round more than four elbows', () => {
-    const { bus, place } = bench();
-    place('emt.stavenor-075', 0, 0, 0); // 1
-    for (let i = 0; i < 5; i++) place('elbow.stavenor-emt-075', 0, 1000 * (i + 1), 0); // 2–6
-    const pull = (route: Waypoint[], lengthMm: number, tool = TAPE) =>
-      bus.exec('wire.pull', { route, lengthMm, conductors: [black], tool });
-    // 15 240 mm (50 ft) of run is the tape's reach exactly; 15 241 is past it.
-    const straight = (runMm: number) => [
-      free(-100, 0, 0),
-      conduit(1, 0, 0, 0),
-      conduit(1, runMm, 0, 0),
-      free(runMm + 100, 0, 0),
-    ];
-    expect(pull(straight(15241), 15500)).toMatchObject(refused('beyond-tool-capacity'));
-    expect(pull(straight(15241), 15500, CUTTERS)).toMatchObject(refused('wrong-tool'));
-    const elbows = (count: number) => [
-      free(-100, 0, 0),
-      conduit(1, 0, 0, 0),
-      ...Array.from({ length: count }, (_, i) => conduit(2 + i, 0, 1000 * (i + 1), 0)),
-      free(0, 1000 * count + 100, 0),
-    ];
-    const five = pull(elbows(5), 5300);
-    expect(five).toMatchObject(refused('beyond-tool-capacity'));
-    expect(five.ok ? '' : five.error.message).toContain('450°');
-    const before = bus.state;
-    expect(pull(elbows(4), 4300).ok).toBe(true); // 360°: four quarter bends
-    expect(pull(straight(15240), 15500).ok).toBe(true);
-    expect(bus.state.connections.map((c) => [c.id, c.a, c.b, c.lengthMm])).toStrictEqual([
-      [1, null, null, 4300],
-      [2, null, null, 15500],
+    const pull = (bus: ReturnType<typeof bench>['bus'], route: Waypoint[], tool = TAPE) =>
+      bus.exec('wire.pull', { route, lengthMm: lengthOf(route), conductors: [black], tool });
+    // 15 240 mm (50 ft) of run is the tape's reach exactly: six 2540 mm sticks end to end. 15 241 is past it.
+    const straight = conduitRun([2540, 2540, 2540, 2540, 2540, 2541].map((lengthMm) => ({ id: STICK, lengthMm })));
+    expect(pull(straight.bus, straight.route)).toMatchObject(refused('beyond-tool-capacity'));
+    expect(pull(straight.bus, straight.route, CUTTERS)).toMatchObject(refused('wrong-tool'));
+    const reached = conduitRun(Array.from({ length: 6 }, () => ({ id: STICK, lengthMm: 2540 })));
+    expect(pullRun(reached.bus.state, BUILTIN_CATALOG, reached.route).lengthMm).toBe(15240);
+    expect(pull(reached.bus, reached.route).ok).toBe(true);
+    // Five elbows (450°) are past the tape's 360°; four go (each between short sticks, zigzagging).
+    const elbows = (count: number) =>
+      conduitRun([
+        { id: STICK, lengthMm: 300 },
+        ...Array.from({ length: count }, (_, i) => [
+          { id: ELBOW, turn: 2 * (i % 2) },
+          { id: STICK, lengthMm: 300 },
+        ]).flat(),
+      ]);
+    const five = elbows(5);
+    const refusedFive = pull(five.bus, five.route);
+    expect(refusedFive).toMatchObject(refused('beyond-tool-capacity'));
+    expect(refusedFive.ok ? '' : refusedFive.error.message).toContain('450°');
+    const four = elbows(4);
+    expect(pullRun(four.bus.state, BUILTIN_CATALOG, four.route)).toMatchObject({ bendDeg: 360 });
+    const before = four.bus.state;
+    expect(pull(four.bus, four.route).ok).toBe(true);
+    expect(four.bus.state.connections.map((c) => [c.id, c.a, c.b, c.lengthMm])).toStrictEqual([
+      [1, null, null, lengthOf(four.route)],
     ]);
-    bus.exec('edit.undo');
-    bus.exec('edit.undo');
-    expect(bus.state).toStrictEqual(before);
+    four.bus.exec('edit.undo');
+    expect(four.bus.state).toStrictEqual(before);
+  });
+
+  it('refuses a pull that skips an elbow, leaves the run, cuts a corner or sits off its part (conduit continuity)', () => {
+    // A stick, an elbow on its end, a second stick on the elbow: the snapped run, and four ways round it.
+    const { bus, route, ids } = conduitRun([{ id: STICK, lengthMm: 500 }, { id: ELBOW }, { id: STICK, lengthMm: 500 }]);
+    const [stick1, elbow, stick2] = ids;
+    const pull = (r: Waypoint[]) =>
+      bus.exec('wire.pull', { route: r, lengthMm: lengthOf(r), conductors: [black], tool: TAPE });
+    const [before, start, , elbowB, end, after] = route;
+    expect(pullRun(bus.state, BUILTIN_CATALOG, route)).toMatchObject({ bendDeg: 90, elbows: [elbow] });
+    // 1. Skipping the elbow: straight from the first stick to the second (not joined: the elbow joins them).
+    const skip = pull([before, start, end, after]);
+    expect(skip).toMatchObject(refused('conduit-discontinuous'));
+    expect(skip.ok ? '' : skip.error.message).toContain(`conduit parts ${stick1} and ${stick2} aren't joined`);
+    // 2. Leaving the conduit between conduit waypoints, past the elbow.
+    expect(pull([before, start, free(-1000, -1000, -1000), end, after])).toMatchObject(
+      refused('conduit-discontinuous'),
+    );
+    // 3. Cutting the corner: from the middle of the first stick to the elbow's far port.
+    const middle = { ...start, positionMm: at(start.positionMm.x + 250, start.positionMm.y, start.positionMm.z) };
+    expect(pull([before, middle, elbowB, end, after])).toMatchObject(refused('conduit-discontinuous'));
+    // 4. A waypoint off its part: beside the first stick's axis, or mid-bend on the elbow.
+    const beside = { ...start, positionMm: at(start.positionMm.x + 250, start.positionMm.y + 1, start.positionMm.z) };
+    expect(pull([before, beside, ...route.slice(2)])).toMatchObject(refused('off-raceway'));
+    const midBend = { ...elbowB, positionMm: at(elbowB.positionMm.x - 1, elbowB.positionMm.y, elbowB.positionMm.z) };
+    expect(pull([before, start, route[2], midBend, end, after])).toMatchObject(refused('off-raceway'));
+    // The run as built pulls, and through the stick a stop mid-stick is fine.
+    expect(pull([before, start, middle, ...route.slice(2)]).ok).toBe(true);
   });
 });

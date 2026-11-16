@@ -101,6 +101,7 @@ describe('Viewport', () => {
           positionMm: { x: -210, y: 260, z: 0 },
           orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
           mountedOn: null,
+          inEntry: null,
         },
       ],
       ['entity.move', { id: 1, positionMm: { x: -70, y: 110, z: 0 } }],

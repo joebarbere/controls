@@ -48,6 +48,7 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
       state,
       sim,
       mountedOn: null,
+      inEntry: null,
       label: null,
       extensions: {},
     });

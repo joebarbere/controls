@@ -24,7 +24,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the run (pinned from this spec; the console twin below reaches it too). */
-const RUN_HASH = '75ad7c409ce4ad45a03c02d89669f79b2474d4e7b9886cbc986c03e084db5bda';
+const RUN_HASH = 'f6d0c04b83bf2dca0484644dd4f56051a48e5f1b7c14c45067c3f14b906b8692';
 
 const NMB = 'cable.sorrelby-nmb-14-2';
 const SPOOL_BUTTON = '5: NM-B 14/2 with ground, copper, 600 V (spool)';
@@ -54,10 +54,10 @@ const TERMINATION =
   `"accessory":null,"clamp":{"tool":${ref('tool.calderyn-ts-03')},"torqueNm":0.6}}`;
 /** Every logged entry of the run, as console lines (`consoleLine`). */
 const RUN_LOG = [
-  `entity.place --ref ${ref('box.tinmoor-2g-nm')} --positionMm {"x":-835,"y":-150,"z":-21} ${UPRIGHT} --mountedOn null`,
+  `entity.place --ref ${ref('box.tinmoor-2g-nm')} --positionMm {"x":-835,"y":-150,"z":-21} ${UPRIGHT} --mountedOn null --inEntry null`,
   `enclosure.openEntry --id 1 --entry clamp-top-1 --tool ${ref('tool.veltmark-sd-2')}`,
   `entity.place --ref ${ref('panel.pellmoor-din-400x500')} --positionMm {"x":-1010,"y":200,"z":-21} ${UPRIGHT} ` +
-    '--mountedOn null',
+    '--mountedOn null --inEntry null',
   `enclosure.openEntry --id 2 --entry ko-bottom-2 --tool ${ref('tool.veltmark-sd-2')}`,
   ...[
     ['tb.quennick-st4', -819],
@@ -66,7 +66,7 @@ const RUN_LOG = [
   ].map(
     ([id, x]) =>
       `entity.place --ref ${ref(String(id))} --positionMm {"x":${x},"y":351,"z":1} ${UPRIGHT} ` +
-      '--mountedOn {"entity":2,"mount":"rail-2"}',
+      '--mountedOn {"entity":2,"mount":"rail-2"} --inEntry null',
   ),
   'view.focus --target entity-2',
   'toolbelt.select --slot 5',

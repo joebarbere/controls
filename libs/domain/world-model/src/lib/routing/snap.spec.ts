@@ -178,59 +178,19 @@ describe('snapWaypoint (ADR 0017)', () => {
   });
 });
 
-describe('connectorEntry (ADR 0017: derived, never stored)', () => {
-  it('a connector snapped into an open entry of its size is in it', () => {
-    expect(connectorEntries(racewayPanelBus().state, BUILTIN_CATALOG)).toStrictEqual([
+describe('connectorEntry (ADR 0015 F3.4 part 2 note 4: stored, not derived)', () => {
+  it('reads the stored inEntry: the fixture connector is in ko-bottom-1', () => {
+    expect(connectorEntries(racewayPanelBus().state)).toStrictEqual([
       { connector: 7, enclosure: 1, entry: 'ko-bottom-1' },
     ]);
+    expect(connectorEntry(racewayPanelBus().state, 1)).toBeNull(); // the panel itself is in no entry
   });
 
-  it('(a) two connectors on one entry: the lowest id is in it, the other in none', () => {
+  it('a connector placed at an entry without inEntry is in none (nothing is derived from geometry)', () => {
     const bus = racewayPanelBus();
-    const place = bus.exec('entity.place', {
-      ref: { id: 'connector.stavenor-emt-075', version: 1 },
-      positionMm: at(-117, -200, 83),
-      orientationMdeg: { yaw: 0, pitch: 0, roll: 270_000 },
-    });
-    expect(place.ok).toBe(true);
-    expect(connectorEntry(bus.state, BUILTIN_CATALOG, 7)).toMatchObject({ entry: 'ko-bottom-1' });
-    expect(connectorEntry(bus.state, BUILTIN_CATALOG, 10)).toBeNull();
-  });
-
-  it('(b) at a closed entry, or one of another trade size: in none', () => {
-    const bus = racewayPanelBus();
-    // ko-bottom-2 (3/4 in, closed) at (0, −200, −100) + ... : the same connector moved 100 mm along x.
-    expect(
-      bus.exec('entity.place', {
-        ref: { id: 'connector.stavenor-emt-075', version: 1 },
-        positionMm: at(-17, -200, 83),
-        orientationMdeg: { yaw: 0, pitch: 0, roll: 270_000 },
-      }).ok,
-    ).toBe(true);
-    expect(connectorEntry(bus.state, BUILTIN_CATALOG, 10)).toBeNull();
-    // A 1/2 in connector in the open 3/4 in knockout: its body is 2 mm thinner, so its port sits elsewhere
-    // unless forced there; force it by placing its entry port exactly on the entry point.
-    const half = { id: 'connector.stavenor-emt-050', version: 1 };
-    const device = BUILTIN_CATALOG.device(half);
-    const r = (device?.sizeMm?.depthMm ?? 0) / 2;
-    expect(
-      bus.exec('entity.place', {
-        ref: half,
-        positionMm: at(-100 - r, -200, 100 - r),
-        orientationMdeg: { yaw: 0, pitch: 0, roll: 270_000 },
-      }).ok,
-    ).toBe(true);
-    expect(connectorEntry(bus.state, BUILTIN_CATALOG, 11)).toBeNull();
-    expect(connectorEntry(bus.state, BUILTIN_CATALOG, 7)).toMatchObject({ entry: 'ko-bottom-1' });
-  });
-
-  it('(c) an enclosure moved away from its connector: in none', () => {
-    const bus = racewayPanelBus();
-    const moved = { ...bus.state, entities: bus.state.entities.filter((e) => e.id === 1 || e.id === 7) };
-    const lone = createWorldBus(moved);
-    expect(connectorEntry(lone.state, BUILTIN_CATALOG, 7)).toMatchObject({ entry: 'ko-bottom-1' });
-    expect(lone.exec('entity.move', { id: 1, positionMm: at(-200, -200, 500) }).ok).toBe(true);
-    expect(connectorEntry(lone.state, BUILTIN_CATALOG, 7)).toBeNull();
-    expect(connectorEntry(lone.state, BUILTIN_CATALOG, 1)).toBeNull(); // not a connector
+    const free = bus.state.entities.map((e) => (e.id === 7 ? { ...e, inEntry: null } : e));
+    const lone = createWorldBus({ ...bus.state, entities: free });
+    expect(connectorEntries(lone.state)).toStrictEqual([]);
+    expect(connectorEntry(lone.state, 7)).toBeNull();
   });
 });

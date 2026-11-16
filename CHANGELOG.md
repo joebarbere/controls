@@ -99,6 +99,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- **A conduit connector records which enclosure entry it is in, and a pull must follow the conduit run** (pre-freeze change to world v3, in place, no `schemaVersion` bump; [ADR 0015 F3.4 part 2 note 4](docs/decisions/0015-world-document-v3.md#implementation-notes-f34-part-2), [save-format caveats](docs/caveats/save-format.md)). Every v3 entity gains `inEntry: { entity, entry } | null` and `entity.place` takes and logs `inEntry` (default `null`); the v2 → v3 step sets it to `null`. A connector placed in an entry must be a conduit connector in an open entry of its trade size, its entry end exactly at the entry pointing in, with room (one connector per entry, counted against `maxCables`): new refusals `not-a-connector` and `off-entry`, plus `entry-full`, `wrong-size`, `mount-mismatch`. Its enclosure is `occupied`, the connector itself can't move or turn (`in-entry`), cable ends count it, `connectorEntries` reads the stored field (ADR 0017 §8's derivation is superseded), and `placeInWorld` returns it for a connector snapped into an entry. `wire.pull` (and the load check) now refuse conduit waypoints off their part (`off-raceway`) and runs that leave the conduit, skip an elbow or cut across one (`conduit-discontinuous`), closing a bypass of the fish tape's bend limit; `pullRun` adds an elbow's arc when either end of its port-to-port segment is hosted by it. The load check re-verifies both (`invalid-device-state`). Every v3 world gained `inEntry: null` per entity, so these world hashes moved (snapshot and topology hashes did not); the v3 `.ctrl` fixtures were replaced in place (the engine-7 saves rebuilt from their scenarios, the engine-6 saves and `wired-world-only.ctrl` patched with `inEntry: null` only), the v3 JSON fixtures, JSON Schemas and the routing parity world regenerated:
+
+  | Golden                                                          | Old                 | New                 |
+  | --------------------------------------------------------------- | ------------------- | ------------------- |
+  | `BAD_TERMINATION_HASH`                                          | `3cda7e00…303df9a6` | `7a3561c5…ab246c33` |
+  | bench-leads `ENGINE_1_HASH` (its engine-1 fixture, migrated)    | `bb88c0f7…19be0288` | `68e0ba45…f2f2f574` |
+  | bench-leads `ENGINE_3_HASH` (its engine-3 fixture, replayed)    | `88495799…a20e0555` | `5d8ac8b0…3a73ee7a` |
+  | `BENCH_LAMP_HASH` (Node, Chromium, Electron)                    | `38784069…07aed947` | `b2871e6d…48d7d4ba` |
+  | `BENCH_LAMP_LIT_HASH` (Node, Chromium, Electron)                | `b94f50ce…1f3281d2` | `5c4941c0…c544fc67` |
+  | `BENCH_LEADS_HASH` (Node, Chromium)                             | `d4663903…564ab6ba` | `e4aa3771…69330d37` |
+  | `DIN_PANEL_BREAKER_HASH` (Node, Chromium)                       | `7901fbdf…0687ac15` | `1a66183a…af344404` |
+  | `DRILL_AND_PULL_HASH`                                           | `3e64b7f8…9768b329` | `d02e5bec…6b6ee04d` |
+  | e2e `LANDED_HASH` (terminations.spec)                           | `6cfe9e32…47763146` | `cb7e589a…9e8130bc` |
+  | e2e `ROUTED_HASH` (routing.spec)                                | `1ce0d6b7…b50a74ab` | `490d7741…a25c54f0` |
+  | e2e `RUN_HASH` (cables.spec)                                    | `75ad7c40…84db5bda` | `f6d0c04b…906b8692` |
+  | `FOUR_SURFACE_HASH` (Node, Chromium)                            | `72cfcb1c…c1b5de99` | `c56fb0a8…e8738491` |
+  | `FUSED_CONDUCTOR_HASH`                                          | `ad34200a…51948191` | `e2aed0b0…422c64e7` |
+  | `FUSED_LEAD_HASH`                                               | `618b81ed…58860819` | `a28eea59…c7e92705` |
+  | `MAINS_HASH` (Node, Chromium)                                   | `3eb673ed…c1dc080d` | `7e85756b…5cd9e173` |
+  | `MOUSE_PLACE_MOVE_DELETE_HASH` (Node; e2e `MOUSE_HASH`)         | `a32cce12…bbca0ab3` | `6c369870…9be52936` |
+  | `NM_CABLE_RUN_HASH`                                             | `e6276774…8952d070` | `b49c8916…dc97dfad` |
+  | `PALETTE_PLACE_UNDO_HASH` (Node, Chromium)                      | `2b6fa876…67b8a95e` | `573a33a9…790ea88b` |
+  | `PHASE_ACCEPTANCE_HASH` (Node, Chromium)                        | `bcf5e971…ceab181f` | `60726d27…89107ab8` |
+  | `PROTECTION_HASH`                                               | `8ea82050…d83316d8` | `2635ccff…f91643eb` |
+  | `RACEWAY_PANEL_HASH`                                            | `e3b59790…44b48b26` | `7a83af95…92d097f5` |
+  | save-format `GOLDEN_SAMPLE_SHA256` (container bytes)            | `699609a6…99431565` | `cbc85866…5cbb1d7c` |
+  | scripting-api routing `HASH`                                    | `02249121…9dd97d8b` | `38e77ea6…60798807` |
+  | scripting-api wiring `HASH`                                     | `35268a19…4160e596` | `8b8adc0d…6daf5773` |
+  | sim-step `ENGINE_3_HASH` (its engine-3 fixture)                 | `0194d4c8…9a50cc2f` | `8c62bc4a…7572659a` |
+  | sim-step `ENGINE_4_HASH` (its engine-4 fixture)                 | `91a543b9…ae2741f6` | `7bf02b74…35c3f2a8` |
+  | `SIM_STEP_HASH` (Node, Chromium)                                | `d350f079…3ef23732` | `aa47983d…bd930253` |
+  | `SOURCES_HASH` (Node, Chromium)                                 | `22f018df…4db0a66d` | `58be51c3…be1eea2b` |
+  | world-model `GOLDEN.propsAndExtensionsFixture` (Node, Chromium) | `2f36913d…af5c5b8f` | `7284d19d…211bad6d` |
+  | world-model `GOLDEN.scenario` (Node, Chromium)                  | `42c47290…82bc0e67` | `52f3577d…bcc73e93` |
+
+- Tests (pre-freeze `inEntry`): `wiring/in-entry.spec.ts` (each placement refusal, the stored and logged field, occupancy, `in-entry` on move and turn, `entry-full` counting the connector, a property over the 64 quarter-turn triples, the load check's refusals and its continuity refusals), conduit-continuity refusals in `entry-and-pull.spec.ts` (a pull that skips an elbow, leaves the run, cuts a corner or sits off its part; the reach tests now pull through snapped runs of real sticks and elbows), the v3 schema invariant and refused fixtures `in-entry-host-missing.json` and `in-entry-shared.json`, and the v2 → v3 migration setting `inEntry: null`.
+
 - **The mains scenario stops at 10 ms** (F3.6 part 2): its kiloamp test leads now fuse (at 11 and 41 ms), and it exists to compare the series-inductance phasors with both faults on.
 - **The test lead gains two failure params** at entry version 1 (catalogue 2 provisional): `meltingPointK` 1357.77 K (copper's ITS-90 point) and `insulationRatedTempK` 363.15 K (game-design: its PVC wall at the MTW row's 90 °C), and `materials` rows gain `meltingPointK` (copper 1357.77 K, aluminium 933.473 K).
 - **Wires and test leads now heat up** (P3 F3.6 part 1, `SIM_ENGINE_VERSION` 6 → 7, provisional until 0.4.0; [ADR 0018](docs/decisions/0018-conductor-and-termination-physics.md#implementation-notes-f36-part-1), [simulation](docs/architecture/simulation.md#connection-thermal-bank-f36-part-1)). Every conductor and every test lead carries a temperature: current heats it (I²R), and it cools to the workshop's 20 °C through its insulation and by convection and radiation from its surface, so its resistance rises as it warms. Each landed conductor end has its own hot spot, heated by its contact resistance and cooled along the wire and into the device, so a poorly made termination runs hotter than the wire beside it. On 14 AWG at 12.5 A a good screw termination runs a few kelvin cooler than its wire (the device sinks its heat); one tightened to a fifth of its marked torque runs about 100 K hotter. A short through a test lead now heats it quickly and limits the current a little. The temperatures are saved and continue exactly after a load. Nothing new is shown yet: the heat overlay and the readouts are F3.6 part 3. Every scenario with a lead re-pins once (the single 6 → 7 list; later P3 changes to engine 7 update it in place):

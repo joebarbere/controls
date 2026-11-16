@@ -25,7 +25,7 @@ import { SimSolutionV2 } from '../v2/world';
  * v3 adds real wiring (P3): connections are test leads **and** conductors in one array (nullable
  * ends, typed per-end terminations, a route, a cut length, a colour and a label, and two state bags),
  * cable assemblies that own their conductors, what each device is mounted on and its printed label,
- * and two new id counters. Fixtures, transforms and the solution record are unchanged and reuse the
+ * which entry a conduit connector is in, and two new id counters. Fixtures, transforms and the solution record are unchanged and reuse the
  * v1 and v2 schemas, so their JSON Schema `$defs` keep their names.
  *
  * Every object is strict and no field is optional (absent is `null`).
@@ -187,7 +187,14 @@ export type CableV3 = z.infer<typeof CableV3>;
 export const MountedOnV3 = z.strictObject({ entity: Int.min(1), mount: MountId }).meta({ id: 'MountedOnV3' });
 export type MountedOnV3 = z.infer<typeof MountedOnV3>;
 
-/** A placed thing in the as-built world (v2's entity plus `mountedOn` and `label`). */
+/**
+ * Which enclosure entry a conduit connector is in (ADR 0015, F3.4 part 2 implementation note 4): an
+ * enclosure entity and one of its catalogue entries. A relation, not a mount: entries aren't mounts.
+ */
+export const InEntryV3 = z.strictObject({ entity: Int.min(1), entry: EntryId }).meta({ id: 'InEntryV3' });
+export type InEntryV3 = z.infer<typeof InEntryV3>;
+
+/** A placed thing in the as-built world (v2's entity plus `mountedOn`, `inEntry` and `label`). */
 export const EntityV3 = z
   .strictObject({
     /** Allocated from `WorldV3.nextEntityId`; never from `crypto.randomUUID` (ADR 0007). */
@@ -201,6 +208,11 @@ export const EntityV3 = z
     sim: DeviceStateBag,
     /** The enclosure (or enclosure part) and the catalogue mount holding it, or `null`. */
     mountedOn: MountedOnV3.nullable(),
+    /**
+     * The enclosure entry a conduit connector is in, or `null` (every other entity, and a connector
+     * standing free). Never with a `mountedOn`; at most one entity per entry.
+     */
+    inEntry: InEntryV3.nullable(),
     /** The text of a printed label on the device (`TB1`), or `null`. */
     label: LabelText.nullable(),
     extensions: Extensions,
@@ -243,7 +255,7 @@ function checkRoute(
 /**
  * The world document (`world.json`), schemaVersion 3 (ADR 0015). Fixtures, entities, connections and
  * cables are each sorted by strictly ascending id, below their counters; termination ids are unique
- * and below `nextTerminationId`; nothing dangles (mounts, ends, cables and route hosts name things
+ * and below `nextTerminationId`; nothing dangles (mounts, entries, ends, cables and route hosts name things
  * that exist); leads and conductors have their shapes. Checks that need the catalogue (terminals,
  * methods, colours, mounts, entries, lengths against geometry, bag keys) are the load check's
  * (`checkWorldReferences` in `world-model`).
@@ -323,6 +335,22 @@ export const WorldV3 = z
           seen.add(host.id);
         }
       }
+    });
+
+    // 2b. inEntry names another entity that exists; one entity per entry; never with mountedOn.
+    const entryHolders = new Set<string>();
+    world.entities.forEach((entity, index) => {
+      if (entity.inEntry === null) return;
+      const at = ['entities', index, 'inEntry'];
+      if (entity.mountedOn !== null) issue(at, 'An entity is either mounted or in an entry, not both');
+      if (entity.inEntry.entity === entity.id) {
+        issue([...at, 'entity'], 'An entity is not in an entry of itself');
+      } else if (!entities.has(entity.inEntry.entity)) {
+        issue([...at, 'entity'], 'An entity is in an entry of an entity that exists');
+      }
+      const key = `${entity.inEntry.entity}\u0000${entity.inEntry.entry}`;
+      if (entryHolders.has(key)) issue(at, 'At most one entity is in each entry');
+      entryHolders.add(key);
     });
 
     // 3–6. Connections: ends, shapes, cables and routes.
@@ -434,6 +462,6 @@ export const WorldV3 = z
   .meta({
     title: 'Controls world document, schemaVersion 3',
     description:
-      'world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).',
+      'world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, entries held by one entity that exists and is not mounted, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).',
   });
 export type WorldV3 = z.infer<typeof WorldV3>;

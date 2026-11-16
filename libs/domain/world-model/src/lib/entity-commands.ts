@@ -11,12 +11,14 @@ import {
 import { BUILTIN_CATALOG, type Catalog, CUT_LENGTH_KEY, cutLengthMm, initialBags } from '@controls/catalog';
 import {
   CatalogRef,
+  EntryId,
   Int,
   MILLIDEGREES_PER_TURN,
   MountId,
   OrientationMdegV1,
   PositionMmV1,
 } from '@controls/save-format';
+import { checkInEntry } from './wiring/in-entry';
 import { checkMount } from './wiring/mounting';
 import { checkOverlap } from './wiring/overlap';
 import { unlandEnd } from './wiring/wire-commands';
@@ -42,6 +44,11 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * rest waypoint where each terminal was) in the same change, so no end dangles; undo restores the
  * entity, its leads and its conductors exactly, terminations included. Test leads behave as in v2.
  *
+ * Pre-freeze (ADR 0015 F3.4 part 2 note 4): `entity.place` takes `inEntry` (default `null`): a conduit
+ * connector placed in an enclosure entry, checked by `checkInEntry` (an open entry of its trade size,
+ * its entry end exactly there, room in the entry). A connector in an entry can't move or turn
+ * (`in-entry`), and holds its enclosure (`occupied`).
+ *
  * F3.5: `entity.place` and `entity.move` refuse a body that would overlap another entity's when
  * either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of `wiring/overlap.ts`;
  * pre-v3 logs stack free props, so free bodies among themselves are only kept apart by the placement
@@ -62,12 +69,23 @@ export const MountedOnArg = z.strictObject({
   mount: MountId.meta({ title: 'Mount', description: "A mount id of the enclosure's catalogue entry (rail-1, yoke)" }),
 });
 
+/** Which enclosure entry a placed conduit connector is in: an enclosure entity and one of its catalogue entries. */
+export const InEntryArg = z.strictObject({
+  entity: EntityIdArg.meta({ ...entityRefMeta, title: 'Enclosure' }),
+  entry: EntryId.meta({ title: 'Entry', description: "An entry id of the enclosure's catalogue entry (ko-bottom-1)" }),
+});
+
 export const EntityPlaceArgs = z.strictObject({
   ref: CatalogRef,
   positionMm: PositionMmV1,
   orientationMdeg: OrientationMdegV1.default(() => ({ yaw: 0, pitch: 0, roll: 0 })),
   /** World v3 (ADR 0015): `null` (the default) places it free-standing. Logged explicitly, as `null` too. */
   mountedOn: MountedOnArg.nullable().default(null).meta({ title: 'Mounted on' }),
+  /**
+   * World v3 (ADR 0015 F3.4 part 2 note 4): the entry a conduit connector goes in, or `null` (the
+   * default). Logged explicitly, as `null` too.
+   */
+  inEntry: InEntryArg.nullable().default(null).meta({ title: 'In entry' }),
 });
 export type EntityPlaceArgs = z.infer<typeof EntityPlaceArgs>;
 
@@ -120,11 +138,12 @@ export function isLead(connection: Connection): boolean {
 }
 
 /**
- * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a cable end is in one of its
- * entries, or a route waypoint names it. An occupied entity can't move, turn or be deleted.
+ * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a connector or a cable end is
+ * in one of its entries, or a route waypoint names it. An occupied entity can't move, turn or be
+ * deleted.
  */
 export function entityOccupied(world: Pick<World, 'entities' | 'cables' | 'connections'>, id: EntityId): boolean {
-  if (world.entities.some((e) => e.mountedOn?.entity === id)) return true;
+  if (world.entities.some((e) => e.mountedOn?.entity === id || e.inEntry?.entity === id)) return true;
   if (world.cables.some((c) => c.a?.entity === id || c.b?.entity === id || c.route.some((w) => w.entity === id))) {
     return true;
   }
@@ -151,7 +170,7 @@ export function entityHold(
 
 function holdFailure(hold: 'occupied' | 'wired', id: EntityId) {
   return hold === 'occupied'
-    ? fail('occupied', `Entity ${id} holds a mounted device, a cable end or a route`)
+    ? fail('occupied', `Entity ${id} holds a mounted device, a connector, a cable end or a route`)
     : fail('wired', `Entity ${id} has a conductor landed on it: unland it first`);
 }
 
@@ -166,6 +185,14 @@ function withoutEntity(entities: readonly Entity[], id: EntityId): Entity[] {
 
 function withEntity(entities: readonly Entity[], id: EntityId, update: (e: Entity) => Entity): Entity[] {
   return entities.map((e) => (e.id === id ? update(e) : e));
+}
+
+function inEntryFailure(entity: Entity) {
+  const at = entity.inEntry;
+  return fail(
+    'in-entry',
+    `Entity ${entity.id} is in entry "${at?.entry}" of entity ${at?.entity}: it can't move or turn`,
+  );
 }
 
 function notFound(id: EntityId) {
@@ -207,6 +234,14 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (kind?.placement === 'connection') {
         return fail('not-placeable', `${args.ref.id} is a connection: make it with lead.connect`);
       }
+      if (args.inEntry !== null) {
+        if (args.mountedOn !== null) {
+          return fail('mount-mismatch', 'A connector in an entry is not also mounted: give mountedOn or inEntry');
+        }
+        const transform = { positionMm: args.positionMm, orientationMdeg: args.orientationMdeg };
+        const refused = checkInEntry(state, catalog, args.ref, transform, null, args.inEntry, null);
+        if (refused) return refused;
+      }
       if (args.mountedOn !== null) {
         const refused = checkMount(
           state,
@@ -233,6 +268,7 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
         state: bags.state,
         sim: bags.sim,
         mountedOn: args.mountedOn && { ...args.mountedOn },
+        inEntry: args.inEntry && { ...args.inEntry },
         label: null,
         extensions: {},
       };
@@ -247,8 +283,8 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
 
 /**
  * `entity.move`: sets an entity's position (absolute, integer mm). Undo restores the old one. A
- * mounted device only slides along its own mount (`off-mount`, `mount-full` re-checked); nothing may
- * move into another entity's body (`overlaps`).
+ * mounted device only slides along its own mount (`off-mount`, `mount-full` re-checked); a connector
+ * in an entry doesn't move (`in-entry`); nothing may move into another entity's body (`overlaps`).
  */
 export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<EntityMoveArgs, World>({
@@ -260,6 +296,7 @@ export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
     run: ({ state }, { id, positionMm }) => {
       const entity = findEntity(state, id);
       if (!entity) return notFound(id);
+      if (entity.inEntry !== null) return inEntryFailure(entity);
       const hold = entityHold(state, id);
       if (hold !== null) return holdFailure(hold, id);
       if (entity.mountedOn !== null) {
@@ -287,7 +324,8 @@ export const entityMove = entityMoveCommand();
 
 /**
  * `entity.rotate`: turns an entity by a per-axis delta, composed by modular integer addition
- * (ADR 0007). Undo subtracts the same delta, which restores the triple exactly.
+ * (ADR 0007). Undo subtracts the same delta, which restores the triple exactly. A mounted device
+ * (`mounted`) or a connector in an entry (`in-entry`) can't turn.
  */
 export const entityRotate = defineCommand<EntityRotateArgs, World>({
   id: 'entity.rotate',
@@ -299,6 +337,7 @@ export const entityRotate = defineCommand<EntityRotateArgs, World>({
     const entity = findEntity(state, id);
     if (!entity) return notFound(id);
     if (entity.mountedOn !== null) return fail('mounted', `Entity ${id} is mounted: it can't be rotated`);
+    if (entity.inEntry !== null) return inEntryFailure(entity);
     const hold = entityHold(state, id);
     if (hold !== null) return holdFailure(hold, id);
     const turn = (sign: 1 | -1) => (w: World) => ({

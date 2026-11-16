@@ -37,8 +37,8 @@ export default function drillAndPull(game: Game): void {
   const place = (part: CatalogRef, cursor: Vec3Mm) => {
     const placed = placeInWorld(world(), part, cursor, worldSnapTargets(world()));
     if (!placed.ok) throw new Error(`no placement for ${part.id} at ${JSON.stringify(cursor)}: ${placed.reason}`);
-    const { positionMm, orientationMdeg, mountedOn } = placed;
-    game.execOrThrow('entity.place', { ref: part, positionMm, orientationMdeg, mountedOn });
+    const { positionMm, orientationMdeg, mountedOn, inEntry } = placed;
+    game.execOrThrow('entity.place', { ref: part, positionMm, orientationMdeg, mountedOn, inEntry });
   };
   const snap = (cursor: PositionMm, kind: 'staple' | 'bore' | 'conduit', boreTool: CatalogRef | null = null) => {
     const w = snapWaypoint(world(), BUILTIN_CATALOG, cursor, { kinds: [kind], boreTool });

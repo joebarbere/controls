@@ -8,7 +8,9 @@
  * 0. **A conduit end or an open entry** (F3.5 part 2), for an EMT-lite part being placed: within
  *    `RACEWAY_CAPTURE_DISTANCE` of an open enclosure entry of its trade size (a connector) or of a free
  *    end of a placed conduit part of its size, the part's end goes there, facing it (`snapConduit`;
- *    `options.turn` picks among the four turns about that end). Otherwise it is placed like any part.
+ *    `options.turn` picks among the four turns about that end). A connector snapped into an entry is
+ *    placed **in** it (`inEntry`, checked by `checkInEntry`; an entry already holding a connector, or
+ *    full, is no target). Otherwise it is placed like any part.
  * 1. **An enclosure mount the device fits** (a breaker onto a panel's DIN rail, a device into a box's
  *    yoke), when the cursor is on it: within {@link MOUNT_CAPTURE_DEPTH} of the mount's plane and over
  *    the place the device would take. Rails win over yokes, yokes over backplates (most specific
@@ -41,7 +43,8 @@ import {
 } from '@controls/catalog';
 import { entityHold, findEntity } from '../entity-commands';
 import { builtinProp, propFootprint } from '../props';
-import type { CatalogRef, EntityId, MountedOn, OrientationMdeg, World } from '../types';
+import type { CatalogRef, EntityId, InEntry, MountedOn, OrientationMdeg, World } from '../types';
+import { checkInEntry } from '../wiring/in-entry';
 import { checkMount, mountFrame } from '../wiring/mounting';
 import { overlappingEntity } from '../wiring/overlap';
 import { MOUNT_CAPTURE_DEPTH, NARROW_RAIL_DEVICE } from './constants';
@@ -125,7 +128,9 @@ export type WorldPlacementFailure =
   | 'mount-mismatch'
   | 'not-axis-aligned'
   | 'unknown-mount'
-  | 'not-found';
+  | 'not-found'
+  | 'entry-full'
+  | 'off-entry';
 
 export type WorldPlacement =
   | {
@@ -138,6 +143,8 @@ export type WorldPlacement =
       readonly orientationMdeg: OrientationMdeg;
       /** Exactly the `entity.place` `mountedOn` (a move keeps the entity's). */
       readonly mountedOn: MountedOn | null;
+      /** Exactly the `entity.place` `inEntry`: the entry a conduit connector snapped into, else `null`. */
+      readonly inEntry: InEntry | null;
     }
   | { readonly ok: false; readonly reason: WorldPlacementFailure; readonly targetId: string | null };
 
@@ -291,8 +298,23 @@ export function placeInWorld(
   if (!entity) {
     const conduit = snapConduit(world, catalog, placed, cursorWorld, options.turn ?? 0);
     if (conduit) {
-      const { targetId, positionMm, orientationMdeg } = conduit;
-      return checked(world, catalog, placed, targetId, 'raceway', positionMm, orientationMdeg, null, null, null);
+      const { targetId, positionMm, orientationMdeg, inEntry } = conduit;
+      const at = { positionMm, orientationMdeg };
+      const refused = inEntry && checkInEntry(world, catalog, placed, at, null, inEntry, null);
+      if (refused) return { ok: false, reason: refused.code as WorldPlacementFailure, targetId };
+      const result = checked(
+        world,
+        catalog,
+        placed,
+        targetId,
+        'raceway',
+        positionMm,
+        orientationMdeg,
+        null,
+        null,
+        null,
+      );
+      return result.ok ? { ...result, inEntry } : result;
     }
   }
 
@@ -351,5 +373,5 @@ function checked(
   if (overlappingEntity(world, catalog, ref, transform, mountedOn, self, 'all', state) !== null) {
     return { ok: false, reason: 'overlaps', targetId };
   }
-  return { ok: true, targetId, kind, positionMm, orientationMdeg, mountedOn };
+  return { ok: true, targetId, kind, positionMm, orientationMdeg, mountedOn, inEntry: null };
 }

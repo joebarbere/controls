@@ -11,7 +11,7 @@ import { createGame, type Game } from './game';
  * explicit waypoints and reach the same pinned hash. A log never holds `auto`.
  */
 
-const HASH = '02249121a120e24f06b211cc8bef3ec93611e2b4514a7166c65c40319dd97d8b';
+const HASH = '38e77ea6d0f248f5e42e3eca4c72a588ba8da4d5c51563f10c6fc04460798807';
 
 const DUCT = '--ref.id duct.lattisby-40x60 --ref.version 1';
 const BLOCK = '--ref.id tb.quennick-st4 --ref.version 1';

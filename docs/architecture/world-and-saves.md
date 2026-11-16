@@ -44,6 +44,7 @@ classDiagram
         state: commanded bag
         sim: sim-owned bag
         mountedOn: entity, mount | null
+        inEntry: entity, entry | null
         label: LabelText | null
         extensions
     }
@@ -131,6 +132,7 @@ classDiagram
     CableV3 *-- WaypointV3 : route
     ConnectionV3 --> CableV3 : cable.id
     EntityV3 --> EntityV3 : mountedOn
+    EntityV3 --> EntityV3 : inEntry
     FixtureV1 --> CatalogRef
     EntityV3 --> CatalogRef
     ConnectionV3 --> CatalogRef

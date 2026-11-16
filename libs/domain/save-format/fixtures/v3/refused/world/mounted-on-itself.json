@@ -53,6 +53,7 @@
       "state": {},
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": "SVC",
       "extensions": {}
     },
@@ -85,6 +86,7 @@
         "entity": 2,
         "mount": "rail-1"
       },
+      "inEntry": null,
       "label": "CB1",
       "extensions": {}
     },
@@ -109,6 +111,7 @@
       "state": {},
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     }

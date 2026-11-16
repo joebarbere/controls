@@ -26,6 +26,7 @@ import { builtinProp } from '../props';
 import { type BoxMm, boxFromCorners, conservativeCube, routeCollision } from '../routing/collide';
 import { routeFloorMm } from '../routing/floor';
 import { UNIT } from '../routing/vec';
+import { conduitContinuityProblem } from '../routing/continuity';
 import { waypointHostProblem } from '../routing/hosts';
 import { entityPointMm, isAxisAligned, rotateQuarterTurns } from '../snap/quarter-turn';
 import { combinationProblem } from '../termination/combination';
@@ -180,10 +181,11 @@ function elbowPorts(world: Pick<World, 'entities'>, catalog: Catalog, elbow: Ent
 /**
  * The conduit run of a pull route (F3.4 part 2): its length from the first to the last `conduit`
  * waypoint along the straight segments between waypoints, except that where two consecutive waypoints
- * are the two ports of one elbow the elbow's own centreline (2L + πR/2) replaces the chord
+ * are the two ports of one elbow (hosting either of them) the elbow's own centreline (2L + πR/2) replaces the chord
  * ({@link elbowArcExcessMm}: the chord under-measures a P3 elbow by about 18 %); and its bends, one
  * quarter bend per distinct elbow hosting a conduit waypoint. A change of direction between two sticks
- * without an elbow isn't counted (P3 has no bending; the snapper never makes one). Pure (D6).
+ * without an elbow isn't counted (P3 has no bending; the snapper never makes one, and `checkRoute`
+ * refuses a route that leaves the run or skips an elbow: `conduitContinuityProblem`). Pure (D6).
  * Exported for the fish tape minigame (its length and bends) and its pre-check.
  */
 export function pullRun(world: Pick<World, 'entities'>, catalog: Catalog, route: readonly Waypoint[]): PullRun {
@@ -198,15 +200,17 @@ export function pullRun(world: Pick<World, 'entities'>, catalog: Catalog, route:
     const dy = q.y - p.y;
     const dz = q.z - p.z;
     lengthMm += Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const host = route[i].entity;
-    if (
-      route[i - 1].kind === 'conduit' &&
-      route[i].kind === 'conduit' &&
-      host !== null &&
-      route[i - 1].entity === host
-    ) {
-      const elbow = elbowPorts(world, catalog, host, p, q);
-      if (elbow) lengthMm += elbowArcExcessMm(elbow['legLengthMm'], elbow['bendRadiusMm']);
+    if (route[i - 1].kind === 'conduit' && route[i].kind === 'conduit') {
+      // The segment is exactly an elbow's two ports, the elbow hosting either end of it (the other
+      // may sit on the stick it is joined to there, `conduitContinuityProblem`).
+      const hosts = new Set([route[i - 1].entity, route[i].entity]);
+      for (const host of hosts) {
+        const elbow = host === null ? null : elbowPorts(world, catalog, host, p, q);
+        if (elbow) {
+          lengthMm += elbowArcExcessMm(elbow['legLengthMm'], elbow['bendRadiusMm']);
+          break;
+        }
+      }
     }
   }
   const elbows = new Set<EntityId>();
@@ -286,7 +290,10 @@ export type ConduitRule = 'refuse' | 'require';
  * (`bad-waypoint`) and are axis-aligned (`not-axis-aligned`), a bore's tool that can bore, a free rest
  * waypoint at each null end, and conduit only in `wire.pull` (`needs-pull`; `wire.pull` needs one,
  * `bad-waypoint`). At most `MAX_ROUTE_WAYPOINTS` minus the landed ends, so unlanding (which adds a
- * rest waypoint) never overflows a route. Which host kinds a waypoint kind accepts (a duct waypoint
+ * rest waypoint) never overflows a route. Conduit waypoints trace the run as built
+ * (`conduitContinuityProblem`, ADR 0015 F3.4 part 2 note 4): each on its part (`off-raceway`), all in
+ * one stretch, consecutive ones on one part or on parts joined where the run passes, an elbow gone
+ * round port to port (`conduit-discontinuous`), so `pullRun` never skips an elbow. Which host kinds a waypoint kind accepts (a duct waypoint
  * on a duct, a staple on a stud wall) is ADR 0017's `waypointHostProblem` (F3.2 part 1).
  */
 export function checkRoute(
@@ -344,7 +351,8 @@ export function checkRoute(
   if (conduit === 'require' && conduits === 0) {
     return fail('bad-waypoint', 'A pull goes through conduit: the route needs a conduit waypoint');
   }
-  return null;
+  const broken = conduitContinuityProblem(world, catalog, route);
+  return broken && fail(broken.code, broken.message);
 }
 
 /** Whether a route goes through conduit (a pulled conductor's). */
@@ -670,7 +678,8 @@ export function cablesInEntry(cables: readonly Cable[], id: EntityId, entry: str
 /**
  * A cable end in an enclosure entry (ADR 0015): the entity exists (`not-found`) and is an enclosure
  * (`not-an-enclosure`) with that entry (`unknown-entry`), opened (`entry-closed`), with room
- * (`entry-full`, `maxCables`), and axis-aligned (`not-axis-aligned`). `extra` counts ends this command
+ * (`entry-full`: its cable ends and the conduit connector in it, if any, together under `maxCables`;
+ * ADR 0015 F3.4 part 2 note 4), and axis-aligned (`not-axis-aligned`). `extra` counts ends this command
  * adds to the same entry before this one (a cable with both ends in one entry is refused separately).
  */
 export function checkCableEnd(world: World, catalog: Catalog, end: CableEnd): Checked<EntryPoint> {
@@ -682,8 +691,13 @@ export function checkCableEnd(world: World, catalog: Catalog, end: CableEnd): Ch
   if (index < 0) return fail('unknown-entry', `Entity ${end.entity} has no entry "${end.entry}"`);
   if (!entryOpen(entity, index)) return fail('entry-closed', `Entry "${end.entry}" of entity ${end.entity} is closed`);
   const entry = enclosure.entries[index];
-  if (cablesInEntry(world.cables, end.entity, end.entry) >= entry.maxCables) {
-    return fail('entry-full', `Entry "${end.entry}" of entity ${end.entity} takes ${entry.maxCables} cable(s)`);
+  const connectors = world.entities.filter((e) => e.inEntry?.entity === end.entity && e.inEntry.entry === end.entry);
+  if (cablesInEntry(world.cables, end.entity, end.entry) + connectors.length >= entry.maxCables) {
+    const held = connectors.length > 0 ? ` and holds connector ${connectors[0].id}` : '';
+    return fail(
+      'entry-full',
+      `Entry "${end.entry}" of entity ${end.entity} takes ${entry.maxCables} cable(s) or connector(s)${held}`,
+    );
   }
   const point = entityPointMm(entity.transform, entry.positionMm);
   if (point === null) return fail('not-axis-aligned', `Entity ${end.entity} isn't at quarter-turns`);

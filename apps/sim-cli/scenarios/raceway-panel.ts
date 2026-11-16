@@ -15,8 +15,8 @@ export default function racewayPanel(game: Game): void {
     const world = game.world();
     const placed = placeInWorld(world, part, cursor, worldSnapTargets(world));
     if (!placed.ok) throw new Error(`no placement for ${part.id} at ${JSON.stringify(cursor)}: ${placed.reason}`);
-    const { positionMm, orientationMdeg, mountedOn } = placed;
-    game.execOrThrow('entity.place', { ref: part, positionMm, orientationMdeg, mountedOn });
+    const { positionMm, orientationMdeg, mountedOn, inEntry } = placed;
+    game.execOrThrow('entity.place', { ref: part, positionMm, orientationMdeg, mountedOn, inEntry });
   };
 
   // The panel on the workshop backplate (entity 1, at (-200, -200, 0)).

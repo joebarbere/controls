@@ -39,13 +39,15 @@ describe('v2 → v3 migration', () => {
     );
   });
 
-  it('a world keeps every v2 field; entities are unmounted and unlabelled; leads become lead-shaped', () => {
+  it('a world keeps every v2 field; entities are unmounted, in no entry (inEntry: null) and unlabelled; leads become lead-shaped', () => {
     fc.assert(
       fc.property(rawWorldV2Arb, (raw) => {
         const v2 = WorldV2.parse(raw);
         const v3 = worldV2ToV3(v2);
         expect(v3).toMatchObject({ schemaVersion: 3, nextCableId: 1, nextTerminationId: 1, cables: [] });
-        expect(v3.entities).toStrictEqual(v2.entities.map((e) => ({ ...e, mountedOn: null, label: null })));
+        expect(v3.entities).toStrictEqual(
+          v2.entities.map((e) => ({ ...e, mountedOn: null, inEntry: null, label: null })),
+        );
         expect(v3.connections).toStrictEqual(
           v2.connections.map((c) => ({
             id: c.id,
@@ -110,7 +112,7 @@ describe('v2 → v3 migration', () => {
     expect(first.sim).not.toBe(LEAD_SIM_BAG_V3);
   });
 
-  it('a replay log migrates its initial world and gives entity.place entries mountedOn: null, nothing else', () => {
+  it('a replay log migrates its initial world and gives entity.place entries mountedOn: null and inEntry: null, nothing else', () => {
     fc.assert(
       fc.property(rawReplayLogV2Arb, (raw) => {
         const v2 = ReplayLogV2.parse(raw);
@@ -121,9 +123,17 @@ describe('v2 → v3 migration', () => {
       }),
     );
     const place = { seq: 0, tick: 0, id: 'entity.place', args: { ref: { id: 'prop.crate', version: 1 } } };
-    expect(replayEntryV2ToV3(place)).toStrictEqual({ ...place, args: { ...place.args, mountedOn: null } });
-    // An entry that already says mountedOn, or isn't entity.place, is copied as it is (the same object).
-    const already = { ...place, args: { ...place.args, mountedOn: { entity: 4, mount: 'rail' } } };
+    expect(replayEntryV2ToV3(place)).toStrictEqual({
+      ...place,
+      args: { ...place.args, mountedOn: null, inEntry: null },
+    });
+    // An entry that already says one of them keeps it and gains the other.
+    const mounted = { ...place, args: { ...place.args, mountedOn: { entity: 4, mount: 'rail' } } };
+    expect(replayEntryV2ToV3(mounted)).toStrictEqual({ ...mounted, args: { ...mounted.args, inEntry: null } });
+    const inEntry = { ...place, args: { ...place.args, inEntry: { entity: 4, entry: 'ko-1' } } };
+    expect(replayEntryV2ToV3(inEntry)).toStrictEqual({ ...inEntry, args: { ...inEntry.args, mountedOn: null } });
+    // An entry that already says both, or isn't entity.place, is copied as it is (the same object).
+    const already = { ...mounted, args: { ...mounted.args, inEntry: null } };
     expect(replayEntryV2ToV3(already)).toBe(already);
     for (const id of ['lead.connect', 'lead.disconnect', 'entity.move', 'entity.placed', 'view.resetLayout']) {
       const entry = { ...place, id };

@@ -104,6 +104,7 @@ function thermalWorld(torqueA = 0.8, connections?: unknown[]): World {
         state: { on: true },
         sim: { thermal: 0, tripped: false },
         mountedOn: null,
+        inEntry: null,
         label: null,
         extensions: {},
       },

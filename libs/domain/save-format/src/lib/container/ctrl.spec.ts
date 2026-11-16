@@ -86,7 +86,7 @@ function sample(): CtrlInput {
  * v3, `a9296dc2…4816` → `699609a6…1565`, when the sample moved to v3 fixtures). Saves written earlier
  * still load either way.
  */
-const GOLDEN_SAMPLE_SHA256 = '699609a6d9d9242fad9aaadf5eb66fe1c67df8e69678582e8843355999431565';
+const GOLDEN_SAMPLE_SHA256 = 'cbc858669f650f5dbc7e4782c5cd48b980c2e0cc58e1fad1d0f4f6365cbb1d7c';
 
 const text = (value: unknown) => ctrlJson(value);
 const manifestText = () => text(sample().manifest);

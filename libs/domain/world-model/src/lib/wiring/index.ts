@@ -1,6 +1,7 @@
 export * from './args';
 export * from './checks';
 export * from './mounting';
+export * from './in-entry';
 export * from './overlap';
 export * from './wire-commands';
 export * from './cable-commands';

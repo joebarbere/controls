@@ -371,6 +371,7 @@ const entity = (id: number, ref: typeof BOX, x: number, y: number, yaw = 0): Ent
   state: {},
   sim: {},
   mountedOn: null,
+  inEntry: null,
   label: null,
   extensions: {},
 });
@@ -925,7 +926,19 @@ describe('ViewportController on the workshop', () => {
     controller.syncWorld({
       ...WORKSHOP,
       nextEntityId: 2,
-      entities: [{ id: 1, ref: SPOOL, transform, state: {}, sim: {}, mountedOn: null, label: null, extensions: {} }],
+      entities: [
+        {
+          id: 1,
+          ref: SPOOL,
+          transform,
+          state: {},
+          sim: {},
+          mountedOn: null,
+          inEntry: null,
+          label: null,
+          extensions: {},
+        },
+      ],
     });
     const spool = controller.scene.getObjectByName('entity-1') as Mesh;
     const bounds = new Box3().setFromObject(spool);

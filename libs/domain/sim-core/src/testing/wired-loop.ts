@@ -49,6 +49,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
     state,
     sim: {},
     mountedOn: null,
+    inEntry: null,
     label: null,
     extensions: {},
   });

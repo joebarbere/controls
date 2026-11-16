@@ -122,7 +122,7 @@ flowchart LR
   tool --> change
 ```
 
-`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry` and (F3.2 part 4) `staple-spacing`.
+`entity.place` checks a non-null `inEntry` (`checkInEntry`: a conduit connector at an open entry of its size, its entry end exactly there, room; then the connector can't move or turn, `in-entry`, and its enclosure is `occupied`), a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry` and (F3.2 part 4) `staple-spacing`.
 
 ### Cables in framing (F3.2 part 4)
 
@@ -155,12 +155,12 @@ flowchart LR
   cap --> drive["checkDrive (opened by drive)"]
   cap --> hole["checkEntryHole (opened by openEntry: punches or hole-saw fit)"]
   pull["wire.pull {route, lengthMm, conductors, tool}"] --> tape["checkTool (pull)"]
-  tape --> route["checkRoute (require conduit)"]
+  tape --> route["checkRoute (require conduit; conduitContinuityProblem)"]
   route --> reach["checkPullReach (pullRun length and elbows)"]
   reach --> geometry["checkGeometry"]
 ```
 
-The fish tape minigame (the UI half) pre-checks with `checkPullReach` and shows `pullRun`'s length and bends against the tape's `pull`; whatever happens in it, it logs the same `wire.pull` on success and nothing otherwise (ADR 0015). Which entry a conduit connector occupies stays derived (`connectorEntries`, ADR 0017 §8); `wire.pull` stores nothing about it (see ADR 0015's F3.4 part 2 note).
+The fish tape minigame (the UI half) pre-checks with `checkPullReach` and shows `pullRun`'s length and bends against the tape's `pull`; whatever happens in it, it logs the same `wire.pull` on success and nothing otherwise (ADR 0015). Which entry a conduit connector occupies is **stored** on the connector (`inEntry`, set by `entity.place` under `checkInEntry`; `connectorEntries` reads it), and `checkRoute` requires a pull's conduit waypoints to follow the run as built (`conduitContinuityProblem`: `off-raceway`, `conduit-discontinuous`), so `pullRun` can't skip an elbow (ADR 0015 F3.4 part 2 note 4, the pre-freeze PR).
 
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 

@@ -42,6 +42,7 @@ export function cableRunBus(options: CableRunOptions = {}): CommandBus<World> {
     ref: ref(id),
     positionMm: { x, y: 651, z: -38 },
     mountedOn: { entity: 2, mount: 'rail-2' },
+    inEntry: null,
   });
   const steps: [string, Record<string, unknown>][] = [
     ['entity.place', { ref: ref('box.tinmoor-2g-nm'), positionMm: { x: 0, y: 0, z: 0 } }],
