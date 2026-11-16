@@ -189,7 +189,7 @@ test('the keyboard alone routes and lands the wire; Escape on end b keeps the ro
     }
     throw new Error(`entity-${n} was never selected`);
   };
-  /** One end's prompt, from the keyboard only: Tab between fields, arrows in the hole list, typing, Enter. */
+  /** One end's prompt, from the keyboard only: Tab between fields, type-ahead in the hole list, typing, Enter. */
   const fillByKeyboard = async (end: 'a' | 'b') => {
     const strip = page.getByRole('dialog', { name: `End ${end}: strip and finish` });
     await expect(strip).toBeVisible();
@@ -201,7 +201,10 @@ test('the keyboard alone routes and lands the wire; Escape on end b keeps the ro
     await page.keyboard.press('Tab'); // Strip hole
     const hole = strip.getByRole('combobox', { name: 'Strip hole' });
     await expect(hole).toBeFocused();
-    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown'); // Choose… → 10 → 12 → 14 AWG solid
+    // Type-ahead, not arrows: on macOS an arrow key on a closed <select> opens its menu instead of
+    // changing the value (Windows and Linux change it in place). Typing the option's leading text
+    // selects it on a closed select on every platform, as a Mac keyboard player would.
+    await page.keyboard.type('14'); // "14 AWG solid", the first option starting "14"
     await expect(hole).toHaveValue('sol14');
     await page.keyboard.press('Tab');
     await expect(strip.getByRole('textbox', { name: 'Strip length (mm)' })).toBeFocused();
