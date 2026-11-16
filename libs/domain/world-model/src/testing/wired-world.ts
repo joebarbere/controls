@@ -17,6 +17,10 @@ export const BARE = { id: 'conductor.test-14-bare', version: 1 };
 export const LEAD = { id: 'lead.quillfern-test-1m', version: 1 };
 export const CABLE = { id: 'cable.test-14-2', version: 1 };
 export const BIT = { id: 'tool.test-bit-19', version: 1 };
+/** A 25.4 mm (1 in) bit: within the bored-hole limit, but it needs a nail plate (F3.2 part 4). */
+export const BIT_25 = { id: 'tool.test-bit-25', version: 1 };
+/** A 38.1 mm (1-1/2 in) bit: over the bored-hole limit (F3.2 part 4). */
+export const BIT_38 = { id: 'tool.test-bit-38', version: 1 };
 export const FERRULE = { id: 'ferrule.test-14', version: 1 };
 export const LUG = { id: 'lug.test-ring-14', version: 1 };
 export const STRANDED = { id: 'conductor.test-14-str', version: 1 };

@@ -11,9 +11,13 @@ import { BAKE_UNITS_PER_MM, laneSizeTenths, type CatalogRef, type ConductorColou
  *   doesn't know. Each look is one `InstancedMesh` with one material, whatever the number of wires.
  * - **Colour** is the conductor's stored base colour (a cable's jacket colour) from the catalogue's
  *   `colours` table: display values, never part of a check. A tracer stripe isn't drawn yet.
- * - **Diameter** is the routing lane's (`laneSizeTenths`: the bare diameter plus twice the insulation
- *   and jacket), so a wire is drawn exactly as wide as the lane the bake packed it into. A flat cable
- *   is drawn round at the mean of its width and height (a drawing abstraction until F3.2 part 4).
+ * - **Diameter** is the routing lane's (`laneSizeTenths`: the metal, stranded wider by the concentric
+ *   bundle factor, plus twice the insulation and jacket), so a wire is drawn exactly as wide as the
+ *   lane the bake packed it into.
+ * - **Flat cables** (F3.2 part 4) carry their jacket's real width × height (`flat`, the lane's size):
+ *   the renderer draws them as an oval of that section, the wide side across the run
+ *   (`flatThinAxis`). Their `diameterMm` is the larger of the two, the radius picking and the
+ *   highlight use.
  */
 
 /** Surface finish of a look (game-design: how the material reads under the panel lights). */
@@ -53,8 +57,10 @@ export interface WireAppearance {
   readonly look: string;
   /** sRGB `0xrrggbb`. */
   readonly colour: number;
-  /** Drawn overall diameter (mm). */
+  /** Drawn overall diameter (mm); for a flat cable the larger side of its section. */
   readonly diameterMm: number;
+  /** A flat cable's section (mm): width across its wide side and height through it; `null` when round. */
+  readonly flat: { readonly widthMm: number; readonly heightMm: number } | null;
 }
 
 /** A colour-table id's display colour as `0xrrggbb`, or {@link UNKNOWN_WIRE_COLOUR}. */
@@ -70,19 +76,26 @@ export const hexString = (colour: number): string => `#${colour.toString(16).pad
 export function conductorAppearance(catalog: Catalog, ref: CatalogRef, colour: ConductorColour | null): WireAppearance {
   const spec = catalog.device(ref)?.conductor;
   const diameterMm = laneSizeTenths(catalog, 'conductor', ref).width / BAKE_UNITS_PER_MM;
-  if (!spec) return { look: UNKNOWN_LOOK, colour: colourHex(catalog, colour?.base), diameterMm };
+  if (!spec) return { look: UNKNOWN_LOOK, colour: colourHex(catalog, colour?.base), diameterMm, flat: null };
   return {
     look: spec.insulation === null ? BARE_LOOK : spec.insulation.key,
     colour: colourHex(catalog, colour?.base),
     diameterMm,
+    flat: null,
   };
 }
 
-/** A cable's look (its jacket material), its jacket colour, and its drawn diameter. */
+/**
+ * A cable's look (its jacket material), its jacket colour, and its section: flat at the jacket's
+ * width × height when the catalogue gives one that isn't round, else round.
+ */
 export function cableAppearance(catalog: Catalog, ref: CatalogRef): WireAppearance {
   const jacket = catalog.cable(ref)?.jacket;
   const size = laneSizeTenths(catalog, 'cable', ref);
-  const diameterMm = (size.width + size.height) / 2 / BAKE_UNITS_PER_MM;
-  if (!jacket) return { look: UNKNOWN_LOOK, colour: UNKNOWN_WIRE_COLOUR, diameterMm };
-  return { look: jacket.material.key, colour: colourHex(catalog, jacket.colour), diameterMm };
+  const widthMm = size.width / BAKE_UNITS_PER_MM;
+  const heightMm = size.height / BAKE_UNITS_PER_MM;
+  const diameterMm = Math.max(widthMm, heightMm);
+  const flat = size.width !== size.height ? { widthMm, heightMm } : null;
+  if (!jacket) return { look: UNKNOWN_LOOK, colour: UNKNOWN_WIRE_COLOUR, diameterMm, flat };
+  return { look: jacket.material.key, colour: colourHex(catalog, jacket.colour), diameterMm, flat };
 }

@@ -1,7 +1,18 @@
-import { BufferAttribute, Color, InstancedMesh, Mesh, Scene, type BufferGeometry, type Material } from 'three/webgpu';
+import {
+  BufferAttribute,
+  Color,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  Scene,
+  Vector3,
+  type BufferGeometry,
+  type Material,
+} from 'three/webgpu';
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { bakeWorldRoutes, type World } from '@controls/world-model';
-import { routingPanelBus, routingParityWorld } from '@controls/world-model/testing';
+import { cableRunBus, routingPanelBus, routingParityWorld } from '@controls/world-model/testing';
+import { mm } from '@controls/units';
 import { describeSceneGraph } from '../scene';
 import { WireRenderer, type WireTint } from './wire-renderer';
 import { halfAt } from './wire-segments';
@@ -431,5 +442,112 @@ describe('WireRenderer', () => {
     expect(new Set(halves).size).toBe(1);
     const half = halfAt(baked.points, baked.coil!.at);
     expect(halves[0]).toBe(half === 0 ? 0xc0 + 2 * c : 0xc1 + 2 * c);
+  });
+});
+
+describe('WireRenderer cables (F3.2 part 4)', () => {
+  /** The box-to-panel NM-B run: stripped 150 mm at the box and 250 mm at the panel, landed at the panel. */
+  const RUN = cableRunBus({ strip: { a: 150, b: 250 }, land: true }).state;
+
+  it('draws NM-B flat from jacket end to jacket end, and each conductor tail by itself (scene-graph snapshot)', () => {
+    const { scene, wires } = setup(RUN);
+    const graph = wires.describe();
+    expect(graph).toMatchSnapshot('cable graph');
+    expect(describeSceneGraph(scene.getObjectByName('wires') as Scene)).toMatchSnapshot('cable scene graph');
+    const jacket = graph.routes.find((r) => r.owner === 'k1');
+    // 14/2 NM-B's 9.4 × 4.7 mm jacket: from 50 mm inside the box's top clamp (28, 92, 40), inward −y,
+    // to 50 mm inside the panel's knockout (100, 500, 40), inward +y.
+    expect(jacket).toMatchObject({ look: 'nmbJacket', flatMm: [9.4, 4.7], fromMm: [28, 42, 40], toMm: [100, 550, 40] });
+    expect(jacket?.tail).toBeUndefined();
+    // Three stubs at the box (end a), then three landed tails at the panel (end b), after the jacket.
+    expect(graph.routes.map((r) => [r.owner, r.tail ?? null, r.look, r.colour])).toStrictEqual([
+      ['k1', null, 'nmbJacket', '#ededed'],
+      ['c1', 'a', 'thhnThwn2', '#1c1c1c'],
+      ['c2', 'a', 'thhnThwn2', '#ededed'],
+      ['c3', 'a', 'bare', '#b87333'],
+      ['c1', 'b', 'thhnThwn2', '#1c1c1c'],
+      ['c2', 'b', 'thhnThwn2', '#ededed'],
+      ['c3', 'b', 'bare', '#b87333'],
+    ]);
+    // The box stubs end 150 mm further in; the panel tails end on their blocks' bottom clamps (y 651, z −8).
+    expect(graph.routes.filter((r) => r.tail === 'b').map((r) => r.toMm)).toStrictEqual([
+      [100, 651, -8],
+      [106, 651, -8],
+      [112, 651, -8],
+    ]);
+    expect(graph.routes.filter((r) => r.tail === 'a').map((r) => r.toMm[1])).toStrictEqual([-108, -108, -108]);
+  });
+
+  it('stands each jacket segment flat: a basis as wide and as thick as the jacket, the wide side across the run', () => {
+    const { scene, wires } = setup(RUN);
+    const mesh = lookMesh(scene, 'nmbJacket');
+    expect(mesh.count).toBe(wires.describe().routes.find((r) => r.owner === 'k1')?.segments);
+    const m = new Matrix4();
+    const [x, y, z] = [new Vector3(), new Vector3(), new Vector3()];
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, m);
+      m.extractBasis(x, y, z);
+      expect(x.length()).toBeCloseTo(mm(9.4 / 2), 9);
+      expect(z.length()).toBeCloseTo(mm(4.7 / 2), 9);
+      expect(x.dot(y)).toBeCloseTo(0, 9);
+      expect(z.dot(y)).toBeCloseTo(0, 9);
+      expect(x.dot(z)).toBeCloseTo(0, 9);
+      expect(new Vector3().crossVectors(x, y).dot(z)).toBeGreaterThan(0); // right-handed: faces keep their winding
+    }
+  });
+
+  it('tints each tail by its own conductor end while the jacket stays unknown', () => {
+    const { scene, wires } = setup(RUN);
+    wires.setTint(perConnection);
+    const routes = wires.describe().routes;
+    expect(routes.find((r) => r.owner === 'k1')?.tint).toStrictEqual(['#777777', '#777777']);
+    for (const c of [1, 2, 3]) {
+      const a = hex(0xc0 + 2 * c);
+      const b = hex(0xc1 + 2 * c);
+      expect(routes.find((r) => r.owner === `c${c}` && r.tail === 'a')?.tint).toStrictEqual([a, a]);
+      expect(routes.find((r) => r.owner === `c${c}` && r.tail === 'b')?.tint).toStrictEqual([b, b]);
+    }
+    // The instance colours follow: every bare (EGC) instance is in end a's or end b's colour.
+    const bare = lookMesh(scene, 'bare');
+    const seen = new Set(Array.from({ length: bare.count }, (_, i) => instanceHex(bare, i)));
+    expect(seen).toStrictEqual(new Set([0xc0 + 6, 0xc1 + 6]));
+    wires.setTint(null);
+    expect(wires.describe().routes.every((r) => r.tint === null)).toBe(true);
+  });
+
+  it('picks a tail as its conductor and the jacket as the cable', () => {
+    const { wires } = setup(RUN);
+    // Straight down −z onto the black tail just above block 3's clamp, then onto the jacket's first free span.
+    const down = { x: 0, y: 0, z: -1 };
+    expect(wires.pick({ x: 100, y: 645, z: 200 }, down, 0.001)?.wire).toStrictEqual({ kind: 'connection', id: 1 });
+    expect(wires.pick({ x: 28, y: 150, z: 200 }, down, 0.001)?.wire).toStrictEqual({ kind: 'cable', id: 1 });
+  });
+
+  it('labels a cable conductor with one sleeve on each tail, near its far end', () => {
+    const { wires, scene } = setup(cableRunBus({ strip: { a: 150, b: 250 }, land: true, label: 'L1' }).state);
+    expect(wires.describe().sleeves).toBe(2);
+    expect(scene.getObjectByName('wires:sleeves')?.userData['wires']).toStrictEqual({
+      labels: ['c1:a L1', 'c1:b L1'],
+      instances: 2,
+    });
+  });
+
+  it('a cable that goes releases its jacket, tail and sleeve meshes exactly once (disposal baseline)', () => {
+    const { scene, wires } = setup(cableRunBus({ strip: { a: 150, b: 250 }, land: true, label: 'L1' }).state);
+    expect(wires.resourceCount).toBe(12); // nmbJacket, thhnThwn2, bare and the sleeves: 3 each
+    const spies = spyAll(scene);
+    wires.sync({ ...RUN, cables: [], connections: [] });
+    expect(wires.resourceCount).toBe(0);
+    expect(scene.getObjectByName('wires')).toBeUndefined();
+    spies.geometries.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    spies.materials.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    spies.meshes.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+  });
+
+  it('an unstripped cable draws its jacket to the end of each tail and no conductors', () => {
+    const { wires } = setup(cableRunBus().state);
+    const routes = wires.describe().routes;
+    expect(routes.map((r) => r.owner)).toStrictEqual(['k1']);
+    expect(routes[0]).toMatchObject({ fromMm: [28, -108, 40], toMm: [100, 800, 40] });
   });
 });

@@ -21,9 +21,11 @@ import { findEntity, isLead } from '../entity-commands';
 import { builtinProp } from '../props';
 import { type BoxMm, boxFromCorners, conservativeCube, routeCollision } from '../routing/collide';
 import { routeFloorMm } from '../routing/floor';
+import { UNIT } from '../routing/vec';
 import { waypointHostProblem } from '../routing/hosts';
-import { entityPointMm, isAxisAligned } from '../snap/quarter-turn';
+import { entityPointMm, isAxisAligned, rotateQuarterTurns } from '../snap/quarter-turn';
 import { combinationProblem } from '../termination/combination';
+import { BORED_HOLE_MAX, boredHoleTooLarge } from './framing';
 import {
   resolveTermination,
   type TerminationArg,
@@ -74,7 +76,9 @@ function reaches(maxAwg: number | null, awg: number | null): boolean {
 /**
  * The tool `ref` names, checked for one of `steps` (ADR 0015, "Tool capabilities"): `unknown-tool`
  * when the ref isn't a tool of the catalogue, `wrong-tool` without the capability,
- * `beyond-tool-capacity` when no such capability reaches conductor size `awg`.
+ * `beyond-tool-capacity` when no such capability reaches conductor size `awg`, or (asked for `bore`
+ * alone, F3.2 part 4) when its `boreDiameterMm` is over the bored-hole limit (`BORED_HOLE_MAX`, IRC
+ * R602.6 by number).
  */
 export function checkTool(
   catalog: Catalog,
@@ -89,6 +93,17 @@ export function checkTool(
   if (capabilities.length === 0) return fail('wrong-tool', `${tool.title} can't ${wanted.join(' or ')}`);
   if (!capabilities.some((c) => reaches(c.maxAwg, awg))) {
     return fail('beyond-tool-capacity', `${tool.title} doesn't reach a ${awg} AWG conductor`);
+  }
+  if (
+    wanted.length === 1 &&
+    wanted[0] === 'bore' &&
+    tool.boreDiameterMm !== null &&
+    boredHoleTooLarge(tool.boreDiameterMm)
+  ) {
+    return fail(
+      'beyond-tool-capacity',
+      `${tool.title} bores ${tool.boreDiameterMm} mm: a stud takes a hole of at most ${BORED_HOLE_MAX.valueMm} mm`,
+    );
   }
   return ok(tool);
 }
@@ -554,11 +569,53 @@ export function cableEndPoint(world: World, catalog: Catalog, end: CableEnd): Ro
   return point && { positionMm: point, entity: end.entity };
 }
 
+/** Where a cable's box end enters and which way is in: the entry point and its inward unit axis (world, integer). */
+export interface CableEntryFrame {
+  readonly point: PositionMm;
+  readonly inward: PositionMm;
+}
+
+/**
+ * A cable box end's entry point and inward axis (catalogue `axis`, turned with the enclosure), or
+ * `null` for a free end or one the catalogue can't place (or not at quarter-turns).
+ */
+export function cableEntryFrame(world: World, catalog: Catalog, cable: Cable, end: 'a' | 'b'): CableEntryFrame | null {
+  const cableEnd = cable[end];
+  if (cableEnd === null) return null;
+  const entity = findEntity(world, cableEnd.entity);
+  const entry = entity && catalog.device(entity.ref)?.enclosure?.entries.find((e) => e.id === cableEnd.entry);
+  if (!entity || !entry) return null;
+  const point = entityPointMm(entity.transform, entry.positionMm);
+  const inward = rotateQuarterTurns(entity.transform.orientationMdeg, UNIT[entry.axis]);
+  if (point === null || inward === null) return null;
+  return { point, inward: { x: Math.round(inward.x) + 0, y: Math.round(inward.y) + 0, z: Math.round(inward.z) + 0 } };
+}
+
+/**
+ * Where the jacket ends at a cable's box end (F3.2 part 4): the entry point moved along the entry's
+ * inward axis by the jacketed part of the tail, `tailsMm[end] − jacketStripMm[end]` (the jacket runs
+ * straight in; the stripped conductors leave it there). Integer mm. `null` for a free end, or one the
+ * catalogue can't place.
+ */
+export function cableJacketEnd(world: World, catalog: Catalog, cable: Cable, end: 'a' | 'b'): PositionMm | null {
+  const frame = cableEntryFrame(world, catalog, cable, end);
+  if (frame === null) return null;
+  const jacket = cable.tailsMm[end] - cable.jacketStripMm[end];
+  return {
+    x: frame.point.x + frame.inward.x * jacket + 0,
+    y: frame.point.y + frame.inward.y * jacket + 0,
+    z: frame.point.z + frame.inward.z * jacket + 0,
+  };
+}
+
 /**
  * Whether a cable conductor's end can reach the terminal it lands on (ADR 0015, "Tails are stored, not
- * derived"): the jacket at that end is stripped and the terminal's entry point is within the tail of
- * the cable's entry point (or, at a free cable end, its rest waypoint), compared as integers
- * (`d² ≤ tailsMm[end]²`). `tail-too-short` otherwise.
+ * derived", tightened by F3.2 part 4 as ADR 0017 §5 left to it): the jacket at that end is stripped,
+ * and at a box end the terminal's entry point is within the **stripped** length of where the jacket
+ * ends (`cableJacketEnd`), compared as integers (`d² ≤ jacketStripMm[end]²`). At a free cable end,
+ * which has no entry axis, it is within the whole tail of the rest waypoint (`d² ≤ tailsMm[end]²`).
+ * `tail-too-short` otherwise. Stripping more never takes a landed conductor out of reach: the jacket
+ * end moves back by as much as the stripped length grows.
  */
 export function checkTailReach(
   world: World,
@@ -567,19 +624,21 @@ export function checkTailReach(
   end: 'a' | 'b',
   terminal: PositionMm,
 ): CommandFailure | null {
-  if (cable.jacketStripMm[end] <= 0) {
+  const strip = cable.jacketStripMm[end];
+  if (strip <= 0) {
     return fail('tail-too-short', `The jacket at end ${end} of cable ${cable.id} isn't stripped`);
   }
-  const cableEnd = cable[end];
+  const boxed = cable[end] !== null;
   const rest = end === 'a' ? cable.route[0] : cable.route.at(-1);
-  const from = cableEnd !== null ? cableEndPoint(world, catalog, cableEnd)?.positionMm : rest?.positionMm;
+  const from = boxed ? cableJacketEnd(world, catalog, cable, end) : (rest?.positionMm ?? null);
   if (!from) return fail('tail-too-short', `End ${end} of cable ${cable.id} has no known place`);
   const dx = terminal.x - from.x;
   const dy = terminal.y - from.y;
   const dz = terminal.z - from.z;
-  const tail = cable.tailsMm[end];
-  if (dx * dx + dy * dy + dz * dz > tail * tail) {
-    return fail('tail-too-short', `The terminal is out of reach of cable ${cable.id}'s ${tail} mm tail at end ${end}`);
+  const reach = boxed ? strip : cable.tailsMm[end];
+  if (dx * dx + dy * dy + dz * dz > reach * reach) {
+    const what = boxed ? `${reach} mm of stripped conductor` : `${reach} mm tail`;
+    return fail('tail-too-short', `The terminal is out of reach of cable ${cable.id}'s ${what} at end ${end}`);
   }
   return null;
 }

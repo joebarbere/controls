@@ -272,3 +272,241 @@ exports[`WireRenderer > draws the bake: one instanced mesh per look, one instanc
   "sleeves": 2,
 }
 `;
+
+exports[`WireRenderer cables (F3.2 part 4) > draws NM-B flat from jacket end to jacket end, and each conductor tail by itself (scene-graph snapshot) > cable graph 1`] = `
+{
+  "highlight": {
+    "hover": null,
+    "selected": null,
+  },
+  "inScene": true,
+  "looks": [
+    {
+      "capacity": 64,
+      "instances": 3,
+      "look": "bare",
+    },
+    {
+      "capacity": 64,
+      "instances": 32,
+      "look": "nmbJacket",
+    },
+    {
+      "capacity": 64,
+      "instances": 6,
+      "look": "thhnThwn2",
+    },
+  ],
+  "preview": null,
+  "routes": [
+    {
+      "coil": null,
+      "colour": "#ededed",
+      "diameterMm": 9.4,
+      "flatMm": [
+        9.4,
+        4.7,
+      ],
+      "fromMm": [
+        28,
+        42,
+        40,
+      ],
+      "label": null,
+      "look": "nmbJacket",
+      "owner": "k1",
+      "segments": 32,
+      "tint": null,
+      "toMm": [
+        100,
+        550,
+        40,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        25.9,
+        42,
+        40,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c1",
+      "segments": 1,
+      "tail": "a",
+      "tint": null,
+      "toMm": [
+        25.9,
+        -108,
+        40,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#ededed",
+      "diameterMm": 2.6,
+      "fromMm": [
+        28.5,
+        42,
+        40,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c2",
+      "segments": 1,
+      "tail": "a",
+      "tint": null,
+      "toMm": [
+        28.5,
+        -108,
+        40,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#b87333",
+      "diameterMm": 1.7,
+      "fromMm": [
+        30.6,
+        42,
+        40,
+      ],
+      "label": null,
+      "look": "bare",
+      "owner": "c3",
+      "segments": 1,
+      "tail": "a",
+      "tint": null,
+      "toMm": [
+        30.6,
+        -108,
+        40,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#1c1c1c",
+      "diameterMm": 2.6,
+      "fromMm": [
+        97.9,
+        550,
+        40,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c1",
+      "segments": 2,
+      "tail": "b",
+      "tint": null,
+      "toMm": [
+        100,
+        651,
+        -8,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#ededed",
+      "diameterMm": 2.6,
+      "fromMm": [
+        100.5,
+        550,
+        40,
+      ],
+      "label": null,
+      "look": "thhnThwn2",
+      "owner": "c2",
+      "segments": 2,
+      "tail": "b",
+      "tint": null,
+      "toMm": [
+        106,
+        651,
+        -8,
+      ],
+    },
+    {
+      "coil": null,
+      "colour": "#b87333",
+      "diameterMm": 1.7,
+      "fromMm": [
+        102.6,
+        550,
+        40,
+      ],
+      "label": null,
+      "look": "bare",
+      "owner": "c3",
+      "segments": 2,
+      "tail": "b",
+      "tint": null,
+      "toMm": [
+        112,
+        651,
+        -8,
+      ],
+    },
+  ],
+  "sleeves": 0,
+}
+`;
+
+exports[`WireRenderer cables (F3.2 part 4) > draws NM-B flat from jacket end to jacket end, and each conductor tail by itself (scene-graph snapshot) > cable scene graph 1`] = `
+{
+  "children": [
+    {
+      "name": "wires:bare",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+      "wires": {
+        "instances": 3,
+        "look": "bare",
+      },
+    },
+    {
+      "name": "wires:nmbJacket",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+      "wires": {
+        "instances": 32,
+        "look": "nmbJacket",
+      },
+    },
+    {
+      "name": "wires:thhnThwn2",
+      "positionMm": [
+        0,
+        0,
+        0,
+      ],
+      "type": "Mesh",
+      "visible": true,
+      "wires": {
+        "instances": 6,
+        "look": "thhnThwn2",
+      },
+    },
+  ],
+  "name": "wires",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;

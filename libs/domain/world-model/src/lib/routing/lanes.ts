@@ -40,7 +40,27 @@ interface Occupant {
   readonly route: readonly Waypoint[];
 }
 
-/** An occupant's width and height in tenths of mm: a conductor's overall diameter, a cable's jacket. */
+/**
+ * How much wider a concentric-stranded conductor is than the solid one of the same area (geometry):
+ * `n = 1 + 3k(k + 1)` round strands in `k` layers lie `2k + 1` strands across, each of diameter
+ * `d / √n`, so the bundle is `(2k + 1) / √n` times `d`: 3/√7 ≈ 1.134 for 7 strands, 5/√19 ≈ 1.147
+ * for 19, 7/√37 ≈ 1.151 for 37 (the same 7-strand factor `resolveTermination`'s nick cap uses, ADR
+ * 0018 implementation note 8). A count between full layers takes the next full layer; fewer than 7
+ * counts as 7. Compact stranding (pressed nearly round) is narrower; the catalogue doesn't mark it
+ * yet, so it is drawn as concentric (a follow-up). 1 for a solid conductor. Drawing only.
+ */
+export function strandedDiameterFactor(strandCount: number): number {
+  if (strandCount <= 1) return 1;
+  const n = Math.max(7, strandCount);
+  let k = 1;
+  while (1 + 3 * k * (k + 1) < n) k++;
+  return (2 * k + 1) / Math.sqrt(n);
+}
+
+/**
+ * An occupant's width and height in tenths of mm: a conductor's overall diameter (its metal, stranded
+ * as {@link strandedDiameterFactor}, plus twice its insulation and jacket walls), a cable's jacket.
+ */
 export function laneSizeTenths(
   catalog: Catalog,
   kind: 'cable' | 'conductor',
@@ -57,7 +77,8 @@ export function laneSizeTenths(
   const spec = catalog.device(ref)?.conductor;
   const bare = spec ? gaugeRow(spec.awg)?.diameterMm : undefined;
   if (!spec || bare === undefined) return { width: DEFAULT_LANE_WIDTH_TENTHS, height: DEFAULT_LANE_WIDTH_TENTHS };
-  const diameter = bare + 2 * ((spec.insulationThicknessMm ?? 0) + (spec.jacketThicknessMm ?? 0));
+  const metal = spec.stranding === 'stranded' ? bare * strandedDiameterFactor(spec.strandCount) : bare;
+  const diameter = metal + 2 * ((spec.insulationThicknessMm ?? 0) + (spec.jacketThicknessMm ?? 0));
   const d = Math.ceil(diameter * BAKE_UNITS_PER_MM);
   return { width: d, height: d };
 }

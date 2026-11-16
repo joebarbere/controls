@@ -122,7 +122,20 @@ flowchart LR
   tool --> change
 ```
 
-`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry`.
+`entity.place` checks a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry` and (F3.2 part 4) `staple-spacing`.
+
+### Cables in framing (F3.2 part 4)
+
+`wiring/framing.ts` holds the rules for NM cable in wood framing, each constant citing its source by number and paraphrased (never a code table):
+
+| Rule                                                                  | Value                                                                         | Where                                                          | Refusal                      |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------- |
+| Support spacing (`NM_SUPPORT_SPACING`, NFPA 70 Art. 334.30)           | ≤ 304.8 mm from a box entry to a support, ≤ 1371.6 mm between supports        | `cable.add`, `cable.reroute`, on a route with a staple or bore | `staple-spacing`             |
+| Bored-hole limit (`BORED_HOLE_MAX`, IRC R602.6)                       | a bit or hole saw ≤ 35.56 mm (40 % of an 88.9 mm stud; every P3 wall bearing) | `checkTool(…, 'bore')`: every route with a `bore` waypoint     | `beyond-tool-capacity`       |
+| Edge distance (`BORE_EDGE_MIN`, NFPA 70 Art. 300.4(A)(1))             | ≥ 31.75 mm from the hole to the stud face, or a nail plate                    | `boreNeedsNailPlate(diameter)`: a warning for the UI and P4    | none (P3 has no nail plates) |
+| Tail reach (`checkTailReach`, ADR 0015 tightened as ADR 0017 §5 left) | a terminal within the stripped length of the jacket end (`cableJacketEnd`)    | `wire.land` on a cable conductor at a box end                  | `tail-too-short`             |
+
+Supports are `staple`, `bore` and `duct` waypoints, measured along the stored polyline (entry points and waypoints, the floor's point set); a free waypoint isn't one, and a free cable end isn't a box. A cable with no staple or bore (on a bench, in a panel's duct) isn't a framing run and isn't checked. Refusal order in `cable.add`: … `route-collides`, then `staple-spacing`. The jacket end is the entry point moved along the entry's inward axis by `tailsMm[end] − jacketStripMm[end]`; stripping more moves it back by as much as the reach grows, so it never strands a landed conductor. At a free cable end the reach is still the whole tail from the rest waypoint.
 
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 

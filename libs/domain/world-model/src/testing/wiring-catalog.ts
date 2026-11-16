@@ -387,6 +387,14 @@ const bit = {
   extensions: {},
 };
 
+/** A bit of `diameterMm` (F3.2 part 4: 25.4 mm leaves under 31.75 mm to the stud edge; 38.1 mm is over the bored-hole limit). */
+const bitOf = (id: string, diameterMm: number) => ({
+  ...bit,
+  id,
+  title: `Test ${diameterMm} mm bit`,
+  boreDiameterMm: diameterMm,
+});
+
 const tool = (id: string, kind: string, capabilities: object[], extra: Record<string, unknown> = {}) => {
   const fields = { holes: [], dies: [], drives: [], torque: null, boreDiameterMm: null, ...extra };
   const covers = ['capabilities', ...Object.keys(extra)];
@@ -473,7 +481,7 @@ export const WIRING_TEST_CATALOG: Catalog = catalogOrThrow(
       panel,
     ],
     cables: [cable],
-    tools: [bit, ...tools],
+    tools: [bit, bitOf('tool.test-bit-25', 25.4), bitOf('tool.test-bit-38', 38.1), ...tools],
     accessories: [ferrule, lug],
     tables: BUILTIN_CATALOG.tables,
   },

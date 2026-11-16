@@ -14,6 +14,7 @@ import {
   wiringBench,
 } from '../../testing';
 import { checkWorldReferences } from '../devices';
+import { cableJacketEnd } from './checks';
 
 /*
  * The cable commands and enclosure entries (ADR 0015, "CableV3"), over the TEST-ONLY wiring bench: a
@@ -188,6 +189,25 @@ describe('cable.strip, landing cable conductors, cable.reroute, cable.label and 
     expect(bus.exec('wire.reroute', { id: 3, route: ROUTE })).toMatchObject(refused('in-cable'));
     expect(bus.exec('wire.unland', { id: 3, end: 'a' }).ok).toBe(true);
     expect(bus.state.connections[2]).toMatchObject({ a: null, route: null });
+  });
+
+  it('the stripped length bounds the reach from where the jacket ends (F3.2 part 4), not the whole tail', () => {
+    const bus = wiringBench();
+    bus.exec('cable.add', cableArgs());
+    // Box 5 at (0, 0, 2000): its top entry is (25, 75, 2030), inward −y. Stripped 10 mm of a 200 mm
+    // tail, the jacket runs 190 mm in and ends at (25, −115, 2030), below the box.
+    bus.exec('cable.strip', { id: 1, end: 'a', jacketMm: 10, tool: STRIPPER });
+    expect(cableJacketEnd(bus.state, WIRING_TEST_CATALOG, bus.state.cables[0], 'a')).toStrictEqual(at(25, -115, 2030));
+    // The ground screw's entry point is within 200 mm of the entry, but not within 10 mm of the jacket end.
+    const land = () =>
+      bus.exec('wire.land', { id: 3, end: 'a', at: { entity: 5, terminal: 'ground', termination: 'auto' } });
+    expect(land()).toMatchObject(refused('tail-too-short'));
+    // Stripping more moves the jacket end back and lengthens the reach by as much.
+    bus.exec('cable.strip', { id: 1, end: 'a', jacketMm: 150, tool: STRIPPER });
+    expect(cableJacketEnd(bus.state, WIRING_TEST_CATALOG, bus.state.cables[0], 'a')).toStrictEqual(at(25, 25, 2030));
+    expect(land().ok).toBe(true);
+    // A free end has no entry axis: its reach is still the whole tail from the rest waypoint.
+    expect(cableJacketEnd(bus.state, WIRING_TEST_CATALOG, bus.state.cables[0], 'b')).toBeNull();
   });
 
   it('reroutes between the same ends, keeping the cut length', () => {
