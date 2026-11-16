@@ -149,7 +149,11 @@ describe('the cable gesture (F3.2 part 4)', () => {
     session.exec('toolbelt.select', { slot: 5 });
     TestBed.tick();
     expect(renderer.current).toMatchObject({ ref: NMB, ends: 'entries', from: null, startMm: null, waypoints: [] });
-    expect(renderer.current?.snap?.kinds).toStrictEqual(['duct', 'conduit', 'staple']); // no drill bit: no bores
+    // No bit on the belt: the default-tool rule's bore-only bit (the 3/4 in ship auger, F3.4 part 2) bores.
+    expect(renderer.current?.snap).toStrictEqual({
+      kinds: ['duct', 'conduit', 'staple', 'bore'],
+      boreTool: ref('tool.corriden-sa-12'),
+    });
     expect(routing.phase()).toBe('armed');
     expect(session.contextKeys()['routing.active']).toBe(true);
     expect(routing.hint()).toMatch(/^NM-B 14\/2 .*: click an open entry on a box or panel/);
@@ -619,5 +623,39 @@ describe('review fixes (F3.2 part 4, test-engineer)', () => {
     expect(keys.keymap().resolve('L', { ...session.contextKeys(), 'viewport.focused': true })?.id).toBe(
       'wiring.land.selection',
     );
+  });
+});
+
+describe('drill bits in the cable gesture (F3.4 part 2)', () => {
+  it('a bit on the belt bores; the 1-1/8 in ship auger warns about a nail plate, the 3/4 in one does not', () => {
+    const { renderer, session, toasts, routing } = setup('trainee', { studWall: true });
+    const store = TestBed.inject(SettingsStore);
+    const slots = [...store.settings().toolBelt.slots];
+    slots[5] = ref('tool.corriden-sa-18');
+    store.update('toolBelt', { slots });
+    session.exec('toolbelt.select', { slot: 5 });
+    TestBed.tick();
+    // The belt comes first in the default-tool rule: the 1-1/8 in auger, not the catalogue's 3/4 in one.
+    expect(renderer.current?.snap?.boreTool).toStrictEqual(ref('tool.corriden-sa-18'));
+    renderer.send({ kind: 'entity', entity: 1, atMm: near(BOX_CLAMP), waypoint: null });
+    const wall = BENCH_STUD_WALL.transform.positionMm;
+    const cursor = { x: wall.x + 400, y: 600, z: wall.z - 40 };
+    const bore = (tool: string) =>
+      snapWaypoint(session.world(), BUILTIN_CATALOG, cursor, { kinds: ['bore'], boreTool: ref(tool) });
+    const big = bore('tool.corriden-sa-18');
+    expect(big).toMatchObject({ kind: 'bore', tool: ref('tool.corriden-sa-18') });
+    renderer.send({ kind: 'waypoint', waypoint: big });
+    TestBed.tick();
+    const warning =
+      'A 28.575 mm hole leaves less than 31.75 mm to the stud edge: a nail plate is needed to protect the cable.';
+    expect(toasts.at(-1)).toBe(warning);
+    expect(routing.announcement()).toBe(`Waypoint 1 added (bore waypoint). ${warning}`);
+    // The 3/4 in auger leaves 34.925 mm: no warning.
+    const before = toasts.length;
+    const small = bore('tool.corriden-sa-12');
+    renderer.send({ kind: 'waypoint', waypoint: { ...small, positionMm: { ...small.positionMm, y: 900 } } });
+    TestBed.tick();
+    expect(toasts).toHaveLength(before);
+    expect(routing.announcement()).toBe('Waypoint 2 added (bore waypoint).');
   });
 });

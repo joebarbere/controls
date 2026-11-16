@@ -284,6 +284,38 @@ stateDiagram-v2
 - **Labels** (`ctl-label-prompt`, `labelRequest`, `labelCommand`): `wiring.label {wire, cable}` (Shift+L on the selected wire or cable), or a click on a wire with the label maker in hand, opens a text field and the label maker (default-tool rule `label`). Print logs `wire.label` or `cable.label`; with a label already printed, empty text removes it. The text rules are the command schema's (`bad-args` in the prompt).
 - **Context keys** (from `connectWiring`): `selection.connectionId` / `selection.cableId` from the selected wire (the palette prefills reference fields from them), `wiring.stripTarget`, and `wiring.cables`, `wiring.freeEnds`, `wiring.wires` (the commands' palette `when`s).
 
+### Tools in hand: entries and the fish tape (F3.4 part 2)
+
+The UI half of F3.4 part 2 ([commands](commands.md#drilling-punching-and-pulling-f34-part-2)). `connectToolFlow` (`routing/tool-flow.ts`) is a fourth `RoutingMode`: a tool in hand runs the renderer in `entries` mode (clicks on entities, Enter and Escape; nothing drawn), and its outcomes are one `enclosure.openEntry` per opened entry or one `wire.pull` per successful pull. Nothing else is logged.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Entries: screwdriver, punch, hole saw or bit on the active slot
+    Entries --> Entries: click a box (nearest closed entry), or Tab… Enter → one enclosure.openEntry (refusal shown, nothing logged)
+    Entries --> [*]: Escape (drops the held entry, then puts the tool away)
+    [*] --> Tape: fish tape on the active slot
+    Tape --> Setup: click a conduit part or a box with a connector, Enter on the selection
+    [*] --> Setup: wiring.pull {conduit} (U, palette, console), any tool or none
+    Setup --> Game: Feed the tape (rows and the command's check pass; the reach was checked on opening)
+    Setup --> Logged: Pull without feeding (Trainee)
+    Game --> Game: F / ↑ feed, T twist, R / ↓ pull back
+    Game --> Kinked: a jam past the difficulty's limit
+    Kinked --> Game: Try again
+    Game --> Logged: through, P → one wire.pull
+    Setup --> [*]: Escape, Cancel (nothing logged)
+    Game --> [*]: Escape, Cancel (nothing logged)
+    Logged --> [*]
+```
+
+- **Which tools arm what** (`cut-model.ts`). A tool with a step some entry type opens by (`ENTRY_TYPES`: `drive` for knockouts, pryouts and clamps; `openEntry` for a punch or hole saw) or `bore` arms the entry flow (`opensEntries`), so a wood bit's click on a drill site is explained (`wrong-tool`). A tool that can `pull` arms the fish tape. The label maker keeps its own click (F3.2 part 4); other tools only show in the HUD. While a tool mode is in force a click doesn't select: `]` / `[` still do.
+- **Opening an entry.** A click on an enclosure picks its nearest **closed** entry whether or not the tool fits (`nearestClosedEntry`), so the refusal is about the hole the player aimed at; every entry is pre-checked with `enclosure.openEntry`'s own `run` (`cutOptions`), and a refusal (`wrong-size`, `wrong-tool`, `wrong-drive`) is a warning toast and an announcement. With the box selected (or focused), Tab and Shift+Tab cycle all its entries, each announced with what the tool would do (opens it, already open, or the refusal), with the focus marker drawn; Enter opens the held entry after re-checking it. Escape drops a held entry first, then puts the tool away.
+- **The conduit run** (`pull-model.ts`, pure). `conduitRun` walks the conduit parts joined end to end with the one named (ends equal in integer mm, same trade size, a branch to the lowest id); a box resolves to the connector in one of its entries (`connectorEntries`). End a is the end whose connector is in an entry when exactly one is, else the lower entity id's. The route is a free rest waypoint `PULL_TAIL_MM` (200 mm, game-design above Art. 300.14's 6 in) past each end along the part's own axis and a conduit waypoint at each end and joint; a joint into an elbow is hosted by the elbow, so `pullRun` measures the elbow along its centreline (two elbows joined directly: the second by its chord). `lengthMm` is `routeDefaultLengthMm` along it.
+- **The prompt** (`ctl-fish-tape-prompt`, `pullRequest`). It shows `pullRun`'s length and bends against the tape (`checkPullReach`'s refusal before any play), and 1–16 rows of conductor and colour; the first rows are the belt's conductor spools, else the first catalogue conductor. The tape is the one in hand, else the default-tool rule's `pull` tool (named with where it came from). Feed the tape (and the Trainee skip) pre-check the whole `wire.pull` with the command's `run` (the viewport passes `tools.checkPull` as the `check` input); the flow checks again before logging, and a refusal then returns the prompt to setup with an alert until the rows change.
+- **The minigame** (`pullTrack`, `pullRules`, `feedTape`, `twistTape`, `retractTape`). The track has one feed per started metre (`FEED_STEP_MM`, game-design) of each straight stretch and one station per elbow; a feed into an elbow is a **jam**, a twist gets the tape round it, a twist elsewhere only spins, pulling back keeps the jams counted. D9-style rules: Trainee may skip and never kinks; Apprentice sees the elbows on the track and the twist named before the push, kink at 3 jams; Journeyman sees only how many elbows (from `pullRun`), kink at 2; Realistic as Journeyman, kink at 1. No clock and no random number: the same keys always do the same, and the game never becomes an argument (ADR 0015: success and skip log identical `wire.pull`s).
+- **Keyboard and announcements.** Every control is a button or a native select (type-ahead picks options). The game's keys (F or ↑, T, R or ↓, P; `aria-keyshortcuts`) are a host `keydown` on the prompt, ignored in selects and stopped there, so no binding sees them (bindings don't fire in an open dialog anyway). Focus goes to the game's main button on start and on each phase change (Feed, Pull the conductors, Try again). The prompt's own polite status says each step (a region outside the modal is inert), the kink is an alert, and the flow's `routing-status` announces the pull (`Pulled 2 conductors through … wires 1–2, both ends free.`).
+- **Reduced motion.** Nothing moves by itself: the tape bar steps with each key, with a 150 ms width transition only when neither `display.reducedMotion` nor the system asks for reduced motion (the `reducedMotion` input, from the overlays' setting, and a `prefers-reduced-motion` media query).
+- **Context keys** (from `connectToolFlow`): `wiring.conduits` (the world has a conduit part: `wiring.pull`'s `when`) and `wiring.pullTarget` (the selected entity when a run goes through it: U's `when`), published in the selection's own task like the wire keys.
+
 ## Command palette (F1.3)
 
 `ctl-command-palette` (`feature-palette`, mounted once by `App`) is one of the four surfaces over the registry. `palette.open` is a view command with the default chords `Mod+K` and `Mod+Shift+P` and `globalKeybinding: true`, so it fires from a text field or an open dialog too; the palette opens when the session reports it (`Session.onCommand`). It is `logged: false` UI chrome: it runs through the registry and fires `onCommand`, but never enters the replay log. Closing isn't a command.

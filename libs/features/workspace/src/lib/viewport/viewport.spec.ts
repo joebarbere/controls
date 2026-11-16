@@ -37,7 +37,9 @@ describe('Viewport', () => {
         'a click elsewhere adds a waypoint, Backspace steps back, Z zooms to crowded terminals. ' +
         'N and Shift+N select the next and previous wire. ' +
         "With a cable spool, pick two box entries (Tab cycles a selected box's entries); " +
-        'J strips, L lands and Shift+L labels the selected cable or conductor.',
+        'J strips, L lands and Shift+L labels the selected cable or conductor. ' +
+        "With a screwdriver, punch or hole saw, click a box's entry (or Tab and Enter) to open it; " +
+        'U on a selected conduit run, or the fish tape and a click, pulls conductors through it.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);

@@ -522,6 +522,7 @@ describe('every registered command', () => {
       'lead.connect:b.entity',
       'raceway.cut:id',
       'wire.land:at.entity',
+      'wiring.pull:conduit',
     ]);
   });
 
