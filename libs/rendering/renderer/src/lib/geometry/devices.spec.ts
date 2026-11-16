@@ -670,3 +670,81 @@ describe('F3.5 part 2 in the scene', () => {
     expect(scene.children).toHaveLength(0);
   });
 });
+
+// --- Twist-on wire nuts (splice.twistOn) ------------------------------------------------------
+
+const NUTS = ['splice.corvelle-tw-s', 'splice.corvelle-tw-m', 'splice.corvelle-tw-l'].map((id) => ({ id, version: 1 }));
+
+describe('wire nut recipes', () => {
+  it('draw every twist-on size (no longer the unknown cube), with its fictional label', () => {
+    for (const ref of NUTS) expect(deviceDefinitionFor(ref)?.id).toBe(ref.id);
+    expect(NUTS.map((ref) => deviceLabel(def(ref)))).toStrictEqual(['Corvelle TW-S', 'Corvelle TW-M', 'Corvelle TW-L']);
+  });
+
+  it.each(NUTS)('%o fills its body box, its mouth at the splice entry', (ref) => {
+    const d = def(ref);
+    const size = d.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+    const g = buildDeviceGeometry(d);
+    const b = bounds(g);
+    // The skirt is the body's width and depth, the dome its height; the mouth disc 0.3 mm proud of y = 0.
+    expect(toMm(b.min)).toStrictEqual([0, -0.3, 0]);
+    expect(toMm(b.max)).toStrictEqual([size.widthMm, size.heightMm, size.depthMm]);
+    const e = d.terminals[0].methods[0].entryMm;
+    const mouth = g.groups.find((group) => DEVICE_SLOTS[group.materialIndex as number] === 'opening');
+    expect(mouth).toBeDefined();
+    expect(b.containsPoint(new Vector3(e.x, e.y, e.z).multiplyScalar(0.001))).toBe(true);
+    g.dispose();
+  });
+
+  it('match the geometry snapshot (bounds, vertices and slots per size)', () => {
+    const summary = NUTS.map((ref) => {
+      const g = buildDeviceGeometry(def(ref));
+      const b = bounds(g);
+      const out = {
+        id: ref.id,
+        boundsMm: [...toMm(b.min), ...toMm(b.max)],
+        vertices: g.getAttribute('position').count,
+        slots: g.groups.map((group) => [DEVICE_SLOTS[group.materialIndex as number], group.count]),
+      };
+      g.dispose();
+      return out;
+    });
+    expect(summary).toMatchSnapshot('wire nut recipes');
+  });
+
+  it('draw a neutral shell (the entry has no colour) with a dark mouth, and have no lever, entries or cover', () => {
+    const d = def(NUTS[0]);
+    const materials = buildDeviceMaterials(d);
+    expect(materials[DEVICE_SLOTS.indexOf('body')].color.getHex()).toBe(0xb9ad97);
+    expect(materials[OPENING_SLOT].color.getHex()).toBe(0x101214);
+    materials.forEach((m) => m.dispose());
+    expect(buildDeviceLever(d)).toBeNull();
+    expect(buildDeviceEntries(d)).toStrictEqual([]);
+    expect(buildDeviceCover(d)).toBeNull();
+  });
+});
+
+describe('wire nuts in the scene', () => {
+  it('draws three nuts (scene-graph snapshot) and disposes every recipe exactly once at teardown', () => {
+    const scene = new Scene();
+    const sync = new WorldSync(scene);
+    sync.sync(worldOf(deviceEntity(1, NUTS[0], 100), deviceEntity(2, NUTS[1], 140), deviceEntity(3, NUTS[2], 180)));
+    const graph = describeSceneGraph(scene.getObjectByName('world') as Group);
+    expect(graph).toMatchSnapshot('wire nuts');
+    expect(sync.recipes.size).toBe(3);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    scene.traverse((o) => {
+      if (o instanceof Mesh) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    expect(geometries.size).toBe(3);
+    const spies = [...geometries, ...materials].map((r) => vi.spyOn(r, 'dispose'));
+    sync.dispose();
+    spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(sync.recipes.size).toBe(0);
+    expect(scene.children).toHaveLength(0);
+  });
+});
