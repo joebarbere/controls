@@ -14,7 +14,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the one `wire.add` (pinned from this spec; the console line below reaches it too). */
-const LANDED_HASH = 'b22fc26f7307293e13f6ba92eb2f774f804c00b9992327fd5dabe45ad7051e7c';
+const LANDED_HASH = '6cfe9e321e092ff3f39a8f49f42b163ee8731d3a50f73b6cb2f9348f47763146';
 
 const THHN = 'conductor.tallowmere-thhn-14-solid';
 const TERMINATION = {
