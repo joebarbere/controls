@@ -78,12 +78,12 @@ async function terminate(page: Page, end: 'a' | 'b', torque: string): Promise<vo
   await expect(strip.getByRole('combobox', { name: 'Method' })).toBeFocused();
   await expect(strip.getByRole('combobox', { name: 'Strip hole' })).toHaveValue('');
   await strip.getByRole('combobox', { name: 'Strip hole' }).selectOption({ label: '14 AWG solid' });
-  await strip.getByRole('spinbutton', { name: 'Strip length (mm)' }).fill('9');
+  await strip.getByRole('textbox', { name: 'Strip length (mm)' }).fill('9');
   await page.keyboard.press('Enter');
   const tighten = page.getByRole('dialog', { name: `End ${end}: tighten` });
   await expect(tighten.getByRole('combobox', { name: 'Screwdriver' })).toBeFocused();
   await expect(tighten.getByRole('combobox', { name: 'Screwdriver' })).toHaveValue('tool.calderyn-ts-03@1');
-  await tighten.getByRole('spinbutton', { name: 'Torque setting (N·m)' }).fill(torque);
+  await tighten.getByRole('textbox', { name: 'Torque setting (N·m)' }).fill(torque);
   await page.keyboard.press('Enter');
 }
 
@@ -108,11 +108,16 @@ test('at Journeyman each end is stripped and torqued in its prompt, and the rout
 
   const a = await terminalOnPage(page, { entity: 1, terminal: 'a' });
   await page.mouse.click(a.x, a.y);
+  await expect(page.getByRole('dialog', { name: 'End a: strip and finish' })).toBeVisible();
+  // Shown modally (showModal): the rest of the page is inert while it is open.
+  expect(await page.evaluate(() => document.querySelector('ctl-termination-prompt dialog')?.matches(':modal'))).toBe(
+    true,
+  );
   // The command's own check refuses 3 N·m on a 0.3–1.2 N·m driver, inside the prompt: nothing logged.
   await terminate(page, 'a', '3');
   const tighten = page.getByRole('dialog', { name: 'End a: tighten' });
   await expect(tighten.getByRole('alert')).toContainText('(beyond-tool-capacity)');
-  await tighten.getByRole('spinbutton', { name: 'Torque setting (N·m)' }).fill('0.6');
+  await tighten.getByRole('textbox', { name: 'Torque setting (N·m)' }).fill('0.6');
   await page.keyboard.press('Enter');
   await expect(tighten).toBeHidden();
   await expect(viewport).toHaveAttribute('data-routing', 'started');
@@ -157,7 +162,91 @@ test('Escape dismisses a prompt: the pick is not taken and nothing is logged', a
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
   await expect(page.getByTestId('routing-status')).toHaveText('Termination cancelled. Pick the first terminal.');
   await expect(viewport).toHaveAttribute('data-routing', 'armed'); // Escape closed the prompt, not the spool
-  expect((await entries(page)).map((e) => e.id)).not.toContain('wire.add');
+  expect((await entries(page)).map((e) => e.id)).toStrictEqual([
+    'entity.place',
+    'entity.place',
+    'entity.place',
+    'toolbelt.select',
+    'view.focus',
+  ]);
+});
+
+test('the keyboard alone routes and lands the wire; Escape on end b keeps the route started', async ({ page }) => {
+  await journeymanSandbox(page);
+  const viewport = page.locator('ctl-viewport');
+  const canvas = page.locator('ctl-viewport canvas');
+  const status = page.getByTestId('routing-status');
+  await page.keyboard.press('Digit4');
+  await expect(viewport).toHaveAttribute('data-routing', 'armed');
+
+  /** `]` until `entity-<n>` is selected (fixtures come first in the cycle). */
+  const selectEntity = async (n: number) => {
+    for (let i = 0; i < 40; i++) {
+      const before = await viewport.getAttribute('data-selected');
+      if (before === `entity-${n}`) return;
+      await page.keyboard.press('BracketRight');
+      await expect.poll(() => viewport.getAttribute('data-selected')).not.toBe(before);
+    }
+    throw new Error(`entity-${n} was never selected`);
+  };
+  /** One end's prompt, from the keyboard only: Tab between fields, arrows in the hole list, typing, Enter. */
+  const fillByKeyboard = async (end: 'a' | 'b') => {
+    const strip = page.getByRole('dialog', { name: `End ${end}: strip and finish` });
+    await expect(strip).toBeVisible();
+    // The picking Enter didn't leak into the prompt: still the first step, first field, nothing flagged.
+    await expect(strip.getByRole('combobox', { name: 'Method' })).toBeFocused();
+    await expect(strip.getByRole('alert')).toHaveText('');
+    await expect(strip.getByRole('combobox', { name: 'Strip hole' })).toHaveValue('');
+    await page.keyboard.press('Tab'); // Stripper
+    await page.keyboard.press('Tab'); // Strip hole
+    const hole = strip.getByRole('combobox', { name: 'Strip hole' });
+    await expect(hole).toBeFocused();
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown'); // Choose… → 10 → 12 → 14 AWG solid
+    await expect(hole).toHaveValue('sol14');
+    await page.keyboard.press('Tab');
+    await expect(strip.getByRole('textbox', { name: 'Strip length (mm)' })).toBeFocused();
+    await page.keyboard.type('9');
+    await page.keyboard.press('Enter');
+    const tighten = page.getByRole('dialog', { name: `End ${end}: tighten` });
+    await expect(tighten.getByRole('combobox', { name: 'Screwdriver' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(tighten.getByRole('textbox', { name: 'Torque setting (N·m)' })).toBeFocused();
+    await page.keyboard.type('0.6');
+    await page.keyboard.press('Enter');
+    await expect(tighten).toBeHidden();
+    await expect(canvas).toBeFocused();
+  };
+
+  await selectEntity(1);
+  await page.keyboard.press('Tab'); // block 1's terminal 1
+  await expect(status).toContainText('#1, terminal 1. Enter picks it.');
+  await page.keyboard.press('Enter');
+  await fillByKeyboard('a');
+  await expect(viewport).toHaveAttribute('data-routing', 'started');
+
+  await selectEntity(3);
+  await page.keyboard.press('Tab'); // block 3's terminal 1
+  await expect(status).toContainText('#3, terminal 1. Enter picks it.');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'End b: strip and finish' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(canvas).toBeFocused();
+  await expect(viewport).toHaveAttribute('data-routing', 'started'); // the route and end a are kept
+  await expect(status).toHaveText('Termination cancelled. Pick the second terminal.');
+
+  await page.keyboard.press('Enter'); // the keyboard terminal again
+  await fillByKeyboard('b');
+  await expect(status).toContainText('Wire added from');
+  expect((await entries(page)).map((e) => e.id)).toStrictEqual([
+    'entity.place',
+    'entity.place',
+    'entity.place',
+    'toolbelt.select',
+    'wire.add',
+  ]);
+  expect((await entries(page)).filter((e) => e.id === 'wire.add').map((e) => e.args)).toStrictEqual([LANDED_ARGS]);
+  expect(await hash(page)).toBe(LANDED_HASH);
 });
 
 test('the console logs the same wire.add with the same terminations and reaches the same hash', async ({ page }) => {

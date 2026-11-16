@@ -17,13 +17,7 @@ import {
   type TerminalRef,
   type ViewportState,
 } from '@controls/renderer';
-import {
-  type CatalogRef,
-  findEntity,
-  proposeRoute,
-  type RouteProposal,
-  type TerminationArgs,
-} from '@controls/world-model';
+import { type CatalogRef, type RouteProposal, type TerminationArgs } from '@controls/world-model';
 import { ActiveTool } from '../tool-belt/active-tool';
 import {
   addWaypoint,
@@ -34,6 +28,7 @@ import {
   type GestureStep,
   IDLE_GESTURE,
   pickTerminal,
+  proposeCompletion,
   type RouteGesture,
   type Spool,
   spoolOf,
@@ -89,7 +84,6 @@ export interface RoutingFlow {
 interface PendingPick {
   readonly end: 'a' | 'b';
   readonly terminal: { readonly entity: number; readonly terminal: string };
-  readonly proposal: RouteProposal | null;
   readonly cutter: CatalogRef | null;
   readonly prompt: TerminationPrompt;
 }
@@ -232,7 +226,17 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   // The gesture is read untracked, so only world changes re-run this.
   effect(() => {
     const world = session.world();
-    untracked(() => apply(dropMissingFrom(gesture(), world, catalog)));
+    untracked(() => {
+      const step = dropMissingFrom(gesture(), world, catalog);
+      apply(step);
+      // End b's prompt is open over a route that no longer has a first terminal: say so where it is
+      // heard (the prompt's alert; the viewport's region is inert under the modal dialog).
+      const p = pending();
+      if (step.kind === 'fromRemoved' && p?.end === 'b') {
+        const refusal = proposeCompletion(world, catalog, gesture(), p.terminal, 'auto');
+        if (!refusal.ok) refuse(p, refusal);
+      }
+    });
   });
 
   /**
@@ -265,41 +269,39 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
       apply(step);
       return;
     }
-    pending.set({ end: which, terminal, proposal, cutter, prompt: { request: built.request, refusal: null } });
+    pending.set({ end: which, terminal, cutter, prompt: { request: built.request, refusal: null } });
     announce(`Terminate end ${which} at ${describe(terminal)}.`);
   };
+
+  /** A refusal of the open prompt's draft, shown in the prompt (its alert reads it): nothing is logged. */
+  function refuse(p: PendingPick, refusal: { readonly code: string; readonly message: string }): void {
+    pending.set({ ...p, prompt: { ...p.prompt, refusal: `${refusal.message} (${refusal.code})` } });
+  }
 
   const confirmTermination = (args: TerminationArgs): void => {
     const p = pending();
     const s = spool();
     if (p === null || s === null) return;
-    const refusal = landingRefusal(session.world(), catalog, s.ref, p.end, p.terminal, args);
+    const world = session.world();
+    const refusal = landingRefusal(world, catalog, s.ref, p.end, p.terminal, args);
     if (refusal) {
-      // The command's own answer, shown in the prompt (and read by its alert): nothing is logged.
-      pending.set({ ...p, prompt: { ...p.prompt, refusal: `${refusal.message} (${refusal.code})` } });
+      refuse(p, refusal);
       return;
     }
-    pending.set(null);
     if (p.end === 'a') {
+      pending.set(null);
       apply(pickTerminal(gesture(), p.terminal, null, s, p.cutter, args));
       return;
     }
+    // Re-proposed against the world now and the chosen method's entry point; a route the command
+    // would refuse stays in the prompt with the player's entries.
     const g = gesture();
-    if (g.from === null) return; // the first terminal left the world meanwhile (announced by its effect)
-    // The preview ended at the terminal's first method's entry point: another method re-proposes.
-    const entity = findEntity(session.world(), p.terminal.entity);
-    const previewed =
-      entity && catalog.device(entity.ref)?.terminals.find((t) => t.id === p.terminal.terminal)?.methods[0]?.method;
-    const proposal =
-      args.method === previewed
-        ? p.proposal
-        : proposeRoute(
-            session.world(),
-            catalog,
-            { ...g.from, termination: g.fromTermination ?? 'auto' },
-            { ...p.terminal, termination: args },
-            g.waypoints,
-          );
+    const proposal = proposeCompletion(world, catalog, g, p.terminal, args);
+    if (!proposal.ok) {
+      refuse(p, proposal);
+      return;
+    }
+    pending.set(null);
     apply(pickTerminal(g, p.terminal, proposal, s, p.cutter, args));
   };
 
@@ -308,7 +310,7 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     if (p === null) return;
     pending.set(null);
     announce(
-      p.end === 'a'
+      gesture().from === null
         ? 'Termination cancelled. Pick the first terminal.'
         : 'Termination cancelled. Pick the second terminal.',
     );

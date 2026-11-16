@@ -16,6 +16,7 @@ import {
   suggestTermination,
   type TerminationArg,
   type TerminationArgs,
+  TerminationArgsSchema,
   terminationConductor,
   toolCan,
   type World,
@@ -358,7 +359,8 @@ export function argsOf(request: TerminationRequest, draft: TerminationDraft): Te
 
 /**
  * The command's own landing check for one end, before anything is logged (ADR 0015: surfaces pre-check
- * with the validation `run` uses): `null` when `wire.add` would land it, else the refusal. `end` b
+ * with the validation `run` uses): the argument schema (`bad-args`), then world-model's `checkLanding`;
+ * `null` when `wire.add` would land it, else the refusal. `end` b
  * takes the termination id after a's. Never shows the outcome.
  */
 export function landingRefusal(
@@ -369,6 +371,14 @@ export function landingRefusal(
   terminal: GestureTerminal,
   termination: TerminationArg,
 ): { readonly code: string; readonly message: string } | null {
+  if (termination !== 'auto') {
+    // The logged argument's own schema first, so the prompt never passes what `execFromInput` rejects.
+    const parsed = TerminationArgsSchema.safeParse(termination);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return { code: 'bad-args', message: `${issue?.path.join('.') || 'termination'}: ${issue?.message ?? 'invalid'}` };
+    }
+  }
   const entry = checkConductor(catalog, spool);
   if (!entry.ok) return { code: entry.code, message: entry.message };
   const checked = checkLanding(

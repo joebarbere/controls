@@ -497,7 +497,12 @@ describe('the termination prompts in the routing flow (F3.3 part 2, D9)', () => 
     expect(flow.phase()).toBe('started');
     expect(flow.announcement()).toBe('Termination cancelled. Pick the second terminal.');
     expect(wireAdds(session)).toHaveLength(0);
-    expect(session.entries().filter((e) => e.id !== 'entity.place' && e.id !== 'toolbelt.select')).toStrictEqual([]);
+    expect(session.entries().map((e) => e.id)).toStrictEqual([
+      'entity.place',
+      'entity.place',
+      'entity.place',
+      'toolbelt.select',
+    ]);
   });
 
   it('Realistic prompts as Journeyman, and the same arguments log the same wire.add', () => {
@@ -516,9 +521,11 @@ describe('the termination prompts in the routing flow (F3.3 part 2, D9)', () => 
         { entity: 3, terminal: 'a', termination: IDEAL },
       ],
     ]);
+    expect(flow.announcement()).toMatch(/^Wire added from /);
+    expect(flow.announcement()).not.toMatch(/nick|quality|achiev|contact/i);
   });
 
-  it('end b’s prompt after the first terminal left the world logs nothing', () => {
+  it('end b’s prompt says so in its alert when the first terminal leaves the world; nothing is logged', () => {
     const { flow, renderer, session } = firstPick('apprentice');
     const a = flow.prompt();
     flow.confirmTermination((a && argsOf(a.request, a.request.draft)) as TerminationArgs);
@@ -526,14 +533,74 @@ describe('the termination prompts in the routing flow (F3.3 part 2, D9)', () => 
     renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
     TestBed.tick();
     const b = flow.prompt();
-    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(true); // the console and palette work under the modal
     TestBed.tick();
+    // The prompt stays open with the reason in its own alert (the viewport's region is inert meanwhile).
+    expect(flow.prompt()?.request).toBe(b?.request);
+    expect(flow.prompt()?.refusal).toBe(
+      'The first terminal left the world: cancel, then pick the route again (not-found)',
+    );
+    expect(flow.announcement()).toBe('First terminal removed from the world. Pick the first terminal.');
     expect(flow.phase()).toBe('armed');
     flow.confirmTermination((b && argsOf(b.request, b.request.draft)) as TerminationArgs);
     TestBed.tick();
+    expect(flow.prompt()?.refusal).toMatch(/\(not-found\)$/);
+    flow.cancelTermination();
+    TestBed.tick();
+    expect(flow.prompt()).toBeNull();
+    expect(flow.announcement()).toBe('Termination cancelled. Pick the first terminal.');
     expect(wireAdds(session)).toHaveLength(0);
-    expect(flow.phase()).toBe('armed');
     expect(renderer.current?.from).toBeNull();
+  });
+
+  it('end a’s device deleted while its prompt is open: Land is refused (not-found) in the prompt', () => {
+    const { flow, session } = firstPick('journeyman');
+    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    TestBed.tick();
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    expect(flow.prompt()?.request.end).toBe('a');
+    expect(flow.prompt()?.refusal).toMatch(/\(not-found\)$/);
+    expect(wireAdds(session)).toHaveLength(0);
+  });
+
+  it('end b re-proposes against the world now: a world change that blocks the route is refused in the prompt', () => {
+    const { flow, renderer, session } = firstPick('journeyman');
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    const waypoint: Waypoint = {
+      kind: 'free',
+      positionMm: { x: -94, y: 80, z: 60 },
+      entity: null,
+      fixture: null,
+      tool: null,
+    };
+    renderer.send({ kind: 'waypoint', waypoint });
+    TestBed.tick();
+    const pick = terminalEvent(session, renderer, { entity: 3, terminal: 'a' });
+    expect(pick.kind === 'terminal' && pick.proposal?.ok).toBe(true);
+    renderer.send(pick);
+    TestBed.tick();
+    // A box dropped over the waypoint while the prompt is open: the stale preview would have collided.
+    const placed = session.exec('entity.place', {
+      ref: { id: 'prop.box', version: 1 },
+      positionMm: { x: -130, y: 60, z: 30 },
+      orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+      mountedOn: null,
+    });
+    expect(placed.ok).toBe(true);
+    TestBed.tick();
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    expect(flow.prompt()?.request.end).toBe('b');
+    expect(flow.prompt()?.refusal).toMatch(/\(route-collides\)$/);
+    expect(wireAdds(session)).toHaveLength(0);
+    // Deleting the box and landing again logs the route as the world now allows it.
+    expect(session.exec('entity.delete', { id: 4 }).ok).toBe(true);
+    TestBed.tick();
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    expect(wireAdds(session).map((e) => e.args['route'])).toStrictEqual([[waypoint]]);
   });
 
   it('a clip-only terminal is refused with a warning, without a prompt', () => {

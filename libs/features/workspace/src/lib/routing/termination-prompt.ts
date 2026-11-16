@@ -9,7 +9,7 @@ import {
   input,
   linkedSignal,
   output,
-  signal,
+  untracked,
 } from '@angular/core';
 import { awgName, type TerminalMethodSpec } from '@controls/catalog';
 import { Button, Dialog } from '@controls/ui';
@@ -52,6 +52,10 @@ function takes(spec: TerminalMethodSpec): string {
  * and, for a method tightened to a torque, **tighten** (the driver and its setting; a plain screwdriver
  * has none, and the command draws its spread). Apprentice opens with every field filled from
  * `suggestTermination`; Journeyman and Realistic with only the tools in hand.
+ *
+ * The two number fields are `type="text"` with an `inputmode`: a `type="number"` field reports `''`
+ * for an intermediate `0.`, which the `[value]` binding then wrote back mid-typing (`0.6` became `60`).
+ * The model validates the text (`stripProblems`, `torqueProblems`).
  *
  * Keyboard-first: focus starts on the first field and moves to the first field of each step, Enter in
  * a text field goes on, Escape (or Cancel) dismisses it and focus returns to the canvas. Blank fields
@@ -124,11 +128,9 @@ function takes(spec: TerminalMethodSpec): string {
               <label [for]="id('stripLengthMm')">Strip length (mm)</label>
               <input
                 class="ctl-input"
-                type="number"
+                type="text"
                 inputmode="numeric"
-                min="1"
-                max="100"
-                step="1"
+                spellcheck="false"
                 autocomplete="off"
                 [id]="id('stripLengthMm')"
                 [value]="draft().stripLengthMm"
@@ -204,10 +206,9 @@ function takes(spec: TerminalMethodSpec): string {
                 <label [for]="id('torqueNm')">Torque setting (N·m)</label>
                 <input
                   class="ctl-input"
-                  type="number"
+                  type="text"
                   inputmode="decimal"
-                  min="0"
-                  step="0.01"
+                  spellcheck="false"
                   autocomplete="off"
                   [id]="id('torqueNm')"
                   [value]="draft().torqueNm"
@@ -291,8 +292,14 @@ export class TerminationPromptDialog {
     source: () => [this.request(), this.step()],
     computation: () => false,
   });
-  /** The draft the flow last checked: its refusal shows until the draft changes. */
-  private readonly confirmed = signal<TerminationDraft | null>(null);
+  /**
+   * The draft as it was when the prompt last changed (a new refusal arrives as a new prompt object):
+   * the refusal shows until the player edits the draft.
+   */
+  private readonly refusedDraft = linkedSignal<TerminationPrompt | null, TerminationDraft>({
+    source: this.prompt,
+    computation: () => untracked(this.draft),
+  });
 
   protected readonly heading = computed(() => {
     const r = this.request();
@@ -359,7 +366,7 @@ export class TerminationPromptDialog {
   protected readonly message = computed(() => {
     if (this.attempted() && this.problems().length > 0) return this.problems()[0].message;
     const refusal = this.prompt()?.refusal ?? null;
-    return refusal !== null && this.confirmed() === this.draft() ? `Refused: ${refusal}` : '';
+    return refusal !== null && this.refusedDraft() === this.draft() ? `Refused: ${refusal}` : '';
   });
 
   protected id(field: string): string {
@@ -410,7 +417,6 @@ export class TerminationPromptDialog {
     }
     const args = argsOf(r, this.draft());
     if (args === null) return;
-    this.confirmed.set(this.draft());
     this.confirm.emit(args);
   }
 

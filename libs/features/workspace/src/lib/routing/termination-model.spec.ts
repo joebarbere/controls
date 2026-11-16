@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { KEY_PLATFORM, Session } from '@controls/feature-session';
 import type { Difficulty } from '@controls/save-format';
-import type { World } from '@controls/world-model';
+import { TerminationArgsSchema, type World } from '@controls/world-model';
 import {
   accessoryChoices,
   argsOf,
@@ -134,17 +134,21 @@ describe('terminationRequest', () => {
 
   it('Realistic prompts as Journeyman', () => {
     const { request: r } = request('realistic');
+    TestBed.resetTestingModule();
+    const { request: j } = request('journeyman');
     expect(r.mode).toBe('blank');
-    expect(r.draft).toMatchObject({ hole: null, stripLengthMm: '', die: null, torqueNm: '' });
+    expect(r).toStrictEqual(j);
   });
 
   it('the belt’s tools come first: a plain screwdriver on the belt is the driver in hand', () => {
     const belt = [ref('tool.veltmark-sd-2'), ...EMPTY_BELT.slice(1)];
-    const { request: r } = request('journeyman', belt);
+    const { w, request: r } = request('journeyman', belt);
     expect(r.draft.driver).toBe('tool.veltmark-sd-2@1');
     const draft = { ...r.draft, hole: 'sol14', stripLengthMm: '9' };
     expect(torqueProblems(r, draft)).toStrictEqual([]); // no setting on a plain screwdriver
-    expect(argsOf(r, draft)?.clamp).toStrictEqual({ tool: ref('tool.veltmark-sd-2'), torqueNm: null });
+    const args = argsOf(r, draft);
+    expect(args?.clamp).toStrictEqual({ tool: ref('tool.veltmark-sd-2'), torqueNm: null });
+    expect(args && landingRefusal(w, BUILTIN_CATALOG, THHN, 'a', TERMINAL, args)).toBeNull();
   });
 
   it('a clip-only terminal is refused before any prompt (wrong-method)', () => {
@@ -171,7 +175,7 @@ describe('landingRefusal (the command’s own check, shown in the prompt)', () =
     const at = (args: ReturnType<typeof argsOf>) =>
       args && landingRefusal(w, BUILTIN_CATALOG, THHN, 'a', TERMINAL, args)?.code;
     expect(at(argsOf(r, { ...draft, torqueNm: '3' }))).toBe('beyond-tool-capacity');
-    expect(at(argsOf(r, { ...draft, driver: 'tool.veltmark-nd-516@1' }))).toMatch(/^wrong-(tool|drive)$/);
+    expect(at(argsOf(r, { ...draft, driver: 'tool.veltmark-nd-516@1' }))).toBe('wrong-drive');
     expect(
       at(
         argsOf(r, {
@@ -183,5 +187,35 @@ describe('landingRefusal (the command’s own check, shown in the prompt)', () =
       ),
     ).toBe('wrong-accessory');
     expect(landingRefusal(w, BUILTIN_CATALOG, THHN, 'a', TERMINAL, 'auto')?.code).toBe('termination-required');
+  });
+
+  it('checks the logged argument schema first (bad-args), so nothing reaches execFromInput it would reject', () => {
+    const { w } = request('journeyman');
+    const bad = { ...IDEAL, strip: { ...IDEAL.strip, lengthMm: 0 } };
+    expect(landingRefusal(w, BUILTIN_CATALOG, THHN, 'a', TERMINAL, bad)).toMatchObject({
+      code: 'bad-args',
+      message: expect.stringMatching(/^strip\.lengthMm: /),
+    });
+  });
+
+  it('every complete draft parses as the command argument (a sweep of strip lengths and torque settings)', () => {
+    const { request: r } = request('journeyman');
+    const base = draftOf(IDEAL, r.draft);
+    for (const stripLengthMm of ['1', '9', '100', '009']) {
+      for (const torqueNm of ['0', '0.6', '1.2', '3', '1e3']) {
+        const args = argsOf(r, { ...base, stripLengthMm, torqueNm });
+        expect(args && TerminationArgsSchema.safeParse(args).success).toBe(true);
+      }
+    }
+    for (const [stripLengthMm, torqueNm] of [
+      ['0', '0.6'],
+      ['101', '0.6'],
+      ['9.5', '0.6'],
+      ['9', '-1'],
+      ['9', 'abc'],
+      ['9', '1e400'],
+    ]) {
+      expect(argsOf(r, { ...base, stripLengthMm, torqueNm })).toBeNull();
+    }
   });
 });

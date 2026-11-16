@@ -5,6 +5,7 @@ import {
   checkConductor,
   type ConductorColour,
   findEntity,
+  proposeRoute,
   type RouteProposal,
   type TerminationArg,
   type Waypoint,
@@ -140,6 +141,36 @@ export function pickTerminal(
     tool: { ...cutter },
   };
   return { kind: 'complete', gesture: IDLE_GESTURE, args, lengthMm: proposal.lengthMm };
+}
+
+/**
+ * The route to `end` landed by `termination`, against `world` now (F3.3 part 2): what the second
+ * terminal's prompt completes with. Always re-proposed, never the renderer's earlier preview: a method
+ * other than the terminal's first has its own entry point (so its own route and `lengthMm`), and the
+ * world may have changed while the prompt was open. Refused (`not-found`) when the gesture has lost its
+ * first terminal.
+ */
+export function proposeCompletion(
+  world: World,
+  catalog: Catalog,
+  gesture: RouteGesture,
+  end: GestureTerminal,
+  termination: TerminationArg,
+): RouteProposal {
+  if (gesture.from === null) {
+    return {
+      ok: false,
+      code: 'not-found',
+      message: 'The first terminal left the world: cancel, then pick the route again',
+    };
+  }
+  return proposeRoute(
+    world,
+    catalog,
+    { ...gesture.from, termination: gesture.fromTermination ?? 'auto' },
+    { entity: end.entity, terminal: end.terminal, termination },
+    gesture.waypoints,
+  );
 }
 
 /** A click off every terminal after the first pick: a waypoint (already snapped by the renderer). */
