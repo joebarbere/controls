@@ -69,7 +69,7 @@ log: 5 entries
 9d366d295ef5099b4f7028a667fcce30c3fcfe17c2593084df377134be55ea52
 ```
 
-`--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document or a level instead, such as `content/levels/workshop.json` (what New sandbox loads). With both, `--world <level> --seed N` is a new game on that level with seed N, exactly as New sandbox with seed N.
+`--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document or a level instead, such as `content/levels/workshop.json` (what New sandbox loads). With both, `--world <level> --seed N` is a new game on that level with seed N, exactly as New sandbox with seed N. `--difficulty <trainee|apprentice|journeyman|realistic>` starts a new game at that difficulty too (on `--world` with its own seed unless `--seed` gives one, or on an empty world): the P3 acceptance scenarios run with `--world content/levels/workshop.json --difficulty journeyman`.
 
 ### 3. Replay it
 
@@ -158,24 +158,24 @@ command.id positional… --flag value --nested.flag value --boolean-flag
 
   In the game, the header's `netlist.dump tick T` is the **bus tick** (the tick commands are stamped at), as for `world.hash`. While the sim runs, the HUD's sim time is the latest snapshot's tick, so it can be a little behind T; the dump waits for the worker to reach T and describes the state there.
 
-- `wire.info <id>` (F3.6 part 3, also `wire.info --id <id>`) prints one wire's or lead's record: its length, its status, the current, the conductor's resistance at its temperature and its drop, then each end's state, contact resistance, hot-spot temperature, drop and voltage on the conductor side of the contact, and whether the insulation is damaged. A debug aid (plan D16), never logged. Numbers have six significant figures. From the bad-termination scenario (`apps/sim-cli/scenarios/bad-termination.console`), the loose breaker screw and a test lead:
+- `wire.info <id>` (F3.6 part 3, also `wire.info --id <id>`) prints one wire's or lead's record: its length, its status, the current, the conductor's resistance at its temperature and its drop, then each end's state, contact resistance, hot-spot temperature, drop and voltage on the conductor side of the contact, and whether the insulation is damaged. A debug aid (plan D16), never logged. Numbers have six significant figures. From the bad-termination scenario (`apps/sim-cli/scenarios/bad-termination.console`), the jumper with the loose breaker screw and cable 1's black conductor:
 
   ```text
+  wire.info 1 tick 600000
+  conductor 1 conductor.tallowmere-thhn-14-solid@1 length 157 mm
+  status solved
+  current 12.8393 A
+  conductor R 0.00135943 Ω at 304.613 K, drop 0.0174541 V
+  end a ok, contact 0.0249044 Ω at 409.285 K, drop 0.319754 V, conductor side 119.26 V
+  end b ok, contact 0.000313207 Ω at 297.839 K, drop 0.00402135 V, conductor side 119.242 V
+  insulation damaged
   wire.info 2 tick 600000
-  conductor 2 conductor.tallowmere-thhn-14-solid@1 length 1979 mm
+  conductor 2 conductor.sorrelby-nm-14-solid@1 length 2303 mm
   status solved
-  current 11.8059 A
-  conductor R 0.0170339 Ω at 303.033 K, drop 0.2011 V
-  end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V, conductor side 119.28 V
-  end b ok, contact 0.000516818 Ω at 301.709 K, drop 0.00610151 V, conductor side 119.078 V
-  insulation intact
-  wire.info 3 tick 600000
-  lead 3 lead.quillfern-test-1m@1 length 1000 mm
-  status solved
-  current 11.8059 A
-  conductor R 0.042916 Ω at 317.052 K, drop 0.506662 V
-  end a none
-  end b none
+  current 12.8393 A
+  conductor R 0.0199411 Ω at 304.613 K, drop 0.25603 V
+  end a ok, contact 0.000305487 Ω at 297.804 K, drop 0.00392223 V, conductor side 119.234 V
+  end b ok, contact 0.000519732 Ω at 303.192 K, drop 0.00667298 V, conductor side 118.978 V
   insulation intact
   ```
 

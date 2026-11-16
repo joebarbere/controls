@@ -1,4 +1,4 @@
-import { CtrlWriteError, migrateWorld, readCtrl, type World } from '@controls/save-format';
+import { createWorld, CtrlWriteError, Difficulty, migrateWorld, readCtrl, type World } from '@controls/save-format';
 import {
   BUILD_ENGINE_VERSIONS,
   createGame,
@@ -30,7 +30,7 @@ import { loadModuleScript, MODULE_SCRIPT_EXTENSIONS, WORKSPACE_ROOT } from './sc
 /*
  * `sim-cli`: runs the game headless in plain Node (plan §4.6, F1.6, ADR 0008).
  *
- *   sim run <script> [--world <file>] [--seed N] [--log <out.json>] [--save <out.ctrl>] [--expect <hash>]
+ *   sim run <script> [--world <file>] [--seed N] [--difficulty <name>] [--log <out.json>] [--save <out.ctrl>] [--expect <hash>]
  *   sim replay <save.ctrl | replay-log.json> [--expect <hash>]
  *   sim hash <save.ctrl | world.json> [--expect <hash>]
  *   sim bench
@@ -70,6 +70,9 @@ Commands:
                           level, e.g. content/levels/workshop.json (default: an empty world)
       --seed <n>          The seed: of the empty world (default 0), or, with --world,
                           a new game on that world with this seed (as New sandbox does)
+      --difficulty <name> trainee, apprentice, journeyman or realistic: a new game at
+                          that difficulty (on --world with its seed, or --seed's; as
+                          New sandbox does with the difficulty chosen)
       --log <file>        Write the session's replay log (JSON) here
       --save <file>       Write the session as a .ctrl save here
   replay <file>    Replay a .ctrl save's replay.log (or a replay-log JSON) from its
@@ -95,7 +98,7 @@ Common options:
       --expect <hash>     Fail (exit 1) unless the final hash equals this`;
 
 const OPTIONS: Readonly<Record<string, readonly string[]>> = {
-  run: ['seed', 'world', 'log', 'save', 'expect'],
+  run: ['seed', 'difficulty', 'world', 'log', 'save', 'expect'],
   replay: ['expect'],
   hash: ['expect'],
   bench: ['report', 'smoke'],
@@ -253,18 +256,29 @@ function describe(error: unknown): string {
   return String(error);
 }
 
+function parseDifficulty(text: string): Difficulty {
+  const parsed = Difficulty.safeParse(text);
+  if (!parsed.success) throw new UsageError(`--difficulty must be one of ${Difficulty.options.join(', ')}`);
+  return parsed.data;
+}
+
 async function startGame(parsed: Parsed, io: CliIo): Promise<Game> {
   const worldFile = parsed.options['world'];
   const seedText = parsed.options['seed'];
   const seed = seedText === undefined ? undefined : parseSeed(seedText);
-  if (worldFile === undefined) return createGame({ seed: seed ?? 0 });
+  const difficultyText = parsed.options['difficulty'];
+  const difficulty = difficultyText === undefined ? undefined : parseDifficulty(difficultyText);
+  if (worldFile === undefined) {
+    if (difficulty === undefined) return createGame({ seed: seed ?? 0 });
+    return createGame({ world: createWorld({ seed: seed ?? 0, difficulty }) });
+  }
   const document = await readDocument(resolve(io.cwd, worldFile), worldFile);
   if (!document.ok) throw new Failure(document.message);
   let world: World;
   if (document.kind === 'ctrl') {
     const read = readCtrl(document.bytes);
     if (!read.ok) throw new Failure(`${worldFile}: ${read.error.message}`);
-    if (seed === undefined) {
+    if (seed === undefined && difficulty === undefined) {
       // The game's Load: the saved world, undo cleared, the replay log continued (or restarted).
       const loaded = gameFromSave(read.value);
       if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
@@ -278,8 +292,10 @@ async function startGame(parsed: Parsed, io: CliIo): Promise<Game> {
     if (!loaded.ok) throw new Failure(`${worldFile}: ${loaded.error.message}`);
     world = loaded.value;
   }
-  // With --seed, a new game on that world (New sandbox's path); without, the document as it is.
-  return createGame({ world: seed === undefined ? world : newGameWorld(world, { seed }) });
+  // With --seed or --difficulty, a new game on that world (New sandbox's path: the document's own seed
+  // unless --seed gives one); with neither, the document as it is.
+  if (seed === undefined && difficulty === undefined) return createGame({ world });
+  return createGame({ world: newGameWorld(world, { seed: seed ?? world.seed, difficulty }) });
 }
 
 async function run(path: string, parsed: Parsed, io: CliIo): Promise<string> {

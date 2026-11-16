@@ -54,6 +54,11 @@ describe('sim help and usage', () => {
     [['run', 'a', '--seed', '1', '--seed', '2'], '--seed is given twice'],
     [['run', 'a.console', '--seed', 'x'], '--seed must be an unsigned 32-bit integer'],
     [['run', 'a.console', '--seed', '4294967296'], '--seed must be an unsigned 32-bit integer'],
+    [
+      ['run', 'a.console', '--difficulty', 'expert'],
+      '--difficulty must be one of trainee, apprentice, journeyman, realistic',
+    ],
+    [['hash', 'a', '--difficulty', 'trainee'], 'Unknown option --difficulty for "hash"'],
   ])('exits 2 for %j', async (argv, message) => {
     const result = await sim(...argv);
     expect(result.code).toBe(EXIT_USAGE);
@@ -178,6 +183,24 @@ describe('sim run', () => {
     const plain = await sim('run', 'noop.console', '--world', WORKSHOP_LEVEL_PATH);
     expect(plain.stdout).toEqual([worldHash(loaded.level)]);
     expect((await sim('run', 'noop.console', '--world', WORKSHOP_LEVEL_PATH, '--seed', '-1')).code).toBe(EXIT_USAGE);
+  });
+
+  it('--difficulty starts a new game at that difficulty: on --world with its own seed (or --seed), or an empty world', async () => {
+    const loaded = loadLevel(await json(WORKSHOP_LEVEL_PATH));
+    if (!loaded.ok) throw new Error('workshop should load');
+    const noop = await file('noop.console', '');
+    const journeyman = await sim('run', noop, '--world', WORKSHOP_LEVEL_PATH, '--difficulty', 'journeyman');
+    const expected = newGameWorld(loaded.level, { seed: 0, difficulty: 'journeyman' });
+    expect(expected.difficulty).toBe('journeyman');
+    expect(journeyman).toEqual({ code: EXIT_OK, stdout: [worldHash(expected)], stderr: [] });
+    const seeded = await sim('run', noop, '--world', WORKSHOP_LEVEL_PATH, '--difficulty', 'realistic', '--seed', '9');
+    expect(seeded.stdout).toEqual([worldHash(newGameWorld(loaded.level, { seed: 9, difficulty: 'realistic' }))]);
+    // The level's own difficulty gives the level as it is.
+    const same = await sim('run', noop, '--world', WORKSHOP_LEVEL_PATH, '--difficulty', loaded.level.difficulty);
+    expect(same.stdout).toEqual([worldHash(loaded.level)]);
+    // No --world: an empty world at that difficulty.
+    const empty = await sim('run', noop, '--difficulty', 'trainee', '--seed', '4');
+    expect(empty.stdout).toEqual([worldHash(createWorld({ seed: 4, difficulty: 'trainee' }))]);
   });
 
   it('runs a TypeScript module script against the game', async () => {
@@ -356,6 +379,10 @@ describe('.ctrl saves (F1.8b)', () => {
     if (!read.ok) throw new Error('fixture should load');
     const result = await sim('run', await file('noop.console', ''), '--world', worldOnly, '--seed', '77');
     expect(result.stdout).toEqual([worldHash(newGameWorld(read.value.world, { seed: 77 }))]);
+    // --difficulty alone starts a new game on it too, with the save's own seed.
+    const harder = await sim('run', 'noop.console', '--world', worldOnly, '--difficulty', 'realistic');
+    const world = read.value.world;
+    expect(harder.stdout).toEqual([worldHash(newGameWorld(world, { seed: world.seed, difficulty: 'realistic' }))]);
   });
 
   it('run --save writes a .ctrl that loads back to the same hash, byte-identical across runs', async () => {

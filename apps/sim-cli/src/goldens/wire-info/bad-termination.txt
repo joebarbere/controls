@@ -1,16 +1,16 @@
+wire.info 1 tick 600000
+conductor 1 conductor.tallowmere-thhn-14-solid@1 length 157 mm
+status solved
+current 12.8393 A
+conductor R 0.00135943 Ω at 304.613 K, drop 0.0174541 V
+end a ok, contact 0.0249044 Ω at 409.285 K, drop 0.319754 V, conductor side 119.26 V
+end b ok, contact 0.000313207 Ω at 297.839 K, drop 0.00402135 V, conductor side 119.242 V
+insulation damaged
 wire.info 2 tick 600000
-conductor 2 conductor.tallowmere-thhn-14-solid@1 length 1979 mm
+conductor 2 conductor.sorrelby-nm-14-solid@1 length 2303 mm
 status solved
-current 11.8059 A
-conductor R 0.0170339 Ω at 303.033 K, drop 0.2011 V
-end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V, conductor side 119.28 V
-end b ok, contact 0.000516818 Ω at 301.709 K, drop 0.00610151 V, conductor side 119.078 V
-insulation intact
-wire.info 3 tick 600000
-lead 3 lead.quillfern-test-1m@1 length 1000 mm
-status solved
-current 11.8059 A
-conductor R 0.042916 Ω at 317.052 K, drop 0.506662 V
-end a none
-end b none
+current 12.8393 A
+conductor R 0.0199411 Ω at 304.613 K, drop 0.25603 V
+end a ok, contact 0.000305487 Ω at 297.804 K, drop 0.00392223 V, conductor side 119.234 V
+end b ok, contact 0.000519732 Ω at 303.192 K, drop 0.00667298 V, conductor side 118.978 V
 insulation intact

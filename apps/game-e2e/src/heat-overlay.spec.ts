@@ -5,11 +5,12 @@ import { startSandbox } from './support/sandbox';
 
 /**
  * F3.6 part 3 renderer half: the heat overlay on the real sim worker (Chromium, WebGL2). The
- * bad-termination scenario (a 20 %-torque breaker screw on 14 AWG THHN, 600 s at about 11.8 A; the
- * `wire.info` golden has its loose end a at 393.8 K on a 303.0 K conductor) runs through the in-game
- * console's `run`; then `view.overlay heat true` from the console. The overlay graph (the `?e2e=1`
- * hook) shows the loose wire's end-a half hot (the overheat point, bin 16 of the heat scale) and its
- * other half cool; the good wire both cool; the two leads their conductors. The legend names the
+ * bad-termination scenario (the P3 acceptance's lamp circuit with a 20 %-torque breaker screw on its
+ * 14 AWG THHN jumper, plus the 1500 W heater: 600 s at about 12.84 A; the `wire.info` golden has its
+ * loose end a at 409.3 K on a 304.6 K conductor) runs through the in-game console's `run`; then
+ * `view.overlay heat true` from the console. The overlay graph (the `?e2e=1` hook) shows the loose
+ * wire's end-a half hot (past the insulation-damage point, bin 18 of the heat scale) and its other half
+ * cool; the supply's good L1 conductor both cool; no leads. The legend names the
  * scale's sourced points in text, and nothing logs a page or console error. Waits are on the page's
  * own state, never on time.
  */
@@ -56,7 +57,7 @@ test('the heat overlay shows the bad termination’s hot end, with a legend (F3.
   const text = readFileSync(join(__dirname, '../../sim-cli/scenarios/bad-termination.console'));
   await (await chooser).setFiles({ name: 'bad-termination.console', mimeType: 'text/plain', buffer: text });
   const output = page.getByTestId('console-output').locator('.entry');
-  await expect(output.last()).toHaveText('Ran 10 commands from bad-termination.console.', { timeout: 60_000 });
+  await expect(output.last()).toHaveText('Ran 43 commands from bad-termination.console.', { timeout: 60_000 });
 
   await expect(input).toBeFocused();
   await page.keyboard.insertText('view.overlay heat true');
@@ -64,23 +65,21 @@ test('the heat overlay shows the bad termination’s hot end, with a legend (F3.
   await expect(output.last()).toHaveText(/view\.overlay: ok/);
   await expect(viewport).toHaveAttribute('data-overlays', 'heat');
 
-  // Wire 2's loose end a (393.8 K) is at the overheat point; its other half is its 303 K conductor.
+  // Wire 1's loose end a (409.3 K) is past the insulation-damage point (403.15 K, bin 18); its other
+  // half is its 304.6 K conductor.
   await expect
-    .poll(async () => (await graph(page))?.conductors.find((c) => c.connection === 2)?.heat)
-    .toStrictEqual([16, 1]);
+    .poll(async () => (await graph(page))?.conductors.find((c) => c.connection === 1)?.heat)
+    .toStrictEqual([18, 1]);
   const g = await graph(page);
   expect(g?.heat).toBe(true);
-  // Wire 1 (both ends at their marked torque) stays in the service range's first bins.
-  const good = g?.conductors.find((c) => c.connection === 1)?.heat;
+  // Wire 8 (the supply's L1, both ends at their marked torque) stays in the service range's first bins.
+  const good = g?.conductors.find((c) => c.connection === 8)?.heat;
   expect(good?.map((h) => typeof h === 'number' && h <= 3)).toStrictEqual([true, true]);
-  // The leads (connections 3 and 4) have clip ends: both halves show their conductor, a reading.
-  expect(g?.leads.map((l) => [l.connection, l.heat[0] === l.heat[1], typeof l.heat[0]])).toStrictEqual([
-    [3, true, 'number'],
-    [4, true, 'number'],
-  ]);
-  // The wire renderer draws the two halves of wire 2 in different colours.
+  // No test leads in this circuit.
+  expect(g?.leads).toStrictEqual([]);
+  // The wire renderer draws the two halves of wire 1 in different colours.
   const tint = await page.evaluate(
-    () => (window as unknown as Hooks).__controlsViewport?.wireGraph()?.routes.find((r) => r.owner === 'c2')?.tint,
+    () => (window as unknown as Hooks).__controlsViewport?.wireGraph()?.routes.find((r) => r.owner === 'c1')?.tint,
   );
   expect(tint?.[0]).not.toBe(tint?.[1]);
 

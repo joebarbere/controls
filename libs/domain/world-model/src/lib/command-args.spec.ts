@@ -1,7 +1,8 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { commandArgJsonSchemas } from './command-args-schema';
 import { createWorldRegistry } from './session';
+import { sha256, toHex } from './sha256';
 
 /*
  * Every logged command's arguments are save format (ADR 0007, ADR 0011 §12, ADR 0013). The JSON
@@ -53,6 +54,19 @@ describe('exported command argument JSON Schema', () => {
         expect([...((node['required'] as string[]) ?? [])].sort(), `${file} ${path}`).toStrictEqual(keys);
         expect(node['additionalProperties'], `${file} ${path}`).toBe(false);
       });
+    }
+  });
+
+  it('lead.connect and lead.disconnect are byte for byte what v0.3.0 shipped (P3 phase acceptance: test leads stay)', () => {
+    // SHA-256 of the files at the v0.3.0 tag (unchanged since P2's #42). A world v3 change that
+    // regenerated them with -u would fail here, not only in review.
+    const pinned: Record<string, string> = {
+      'lead.connect.args.schema.json': '21be55f69dc715075b02cf55de56904f12a80fb09e37e2bb82025c7cdb662736',
+      'lead.disconnect.args.schema.json': '9a4a11c89b7d034e2f3eab67182517af089553549b5edcc39cc20d77c8004254',
+    };
+    for (const [file, hash] of Object.entries(pinned)) {
+      expect(toHex(sha256(new Uint8Array(readFileSync(join(outDir, file))))), file).toBe(hash);
+      expect(`${JSON.stringify(schemas[file], null, 2)}\n`, file).toBe(readFileSync(join(outDir, file), 'utf8'));
     }
   });
 
