@@ -49,6 +49,12 @@ export interface WiringFlow extends RoutingMode {
   cancelTermination(): void;
   /** The label prompt open now, or `null`. */
   readonly label: Signal<LabelPrompt | null>;
+  /**
+   * Publishes the selected wire's context keys (`selection.connectionId`, `selection.cableId`,
+   * `wiring.stripTarget`) now. The viewport calls it with the renderer's state in the same task as the
+   * selection changes, so L, J and Shift+L work on the very next key; the flow's effect also calls it.
+   */
+  publishSelection(state: ViewportState | undefined): void;
   confirmLabel(confirm: LabelConfirm): void;
   cancelLabel(): void;
 }
@@ -82,7 +88,9 @@ const LABEL_MAKER_KIND = 'labelMaker';
  * context keys the commands' `when`s read.
  */
 export function connectWiring(
-  renderer: Pick<RoutingRenderer, 'onRouting' | 'cycleTerminal'>,
+  renderer: Pick<RoutingRenderer, 'onRouting' | 'cycleTerminal'> & {
+    selectWire?(wire: { readonly kind: 'connection' | 'cable'; readonly id: number } | null): boolean;
+  },
   state: Signal<ViewportState | undefined>,
   announcer: Announcer,
 ): WiringFlow {
@@ -267,6 +275,17 @@ export function connectWiring(
 
   // --- labels -------------------------------------------------------------------------------------
   const label = linkedSignal<number, LabelPrompt | null>({ source: session.generation, computation: () => null });
+  /** The wire the label maker's click last opened a prompt for (so a held selection opens it once). */
+  let lastSelected: string | null = null;
+  /**
+   * A closed label prompt forgets the wire it was for and clears the wire selection, so a click on the
+   * same wire with the label maker opens it again.
+   */
+  const labelClosed = (): void => {
+    if (lastSelected === null) return;
+    lastSelected = null;
+    renderer.selectWire?.(null);
+  };
   const openLabel = (t: LabelTarget): void => {
     const built = labelRequest(session.world(), catalog, belt(), t);
     if (!built.ok) {
@@ -285,6 +304,7 @@ export function connectWiring(
       return;
     }
     label.set(null);
+    labelClosed();
     const result = session.execFromInput(confirm.id, confirm.args);
     if (!result.ok) {
       if (result.error.kind !== 'rejected') console.warn('label prompt command failed', result);
@@ -296,11 +316,11 @@ export function connectWiring(
   const cancelLabel = (): void => {
     if (label() === null) return;
     label.set(null);
+    labelClosed();
     announce('Nothing labelled.');
   };
   // The label maker in hand: a click on a wire (it becomes the selected wire) opens its prompt.
   const labelMaker = computed(() => activeTool.tool()?.kind === LABEL_MAKER_KIND);
-  let lastSelected: string | null = null;
   effect(() => {
     const wire = state()?.selectedWire ?? null;
     const now = wire ? `${wire.kind}:${wire.id}` : null;
@@ -335,6 +355,10 @@ export function connectWiring(
     session.onCommand('wiring.label', (e) => {
       const args = e.command.args as WiringLabelArgs;
       const wire = selectedWire();
+      if (args.wire !== null && args.cable !== null) {
+        refuse('Label', { code: 'bad-args', message: 'Label a wire or a cable, not both at once' });
+        return;
+      }
       const t: LabelTarget | null =
         args.wire !== null
           ? { kind: 'connection', id: args.wire }
@@ -355,6 +379,15 @@ export function connectWiring(
     session.onCommand(
       'routing.cancel',
       whileLanding(() => stopLanding('Landing stopped.')),
+    ),
+    // Undo and redo move the world under a landing (a conductor landed again, or unlanded): stop it,
+    // rather than keep a conductor id that may come back to life.
+    ...['edit.undo', 'edit.redo'].map((id) =>
+      session.onCommand(id, () => {
+        if (landing() === null) return;
+        pending.set(null);
+        stopLanding('Landing stopped by undo or redo.');
+      }),
     ),
   ];
   destroyRef.onDestroy(() => {
@@ -377,19 +410,24 @@ export function connectWiring(
     SELECTION_CONNECTION_ID_KEY,
     SELECTION_CABLE_ID_KEY,
   ];
-  effect(() => {
-    const world = session.world();
-    const wire = selectedWire();
+  const publishSelection = (s: ViewportState | undefined): void => {
+    const wire = s?.selectedWire ?? null;
     const connection = wire?.kind === 'connection' ? wire.id : null;
     const cable = wire?.kind === 'cable' ? wire.id : null;
+    const world = untracked(session.world);
     const stripTarget =
       cable ?? (connection === null ? null : (world.connections.find((c) => c.id === connection)?.cable?.id ?? null));
-    publish(WIRING_CABLES_KEY, world.cables.length > 0 ? true : null);
-    publish(WIRING_FREE_ENDS_KEY, world.connections.some((c) => c.cable && (c.a === null || c.b === null)) || null);
-    publish(WIRING_WIRES_KEY, world.connections.length + world.cables.length > 0 ? true : null);
     publish(WIRING_STRIP_TARGET_KEY, stripTarget);
     publish(SELECTION_CONNECTION_ID_KEY, connection);
     publish(SELECTION_CABLE_ID_KEY, cable);
+  };
+  effect(() => {
+    const world = session.world();
+    const s = state();
+    publish(WIRING_CABLES_KEY, world.cables.length > 0 ? true : null);
+    publish(WIRING_FREE_ENDS_KEY, world.connections.some((c) => c.cable && (c.a === null || c.b === null)) || null);
+    publish(WIRING_WIRES_KEY, world.connections.length + world.cables.length > 0 ? true : null);
+    untracked(() => publishSelection(s));
   });
   destroyRef.onDestroy(() => KEYS.forEach((k) => session.setContext(k, null)));
 
@@ -419,6 +457,7 @@ export function connectWiring(
     confirmTermination,
     cancelTermination,
     label: label.asReadonly(),
+    publishSelection,
     confirmLabel,
     cancelLabel,
   };

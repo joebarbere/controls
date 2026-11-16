@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { KEY_PLATFORM } from '@controls/feature-session';
-import type { CableStripArgs } from '@controls/world-model';
+import type { CableStripArgs, World } from '@controls/world-model';
 import { cableRunBus } from '@controls/world-model/testing';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -17,10 +17,34 @@ import { labelRequest, stripRequest } from './wiring-model';
 const ref = (id: string) => ({ id, version: 1 });
 const EMPTY_BELT = Array.from({ length: 9 }, () => null);
 
-async function mountStrip(difficulty: 'trainee' | 'journeyman', refusal: string | null = null) {
+/** `cableRunBus` plus a second cable (id 2) from the box's other top clamp to a free end with a 150 mm tail. */
+function withFreeEnd(): World {
+  const bus = cableRunBus();
+  const free = { kind: 'free', positionMm: { x: 74, y: 300, z: 40 }, entity: null, fixture: null, tool: null };
+  expect(bus.exec('enclosure.openEntry', { id: 1, entry: 'clamp-top-2', tool: ref('tool.veltmark-sd-2') }).ok).toBe(
+    true,
+  );
+  const added = bus.exec('cable.add', {
+    ref: ref('cable.sorrelby-nmb-14-2'),
+    a: { entity: 1, entry: 'clamp-top-2' },
+    b: null,
+    route: [free],
+    lengthMm: 1000,
+    tailsMm: { a: 200, b: 150 },
+    tool: ref('tool.veltmark-dc-8'),
+  });
+  expect(added.ok).toBe(true);
+  return bus.state;
+}
+
+async function mountStrip(
+  difficulty: 'trainee' | 'journeyman',
+  refusal: string | null = null,
+  world: World = cableRunBus().state,
+  cable = 1,
+) {
   TestBed.configureTestingModule({ providers: [{ provide: KEY_PLATFORM, useValue: 'other' }] });
-  const world = { ...cableRunBus().state, difficulty };
-  const built = stripRequest(world, BUILTIN_CATALOG, EMPTY_BELT, 1);
+  const built = stripRequest({ ...world, difficulty }, BUILTIN_CATALOG, EMPTY_BELT, cable);
   if (!built.ok) throw new Error(built.message);
   const fixture = TestBed.createComponent(CableStripPromptDialog);
   const confirmed: CableStripArgs[][] = [];
@@ -87,6 +111,16 @@ describe('CableStripPromptDialog (F3.2 part 4)', () => {
     expect(document.activeElement).toBe(screen.getByLabelText('End a: jacket to strip (mm)'));
     await user.type(screen.getByLabelText('End b: jacket to strip (mm)'), '120{Enter}');
     expect(confirmed).toStrictEqual([[{ id: 1, end: 'b', jacketMm: 120, tool: ref('tool.veltmark-ws-nm12') }]]);
+  });
+
+  it('a free cable end is bounded by its whole tail (no box keeps sheath), and its hint says so', async () => {
+    const { confirmed, user } = await mountStrip('trainee', null, withFreeEnd(), 2);
+    expect(value('End a: jacket to strip (mm)')).toBe('193');
+    expect(value('End b: jacket to strip (mm)')).toBe('150');
+    expect(screen.getByText('Free end, 150 mm tail. Leave blank to keep it.')).toBeTruthy();
+    await user.click(screen.getByLabelText('End b: jacket to strip (mm)'));
+    await user.keyboard('{Enter}');
+    expect(confirmed[0]?.[1]).toStrictEqual({ id: 2, end: 'b', jacketMm: 150, tool: ref('tool.veltmark-ws-nm12') });
   });
 
   it('shows the command’s refusal until the draft changes; Escape dismisses without stripping', async () => {

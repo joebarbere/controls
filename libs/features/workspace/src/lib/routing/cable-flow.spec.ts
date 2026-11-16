@@ -37,6 +37,11 @@ class FakeRenderer implements RoutingRenderer {
   readonly sessions: (RoutingSession | null)[] = [];
   private readonly listeners = new Set<RoutingEventListener>();
   keyTerminal: TerminalRef | null = null;
+  readonly wireSelections: unknown[] = [];
+  selectWire(wire: unknown): boolean {
+    this.wireSelections.push(wire);
+    return true;
+  }
   setRouting(session: RoutingSession | null): void {
     if (this.sessions.at(-1) !== session) this.sessions.push(session);
   }
@@ -456,5 +461,163 @@ describe('labels (F3.2 part 4)', () => {
     TestBed.tick();
     expect(wiring.label()?.request).toMatchObject({ target: { kind: 'cable', id: 1 } });
     expect(wiring.label()?.request.makers[0].label).toBe('Label printer, 12 mm tape (belt slot 7)');
+  });
+});
+
+const SCREWDRIVER = ref('tool.veltmark-sd-2');
+const BOX_SELECTED = (): ViewportState => ({
+  ...STATE,
+  selected: { id: 'entity-1', kind: 'device', label: 'box', entityId: 1 },
+});
+
+describe('review fixes (F3.2 part 4, test-engineer)', () => {
+  it('Enter re-checks the keyboard’s entry: one closed by an undo since Tab is refused (entry-closed)', () => {
+    const { routing, cable, renderer, session, state } = setup();
+    expect(session.exec('enclosure.openEntry', { id: 1, entry: 'clamp-top-2', tool: SCREWDRIVER }).ok).toBe(true);
+    session.exec('toolbelt.select', { slot: 5 });
+    state.set(BOX_SELECTED());
+    TestBed.tick();
+    for (let i = 0; i < 8 && cable.keyEntry()?.entry !== 'clamp-top-2'; i++) session.exec('routing.terminalNext');
+    expect(cable.keyEntry()).toMatchObject({ entry: 'clamp-top-2', problem: null });
+    session.exec('edit.undo');
+    TestBed.tick();
+    expect(cable.keyEntry()).toMatchObject({ entry: 'clamp-top-2', problem: { code: 'entry-closed' } });
+    renderer.send({ kind: 'enter' });
+    TestBed.tick();
+    expect(routing.announcement()).toMatch(/\(entry-closed\)\.$/);
+    expect(cable.gesture().a).toBeNull();
+    // Another enclosure in hand (here none) drops the keyboard's entry.
+    state.set(STATE);
+    TestBed.tick();
+    expect(cable.keyEntry()).toBeNull();
+  });
+
+  it('a first entry closed by undo, or whose box is deleted, starts the run over, announced', () => {
+    const { routing, cable, renderer, session } = setup();
+    expect(session.exec('enclosure.openEntry', { id: 1, entry: 'clamp-top-2', tool: SCREWDRIVER }).ok).toBe(true);
+    session.exec('toolbelt.select', { slot: 5 });
+    TestBed.tick();
+    renderer.send({ kind: 'entity', entity: 1, atMm: { x: 74, y: 92, z: 40 }, waypoint: null });
+    TestBed.tick();
+    expect(cable.gesture().a?.entry).toBe('clamp-top-2');
+    session.exec('edit.undo');
+    TestBed.tick();
+    expect(cable.gesture()).toStrictEqual({ a: null, waypoints: [] });
+    expect(routing.announcement()).toBe('The first entry is no longer usable (entry-closed). Pick the first entry.');
+    renderer.send({ kind: 'entity', entity: 1, atMm: near(BOX_CLAMP), waypoint: null });
+    TestBed.tick();
+    expect(cable.gesture().a?.entry).toBe('clamp-top-1');
+    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    TestBed.tick();
+    expect(cable.gesture()).toStrictEqual({ a: null, waypoints: [] });
+    expect(routing.announcement()).toBe('The first entry is no longer usable (not-found). Pick the first entry.');
+  });
+
+  it('Escape after the first entry cancels the run with the spool kept; another slot drops the gesture', () => {
+    const { routing, cable, renderer, session } = setup();
+    session.exec('toolbelt.select', { slot: 5 });
+    TestBed.tick();
+    renderer.send({ kind: 'entity', entity: 1, atMm: near(BOX_CLAMP), waypoint: null });
+    renderer.send({ kind: 'cancel' });
+    TestBed.tick();
+    expect(routing.announcement()).toBe('Cable run cancelled.');
+    expect(TestBed.inject(ToolBelt).activeSlot()).toBe(5);
+    expect(renderer.current).toMatchObject({ ends: 'entries', startMm: null });
+    renderer.send({ kind: 'entity', entity: 1, atMm: near(BOX_CLAMP), waypoint: null });
+    session.exec('toolbelt.select', { slot: 9 }); // an empty slot
+    TestBed.tick();
+    expect(renderer.current).toBeNull();
+    session.exec('toolbelt.select', { slot: 5 });
+    TestBed.tick();
+    expect(cable.gesture()).toStrictEqual({ a: null, waypoints: [] });
+  });
+
+  it('with the spool still armed, a second run logs a second cable.add', () => {
+    const { wiring, renderer, session } = withCable('trainee');
+    wiring.cancelStrip();
+    expect(session.exec('enclosure.openEntry', { id: 1, entry: 'clamp-top-2', tool: SCREWDRIVER }).ok).toBe(true);
+    expect(session.exec('enclosure.openEntry', { id: 2, entry: 'ko-bottom-1', tool: SCREWDRIVER }).ok).toBe(true);
+    renderer.send({ kind: 'entity', entity: 1, atMm: { x: 74, y: 92, z: 40 }, waypoint: null });
+    renderer.send({ kind: 'waypoint', waypoint: free(74, 250, 40) });
+    renderer.send({ kind: 'entity', entity: 2, atMm: { x: 0, y: 500, z: 40 }, waypoint: null });
+    TestBed.tick();
+    expect(logged(session, 'cable.add').map((e) => [e.args['a'], e.args['b']])).toStrictEqual([
+      [
+        { entity: 1, entry: 'clamp-top-1' },
+        { entity: 2, entry: 'ko-bottom-2' },
+      ],
+      [
+        { entity: 1, entry: 'clamp-top-2' },
+        { entity: 2, entry: 'ko-bottom-1' },
+      ],
+    ]);
+    expect(wiring.strip()?.request.cableId).toBe(2);
+  });
+
+  it('Escape mid-landing logs exactly the landings made; undo or redo during landing stops it', () => {
+    const { wiring, renderer, session } = withCable('trainee');
+    wiring.cancelStrip();
+    session.exec('cable.strip', { id: 1, end: 'b', jacketMm: 180, tool: ref('tool.veltmark-ws-nm12') });
+    session.exec('wiring.land', { id: 1 });
+    renderer.send({ kind: 'terminal', end: { entity: 3, terminal: 'b' }, source: 'pointer', proposal: null });
+    TestBed.tick();
+    expect(wiring.landing()).toBe(2);
+    renderer.send({ kind: 'cancel' });
+    TestBed.tick();
+    expect(logged(session, 'wire.land')).toHaveLength(1);
+    expect(wiring.landing()).toBeNull();
+    // Landing again, then an undo (the first landing comes off): landing stops rather than resuming later.
+    session.exec('wiring.land', { id: 2 });
+    TestBed.tick();
+    expect(wiring.landing()).toBe(2);
+    session.exec('edit.undo');
+    TestBed.tick();
+    expect(wiring.landing()).toBeNull();
+    session.exec('wiring.land', { id: 2 });
+    session.exec('edit.redo');
+    TestBed.tick();
+    expect(wiring.landing()).toBeNull();
+  });
+
+  it('labels: clearing logs wire.label {text: null}; wire and cable together are refused; the label maker reopens on the same wire after Cancel', () => {
+    const { routing, wiring, renderer, session, state, toasts } = withCable('trainee');
+    wiring.cancelStrip();
+    const printer = ref('tool.penmarrow-lp-12');
+    expect(session.exec('wire.label', { id: 1, text: 'L1', tool: printer }).ok).toBe(true);
+    session.exec('wiring.label', { wire: 1 });
+    expect(wiring.label()?.request.current).toBe('L1');
+    wiring.confirmLabel({ ok: true, id: 'wire.label', args: { id: 1, text: null, tool: printer } });
+    expect(logged(session, 'wire.label').filter((e) => e.args['text'] === null)).toHaveLength(1);
+    expect(routing.announcement()).toBe('Wire 1, the black conductor of cable 1: label removed.');
+
+    session.exec('wiring.label', { wire: 1, cable: 1 });
+    expect(wiring.label()).toBeNull();
+    expect(toasts.at(-1)).toBe('Label: Label a wire or a cable, not both at once');
+
+    const store = TestBed.inject(SettingsStore);
+    const slots = [...store.settings().toolBelt.slots];
+    slots[6] = printer;
+    store.update('toolBelt', { slots });
+    session.exec('toolbelt.select', { slot: 7 });
+    state.set({ ...STATE, selectedWire: { kind: 'connection', id: 2 } });
+    TestBed.tick();
+    expect(wiring.label()?.request.target).toStrictEqual({ kind: 'connection', id: 2 });
+    wiring.cancelLabel();
+    expect(renderer.wireSelections.at(-1)).toBeNull(); // the selection is cleared…
+    state.set(STATE);
+    TestBed.tick();
+    state.set({ ...STATE, selectedWire: { kind: 'connection', id: 2 } });
+    TestBed.tick();
+    expect(wiring.label()?.request.target).toStrictEqual({ kind: 'connection', id: 2 }); // …so a click reopens it
+  });
+
+  it('the selected wire’s keys are published as soon as the viewport hands over its state (no tick needed)', () => {
+    const { wiring, session } = withCable('trainee');
+    wiring.publishSelection({ ...STATE, selectedWire: { kind: 'connection', id: 3 } });
+    expect(session.contextKeys()).toMatchObject({ 'selection.connectionId': 3, 'wiring.stripTarget': 1 });
+    const keys = TestBed.inject(KeybindingService);
+    expect(keys.keymap().resolve('L', { ...session.contextKeys(), 'viewport.focused': true })?.id).toBe(
+      'wiring.land.selection',
+    );
   });
 });

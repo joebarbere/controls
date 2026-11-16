@@ -579,6 +579,8 @@ export class Viewport {
       [SELECTION_ENTITY_ID_KEY, selected?.entityId ?? null],
     ];
     for (const [key, value] of next) this.publish(key, value);
+    // The selected wire's keys in the same task as the selection, so L works on the next key press.
+    this.wiring.publishSelection(s);
   }
 
   /** Sets a context key unless it already holds `value`. */

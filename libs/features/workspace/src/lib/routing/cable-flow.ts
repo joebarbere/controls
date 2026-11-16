@@ -87,10 +87,29 @@ export function connectCableRouting(
     source: reset,
     computation: () => IDLE_CABLE,
   });
-  const keyEntry = linkedSignal<{ spool: CableSpool | null; generation: number }, EntryOption | null>({
-    source: reset,
+  /** The enclosure Tab cycles: the selected entity, else the focused one, when it has entries. */
+  const entryDevice = computed<number | null>(() => {
+    if (spool() === null) return null;
+    const world = session.world();
+    const s = state();
+    const focused = ENTITY_TARGET.exec(s?.focusId ?? '');
+    for (const id of [s?.selected?.entityId ?? null, focused ? Number(focused[1]) : null]) {
+      if (id !== null && (enclosureEntries(world, catalog, id)?.length ?? 0) > 0) return id;
+    }
+    return null;
+  });
+
+  // The keyboard's entry: dropped by a new spool, a new session, or another enclosure in hand.
+  const keyEntry = linkedSignal<
+    { spool: CableSpool | null; generation: number; device: number | null },
+    EntryOption | null
+  >({
+    source: () => ({ ...reset(), device: entryDevice() }),
     computation: () => null,
   });
+  /** `entry` as the world has it now (its problem re-checked), or `null` when it is gone. */
+  const resolve = (entry: Pick<EntryOption, 'entity' | 'entry'>): EntryOption | null =>
+    enclosureEntries(session.world(), catalog, entry.entity)?.find((o) => o.entry === entry.entry) ?? null;
   /** The drill bit a bore would use (the default-tool rule), or `null`: then no bore is offered. */
   const boreTool = computed(() => activeTool.toolFor('bore')?.ref ?? null);
   const routingSession = computed<RoutingSession | null>(() => {
@@ -190,6 +209,17 @@ export function connectCableRouting(
         gesture.set(IDLE_CABLE);
         announce(`The first entry is no longer usable (${step.code}). Pick the first entry.`);
       }
+      // The keyboard's entry is re-checked (an entry closed or filled since Tab), or dropped when gone.
+      const k = keyEntry();
+      if (k !== null) {
+        const now = resolve(k);
+        if (now === null) {
+          keyEntry.set(null);
+          announce('The entry in hand left the world.');
+        } else if (now.problem?.code !== k.problem?.code) {
+          keyEntry.set(now);
+        }
+      }
     });
   });
 
@@ -222,8 +252,13 @@ export function connectCableRouting(
         apply(addCableWaypoint(gesture(), event.waypoint as Waypoint));
         return;
       case 'enter': {
-        const k = keyEntry();
-        if (k) pick(k, s);
+        const held = keyEntry();
+        // Re-resolved now: never the entry as it was when Tab reached it.
+        const k = held && resolve(held);
+        if (held && !k) {
+          keyEntry.set(null);
+          announce('The entry in hand left the world.');
+        } else if (k) pick(k, s);
         else announce(`Select a box or panel, then ${key('routing.terminalNext')} to an entry.`);
         return;
       }
@@ -233,18 +268,6 @@ export function connectCableRouting(
       case 'terminal':
         return;
     }
-  });
-
-  /** The enclosure Tab cycles: the selected entity, else the focused one, when it has entries. */
-  const entryDevice = computed<number | null>(() => {
-    if (spool() === null) return null;
-    const world = session.world();
-    const s = state();
-    const focused = ENTITY_TARGET.exec(s?.focusId ?? '');
-    for (const id of [s?.selected?.entityId ?? null, focused ? Number(focused[1]) : null]) {
-      if (id !== null && (enclosureEntries(world, catalog, id)?.length ?? 0) > 0) return id;
-    }
-    return null;
   });
 
   const cycle = (step: 1 | -1): void => {

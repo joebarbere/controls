@@ -24,7 +24,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the run (pinned from this spec; the console twin below reaches it too). */
-const RUN_HASH = '73f1600bbce57a781ce671395307724b46c7286420c0ede983a76c1ca2a68f2d';
+const RUN_HASH = '75ad7c409ce4ad45a03c02d89669f79b2474d4e7b9886cbc986c03e084db5bda';
 
 const NMB = 'cable.sorrelby-nmb-14-2';
 const SPOOL_BUTTON = '5: NM-B 14/2 with ground, copper, 600 V (spool)';
@@ -148,6 +148,7 @@ const WORLD_COMMANDS = new Set(['entity.place', 'enclosure.openEntry', 'cable.ad
 test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and three conductors landed', async ({
   page,
 }) => {
+  test.slow(); // the played run, then a second page replaying it: about 30 s under a full suite's load
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('console', (m) => {
@@ -159,7 +160,10 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await page.keyboard.press('Backquote');
   const canvas = page.locator('ctl-viewport canvas');
   const box = await canvas.boundingBox();
-  await page.mouse.move((box?.x ?? 0) + 400, (box?.y ?? 0) + 300);
+  expect(box).not.toBeNull();
+  const wheelAt = { x: (box as { x: number }).x + 400, y: (box as { y: number }).y + 300 };
+  await expectOnCanvas(page, wheelAt, 'the zoom-out point'); // a wheel over an overlay would scroll it
+  await page.mouse.move(wheelAt.x, wheelAt.y);
   for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 200);
 
   const viewport = page.locator('ctl-viewport');
@@ -207,9 +211,12 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await expect(strip).toBeHidden();
   await expect(canvas).toBeFocused();
   await expect(status).toContainText('Cable 1 stripped: end a 193 mm, end b 193 mm.');
-  // Escape puts the spool away.
+  // Escape puts the spool away, and Tab moves focus off the canvas again (no routing key holds it).
   await page.keyboard.press('Escape');
   await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
+  await page.keyboard.press('Tab');
+  await expect(canvas).not.toBeFocused();
+  await canvas.focus();
 
   // Frame the panel. The palette starts landing a conductor by number, keyboard only (the black, wire 1);
   // Escape stops it again, with nothing logged.
@@ -243,12 +250,9 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.state.selectedWire ?? null))
     .toStrictEqual({ kind: 'connection', id: 3 });
-  // The UI publishes `selection.connectionId` (L's `when`) from an effect after the renderer's state,
-  // which this hook reads first: an L pressed in between does nothing, so press it until it lands.
-  await expect(async () => {
-    await page.keyboard.press('KeyL');
-    await expect(status).toContainText('Landing the bare conductor 3 of cable 1 (wire 3)', { timeout: 500 });
-  }).toPass();
+  // `selection.connectionId` (L's `when`) is published with the renderer's selection, so L works at once.
+  await page.keyboard.press('KeyL');
+  await expect(status).toContainText('Landing the bare conductor 3 of cable 1 (wire 3)');
   await expect(viewport).toHaveAttribute('data-routing', 'armed');
 
   // The blocks' terminals are a few pixels apart here: frame block 4 with Z, then pick each bottom clamp.
@@ -258,9 +262,9 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await page.keyboard.press('KeyZ');
   await expect(viewport).toHaveAttribute('data-focus', 'entity-4');
   for (const [wire, block, next] of [
-    [3, 5, 'black'],
-    [1, 3, 'white'],
-    [2, 4, null],
+    [3, 5, 'Next: the black conductor'],
+    [1, 3, 'Next: the white conductor'],
+    [2, 4, 'Every conductor of cable 1 is landed at end b.'],
   ] as const) {
     const t = await terminalOnPage(page, { entity: block, terminal: 'b' });
     await page.mouse.click(t.x, t.y);
@@ -270,10 +274,10 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
     const tighten = page.getByRole('dialog', { name: 'End b: tighten' });
     await tighten.getByRole('button', { name: 'Land end b' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(canvas).toBeFocused(); // focus returns to the canvas after each prompt
     await expect(status).toContainText(`Wire ${wire} end b landed on`);
-    if (next) await expect(status).toContainText(`Next: the ${next} conductor`);
+    await expect(status).toContainText(next);
   }
-  await expect(status).toContainText('Every conductor of cable 1 is landed at end b.');
   await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
 
   // The full log, as console lines: the setup, the gesture's one cable.add, a strip per end, and a
@@ -288,11 +292,18 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   const lines = logged.filter((e) => WORLD_COMMANDS.has(e.id)).map(consoleLine);
   expect(lines).toHaveLength(13);
   const twin = await page.context().newPage();
+  const twinErrors: string[] = [];
+  twin.on('pageerror', (error) => twinErrors.push(`pageerror: ${error.message}`));
+  twin.on('console', (m) => {
+    if (m.type() === 'error') twinErrors.push(`console: ${m.text()}`);
+  });
+  await page.close(); // one game at a time: the twin never shares a page with the played run
   await twin.setViewportSize({ width: 1280, height: 720 });
   await twin.goto('/?e2e=1&renderer=webgl2');
   await openSandbox(twin);
   for (const [seq, line] of lines.entries()) await runLogged(twin, line, seq);
   expect(await hash(twin)).toBe(RUN_HASH);
+  expect(twinErrors).toStrictEqual([]);
 });
 
 test('keyboard: a selected box’s entries are cycled with Tab and picked with Enter; Backspace clears it', async ({
@@ -334,5 +345,8 @@ test('keyboard: a selected box’s entries are cycled with Tab and picked with E
   // Escape puts the spool away, and Tab moves focus out of the canvas again.
   await page.keyboard.press('Escape');
   await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
+  await expect(canvas).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(canvas).not.toBeFocused();
   expect((await entries(page)).map((e) => e.id).slice(SETUP.length)).toStrictEqual(['toolbelt.select']);
 });
