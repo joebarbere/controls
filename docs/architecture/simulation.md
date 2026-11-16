@@ -817,7 +817,21 @@ stateDiagram-v2
 - **States.** `endStateCode(R_made · D, s, bucket)` with `s` the first output of `termination:<id>:intermittent` and one draw per 100-tick bucket (`mix32(s ^ imul(bucket, 0x9e3779b1))`: 30 % open, 20 % arcing, 50 % closed). Decided at each cadence step for the compact list's ends (protection layer, `protection(ctx)`) and at every rebuild, for bucket ⌊(T − 1)/100⌋, so a bag always equals the pure function. Entering or leaving `intermittentOpen` is a topology change (the compiler reads it through `connectionSim` and leaves the connection out, `intermittent-open`); any other change is a value change.
 - **Limits and the failure rule.** No node reports above its metal's melting point (`materials.meltingPointK`, or the lead's `meltingPointK`): a hot spot reaching it burns open (D raised to 1 Ω / R_made); a conductor node reaching it fuses the connection, open for good (a conductor: its sticky `fused` key set, which the compiler reads through `simTopologyKeys`, and both landed ends burned open, so re-landing an end, which resets that end, never closes it and only a new conductor conducts; a lead: both end states `intermittentOpen`, the one non-initial lead end state, sticky since its clips are never re-landed). `insulationDamaged` is set, sticky, at the insulation's rating + 40 K on the conductor node or a conductor's hot spot (a lead's rating is its `insulationRatedTempK`). The fusing current is anchored to Preece and reads 24–34 % high because R(T) is clamped at 200 °C.
 - **Detections.** `terminationOverheat` (a hot spot crossing T_a + 100 K upwards) and `insulationDamaged` go into a preallocated ring, which the engine drains into sim events after every step that recorded one (protocol 7, below).
-- **The bad-termination scenario** (`apps/sim-cli/scenarios/bad-termination.console`, ADR 0018 §7): a 20 %-torque breaker screw on 14 AWG THHN at 11.8 A settles 90.8 K above its conductor with 81.5× a good end's drop, every expectation derived from the built current.
+- **The P3 acceptance scenarios** (`apps/sim-cli/scenarios/`, at Journeyman). `lamp-circuit`: the split-phase stand-in, a DIN panel with the 15 A breaker and terminal blocks, two 14/2 NM-B runs through a wire-nut junction box to the 120 V 60 W lamp, every step with its tool; lit at its rated current within 0.5 % (0.49988 A). `bad-termination` (ADR 0018 §7): that circuit with the breaker's load screw at 20 % of its torque, plus the 1500 W heater, at 12.839 A: the loose end settles at 409.285 K, 104.7 K above its conductor, with 81× the good circuit's end drop, `terminationOverheat` raised and `insulationDamaged` set with 6.13 K to spare, every expectation derived from the built current. `voltage-drop.spec.ts`: 30 m of 14/2 NM-B on the stand-in's L1–N into the heater, the first solve (11.871 A, 5.901 V) and the thermal steady state (303.096 K, 6.120 V) against hand calculations.
+
+```mermaid
+flowchart LR
+    U["stand-in supply (1)"] -- "wire 8 (L1)" --> CB["breaker CB1 (3)"]
+    CB -- "wire 1 jumper (loose end a in bad-termination)" --> TBL["line block (4)"]
+    U -- "wire 9 (N)" --> TBN["neutral block (5)"]
+    TBL -- "cable 1 black (2)" --> NB["black nut (9)"]
+    TBN -- "cable 1 white (3)" --> NW["white nut (10)"]
+    NB -- "cable 2 black (5)" --> L["120 V lamp (12)"]
+    NW -- "cable 2 white (6)" --> L
+    NB -. "wire 10 (bad-termination)" .-> H["1500 W heater (13)"]
+    NW -. "wire 11 (bad-termination)" .-> H
+```
+
 - **Budget.** `intermittent-toggle-wired`: one end opening on the wired plant (the compiler's open-toggle path, the bank's sync and a linear solve copying the untouched islands), under the calibrated 2 ms re-solve gate.
 - **The open-toggle path.** A recompile of the same world whose only change is an end opening or closing skips the world walk and the terminal partition: `NetlistCompiler` re-assembles branches and islands from the previous netlist and resumes the topology hash after the unchanged node section. The result equals a from-scratch compile exactly (property-tested).
 

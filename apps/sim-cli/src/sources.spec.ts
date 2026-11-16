@@ -142,7 +142,14 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
           file.replace(ENGINE_FIXTURE_PATTERN, '.console'),
         );
         const out = join(dir, file);
-        expect(sim('run', scenario, '--world', WORKSHOP_LEVEL, '--save', out).status, file).toBe(0);
+        // A scenario built at another difficulty than the level's (the P3 acceptance scenarios, at
+        // Journeyman) says so on its header's `pnpm sim run` line; it is rebuilt exactly as that line runs.
+        const header = readFileSync(scenario, 'utf8')
+          .split('\n')
+          .find((line) => line.startsWith('#') && line.includes('pnpm sim run'));
+        const difficulty = /--difficulty (\w+)/.exec(header ?? '')?.[1];
+        const at = difficulty === undefined ? [] : ['--difficulty', difficulty];
+        expect(sim('run', scenario, '--world', WORKSHOP_LEVEL, ...at, '--save', out).status, file).toBe(0);
         const [saved, rebuilt] = [join(ctrlDir, file), out].map((path) => {
           const read = readCtrl(new Uint8Array(readFileSync(path)));
           if (!read.ok) throw new Error(read.error.message);

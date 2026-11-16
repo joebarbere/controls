@@ -6,8 +6,9 @@ import { startSandbox } from './support/sandbox';
 
 /**
  * F3.2 part 2: the wire renderer draws what is wired. The bad-termination scenario's split-phase
- * stand-in, breaker and wire nut, and its two 14 AWG THHN conductors (typed into the in-game console,
- * the same lines `apps/sim-cli/scenarios/bad-termination.console` runs), are drawn from the domain
+ * stand-in, DIN panel, breaker and terminal blocks, its THHN jumper and the supply's L1 conductor (two
+ * 14 AWG THHN conductors, typed into the in-game console, the same lines
+ * `apps/sim-cli/scenarios/bad-termination.console` runs, without its cables and boxes), are drawn from the domain
  * bake as instanced segments; `wire.label` puts sleeve markers on one and `wire.delete` takes the
  * other away. Read through the renderer's `?e2e=1` hook (`wireGraph`, `sceneGraph`), never pixels.
  */
@@ -56,15 +57,21 @@ async function openSandboxConsole(page: Page): Promise<void> {
 const wireGraph = (page: Page) =>
   page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.wireGraph() ?? null);
 
-/** The scenario's lines up to and including its second `wire.add`, comments stripped. */
+/**
+ * The scenario's panel make-up (its lines up to and including the first `wire.add`, the jumper: wire 1)
+ * and the supply's L1 conductor (its `wire.add` from entity 1's l1: wire 2 here, with no cables before
+ * it), comments stripped.
+ */
 function setupLines(): string[] {
   const file = readFileSync(join(__dirname, '../../sim-cli/scenarios/bad-termination.console'), 'utf8');
   const lines = file
     .split('\n')
     .map((line) => line.replace(/#.*$/, '').trim())
     .filter(Boolean);
-  const wires = lines.flatMap((line, i) => (line.startsWith('wire.add') ? [i] : []));
-  return lines.slice(0, wires[1] + 1);
+  const jumper = lines.findIndex((line) => line.startsWith('wire.add'));
+  const supply = lines.find((line) => line.startsWith('wire.add --a.entity 1 --a.terminal l1 '));
+  if (jumper < 0 || supply === undefined) throw new Error('bad-termination.console changed: no jumper or L1 wire');
+  return [...lines.slice(0, jumper + 1), supply];
 }
 
 test('routed conductors are drawn from the bake, labelled with sleeves, and removed with the wire (F3.2 part 2)', async ({
@@ -142,21 +149,37 @@ test('a pool’s instance buffers are freed on rebuild and delete: GPU attribute
       fixture: null,
       tool: null,
     }));
-  const long = (line: string, y0: number) => {
-    const out = line.replace(/--route \[.*?\] --lengthMm/, `--route ${JSON.stringify(zigzag(y0))} --lengthMm`);
+  const free = (x: number, y: number, z: number) => ({
+    kind: 'free',
+    positionMm: { x, y, z },
+    entity: null,
+    fixture: null,
+    tool: null,
+  });
+  // The zigzag, then an approach from above the panel's blocks and breaker (so the last span passes
+  // through no other device), cut at the default length (`auto`).
+  const long = (line: string, y0: number, approach: ReturnType<typeof free>[]) => {
+    const route = JSON.stringify([...zigzag(y0), ...approach]);
+    const out = line
+      .replace(/--route \[.*?\](?= --|$)/, `--route ${route}`)
+      .replace(/--lengthMm \d+/, '--lengthMm auto');
     expect(out).not.toBe(line);
+    expect(out).toContain('--lengthMm auto');
     return out;
   };
+  // The jumper ends on the line block's top clamp; the L1 conductor on the breaker's line screw.
+  const toBlock = [free(-816, 1060, 31)];
+  const toBreaker = [free(-960, 1240, 79), free(-920, 1240, 21)];
   const baseline = await memoryAfterFrames(page);
   expect(baseline?.attributes).toBeGreaterThan(0);
   const instances = async () => (await wireGraph(page))?.looks[0]?.instances ?? 0;
   let seq = places.length;
   let id = 1;
   for (let cycle = 1; cycle <= 2; cycle++) {
-    await runLogged(page, long(wireLines[0], 800), seq++);
+    await runLogged(page, long(wireLines[0], 800, toBlock), seq++);
     await expect.poll(instances).toBeGreaterThan(1024);
     const one = await memoryAfterFrames(page); // the large mesh is drawn
-    await runLogged(page, long(wireLines[1], 2000), seq++);
+    await runLogged(page, long(wireLines[1], 2000, toBreaker), seq++);
     await expect.poll(instances).toBeGreaterThan(2048); // the pool doubled: the drawn mesh was replaced
     const two = await memoryAfterFrames(page);
     expect(two?.attributesSize).toBeGreaterThan(one?.attributesSize ?? 0);

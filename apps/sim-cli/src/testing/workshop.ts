@@ -1,4 +1,5 @@
-import { loadLevel, type World } from '@controls/world-model';
+import type { Difficulty } from '@controls/save-format';
+import { loadLevel, newGameWorld, type World } from '@controls/world-model';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WORKSPACE_ROOT } from '../script-loader';
@@ -20,3 +21,16 @@ export function workshopWorld(): World {
   if (!loaded.ok) throw new Error(`${WORKSHOP_LEVEL}: ${loaded.error.message}`);
   return loaded.level;
 }
+
+/**
+ * The workshop as New sandbox starts it at `difficulty` with the level's seed (0): what
+ * `sim run … --world content/levels/workshop.json --difficulty <difficulty>` runs on. The P3 phase
+ * acceptance scenarios (`lamp-circuit`, `bad-termination`) are built at Journeyman.
+ */
+export function workshopWorldAt(difficulty: Difficulty): World {
+  const level = workshopWorld();
+  return newGameWorld(level, { seed: level.seed, difficulty });
+}
+
+/** The `sim run` arguments that start {@link workshopWorldAt}('journeyman'). */
+export const JOURNEYMAN_WORKSHOP_ARGS: readonly string[] = ['--world', WORKSHOP_LEVEL, '--difficulty', 'journeyman'];
