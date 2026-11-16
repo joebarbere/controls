@@ -66,7 +66,7 @@ Output: the script's three `console.log` lines, then the final `world.hash` as t
 expected failure: rejected No entity with id 42
 entities: 1, 2
 log: 5 entries
-9d366d295ef5099b4f7028a667fcce30c3fcfe17c2593084df377134be55ea52
+5abaf06669b88828f15b2d61f421a301bfc3450704a2054ac639ff3f21561e47
 ```
 
 `--seed` sets the seed of the empty starting world (default 0); `--world <file>` starts from a world document or a level instead, such as `content/levels/workshop.json` (what New sandbox loads). With both, `--world <level> --seed N` is a new game on that level with seed N, exactly as New sandbox with seed N. `--difficulty <trainee|apprentice|journeyman|realistic>` starts a new game at that difficulty too (on `--world` with its own seed unless `--seed` gives one, or on an empty world): the P3 acceptance scenarios run with `--world content/levels/workshop.json --difficulty journeyman`.

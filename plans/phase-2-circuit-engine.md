@@ -23,7 +23,7 @@ _Audited 2026-10-31 (the acceptance PR). Evidence for each item is linked; every
 
 - [x] Hand-calculated golden fixtures agree with `sim-core` within **0.5 %**. Most linear ones are much tighter; each fixture states its tolerance. The ngspice oracle corpus passes at the tolerance fixed in ADR 0012.
   - _Goldens: `libs/domain/sim-core/src/testing/dc-goldens.ts` and `ac-goldens.ts` (each with its hand calculation and `tolerance`: 1e-9, a few checks 1e-8), run by `mna/golden.spec.ts` and `mna/ac-golden.spec.ts`; the device goldens (battery, supplies, services, lamp, fuse, breaker) state their 0.5 % bounds in their specs under `devices/`._
-  - _Oracle: `src/oracle/dc-oracle.spec.ts` and `ac-oracle.spec.ts` over the 500 + 500 circuit corpus in `libs/domain/sim-core/oracle/`, at [ADR 0012](../docs/decisions/0012-oracle-tolerance.md)'s tolerance: worst 1.06e-3 (DC volts) and 5.0e-4 (AC amps) of the allowance, a margin asserted ≥ 10×._
+  - _Oracle: `src/oracle/dc-oracle.spec.ts` and `ac-oracle.spec.ts` over the 500 + 500 circuit corpus in `libs/domain/sim-core/oracle/`, at [ADR 0012](../docs/decisions/0012-oracle-corpus.md)'s tolerance: worst 1.06e-3 (DC volts) and 5.0e-4 (AC amps) of the allowance, a margin asserted ≥ 10×._
 - [x] The §4.5 budgets are met and enforced by `sim-cli bench` inside `pnpm verify`:
   - a seeded synthetic 2,000-node plant re-solves in under 2 ms after a topology change;
   - discrete + continuous + protection work stays under 0.3 ms per tick.

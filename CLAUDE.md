@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 3 (Wires, terminations, enclosures and hand tools) kickoff in progress, 2026-11-11; version 0.3.0** (P2 shipped as v0.3.0 on 2026-11-11). Plan: [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md); kickoff decisions D1–D19 taken (defaults), `content-designer` created. Next: the guard e2e and replay-log checkpointing, then ADR 0015 (world v3 and the wire contract, agent team), catalogue v2, world v3 and its commands, then F3.1. Test leads stay working alongside `wire.*`. Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.4).
+**Phase 3 (Wires, terminations, enclosures and hand tools) complete, 2026-11-16; version 0.3.0; the v0.4.0 release is pending the user's `/release minor`.** Plan: [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md); its "Carried to P4 / later" list holds the items to clear before the release (freeze cables and accessories in `shipped.spec.ts`, the `entity.rotate` overlap decision) and the user's manual checks. Next, after the release: the P4 kickoff (Plan agent → `plans/phase-4-*.md`; create P4's specialists). Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.5).
 
 ## What this project is
 
