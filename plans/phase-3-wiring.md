@@ -364,7 +364,7 @@ PRs 2–4 run in parallel; after PR 8 the content (9–10, 17), physics (13, 21�
 
 Collected at the closing sync (2026-11-16). **Before `/release minor`** (they touch what 0.4.0 freezes):
 
-- **`shipped.spec.ts` doesn't freeze cables or accessories.** Its `Shipped` list holds `devices`, `tables` and `tools` only, but saves pin cable entries (`CableV3.ref`) and accessory entries (`TerminationV3.accessory.ref`). Add `cables` and `accessories` lists with their comparisons and self-tests, append `libs/domain/catalog/fixtures/shipped/0.4.0.json` from the v0.4.0 tag (devices, tables, tools, cables, accessories, colour ids), and make the "has a frozen list for every release" test require it (`save-format-guardian`, `content-designer`).
+- ~~**`shipped.spec.ts` doesn't freeze cables or accessories.**~~ _Done (#129): frozen lists hold `cables` and `accessories`; a list is required for every dated CHANGELOG release; `pnpm catalog:freeze` writes it in the release commit (version-keeper's procedure and the `/release` skill run it)._
 - **The `entity.rotate` overlap decision** (F3.5 part 1; `save-format-guardian`): freeze "rotate never checks overlap" or add the check before 0.4.0 logs exist.
 - **Kickoff step 7's three r186 check** (`release-engineer`).
 - **The user's review of the spec amendments:** v1.4 (D5 analytic bake, D6 derived ampacity, D12 stand-in supply, lamp and heater, D2 leads heating) and v1.5 (series arcing as V_arc/|I|).
