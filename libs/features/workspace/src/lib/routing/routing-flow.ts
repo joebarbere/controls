@@ -9,6 +9,7 @@ import {
 } from '@controls/commands';
 import { KeybindingService, Session, ToolBelt } from '@controls/feature-session';
 import { NotificationService } from '@controls/feature-shell';
+import { SettingsStore } from '@controls/feature-settings';
 import {
   entitySelectableId,
   type RoutingEventListener,
@@ -16,6 +17,7 @@ import {
   type TerminalRef,
   type ViewportState,
 } from '@controls/renderer';
+import { type CatalogRef, type RouteProposal, type TerminationArgs } from '@controls/world-model';
 import { ActiveTool } from '../tool-belt/active-tool';
 import {
   addWaypoint,
@@ -26,11 +28,27 @@ import {
   type GestureStep,
   IDLE_GESTURE,
   pickTerminal,
+  proposeCompletion,
   type RouteGesture,
   type Spool,
   spoolOf,
   stepBack,
 } from './routing-gesture';
+import {
+  landingRefusal,
+  methodName,
+  promptMode,
+  type PromptMode,
+  terminationRequest,
+  type TerminationRequest,
+} from './termination-model';
+
+/** An open termination prompt (F3.3 part 2): one end's request and the command's last refusal of it. */
+export interface TerminationPrompt {
+  readonly request: TerminationRequest;
+  /** The landing check's refusal of the last confirmed draft, in words (`<message> (<code>)`), else `null`. */
+  readonly refusal: string | null;
+}
 
 /** What the routing flow needs from the renderer (`ViewportRenderer`; a fake in specs). */
 export interface RoutingRenderer {
@@ -52,6 +70,22 @@ export interface RoutingFlow {
   readonly hint: Signal<string | null>;
   /** The latest announcement for the polite live region (picks, waypoints, completion, cancel). */
   readonly announcement: Signal<string>;
+  /** How this world prompts for terminations (D9): `automatic` at Trainee. */
+  readonly mode: Signal<PromptMode>;
+  /** The termination prompt open now (above Trainee, after a terminal pick), or `null`. */
+  readonly prompt: Signal<TerminationPrompt | null>;
+  /** The prompt's arguments: checked as the command checks a landing, then the pick goes ahead. */
+  confirmTermination(args: TerminationArgs): void;
+  /** The prompt was dismissed: the pick is not taken. */
+  cancelTermination(): void;
+}
+
+/** What a pick waits on while its end's prompt is open. */
+interface PendingPick {
+  readonly end: 'a' | 'b';
+  readonly terminal: { readonly entity: number; readonly terminal: string };
+  readonly cutter: CatalogRef | null;
+  readonly prompt: TerminationPrompt;
 }
 
 const ENTITY_TARGET = /^entity-(\d+)$/;
@@ -69,6 +103,10 @@ const sameSpool = (a: Spool | null, b: Spool | null): boolean =>
  *   Shift+Tab, Backspace; the palette and console), step the pure state machine in `routing-gesture`;
  * - a completed route runs **exactly one** `wire.add` through `Session.execFromInput`, with the
  *   proposal the renderer previewed; a refusal reaches the shell's toasts and the picks are kept;
+ * - above Trainee (D9) each terminal pick first opens that end's **termination prompt**
+ *   ({@link TerminationPrompt}, `termination-model`): its arguments are checked with the command's
+ *   own landing check and become that end's `termination` in the one `wire.add`; nothing else is
+ *   logged, and a dismissed prompt leaves the pick untaken;
  * - the `routing.*` context keys (`active`, `started`, `terminalDevice`, `zoomTarget`) gate the keys.
  *
  * Nothing here mutates the world: the gesture is UI state, and its one outcome is a Command.
@@ -80,7 +118,9 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   const toolBelt = inject(ToolBelt);
   const keys = inject(KeybindingService);
   const notifications = inject(NotificationService);
+  const settings = inject(SettingsStore);
   const catalog = activeTool.catalog;
+  const mode = computed(() => promptMode(session.world().difficulty));
 
   /** The active slot when it holds a spool (routable or not). */
   const spoolSlot = computed(() => {
@@ -93,6 +133,12 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     source: () => ({ spool: spool(), generation: session.generation() }),
     computation: () => IDLE_GESTURE,
   });
+  // The pick waiting on its prompt; a new spool or session drops it too.
+  const pending = linkedSignal<{ spool: Spool | null; generation: number }, PendingPick | null>({
+    source: () => ({ spool: spool(), generation: session.generation() }),
+    computation: () => null,
+  });
+  const prompt = computed(() => pending()?.prompt ?? null);
   const routingSession = computed<RoutingSession | null>(() => {
     const s = spool();
     if (s === null) return null;
@@ -100,7 +146,7 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     return {
       ref: s.ref,
       colour: s.colour,
-      from: g.from && { entity: g.from.entity, terminal: g.from.terminal, termination: 'auto' },
+      from: g.from && { entity: g.from.entity, terminal: g.from.terminal, termination: g.fromTermination ?? 'auto' },
       waypoints: g.waypoints,
       termination: 'auto',
     };
@@ -123,10 +169,13 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
 
   const apply = (step: GestureStep): void => {
     switch (step.kind) {
-      case 'from':
+      case 'from': {
         gesture.set(step.gesture);
-        announce(`From ${describe(step.end)}. Pick the second terminal.`);
+        const t = step.gesture.fromTermination;
+        const how = t && t !== 'auto' ? ` (${methodName(t.method).toLowerCase()})` : '';
+        announce(`From ${describe(step.end)}${how}. Pick the second terminal.`);
         return;
+      }
       case 'complete': {
         const result = session.execFromInput('wire.add', step.args);
         if (result.ok) {
@@ -177,18 +226,103 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   // The gesture is read untracked, so only world changes re-run this.
   effect(() => {
     const world = session.world();
-    untracked(() => apply(dropMissingFrom(gesture(), world, catalog)));
+    untracked(() => {
+      const step = dropMissingFrom(gesture(), world, catalog);
+      apply(step);
+      // End b's prompt is open over a route that no longer has a first terminal: say so where it is
+      // heard (the prompt's alert; the viewport's region is inert under the modal dialog).
+      const p = pending();
+      if (step.kind === 'fromRemoved' && p?.end === 'b') {
+        const refusal = proposeCompletion(world, catalog, gesture(), p.terminal, 'auto');
+        if (!refusal.ok) refuse(p, refusal);
+      }
+    });
   });
+
+  /**
+   * A terminal pick. At Trainee it lands `'auto'` at once; above it a pick the gesture would take (a
+   * first terminal, or a second with a route the command accepts) opens that end's prompt instead.
+   */
+  const pick = (end: { entity: number; terminal: string }, proposal: RouteProposal | null, s: Spool): void => {
+    const cutter = activeTool.toolFor('cut', s.awg)?.ref ?? null;
+    const step = pickTerminal(gesture(), end, proposal, s, cutter);
+    if (mode() === 'automatic' || (step.kind !== 'from' && step.kind !== 'complete')) {
+      apply(step);
+      return;
+    }
+    const which = step.kind === 'from' ? 'a' : 'b';
+    const terminal = { entity: end.entity, terminal: end.terminal };
+    const built = terminationRequest(
+      session.world(),
+      catalog,
+      settings.settings().toolBelt.slots,
+      s.ref,
+      which,
+      terminal,
+      describe(terminal),
+    );
+    if (!built.ok) {
+      apply({ kind: 'refused', gesture: gesture(), code: built.code, message: built.message });
+      return;
+    }
+    if (built.request === null) {
+      apply(step);
+      return;
+    }
+    pending.set({ end: which, terminal, cutter, prompt: { request: built.request, refusal: null } });
+    announce(`Terminate end ${which} at ${describe(terminal)}.`);
+  };
+
+  /** A refusal of the open prompt's draft, shown in the prompt (its alert reads it): nothing is logged. */
+  function refuse(p: PendingPick, refusal: { readonly code: string; readonly message: string }): void {
+    pending.set({ ...p, prompt: { ...p.prompt, refusal: `${refusal.message} (${refusal.code})` } });
+  }
+
+  const confirmTermination = (args: TerminationArgs): void => {
+    const p = pending();
+    const s = spool();
+    if (p === null || s === null) return;
+    const world = session.world();
+    const refusal = landingRefusal(world, catalog, s.ref, p.end, p.terminal, args);
+    if (refusal) {
+      refuse(p, refusal);
+      return;
+    }
+    if (p.end === 'a') {
+      pending.set(null);
+      apply(pickTerminal(gesture(), p.terminal, null, s, p.cutter, args));
+      return;
+    }
+    // Re-proposed against the world now and the chosen method's entry point; a route the command
+    // would refuse stays in the prompt with the player's entries.
+    const g = gesture();
+    const proposal = proposeCompletion(world, catalog, g, p.terminal, args);
+    if (!proposal.ok) {
+      refuse(p, proposal);
+      return;
+    }
+    pending.set(null);
+    apply(pickTerminal(g, p.terminal, proposal, s, p.cutter, args));
+  };
+
+  const cancelTermination = (): void => {
+    const p = pending();
+    if (p === null) return;
+    pending.set(null);
+    announce(
+      gesture().from === null
+        ? 'Termination cancelled. Pick the first terminal.'
+        : 'Termination cancelled. Pick the second terminal.',
+    );
+  };
 
   const offEvents = renderer.onRouting((event) => {
     const s = spool();
-    if (s === null) return;
+    if (s === null || pending() !== null) return; // the prompt is modal
     switch (event.kind) {
-      case 'terminal': {
-        const cutter = activeTool.toolFor('cut', s.awg)?.ref ?? null;
-        apply(pickTerminal(gesture(), event.end, event.proposal, s, cutter));
+      case 'terminal':
+        pick(event.end, event.proposal, s);
         return;
-      }
       case 'waypoint':
         apply(addWaypoint(gesture(), event.waypoint));
         return;
@@ -199,12 +333,12 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   });
 
   const cycle = (step: 1 | -1): void => {
-    if (spool() === null) return;
+    if (spool() === null || pending() !== null) return;
     const ref = renderer.cycleTerminal(step);
     announce(ref ? `Terminal: ${describe(ref)}. Enter picks it.` : 'Select a device with terminals first.');
   };
   const whileRouting = (run: () => void) => () => {
-    if (spool() !== null) run();
+    if (spool() !== null && pending() === null) run();
   };
   const offCommands = [
     session.onCommand('routing.terminalNext', () => cycle(1)),
@@ -295,5 +429,15 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     );
   });
 
-  return { spool, gesture: gesture.asReadonly(), phase, hint, announcement: announcement.asReadonly() };
+  return {
+    spool,
+    gesture: gesture.asReadonly(),
+    phase,
+    hint,
+    announcement: announcement.asReadonly(),
+    mode,
+    prompt,
+    confirmTermination,
+    cancelTermination,
+  };
 }

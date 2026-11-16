@@ -45,6 +45,7 @@ import {
   selectionToggle,
 } from '@controls/world-model';
 import { connectRouting } from '../routing/routing-flow';
+import { TerminationPromptDialog } from '../routing/termination-prompt';
 import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
 import { OverlayLegend } from './overlay-legend';
@@ -91,7 +92,9 @@ const TEST_HOOK = '__controlsViewport';
  * the renderer's terminal and waypoint picks, Escape and the `routing.*` keys step it, and a completed
  * route is exactly one `wire.add` through `Session.execFromInput`. A top-centre hint (not a live
  * region: it follows the pointer) says what the next pick does; a polite status announces picks,
- * waypoints, completed and cancelled routes. The host's `data-routing` is `armed` or `started`.
+ * waypoints, completed and cancelled routes. The host's `data-routing` is `armed` or `started`. Above
+ * Trainee each terminal pick opens that end's termination prompt (`ctl-termination-prompt`, F3.3 part
+ * 2, D9) first; its arguments become the end's `termination` in the same one `wire.add`.
  *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
@@ -105,7 +108,7 @@ const TEST_HOOK = '__controlsViewport';
 @Component({
   selector: 'ctl-viewport',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OverlayLegend],
+  imports: [OverlayLegend, TerminationPromptDialog],
   template: `
     <canvas
       #canvas
@@ -142,6 +145,11 @@ const TEST_HOOK = '__controlsViewport';
     <p class="ctl-visually-hidden" role="status" aria-live="polite" data-testid="routing-status">
       {{ routing.announcement() }}
     </p>
+    <ctl-termination-prompt
+      [prompt]="routing.prompt()"
+      (confirm)="routing.confirmTermination($event)"
+      (dismissed)="routing.cancelTermination()"
+    />
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
     }

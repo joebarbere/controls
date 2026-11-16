@@ -11,8 +11,8 @@ import { startSandbox } from './support/sandbox';
  * three ways, with the mouse, with the keyboard only and with the command palette, and each reaches
  * ROUTED_HASH. Backspace and Escape step the gesture back without logging anything.
  *
- * Trainee, because the gesture lands both ends with `'auto'` terminations until the termination
- * prompts (F3.3 part 2): above Trainee `wire.add` refuses them (`termination-required`, D9).
+ * Trainee, so the gesture lands both ends with `'auto'` terminations and opens no prompt; above
+ * Trainee each pick opens a termination prompt (F3.3 part 2), covered by `terminations.spec.ts`.
  */
 
 /** `world.hash` after the one `wire.add` (pinned from this suite; the three surfaces must agree). */
