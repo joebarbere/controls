@@ -449,25 +449,31 @@ export function pullTrack(run: Pick<ConduitRun, 'elbows' | 'stretchesMm'>): Trac
  * - `skip`: whether the prompt offers to pull without playing (Trainee only);
  * - `showElbows`: whether the track shows where the elbows are before the tape reaches them
  *   (Trainee and Apprentice; above, only how many there are, from `pullRun`);
- * - `jamLimit`: how many pushes into an elbow the tape takes before it kinks and the pull fails
- *   (`null`: never, Trainee).
+ * - `blindTwist`: whether a twist where there is no bend binds the tape (a jam), so twisting can't be
+ *   used to find hidden elbows for free (Journeyman and Realistic, where `showElbows` is off); below,
+ *   it only spins, and says there is no bend there;
+ * - `jamLimit`: how many jams **at one spot** the tape takes before it kinks and the pull fails (`null`:
+ *   never, Trainee). Per spot, not per pull: with hidden elbows every elbow costs at least one jam to
+ *   find (a push into it, or a twist short of it), so a per-pull limit would make a run with more
+ *   elbows than the limit unwinnable. Apprentice 3 (it sees the elbows), Journeyman 3, Realistic 2.
  */
 export interface PullRules {
   readonly skip: boolean;
   readonly showElbows: boolean;
+  readonly blindTwist: boolean;
   readonly jamLimit: number | null;
 }
 
 export function pullRules(difficulty: Difficulty): PullRules {
   switch (difficulty) {
     case 'trainee':
-      return { skip: true, showElbows: true, jamLimit: null };
+      return { skip: true, showElbows: true, blindTwist: false, jamLimit: null };
     case 'apprentice':
-      return { skip: false, showElbows: true, jamLimit: 3 };
+      return { skip: false, showElbows: true, blindTwist: false, jamLimit: 3 };
     case 'journeyman':
-      return { skip: false, showElbows: false, jamLimit: 2 };
+      return { skip: false, showElbows: false, blindTwist: true, jamLimit: 3 };
     case 'realistic':
-      return { skip: false, showElbows: false, jamLimit: 1 };
+      return { skip: false, showElbows: false, blindTwist: true, jamLimit: 2 };
   }
 }
 
@@ -475,8 +481,10 @@ export function pullRules(difficulty: Difficulty): PullRules {
 export interface TapeState {
   readonly track: readonly TrackStation[];
   readonly at: number;
-  /** Pushes into an elbow so far (the whole pull, retracting doesn't undo them). */
+  /** Jams so far, the whole pull (retracting doesn't undo them). */
   readonly jams: number;
+  /** Jams at each station (index = the station the tape head is up against); the kink limit is per station. */
+  readonly stationJams: readonly number[];
   readonly phase: 'feeding' | 'through' | 'kinked';
 }
 
@@ -494,7 +502,13 @@ export type TapeEvent =
   | 'idle';
 
 export function startTape(track: readonly TrackStation[]): TapeState {
-  return { track, at: 0, jams: 0, phase: track.length === 0 ? 'through' : 'feeding' };
+  return {
+    track,
+    at: 0,
+    jams: 0,
+    stationJams: track.map(() => 0),
+    phase: track.length === 0 ? 'through' : 'feeding',
+  };
 }
 
 const next = (s: TapeState): TrackStation | undefined => s.track[s.at];
@@ -503,22 +517,30 @@ const advance = (s: TapeState): { state: TapeState; event: TapeEvent } => {
   if (at >= s.track.length) return { state: { ...s, at, phase: 'through' }, event: 'through' };
   return { state: { ...s, at }, event: s.track[at].kind === 'elbow' ? 'reachedElbow' : 'fed' };
 };
+/** A jam at the station ahead: counted there and in total; at the limit the tape kinks. */
+const jam = (s: TapeState, rules: PullRules): { state: TapeState; event: TapeEvent } => {
+  const stationJams = s.stationJams.map((n, i) => (i === s.at ? n + 1 : n));
+  const state = { ...s, jams: s.jams + 1, stationJams };
+  if (rules.jamLimit !== null && stationJams[s.at] >= rules.jamLimit) {
+    return { state: { ...state, phase: 'kinked' }, event: 'kinked' };
+  }
+  return { state, event: 'jammed' };
+};
 
-/** Feed (F, ↑): pushes the tape one station; into an elbow it jams, and past the limit it kinks. */
+/** Feed (F, ↑): pushes the tape one station; into an elbow it jams, and at the limit it kinks. */
 export function feedTape(s: TapeState, rules: PullRules): { state: TapeState; event: TapeEvent } {
   if (s.phase !== 'feeding') return { state: s, event: 'idle' };
   if (next(s)?.kind !== 'elbow') return advance(s);
-  const jams = s.jams + 1;
-  if (rules.jamLimit !== null && jams >= rules.jamLimit) {
-    return { state: { ...s, jams, phase: 'kinked' }, event: 'kinked' };
-  }
-  return { state: { ...s, jams }, event: 'jammed' };
+  return jam(s, rules);
 }
 
-/** Twist (T): at an elbow the tape turns round it and goes on; anywhere else it only spins. */
-export function twistTape(s: TapeState): { state: TapeState; event: TapeEvent } {
+/**
+ * Twist (T): at an elbow the tape turns round it and goes on. Anywhere else it only spins, except
+ * where elbows are hidden (`blindTwist`): there it binds, a jam like a push into an elbow.
+ */
+export function twistTape(s: TapeState, rules: PullRules): { state: TapeState; event: TapeEvent } {
   if (s.phase !== 'feeding') return { state: s, event: 'idle' };
-  if (next(s)?.kind !== 'elbow') return { state: s, event: 'twistedFree' };
+  if (next(s)?.kind !== 'elbow') return rules.blindTwist ? jam(s, rules) : { state: s, event: 'twistedFree' };
   const moved = advance(s);
   return { state: moved.state, event: moved.event === 'through' ? 'through' : 'twisted' };
 }
@@ -530,14 +552,14 @@ export function retractTape(s: TapeState): { state: TapeState; event: TapeEvent 
   return { state: { ...s, at: s.at - 1 }, event: 'retracted' };
 }
 
+/** Jams at the station the tape head is up against. */
+export function jamsHere(s: TapeState): number {
+  return s.stationJams[s.at] ?? 0;
+}
+
 /** The elbows the tape has got round so far. */
 export function elbowsPassed(s: TapeState): number {
   return s.track.slice(0, s.at).filter((t) => t.kind === 'elbow').length;
-}
-
-/** `true` when the station ahead is an elbow (the tape is up against it). */
-export function atElbow(s: TapeState): boolean {
-  return s.phase === 'feeding' && next(s)?.kind === 'elbow';
 }
 
 /** The default-tool rule's choice, named the way the prompt says it. */

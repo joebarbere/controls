@@ -1,4 +1,11 @@
-import { type Catalog, ENTRY_TYPES, type ToolDefinition, type ToolStep } from '@controls/catalog';
+import {
+  type Catalog,
+  ENTRY_TYPES,
+  knockoutHoleMm,
+  type ToolDefinition,
+  type ToolStep,
+  type TradeSize,
+} from '@controls/catalog';
 import {
   type CatalogRef,
   entityPointMm,
@@ -36,7 +43,7 @@ export interface CutOption {
   readonly entry: string;
   /** The entry's catalogue type (`knockout`, `drillSite`, …) and trade size (`3/4`), for the player. */
   readonly type: string;
-  readonly tradeSize: string | null;
+  readonly tradeSize: TradeSize | null;
   readonly positionMm: PositionMm;
   readonly open: boolean;
   /** `null` when the command would open it with this tool; else its refusal. */
@@ -76,10 +83,26 @@ export function cutOptions(
 
 const distance2 = (p: PositionMm, q: PositionMm): number => (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2;
 
+/** How far past an entry's hole a click still means that entry (mm): 10 mm, game-design (a fingertip's slack). */
+export const ENTRY_PICK_MARGIN_MM = 10;
+/** The hole radius taken for an entry with no trade size (a clamp or pryout tab, mm): 6 mm, game-design. */
+export const UNSIZED_ENTRY_RADIUS_MM = 6;
+
 /**
- * The entry a click at `atMm` on an enclosure means: the nearest **closed** entry (ties by catalogue
- * order), whether or not this tool can open it, so the refusal is about the hole the player aimed at
- * (`wrong-size` on a drill site, not some other knockout the tool fits). `null` when every entry is open.
+ * How near an entry's point a click must land to mean it (mm): the hole's radius (half the trade size's
+ * knockout hole, `knockoutHoleMm`; {@link UNSIZED_ENTRY_RADIUS_MM} with no trade size) plus
+ * {@link ENTRY_PICK_MARGIN_MM}. A 3/4 in knockout: 14.2 + 10 = 24.2 mm.
+ */
+export function entryPickRadiusMm(o: Pick<CutOption, 'tradeSize'>): number {
+  const radius = o.tradeSize === null ? UNSIZED_ENTRY_RADIUS_MM : knockoutHoleMm(o.tradeSize) / 2;
+  return radius + ENTRY_PICK_MARGIN_MM;
+}
+
+/**
+ * The entry a click at `atMm` on an enclosure means: the nearest **closed** entry within its pick radius
+ * ({@link entryPickRadiusMm}; ties by catalogue order), whether or not this tool can open it, so the
+ * refusal is about the hole the player aimed at (`wrong-size` on a drill site, not some other knockout
+ * the tool fits). `null` when no closed entry is that near: the click isn't a cut, and selects instead.
  */
 export function nearestClosedEntry(options: readonly CutOption[], atMm: PositionMm): CutOption | null {
   let best: CutOption | null = null;
@@ -87,6 +110,7 @@ export function nearestClosedEntry(options: readonly CutOption[], atMm: Position
   for (const o of options) {
     if (o.open) continue;
     const d = distance2(o.positionMm, atMm);
+    if (d > entryPickRadiusMm(o) ** 2) continue;
     if (d < bestD) {
       best = o;
       bestD = d;

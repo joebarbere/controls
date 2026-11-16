@@ -376,6 +376,29 @@ describe('a cable gesture between entries (F3.2 part 4)', () => {
     controller.dispose();
   });
 
+  it('a click the session does not claim selects instead (F3.4 part 2: a tool in hand)', () => {
+    const { controller, events, click, at } = setup();
+    const asked: number[] = [];
+    controller.setRouting({
+      ...cable(),
+      claimsClick: (entity) => {
+        asked.push(entity);
+        return false;
+      },
+    });
+    const t = at(rowA(0), 'a');
+    click(t.x, t.y);
+    expect(asked).toStrictEqual([rowA(0)]);
+    expect(events).toStrictEqual([]);
+    expect(controller.state.selected?.entityId).toBe(rowA(0));
+    // A claimed click is the gesture's, and selects nothing.
+    controller.setRouting({ ...cable(), claimsClick: () => true });
+    click(t.x, t.y);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ kind: 'entity', entity: rowA(0) });
+    controller.dispose();
+  });
+
   it('from a start point, a click off the entities adds a waypoint and the rope starts at the point', () => {
     const { controller, events, click } = setup();
     controller.setRouting(cable({ x: 100, y: 200, z: 30 }));

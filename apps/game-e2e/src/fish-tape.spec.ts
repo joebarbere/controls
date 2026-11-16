@@ -76,6 +76,27 @@ function consoleLine(entry: Entry): string {
   return [entry.id, ...words].join(' ');
 }
 
+/** Collects page errors and console errors. */
+function watchErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console: ${m.text()}`);
+  });
+  return errors;
+}
+
+/** The Settings dialog's default difficulty for new games, set to `value` (and what it was). */
+async function defaultDifficulty(page: Page, value: string): Promise<string> {
+  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const select = settings.getByRole('combobox', { name: 'Default for new games' });
+  const was = await select.inputValue();
+  await select.selectOption(value);
+  await expect(select).toHaveValue(value);
+  return was;
+}
+
 /** A seed-0 sandbox with the console open and the conduit run built from it. */
 async function runSandbox(page: Page): Promise<void> {
   await startSandbox(page);
@@ -91,16 +112,13 @@ test('one conduit pull with the keyboard: the palette opens the fish tape, the g
   page,
 }) => {
   test.slow(); // the played pull, then a second page replaying it
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-  page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`console: ${m.text()}`);
-  });
+  const errors = watchErrors(page);
   await page.setViewportSize({ width: 1280, height: 720 });
+  // Reduced motion from the system (the setting's default follows it): the tape bar must not animate.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?e2e=1&renderer=webgl2');
-  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'Settings' }).click();
+  await defaultDifficulty(page, 'journeyman');
   const settings = page.getByRole('dialog', { name: 'Settings' });
-  await settings.getByRole('combobox', { name: 'Default for new games' }).selectOption('journeyman');
   await settings
     .getByRole('group', { name: 'Tool belt' })
     .getByRole('combobox', { name: 'Slot 4' })
@@ -112,6 +130,12 @@ test('one conduit pull with the keyboard: the palette opens the fish tape, the g
   const canvas = page.locator('ctl-viewport canvas');
   await canvas.focus();
   const logBefore = (await entries(page)).length;
+  // From here on, keyboard only: count every pointer press on the page.
+  await page.evaluate(() => {
+    const w = window as unknown as { __pointerDowns: number };
+    w.__pointerDowns = 0;
+    document.addEventListener('pointerdown', () => w.__pointerDowns++, true);
+  });
 
   // The palette: the fish tape on the stick (entity 3), by number.
   const palette = page.getByRole('dialog', { name: 'Command palette' });
@@ -157,10 +181,15 @@ test('one conduit pull with the keyboard: the palette opens the fish tape, the g
   // The game, by its keys; every step is said in the prompt's own status.
   const status = prompt.getByTestId('tape-status');
   await expect(prompt.getByRole('button', { name: 'Feed (F)' })).toBeFocused();
+  const fill = prompt.locator('.fill');
+  await expect(fill).toHaveClass(/\bstill\b/);
+  // The global reduced-motion rule caps every transition at 0.01 ms; the bar's own 150 ms is gone.
+  expect(parseFloat(await fill.evaluate((el) => getComputedStyle(el).transitionDuration))).toBeLessThan(0.001);
   await page.keyboard.press('KeyF');
   await expect(status).toHaveText('Fed: station 1 of 3.');
   await page.keyboard.press('KeyF');
-  await expect(status).toHaveText('The tape is jammed against a bend (1 jam of 2). Twist (T), or pull back (R).');
+  // Journeyman hides the elbows: the jam doesn't say where (or that it is a bend).
+  await expect(status).toHaveText('The tape binds (1 jam here of 3). Feed (F), twist (T) or pull back (R).');
   await page.keyboard.press('KeyT');
   await expect(status).toHaveText('Round elbow 1: station 2 of 3.');
   await page.keyboard.press('KeyF');
@@ -175,17 +204,25 @@ test('one conduit pull with the keyboard: the palette opens the fish tape, the g
   );
 
   const logged = await entries(page);
+  expect(logged).toHaveLength(SETUP.length + 1);
   const lines = logged.map(consoleLine);
   expect(lines.slice(SETUP.length)).toStrictEqual([PULL_LINE]);
   expect(await hash(page)).toBe(PULL_HASH);
+  expect(await page.evaluate(() => (window as unknown as { __pointerDowns: number }).__pointerDowns)).toBe(0);
   expect(errors).toStrictEqual([]);
 
   // The console twin: the same setup and the logged wire.pull in a fresh sandbox reach the same hash.
+  // The world records its difficulty, so the twin starts at Journeyman too (kept in the context's settings).
   const twin = await page.context().newPage();
+  const twinErrors = watchErrors(twin);
   await page.close();
   await twin.setViewportSize({ width: 1280, height: 720 });
   await twin.goto('/?e2e=1&renderer=webgl2');
+  expect(await defaultDifficulty(twin, 'journeyman')).toBe('journeyman');
+  await twin.keyboard.press('Escape');
+  await expect(twin.getByRole('dialog', { name: 'Settings' })).toBeHidden();
   await runSandbox(twin);
   await runLogged(twin, PULL_LINE, SETUP.length);
   expect(await hash(twin)).toBe(PULL_HASH);
+  expect(twinErrors).toStrictEqual([]);
 });

@@ -5,6 +5,7 @@ import { precheck } from './cable-gesture';
 import {
   conduitRun,
   feedTape,
+  jamsHere,
   pullArgs,
   pullRequest,
   pullRules,
@@ -169,7 +170,7 @@ describe('the minigame (F3.4 part 2)', () => {
     let s: TapeState = startTape(track);
     const events: string[] = [];
     for (const key of ['feed', 'twist', 'feed'] as const) {
-      const step = key === 'feed' ? feedTape(s, rules) : twistTape(s);
+      const step = key === 'feed' ? feedTape(s, rules) : twistTape(s, rules);
       s = step.state;
       events.push(step.event);
     }
@@ -177,12 +178,12 @@ describe('the minigame (F3.4 part 2)', () => {
     expect(s).toMatchObject({ at: 3, jams: 0, phase: 'through' });
   });
 
-  it('pushing into an elbow jams; at the difficulty’s limit the tape kinks', () => {
+  it('pushing into an elbow jams; at the difficulty’s limit at that spot the tape kinks', () => {
     const limits: [Difficulty, number | null][] = [
       ['trainee', null],
       ['apprentice', 3],
-      ['journeyman', 2],
-      ['realistic', 1],
+      ['journeyman', 3],
+      ['realistic', 2],
     ];
     for (const [difficulty, limit] of limits) {
       const rules = pullRules(difficulty);
@@ -201,16 +202,47 @@ describe('the minigame (F3.4 part 2)', () => {
     }
   });
 
-  it('twisting off an elbow only spins; pulling back steps back but keeps the jams', () => {
+  it('the limit is per spot: a jam at each of two elbows never kinks at Realistic', () => {
+    const rules = pullRules('realistic');
+    const two = pullTrack({ elbows: [7, 8], stretchesMm: [500, 500, 500] });
+    let s = startTape(two);
+    const events: string[] = [];
+    for (const key of ['feed', 'feed', 'twist', 'feed', 'feed', 'twist', 'feed'] as const) {
+      const step = key === 'feed' ? feedTape(s, rules) : twistTape(s, rules);
+      s = step.state;
+      events.push(step.event);
+    }
+    expect(events).toStrictEqual(['reachedElbow', 'jammed', 'twisted', 'reachedElbow', 'jammed', 'twisted', 'through']);
+    expect(s).toMatchObject({ jams: 2, phase: 'through' });
+  });
+
+  it('a twist off an elbow: only a spin where the elbows are shown, a jam where they are hidden', () => {
+    for (const difficulty of ['trainee', 'apprentice', 'journeyman', 'realistic'] as const) {
+      const rules = pullRules(difficulty);
+      expect(rules.blindTwist).toBe(!rules.showElbows);
+      const step = twistTape(startTape(track), rules);
+      if (rules.blindTwist) {
+        expect(step.event).toBe('jammed');
+        expect(step.state).toMatchObject({ at: 0, jams: 1, stationJams: [1, 0, 0] });
+        expect(twistTape(step.state, rules).event).toBe(difficulty === 'realistic' ? 'kinked' : 'jammed');
+      } else {
+        expect(step).toStrictEqual({ state: startTape(track), event: 'twistedFree' });
+      }
+    }
+  });
+
+  it('pulling back steps back but keeps the jams; a kinked tape takes no keys', () => {
     const rules = pullRules('apprentice');
     let s = startTape(track);
-    expect(twistTape(s).event).toBe('twistedFree');
     expect(retractTape(s).event).toBe('atStart');
     s = feedTape(s, rules).state;
-    s = feedTape(s, rules).state; // a jam
+    s = feedTape(s, rules).state; // a jam at the elbow
+    expect(jamsHere(s)).toBe(1);
     const back = retractTape(s);
     expect(back.event).toBe('retracted');
-    expect(back.state).toMatchObject({ at: 0, jams: 1 });
+    expect(back.state).toMatchObject({ at: 0, jams: 1, stationJams: [0, 1, 0] });
+    expect(jamsHere(back.state)).toBe(0);
     expect(feedTape({ ...s, phase: 'kinked' }, rules).event).toBe('idle');
+    expect(twistTape({ ...s, phase: 'kinked' }, rules).event).toBe('idle');
   });
 });

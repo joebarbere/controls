@@ -94,9 +94,10 @@ describe('FishTapePromptDialog (F3.4 part 2)', () => {
     await user.keyboard('f');
     expect(status()).toBe('Fed: station 1 of 3.');
     await user.keyboard('f'); // into the elbow
-    expect(status()).toBe('The tape is jammed against a bend (1 jam of 2). Twist (T), or pull back (R).');
+    // Journeyman hides the elbows: a jam says neither "bend" nor where.
+    expect(status()).toBe('The tape binds (1 jam here of 3). Feed (F), twist (T) or pull back (R).');
     expect(within(d).getByTestId('tape-position').textContent).toBe(
-      'Station 1 of 3; round 0 of 1 elbows; jams 1 of 2 before it kinks.',
+      'Station 1 of 3; round 0 of 1 elbows; jams 1 of 3 here before it kinks, 1 in all.',
     );
     await user.keyboard('t');
     expect(status()).toBe('Round elbow 1: station 2 of 3.');
@@ -112,15 +113,18 @@ describe('FishTapePromptDialog (F3.4 part 2)', () => {
     expect(confirmed[0].tool).toStrictEqual(FISH_TAPE);
   });
 
-  it('at Realistic one push into the elbow kinks the tape: an alert, nothing confirmed; Try again starts over', async () => {
+  it('at Realistic a second jam at one spot kinks the tape: an alert, nothing confirmed; Try again starts over', async () => {
     const { user, fixture, confirmed } = await mount('realistic');
     const d = dialog();
     await user.click(within(d).getByRole('button', { name: 'Feed the tape' }));
     await fixture.whenStable();
-    await user.keyboard('ff');
+    await user.keyboard('t'); // a twist on the straight binds, worded as a push into a bend would be
+    expect(status()).toBe('The tape binds (1 jam here of 2). Feed (F), twist (T) or pull back (R).');
+    await user.keyboard('f'); // past the straight (its jam stays there)
+    await user.keyboard('ff'); // two pushes into the elbow
     await fixture.whenStable();
     expect(within(d).getByTestId('tape-alert').textContent).toBe(
-      'The tape kinked against a bend after 1 jam. Nothing was pulled. Try again, or Cancel.',
+      'The tape kinked after 2 jams at one spot. Nothing was pulled. Try again, or Cancel.',
     );
     expect(within(d).queryByRole('button', { name: 'Feed (F)' })).toBeNull();
     await user.keyboard('ftp'); // the game's keys do nothing once kinked
@@ -150,6 +154,58 @@ describe('FishTapePromptDialog (F3.4 part 2)', () => {
     expect(status()).toBe('Pulled back: station 0 of 3.');
     await user.keyboard('{ArrowDown}');
     expect(status()).toBe('The tape is all the way out.');
+  });
+
+  it('a held key feeds once: auto-repeat is swallowed', async () => {
+    const { user, fixture } = await mount('journeyman');
+    await user.click(within(dialog()).getByRole('button', { name: 'Feed the tape' }));
+    await fixture.whenStable();
+    await user.keyboard('{f>3/}');
+    expect(status()).toBe('Fed: station 1 of 3.');
+    expect(within(dialog()).getByTestId('tape-position').textContent).toMatch(/^Station 1 of 3;/);
+  });
+
+  it('confirms at most once: P twice, and P while still feeding, emit one confirm', async () => {
+    const { user, fixture, confirmed } = await mount('apprentice');
+    await user.click(within(dialog()).getByRole('button', { name: 'Feed the tape' }));
+    await fixture.whenStable();
+    await user.keyboard('fp'); // P before the tape is through does nothing
+    expect(confirmed).toHaveLength(0);
+    await user.keyboard('tf');
+    await fixture.whenStable();
+    await user.keyboard('pp');
+    expect(confirmed).toHaveLength(1);
+  });
+
+  it('a refusal from the flow returns to setup with focus on the first conductor', async () => {
+    const { user, fixture, prompt } = await mount('journeyman');
+    await user.click(within(dialog()).getByRole('button', { name: 'Feed the tape' }));
+    await fixture.whenStable();
+    expect(document.activeElement?.textContent?.trim()).toBe('Feed (F)');
+    fixture.componentRef.setInput('prompt', { ...prompt, refusal: 'No entity with id 5 (not-found)' });
+    await fixture.whenStable();
+    const d = dialog();
+    expect(within(d).getByTestId('pull-message').textContent).toBe('Refused: No entity with id 5 (not-found)');
+    expect(document.activeElement).toBe(within(d).getByRole('combobox', { name: 'Conductor 1' }));
+  });
+
+  it('only Trainee offers the skip; Trainee never kinks however often the tape is pushed', async () => {
+    for (const difficulty of ['apprentice', 'realistic'] as const) {
+      await mount(difficulty);
+      expect(within(dialog()).queryByRole('button', { name: 'Pull without feeding' })).toBeNull();
+      document.body.innerHTML = '';
+      TestBed.resetTestingModule();
+    }
+    const { user, fixture } = await mount('trainee');
+    await user.click(within(dialog()).getByRole('button', { name: 'Feed the tape' }));
+    await fixture.whenStable();
+    await user.keyboard('ffffffff');
+    await fixture.whenStable();
+    expect(within(dialog()).getByTestId('tape-position').textContent).toBe(
+      'Station 1 of 3; round 0 of 1 elbows; jams 7 here (it never kinks at Trainee), 7 in all.',
+    );
+    expect(within(dialog()).getByTestId('tape-alert').textContent).toBe('');
+    expect(within(dialog()).getByRole('button', { name: 'Feed (F)' })).toBeDefined();
   });
 
   it('Trainee can pull without feeding: the same arguments, checked first', async () => {

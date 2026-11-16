@@ -100,8 +100,21 @@ export function connectToolFlow(
       startMm: null,
       keyPointMm: keyEntry()?.positionMm ?? null,
       snap: { kinds: [] },
+      claimsClick,
     };
   });
+
+  /**
+   * Which clicks are the tool's (the renderer selects on any other, F3.4 part 2): with the fish tape, a
+   * click on a conduit run (or a box with a connector in an entry); with an entry tool, a click within
+   * the pick radius of a closed entry (`nearestClosedEntry`).
+   */
+  const claimsClick = (entity: number, atMm: { x: number; y: number; z: number }): boolean =>
+    untracked(() => {
+      if (tape()) return conduitRun(session.world(), catalog, entity).ok;
+      const list = options(entity);
+      return list !== null && nearestClosedEntry(list, atMm) !== null;
+    });
 
   // --- entries --------------------------------------------------------------------------------------
   const entryDevice = computed<number | null>(() => {
@@ -216,6 +229,7 @@ export function connectToolFlow(
     const result = session.execFromInput('wire.pull', args);
     if (!result.ok) {
       if (result.error.kind !== 'rejected') console.warn('pull command failed', result);
+      announce(`Nothing pulled: ${result.error.message}.`);
       return;
     }
     const n = args.conductors.length;
@@ -252,9 +266,9 @@ export function connectToolFlow(
           announce('Click a box or panel to open one of its entries.');
           return;
         }
+        // The renderer only sends claimed clicks; re-checked in case the world moved since.
         const o = nearestClosedEntry(list, event.atMm);
-        if (o === null) announce(`Every entry of ${title(event.entity)} is open.`);
-        else cut(o);
+        if (o !== null) cut(o);
         return;
       }
       case 'enter': {

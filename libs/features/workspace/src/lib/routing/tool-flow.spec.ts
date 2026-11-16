@@ -136,6 +136,7 @@ describe('the fish tape flow (F3.4 part 2)', () => {
     const args = blackAndWhite(tools);
     expect(tools.checkPull(args)).toBeNull();
     tools.confirmPull(args);
+    tools.confirmPull(args); // a second confirm (a double key press) finds no prompt and logs nothing
     expect(tools.pull()).toBeNull();
     expect(logged(session, 'wire.pull').map((e) => e.args)).toStrictEqual([args]);
     expect(session.world().connections.map((c) => [c.id, c.a, c.b])).toStrictEqual([
@@ -213,6 +214,44 @@ describe('the fish tape flow (F3.4 part 2)', () => {
 
 describe('opening entries with the tool in hand (F3.4 part 2)', () => {
   const PANEL_TOP_2 = { x: -740, y: 1300, z: 79 }; // the panel's second drill site (3/4 in)
+  const PANEL_KO_1 = { x: -910, y: 800, z: 79 }; // the panel's first bottom knockout (3/4 in)
+
+  it('only a click on (or within 10 mm of) a closed entry’s hole is the tool’s; any other selects', () => {
+    const { tools, renderer, session } = setup('journeyman', [ref('tool.veltmark-sd-2')]);
+    session.exec('toolbelt.select', { slot: 1 });
+    TestBed.tick();
+    const claims = renderer.current?.claimsClick;
+    if (!claims) throw new Error('no claimsClick on the session');
+    const before = logged(session, 'enclosure.openEntry').length;
+    // The middle of the panel's front, 150 mm and more from every entry: not the screwdriver's.
+    const far = { x: -810, y: 1050, z: 79 };
+    expect(claims(1, far)).toBe(false);
+    expect(claims(1, { ...PANEL_KO_1, x: PANEL_KO_1.x + 24 })).toBe(true); // a 3/4 in hole: 14.2 + 10 mm
+    expect(claims(1, { ...PANEL_KO_1, x: PANEL_KO_1.x + 25 })).toBe(false);
+    expect(claims(3, far)).toBe(false); // a conduit stick has no entries
+    // Even if such a click arrived, nothing is opened.
+    renderer.send({ kind: 'entity', entity: 1, atMm: far, waypoint: null });
+    expect(logged(session, 'enclosure.openEntry')).toHaveLength(before);
+    // A click on the knockout still opens it.
+    renderer.send({ kind: 'entity', entity: 1, atMm: { ...PANEL_KO_1, z: PANEL_KO_1.z + 2 }, waypoint: null });
+    expect(
+      logged(session, 'enclosure.openEntry')
+        .slice(before)
+        .map((e) => e.args),
+    ).toStrictEqual([{ id: 1, entry: 'ko-bottom-1', tool: ref('tool.veltmark-sd-2') }]);
+    expect(tools.keyEntry()).toBeNull(); // nothing held by the keyboard
+  });
+
+  it('with the fish tape, a click on a conduit run is the tape’s and a click on anything else selects', () => {
+    const { renderer, session } = setup('journeyman', [FISH_TAPE]);
+    session.exec('entity.place', { ref: ref('box.tinmoor-2g-nm'), positionMm: { x: 0, y: 0, z: 0 } });
+    session.exec('toolbelt.select', { slot: 1 });
+    TestBed.tick();
+    const claims = renderer.current?.claimsClick;
+    expect(claims?.(4, { x: 0, y: 0, z: 0 })).toBe(true);
+    expect(claims?.(1, { x: 0, y: 0, z: 0 })).toBe(true); // the panel holds connector 2
+    expect(claims?.(6, { x: 0, y: 0, z: 0 })).toBe(false); // a box with no connector
+  });
 
   it('a click picks the nearest closed entry; wrong-size and wrong-tool are shown, nothing logged', () => {
     const tools = [ref('tool.corriden-hs-14'), ref('tool.corriden-sa-12'), ref('tool.veltmark-kp-3')];

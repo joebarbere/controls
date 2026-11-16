@@ -167,6 +167,13 @@ export interface RoutingSession {
   readonly startMm?: PositionMm | null;
   /** A point the keyboard holds (a cable's entry, cycled by the UI), drawn with the focus marker. */
   readonly keyPointMm?: PositionMm | null;
+  /**
+   * `entries` only (F3.4 part 2): whether a click on `entity` at `atMm` is the gesture's. When given and
+   * it returns `false` (or the click hits no entity), the click is not the gesture's: it selects as it
+   * would with no routing session (a tool in hand still lets the player pick devices). Absent: every
+   * entity click is the gesture's (a cable spool).
+   */
+  readonly claimsClick?: (entity: EntityId, atMm: PositionMm) => boolean;
 }
 
 /**
@@ -1434,13 +1441,16 @@ export class ViewportController {
     return `${terminalKey(v.from)} ${terminalKey(v.target)} ${proposal} ${next}`;
   }
 
-  /** A click while routing: a terminal pick, else (after the first terminal) a waypoint, else nothing. */
-  private routingClick(): void {
+  /**
+   * A click while routing: a terminal pick, else (after the first terminal) a waypoint, else nothing.
+   * `false` when the click isn't the gesture's (`claimsClick` said no): the caller selects instead.
+   */
+  private routingClick(): boolean {
     this.updateHover(); // the pointer moved to the click: answer for where it is now
     this.hoverDirty = false;
     const session = this.routingSession;
     const hit = this.terminalView?.hit ?? null;
-    if (!session) return;
+    if (!session) return true;
     if (session.ends === 'entries') {
       const c = this.hoverNdc();
       const body = c ? this.picker.pick(c.x, c.y, this.camera) : null;
@@ -1449,18 +1459,21 @@ export class ViewportController {
       if (body && entity !== undefined && entity !== null) {
         const p = body.point;
         const atMm = { x: metresToMm(p.x), y: metresToMm(p.y), z: metresToMm(p.z) };
+        if (session.claimsClick && !session.claimsClick(entity, atMm)) return false;
         this.emitRouting({ kind: 'entity', entity, atMm, waypoint: next });
-        return;
+        return true;
       }
+      if (session.claimsClick) return false;
       if (session.startMm && next) this.emitRouting({ kind: 'waypoint', waypoint: next });
-      return;
+      return true;
     }
     if (hit) {
       this.emitRouting({ kind: 'terminal', end: hit, source: 'pointer', proposal: this.proposalTo(hit) });
-      return;
+      return true;
     }
     const next = this.routingView?.next ?? null;
     if (session.from && next) this.emitRouting({ kind: 'waypoint', waypoint: next });
+    return true;
   }
 
   private onTrigger(action: TriggeredAction): boolean {
@@ -1586,10 +1599,8 @@ export class ViewportController {
           this.look.request();
           return;
         }
-        if (this.routingSession) {
-          this.routingClick(); // a terminal or a waypoint for the UI's routing gesture
-          return;
-        }
+        // A terminal or a waypoint for the UI's routing gesture; a click it doesn't claim selects.
+        if (this.routingSession && this.routingClick()) return;
         if (this.gestureRef()) {
           this.commit(); // a click places the active prop (or drops a keyboard move)
           return;

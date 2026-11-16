@@ -14,9 +14,9 @@ import {
 import { Button, Dialog } from '@controls/ui';
 import type { WirePullArgs } from '@controls/world-model';
 import {
-  atElbow,
   elbowsPassed,
   feedTape,
+  jamsHere,
   MAX_PULL_ROWS,
   pullArgs,
   type PullRequest,
@@ -283,6 +283,8 @@ export class FishTapePromptDialog {
   });
   /** The arguments the game was started with (what a success logs). */
   private args: WirePullArgs | null = null;
+  /** Set once `confirm` has been emitted for this prompt: the prompt confirms at most once (a new prompt resets it). */
+  private readonly done = linkedSignal<PullPrompt | null, boolean>({ source: this.prompt, computation: () => false });
   protected readonly phase = computed(() => this.tape()?.phase ?? 'setup');
   /** The setup step's own problem (rows, the command's check), shown until the rows change. */
   private readonly problem = linkedSignal<readonly PullRow[], string | null>({
@@ -329,15 +331,18 @@ export class FishTapePromptDialog {
     const t = this.tape();
     if (!t) return '';
     const r = this.rules();
-    const jams =
-      r.jamLimit === null ? `${t.jams} (it never kinks at Trainee)` : `${t.jams} of ${r.jamLimit} before it kinks`;
+    const here =
+      r.jamLimit === null
+        ? `${jamsHere(t)} here (it never kinks at Trainee)`
+        : `${jamsHere(t)} of ${r.jamLimit} here before it kinks`;
     const elbows = t.track.filter((s) => s.kind === 'elbow').length;
-    return `Station ${t.at} of ${t.track.length}; round ${elbowsPassed(t)} of ${elbows} elbows; jams ${jams}.`;
+    return `Station ${t.at} of ${t.track.length}; round ${elbowsPassed(t)} of ${elbows} elbows; jams ${here}, ${t.jams} in all.`;
   });
   protected readonly gameAlert = computed(() => {
     const t = this.tape();
     if (t?.phase !== 'kinked') return '';
-    return `The tape kinked against a bend after ${t.jams} jam${t.jams === 1 ? '' : 's'}. Nothing was pulled. Try again, or Cancel.`;
+    const n = jamsHere(t);
+    return `The tape kinked after ${n} jam${n === 1 ? '' : 's'} at one spot. Nothing was pulled. Try again, or Cancel.`;
   });
 
   constructor() {
@@ -345,6 +350,16 @@ export class FishTapePromptDialog {
       write: () => {
         if (this.focusGame() === 0) return;
         untracked(() => this.host.nativeElement.querySelector<HTMLElement>('[data-game-focus]')?.focus());
+      },
+    });
+    // A refusal sends the prompt back to setup, whose game buttons (and focus) are gone: focus the first
+    // conductor, next to the alert that says why.
+    afterRenderEffect({
+      write: () => {
+        if (this.prompt()?.refusal == null) return;
+        untracked(() =>
+          this.host.nativeElement.querySelector<HTMLElement>(`[id="${this.id('conductor-0')}"]`)?.focus(),
+        );
       },
     });
   }
@@ -408,6 +423,7 @@ export class FishTapePromptDialog {
     const r = this.request();
     if (!args || !r) return;
     this.args = args;
+    this.done.set(false);
     const track = pullTrack(r.run);
     this.tape.set(startTape(track));
     const a = r.run.ends.a;
@@ -419,24 +435,29 @@ export class FishTapePromptDialog {
   }
 
   protected skip(): void {
-    if (!this.rules().skip) return;
+    if (!this.rules().skip || this.done()) return;
     const args = this.checked();
-    if (args) this.confirm.emit(args);
+    if (!args) return;
+    this.done.set(true);
+    this.confirm.emit(args);
   }
 
   protected act(key: 'feed' | 'twist' | 'retract'): void {
     const t = this.tape();
     if (!t) return;
     const rules = this.rules();
-    const step = key === 'feed' ? feedTape(t, rules) : key === 'twist' ? twistTape(t) : retractTape(t);
+    const step = key === 'feed' ? feedTape(t, rules) : key === 'twist' ? twistTape(t, rules) : retractTape(t);
     this.tape.set(step.state);
     this.status.set(this.say(step.event, step.state));
     if (step.state.phase !== t.phase) this.focusGame.update((n) => n + 1);
   }
 
   protected pull(): void {
-    if (this.tape()?.phase !== 'through' || !this.args) return;
-    this.confirm.emit(this.args);
+    if (this.tape()?.phase !== 'through' || !this.args || this.done()) return;
+    const args = this.args;
+    this.args = null;
+    this.done.set(true);
+    this.confirm.emit(args);
   }
 
   protected retry(): void {
@@ -451,6 +472,8 @@ export class FishTapePromptDialog {
     const where = `station ${s.at} of ${s.track.length}`;
     const show = this.rules().showElbows;
     const limit = this.rules().jamLimit;
+    const here = jamsHere(s);
+    const count = `${here} jam${here === 1 ? '' : 's'} here${limit === null ? '' : ` of ${limit}`}`;
     switch (event) {
       case 'fed':
         return `Fed: ${where}.`;
@@ -459,16 +482,16 @@ export class FishTapePromptDialog {
           ? `Fed: ${where}. Elbow ${elbowsPassed(s) + 1} ahead: twist (T) to get round it.`
           : `Fed: ${where}.`;
       case 'jammed':
-        return (
-          `The tape is jammed against a bend (${s.jams} jam${s.jams === 1 ? '' : 's'}` +
-          `${limit === null ? '' : ` of ${limit}`}). Twist (T), or pull back (R).`
-        );
+        // With the elbows hidden a push into one and a twist short of one sound the same: neither says where they are.
+        return show
+          ? `The tape is jammed against a bend (${count}). Twist (T), or pull back (R).`
+          : `The tape binds (${count}). Feed (F), twist (T) or pull back (R).`;
       case 'kinked':
         return `The tape kinked. Nothing was pulled.`;
       case 'twisted':
         return `Round elbow ${elbowsPassed(s)}: ${where}.`;
       case 'twistedFree':
-        return atElbow(s) ? 'The tape turns.' : 'The tape spins; no bend to get round here.';
+        return 'The tape spins; no bend to get round here.';
       case 'retracted':
         return `Pulled back: ${where}.`;
       case 'atStart':
@@ -486,6 +509,13 @@ export class FishTapePromptDialog {
     if (!t || event.ctrlKey || event.metaKey || event.altKey) return;
     if ((event.target as HTMLElement | null)?.closest('select, input, textarea')) return;
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (!['f', 't', 'r', 'p', 'ArrowUp', 'ArrowDown'].includes(key)) return;
+    // A held key feeds once: auto-repeat would push the tape into an elbow the player never saw coming.
+    if (event.repeat) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     let run: (() => void) | null = null;
     if (key === 'f' || key === 'ArrowUp') run = () => this.act('feed');
     else if (key === 't') run = () => this.act('twist');
