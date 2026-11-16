@@ -4,7 +4,7 @@ import fc from 'fast-check';
 import { wiredLoopWorld } from '../../testing/wired-loop';
 import { createDcSolution, DcSolver } from '../mna/dc';
 import { dcBranchValues, type DcBranchValues } from '../mna/values';
-import { compileNetlist, NetlistCompiler } from './compile';
+import { compileNetlist, CONNECTION_OPEN_FLAG_KEYS, connectionKeyOpens, NetlistCompiler } from './compile';
 import { computeTopologyHash } from './hash';
 import type { NetlistBranch } from './types';
 
@@ -124,6 +124,26 @@ describe('the open-toggle path (F3.6 part 2)', () => {
     // open through `fused` alone: the same netlist as the open end gave.
     const fused = compiler.compile(world, { connectionSim: viewOf(new Set(), new Set([2])) });
     expect(fused).toStrictEqual(open);
+  });
+
+  it('only an intermittentOpen end or a listed flag (`fused`) opens a connection; no other boolean does', () => {
+    expect(CONNECTION_OPEN_FLAG_KEYS).toStrictEqual(['fused']);
+    expect(connectionKeyOpens('endAState', 'intermittentOpen')).toBe(true);
+    expect(connectionKeyOpens('fused', 'intermittentOpen')).toBe(true);
+    expect(connectionKeyOpens('fused', true)).toBe(true);
+    for (const [key, value] of [
+      ['fused', false],
+      ['fused', 'true'],
+      ['fused', 1],
+      ['endAState', true],
+      ['insulationDamaged', true],
+      ['someFutureFlag', true],
+      ['endBState', 'arcing'],
+      ['endBState', 'ok'],
+      ['endBState', null],
+    ] as const) {
+      expect(connectionKeyOpens(key, value), `${key} ${String(value)}`).toBe(false);
+    }
   });
 
   it('a solver reusing unchanged islands solves bit for bit what a fresh solver does', () => {

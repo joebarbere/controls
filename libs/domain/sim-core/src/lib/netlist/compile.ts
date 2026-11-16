@@ -761,14 +761,29 @@ function plantTerminal(entry: EntityCacheEntry | null, terminal: number): number
 const NO_SIM: StateBag = Object.freeze({});
 
 /**
- * Whether a connection's sim state opens it, read through its model's `simTopologyKeys`: an end that is
- * `intermittentOpen`, or a sticky flag that is `true` (a conductor's `fused`: open for good).
+ * The connection sim keys whose `true` opens the connection: only a conductor's sticky `fused` (ADR 0018,
+ * open for good). Any other boolean a model lists in `simTopologyKeys` opens nothing until it is added
+ * here, so a future flag can't silently take a connection out of the netlist.
  */
+export const CONNECTION_OPEN_FLAG_KEYS: readonly string[] = Object.freeze(['fused']);
+
+/**
+ * Whether one topology key's value opens a connection: an end state that is `intermittentOpen`, or a
+ * key of {@link CONNECTION_OPEN_FLAG_KEYS} that is `true`.
+ */
+export function connectionKeyOpens(key: string, value: unknown): boolean {
+  if (value === 'intermittentOpen') return true;
+  if (value !== true) return false;
+  for (let i = 0; i < CONNECTION_OPEN_FLAG_KEYS.length; i++) if (CONNECTION_OPEN_FLAG_KEYS[i] === key) return true;
+  return false;
+}
+
+/** Whether a connection's sim state opens it, read through its model's `simTopologyKeys` ({@link connectionKeyOpens}). */
 function openEnd(model: ConnectionNetlistModel, sim: Readonly<Record<string, unknown>>): boolean {
   const keys = model.simTopologyKeys;
   for (let i = 0; i < keys.length; i++) {
-    const value = sim[keys[i]];
-    if (value === 'intermittentOpen' || value === true) return true;
+    const key = keys[i];
+    if (connectionKeyOpens(key, sim[key])) return true;
   }
   return false;
 }

@@ -26,7 +26,7 @@ import { createGame, type Game } from './game';
  * then landed on the breaker's line screw with a torque driver. They reach the same pinned hash.
  */
 
-const HASH = '56d51acbad09e85806d04aa11696f341990a05954c51d73807a8d14b1cfa853f';
+const HASH = '35268a19b59415be9e7eae4a83e91da7ba0b5ffe5251f327cb083f714160e596';
 
 function wiringGame(): Game {
   return createGame({
