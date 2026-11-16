@@ -17,6 +17,7 @@ import {
   checkConductor,
   checkGeometry,
   checkLanding,
+  checkPullReach,
   checkRoute,
   checkTailReach,
   checkTool,
@@ -345,7 +346,8 @@ export function wireLabelCommand(catalog: Catalog = BUILTIN_CATALOG) {
  * `wire.pull {route, lengthMm, conductors, tool}`: pulls 1–16 conductors through conduit with a tool
  * that can `pull` (the fish tape minigame logs it on success only, D10). The route must go through
  * conduit and starts and ends with free rest waypoints outside it; each conductor is created with
- * both ends free, in array order.
+ * both ends free, in array order. Since F3.4 part 2 the tape must reach the conduit run
+ * (`checkPullReach`: its length and its elbows' bends within the tool's `pull`; `beyond-tool-capacity`).
  */
 export function wirePullCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<WirePullArgs, World>({
@@ -370,6 +372,8 @@ export function wirePullCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (!tape.ok) return tape;
       const route = checkRoute(state, catalog, args.route, { a: false, b: false }, 'require');
       if (route) return route;
+      const reach = checkPullReach(state, catalog, args.route, tape.value);
+      if (reach) return reach;
       const geometry = checkGeometry(state, catalog, routePoints(null, args.route, null), args.lengthMm);
       if (geometry) return geometry;
       const pulled = entries.map((entry, i) =>

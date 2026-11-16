@@ -125,7 +125,24 @@ describe('defaultTool (ADR 0015: the first matching tool on the belt, else the f
   it('skips belt slots that are not tools, unknown or can’t reach the size', () => {
     const belt = [ref('prop.box'), ref('tool.nothing'), CUTTERS, null];
     expect(defaultTool(BUILTIN_CATALOG, belt, 'cut', 6)).toBeNull();
-    expect(defaultTool(BUILTIN_CATALOG, belt, 'bore')).toBeNull();
+    // F3.4 part 2: no bit on the belt, so the first bore-only catalogue tool by id (the 3/4 in auger), never a hole saw first.
+    expect(defaultTool(BUILTIN_CATALOG, belt, 'bore')).toMatchObject({
+      ref: { id: 'tool.corriden-sa-12', version: 1 },
+      slot: null,
+    });
+    // A hole saw on the belt still wins over the catalogue's auger (the belt comes first).
+    expect(defaultTool(BUILTIN_CATALOG, [{ id: 'tool.corriden-hs-14', version: 1 }], 'bore')).toMatchObject({
+      ref: { id: 'tool.corriden-hs-14', version: 1 },
+      slot: 1,
+    });
+    // With only hole saws in a catalogue, the first of them is the default.
+    const sawsOnly = { ...BUILTIN_CATALOG, tools: BUILTIN_CATALOG.tools.filter((t) => t.kind !== 'drill') };
+    expect(defaultTool(sawsOnly as typeof BUILTIN_CATALOG, [], 'bore')).toMatchObject({
+      ref: { id: 'tool.corriden-hs-14', version: 1 },
+    });
+    expect(defaultTool(BUILTIN_CATALOG, belt, 'pull')).toMatchObject({
+      ref: { id: 'tool.veltmark-fr-1524', version: 1 },
+    });
     expect(defaultTool(BUILTIN_CATALOG, belt, 'strip', 14)).toMatchObject({ ref: STRIPPERS, slot: null });
   });
 

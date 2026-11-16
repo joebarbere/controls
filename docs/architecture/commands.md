@@ -138,6 +138,30 @@ flowchart LR
 
 A run is **in framing** when its route has a `staple` or `bore` waypoint, or when both its ends are in enclosures on a stud wall (`enclosureOnStudWall`). Distances are measured along the stored polyline (entry points and waypoints, the floor's point set). Only a staple secures the cable near a box (a run through bored holes counts as supported only away from boxes, Art. 334.30(A)); between supports, staples, bores and ducts all count; a free waypoint never does, and a free end isn't a box. Refusal order in `cable.add`: … `route-collides`, then `staple-spacing`. The jacket end is the entry point moved along the entry's inward axis by `tailsMm[end] − jacketStripMm[end]`; stripping more moves it back by as much as the reach grows, so it never strands a landed conductor. At a free cable end the reach is still the whole tail from the rest waypoint.
 
+### Drilling, punching and pulling (F3.4 part 2)
+
+The real bits, hole saws, knockout punch and fish tape (`content/tools/`) go through existing commands; no argument or world shape changed. Custom enclosure entries are the catalogue's `drillSite` entries (ADR 0015 deviation 10), opened by `enclosure.openEntry` like any knockout and stored in the same `openEntries` bit.
+
+| Step                               | Rule                                                                                                                                                                                                                                                                               | Where                                                                    | Refusal                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------- |
+| Cut a drill site                   | opens by `openEntry` only (a hole saw or punch; a wood bit or a screwdriver can't)                                                                                                                                                                                                 | `enclosure.openEntry` (`ENTRY_TYPES`)                                    | `wrong-tool`           |
+| Hole size (`checkEntryHole`)       | a punch must carry the entry's trade size (`punches`); a hole saw's `boreDiameterMm` within 1/16 in (1.5875 mm, game-design) of the trade size's knockout hole (`KNOCKOUT_HOLES`: published punch data, 0.885 / 1.115 / 1.362 in for 1/2, 3/4, 1)                                  | `enclosure.openEntry`, any entry opened by `openEntry` with a trade size | `wrong-size`           |
+| Bore a stud                        | unchanged (F3.2 part 4); the real 3/4 and 7/8 in bits need no nail plate, 1 in is exactly at 31.75 mm, 1-1/8 in warns, the 1-3/4 in hole saw is over 35.56 mm                                                                                                                      | `checkTool(…, 'bore')`, `snapWaypoint`                                   | `beyond-tool-capacity` |
+| Fish tape reach (`checkPullReach`) | the conduit run (`pullRun`: along the stored polyline from the first to the last `conduit` waypoint, an elbow passed port to port at its centreline 2L + πR/2, `elbowArcExcessMm`) ≤ the tape's `pull.lengthMm`; 90° (`ELBOW_BEND_DEG`) per distinct elbow ≤ its `pull.maxBendDeg` | `wire.pull`, after `checkRoute`                                          | `beyond-tool-capacity` |
+
+```mermaid
+flowchart LR
+  open["enclosure.openEntry {id, entry, tool}"] --> cap["checkTool (ENTRY_TYPES opens)"]
+  cap --> drive["checkDrive (opened by drive)"]
+  cap --> hole["checkEntryHole (opened by openEntry: punches or hole-saw fit)"]
+  pull["wire.pull {route, lengthMm, conductors, tool}"] --> tape["checkTool (pull)"]
+  tape --> route["checkRoute (require conduit)"]
+  route --> reach["checkPullReach (pullRun length and elbows)"]
+  reach --> geometry["checkGeometry"]
+```
+
+The fish tape minigame (the UI half) pre-checks with `checkPullReach` and shows `pullRun`'s length and bends against the tape's `pull`; whatever happens in it, it logs the same `wire.pull` on success and nothing otherwise (ADR 0015). Which entry a conduit connector occupies stays derived (`connectorEntries`, ADR 0017 §8); `wire.pull` stores nothing about it (see ADR 0015's F3.4 part 2 note).
+
 Positions are integer mm and angles integer millidegrees, validated by the `save-format` primitives. Unknown ids fail with `not-found`. The world registry resolves catalogue refs through `createWorldRegistry({ catalog })` (default the built-in catalogue): `entity.place` gives a device its model kind's initial state bags, `lead.connect` checks terminals and `device.operate` checks controls against it (world v2, [ADR 0013](../decisions/0013-world-document-v2.md)). Every logged command's argument JSON Schema is frozen in `libs/domain/world-model/json-schema/command-args/`.
 
 ## View commands

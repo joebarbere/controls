@@ -7,6 +7,10 @@ import {
   type DeviceDefinition,
   type DriveType,
   drivesFit,
+  type EnclosureEntry,
+  holeFitsTradeSize,
+  knockoutHoleMm,
+  racewayPorts,
   type ModelKindDef,
   racewayOf,
   type TerminalMethodSpec,
@@ -116,6 +120,131 @@ export function checkDrive(tool: ToolDefinition, screw: readonly DriveType[], wh
   if (drivesFit(tool.drives, screw)) return null;
   const has = tool.drives.length > 0 ? tool.drives.join(', ') : 'no drive';
   return fail('wrong-drive', `${tool.title} (${has}) doesn't fit ${what} (${screw.join(' or ')})`);
+}
+
+/**
+ * `wrong-size` unless `tool`, opening `entry` by `openEntry` (a punch or a hole saw, F3.4 part 2), makes
+ * a hole that fits the entry's trade size: a punch must carry that size (`punches`), a hole saw's
+ * `boreDiameterMm` must be within `HOLE_FIT_TOLERANCE_MM` of the size's knockout hole
+ * (`KNOCKOUT_HOLES`, published punch data). An entry with no trade size (a clamp, a pryout) takes any.
+ * `null` when it fits.
+ */
+export function checkEntryHole(tool: ToolDefinition, entry: EnclosureEntry): CommandFailure | null {
+  const size = entry.tradeSize;
+  if (size === null) return null;
+  const want = `the ${size} in entry "${entry.id}" (a ${knockoutHoleMm(size).toFixed(1)} mm hole)`;
+  if (tool.punches.length > 0) {
+    if (tool.punches.includes(size)) return null;
+    return fail('wrong-size', `${tool.title} has no punch for ${want}; it punches ${tool.punches.join(', ')} in`);
+  }
+  if (tool.boreDiameterMm !== null && holeFitsTradeSize(tool.boreDiameterMm, size)) return null;
+  return fail('wrong-size', `${tool.title} cuts ${tool.boreDiameterMm ?? 0} mm, which doesn't fit ${want}`);
+}
+
+/** The bend a P3 elbow makes (degrees): every `raceway.conduitElbow` is a factory 90° elbow (F3.5 part 2). */
+export const ELBOW_BEND_DEG = 90;
+
+/** How far a pull runs through conduit (F3.4 part 2): what a fish tape has to reach. */
+export interface PullRun {
+  /** From the first `conduit` waypoint to the last (mm, not rounded): the polyline, an elbow's centreline between its ports. */
+  readonly lengthMm: number;
+  /** The total bend: {@link ELBOW_BEND_DEG} for each distinct elbow a conduit waypoint names. */
+  readonly bendDeg: number;
+  /** Those elbows' entity ids, ascending. */
+  readonly elbows: readonly EntityId[];
+}
+
+/**
+ * The centreline length of a factory elbow less the chord between its ports (mm): an elbow of bend
+ * radius R with straight legs L runs 2L + πR/2 along its centreline, while its ports are (R + L)√2
+ * apart (they sit at (D/2, 0) and (L + R + D/2, L + R) in its own frame). Exact geometry; `Math.sqrt`
+ * and `Math.PI` only (D6). 3/4 in EMT (L 64, R 114): 307.07 − 251.73 = 55.34 mm.
+ */
+export function elbowArcExcessMm(legLengthMm: number, bendRadiusMm: number): number {
+  return 2 * legLengthMm + (Math.PI * bendRadiusMm) / 2 - (bendRadiusMm + legLengthMm) * Math.sqrt(2);
+}
+
+/** Whether `a` and `b` are the two ports of `elbow` (world integer mm), in either order. */
+function elbowPorts(world: Pick<World, 'entities'>, catalog: Catalog, elbow: EntityId, a: PositionMm, b: PositionMm) {
+  const host = findEntity(world as World, elbow);
+  const device = host ? catalog.device(host.ref) : undefined;
+  if (!host || !device || device.model.kind !== 'raceway.conduitElbow') return null;
+  const ports = racewayPorts(device, host.state).map((p) => entityPointMm(host.transform, p.positionMm));
+  const [p, q] = ports;
+  if (!p || !q) return null;
+  const same = (u: PositionMm, v: PositionMm) => u.x === v.x && u.y === v.y && u.z === v.z;
+  const both = (same(a, p) && same(b, q)) || (same(a, q) && same(b, p));
+  return both ? device.model.params : null;
+}
+
+/**
+ * The conduit run of a pull route (F3.4 part 2): its length from the first to the last `conduit`
+ * waypoint along the straight segments between waypoints, except that where two consecutive waypoints
+ * are the two ports of one elbow the elbow's own centreline (2L + πR/2) replaces the chord
+ * ({@link elbowArcExcessMm}: the chord under-measures a P3 elbow by about 18 %); and its bends, one
+ * quarter bend per distinct elbow hosting a conduit waypoint. A change of direction between two sticks
+ * without an elbow isn't counted (P3 has no bending; the snapper never makes one). Pure (D6).
+ * Exported for the fish tape minigame (its length and bends) and its pre-check.
+ */
+export function pullRun(world: Pick<World, 'entities'>, catalog: Catalog, route: readonly Waypoint[]): PullRun {
+  const first = route.findIndex((w) => w.kind === 'conduit');
+  let last = -1;
+  for (const [i, w] of route.entries()) if (w.kind === 'conduit') last = i;
+  let lengthMm = 0;
+  for (let i = first + 1; first >= 0 && i <= last; i++) {
+    const p = route[i - 1].positionMm;
+    const q = route[i].positionMm;
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const dz = q.z - p.z;
+    lengthMm += Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const host = route[i].entity;
+    if (
+      route[i - 1].kind === 'conduit' &&
+      route[i].kind === 'conduit' &&
+      host !== null &&
+      route[i - 1].entity === host
+    ) {
+      const elbow = elbowPorts(world, catalog, host, p, q);
+      if (elbow) lengthMm += elbowArcExcessMm(elbow['legLengthMm'], elbow['bendRadiusMm']);
+    }
+  }
+  const elbows = new Set<EntityId>();
+  for (const w of route) {
+    if (w.kind !== 'conduit' || w.entity === null) continue;
+    const host = findEntity(world as World, w.entity);
+    if (host && catalog.device(host.ref)?.model.kind === 'raceway.conduitElbow') elbows.add(w.entity);
+  }
+  const sorted = [...elbows].sort((p, q) => p - q);
+  return { lengthMm, bendDeg: sorted.length * ELBOW_BEND_DEG, elbows: sorted };
+}
+
+/**
+ * `beyond-tool-capacity` unless the fish tape `tool` reaches the pull's conduit run (F3.4 part 2): the
+ * run no longer than its `pull.lengthMm`, its bends no more than its `pull.maxBendDeg`. `null` when it
+ * reaches (a tool with no pull reach isn't refused here: `checkTool(…, 'pull')` refused it first).
+ */
+export function checkPullReach(
+  world: Pick<World, 'entities'>,
+  catalog: Catalog,
+  route: readonly Waypoint[],
+  tool: ToolDefinition,
+): CommandFailure | null {
+  if (tool.pull === null) return null;
+  const run = pullRun(world, catalog, route);
+  if (run.lengthMm > tool.pull.lengthMm) {
+    return fail(
+      'beyond-tool-capacity',
+      `${tool.title} reaches ${tool.pull.lengthMm} mm; this conduit run is ${Math.ceil(run.lengthMm)} mm`,
+    );
+  }
+  if (run.bendDeg > tool.pull.maxBendDeg) {
+    return fail(
+      'beyond-tool-capacity',
+      `${tool.title} pushes round ${tool.pull.maxBendDeg}° of bends; this run has ${run.bendDeg}° (${run.elbows.length} elbows)`,
+    );
+  }
+  return null;
 }
 
 /** A conductor entry: its connection kind and its conductor data. */

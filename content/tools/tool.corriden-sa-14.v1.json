@@ -1,0 +1,31 @@
+{
+  "id": "tool.corriden-sa-14",
+  "version": 1,
+  "title": "Ship auger bit, 7/8 in x 18 in",
+  "brand": "Corriden",
+  "modelName": "SA-14",
+  "kind": "drill",
+  "capabilities": [{ "step": "bore", "maxAwg": null }],
+  "holes": [],
+  "dies": [],
+  "torque": null,
+  "boreDiameterMm": 22.225,
+  "drives": [],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "ship-auger-class",
+      "kind": "real-world",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "covers": ["boreDiameterMm"]
+    },
+    {
+      "id": "wood-bit-steps",
+      "kind": "game-design",
+      "citation": "game-design: a wood-boring bit bores studs (step bore; no conductor size is involved, so no size limit). It cuts no steel box wall, so it opens no enclosure entry. Whether its hole suits a stud is the bored-hole limit and the edge distance (IRC R602.6 and NFPA 70 Art. 300.4(A)(1), by number), which the commands check.",
+      "covers": ["capabilities"]
+    }
+  ],
+  "extensions": {}
+}

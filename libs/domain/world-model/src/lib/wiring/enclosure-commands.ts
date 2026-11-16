@@ -3,7 +3,7 @@ import { type AnyCommandDef, defineCommand, fail, succeed } from '@controls/comm
 import { findEntity } from '../entity-commands';
 import type { Entity, World } from '../types';
 import { EnclosureOpenEntryArgs, EntityLabelArgs } from './args';
-import { checkDrive, checkTool, ENTRY_BITS, entryOpen } from './checks';
+import { checkDrive, checkEntryHole, checkTool, ENTRY_BITS, entryOpen } from './checks';
 
 /*
  * `enclosure.openEntry` and `entity.label` (ADR 0015). An enclosure's knockouts are its commanded
@@ -23,8 +23,10 @@ function swap(before: Entity, after: Entity) {
  * `enclosure.openEntry {id, entry, tool}`: opens one entry of an enclosure (a knockout, pryout, clamp
  * or drill site) with a tool that has one of the capabilities its entry type lists (`ENTRY_TYPES`).
  * Refused: not an enclosure (`not-an-enclosure`), an entry it doesn't have (`unknown-entry`), one
- * already open (`already-open`), a tool that can't open it (`unknown-tool`, `wrong-tool`), or a driver
- * whose tip doesn't fit the entry type's drives (`wrong-drive`: a nut driver can't pry a knockout).
+ * already open (`already-open`), a tool that can't open it (`unknown-tool`, `wrong-tool`), a driver
+ * whose tip doesn't fit the entry type's drives (`wrong-drive`: a nut driver can't pry a knockout), or
+ * (F3.4 part 2) a punch or hole saw whose hole doesn't fit the entry's trade size (`wrong-size`). A drill
+ * site (a custom entry, ADR 0015) opens only by `openEntry`: a hole saw or a knockout punch.
  */
 export function enclosureOpenEntryCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<EnclosureOpenEntryArgs, World>({
@@ -51,6 +53,11 @@ export function enclosureOpenEntryCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (!otherwise && type) {
         const misfit = checkDrive(opener.value, type.drives, `a ${type.id} entry`);
         if (misfit) return misfit;
+      }
+      // Opened by cutting (a knockout punch or a hole saw, F3.4 part 2): the hole must fit the trade size.
+      if (steps.has('openEntry') && type?.opens.includes('openEntry')) {
+        const size = checkEntryHole(opener.value, enclosure.entries[index]);
+        if (size) return size;
       }
       return swap(entity, { ...entity, state: { ...entity.state, openEntries: open + ENTRY_BITS[index] } });
     },

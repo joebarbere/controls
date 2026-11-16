@@ -8,6 +8,7 @@ import {
 } from '@controls/catalog';
 import { BUILTIN_PROP_VERSION, BUILTIN_PROPS, builtinProp } from '../props';
 import type { CatalogRef } from '../types';
+import { boredHoleTooLarge } from '../wiring/framing';
 
 /*
  * The tool belt's rules (F3.4 part 1, D10, ADR 0015 "Consequences" for the UI). The belt is a player
@@ -132,9 +133,11 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
 /**
  * Whether `tool` can perform `step` on a conductor of size `awg` (an integer AWG designation, or `null`
  * when no conductor is involved). The same rule the commands check (`checkTool`): a capability with no
- * size limit reaches every size; otherwise it reaches sizes up to its `maxAwg` (smaller is thicker).
+ * size limit reaches every size; otherwise it reaches sizes up to its `maxAwg` (smaller is thicker); a
+ * bit or hole saw over the bored-hole limit can't `bore` a stud (F3.2 part 4, `BORED_HOLE_MAX`).
  */
 export function toolCan(tool: ToolDefinition, step: ToolStep, awg: number | null = null): boolean {
+  if (step === 'bore' && tool.boreDiameterMm !== null && boredHoleTooLarge(tool.boreDiameterMm)) return false;
   return tool.capabilities.some((c) => c.step === step && (awg === null || c.maxAwg === null || awg >= c.maxAwg));
 }
 
@@ -148,7 +151,8 @@ export interface DefaultTool {
 
 /**
  * The default-tool rule (ADR 0015): the first tool in `belt` (slot order) that can do `step` for `awg`,
- * else the first catalogue tool that can, by id (the newest version of that id), else `null` when no
+ * else the first catalogue tool that can, by id (the newest version of that id; for `bore` a bore-only
+ * tool first), else `null` when no
  * tool in the catalogue can. `belt` is settings `toolBelt.slots` (index 0 is slot 1). For a step that
  * turns a screw, pass the screw's `drives`: only a tool whose drive types fit one counts (`wrong-drive`
  * otherwise).
@@ -168,11 +172,18 @@ export function defaultTool(
     if (tool && suits(tool)) return { tool, ref: { id: tool.id, version: tool.version }, slot: i + 1 };
   }
   // `catalog.tools` is sorted by id, then version: the first matching id, at its newest matching version.
-  let found: ToolDefinition | null = null;
-  for (const tool of catalog.tools) {
-    if (found !== null && tool.id !== found.id) break;
-    if (suits(tool)) found = tool;
-  }
+  // For `bore`, a tool that only bores (a wood bit) comes before one that also opens entries (a hole
+  // saw), F3.4 part 2: an electrician bores a stud with an auger, not a hole saw.
+  const first = (eligible: (tool: ToolDefinition) => boolean): ToolDefinition | null => {
+    let found: ToolDefinition | null = null;
+    for (const tool of catalog.tools) {
+      if (found !== null && tool.id !== found.id) break;
+      if (eligible(tool) && suits(tool)) found = tool;
+    }
+    return found;
+  };
+  const boreOnly = (tool: ToolDefinition) => tool.capabilities.every((c) => c.step === 'bore');
+  const found = (step === 'bore' ? first(boreOnly) : null) ?? first(() => true);
   return found && { tool: found, ref: { id: found.id, version: found.version }, slot: null };
 }
 

@@ -20,6 +20,8 @@
   "torque": null,
   "boreDiameterMm": null,
   "drives": [],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "nm-stripper-class",

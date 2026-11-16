@@ -18,7 +18,7 @@ import * as z from 'zod';
  *   `fits.<mountType>` (what the device mounts on), `mounts.<id>`, `entries.<id>` and
  *   `interiorVolumeMm3` (an enclosure), `conductor.<field>` (a conductor product);
  * - cables: `conductors.<index>`, `jacket.<field>`;
- * - tools: `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`;
+ * - tools: `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`, `punches`, `pull.lengthMm`, `pull.maxBendDeg`;
  * - accessories: `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`;
  * - tables: `rows.<key>.<field>` for each sourced field.
  */

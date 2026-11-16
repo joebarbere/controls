@@ -11,6 +11,8 @@
   "torque": null,
   "boreDiameterMm": null,
   "drives": ["hex"],
+  "punches": [],
+  "pull": null,
   "sources": [
     {
       "id": "nut-driver",

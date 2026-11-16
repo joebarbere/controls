@@ -232,6 +232,8 @@ function tool(overrides: Record<string, unknown> = {}): Record<string, unknown> 
     drives: [],
     torque: null,
     boreDiameterMm: null,
+    punches: [],
+    pull: null,
     sources: source(['capabilities', 'holes']),
     extensions: {},
     ...overrides,
@@ -570,6 +572,47 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(messages({ tools: [tool({ boreDiameterMm: 22 })] }).join()).toContain(
       'bore diameter exactly when it can bore',
     );
+    // F3.4 part 2: punches and pull reach.
+    expect(messages({ tools: [tool({ pull: { lengthMm: 15240, maxBendDeg: 360 } })] }).join()).toContain(
+      'pull reach exactly when it can pull',
+    );
+    expect(messages({ tools: [tool({ punches: ['1/2'] })] }).join()).toContain('punches only if it can openEntry');
+    const opener = (extra: Record<string, unknown>) =>
+      tool({
+        capabilities: [{ step: 'openEntry', maxAwg: null }],
+        holes: [],
+        sources: source(['capabilities']),
+        ...extra,
+      });
+    expect(messages({ tools: [opener({})] }).join()).toContain('can openEntry has punches or a bore diameter');
+    expect(messages({ tools: [opener({ punches: ['1/2'] })] }).join()).toContain('punches: Has no source');
+    expect(messages({ tools: [opener({ punches: ['1/2'], sources: source(['capabilities', 'punches']) })] })).toEqual(
+      [],
+    );
+    expect(messages({ tools: [opener({ punches: ['1/2', '1/2'] })] }).join()).toContain('punches must be unique');
+    const tape = (sources: string[]) =>
+      tool({
+        capabilities: [{ step: 'pull', maxAwg: null }],
+        holes: [],
+        pull: { lengthMm: 15240, maxBendDeg: 360 },
+        sources: source(sources),
+      });
+    expect(messages({ tools: [tape(['capabilities', 'pull.lengthMm'])] }).join()).toContain(
+      'pull.maxBendDeg: Has no source',
+    );
+    expect(messages({ tools: [tape(['capabilities', 'pull'])] })).toEqual([]);
+    expect(
+      messages({
+        tools: [
+          tool({
+            capabilities: [{ step: 'pull', maxAwg: null }],
+            holes: [],
+            pull: { lengthMm: 15240, maxBendDeg: 45 },
+            sources: source(['capabilities', 'pull']),
+          }),
+        ],
+      }).join(),
+    ).toContain('quarter bends');
     const twice = tool({
       holes: [
         { id: 'h', awg: 14, stranding: 'solid' },
