@@ -793,7 +793,7 @@ flowchart LR
 - **Bags.** T_c starts at ambient when the bag's is null; a landed end at T_c. A new termination (another id) resets its end; an unlanded end keeps its degradation, state and id. Deleted members are tombstoned while their id can't be reused. The export (`SimStateExport.connections`, protocol 6) carries every member's bag and `materialiseWorld` writes it.
 - **The catalogue refuses τ < 1 s** (100 steps) at load: conductors, leads and terminal methods, from conservative bounds (ADR 0018 §3.4). The heat path lives in `@controls/catalog` for that check; sim-core re-exports it.
 - **Budget.** `sim bench`'s `tick-wired-plant` times a cadence tick's layers on 1,000 devices and 2,000 landed conductors (gated at 0.3 ms and 1 B per tick); `plant-resolve-topology-change-wired` the calibrated re-solve with the bank synced and stamping. The step runs in phases over all members so independent members' sqrt-and-divide chains overlap.
-- **Not yet** (F3.6 part 3): the connection records, the detections published as events, the heat overlay and the readouts.
+- **Published since F3.6 part 3:** the [connection records and events](#connection-records-and-events-f36-part-3-protocol-7) (protocol 7), which feed the heat overlay and the readouts.
 
 ## Degradation, end states and the failure rule (F3.6 part 2)
 
@@ -863,5 +863,3 @@ flowchart LR
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
-- **Device models** (F2.5 part 2): the fuse and breaker. F2.4's sources and F2.5's loads have theirs (above).
-- **Fuse and breaker recipes** (renderer): the fuse and the breaker have engine models but no procedural recipe yet, so they draw as unknown objects.
