@@ -719,6 +719,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -797,6 +798,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -919,6 +921,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -997,6 +1000,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1119,6 +1123,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1241,6 +1246,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1319,6 +1325,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1397,6 +1404,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1519,6 +1527,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}
@@ -1606,6 +1615,7 @@
         "endBState": "ok",
         "endBTempK": null,
         "endBTerminationId": null,
+        "fused": false,
         "insulationDamaged": false
       },
       "extensions": {}

@@ -569,7 +569,8 @@ const endKeys = (end: 'A' | 'B'): Record<string, StateKeyDef> => ({
 
 /**
  * The sim-owned bag of a connection kind (ADR 0015, "Connection state bags and their owners"): ten
- * keys shared by `lead` and, from F3.1, `conductor`, written only by the engine (`materialiseWorld`)
+ * keys shared by `lead` and, from F3.1, `conductor` (which adds an eleventh, `fused`:
+ * {@link CONDUCTOR_SIM_KEYS}), written only by the engine (`materialiseWorld`)
  * and persisted in world v3's `ConnectionV3.sim`. A lead's end keys stay at their initial values (its
  * clips have no termination node), except that a fused lead's two end states are `intermittentOpen`
  * (F3.6 part 2). Provisional until v0.4.0 (finalised by ADR 0018); after that a
@@ -596,11 +597,32 @@ export const CONNECTION_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object
 });
 
 /**
+ * A conductor's sim bag: the ten connection keys plus `fused` (the eleventh, added while world v3 is
+ * provisional, before v0.4.0): sticky, set when the conductor node reaches its metal's melting point
+ * (ADR 0018 implementation notes, F3.6 part 2's fusing rule). A fused conductor is open for good: the
+ * compiler reads it through the conductor model's `simTopologyKeys`, so re-landing an end (a new
+ * termination id, which resets that end's degradation to 1) never closes it again; only a new
+ * conductor (a new connection) does. A lead keeps the ten keys: its fused state is its two
+ * `intermittentOpen` end states, already sticky (a lead's clips are never re-landed: `lead.disconnect`
+ * deletes it).
+ */
+export const CONDUCTOR_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object.freeze({
+  ...CONNECTION_SIM_KEYS,
+  fused: key(
+    'sim',
+    'boolean',
+    z.boolean(),
+    false,
+    "Sticky: set once the conductor node reached its metal's melting point. A fused conductor is open for good: re-landing an end never closes it; only a new conductor does.",
+  ),
+});
+
+/**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
  * heater, and part 2's fuse and thermal-magnetic breaker. P3: F3.1's conductor, whose sim keys are the
- * lead's ten connection keys, F3.5's enclosure kinds (`enclosure.box`, `enclosure.panel`), F3.3's
+ * lead's ten connection keys plus `fused` (`CONDUCTOR_SIM_KEYS`), F3.5's enclosure kinds (`enclosure.box`, `enclosure.panel`), F3.3's
  * twist-on splice, and F3.5 part 2's raceways (`raceway.*`) and terminal blocks (`terminalBlock.*`);
  * adding a kind needs no `schemaVersion` bump.
  */
@@ -658,7 +680,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     requires: 'conductor',
     terminals: [],
     params: ConductorParams,
-    keys: CONNECTION_SIM_KEYS,
+    keys: CONDUCTOR_SIM_KEYS,
     description:
       'A building-wire conductor (F3.1): cut to a length, landed on terminals with wire.add, one resistance from its material, size, length and temperature plus each end’s contact.',
   },

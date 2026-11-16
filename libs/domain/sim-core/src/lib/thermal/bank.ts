@@ -67,7 +67,8 @@ import { CONNECTION_RESOLVE_MIN_A, CONNECTION_RESOLVE_RELTOL } from './constants
 /*
  * The connection thermal bank (F3.6 parts 1 and 2, D2, D7, D8, ADR 0018 §3, §5, §6, ADR 0015
  * "Connection state bags"): the continuous and protection layers of every connection of a known
- * connection kind, leads and conductors, netlisted or not. It owns their ten `sim` keys, stamps each
+ * connection kind, leads and conductors, netlisted or not. It owns their `sim` keys (a lead's ten, a
+ * conductor's eleven: the ten and `fused`), stamps each
  * netlisted connection's solve-time value, integrates its thermal nodes on the fixed absolute schedule
  * and decides its ends' states.
  *
@@ -105,9 +106,11 @@ import { CONNECTION_RESOLVE_MIN_A, CONNECTION_RESOLVE_RELTOL } from './constants
  * leaving `intermittentOpen` is a topology change; any other state or regime change a value change.
  *
  * **Failure (F3.6 part 2's rule).** A conductor or lead whose conductor node reaches its metal's
- * melting point is fused: a conductor's two landed ends are burned open (each D raised to
- * `BURNED_OPEN_OHM` / R_made), a lead's two end states become `intermittentOpen` for good (a lead's
- * only non-initial end key). `insulationDamaged` (sticky) is set when the conductor node, or a
+ * melting point is fused, open for good: a conductor's sticky `fused` key is set (the compiler reads
+ * it, so re-landing an end, which resets that end's D to 1, never closes it again; only a new
+ * conductor does) and its two landed ends are burned open (each D raised to `BURNED_OPEN_OHM` /
+ * R_made); a lead's two end states become `intermittentOpen` for good (a lead's only non-initial end
+ * key; its clips are never re-landed). `insulationDamaged` (sticky) is set when the conductor node, or a
  * conductor's hot spot, reaches the insulation's rating plus `INSULATION_DAMAGE_MARGIN_K` (a lead's
  * rating is its `insulationRatedTempK`; a bare conductor has none).
  *
@@ -126,7 +129,8 @@ import { CONNECTION_RESOLVE_MIN_A, CONNECTION_RESOLVE_RELTOL } from './constants
  * **Bags (ADR 0015's identity rules).** For a conductor end: an unlanded end's temperature is null and
  * its degradation, state and termination id are kept; a termination whose id equals the bag's
  * `end*TerminationId` continues; any other resets (temperature = the conductor's, degradation 1, the new
- * id, the state decided for D = 1). A landed end whose temperature is null starts at T_c. A conductor
+ * id, the state decided for D = 1); a conductor's `fused` is kept whatever its ends do. A landed end
+ * whose temperature is null starts at T_c. A conductor
  * whose temperature is null starts at ambient. Deleted connections keep their bags as tombstones while
  * their id can't be reused, so undoing the delete restores them.
  *
@@ -253,11 +257,15 @@ export interface ConnectionBagExport {
   readonly state: Record<string, DeviceStateValue>;
 }
 
-/** What the compiler reads of a connection's sim state (`CompileOptions.connectionSim`): its two end states. */
+/**
+ * What the compiler reads of a connection's sim state (`CompileOptions.connectionSim`): its two end
+ * states and whether it fused (a conductor's `fused`; a lead's model doesn't read it).
+ */
 export interface ConnectionTopologyView {
-  readonly [key: string]: string;
+  readonly [key: string]: string | boolean;
   readonly endAState: string;
   readonly endBState: string;
+  readonly fused: boolean;
 }
 
 type Connection = World['connections'][number];
@@ -295,6 +303,11 @@ export class ConnectionThermalBank {
   private damageK = new Float64Array(0);
   private tc = new Float64Array(0);
   private insulationDamaged = new Uint8Array(0);
+  /**
+   * Per member: 1 once its conductor node melted (sticky): a conductor's `fused` key, a lead's two
+   * `intermittentOpen` end states. The connection is open for good.
+   */
+  private fused = new Uint8Array(0);
   /** Per member: 1 if an end is in a nonlinear regime (glowing or arcing): its branch gets `iterate`. */
   private nonlinear = new Uint8Array(0);
   /** The solve-time value each `dcValue`/`acValue` wrote (scratch: never read back by the 1 % rule). */
@@ -400,11 +413,14 @@ export class ConnectionThermalBank {
     if (world.connections !== this.connectionsRef) this.rebuild(world);
   }
 
-  /** Member `i`'s sim bag now: the ten connection keys, finite numbers (allocates; never per tick). */
+  /**
+   * Member `i`'s sim bag now: a lead's ten connection keys, a conductor's eleven (the ten and `fused`),
+   * finite numbers (allocates; never per tick).
+   */
   bag(i: number): Record<string, DeviceStateValue> {
     const a = 2 * i;
     const b = a + 1;
-    return {
+    const bag: Record<string, DeviceStateValue> = {
       conductorTempK: this.tc[i],
       endATempK: this.hot[a] === 1 ? this.th[a] : null,
       endADegradation: this.degradation[a],
@@ -416,6 +432,8 @@ export class ConnectionThermalBank {
       endBState: CONNECTION_END_STATES[this.state[b]],
       insulationDamaged: this.insulationDamaged[i] === 1,
     };
+    if (this.kind[i] === KIND_CONDUCTOR) bag['fused'] = this.fused[i] === 1;
+    return bag;
   }
 
   /** Every member's bag, ascending by id (`SimStateExport.connections`). */
@@ -426,8 +444,8 @@ export class ConnectionThermalBank {
   }
 
   /**
-   * Connection `id`'s end states as the compiler reads them (`CompileOptions.connectionSim`), or
-   * `undefined` for a connection that isn't a member: one of 16 frozen objects, no allocation. A
+   * Connection `id`'s end states and `fused` as the compiler reads them (`CompileOptions.connectionSim`),
+   * or `undefined` for a connection that isn't a member: one of 32 frozen objects, no allocation. A
    * compile asks in ascending id order, so the member after the last one asked is tried first (a
    * compile of the wired plant asks 2,600 times; a binary search each was 10 % of a toggle's re-solve).
    */
@@ -436,7 +454,7 @@ export class ConnectionThermalBank {
     const i = next < this.count && this.ids[next] === id ? next : this.indexOf(id);
     if (i < 0) return undefined;
     this.viewCursor = i;
-    return TOPOLOGY_VIEWS[4 * this.state[2 * i] + this.state[2 * i + 1]];
+    return TOPOLOGY_VIEWS[16 * this.fused[i] + 4 * this.state[2 * i] + this.state[2 * i + 1]];
   }
 
   /** The member netlist branch `branch` belongs to, or −1 (not a connection's, or not a member). */
@@ -612,11 +630,11 @@ export class ConnectionThermalBank {
       if (side === 0) ra = r;
       else rb = r;
     }
-    const fusedLead = this.kind[i] === KIND_LEAD && this.state[2 * i] === END_INTERMITTENT_OPEN;
+    const fused = this.fused[i] === 1;
     view.setFloat64(at + O.conductorResistanceOhm, rc + 0, true);
     view.setFloat64(at + O.conductorTempK, this.tc[i] + 0, true);
     view.setUint8(at + O.insulationDamaged, this.insulationDamaged[i]);
-    view.setUint8(at + O.conductorState, fusedLead ? CONNECTION_CONDUCTOR_OPEN : CONNECTION_CONDUCTOR_CLOSED);
+    view.setUint8(at + O.conductorState, fused ? CONNECTION_CONDUCTOR_OPEN : CONNECTION_CONDUCTOR_CLOSED);
     if (netlisted) {
       view.setUint8(at + O.status, status);
       if (status !== READING_SOLVED_CODE) return; // no electrical field is a reading
@@ -651,7 +669,7 @@ export class ConnectionThermalBank {
       return;
     }
     view.setUint8(at + O.status, CONNECTION_RECORD_OPEN);
-    this.writeOpen(i, view, at, solution, fusedLead, endNodes, nodeIsland, islandReference);
+    this.writeOpen(i, view, at, solution, fused, endNodes, nodeIsland, islandReference);
   }
 
   /** The electrical fields of member `i`'s `open` record (see {@link writeRecord}). Allocates nothing. */
@@ -660,7 +678,7 @@ export class ConnectionThermalBank {
     view: DataView,
     at: number,
     solution: DcSolution | null,
-    fusedLead: boolean,
+    fused: boolean,
     endNodes: Int32Array,
     nodeIsland: Int32Array,
     islandReference: Int32Array,
@@ -676,7 +694,7 @@ export class ConnectionThermalBank {
     // A node's voltage is a reading when the solution holds its island as solved and referenced.
     const okA = nodes !== null && na >= 0 && islandReference[nodeIsland[na]] >= 0;
     const okB = nodes !== null && nb >= 0 && islandReference[nodeIsland[nb]] >= 0;
-    if (fusedLead) {
+    if (fused && this.kind[i] === KIND_LEAD) {
       // The gap is the lead's body; each clip half sits at its terminal.
       readings &= ~CONNECTION_READING_CONDUCTOR_DROP;
       if (okA && okB && nodeIsland[na] === nodeIsland[nb]) {
@@ -699,7 +717,18 @@ export class ConnectionThermalBank {
     // The conductor floats at the potential of a landed, closed end on a readable node.
     const closedA = this.landed[ea] === 1 && !openA && okA;
     const closedB = this.landed[eb] === 1 && !openB && okB;
-    const float = closedA ? na : closedB ? nb : -1;
+    let float = closedA ? na : closedB ? nb : -1;
+    if (fused) {
+      // A fused conductor's body is a gap too: each half floats at its own end's terminal when that end
+      // is closed, so the body's gap is a reading only with both ends closed on one island, and an
+      // open end's half (between two gaps) floats at nothing.
+      float = -1;
+      readings &= ~CONNECTION_READING_CONDUCTOR_DROP;
+      if (closedA && closedB && nodeIsland[na] === nodeIsland[nb]) {
+        view.setFloat64(at + O.conductorDropV, nodeDistance(nodes, na, nb) + 0, true);
+        readings |= CONNECTION_READING_CONDUCTOR_DROP;
+      }
+    }
     for (let side = 0; side < 2; side++) {
       const e = ea + side;
       const node = side === 0 ? na : nb;
@@ -1078,16 +1107,18 @@ export class ConnectionThermalBank {
   }
 
   /**
-   * Member `i`'s conductor node reached its metal's melting point (F3.6 part 2's fusing rule): a
-   * conductor's landed ends are burned open (D raised to `BURNED_OPEN_OHM` / R_made, decided open at the
-   * protection step), a lead's two end states become `intermittentOpen` for good.
+   * Member `i`'s conductor node reached its metal's melting point (F3.6 part 2's fusing rule): it is
+   * fused, open for good (a topology change). A conductor's sticky `fused` is set and its landed ends
+   * are burned open (D raised to `BURNED_OPEN_OHM` / R_made, decided open at the protection step); a
+   * lead's two end states become `intermittentOpen` for good.
    */
   private fuse(i: number): void {
+    if (this.fused[i] === 1) return;
+    this.fused[i] = 1;
+    this.pending[0] = 1;
     if (this.kind[i] === KIND_LEAD) {
-      if (this.state[2 * i] === END_INTERMITTENT_OPEN) return;
       this.state[2 * i] = END_INTERMITTENT_OPEN;
       this.state[2 * i + 1] = END_INTERMITTENT_OPEN;
-      this.pending[0] = 1;
       return;
     }
     for (let e = 2 * i; e < 2 * i + 2; e++) {
@@ -1203,6 +1234,8 @@ export class ConnectionThermalBank {
       termId: this.termId,
       state: this.state,
       insulationDamaged: this.insulationDamaged,
+      fused: this.fused,
+      kind: this.kind,
     };
     const members: { readonly connection: Connection; readonly line: LineStatic }[] = [];
     for (const connection of world.connections) {
@@ -1265,6 +1298,14 @@ export class ConnectionThermalBank {
         const e = 2 * i + side;
         const end = side === 0 ? connection.a : connection.b;
         this.initEnd(e, side, line, end, live, bag, previous, tc, entities, landed, world.seed, bucket);
+      }
+      // Sticky (ADR 0018 implementation notes): a conductor's `fused` survives any re-landing; a lead's
+      // fused state is its two open end states.
+      if (line.kind === KIND_LEAD) {
+        this.fused[i] =
+          this.state[2 * i] === END_INTERMITTENT_OPEN && this.state[2 * i + 1] === END_INTERMITTENT_OPEN ? 1 : 0;
+      } else {
+        this.fused[i] = live >= 0 ? previous.fused[live] : bag?.['fused'] === true ? 1 : 0;
       }
       this.updateNonlinear(i);
     }
@@ -1438,6 +1479,7 @@ export class ConnectionThermalBank {
     this.damageK = new Float64Array(n);
     this.tc = new Float64Array(n);
     this.insulationDamaged = new Uint8Array(n);
+    this.fused = new Uint8Array(n);
     this.nonlinear = new Uint8Array(n);
     this.stampOhm = new Float64Array(n);
     this.stampAmps = new Float64Array(n);
@@ -1468,10 +1510,14 @@ export class ConnectionThermalBank {
   }
 }
 
-/** Every (end A, end B) state pair as the compiler's view, by `4 × a + b` (frozen, shared). */
+/** Every (fused, end A, end B) as the compiler's view, by `16 × fused + 4 × a + b` (frozen, shared). */
 const TOPOLOGY_VIEWS: readonly ConnectionTopologyView[] = Object.freeze(
-  Array.from({ length: 16 }, (_, k) =>
-    Object.freeze({ endAState: CONNECTION_END_STATES[k >> 2], endBState: CONNECTION_END_STATES[k & 3] }),
+  Array.from({ length: 32 }, (_, k) =>
+    Object.freeze({
+      endAState: CONNECTION_END_STATES[(k >> 2) & 3],
+      endBState: CONNECTION_END_STATES[k & 3],
+      fused: k >= 16,
+    }),
   ),
 );
 
@@ -1493,6 +1539,8 @@ interface PreviousState {
   readonly termId: Float64Array;
   readonly state: Uint8Array;
   readonly insulationDamaged: Uint8Array;
+  readonly fused: Uint8Array;
+  readonly kind: Uint8Array;
 }
 
 /** A retired member's bag (a tombstone), from the arrays it lived in. */
@@ -1508,5 +1556,6 @@ function previousBag(p: PreviousState, i: number): StateBag {
     ...end(2 * i, 'endA'),
     ...end(2 * i + 1, 'endB'),
     insulationDamaged: p.insulationDamaged[i] === 1,
+    ...(p.kind[i] === KIND_CONDUCTOR ? { fused: p.fused[i] === 1 } : {}),
   };
 }

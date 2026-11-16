@@ -75,7 +75,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
   });
   const conductor = (id: number, a: object | null, b: object | null, sim: object = {}) => ({
     ...base,
-    sim: { ...LEAD_SIM_BAG_V3, ...sim },
+    sim: { ...LEAD_SIM_BAG_V3, fused: false, ...sim },
     id,
     ref: THHN_14,
     a,

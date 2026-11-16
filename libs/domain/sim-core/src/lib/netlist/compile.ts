@@ -65,8 +65,8 @@ export interface CompileOptions {
   readonly sim?: (entity: number) => StateBag | undefined;
   /**
    * The engine's sim-owned state of a connection (ADR 0015, F3.6 part 2): only the keys its model lists
-   * in `simTopologyKeys` (`endAState`, `endBState`) are read, and only whether one is
-   * `intermittentOpen` (the connection is then absent, `intermittent-open`). When it returns
+   * in `simTopologyKeys` (`endAState`, `endBState`, a conductor's `fused`) are read, and only whether one
+   * is `intermittentOpen` or `fused` is `true` (the connection is then absent, `intermittent-open`). When it returns
    * `undefined`, or is left out, the world's own `sim` bag is used (right at a start or a load).
    */
   readonly connectionSim?: (connection: number) => Readonly<Record<string, unknown>> | undefined;
@@ -392,7 +392,8 @@ export class NetlistCompiler {
         if (a === ABSENT_END || b === ABSENT_END) reason = 'absent-end';
         else if (a < 0 || b < 0) reason = 'unknown-terminal';
         else if (openEnd(result.model, options.connectionSim?.(connection.id) ?? connection.sim)) {
-          // An end that is open (intermittent, burned open, a fused lead) takes the branch out (ADR 0015).
+          // An end that is open (intermittent, burned open, a fused lead) or a fused conductor takes the
+          // branch out (ADR 0015, ADR 0018 implementation notes).
           reason = 'intermittent-open';
         }
       }
@@ -759,10 +760,16 @@ function plantTerminal(entry: EntityCacheEntry | null, terminal: number): number
 
 const NO_SIM: StateBag = Object.freeze({});
 
-/** Whether a connection's sim state has an `intermittentOpen` end, read through its model's `simTopologyKeys`. */
+/**
+ * Whether a connection's sim state opens it, read through its model's `simTopologyKeys`: an end that is
+ * `intermittentOpen`, or a sticky flag that is `true` (a conductor's `fused`: open for good).
+ */
 function openEnd(model: ConnectionNetlistModel, sim: Readonly<Record<string, unknown>>): boolean {
   const keys = model.simTopologyKeys;
-  for (let i = 0; i < keys.length; i++) if (sim[keys[i]] === 'intermittentOpen') return true;
+  for (let i = 0; i < keys.length; i++) {
+    const value = sim[keys[i]];
+    if (value === 'intermittentOpen' || value === true) return true;
+  }
   return false;
 }
 

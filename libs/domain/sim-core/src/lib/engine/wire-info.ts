@@ -24,8 +24,8 @@ import { SimEngine, type SimConnectionRecord, type SimEngineOptions } from './en
  * connection's `sim` bag (ADR 0011's F3.6 part 1 amendment). A field that is no reading says so: an
  * electrical field whose `readings` bit is clear prints `no reading`, never 0. An `open` connection
  * (not netlisted) has 0 A; a gap prints the voltage across it (`gap … V`, or `gap no reading`): an
- * `intermittentOpen` end prints `open` instead of its closed contact's resistance, and a fused lead
- * `conductor open (fused)`. An end whose state is `none` prints nothing more.
+ * `intermittentOpen` end prints `open` instead of its closed contact's resistance, and a fused lead or
+ * conductor `conductor open (fused)`. An end whose state is `none` prints nothing more.
  *
  * ```text  (the bad-termination scenario's loose conductor at 600 s)
  * wire.info 2 tick 600000

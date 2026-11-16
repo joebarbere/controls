@@ -46,7 +46,7 @@ import { workshopWorld } from './testing/workshop';
  * the hot spot stays below the oxidation onset), and whether `terminationOverheat` and
  * `insulationDamaged` happen follows from the computed T_h.
  */
-export const BAD_TERMINATION_HASH = 'f630358e4fa9070416b89e27b7692165c8f89c92aebe7c2ee0cee02110488288';
+export const BAD_TERMINATION_HASH = '3cda7e00ca7e394e3a17961e6ce9f473f500b90b50269d503f9d3176303df9a6';
 export const BAD_TERMINATION_SNAPSHOT_HASH = 'aeb5eb4375e16e6a84af5a9205dc19aacd3ca3da872e64efeec0bacdba081439';
 
 /**

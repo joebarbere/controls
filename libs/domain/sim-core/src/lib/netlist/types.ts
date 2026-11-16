@@ -104,8 +104,9 @@ export type AbsentConnectionReason =
   /** An end is unlanded, lying free (world v3, ADR 0015): wired to nothing. */
   | 'unlanded'
   /**
-   * An end's state is `intermittentOpen` (ADR 0015, F3.6 part 2): an intermittent end in an open
-   * bucket, an end burned open, or a fused conductor or lead.
+   * The connection is open (ADR 0015, F3.6 part 2): an end's state is `intermittentOpen` (an
+   * intermittent end in an open bucket, an end burned open, a fused lead), or a conductor's sticky
+   * `fused` is `true` (its node melted: open for good, whatever its ends).
    */
   | 'intermittent-open';
 
