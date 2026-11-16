@@ -33,6 +33,9 @@ const MODE_LABELS: Record<InteractionMode, string> = { walk: 'Walk', work: 'Work
   styles: `
     .hud {
       display: grid;
+      /* Long catalogue titles wrap rather than widen the HUD (and the sim controls under it, which
+         take the overlay's width) into the middle of the viewport, where view.focus frames a device. */
+      max-width: 18rem;
       gap: var(--ctl-space-1);
       padding: var(--ctl-space-2) var(--ctl-space-3);
       border-radius: var(--ctl-radius);

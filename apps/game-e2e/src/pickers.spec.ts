@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { terminalOnPage } from './support/aim';
 import { expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
@@ -43,19 +44,12 @@ const routingEvents = (page: Page) => page.evaluate(() => (window as unknown as 
 const markers = (page: Page) =>
   page.evaluate(() => (window as unknown as Win).__controlsViewport?.routingMarkers().map((m) => m.kind) ?? []);
 
-/** The page position of a terminal's entry point. */
-async function terminalOnPage(page: Page, ref: TerminalRef): Promise<{ x: number; y: number }> {
-  const box = await page.locator('ctl-viewport canvas').boundingBox();
-  const p = await page.evaluate((r) => (window as unknown as Win).__controlsViewport?.projectTerminal(r) ?? null, ref);
-  if (!box || !p) throw new Error('terminal not on the canvas');
-  return { x: box.x + p.x, y: box.y + p.y };
-}
-
 test('terminals are picked in screen space, the zoom is offered under 24 px, and routing reports picks (F3.2 part 3)', async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1280, height: 720 }); // the mouse aims at projected pixels
   await page.goto('/?e2e=1&renderer=webgl2');
   await startSandbox(page);
   await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
@@ -78,8 +72,8 @@ test('terminals are picked in screen space, the zoom is offered under 24 px, and
     w.__controlsViewport?.onRouting((e) => w.__routingEvents?.push(e));
     w.__controlsViewport?.setRouting({ ...spool, from: null, waypoints: [] });
   }, SPOOL);
-  const far = await terminalOnPage(page, { entity: 1, terminal: 'a' });
-  await page.mouse.move(far.x, far.y + 3);
+  const far = await terminalOnPage(page, { entity: 1, terminal: 'a' }, 0, 3);
+  await page.mouse.move(far.x, far.y);
   await idle(page);
   await expect
     .poll(async () => {
@@ -93,12 +87,12 @@ test('terminals are picked in screen space, the zoom is offered under 24 px, and
   await idle(page);
   const zoomed = await pitchOf(page, 1);
   expect(zoomed === null || zoomed >= 24).toBe(true);
-  const a = await terminalOnPage(page, { entity: 1, terminal: 'a' });
-  await page.mouse.move(a.x + 4, a.y);
+  const a = await terminalOnPage(page, { entity: 1, terminal: 'a' }, 4);
+  await page.mouse.move(a.x, a.y);
   await idle(page);
   await expect.poll(async () => (await terminalView(page))?.hit ?? null).toStrictEqual({ entity: 1, terminal: 'a' });
   expect(await markers(page)).toStrictEqual(['pick']);
-  await page.mouse.click(a.x + 4, a.y);
+  await page.mouse.click(a.x, a.y);
   await expect
     .poll(() => routingEvents(page))
     .toStrictEqual([{ kind: 'terminal', end: { entity: 1, terminal: 'a' }, source: 'pointer', proposal: null }]);

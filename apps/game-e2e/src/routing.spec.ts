@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { expectOnCanvas, terminalOnPage } from './support/aim';
 import { expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
@@ -90,21 +91,6 @@ async function wiringSandbox(page: Page): Promise<void> {
   await page.keyboard.press('Backquote'); // close the console; focus returns to the canvas
   await page.locator('ctl-viewport canvas').focus();
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
-}
-
-/** The page position of a terminal's entry point, checked to be over the canvas (not the HUD). */
-async function terminalOnPage(page: Page, ref: TerminalRef): Promise<{ x: number; y: number }> {
-  await idle(page);
-  const box = await page.locator('ctl-viewport canvas').boundingBox();
-  const p = await page.evaluate(
-    (r) => (window as unknown as Hooks).__controlsViewport?.projectTerminal(r) ?? null,
-    ref,
-  );
-  if (!box || !p) throw new Error('terminal not on the canvas');
-  const at = { x: box.x + p.x, y: box.y + p.y };
-  const over = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName ?? null, at);
-  expect(over, `terminal ${ref.entity}/${ref.terminal} is under an overlay`).toBe('CANVAS');
-  return at;
 }
 
 const status = (page: Page) => page.getByTestId('routing-status');
@@ -222,7 +208,9 @@ test('Backspace removes the last waypoint, then the first terminal; Escape cance
   await expect(viewport).toHaveAttribute('data-routing', 'started');
   // A click on the backplate, off every terminal: a waypoint.
   const box = (await page.locator('ctl-viewport canvas').boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
-  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.5);
+  const plate = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.5 };
+  await expectOnCanvas(page, plate, 'the backplate point');
+  await page.mouse.click(plate.x, plate.y);
   await expect(status(page)).toHaveText(/Waypoint 1 added \(\w+ waypoint\)\./);
   await page.keyboard.press('Backspace');
   await expect(status(page)).toHaveText('Waypoint removed; 0 left.');
