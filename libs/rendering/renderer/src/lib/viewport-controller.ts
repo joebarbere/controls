@@ -797,6 +797,9 @@ export class ViewportController {
     if (session === this.routingSession) return;
     if (session && this.moving) this.endMove();
     this.routingSession = session;
+    // A cable's gesture (entries) picks no terminal: a keyboard terminal left by a conductor's gesture
+    // (a belt slot switched mid-route) would keep its focus marker, so it goes too.
+    if (session?.ends === 'entries' && !this.terminalPickingOn) this.keyTerminalValue = null;
     if (!session) {
       // The keyboard terminal belongs to the gesture: ending it (Escape, another slot, the palette's
       // routing.cancel) drops it and its marker, unless terminal picking stays on for another tool.
@@ -1376,7 +1379,7 @@ export class ViewportController {
     if (session && world) {
       const from = session.from && terminalPlace(world, this.catalog, session.from);
       if (from && from.ok) list.push({ kind: 'from', atMm: from.point });
-      else if (session.startMm) list.push({ kind: 'from', atMm: session.startMm });
+      else if (session.from === null && session.startMm) list.push({ kind: 'from', atMm: session.startMm });
       for (const w of session.waypoints) list.push({ kind: 'waypoint', atMm: w.positionMm });
       const next = this.routingView?.next;
       if (next) list.push({ kind: 'next', atMm: next.positionMm });

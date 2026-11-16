@@ -13,8 +13,10 @@ import { startSandbox } from './support/sandbox';
  *   `cable.add` with the default 200 mm tails;
  * - the strip prompt that follows: both ends stripped to the most a box allows (193 mm), one
  *   `cable.strip` per end (one more is refused inside the prompt);
- * - landing: the palette's `wiring.land` on the black conductor, then each terminal pick's prompt
- *   (Next, Land) logs one `wire.land`; the white and the bare EGC follow by themselves.
+ * - landing: the palette's `wiring.land` starts on the black conductor (then Escape stops it); a click
+ *   on the knockout's tails (head-on they line up, and the bare EGC is in front) selects the bare one
+ *   and L lands it; each terminal pick's prompt (Next, Land) logs one `wire.land`, and the black and
+ *   the white follow by themselves.
  *
  * The full logged entry list and `world.hash` are pinned, and the world commands typed into the
  * console of a fresh sandbox reach the same hash. Pixel-aimed, so 1280 × 720 and every click checked
@@ -22,7 +24,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the run (pinned from this spec; the console twin below reaches it too). */
-const RUN_HASH = '3bda3b97aca57389423af776a2ebadc1f0de47ac4ee901f3b7f91a155f377971';
+const RUN_HASH = '73f1600bbce57a781ce671395307724b46c7286420c0ede983a76c1ca2a68f2d';
 
 const NMB = 'cable.sorrelby-nmb-14-2';
 const SPOOL_BUTTON = '5: NM-B 14/2 with ground, copper, 600 V (spool)';
@@ -75,7 +77,7 @@ const RUN_LOG = [
   `cable.strip --id 1 --end b --jacketMm 193 --tool ${ref('tool.veltmark-ws-nm12')}`,
   'view.focus --target entity-2',
   'view.focus --target entity-4',
-  ...[1, 2, 3].map(
+  ...[3, 1, 2].map(
     (id) => `wire.land --id ${id} --end b --at {"entity":${id + 2},"terminal":"b","termination":${TERMINATION}}`,
   ),
 ];
@@ -83,7 +85,11 @@ const RUN_LOG = [
 type Vec = { x: number; y: number; z: number };
 type Entry = { id: string; args: Record<string, unknown> };
 type Hooks = {
-  __controlsViewport?: { whenIdle(): Promise<void>; projectMm(p: Vec): { x: number; y: number } | undefined };
+  __controlsViewport?: {
+    whenIdle(): Promise<void>;
+    projectMm(p: Vec): { x: number; y: number } | undefined;
+    state: { selectedWire: { kind: string; id: number } | null };
+  };
   __controlsSession?: { entries(): readonly Entry[]; hash(): Promise<string> };
 };
 
@@ -205,7 +211,8 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await page.keyboard.press('Escape');
   await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
 
-  // Frame the panel, then start landing the black conductor (wire 1) from the palette, keyboard only.
+  // Frame the panel. The palette starts landing a conductor by number, keyboard only (the black, wire 1);
+  // Escape stops it again, with nothing logged.
   await page.keyboard.press('Backquote');
   await expect(page.getByRole('textbox', { name: 'Console input' })).toBeFocused();
   await runLogged(page, 'view.focus --target entity-2', (await entries(page)).length);
@@ -225,6 +232,24 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await expect(canvas).toBeFocused();
   await expect(status).toContainText('Landing the black conductor 1 of cable 1 (wire 1)');
   await expect(viewport).toHaveAttribute('data-routing', 'armed');
+  await page.keyboard.press('Escape');
+  await expect(viewport).not.toHaveAttribute('data-routing', /.+/);
+
+  // A click on the tails above the bottom knockout: head-on they line up one behind the other, and the
+  // front one (the bare EGC, wire 3) is picked over the tails behind it and the panel behind them all,
+  // on them or a few pixels beside them. L on the selected conductor lands it.
+  const tail = await onPage(page, { x: -810, y: 300, z: 82 }, 'the tails above the bottom knockout');
+  await page.mouse.click(tail.x + 2, tail.y);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.state.selectedWire ?? null))
+    .toStrictEqual({ kind: 'connection', id: 3 });
+  // The UI publishes `selection.connectionId` (L's `when`) from an effect after the renderer's state,
+  // which this hook reads first: an L pressed in between does nothing, so press it until it lands.
+  await expect(async () => {
+    await page.keyboard.press('KeyL');
+    await expect(status).toContainText('Landing the bare conductor 3 of cable 1 (wire 3)', { timeout: 500 });
+  }).toPass();
+  await expect(viewport).toHaveAttribute('data-routing', 'armed');
 
   // The blocks' terminals are a few pixels apart here: frame block 4 with Z, then pick each bottom clamp.
   const crowded = await terminalOnPage(page, { entity: 4, terminal: 'b' });
@@ -233,9 +258,9 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await page.keyboard.press('KeyZ');
   await expect(viewport).toHaveAttribute('data-focus', 'entity-4');
   for (const [wire, block, next] of [
+    [3, 5, 'black'],
     [1, 3, 'white'],
-    [2, 4, 'bare'],
-    [3, 5, null],
+    [2, 4, null],
   ] as const) {
     const t = await terminalOnPage(page, { entity: block, terminal: 'b' });
     await page.mouse.click(t.x, t.y);

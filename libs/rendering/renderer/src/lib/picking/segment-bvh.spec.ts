@@ -1,5 +1,12 @@
 import fc from 'fast-check';
-import { emptySegmentHit, rayToSegment, SegmentBvh, type SegmentRayHit, WIRE_PICK_MIN_RADIUS_PX } from './segment-bvh';
+import {
+  emptySegmentHit,
+  rayToSegment,
+  SegmentBvh,
+  type SegmentRayHit,
+  WIRE_PICK_MIN_RADIUS_PX,
+  WIRE_PICK_SCREEN_STEP_PX,
+} from './segment-bvh';
 
 /** One CSS px per mm of depth for a 45° vertical fov on a 720 px canvas: 2 tan(22.5°) / 720. */
 const PX_ANGLE = (2 * Math.tan(Math.PI / 8)) / 720;
@@ -88,7 +95,34 @@ describe('SegmentBvh (ADR 0017 §9)', () => {
     expect(down(b, 0, -0.9).segment).toBe(0);
   });
 
+  it('wires lined up along the ray (a cable’s tails end-on): the front one, on it or beside it, in any order', () => {
+    const px = PX_ANGLE * 1000;
+    // Three tails 2.6 mm apart in depth, straight up at x = 0, seen from z = 1000 (the bottom knockout's
+    // three conductors seen head-on, F3.2 part 4). Bake order front-last, as a cable's tails are.
+    const tails: [number, number, number, number, number, number][] = [
+      [0, -100, -5.2, 0, 100, -5.2],
+      [0, -100, -2.6, 0, 100, -2.6],
+      [0, -100, 0, 0, 100, 0],
+    ];
+    for (const order of [tails, [...tails].reverse(), [tails[1], tails[0], tails[2]]]) {
+      const b = bvh(order);
+      const front = order.indexOf(tails[2]);
+      expect(down(b, 0.3, 0)).toMatchObject({ segment: front, exact: true });
+      // Beside them (widened only), their screen distances differ by rounding only: still the front one.
+      for (const offset of [1.3, 2.2, 3.6])
+        expect(down(b, offset * px, 7)).toMatchObject({ segment: front, exact: false });
+    }
+    // A quarter pixel or more nearer on screen still wins over a wire in front.
+    const b = bvh([
+      [0.5 * px, -100, -50, 0.5 * px, 100, -50],
+      [0, -100, 0, 0, 100, 0],
+    ]);
+    expect(down(b, 3 * px, 0).segment).toBe(0);
+    expect(WIRE_PICK_SCREEN_STEP_PX).toBe(0.25);
+  });
+
   it('property: the BVH answers exactly what testing every segment answers, for any ray', () => {
+    const step = (offsetPx: number) => Math.floor(offsetPx / 0.25);
     const c = fc.integer({ min: -300, max: 300 });
     const segment = fc.tuple(c, c, c, c, c, c);
     const o = fc.integer({ min: -1000, max: 1000 });
@@ -130,8 +164,8 @@ describe('SegmentBvh (ADR 0017 §9)', () => {
                 ? hit.exact
                 : hit.exact
                   ? hit.depthMm < best.depthMm || (hit.depthMm === best.depthMm && i < best.segment)
-                  : hit.offsetPx < best.offsetPx ||
-                    (hit.offsetPx === best.offsetPx &&
+                  : step(hit.offsetPx) < step(best.offsetPx) ||
+                    (step(hit.offsetPx) === step(best.offsetPx) &&
                       (hit.depthMm < best.depthMm || (hit.depthMm === best.depthMm && i < best.segment))));
             if (better) best = hit;
           });

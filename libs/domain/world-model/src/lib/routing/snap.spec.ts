@@ -112,6 +112,32 @@ describe('snapWaypoint (ADR 0017)', () => {
     expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2590, 500, -2990)).kind).toBe('free');
   });
 
+  it('a cursor on or in the stud wall snaps to studs as one at mid-depth does; one in front is measured where it is (property)', () => {
+    const world = { ...panel, fixtures: [studWall] };
+    const options = { kinds: ['staple', 'bore'] as const, boreTool: BIT };
+    // The wall spans x −3000 … 1915 and y 0 … 2440, its face at z = −3000 and its studs 89 mm deep.
+    const u = fc.integer({ min: -3000, max: -3000 + 1200 });
+    const v = fc.integer({ min: 0, max: 2440 });
+    fc.assert(
+      fc.property(u, v, fc.integer({ min: -88, max: 0 }), (x, y, w) => {
+        const midDepth = snapWaypoint(world, BUILTIN_CATALOG, at(x, y, -3000 - BORE_DEPTH_MM), options);
+        const got = snapWaypoint(world, BUILTIN_CATALOG, at(x, y, -3000 + w), options);
+        // A free waypoint stays at the cursor itself; a captured one is the same staple or bore.
+        if (midDepth.kind === 'free') expect(got).toMatchObject({ kind: 'free', positionMm: at(x, y, -3000 + w) });
+        else expect(got).toStrictEqual(midDepth);
+      }),
+    );
+    // In front of the face the plain distance counts: 40 mm straight out from a staple is the limit.
+    fc.assert(
+      fc.property(u, v, fc.integer({ min: 1, max: 60 }), (x, y, out) => {
+        const snapped = snapWaypoint(world, BUILTIN_CATALOG, at(x, y, -3000 + out), options);
+        if (snapped.kind === 'free') return;
+        const p = snapped.positionMm;
+        expect((p.x - x) ** 2 + (p.y - y) ** 2 + (p.z + 3000 - out) ** 2).toBeLessThanOrEqual(40 * 40);
+      }),
+    );
+  });
+
   it('gives integer points within the capture distance, a captured one on its host’s axis (property)', () => {
     // Fractional cursors as a ray hit gives them, mostly near a duct (mapped draws, never filtered).
     const paths = racewayPaths(panel, BUILTIN_CATALOG);

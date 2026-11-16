@@ -1,7 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { bakeWorldRoutes, proposeRoute, type World } from '@controls/world-model';
-import { ROUTING_PANEL_REFS, routingPanelBus, rowA, rowB } from '@controls/world-model/testing';
+import { migrateWorld } from '@controls/save-format';
+import {
+  bakeCableEnds,
+  bakeWorldRoutes,
+  createWorldBus,
+  createWorldRegistry,
+  proposeRoute,
+  type World,
+} from '@controls/world-model';
+import { cableRunBus, ROUTING_PANEL_REFS, routingPanelBus, rowA, rowB } from '@controls/world-model/testing';
 import { ViewportController, type RoutingEvent, type RoutingSession } from './viewport-controller';
 
 /*
@@ -378,6 +388,20 @@ describe('a cable gesture between entries (F3.2 part 4)', () => {
     controller.dispose();
   });
 
+  it('drops a keyboard terminal a conductor’s gesture left (no stale focus marker)', () => {
+    const { controller } = setup();
+    controller.setRouting(session());
+    expect(controller.setKeyTerminal({ entity: rowA(0), terminal: 'a' })).toBe(true);
+    controller.update(0);
+    expect(controller.routingMarkers().map((m) => m.kind)).toContain('focus');
+    controller.setRouting(cable());
+    controller.update(0);
+    expect(controller.state.keyTerminal).toBeNull();
+    expect(controller.routingMarkers()).toStrictEqual([]);
+    controller.dispose();
+    expect(controller.routingResourceCount).toBe(0);
+  });
+
   it('Enter reports `enter`, and the keyboard point is drawn with the focus marker', () => {
     const { canvas, controller, events } = setup();
     controller.setRouting({ ...cable(), keyPointMm: { x: 100, y: 200, z: 30 } });
@@ -440,6 +464,121 @@ describe('wire picking (ADR 0017 §9)', () => {
     controller.syncWorld(bus.state);
     expect(controller.state.selectedWire).toBeNull();
     expect(controller.wireGraph().highlight.selected).toBeNull();
+    controller.dispose();
+  });
+});
+
+describe('picking a cable conductor’s tail (F3.2 part 4)', () => {
+  const ref = (id: string) => ({ id, version: 1 });
+  /**
+   * `apps/game-e2e/src/cables.spec.ts`'s run on the workshop's stud wall up to the strip: the panel's
+   * bottom knockout feeds three tails straight up at x = −810, 2.6 mm apart in depth, so from the
+   * front (view.focus on the panel) they line up one behind the other with the panel's backplate
+   * behind them.
+   */
+  const stripped = (): World => {
+    const json: unknown = JSON.parse(
+      readFileSync(resolve(import.meta.dirname, '../../../../../content/levels/workshop.json'), 'utf8'),
+    );
+    const loaded = migrateWorld(json);
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    const bus = createWorldBus(loaded.value, createWorldRegistry({ catalog: BUILTIN_CATALOG }));
+    const screwdriver = ref('tool.veltmark-sd-2');
+    const stripper = ref('tool.veltmark-ws-nm12');
+    const staple = (y: number) => ({
+      kind: 'staple',
+      positionMm: { x: -835, y, z: -65 },
+      entity: null,
+      fixture: 'stud-wall',
+      tool: null,
+    });
+    const block = (id: string, x: number) => ({
+      ref: ref(id),
+      positionMm: { x, y: 351, z: 1 },
+      mountedOn: { entity: 2, mount: 'rail-2' },
+    });
+    const steps: [string, Record<string, unknown>][] = [
+      ['entity.place', { ref: ref('box.tinmoor-2g-nm'), positionMm: { x: -835, y: -150, z: -21 } }],
+      ['enclosure.openEntry', { id: 1, entry: 'clamp-top-1', tool: screwdriver }],
+      ['entity.place', { ref: ref('panel.pellmoor-din-400x500'), positionMm: { x: -1010, y: 200, z: -21 } }],
+      ['enclosure.openEntry', { id: 2, entry: 'ko-bottom-2', tool: screwdriver }],
+      ['entity.place', block('tb.quennick-st4', -819)],
+      ['entity.place', block('tb.quennick-st4', -813)],
+      ['entity.place', block('tb.quennick-pe4', -807)],
+      [
+        'cable.add',
+        {
+          ref: ref('cable.sorrelby-nmb-14-2'),
+          a: { entity: 1, entry: 'clamp-top-1' },
+          b: { entity: 2, entry: 'ko-bottom-2' },
+          route: [staple(0), staple(130)],
+          lengthMm: 818,
+          tailsMm: { a: 200, b: 200 },
+          tool: ref('tool.veltmark-dc-8'),
+        },
+      ],
+      ['cable.strip', { id: 1, end: 'a', jacketMm: 193, tool: stripper }],
+      ['cable.strip', { id: 1, end: 'b', jacketMm: 193, tool: stripper }],
+    ];
+    for (const [id, args] of steps) {
+      const result = bus.exec(id, args);
+      if (!result.ok) throw new Error(`${id}: ${result.error.message}`);
+    }
+    return bus.state;
+  };
+
+  /** The canvas px of the point `t` of the way along tail `connection` at cable end `end`. */
+  const alongTail = (controller: ViewportController, world: World, end: 'a' | 'b', connection: number, t: number) => {
+    const tail = bakeCableEnds(world, BUILTIN_CATALOG)
+      .find((e) => e.end === end)
+      ?.tails.find((x) => x.connection === connection);
+    if (!tail) throw new Error(`no tail ${connection}:${end}`);
+    const p = tail.points;
+    const n = p.length - 3;
+    const q = (k: number) => Math.round((p[k] + t * (p[n + k] - p[k])) / 10);
+    return controller.projectMm({ x: q(0), y: q(1), z: q(2) });
+  };
+
+  const framed = (world: World, target: string) => {
+    const s = setup(world);
+    expect(s.controller.focus(target)).toBe(true);
+    while (s.controller.update(1 / 60)) {
+      /* settle */
+    }
+    s.controller.camera.updateMatrixWorld();
+    return s;
+  };
+
+  it('head-on, the front tail of a knockout’s three is hovered and selected over the panel behind it', () => {
+    const world = stripped();
+    const { controller, hover, click } = framed(world, 'entity-2');
+    // Black (1), white (2) and bare (3) line up from the back; the bare one is in front.
+    for (const t of [0.1, 0.5, 0.9]) {
+      const p = alongTail(controller, world, 'b', 1, t);
+      hover(p.x, p.y);
+      expect(controller.state.hoveredWire).toStrictEqual({ kind: 'connection', id: 3 });
+      expect(controller.state.hovered).toBeNull();
+      // Beside it (within the 4 px target, off the insulation): still the front tail, never a rear one.
+      for (const dx of [-3, 3]) {
+        hover(p.x + dx, p.y);
+        expect(controller.state.hoveredWire).toStrictEqual({ kind: 'connection', id: 3 });
+      }
+    }
+    const p = alongTail(controller, world, 'b', 2, 0.5);
+    click(p.x, p.y);
+    expect(controller.state.selectedWire).toStrictEqual({ kind: 'connection', id: 3 });
+    expect(controller.state.selected).toBeNull();
+    controller.dispose();
+  });
+
+  it('a tail behind a body in front of it is not picked (the box’s wall hides end a’s tails)', () => {
+    // cableRunBus: end a's tails run down inside the box (entity 1), behind its wall from the panel's framing.
+    const world = cableRunBus({ strip: { a: 150, b: 250 } }).state;
+    const { controller, hover } = framed(world, 'entity-2');
+    const p = alongTail(controller, world, 'a', 1, 0.3);
+    hover(p.x, p.y);
+    expect(controller.state.hoveredWire).toBeNull();
+    expect(controller.state.hovered?.entityId).toBe(1);
     controller.dispose();
   });
 });
