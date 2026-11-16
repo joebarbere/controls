@@ -149,7 +149,11 @@ describe('the cable gesture (F3.2 part 4)', () => {
     session.exec('toolbelt.select', { slot: 5 });
     TestBed.tick();
     expect(renderer.current).toMatchObject({ ref: NMB, ends: 'entries', from: null, startMm: null, waypoints: [] });
-    expect(renderer.current?.snap?.kinds).toStrictEqual(['duct', 'conduit', 'staple']); // no drill bit: no bores
+    // No bit on the belt: the default-tool rule's bore-only bit (the 3/4 in ship auger, F3.4 part 2) bores.
+    expect(renderer.current?.snap).toStrictEqual({
+      kinds: ['duct', 'conduit', 'staple', 'bore'],
+      boreTool: ref('tool.corriden-sa-12'),
+    });
     expect(routing.phase()).toBe('armed');
     expect(session.contextKeys()['routing.active']).toBe(true);
     expect(routing.hint()).toMatch(/^NM-B 14\/2 .*: click an open entry on a box or panel/);
