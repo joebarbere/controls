@@ -13,6 +13,7 @@ import {
 import { materialiseWorld } from '@controls/sim-protocol';
 import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
+import { allocationSites } from './allocation-sites';
 import type { BenchCalibration, BenchCase } from './bench';
 import { buildWiredPlant, WIRED_LOOPS, WIRED_SMOKE_LOOPS } from './wired-plant';
 
@@ -65,23 +66,39 @@ function startWired(loops = WIRED_LOOPS): SimEngine {
  */
 export const WIRED_ALLOCATION_GATE_BYTES = 1;
 
+/** Advances `engine` by `ticks`: what the probe measures (a self-test passes one that also allocates). */
+export type WiredAdvance = (engine: SimEngine, ticks: number) => void;
+
+const advanceBy: WiredAdvance = (engine, ticks) => engine.advanceTo(engine.tick + ticks);
+
+/** The probe's sizes: the full bench's, and the smoke run's (a tenth of the plant, shorter windows). */
+const WIRED_PROBE = { ticks: 5_000, windows: 4, warmup: 20_000, loops: WIRED_LOOPS } as const;
+const WIRED_SMOKE_PROBE = { ticks: 2_000, windows: 2, warmup: 5_000, loops: WIRED_SMOKE_LOOPS } as const;
+
 /**
  * Bytes the engine allocates per tick on the wired plant, as `bytesPerRead` measures a read: a warm-up
  * to optimised code, a collection before each window, heap growth plus what each GC freed, the
  * smallest of several windows, and the slope between window sizes so a fixed per-window cost cancels.
  * `loops`: the plant's size (the smoke run's is {@link WIRED_SMOKE_LOOPS}: the same code per tick).
+ * Returns the engine too, warm, for {@link allocationSites} when the gate fails.
  */
-export function wiredBytesPerTick(ticks = 5_000, windows = 4, warmup = 20_000, loops = WIRED_LOOPS): number {
+function measureWired(
+  ticks: number,
+  windows: number,
+  warmup: number,
+  loops: number,
+  advance: WiredAdvance,
+): { readonly bytes: number; readonly engine: SimEngine } {
   setFlagsFromString('--expose-gc');
   const collect = runInNewContext('gc') as () => void;
   const engine = startWired(loops);
-  engine.advanceTo(engine.tick + warmup);
+  advance(engine, warmup);
   const window = (count: number) => {
     collect();
     const profiler = new GCProfiler();
     const start = getHeapStatistics().used_heap_size;
     profiler.start();
-    engine.advanceTo(engine.tick + count);
+    advance(engine, count);
     const stats = profiler.stop()?.statistics ?? [];
     const freed = stats.reduce(
       (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
@@ -92,7 +109,38 @@ export function wiredBytesPerTick(ticks = 5_000, windows = 4, warmup = 20_000, l
   for (const count of [ticks, 2 * ticks, 3 * ticks]) window(count);
   const smallest = (count: number) => Math.min(...Array.from({ length: windows }, () => window(count)));
   const [one, two, three] = [smallest(ticks), smallest(2 * ticks), smallest(3 * ticks)];
-  return Math.max(0, Math.min(two - one, three - two) / ticks);
+  return { bytes: Math.max(0, Math.min(two - one, three - two) / ticks), engine };
+}
+
+/** {@link measureWired}'s bytes per tick (the gate's value). */
+export function wiredBytesPerTick(
+  ticks = 5_000,
+  windows = 4,
+  warmup = 20_000,
+  loops = WIRED_LOOPS,
+  advance: WiredAdvance = advanceBy,
+): number {
+  return measureWired(ticks, windows, warmup, loops, advance).bytes;
+}
+
+/**
+ * `tick-wired-plant`'s allocation invariant: the probe at the bench's size (or the smoke run's), gated
+ * under {@link WIRED_ALLOCATION_GATE_BYTES}. A failure names the top allocation sites, sampled on the
+ * same warm engine, so a regime seen only on one runner (#123: exactly 320 B per tick on Windows, one
+ * boxed double per lamp per cadence solve) can be placed from the CI log alone. `advance` is a test seam.
+ */
+export function wiredAllocationInvariant(
+  smoke: boolean,
+  advance: WiredAdvance = advanceBy,
+): { readonly value: number; readonly failure: string | null } {
+  const probe = smoke ? WIRED_SMOKE_PROBE : WIRED_PROBE;
+  const { bytes, engine } = measureWired(probe.ticks, probe.windows, probe.warmup, probe.loops, advance);
+  if (bytes < WIRED_ALLOCATION_GATE_BYTES) return { value: bytes, failure: null };
+  const sites = allocationSites(() => advance(engine, probe.ticks), probe.ticks);
+  return {
+    value: bytes,
+    failure: `the wired plant allocated ${bytes.toFixed(2)} B per tick (the gate: under ${WIRED_ALLOCATION_GATE_BYTES} B); top sites per tick: ${sites}`,
+  };
 }
 
 let tickEngine: SimEngine | null = null;
@@ -129,17 +177,8 @@ export const TICK_WIRED_CASE: BenchCase = {
   },
   // A digest of what the bank's step wrote, untimed: an idle bank can't pass.
   checksum: () => connectionDigest(tickEngine as SimEngine),
-  invariant: (smoke) => {
-    // Smoke: the same probe on the smoke plant (a tenth of the loops), so a CI smoke run stays cheap.
-    const bytes = smoke ? wiredBytesPerTick(2_000, 2, 5_000, WIRED_SMOKE_LOOPS) : wiredBytesPerTick();
-    return {
-      value: bytes,
-      failure:
-        bytes < WIRED_ALLOCATION_GATE_BYTES
-          ? null
-          : `the wired plant allocated ${bytes.toFixed(2)} B per tick (the gate: under ${WIRED_ALLOCATION_GATE_BYTES} B)`,
-    };
-  },
+  // Smoke: the same probe on the smoke plant (a tenth of the loops), so a CI smoke run stays cheap.
+  invariant: (smoke) => wiredAllocationInvariant(smoke),
 };
 
 /** What the wired re-solve keeps between runs: a compiler, a solver (its factorisation cache), a bank, value storage. */

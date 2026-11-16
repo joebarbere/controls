@@ -486,7 +486,8 @@ export class ConnectionThermalBank {
    * nonlinear ends valued at `amps` (A, default the last solution's branch current). Allocates nothing.
    */
   resistanceOhm(i: number, amps?: number): number {
-    this.stampAmps[i] = amps ?? this.solvedAmps(i);
+    if (amps === undefined) this.solvedAmpsInto(i);
+    else this.stampAmps[i] = amps;
     this.computeStamp(i);
     return this.stampOhm[i];
   }
@@ -777,14 +778,22 @@ export class ConnectionThermalBank {
     else counts[2]++;
   }
 
-  /** |I| (A) of member `i`'s branch in the last solution, or 0 (not netlisted, no solution). */
-  private solvedAmps(i: number): number {
+  /**
+   * Writes |I| (A) of member `i`'s branch in the last solution, or 0 (not netlisted, no solution), into
+   * `stampAmps[i]`. A slot, not a returned double: returned, it was boxed into a heap number per
+   * connection per solve whenever the calling hook ran un-inlined (about 4,200 B per tick on the wired
+   * bench plant with `dcValue` kept out of Turbofan; simulation caveats, "Pass a slot, not a value").
+   */
+  private solvedAmpsInto(i: number): void {
     const b = this.branch[i];
     const solution = this.solution;
-    if (b < 0 || solution === null || 2 * b + 1 >= solution.branches.length) return 0;
+    if (b < 0 || solution === null || 2 * b + 1 >= solution.branches.length) {
+      this.stampAmps[i] = 0;
+      return;
+    }
     const re = solution.branches[2 * b];
     const im = solution.branches[2 * b + 1];
-    return Math.sqrt(re * re + im * im);
+    this.stampAmps[i] = Math.sqrt(re * re + im * im);
   }
 
   /**
@@ -825,7 +834,8 @@ export class ConnectionThermalBank {
 
   /** `SimDeviceBank.dcValue` for member `i`'s branch: nonlinear ends at the last solution's current. */
   dcValue(i: number, branch: NetlistBranch, values: DcBranchValues): boolean {
-    this.stampAmps[i] = this.nonlinear[i] === 1 ? this.solvedAmps(i) : 0;
+    if (this.nonlinear[i] === 1) this.solvedAmpsInto(i);
+    else this.stampAmps[i] = 0;
     this.computeStamp(i);
     values.resistorAt(branch.index, this.stampOhm, i);
     return true;
@@ -836,15 +846,13 @@ export class ConnectionThermalBank {
    * iterate's branch current (the last solution's on a cold start). Pure in its inputs.
    */
   iterate(i: number, branch: NetlistBranch, iterate: DcSolution | null, values: DcBranchValues): void {
-    let amps: number;
     if (iterate === null) {
-      amps = this.solvedAmps(i);
+      this.solvedAmpsInto(i);
     } else {
       const re = iterate.branches[2 * branch.index];
       const im = iterate.branches[2 * branch.index + 1];
-      amps = Math.sqrt(re * re + im * im);
+      this.stampAmps[i] = Math.sqrt(re * re + im * im);
     }
-    this.stampAmps[i] = amps;
     this.computeStamp(i);
     values.resistorAt(branch.index, this.stampOhm, i);
   }
@@ -854,7 +862,8 @@ export class ConnectionThermalBank {
    * nonlinear end is valued at the last solution's current and the 1 % rule re-solves until it settles.
    */
   acValue(i: number, branch: NetlistBranch, values: AcBranchValues): boolean {
-    this.stampAmps[i] = this.nonlinear[i] === 1 ? this.solvedAmps(i) : 0;
+    if (this.nonlinear[i] === 1) this.solvedAmpsInto(i);
+    else this.stampAmps[i] = 0;
     this.computeStamp(i);
     values.resistorAt(branch.index, this.stampOhm, i);
     return true;
