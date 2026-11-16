@@ -328,6 +328,11 @@ export class ViewportRenderer {
     return this.controller?.pickWireAt(ndcX, ndcY) ?? null;
   }
 
+  /** What the hover rule gives NDC to: a wire, else an entity id, else nothing (tests, the e2e hook). */
+  hoverTargetAt(ndcX: number, ndcY: number): { readonly entity: EntityId | null; readonly wire: WireRef | null } {
+    return this.controller?.hoverTargetAt(ndcX, ndcY) ?? { entity: null, wire: null };
+  }
+
   /** Selects a drawn wire, or clears the wire selection (`null`). */
   selectWire(wire: WireRef | null): boolean {
     return this.controller?.selectWire(wire) ?? false;

@@ -916,6 +916,17 @@ export class ViewportController {
     return this.wireAt(ndcX, ndcY)?.wire ?? null;
   }
 
+  /**
+   * What the hover rule gives NDC to (tests, the `?e2e=1` hook): the wire when it is nearer than the
+   * entity the BVH picker hits (within the occlusion tolerance), else that entity's id, else nothing;
+   * the same `pickTarget` a pointer move uses.
+   */
+  hoverTargetAt(ndcX: number, ndcY: number): { readonly entity: EntityId | null; readonly wire: WireRef | null } {
+    this.camera.updateMatrixWorld();
+    const target = this.pickTarget(ndcX, ndcY);
+    return { entity: target.entity?.entityId ?? null, wire: target.wire };
+  }
+
   /** Selects a drawn wire (clearing the entity selection), or clears it. Returns false for a wire not drawn. */
   selectWire(wire: WireRef | null): boolean {
     if (wire !== null && !this.wires.drawn(wire)) return false;

@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import badTermination, { buildBadTermination, LOOSE_TORQUE_NM } from '../scenarios/bad-termination';
 import { LAMP_CIRCUIT_IDS } from '../scenarios/lamp-circuit';
 import { WORKSPACE_ROOT } from './script-loader';
+import { ACCEPTANCE_HASHES } from './testing/acceptance-hashes';
 import { currentFixture } from './testing/fixtures';
 import { workshopWorldAt } from './testing/workshop';
 
@@ -64,8 +65,8 @@ import { workshopWorldAt } from './testing/workshop';
  * content review's note: key the flag on the engine's own peak T_h, never a flag 0.03 A from its
  * threshold), and D stays 1: a steady state to compare against at 600 s.
  */
-export const BAD_TERMINATION_HASH = '53c822210a1912b21d8e28f4e838296aaf7ac87c8c42434e3e5e6103f97d2de5';
-export const BAD_TERMINATION_SNAPSHOT_HASH = 'b35794ea6f84fc9f11767cd3ea35988d4aa2b8a38d05c0f4d471a212fe6be8e1';
+export const BAD_TERMINATION_HASH = ACCEPTANCE_HASHES.badTermination.hash;
+export const BAD_TERMINATION_SNAPSHOT_HASH = ACCEPTANCE_HASHES.badTermination.snapshotHash;
 
 /**
  * `wire.info 1` (the jumper with the loose end) and `wire.info 2` (cable 1's black, a cable conductor
@@ -81,6 +82,14 @@ const T0 = 293.15;
 const ALPHA = 0.00393;
 const END_TICK = 600_000;
 const LOOSE = 1;
+/** ADR 0018 §4.2: a screw clamp is seated from 40 % of its marked torque; the loose film is 0.1 Ω at zero torque. */
+const SEAT = 0.4;
+const LOOSE_OHM = 0.1;
+/** The loose screw's achieved torque (N·m): 0.8 × (1 + 0.06 (2u − 1)), u the clamp stream of termination 1 under seed 0. */
+const DRAWN_TORQUE_NM = 0.8127;
+/** Where a failing margin points: the clamp draw follows the termination id. */
+const DRAW_CAVEAT =
+  'the clamp draw follows termination id: was a landing reordered? (docs/caveats/simulation.md, "A scenario\'s termination outcomes follow its landing order")';
 const ids = LAMP_CIRCUIT_IDS;
 
 const journeymanGame = () => createGame({ world: workshopWorldAt('journeyman') });
@@ -135,10 +144,23 @@ function handCalculation(world: World, id: number, amps: number) {
     const landedCount = world.connections.filter((c) =>
       [c.a, c.b].some((e) => e?.entity === end.entity && e.terminal === end.terminal && e.termination !== null),
     ).length;
-    const { constrictionOhm: a, filmOhm: b } = asMadeContact(
-      { termination: end.termination, spec, landedCount },
-      physics,
-    );
+    // The contact by hand (ADR 0018 §4.2–4.3), for a solid copper conductor with no nicks and no
+    // accessory: r = achieved / marked torque (1 without a torque, capped at 1), times the strip factor
+    // min(1, strip / clamp depth) and rated/n when more than the rated count share the clamp; then
+    // a = R₀ / √clamp(r, 0.4, 1) and b = 0.1 Ω × (max(0, 1 − r/0.4))² (r_seat = 0.4, R_loose = 0.1 Ω).
+    const t = end.termination;
+    const torqueRatio = t.torqueNm === null || spec.torqueNm === null ? 1 : Math.min(1, t.torqueNm / spec.torqueNm);
+    const r =
+      torqueRatio *
+      Math.min(1, t.stripLengthMm / spec.clampDepthMm) *
+      (landedCount > spec.ratedConductors ? spec.ratedConductors / landedCount : 1);
+    const a = spec.contactOhm / Math.sqrt(Math.min(1, Math.max(r, SEAT)));
+    const loose = Math.max(0, 1 - r / SEAT);
+    const b = LOOSE_OHM * loose * loose;
+    // The engine's own static split agrees (so the closed form below is checked against the hand values).
+    const engine = asMadeContact({ termination: t, spec, landedCount }, physics);
+    expect(Math.abs(engine.constrictionOhm - a)).toBeLessThan(1e-9);
+    expect(Math.abs(engine.filmOhm - b)).toBeLessThan(1e-9);
     const gTerm = spec.heatPathWPerK;
     const th = (i2 * (a * (1 - ALPHA * T0) + b) + fin * tc + gTerm * TA) / (fin + gTerm - i2 * a * ALPHA);
     return { th, rEnd: a * (1 + ALPHA * (th - T0)) + b, torqueNm: end.termination.torqueNm };
@@ -150,6 +172,12 @@ const riseError = (actual: number, expected: number) => Math.abs(actual - expect
 const relative = (actual: number, expected: number) => Math.abs(actual - expected) / Math.abs(expected);
 
 describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () => {
+  it('the loose screw drew 0.8127 N·m on the ±6 % driver: the draw every margin below rests on', () => {
+    const world = builtGame().world() as World;
+    const torque = connection(world, LOOSE).a?.termination?.torqueNm as number;
+    expect(Math.abs(torque - DRAWN_TORQUE_NM), `achieved ${torque} N·m; ${DRAW_CAVEAT}`).toBeLessThan(1e-4);
+  });
+
   it('reaches its pinned hashes; the script and the console file log the same entries; the current is in §7’s window', async () => {
     const game = await scenarioGame();
     expect(game.tick()).toBe(END_TICK);
@@ -166,10 +194,12 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
         .map((e) => e.id)
         .slice(-5),
     ).toStrictEqual(['entity.place', 'wire.add', 'wire.add', 'device.operate', 'sim.step']);
-    // The built current: the lamp and the heater through the loose screw, inside §7's window.
+    // The built current: the lamp and the heater through the loose screw, inside §7's window, and the
+    // header's hand calculation (12.839 A) within 0.5 %.
     const amps = game.connection(LOOSE)?.values['currentA'] as number;
     expect(amps).toBeGreaterThan(12.01);
     expect(amps).toBeLessThan(13.07);
+    expect(relative(amps, 12.839)).toBeLessThan(0.005);
     // KCL at the junction box's black nut: the lamp's and the heater's currents add up to the feed's.
     const lampAmps = game.device(ids.lamp)?.values['currentA'] as number;
     const heaterAmps = game.device(13)?.values['currentA'] as number;
@@ -194,7 +224,9 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     const line = handCalculation(world, 8, amps);
     expect(riseError(connection(world, 8).sim['endBTempK'] as number, line.ends[1].th)).toBeLessThan(0.005);
     // Below the oxidation onset, so no degradation: the steady state is at D = 1.
-    expect(bad.ends[0].th).toBeLessThan(OXIDATION_ONSET_K.value - 5);
+    expect(bad.ends[0].th, `T_h ${bad.ends[0].th} K: within 5 K of the onset; ${DRAW_CAVEAT}`).toBeLessThan(
+      OXIDATION_ONSET_K.value - 5,
+    );
     expect(sim['endADegradation']).toBe(1);
     expect(sim['endAState']).toBe('ok');
     // The acceptance's margin (ADR 0018 §7): the loose end at least 50 K above its conductor.
@@ -209,7 +241,8 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     const record = game.connection(LOOSE);
     if (record === null) throw new Error('the loose conductor has a record');
     const v = record.values;
-    expect(v).toMatchObject({ status: 'solved', endAState: 'ok', endBState: 'ok', insulationDamaged: 'yes' });
+    expect(v).toMatchObject({ status: 'solved', endAState: 'ok', endBState: 'ok' });
+    expect(v['insulationDamaged']).toBe(connection(world, LOOSE).sim['insulationDamaged'] === true ? 'yes' : 'no');
     // The engine's end drop against the hand calculation's I × R_contact (R at the computed T_h).
     const handDrop = amps * bad.ends[0].rEnd;
     expect(relative(v['endADropV'] as number, handDrop)).toBeLessThan(0.005);
@@ -236,7 +269,7 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     expect(relative(sum, reading.rmsVolts)).toBeLessThan(1e-9);
   });
 
-  it('terminationOverheat is raised once, unconditionally, where the hot spot passes T_a + 100 K; insulationDamaged follows the peak T_h with ≥ 5 K to spare', async () => {
+  it('terminationOverheat is raised once, unconditionally, where the hot spot passes T_a + 100 K; insulationDamaged follows from the peak T_h', async () => {
     const events: SimEvent[] = [];
     const game = await scenarioGame(events);
     const threshold = TA + TERMINATION_OVERHEAT_RISE_K.value;
@@ -271,16 +304,25 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
       peak = Math.max(peak, th);
     }
     expect(stepped.hash()).toBe(game.hash());
-    expect(Math.abs(peak - damageK)).toBeGreaterThanOrEqual(5);
+    // Scenario-design guard, not physics: the build keeps its peak at least 5 K from the threshold
+    // (409.29 K, 6.13 K past it), so a small change elsewhere can't flip the flag unnoticed.
+    expect(
+      Math.abs(peak - damageK),
+      `peak T_h ${peak} K is within 5 K of ${damageK} K; ${DRAW_CAVEAT}`,
+    ).toBeGreaterThanOrEqual(5);
+    // The flag, its event and the event count are derived from the peak (ADR 0018 §7: never asserted).
     const damaged = peak >= damageK;
-    expect(damaged).toBe(true); // 409.29 K: 6.13 K past it
     const flagged = events.filter((e) => e.kind === 'insulationDamaged');
-    expect(flagged).toHaveLength(1);
-    expect(flagged[0]).toMatchObject({ connection: LOOSE, end: 'a' });
-    expect(flagged[0].detail['temperatureK'] as number).toBeGreaterThanOrEqual(damageK);
-    expect(connection(game.materialisedWorld() as World, LOOSE).sim['insulationDamaged']).toBe(true);
+    expect(flagged).toHaveLength(damaged ? 1 : 0);
+    if (damaged) {
+      expect(flagged[0]).toMatchObject({ connection: LOOSE, end: 'a' });
+      expect(flagged[0].detail['temperatureK'] as number).toBeGreaterThanOrEqual(damageK);
+    }
+    expect(connection(game.materialisedWorld() as World, LOOSE).sim['insulationDamaged']).toBe(damaged);
     // No other connection overheats or is damaged.
-    expect(events.filter((e) => e.kind === 'terminationOverheat' || e.kind === 'insulationDamaged')).toHaveLength(2);
+    expect(events.filter((e) => e.kind === 'terminationOverheat' || e.kind === 'insulationDamaged')).toHaveLength(
+      1 + (damaged ? 1 : 0),
+    );
   });
 
   it('wire.info prints the records: the golden text, the same from a console line as from Game.wireInfo', async () => {
@@ -288,7 +330,6 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     const text = `${game.wireInfo(1)}${game.wireInfo(2)}`;
     await expect(text).toMatchFileSnapshot(WIRE_INFO_GOLDEN);
     expect(text).toMatch(/end a ok, contact 0\.0249\d+ Ω at 409\.\d+ K, drop 0\.31\d+ V/); // the loose end
-    expect(text).toContain('insulation damaged');
     const { output } = await runConsoleScript(game, 'wire.info 1\nwire.info --id 2\n');
     expect(`${output.join('\n')}\n`).toBe(text);
     expect(game.hash()).toBe(BAD_TERMINATION_HASH); // read-only
@@ -305,7 +346,6 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     expect(sim['endATerminationId']).not.toBeNull();
     expect(sim['endATempK']).not.toBeNull();
     expect(sim['endADegradation']).toBe(1);
-    expect(sim['insulationDamaged']).toBe(true);
     const straight = await scenarioGame();
     for (const game of [straight, loaded.game]) game.advance(5000);
     expect(loaded.game.snapshotHash()).toBe(straight.snapshotHash());
@@ -354,15 +394,16 @@ describe('bad-termination determinism (P3 phase acceptance)', () => {
     expect(atEnd['endADegradation'] as number).toBeGreaterThan(atSave['endADegradation'] as number);
   });
 
-  it('save at T1, load, advance to T2 = straight to T2, for any loose torque in the driver’s range (property)', () => {
+  it('save at T1 (0 to 90 s, either side of the 10 000-tick checkpoint rebase, D19), load, advance to T2 = straight to T2, for any loose torque in the driver’s range (property)', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 30, max: 120 }),
-        fc.integer({ min: 1, max: 90 }),
+        fc.integer({ min: 0, max: 90 }),
+        fc.integer({ min: 0, max: 9 }),
         fc.integer({ min: 1, max: 60 }),
-        (centiNm, t1s, extra) => {
+        (centiNm, t1s, offset, extra) => {
           const torque = centiNm / 100;
-          const t1 = t1s * 1000 + (t1s % 7); // not only on whole seconds or cadence ticks
+          const t1 = t1s * 1000 + offset; // not only on whole seconds or cadence ticks
           const t2 = t1 + extra * 1000;
           const saved = builtGame(torque);
           saved.advanceTo(t1);
@@ -375,7 +416,42 @@ describe('bad-termination determinism (P3 phase acceptance)', () => {
           expect(loaded.game.hash()).toBe(straight.hash());
         },
       ),
-      { numRuns: 8, seed: 0x3c0d },
+      { numRuns: 32, seed: 0x3c0d },
+    );
+  });
+});
+
+describe('bad-termination physics, independent of the draw (P3 phase acceptance, ADR 0018 §7)', () => {
+  it('for any achieved torque within ±6 % of 0.8 N·m: the 600 s hot spot is the closed form below the onset, and the flags follow it (property)', () => {
+    // The setting is scaled so the achieved torque (setting × the drawn 1.01588) spans 0.753–0.847 N·m:
+    // r from 0.188 to 0.212, hot spots from about 400 K to past the 422.15 K oxidation onset.
+    const damageK = 363.15 + INSULATION_DAMAGE_MARGIN_K.value;
+    const onsetK = OXIDATION_ONSET_K.value;
+    fc.assert(
+      fc.property(fc.integer({ min: 741, max: 834 }), (milliNm) => {
+        const game = builtGame(milliNm / 1000);
+        let peak = 0;
+        for (let t = 10_000; t <= END_TICK; t += 10_000) {
+          game.advanceTo(t);
+          peak = Math.max(peak, game.connection(LOOSE)?.values['endATempK'] as number);
+        }
+        const world = game.materialisedWorld() as World;
+        const sim = connection(world, LOOSE).sim;
+        const th = sim['endATempK'] as number;
+        expect(th).toBe(peak); // it only rises
+        const achieved = connection(world, LOOSE).a?.termination?.torqueNm as number;
+        expect(achieved / 0.8).toBeGreaterThan(0.94 - 1e-9);
+        expect(achieved / 0.8).toBeLessThan(1.06 + 1e-9);
+        expect(sim['insulationDamaged']).toBe(peak >= damageK);
+        expect(sim['endADegradation'] === 1).toBe(peak < onsetK);
+        if (peak < onsetK) {
+          const amps = game.connection(LOOSE)?.values['currentA'] as number;
+          const hand = handCalculation(world, LOOSE, amps);
+          expect(riseError(th, hand.ends[0].th), `setting ${milliNm / 1000} N·m`).toBeLessThan(0.005);
+        }
+      }),
+      // Both ends of the range always: past the onset (D > 1) and clear of the damage threshold.
+      { numRuns: 12, seed: 0x7e4d, examples: [[741], [834]] },
     );
   });
 });

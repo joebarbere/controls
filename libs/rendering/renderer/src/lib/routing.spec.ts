@@ -458,6 +458,8 @@ describe('wire picking (ADR 0017 §9)', () => {
     const px = controller.projectMm({ x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) });
     const v = new Vector3(p.x / 1000, p.y / 1000, p.z / 1000).project(controller.camera);
     expect(controller.pickWireAt(v.x, v.y)).toStrictEqual({ kind: 'connection', id: 1 });
+    // The hover rule's answer, as a pointer move computes it (the e2e hook's hoverTargetAt).
+    expect(controller.hoverTargetAt(v.x, v.y)).toStrictEqual({ entity: null, wire: { kind: 'connection', id: 1 } });
     hover(px.x, px.y);
     expect(controller.state.hoveredWire).toStrictEqual({ kind: 'connection', id: 1 });
     expect(controller.state.hovered).toBeNull();
@@ -475,6 +477,7 @@ describe('wire picking (ADR 0017 §9)', () => {
     expect(controller.selectWire({ kind: 'connection', id: 99 })).toBe(false);
     // Off every wire, nothing.
     expect(controller.pickWireAt(0.95, 0.95)).toBeNull();
+    expect(controller.hoverTargetAt(0.95, 0.95).wire).toBeNull();
     controller.dispose();
     expect(controller.wireResourceCount).toBe(0);
   });

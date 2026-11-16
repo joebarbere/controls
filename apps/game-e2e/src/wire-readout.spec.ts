@@ -27,8 +27,7 @@ type Hooks = {
   __controlsViewport?: {
     whenIdle(): Promise<void>;
     projectMm(p: Vec): { x: number; y: number } | undefined;
-    pickWireAt(ndcX: number, ndcY: number): { kind: string; id: number } | null;
-    pickAt(ndcX: number, ndcY: number): { kind: string } | null;
+    hoverTargetAt(ndcX: number, ndcY: number): { entity: number | null; wire: { kind: string; id: number } | null };
     wireGraph(): { routes: { owner: string; fromMm: [number, number, number] }[] } | undefined;
   };
 };
@@ -37,10 +36,8 @@ interface WirePixel {
   /** Page px. */
   readonly x: number;
   readonly y: number;
-  /** The wire there (`c2`, `k1`). */
+  /** The wire the hover rule gives the pixel to (`c2`, `k1`). */
   readonly owner: string;
-  /** Whether a device is under the ray too (the hover rule then needs the wire nearer). */
-  readonly device: boolean;
   /** Distance (canvas px) from the `near` wire's end a. */
   readonly d: number;
 }
@@ -56,11 +53,11 @@ function collectErrors(page: Page): string[] {
 }
 
 /**
- * Page pixels on a 4 px grid where the wire BVH hits a wire and the canvas, not an overlay, is under
- * the point (the readout ignores the pointer, so it doesn't count), those with no device under the ray
- * first, then by distance from connection `near`'s end a. Whether the hover rule gives a pixel to the
- * wire (a device wins unless the wire is more than 2 mm nearer, and near a terminal it isn't: inside a
- * panel every pixel has the backplate behind it) is settled by {@link hoverWire} with the mouse.
+ * Page pixels on a 4 px grid that the hover rule gives to a wire (the renderer's own rule through the
+ * `?e2e=1` hook's `hoverTargetAt`, the `pickTarget` a pointer move uses: a device wins unless the wire
+ * is more than 2 mm nearer, and near a terminal it isn't), where the canvas, not an overlay, is under
+ * the point (the readout ignores the pointer, so it doesn't count). Sorted by distance from connection
+ * `near`'s end a.
  */
 async function wirePixels(page: Page, near: number): Promise<WirePixel[]> {
   return page.evaluate(async (wire) => {
@@ -81,42 +78,16 @@ async function wirePixels(page: Page, near: number): Promise<WirePixel[]> {
       for (let px = 2; px < w; px += 4) {
         const nx = (2 * px) / w - 1;
         const ny = 1 - (2 * py) / h;
-        const hit = hook.pickWireAt(nx, ny);
+        const hit = hook.hoverTargetAt(nx, ny).wire;
         if (hit === null) continue;
         const at = { x: box.left + px, y: box.top + py };
         if (document.elementFromPoint(at.x, at.y)?.tagName !== 'CANVAS') continue;
         const owner = `${hit.kind === 'cable' ? 'k' : 'c'}${hit.id}`;
-        const device = hook.pickAt(nx, ny)?.kind === 'device';
-        hits.push({ ...at, owner, device, d: Math.sqrt((px - end.x) ** 2 + (py - end.y) ** 2) });
+        hits.push({ ...at, owner, d: Math.sqrt((px - end.x) ** 2 + (py - end.y) ** 2) });
       }
     }
-    return hits.sort((a, b) => Number(a.device) - Number(b.device) || a.d - b.d);
+    return hits.sort((a, b) => a.d - b.d);
   }, near);
-}
-
-/**
- * Rests the mouse on the first of `candidates` that the hover rule gives to its wire, and returns it;
- * the viewport's `data-wire-hovered` says which wire the rule chose. Pixels with no device under them
- * are tried first, then the rest from the middle of the candidates' distance range outwards (a wire's
- * ends sit on terminals, where the device wins), at most 24.
- */
-async function hoverWire(page: Page, candidates: readonly WirePixel[]): Promise<WirePixel> {
-  const viewport = page.locator('ctl-viewport');
-  const ds = candidates.map((p) => p.d);
-  const mid = (Math.min(...ds) + Math.max(...ds)) / 2;
-  const order = [...candidates].sort(
-    (p, q) => Number(p.device) - Number(q.device) || Math.abs(p.d - mid) - Math.abs(q.d - mid),
-  );
-  for (const p of order.slice(0, 24)) {
-    await page.mouse.move(p.x, p.y);
-    try {
-      await expect(viewport).toHaveAttribute('data-wire-hovered', p.owner, { timeout: 1500 });
-      return p;
-    } catch {
-      // A device or a terminal won this pixel: try the next.
-    }
-  }
-  throw new Error(`no pixel the hover rule gives to ${candidates[0]?.owner ?? 'a wire'}`);
 }
 
 /** Whether page point `p` is inside `box`. */
@@ -170,14 +141,14 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   await page.keyboard.press('Backquote'); // close the console
   await expect(viewport).toHaveAttribute('data-mode', 'work');
 
-  // Mouse: rest on wire 1, at the pixel nearest its loose end that the hover rule gives to the wire.
+  // Mouse: rest on wire 1, at the pixel nearest its loose end a that the hover rule gives to the wire.
   const box = await page.locator('ctl-viewport canvas').boundingBox();
   if (!box) throw new Error('no canvas');
   const pixels = await wirePixels(page, 1);
-  const at = await hoverWire(
-    page,
-    pixels.filter((p) => p.owner === 'c1'),
-  );
+  const at = pixels.find((p) => p.owner === 'c1');
+  if (!at) throw new Error('no pixel of wire 1 that the hover rule picks');
+  await page.mouse.move(at.x, at.y);
+  await expect(viewport).toHaveAttribute('data-wire-hovered', 'c1');
   const readout = page.getByRole('region', { name: 'Wire readout: Wire 1' });
   await expect(readout).toBeVisible();
   await expect(readout).toHaveAttribute('data-source', 'hover');
@@ -203,10 +174,10 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   // A wire under the panel's top-right corner: hovering it moves the panel to the bottom left.
   await expect(panel).toHaveAttribute('data-corner', 'top-right');
   const topRight = await readout.boundingBox();
-  const under = await hoverWire(
-    page,
-    pixels.filter((p) => insideBox(p, topRight)),
-  );
+  const under = pixels.find((p) => insideBox(p, topRight));
+  if (!under) throw new Error('no wire pixel under the panel: the framing changed');
+  await page.mouse.move(under.x, under.y);
+  await expect(viewport).toHaveAttribute('data-wire-hovered', under.owner);
   await expect(panel).toHaveAttribute('data-corner', 'bottom-left');
   expect(insideBox(under, await page.getByTestId('wire-readout').boundingBox())).toBe(false);
 
@@ -226,8 +197,10 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   const said = (await status.textContent()) ?? '';
   expect(kelvin(/End a ([^,]+)/.exec(said)?.[1] ?? null)).toBeGreaterThanOrEqual(400);
   expect(kelvin(/Conductor ([^,]+)/.exec(said)?.[1] ?? null)).toBeLessThan(320);
-  // N again: the next routed wire, the supply's L1 (wire 8); Shift+N goes back; Escape clears the
-  // wire and the readout goes.
+  // N again: the next routed wire, the supply's L1 (wire 8). Skipping wires 2–7 is by design: they are
+  // cable conductors, and N's order (`wireCycleOrder`, workspace) is routed single conductors by id,
+  // then whole cables (k1, k2), never a cable's conductors one by one. Shift+N goes back; Escape clears
+  // the wire and the readout goes.
   await page.keyboard.press('N');
   await expect(viewport).toHaveAttribute('data-wire-selected', 'c8');
   await expect(status).toContainText('Wire 8 selected.');

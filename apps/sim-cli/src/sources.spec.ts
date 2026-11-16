@@ -143,11 +143,12 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
         );
         const out = join(dir, file);
         // A scenario built at another difficulty than the level's (the P3 acceptance scenarios, at
-        // Journeyman) is rebuilt on a New sandbox at that difficulty, as its header's command line says.
-        const frozen = readCtrl(new Uint8Array(readFileSync(join(ctrlDir, file))));
-        if (!frozen.ok) throw new Error(frozen.error.message);
-        const difficulty = (frozen.value.replayLog?.initialWorld ?? frozen.value.world).difficulty;
-        const at = difficulty === workshopWorld().difficulty ? [] : ['--difficulty', difficulty];
+        // Journeyman) says so on its header's `pnpm sim run` line; it is rebuilt exactly as that line runs.
+        const header = readFileSync(scenario, 'utf8')
+          .split('\n')
+          .find((line) => line.startsWith('#') && line.includes('pnpm sim run'));
+        const difficulty = /--difficulty (\w+)/.exec(header ?? '')?.[1];
+        const at = difficulty === undefined ? [] : ['--difficulty', difficulty];
         expect(sim('run', scenario, '--world', WORKSHOP_LEVEL, ...at, '--save', out).status, file).toBe(0);
         const [saved, rebuilt] = [join(ctrlDir, file), out].map((path) => {
           const read = readCtrl(new Uint8Array(readFileSync(path)));

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import lampCircuit, { buildLampCircuit, LAMP_CIRCUIT_IDS } from '../scenarios/lamp-circuit';
 import { WORKSPACE_ROOT } from './script-loader';
+import { ACCEPTANCE_HASHES } from './testing/acceptance-hashes';
 import { currentFixture } from './testing/fixtures';
 import { JOURNEYMAN_WORKSHOP_ARGS, workshopWorldAt } from './testing/workshop';
 
@@ -27,17 +28,20 @@ import { JOURNEYMAN_WORKSHOP_ARGS, workshopWorldAt } from './testing/workshop';
  * a New sandbox on the workshop at Journeyman with seed 0 that logs these entries (the console lines, or
  * the mouse and keyboard for some of them) must reach `LAMP_CIRCUIT_LIT_HASH` and
  * `LAMP_CIRCUIT_LIT_SNAPSHOT_HASH` after the breaker's 1.5 s, and `LAMP_CIRCUIT_HASH` and
- * `LAMP_CIRCUIT_SNAPSHOT_HASH` at the end, in Node and in Chromium's worker (both transports). Change
- * them together, never one: a difference in the game is float drift between engines, not a golden to
- * re-pin. A numeric change also bumps `SIM_ENGINE_VERSION` (D8).
+ * `LAMP_CIRCUIT_SNAPSHOT_HASH` at the end, in Node and in Chromium's worker (both transports). The
+ * values live in `apps/sim-cli/scenarios/acceptance-hashes.json` (read with `fs` by the e2e, as they
+ * read the `.console` files; this spec checks every one); in the game, `world.hash` and the session
+ * hook's `snapshotHash()` give what to compare. Change them together, never one: a difference in the
+ * game is float drift between engines, not a golden to re-pin. A numeric change also bumps
+ * `SIM_ENGINE_VERSION` (D8).
  */
 
 /** `world.hash` with the lamp lit: 1.5 s after the breaker closed. */
-export const LAMP_CIRCUIT_LIT_HASH = 'ffe1dc35c5d71981a87b893b9bbd9a2d8750b2b80f35519346c8abfc49982f08';
-export const LAMP_CIRCUIT_LIT_SNAPSHOT_HASH = '32359c6e8550025059811c601e209054d9d98fa8b5be0e74afa65f9c76e072cc';
+export const LAMP_CIRCUIT_LIT_HASH = ACCEPTANCE_HASHES.lampCircuit.litHash;
+export const LAMP_CIRCUIT_LIT_SNAPSHOT_HASH = ACCEPTANCE_HASHES.lampCircuit.litSnapshotHash;
 /** `world.hash` at the end: 0.5 s after the breaker opened, the lamp out. */
-export const LAMP_CIRCUIT_HASH = 'a3b98b17b9c974915a4422b83312c669feeb63d67db32319d5eab31205b49c48';
-export const LAMP_CIRCUIT_SNAPSHOT_HASH = 'ac9772f41ef7d35b1779a2cfe59ff5e74f08be8ac983f72ec44e3e85e4d03939';
+export const LAMP_CIRCUIT_HASH = ACCEPTANCE_HASHES.lampCircuit.hash;
+export const LAMP_CIRCUIT_SNAPSHOT_HASH = ACCEPTANCE_HASHES.lampCircuit.snapshotHash;
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');
@@ -152,9 +156,29 @@ describe('the lamp circuit (P3 phase acceptance, D12)', () => {
         expect(t.torqueNm === null).toBe(t.method === 'twistOn');
       }
     }
-    // At Journeyman an 'auto' termination is refused.
-    const auto = { id: 7, end: 'b', at: { entity: ids.lamp, terminal: 'a', termination: 'auto' } };
-    expect(game.exec('wire.land', auto)).toMatchObject({ ok: false });
+    // At Journeyman an 'auto' termination is refused for what it is (on a free terminal, the supply's
+    // l2, so nothing else can refuse it), and the same landing with its steps spelled out is accepted.
+    const spare = {
+      ref: { id: 'conductor.tallowmere-thhn-14-solid', version: 1 },
+      b: null,
+      route: [{ kind: 'free', positionMm: { x: -1250, y: 700, z: 300 }, entity: null, fixture: null, tool: null }],
+      lengthMm: 500,
+      colour: { base: 'red', stripe: null },
+      tool: { id: 'tool.veltmark-dc-8', version: 1 },
+    };
+    const l2 = { entity: ids.supply, terminal: 'l2' };
+    expect(game.exec('wire.add', { ...spare, a: { ...l2, termination: 'auto' } })).toMatchObject({
+      ok: false,
+      error: { code: 'termination-required' },
+    });
+    const explicit = {
+      method: 'screw',
+      strip: { tool: { id: 'tool.veltmark-ws-1018', version: 1 }, hole: 'sol14', lengthMm: 13 },
+      accessory: null,
+      clamp: { tool: { id: 'tool.calderyn-ts-15', version: 1 }, torqueNm: 4 },
+    };
+    expect(game.exec('wire.add', { ...spare, a: { ...l2, termination: explicit } }).ok).toBe(true);
+    expect(game.exec('edit.undo', {}).ok).toBe(true); // the connection list below is the scenario's
     // The splices: black, white and bare joined in their own nut; the lamp on the black and the white.
     expect(world.connections.map((c) => [c.id, c.colour?.base, c.a?.entity ?? null, c.b?.entity ?? null])).toEqual([
       [1, 'black', ids.breaker, ids.tbLine],
@@ -179,10 +203,13 @@ describe('the lamp circuit (P3 phase acceptance, D12)', () => {
     if (across.kind !== 'ac') throw new Error(across.kind);
     const v = across.rmsVolts;
     const amps = lit['currentA'] as number;
-    // Hand calculation. The lamp's rated point is exact by construction (R_r = V_r²/P_r = 240 Ω at
-    // 2700 K, so 0.5 A at 120 V). Near rated voltage an incandescent lamp's power goes as V^1.6 (Fink and
-    // Beaty), so its current goes as V^0.6: I = 0.5 A × (V / 120 V)^0.6. The wiring drops about 54 mV
-    // (0.045 %), so V ≈ 119.95 V and I ≈ 0.49986 A.
+    // Hand calculation: lit at rated current within 0.5 %. The lamp's rated point is exact by
+    // construction (R_r = V_r²/P_r = 240 Ω at 2700 K, so 0.5 A at 120 V), and the wiring drops only about
+    // 54 mV (0.045 %), so V ≈ 119.95 V and I ≈ 0.4999 A. Near rated voltage an incandescent lamp's power
+    // goes as V^1.6 (Fink and Beaty), so its current as V^0.6: 0.5 A × (V / 120 V)^0.6 = 0.49986 A, which
+    // the check below agrees with; but 0.05 % off rated it can't tell that exponent from any other. The
+    // off-nominal behaviour is P2's lamp goldens' job (`lamp-120v.spec.ts`, `lamp.spec.ts`: L ∝ V^3.4 from
+    // 75 % to 115 % of rated voltage).
     const hand = 0.5 * Math.pow(v / 120, 0.6);
     expect(relative(amps, hand)).toBeLessThan(0.005);
     expect(relative(amps, 0.5)).toBeLessThan(0.005);
