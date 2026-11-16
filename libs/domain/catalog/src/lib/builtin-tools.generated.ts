@@ -297,7 +297,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "id": "ship-auger-class",
       "kind": "real-world",
-      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
       "covers": [
         "boreDiameterMm"
       ]
@@ -337,7 +337,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "id": "ship-auger-class",
       "kind": "real-world",
-      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
       "covers": [
         "boreDiameterMm"
       ]
@@ -377,7 +377,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "id": "ship-auger-class",
       "kind": "real-world",
-      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
       "covers": [
         "boreDiameterMm"
       ]
@@ -417,7 +417,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "id": "ship-auger-class",
       "kind": "real-world",
-      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
       "covers": [
         "boreDiameterMm"
       ]
@@ -563,11 +563,11 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
-  "id": "tool.veltmark-ft-50",
+  "id": "tool.veltmark-fr-1524",
   "version": 1,
   "title": "Steel fish tape, 1/8 in x 50 ft",
   "brand": "Veltmark",
-  "modelName": "FT-50",
+  "modelName": "FR-1524",
   "kind": "fishTape",
   "capabilities": [
     {
@@ -597,7 +597,7 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
     {
       "id": "fish-tape-bends",
       "kind": "game-design",
-      "citation": "game-design: the tape is taken to push round at most four quarter bends (360 degrees) in one run, the same total a code-compliant EMT run may have between pull points (NFPA 70-2023 Art. 358.26, cited by number and paraphrased). A real tape's limit depends on bend radius, fill and lubricant; no published figure was read. P3 checks no conduit code rule; P4's inspector will.",
+      "citation": "game-design: the tape is taken to push round at most 360 degrees of bends (four 90-degree elbows) in one run, the same total a code-compliant EMT run may have between pull points (NFPA 70-2023 Art. 358.26, cited by number and paraphrased). A real tape's limit depends on bend radius, fill and lubricant; no published figure was read. P3 checks no conduit code rule; P4's inspector will.",
       "covers": [
         "pull.maxBendDeg"
       ]

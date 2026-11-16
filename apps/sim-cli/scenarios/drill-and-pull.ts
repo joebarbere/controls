@@ -85,7 +85,7 @@ export default function drillAndPull(game: Game): void {
       { ref: ref('conductor.tallowmere-thhn-12-solid'), colour: { base: 'black', stripe: null } },
       { ref: ref('conductor.tallowmere-thhn-12-solid'), colour: { base: 'white', stripe: null } },
     ],
-    tool: ref('tool.veltmark-ft-50'),
+    tool: ref('tool.veltmark-fr-1524'),
   });
 
   // 4. Two boxes on studs 4 and 6 (entities 4, 5), their top clamps opened, joined through a bore in stud 5.

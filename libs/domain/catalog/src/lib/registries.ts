@@ -362,42 +362,42 @@ export const KNOCKOUT_HOLES: Readonly<Record<TradeSize, KnockoutHoleDef>> = Obje
   '1/2': {
     tradeSize: '1/2',
     diameterIn: 0.885,
-    description: '7/8 in nominal',
+    description: 'The hole of a 1/2 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
   '3/4': {
     tradeSize: '3/4',
     diameterIn: 1.115,
-    description: '1-1/8 in nominal',
+    description: 'The hole of a 3/4 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
   '1': {
     tradeSize: '1',
     diameterIn: 1.362,
-    description: '1-3/8 in nominal',
+    description: 'The hole of a 1 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
   '1-1/4': {
     tradeSize: '1-1/4',
     diameterIn: 1.701,
-    description: '1-11/16 in nominal',
+    description: 'The hole of a 1-1/4 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
   '1-1/2': {
     tradeSize: '1-1/2',
     diameterIn: 1.951,
-    description: '1-15/16 in nominal',
+    description: 'The hole of a 1-1/2 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
   '2': {
     tradeSize: '2',
     diameterIn: 2.416,
-    description: '2-3/8 in nominal',
+    description: 'The hole of a 2 in conduit-size punch',
     kind: 'real-world',
     source: KNOCKOUT_PUNCH_CLASS,
   },
@@ -416,10 +416,13 @@ export function knockoutHoleMm(size: TradeSize): number {
  */
 export const HOLE_FIT_TOLERANCE_MM = 1.5875;
 
-/** Whether a hole of `diameterMm` fits an entry of trade size `size` ({@link HOLE_FIT_TOLERANCE_MM}). */
+/** Whether a hole of `diameterMm` fits an entry of trade size `size`: within {@link HOLE_FIT_TOLERANCE_MM} either way, inclusive. */
 export function holeFitsTradeSize(diameterMm: number, size: TradeSize): boolean {
-  const off = diameterMm - knockoutHoleMm(size);
-  return off <= HOLE_FIT_TOLERANCE_MM && -off <= HOLE_FIT_TOLERANCE_MM;
+  // Compared in whole tenths of a micrometre, so the tolerance's edge is exact (1.5875 mm = 15 875).
+  const tenthsUm = (mm: number) => Math.round(mm * 10_000);
+  const off = tenthsUm(diameterMm) - tenthsUm(knockoutHoleMm(size));
+  const limit = tenthsUm(HOLE_FIT_TOLERANCE_MM);
+  return off <= limit && -off <= limit;
 }
 
 /** Id prefixes reserved for the non-device families (one catalogue namespace, ADR 0015). */

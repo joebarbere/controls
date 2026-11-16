@@ -43,7 +43,7 @@ describe('the built-in hand tools (F3.4 part 1)', () => {
       ['tool.penmarrow-lp-12', 1, 'labelMaker'],
       ['tool.veltmark-cr-2210', 1, 'crimper'],
       ['tool.veltmark-dc-8', 1, 'cutter'],
-      ['tool.veltmark-ft-50', 1, 'fishTape'],
+      ['tool.veltmark-fr-1524', 1, 'fishTape'],
       ['tool.veltmark-kp-3', 1, 'knockoutPunch'],
       ['tool.veltmark-nd-516', 1, 'nutDriver'],
       ['tool.veltmark-sd-2', 1, 'screwdriver'],
@@ -208,10 +208,14 @@ describe('the F3.4 part 2 tools: bits, hole saws, punch and fish tape', () => {
     expect([19.05, 22.225, 25.4, 28.575].map((mm, i) => bore(sizes[i][0]) - mm)).toStrictEqual([0, 0, 0, 0]);
   });
 
-  it('split at the stud limits: 3/4 and 7/8 in bits (under 24.5 mm) and 1 in need no nail plate; 1-1/8 in does; 1-3/4 in is over the bored-hole limit', () => {
+  it('split at the stud limits: 3/4, 7/8 and 1 in bits (at most 25.4 mm) need no nail plate; 1-1/8 in does; 1-3/4 in is over the bored-hole limit', () => {
     expect(BORED_HOLE_MAX_MM).toBeCloseTo(35.56, 9);
-    expect(bore('tool.corriden-sa-12')).toBeLessThan(24.5);
-    expect(bore('tool.corriden-sa-14')).toBeLessThan(24.5);
+    // The nail-plate threshold: 44.45 − D / 2 ≥ 31.75 ⇔ D ≤ 25.4 mm.
+    expect(STUD_DEPTH_MM / 2 - 31.75).toBeCloseTo(25.4 / 2, 9);
+    for (const id of ['tool.corriden-sa-12', 'tool.corriden-sa-14', 'tool.corriden-sa-16']) {
+      expect(bore(id)).toBeLessThanOrEqual(25.4);
+    }
+    expect(bore('tool.corriden-sa-18')).toBeGreaterThan(25.4);
     // 3/4 in leaves 44.45 − 9.525 = 34.925 mm; 7/8 in 33.3375; 1 in exactly 31.75; 1-1/8 in 30.1625.
     expect(edgeMm(bore('tool.corriden-sa-12'))).toBeCloseTo(34.925, 9);
     expect(edgeMm(bore('tool.corriden-sa-14'))).toBeCloseTo(33.3375, 9);
@@ -230,7 +234,7 @@ describe('the F3.4 part 2 tools: bits, hole saws, punch and fish tape', () => {
     }
     expect(caps(tool('tool.veltmark-kp-3'))).toStrictEqual(['openEntry:any']);
     expect(tool('tool.veltmark-kp-3').punches).toStrictEqual(['1/2', '3/4', '1']);
-    expect(caps(tool('tool.veltmark-ft-50'))).toStrictEqual(['pull:any']);
+    expect(caps(tool('tool.veltmark-fr-1524'))).toStrictEqual(['pull:any']);
     // A drill site opens only by openEntry: a wood bit can't cut a steel box wall.
     expect(ENTRY_TYPES['drillSite'].opens).toStrictEqual(['openEntry']);
   });
@@ -248,6 +252,14 @@ describe('the F3.4 part 2 tools: bits, hole saws, punch and fish tape', () => {
     expect(fits('tool.corriden-hs-18')).toStrictEqual(['3/4']);
     expect(fits('tool.corriden-hs-22')).toStrictEqual(['1']);
     expect(fits('tool.corriden-hs-28')).toStrictEqual(['1-1/4']);
+    // The tolerance's edge is inclusive and exact: K ± 1.5875 mm fits, K ± 1.5885 mm doesn't.
+    for (const size of sizes) {
+      const k = knockoutHoleMm(size);
+      expect(holeFitsTradeSize(k + HOLE_FIT_TOLERANCE_MM, size)).toBe(true);
+      expect(holeFitsTradeSize(k - HOLE_FIT_TOLERANCE_MM, size)).toBe(true);
+      expect(holeFitsTradeSize(k + HOLE_FIT_TOLERANCE_MM + 0.001, size)).toBe(false);
+      expect(holeFitsTradeSize(k - HOLE_FIT_TOLERANCE_MM - 0.001, size)).toBe(false);
+    }
     // Wood bits are never close enough to open anything (and can't openEntry anyway): 3/4 in is 3.4 mm under 1/2.
     expect(fits('tool.corriden-sa-12')).toStrictEqual([]);
     // Every entry in the catalogue with a trade size can be opened by a punch or a hole saw.
@@ -265,7 +277,7 @@ describe('the F3.4 part 2 tools: bits, hole saws, punch and fish tape', () => {
 
   it('give the fish tape 50 ft (15 240 mm) and four quarter bends', () => {
     expect(50 * 12 * 25.4).toBeCloseTo(15240, 9);
-    expect(tool('tool.veltmark-ft-50').pull).toStrictEqual({ lengthMm: 15240, maxBendDeg: 360 });
+    expect(tool('tool.veltmark-fr-1524').pull).toStrictEqual({ lengthMm: 15240, maxBendDeg: 360 });
     for (const t of BUILTIN_CATALOG.tools) {
       expect(t.pull !== null).toBe(t.capabilities.some((c) => c.step === 'pull'));
     }

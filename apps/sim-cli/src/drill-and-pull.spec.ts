@@ -1,18 +1,28 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { createGame, runConsoleScript } from '@controls/scripting-api';
+import { createGame, loadGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
 import { boreNeedsNailPlate, pullRun, type World } from '@controls/world-model';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import drillAndPull from '../scenarios/drill-and-pull';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
  * F3.4 part 2, headless: a custom enclosure entry cut with the hole saw, conductors pulled through EMT
  * with the fish tape (what the minigame logs on success, D10), and an NM-B run bored through a stud with
  * a sub-24.5 mm bit (`scenarios/drill-and-pull.ts`, spelled out in `drill-and-pull.console`). The
- * player-facing minigame and its e2e are the UI half.
+ * player-facing minigame and its e2e are the UI half. Its save is a frozen fixture (save-format review),
+ * written by
+ *
+ *   pnpm sim run apps/sim-cli/scenarios/drill-and-pull.console --world content/levels/workshop.json \
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/drill-and-pull-engine-7-catalog-2.ctrl
+ *
+ * and rebuilt from the console file by `sources.spec.ts`'s fixture-rebuild check, so the cut drill site,
+ * `wire.pull` and a cable with a bore replay are pinned.
  */
 
 /** world.hash after `drill-and-pull.ts`. */
@@ -61,6 +71,15 @@ describe('the drill-and-pull scenario (F3.4 part 2)', () => {
     const fromScript = createGame({ world: workshopWorld() });
     drillAndPull(fromScript);
     expect(fromConsole.entries()).toEqual(fromScript.entries());
+  });
+
+  it('its checked-in save loads continued, replaying the cut, the pull and the bored run', () => {
+    const loaded = loadGame(new Uint8Array(readFileSync(currentFixture('drill-and-pull'))));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
+    expect(loaded.game.hash()).toBe(DRILL_AND_PULL_HASH);
+    expect(loaded.game.entries().map((e) => e.id)).toEqual(expect.arrayContaining(['wire.pull', 'cable.add']));
   });
 
   it('cuts the drill site, pulls two conductors through the conduit, and bores stud 5 without a nail plate', () => {

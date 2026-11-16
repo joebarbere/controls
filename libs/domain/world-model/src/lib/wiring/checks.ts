@@ -10,6 +10,7 @@ import {
   type EnclosureEntry,
   holeFitsTradeSize,
   knockoutHoleMm,
+  racewayPorts,
   type ModelKindDef,
   racewayOf,
   type TerminalMethodSpec,
@@ -145,7 +146,7 @@ export const ELBOW_BEND_DEG = 90;
 
 /** How far a pull runs through conduit (F3.4 part 2): what a fish tape has to reach. */
 export interface PullRun {
-  /** Along the stored polyline from the first `conduit` waypoint to the last (mm, not rounded). */
+  /** From the first `conduit` waypoint to the last (mm, not rounded): the polyline, an elbow's centreline between its ports. */
   readonly lengthMm: number;
   /** The total bend: {@link ELBOW_BEND_DEG} for each distinct elbow a conduit waypoint names. */
   readonly bendDeg: number;
@@ -154,11 +155,35 @@ export interface PullRun {
 }
 
 /**
+ * The centreline length of a factory elbow less the chord between its ports (mm): an elbow of bend
+ * radius R with straight legs L runs 2L + πR/2 along its centreline, while its ports are (R + L)√2
+ * apart (they sit at (D/2, 0) and (L + R + D/2, L + R) in its own frame). Exact geometry; `Math.sqrt`
+ * and `Math.PI` only (D6). 3/4 in EMT (L 64, R 114): 307.07 − 251.73 = 55.34 mm.
+ */
+export function elbowArcExcessMm(legLengthMm: number, bendRadiusMm: number): number {
+  return 2 * legLengthMm + (Math.PI * bendRadiusMm) / 2 - (bendRadiusMm + legLengthMm) * Math.sqrt(2);
+}
+
+/** Whether `a` and `b` are the two ports of `elbow` (world integer mm), in either order. */
+function elbowPorts(world: Pick<World, 'entities'>, catalog: Catalog, elbow: EntityId, a: PositionMm, b: PositionMm) {
+  const host = findEntity(world as World, elbow);
+  const device = host ? catalog.device(host.ref) : undefined;
+  if (!host || !device || device.model.kind !== 'raceway.conduitElbow') return null;
+  const ports = racewayPorts(device, host.state).map((p) => entityPointMm(host.transform, p.positionMm));
+  const [p, q] = ports;
+  if (!p || !q) return null;
+  const same = (u: PositionMm, v: PositionMm) => u.x === v.x && u.y === v.y && u.z === v.z;
+  const both = (same(a, p) && same(b, q)) || (same(a, q) && same(b, p));
+  return both ? device.model.params : null;
+}
+
+/**
  * The conduit run of a pull route (F3.4 part 2): its length from the first to the last `conduit`
- * waypoint along the straight segments between waypoints (an elbow's waypoints are its ports, so the
- * chord stands in for its arc: game-design, a little short), and its bends, one quarter bend per
- * distinct elbow hosting a conduit waypoint. A change of direction between two sticks without an
- * elbow isn't counted (P3 has no bending; the snapper never makes one). Pure, `Math.sqrt` only (D6).
+ * waypoint along the straight segments between waypoints, except that where two consecutive waypoints
+ * are the two ports of one elbow the elbow's own centreline (2L + πR/2) replaces the chord
+ * ({@link elbowArcExcessMm}: the chord under-measures a P3 elbow by about 18 %); and its bends, one
+ * quarter bend per distinct elbow hosting a conduit waypoint. A change of direction between two sticks
+ * without an elbow isn't counted (P3 has no bending; the snapper never makes one). Pure (D6).
  * Exported for the fish tape minigame (its length and bends) and its pre-check.
  */
 export function pullRun(world: Pick<World, 'entities'>, catalog: Catalog, route: readonly Waypoint[]): PullRun {
@@ -173,6 +198,16 @@ export function pullRun(world: Pick<World, 'entities'>, catalog: Catalog, route:
     const dy = q.y - p.y;
     const dz = q.z - p.z;
     lengthMm += Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const host = route[i].entity;
+    if (
+      route[i - 1].kind === 'conduit' &&
+      route[i].kind === 'conduit' &&
+      host !== null &&
+      route[i - 1].entity === host
+    ) {
+      const elbow = elbowPorts(world, catalog, host, p, q);
+      if (elbow) lengthMm += elbowArcExcessMm(elbow['legLengthMm'], elbow['bendRadiusMm']);
+    }
   }
   const elbows = new Set<EntityId>();
   for (const w of route) {

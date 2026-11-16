@@ -2,7 +2,8 @@ import { BUILTIN_CATALOG, ENTRY_TYPES, knockoutHoleMm } from '@controls/catalog'
 import { createWorld, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '../session';
 import type { Waypoint } from '../types';
-import { checkPullReach, ELBOW_BEND_DEG, pullRun } from './checks';
+import { checkPullReach, ELBOW_BEND_DEG, elbowArcExcessMm, pullRun } from './checks';
+import { racewayPaths } from '../routing/raceways';
 import { boreNeedsNailPlate } from './framing';
 import { snapWaypoint } from '../routing/snap';
 
@@ -34,7 +35,7 @@ const SAW_138 = ref('tool.corriden-hs-22');
 const SAW_134 = ref('tool.corriden-hs-28');
 const AUGER_34 = ref('tool.corriden-sa-12');
 const PUNCH = ref('tool.veltmark-kp-3');
-const TAPE = ref('tool.veltmark-ft-50');
+const TAPE = ref('tool.veltmark-fr-1524');
 const SCREWDRIVER = ref('tool.veltmark-sd-2');
 const CUTTERS = ref('tool.veltmark-dc-8');
 const THHN = ref('conductor.tallowmere-thhn-12-solid');
@@ -150,6 +151,37 @@ describe('wire.pull with the fish tape (F3.4 part 2)', () => {
     const tape = BUILTIN_CATALOG.tool(TAPE);
     if (!tape) throw new Error('no fish tape');
     expect(checkPullReach(bus.state, BUILTIN_CATALOG, route, tape)).toBeNull();
+  });
+
+  it('runs an elbow along its centreline (2L + πR/2), not its chord, for each EMT elbow', () => {
+    // [entry, L, R, centreline]: 1/2 in 2·64 + π·102/2 = 288.22; 3/4 in 128 + π·114/2 = 307.07;
+    // 1 in 2·76 + π·146/2 = 381.34 mm. The chords (R + L)√2 are 234.76, 251.73 and 313.96 mm.
+    const elbows: [string, number, number, number][] = [
+      ['elbow.stavenor-emt-050', 64, 102, 288.22],
+      ['elbow.stavenor-emt-075', 64, 114, 307.07],
+      ['elbow.stavenor-emt-100', 76, 146, 381.34],
+    ];
+    for (const [id, leg, radius, centreline] of elbows) {
+      const { bus, place } = bench();
+      place(id, 0, 0, 0);
+      const path = racewayPaths(bus.state, BUILTIN_CATALOG).find((p) => p.entity === 1);
+      if (!path) throw new Error('no elbow path');
+      const chord = Math.sqrt(2) * (leg + radius);
+      const { x, y, z } = path.a;
+      const route = [
+        free(x, y - 50, z),
+        conduit(1, x, y, z),
+        conduit(1, path.b.x, path.b.y, path.b.z),
+        free(path.b.x + 50, path.b.y, path.b.z),
+      ];
+      const run = pullRun(bus.state, BUILTIN_CATALOG, route);
+      expect(Math.abs(run.lengthMm - centreline) / centreline).toBeLessThan(0.005);
+      expect(run.lengthMm).toBeCloseTo(chord + elbowArcExcessMm(leg, radius), 9);
+      expect(run.bendDeg).toBe(90);
+      // Two waypoints on the elbow that aren't both its ports stay a chord.
+      const off = [route[0], route[1], conduit(1, path.b.x, path.b.y, path.b.z + 1), route[3]];
+      expect(pullRun(bus.state, BUILTIN_CATALOG, off).lengthMm).toBeLessThan(chord + 2);
+    }
   });
 
   it('pulls through a run the tape reaches, and refuses one longer than 50 ft or round more than four elbows', () => {

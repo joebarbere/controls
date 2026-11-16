@@ -17,7 +17,7 @@
     {
       "id": "ship-auger-class",
       "kind": "real-world",
-      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered in hole diameters 1/2 to 1-1/4 in, among them 3/4, 7/8, 1 and 1-1/8 in, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
+      "citation": "An electrician's 18 in dual-flute ship auger family (one maker's product page, read 2026-11-15; maker not named in content) is offered, among other sizes, in 3/4, 7/8, 1 and 1-1/8 in hole diameters, for wet, dry and nail-embedded wood. The diameter is the nominal size in inches converted exactly (x 25.4 mm, NIST SP 811).",
       "covers": ["boreDiameterMm"]
     },
     {
