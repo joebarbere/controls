@@ -49,10 +49,10 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * its entry end exactly there, room in the entry). A connector in an entry can't move or turn
  * (`in-entry`), and holds its enclosure (`occupied`).
  *
- * F3.5: `entity.place` and `entity.move` refuse a body that would overlap another entity's when
- * either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of `wiring/overlap.ts`;
- * pre-v3 logs stack free props, so free bodies among themselves are only kept apart by the placement
- * maths), after the mount checks; a device never overlaps its own host.
+ * F3.5: `entity.place`, `entity.move` and `entity.rotate` refuse a body that would overlap another
+ * entity's when either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of
+ * `wiring/overlap.ts`; pre-v3 logs stack free props, so free bodies among themselves are only kept
+ * apart by the placement maths), after the mount checks; a device never overlaps its own host.
  *
  * The argument shapes are persisted in replay logs: changing one is a save-format change.
  */
@@ -324,32 +324,45 @@ export const entityMove = entityMoveCommand();
 
 /**
  * `entity.rotate`: turns an entity by a per-axis delta, composed by modular integer addition
- * (ADR 0007). Undo subtracts the same delta, which restores the triple exactly. A mounted device
- * (`mounted`) or a connector in an entry (`in-entry`) can't turn.
+ * (ADR 0007), about its own origin (`transform.positionMm`, which doesn't change). Undo subtracts the
+ * same delta, which restores the triple exactly. A mounted device (`mounted`) or a connector in an
+ * entry (`in-entry`) can't turn, and nothing may turn into another entity's body (`overlaps`, the
+ * `mounting` scope `entity.move` uses; decided before the v3 freeze, ADR 0015 F3.5 part 1 note 1).
  */
-export const entityRotate = defineCommand<EntityRotateArgs, World>({
-  id: 'entity.rotate',
-  title: 'Rotate object',
-  category: 'Entity',
-  args: EntityRotateArgs,
-  undoable: true,
-  run: ({ state }, { id, deltaMdeg }) => {
-    const entity = findEntity(state, id);
-    if (!entity) return notFound(id);
-    if (entity.mountedOn !== null) return fail('mounted', `Entity ${id} is mounted: it can't be rotated`);
-    if (entity.inEntry !== null) return inEntryFailure(entity);
-    const hold = entityHold(state, id);
-    if (hold !== null) return holdFailure(hold, id);
-    const turn = (sign: 1 | -1) => (w: World) => ({
-      ...w,
-      entities: withEntity(w.entities, id, (e) => ({
-        ...e,
-        transform: { ...e.transform, orientationMdeg: rotateBy(e.transform.orientationMdeg, deltaMdeg, sign) },
-      })),
-    });
-    return succeed({ apply: turn(1), invert: turn(-1) });
-  },
-});
+export function entityRotateCommand(catalog: Catalog = BUILTIN_CATALOG) {
+  return defineCommand<EntityRotateArgs, World>({
+    id: 'entity.rotate',
+    title: 'Rotate object',
+    category: 'Entity',
+    args: EntityRotateArgs,
+    undoable: true,
+    run: ({ state }, { id, deltaMdeg }) => {
+      const entity = findEntity(state, id);
+      if (!entity) return notFound(id);
+      if (entity.mountedOn !== null) return fail('mounted', `Entity ${id} is mounted: it can't be rotated`);
+      if (entity.inEntry !== null) return inEntryFailure(entity);
+      const hold = entityHold(state, id);
+      if (hold !== null) return holdFailure(hold, id);
+      const turned = {
+        positionMm: entity.transform.positionMm,
+        orientationMdeg: rotateBy(entity.transform.orientationMdeg, deltaMdeg, 1),
+      };
+      const overlaps = checkOverlap(state, catalog, entity.ref, turned, entity.mountedOn, id, entity.state);
+      if (overlaps) return overlaps;
+      const turn = (sign: 1 | -1) => (w: World) => ({
+        ...w,
+        entities: withEntity(w.entities, id, (e) => ({
+          ...e,
+          transform: { ...e.transform, orientationMdeg: rotateBy(e.transform.orientationMdeg, deltaMdeg, sign) },
+        })),
+      });
+      return succeed({ apply: turn(1), invert: turn(-1) });
+    },
+  });
+}
+
+/** `entity.rotate` against the built-in catalogue. */
+export const entityRotate = entityRotateCommand();
 
 /** Binding id of the Delete key: `entity.delete` with `id` taken from the selection (F1.7). */
 export const ENTITY_DELETE_SELECTION_BINDING = 'entity.delete.selection';
@@ -430,5 +443,10 @@ export const entityDelete = entityDeleteCommand();
 
 /** The entity commands, in a fixed order, resolving refs against `catalog`. */
 export function entityCommands(catalog: Catalog = BUILTIN_CATALOG): AnyCommandDef<World>[] {
-  return [entityPlaceCommand(catalog), entityMoveCommand(catalog), entityRotate, entityDeleteCommand(catalog)];
+  return [
+    entityPlaceCommand(catalog),
+    entityMoveCommand(catalog),
+    entityRotateCommand(catalog),
+    entityDeleteCommand(catalog),
+  ];
 }

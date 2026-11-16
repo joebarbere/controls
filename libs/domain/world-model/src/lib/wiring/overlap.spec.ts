@@ -98,14 +98,67 @@ describe('entity.place and entity.move refuse overlaps with enclosures and mount
   });
 });
 
+describe('entity.rotate refuses overlaps in the same scope (decided before the v3 freeze)', () => {
+  it('a box turning about its origin into a crate is refused, and the other way round is fine', () => {
+    const b = bus();
+    expect(b.exec('entity.place', { ref: BOX_1G, positionMm: at(0, 0, 0) }).ok).toBe(true);
+    // The crate (300 x 200 x 200) sits clear of the box's +x face, behind it in -z.
+    expect(b.exec('entity.place', { ref: CRATE, positionMm: at(60, 0, -250) }).ok).toBe(true);
+    const before = b.state;
+    // A quarter-turn yaw swings the box to x 0..64, z -51..0: into the crate at x 60, z -50.
+    expect(b.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 90_000, pitch: 0, roll: 0 } })).toMatchObject({
+      ok: false,
+      error: { code: 'overlaps', message: 'It would overlap entity 2' },
+    });
+    expect(b.state).toBe(before);
+    // A half turn swings it to -x, away from the crate.
+    expect(b.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 180_000, pitch: 0, roll: 0 } }).ok).toBe(true);
+    expect(b.state.entities[0]?.transform).toStrictEqual({
+      positionMm: at(0, 0, 0),
+      orientationMdeg: { yaw: 180_000, pitch: 0, roll: 0 },
+    });
+    // The free crate turning into the box is refused the same way (yaw 270: x -140..60, z -250..50).
+    expect(b.exec('entity.rotate', { id: 2, deltaMdeg: { yaw: 270_000, pitch: 0, roll: 0 } })).toMatchObject(
+      refused('overlaps'),
+    );
+    expect(b.exec('entity.rotate', { id: 2, deltaMdeg: { yaw: 0, pitch: 0, roll: 0 } }).ok).toBe(true);
+  });
+
+  it('a non-quarter-turn is checked with the conservative cube; free bodies still turn into each other', () => {
+    const b = bus();
+    b.exec('entity.place', { ref: BOX_1G, positionMm: at(0, 0, 0) });
+    b.exec('entity.place', { ref: CRATE, positionMm: at(60, 0, 0) });
+    expect(b.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 1, pitch: 0, roll: 0 } })).toMatchObject(
+      refused('overlaps'),
+    );
+    const c = bus();
+    c.exec('entity.place', { ref: CRATE, positionMm: at(0, 0, 0) });
+    c.exec('entity.place', { ref: LAMP, positionMm: at(310, 0, 0) });
+    expect(c.exec('entity.rotate', { id: 2, deltaMdeg: { yaw: 180_000, pitch: 0, roll: 0 } }).ok).toBe(true);
+    expect(c.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 45_000, pitch: 0, roll: 0 } }).ok).toBe(true);
+  });
+
+  it('a mounted device is still `mounted` before any overlap', () => {
+    const b = bus();
+    b.exec('entity.place', { ref: PANEL, positionMm: at(-200, -250, 0) });
+    b.exec('entity.place', { ref: BREAKER, positionMm: at(-77, 55, 22), mountedOn: { entity: 1, mount: 'rail-1' } });
+    expect(b.exec('entity.rotate', { id: 2, deltaMdeg: { yaw: 90_000, pitch: 0, roll: 0 } })).toMatchObject(
+      refused('mounted'),
+    );
+  });
+});
+
 describe('overlaps (property)', () => {
   const refs = [PANEL, BOX_1G, BOX_4SQ, CRATE, BOX_PROP, LAMP];
-  const coordinate = fc.integer({ min: -400, max: 400 });
+  // ±200 mm keeps bodies close enough that a turn about an origin often swings into a neighbour:
+  // with the rotate check removed, 1 000 runs found a clash every time (300 runs at ±400 mm rarely did).
+  const coordinate = fc.integer({ min: -200, max: 200 });
   const quarter = fc.constantFrom(0, 90_000, 180_000, 270_000);
   type Op =
     | { kind: 'place'; ref: CatalogRef; p: { x: number; y: number; z: number }; yaw: number }
     | { kind: 'mount'; x: number }
     | { kind: 'move'; pick: number; p: { x: number; y: number; z: number } }
+    | { kind: 'rotate'; pick: number; yaw: number; pitch: number }
     | { kind: 'undo' };
   const point = fc.record({ x: coordinate, y: coordinate, z: coordinate });
   const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -120,6 +173,15 @@ describe('overlaps (property)', () => {
     },
     { weight: 2, arbitrary: fc.record({ kind: fc.constant('mount' as const), x: fc.integer({ min: 0, max: 290 }) }) },
     { weight: 3, arbitrary: fc.record({ kind: fc.constant('move' as const), pick: fc.nat({ max: 6 }), p: point }) },
+    {
+      weight: 3,
+      arbitrary: fc.record({
+        kind: fc.constant('rotate' as const),
+        pick: fc.nat({ max: 6 }),
+        yaw: quarter,
+        pitch: quarter,
+      }),
+    },
     { weight: 1, arbitrary: fc.constant({ kind: 'undo' as const }) },
   );
 
@@ -139,7 +201,7 @@ describe('overlaps (property)', () => {
     return found;
   }
 
-  it('no sequence of place, mount, move and undo ever leaves an enclosure or a mounted device overlapping a body', () => {
+  it('no sequence of place, mount, move, rotate and undo ever leaves an enclosure or a mounted device overlapping a body', () => {
     fc.assert(
       fc.property(fc.array(opArb, { maxLength: 30 }), (ops) => {
         const b = bus();
@@ -159,13 +221,16 @@ describe('overlaps (property)', () => {
           } else if (op.kind === 'move') {
             const e = b.state.entities[op.pick];
             if (e) b.exec('entity.move', { id: e.id, positionMm: op.p });
+          } else if (op.kind === 'rotate') {
+            const e = b.state.entities[op.pick];
+            if (e) b.exec('entity.rotate', { id: e.id, deltaMdeg: { yaw: op.yaw, pitch: op.pitch, roll: 0 } });
           } else {
             b.exec('edit.undo', {});
           }
           expect(clashes(b.state)).toStrictEqual([]);
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 1000 },
     );
   });
 });

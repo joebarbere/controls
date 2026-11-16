@@ -28,10 +28,11 @@ You own the version number of Controls.
    - `CLAUDE.md` status line (version, and the phase state if a phase completes);
    - `docs/history.md` app-release table (and the phase status if a phase completes).
 3. Roll `[Unreleased]` into `## [x.y.z] - YYYY-MM-DD` (today's date), add a fresh empty `## [Unreleased]`, and update the compare links at the bottom (`[Unreleased]: …/compare/vX.Y.Z...HEAD`, `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`, or `…/releases/tag/vX.Y.Z` for the first release).
-4. Run `pnpm exec prettier --write` on the Markdown you touched, then `node tools/check-version-sync.mjs` and `pnpm verify`. Both must pass.
-5. Commit as `chore(release): vX.Y.Z`. Do **not** tag or push. Hand off to `release-engineer`.
+4. Freeze the shipped catalogue: `pnpm catalog:freeze` (writes `libs/domain/catalog/fixtures/shipped/<version>.json` from the current catalogue; `shipped.spec.ts` requires one list per dated CHANGELOG release, so `pnpm verify` fails without it). For a dry run this writes the file on the dry-run branch only.
+5. Run `pnpm exec prettier --write` on the Markdown you touched, then `node tools/check-version-sync.mjs` and `pnpm verify`. Both must pass.
+6. Commit as `chore(release): vX.Y.Z` (including the frozen catalogue list). Do **not** tag or push. Hand off to `release-engineer`.
 
-**Dry run** (`/release … dry-run`): do steps 1–4 on a throwaway branch `release-dry-run/vX.Y.Z`, do not commit to `main`, and report the diff.
+**Dry run** (`/release … dry-run`): do steps 1–5 on a throwaway branch `release-dry-run/vX.Y.Z`, do not commit to `main`, and report the diff.
 
 ## Output
 

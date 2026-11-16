@@ -17,7 +17,8 @@ import { bodyBox } from './checks';
  * two devices mounted on the same enclosure do (a rail and the backplate behind it are different
  * mounts, so `mount-full` alone doesn't keep them apart). Mount rules (`checkMount`) run first, so a
  * device that crowds its own mount is `mount-full`, not `overlaps`. Fixtures (level geometry) aren't
- * entities and aren't bodies. `entity.rotate` doesn't check overlap in P3.
+ * entities and aren't bodies. `entity.rotate` checks the turned body (about the entity's origin, its
+ * position unchanged) exactly as `entity.move` checks the moved one (decided before the v3 freeze).
  *
  * Raceways (F3.5 part 2) are solid here, though hollow for `route-collides`: a terminal block may not
  * be placed inside a duct. A cut-to-length part's body is its cut length wide (`deviceBodySizeMm`),
@@ -28,7 +29,8 @@ import { bodyBox } from './checks';
  * - `all`: every pair of bodies. The placement maths (`placeInWorld`: the mouse, the keyboard reticle
  *   and scripts) uses it, so a snapped placement never overlaps anything.
  * - `mounting`: only pairs where at least one body is an **enclosure or a mounted device**. The
- *   `entity.place` and `entity.move` commands refuse in this scope (`overlaps`). Logs written before
+ *   `entity.place`, `entity.move` and `entity.rotate` commands refuse in this scope (`overlaps`;
+ *   `raceway.cut` too). Logs written before
  *   world v3 hold neither (no enclosure kind or `mountedOn` existed), and several shipped ones place
  *   free props and devices on top of each other (`four-surface`, the P2 goldens, which place at the
  *   origin), so refusing every overlap would stop shipped logs replaying. A console line can still

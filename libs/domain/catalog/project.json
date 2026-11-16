@@ -5,6 +5,18 @@
   "projectType": "library",
   "tags": ["type:domain"],
   "targets": {
+    "test": {
+      "inputs": [
+        "default",
+        "^production",
+        { "fileset": "{projectRoot}/tsconfig.spec.json", "dependencies": true },
+        { "json": "{workspaceRoot}/libs/domain/tsconfig.domain.json", "fields": ["compilerOptions"] },
+        { "externalDependencies": ["vitest"] },
+        { "env": "CI" },
+        { "dependentTasksOutputFiles": "**/*.js", "transitive": true },
+        "{workspaceRoot}/CHANGELOG.md"
+      ]
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": true,

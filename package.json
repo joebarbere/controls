@@ -14,7 +14,7 @@
   },
   "packageManager": "pnpm@11.28.8",
   "scripts": {
-    "verify": "prettier --check . && nx run-many -t lint typecheck test build && nx run-many -t bench && node tools/check-version-sync.mjs && node --test tools/release-notes.test.mjs",
+    "verify": "prettier --check . && nx run-many -t lint typecheck test build && nx run-many -t bench && node tools/check-version-sync.mjs && node --test tools/release-notes.test.mjs tools/freeze-shipped-catalogue.test.mjs",
     "format": "prettier --write .",
     "start": "nx run desktop:start",
     "start:web": "nx serve game",
@@ -25,7 +25,8 @@
     "package:desktop": "nx run desktop:package",
     "package:desktop:dir": "nx run desktop:package-dir",
     "version:sync": "node tools/sync-version.mjs",
-    "sim": "node apps/sim-cli/bin/sim.mjs"
+    "sim": "node apps/sim-cli/bin/sim.mjs",
+    "catalog:freeze": "node tools/freeze-shipped-catalogue.mjs"
   },
   "dependencies": {
     "@angular/common": "~22.2.0",
