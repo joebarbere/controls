@@ -172,17 +172,26 @@ export const FLAT_VERTICAL_Y = 0.9;
 /**
  * The axis a flat cable's segment is thin along (the normal of its wide faces), for a segment along
  * the unit direction (dx, dy, dz): world +y made perpendicular to the segment, so a horizontal run
- * lies flat; a vertical run (|dy| > {@link FLAT_VERTICAL_Y}) uses +z, so it shows its wide face to a
- * wall's front and lies flat against a stud's side face. A drawing abstraction (a real NM-B twists
- * as it is pulled), deterministic, and the same frame `bakeCableEnds` fans tails across (`fanAxis`:
- * +x across an entry along y, +z across one along x). Writes the unit axis into `out[0..2]`;
- * allocation-free.
+ * lies flat; a vertical run (|dy| > {@link FLAT_VERTICAL_Y}) uses the cable's **face axis**
+ * (`face`, from the domain's `cableFaceAxis`: the stud wall's across-the-wall `u` axis, the normal of
+ * a stud's side face), so a run stapled up a stud lies with its wide face against the stud, as NM-B
+ * is installed; with no stud wall it is world +z. A drawing abstraction (a free NM-B twists as it is
+ * pulled), deterministic, and the same frame `bakeCableEnds` fans tails across (`fanAxis`). Writes the
+ * unit axis into `out[0..2]`; allocation-free.
  */
-export function flatThinAxis(dx: number, dy: number, dz: number, out: Float64Array | number[]): void {
+export function flatThinAxis(
+  dx: number,
+  dy: number,
+  dz: number,
+  out: Float64Array | number[],
+  faceX = 0,
+  faceY = 0,
+  faceZ = 1,
+): void {
   const vertical = Math.abs(dy) > FLAT_VERTICAL_Y;
-  const rx = 0;
-  const ry = vertical ? 0 : 1;
-  const rz = vertical ? 1 : 0;
+  const rx = vertical ? faceX : 0;
+  const ry = vertical ? faceY : 1;
+  const rz = vertical ? faceZ : 0;
   const dot = rx * dx + ry * dy + rz * dz;
   let nx = rx - dot * dx;
   let ny = ry - dot * dy;

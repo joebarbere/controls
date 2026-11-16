@@ -387,7 +387,7 @@ const bit = {
   extensions: {},
 };
 
-/** A bit of `diameterMm` (F3.2 part 4: 25.4 mm leaves under 31.75 mm to the stud edge; 38.1 mm is over the bored-hole limit). */
+/** A bit of `diameterMm` (F3.2 part 4: 28.575 mm, 1-1/8 in, leaves under 31.75 mm to the stud edge; 38.1 mm is over the bored-hole limit). */
 const bitOf = (id: string, diameterMm: number) => ({
   ...bit,
   id,
@@ -481,7 +481,7 @@ export const WIRING_TEST_CATALOG: Catalog = catalogOrThrow(
       panel,
     ],
     cables: [cable],
-    tools: [bit, bitOf('tool.test-bit-25', 25.4), bitOf('tool.test-bit-38', 38.1), ...tools],
+    tools: [bit, bitOf('tool.test-bit-29', 28.575), bitOf('tool.test-bit-38', 38.1), ...tools],
     accessories: [ferrule, lug],
     tables: BUILTIN_CATALOG.tables,
   },

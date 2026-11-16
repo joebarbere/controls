@@ -10,7 +10,7 @@ import {
   type Material,
 } from 'three/webgpu';
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { bakeWorldRoutes, type World } from '@controls/world-model';
+import { bakeWorldRoutes, cableFaceAxis, type World } from '@controls/world-model';
 import { cableRunBus, routingPanelBus, routingParityWorld } from '@controls/world-model/testing';
 import { mm } from '@controls/units';
 import { describeSceneGraph } from '../scene';
@@ -493,6 +493,41 @@ describe('WireRenderer cables (F3.2 part 4)', () => {
       expect(z.dot(y)).toBeCloseTo(0, 9);
       expect(x.dot(z)).toBeCloseTo(0, 9);
       expect(new Vector3().crossVectors(x, y).dot(z)).toBeGreaterThan(0); // right-handed: faces keep their winding
+    }
+  });
+
+  it('lays a run up a stud with its wide face against the stud, on a turned wall too (realism F2)', () => {
+    for (const yaw of [0, 90_000]) {
+      // The run's first span is vertical, from the box clamp's jacket end up to a staple on a stud wall.
+      const studs = {
+        id: 'studs',
+        ref: { id: 'prop.stud-wall', version: 1 },
+        transform: { positionMm: { x: -3000, y: -100, z: -3000 }, orientationMdeg: { yaw, pitch: 0, roll: 0 } },
+        extensions: {},
+      };
+      const staple = {
+        kind: 'staple' as const,
+        positionMm: { x: 28, y: 150, z: 40 },
+        entity: null,
+        fixture: 'studs',
+        tool: null,
+      };
+      const world: World = {
+        ...RUN,
+        fixtures: [studs],
+        cables: RUN.cables.map((c) => ({ ...c, route: [staple, c.route[1]] })),
+      };
+      const face = cableFaceAxis(world, world.cables[0]);
+      expect(face).not.toBeNull();
+      const { scene } = setup(world);
+      const mesh = lookMesh(scene, 'nmbJacket');
+      const m = new Matrix4();
+      const [x, y, z] = [new Vector3(), new Vector3(), new Vector3()];
+      mesh.getMatrixAt(0, m); // the first jacket segment: up from the jacket end at (28, 42, 40)
+      m.extractBasis(x, y, z);
+      expect(Math.abs(y.normalize().y)).toBeCloseTo(1, 9);
+      // Its thin axis (the wide faces' normal) is the wall's u axis: the stud side face's normal.
+      expect(Math.abs(z.normalize().dot(new Vector3(face?.x, face?.y, face?.z)))).toBeCloseTo(1, 9);
     }
   });
 

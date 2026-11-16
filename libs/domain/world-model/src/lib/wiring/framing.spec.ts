@@ -1,7 +1,8 @@
 import fc from 'fast-check';
 import {
+  autoWireArgs,
   BIT,
-  BIT_25,
+  BIT_29,
   BIT_38,
   CABLE,
   CUTTER,
@@ -21,7 +22,10 @@ import {
   boreEdgeDistanceMm,
   boreNeedsNailPlate,
   boredHoleTooLarge,
+  enclosureOnStudWall,
   inFraming,
+  maxStripAtBoxMm,
+  MIN_SHEATH_IN_BOX,
   NM_SUPPORT_SPACING,
   supportGap,
 } from './framing';
@@ -48,15 +52,21 @@ describe('the sourced constants', () => {
     expect(BORE_EDGE_MIN.source).toContain('Art. 300.4(A)(1)');
     expect(BORED_HOLE_MAX.valueMm).toBeCloseTo((WALL_STUD_DEPTH.valueMm * 40) / 100, 9);
     expect(BORED_HOLE_MAX.source).toContain('R602.6');
+    expect(BORED_HOLE_MAX.source).toContain('doubled');
+    expect(MIN_SHEATH_IN_BOX.valueMm).toBeCloseTo(0.25 * 25.4, 9);
+    expect(MIN_SHEATH_IN_BOX.source).toContain('Art. 314.17');
+    expect(NM_SUPPORT_SPACING.source).toContain('not vertical');
   });
 });
 
 describe('bores', () => {
-  it('a 1 in bit at the 44 mm mid-depth leaves 31.3 mm, under 31.75 mm: a nail plate is needed (plan F3.2 follow-up)', () => {
+  it('a centred 1 in bit leaves exactly 31.75 mm (44.45 − 12.7): no plate; anything wider needs one (realism F3)', () => {
+    // The stored bore waypoint is at the rounded 44 mm; the edge distance is the drilled hole's.
     expect(BORE_DEPTH_MM).toBe(44);
-    expect(boreEdgeDistanceMm(25.4)).toBeCloseTo(31.3, 9);
-    expect(boreNeedsNailPlate(25.4)).toBe(true);
-    expect(boreNeedsNailPlate(24.5)).toBe(false); // exactly 31.75 mm left
+    expect(boreEdgeDistanceMm(25.4)).toBe(31.75);
+    expect(boreNeedsNailPlate(25.4)).toBe(false);
+    expect(boreNeedsNailPlate(25.401)).toBe(true);
+    expect(boreNeedsNailPlate(28.575)).toBe(true); // 1-1/8 in: 30.1625 mm left
     expect(boreNeedsNailPlate(19)).toBe(false);
   });
 
@@ -64,11 +74,33 @@ describe('bores', () => {
     expect(boredHoleTooLarge(35.56)).toBe(false);
     expect(boredHoleTooLarge(38.1)).toBe(true);
     expect(checkTool(WIRING_TEST_CATALOG, BIT, 'bore').ok).toBe(true);
-    expect(checkTool(WIRING_TEST_CATALOG, BIT_25, 'bore').ok).toBe(true); // allowed; the plate is a warning
+    expect(checkTool(WIRING_TEST_CATALOG, BIT_29, 'bore').ok).toBe(true); // allowed; the plate is a warning
     expect(checkTool(WIRING_TEST_CATALOG, BIT_38, 'bore')).toMatchObject({
       ok: false,
       code: 'beyond-tool-capacity',
     });
+  });
+
+  it('snapWaypoint proposes no bore with a bit the catalogue knows is over the limit (guardian 6)', () => {
+    const bus = wiringBench('trainee', 7, { studWall: true });
+    const at = { x: -2981, y: 1000, z: -3044 };
+    expect(snapWaypoint(bus.state, WIRING_TEST_CATALOG, at, { kinds: ['bore'], boreTool: BIT_38 }).kind).toBe('free');
+    expect(snapWaypoint(bus.state, WIRING_TEST_CATALOG, at, { kinds: ['bore'], boreTool: BIT_29 }).kind).toBe('bore');
+  });
+
+  it('wire.add refuses a bore with a bit over the limit too (guardian 5)', () => {
+    const bus = wiringBench('trainee', 7, { studWall: true });
+    const bore = (tool: typeof BIT) => ({
+      kind: 'bore' as const,
+      positionMm: { x: -2981, y: 1000, z: -3044 },
+      entity: null,
+      fixture: 'studs',
+      tool,
+    });
+    const args = (tool: typeof BIT) =>
+      autoWireArgs({ route: [freeAt(50, 500, 300), bore(tool), freeAt(1070, 500, 300)], lengthMm: 20_000 });
+    expect(bus.exec('wire.add', args(BIT_38))).toMatchObject(refused('beyond-tool-capacity'));
+    expect(bus.exec('wire.add', args(BIT_29)).ok).toBe(true);
   });
 
   it('a route bored with a bit over the limit is refused; one that needs a plate is not', () => {
@@ -85,9 +117,11 @@ describe('bores', () => {
       tailsMm: { a: 0, b: 0 },
       tool: CUTTER,
     });
-    expect(bore(BIT_38)).toMatchObject({ kind: 'bore', fixture: 'studs' });
-    expect(bus.exec('cable.add', args(BIT_38))).toMatchObject(refused('beyond-tool-capacity'));
-    expect(bus.exec('cable.add', args(BIT_25)).ok).toBe(true);
+    const oversized = { ...bore(BIT_29), tool: BIT_38 }; // spelled out: the snapper won't propose it
+    expect(
+      bus.exec('cable.add', { ...args(BIT_29), route: [args(BIT_29).route[0], oversized, args(BIT_29).route[2]] }),
+    ).toMatchObject(refused('beyond-tool-capacity'));
+    expect(bus.exec('cable.add', args(BIT_29)).ok).toBe(true);
   });
 });
 
@@ -109,8 +143,26 @@ describe('supportGap (NM support spacing)', () => {
     expect(supportGap(box(0), [wp('staple', 300)], box(605))).toMatchObject({ where: 'from-box-b', waypoint: 0 });
     // A free waypoint isn't a support: the distance runs on through it.
     expect(supportGap(box(0), [wp('free', 200), wp('staple', 310)], null)).toMatchObject({ where: 'from-box-a' });
-    // Bores and ducts are supports too.
-    expect(supportGap(box(0), [wp('bore', 300), wp('duct', 1600), wp('staple', 2900)], null)).toBeNull();
+    // Bores and ducts break the spans between supports...
+    expect(supportGap(box(0), [wp('staple', 300), wp('bore', 1600), wp('duct', 2900)], null)).toBeNull();
+  });
+
+  it('only a staple secures the cable near a box: a bore or a duct there is a gap (realism F1, Art. 334.30(A))', () => {
+    expect(supportGap(box(0), [wp('bore', 300), wp('duct', 1600), wp('staple', 2900)], null)).toMatchObject({
+      where: 'from-box-a',
+      waypoint: 2,
+      distanceMm: 2900,
+    });
+    expect(supportGap(box(0), [wp('staple', 300), wp('bore', 1000)], box(1200))).toMatchObject({
+      where: 'from-box-b',
+      waypoint: 0,
+      distanceMm: 900,
+    });
+    // Framing with no staple at all: each box end is a gap.
+    expect(supportGap(box(0), [wp('bore', 100)], box(200))).toMatchObject({ where: 'from-box-a', waypoint: -1 });
+    // A run between two boxes on a stud wall is framing even with free waypoints only.
+    expect(supportGap(box(0), [wp('free', 100)], box(2000))).toBeNull();
+    expect(supportGap(box(0), [wp('free', 100)], box(2000), { framing: true })).toMatchObject({ where: 'from-box-a' });
   });
 
   it('a free end is not a box: the run from it to the first support is not checked', () => {
@@ -139,6 +191,29 @@ describe('supportGap (NM support spacing)', () => {
         },
       ),
     );
+  });
+});
+
+describe('the minimum sheath inside a box (realism F7, Art. 314.17)', () => {
+  it('cable.strip leaves at least 6.35 mm of jacket past a box entry, never at a free end', () => {
+    expect(maxStripAtBoxMm(200)).toBe(193);
+    expect(maxStripAtBoxMm(7)).toBe(0);
+    const bus = wiringBench();
+    const added = bus.exec('cable.add', {
+      ref: CABLE,
+      a: { entity: 5, entry: 'top' },
+      b: null,
+      route: [freeAt(25, 500, 2030), freeAt(500, 500, 1000)],
+      lengthMm: 2000,
+      tailsMm: { a: 200, b: 100 },
+      tool: CUTTER,
+    });
+    expect(added.ok).toBe(true);
+    const strip = (end: 'a' | 'b', jacketMm: number) =>
+      bus.exec('cable.strip', { id: 1, end, jacketMm, tool: STRIPPER });
+    expect(strip('a', 194)).toMatchObject(refused('strip-too-long'));
+    expect(strip('a', 193).ok).toBe(true);
+    expect(strip('b', 100).ok).toBe(true); // a free end has no box
   });
 });
 
@@ -182,6 +257,29 @@ describe('cable.add and cable.reroute in framing (staple-spacing)', () => {
     expect(bus.exec('cable.reroute', { id: 1, route: far })).toMatchObject(refused('staple-spacing'));
     const near = [ok[0], staple(1800), freeAt(-2961, 2000, -3044)];
     expect(bus.exec('cable.reroute', { id: 1, route: near }).ok).toBe(true);
+  });
+
+  it('a box-to-box run on the stud wall is framing even through free waypoints only (realism F4)', () => {
+    const { bus, staple } = framed();
+    bus.exec('entity.place', {
+      ref: { id: 'box.test-1gang', version: 1 },
+      positionMm: { x: -2955, y: 2200, z: -3074 },
+    });
+    bus.exec('enclosure.openEntry', { id: 7, entry: 'ko1', tool: PUNCH });
+    const base = {
+      ref: CABLE,
+      a: { entity: 6, entry: 'top' },
+      b: { entity: 7, entry: 'ko1' },
+      lengthMm: 3000,
+      tailsMm: { a: 200, b: 200 },
+      tool: CUTTER,
+    };
+    expect(enclosureOnStudWall(bus.state, WIRING_TEST_CATALOG, 6)).toBe(true);
+    expect(enclosureOnStudWall(bus.state, WIRING_TEST_CATALOG, 5)).toBe(false); // the bench box, far off
+    expect(bus.exec('cable.add', { ...base, route: [freeAt(-2930, 1300, -3044)] })).toMatchObject(
+      refused('staple-spacing'),
+    );
+    expect(bus.exec('cable.add', { ...base, route: [staple(600), staple(1900)] }).ok).toBe(true);
   });
 
   it('checks the last support to a box end too', () => {

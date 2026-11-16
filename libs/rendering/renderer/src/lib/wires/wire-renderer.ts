@@ -56,6 +56,7 @@ import { mm } from '@controls/units';
 import {
   bakeCableEnds,
   bakeWorldRoutes,
+  cableFaceAxis,
   type BakedCableEnd,
   type BakedRoute,
   type CatalogRef,
@@ -171,6 +172,8 @@ interface DrawnRoute {
   readonly connection: number | null;
   /** A cable conductor's tail: which cable end it is at (its whole tint is that end's); `null` otherwise. */
   readonly tailEnd: 'a' | 'b' | null;
+  /** A flat cable's face axis on vertical runs (`cableFaceAxis`), or `null` (world +z). */
+  readonly face: { readonly x: number; readonly y: number; readonly z: number } | null;
   readonly appearance: WireAppearance;
   readonly label: string | null;
   segments: number;
@@ -494,6 +497,7 @@ export class WireRenderer {
           baked,
           connection: c.id,
           tailEnd: null,
+          face: null,
           appearance: conductorAppearance(this.catalog, c.ref, c.colour),
           label: c.label,
           segments: 0,
@@ -508,6 +512,7 @@ export class WireRenderer {
         baked: { ...baked, points: joinCableJacket(stub('a'), baked.points, stub('b')) },
         connection: null,
         tailEnd: null,
+        face: cableFaceAxis(world, k),
         appearance: cableAppearance(this.catalog, k.ref),
         label: k.label,
         segments: 0,
@@ -520,6 +525,7 @@ export class WireRenderer {
             baked: { owner: `c${c.id}`, points: tail.points, coil: null },
             connection: c.id,
             tailEnd: end.end,
+            face: null,
             appearance: conductorAppearance(this.catalog, c.ref, c.colour),
             label: c.label,
             segments: 0,
@@ -581,9 +587,10 @@ export class WireRenderer {
       const radius = mm(r.appearance.diameterMm / 2);
       const radiusMm = r.appearance.diameterMm / 2;
       const flat = r.appearance.flat;
+      const face = r.face;
       let k = next.get(r.appearance.look) ?? 0;
       const write = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, half: 0 | 1) => {
-        if (flat) this.flatSegmentMatrix(ax, ay, az, bx, by, bz, flat.widthMm, flat.heightMm);
+        if (flat) this.flatSegmentMatrix(ax, ay, az, bx, by, bz, flat.widthMm, flat.heightMm, face);
         else this.segmentMatrix(ax, ay, az, bx, by, bz, radius);
         layer.pool.mesh.setMatrixAt(k, this.m);
         layer.route[k] = ri;
@@ -812,7 +819,7 @@ export class WireRenderer {
   /**
    * `this.m` = the unit cylinder stood on the segment from a to b (mm) as a flat cable: its local x
    * (wide) across the run and its local z (thin) along `flatThinAxis`, scaled to half the section
-   * (`widthMm` × `heightMm`), lengthened by half the height so a bend has no gap. Right-handed
+   * (`widthMm` × `heightMm`), its vertical runs facing `face` (the stud wall's `u`), lengthened by half the height so a bend has no gap. Right-handed
    * (x × y = z), so the faces keep their winding. Allocation-free.
    */
   private flatSegmentMatrix(
@@ -824,6 +831,7 @@ export class WireRenderer {
     bz: number,
     widthMm: number,
     heightMm: number,
+    face: { readonly x: number; readonly y: number; readonly z: number } | null = null,
   ): void {
     const dx = bx - ax;
     const dy = by - ay;
@@ -837,7 +845,8 @@ export class WireRenderer {
     const uy = dy / lengthMm;
     const uz = dz / lengthMm;
     const n = this.thin;
-    flatThinAxis(ux, uy, uz, n);
+    if (face) flatThinAxis(ux, uy, uz, n, face.x, face.y, face.z);
+    else flatThinAxis(ux, uy, uz, n);
     // wide = along × thin
     const wx = uy * n[2] - uz * n[1];
     const wy = uz * n[0] - ux * n[2];
@@ -940,6 +949,9 @@ function sameRoutes(a: readonly DrawnRoute[], b: readonly DrawnRoute[]): boolean
       p.label !== q.label ||
       p.connection !== q.connection ||
       p.tailEnd !== q.tailEnd ||
+      p.face?.x !== q.face?.x ||
+      p.face?.y !== q.face?.y ||
+      p.face?.z !== q.face?.z ||
       p.appearance.flat?.widthMm !== q.appearance.flat?.widthMm ||
       p.appearance.flat?.heightMm !== q.appearance.flat?.heightMm ||
       p.appearance.look !== q.appearance.look ||

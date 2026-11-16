@@ -175,6 +175,12 @@ describe('flat cables and cable ends (F3.2 part 4)', () => {
     expect(axis(0, 0, -1)).toEqual([0, 1, 0]);
     expect(axis(0, 1, 0)).toEqual([0, 0, 1]);
     expect(axis(0, -1, 0)).toEqual([0, 0, 1]);
+    // On a stud wall the vertical reference is the wall's u axis (the stud side face's normal).
+    const onStud = [0, 0, 0];
+    flatThinAxis(0, 1, 0, onStud, 1, 0, 0);
+    expect(onStud).toEqual([1, 0, 0]);
+    flatThinAxis(1, 0, 0, onStud, 0, 0, 1); // a horizontal run still lies flat
+    expect(onStud).toEqual([0, 1, 0]);
   });
 
   it('property: the thin axis is a unit vector perpendicular to the run', () => {

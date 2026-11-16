@@ -1,16 +1,34 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { createGame } from '@controls/scripting-api';
-import { bakeCableEnds, cableJacketEnd, supportGap, type World } from '@controls/world-model';
+import { createGame, loadGame, runConsoleScript } from '@controls/scripting-api';
+import { SIM_ENGINE_VERSION } from '@controls/sim-core';
+import {
+  bakeCableEnds,
+  cableFaceAxis,
+  cableJacketEnd,
+  enclosureOnStudWall,
+  supportGap,
+  type World,
+} from '@controls/world-model';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import nmCableRun from '../scenarios/nm-cable-run';
 import { WORKSPACE_ROOT } from './script-loader';
+import { currentFixture } from './testing/fixtures';
 import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
 
 /*
  * F3.2 part 4, headless: a box-to-box NM-B run on the workshop stud wall, stapled within the NM support
  * spacing, its jacket stripped at both ends and its conductors landed individually on DIN terminal
- * blocks in the panel (`scenarios/nm-cable-run.ts`). The player-facing e2e comes with the UI half.
+ * blocks in the panel (`scenarios/nm-cable-run.ts`, spelled out in `nm-cable-run.console`). The
+ * player-facing e2e comes with the UI half. Its save is a frozen fixture (save-format review), written by
+ *
+ *   pnpm sim run apps/sim-cli/scenarios/nm-cable-run.console --world content/levels/workshop.json \
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/nm-cable-run-engine-7-catalog-2.ctrl
+ *
+ * and rebuilt from the console file by `sources.spec.ts`'s fixture-rebuild check, so `cable.add`,
+ * `cable.strip` and a cable conductor's `wire.land` replay are pinned.
  */
 
 /** world.hash after `nm-cable-run.ts`. */
@@ -18,6 +36,7 @@ export const NM_CABLE_RUN_HASH = '1ac88020c8d4184be79f59800bf00762e1e0837eeae591
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const script = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/nm-cable-run.ts');
+const consoleFile = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/nm-cable-run.console');
 
 function sim(...argv: string[]): { status: number | null; stdout: string[]; stderr: string } {
   const result = spawnSync(process.execPath, [bundle, ...argv], {
@@ -34,6 +53,27 @@ describe('the NM-B cable run scenario (F3.2 part 4)', () => {
     const run = sim('run', script, '--world', WORKSHOP_LEVEL, '--expect', NM_CABLE_RUN_HASH);
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
+  });
+
+  it('sim run <file.console> reaches it too, and logs exactly the script entries', async () => {
+    const run = sim('run', consoleFile, '--world', WORKSHOP_LEVEL, '--expect', NM_CABLE_RUN_HASH);
+    expect(run.stderr).toBe('');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toEqual([NM_CABLE_RUN_HASH, NM_CABLE_RUN_HASH]);
+    const fromConsole = createGame({ world: workshopWorld() });
+    expect((await runConsoleScript(fromConsole, await readFile(consoleFile, 'utf8'))).ok).toBe(true);
+    const fromScript = createGame({ world: workshopWorld() });
+    nmCableRun(fromScript);
+    expect(fromConsole.entries()).toEqual(fromScript.entries());
+  });
+
+  it('its checked-in save loads continued, replaying cable.add, cable.strip and the landings', () => {
+    const loaded = loadGame(new Uint8Array(readFileSync(currentFixture('nm-cable-run'))));
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.manifest.simEngineVersion).toBe(SIM_ENGINE_VERSION);
+    expect(loaded.game.hash()).toBe(NM_CABLE_RUN_HASH);
+    expect(loaded.game.entries().map((e) => e.id)).toContain('cable.strip');
   });
 
   it('runs box to panel, stapled, stripped at both ends, with each conductor landed on its block', () => {
@@ -61,6 +101,10 @@ describe('the NM-B cable run scenario (F3.2 part 4)', () => {
       [2, 'white', null, 4, 'b'],
       [3, 'bare', null, 5, 'b'],
     ]);
+    // Both enclosures are on the stud wall; the staples face the studs' side faces (the wall's u is +x).
+    expect(enclosureOnStudWall(world, BUILTIN_CATALOG, 1)).toBe(true);
+    expect(enclosureOnStudWall(world, BUILTIN_CATALOG, 2)).toBe(true);
+    expect(cableFaceAxis(world, cable)).toEqual({ x: 1, y: 0, z: 0 });
     // The jacket ends 100 mm inside the panel; the tails are drawn from there.
     expect(cableJacketEnd(world, BUILTIN_CATALOG, world.cables[0], 'b')).toEqual({ x: -810, y: 900, z: 79 });
     const ends = bakeCableEnds(world, BUILTIN_CATALOG);

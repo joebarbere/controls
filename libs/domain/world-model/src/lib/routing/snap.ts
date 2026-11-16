@@ -6,6 +6,7 @@ import { surfaceToWorld, worldToSurface } from '../snap/surface';
 import type { CatalogRef, PositionMm, Waypoint, World } from '../types';
 import { ROUTE_SNAP_CAPTURE } from './constants';
 import { nearestOnAxis, racewayPaths } from './raceways';
+import { boredHoleTooLarge } from '../wiring/framing';
 import { distance2 } from './vec';
 
 /*
@@ -23,7 +24,8 @@ import { distance2 } from './vec';
  *   300.4(D), cited by number: at least 1-1/4 in (31.75 mm) from the edge, or a steel plate); the
  *   mid-depth gives 44 mm;
  * - `bore`: on a stud's axis at its mid-depth ({@link BORE_DEPTH_MM} behind the face), at the cursor's
- *   height; only when the caller names the bit or hole saw (`boreTool`), which a bore stores.
+ *   height; only when the caller names the bit or hole saw (`boreTool`), which a bore stores, and
+ *   never with a bit the catalogue says is over the bored-hole limit (F3.2 part 4, `BORED_HOLE_MAX`).
  *
  * The nearest candidate within {@link ROUTE_SNAP_CAPTURE} wins (ties: duct, conduit, staple, bore, then
  * the lower entity id or fixture id and stud); otherwise a `free` waypoint at the cursor. Integer in,
@@ -95,7 +97,11 @@ export function snapWaypoint(
   }
 
   const staples = kinds.includes('staple');
-  const bores = kinds.includes('bore') && boreTool !== null;
+  // A bit the catalogue knows to be over the bored-hole limit proposes no bore (the command would
+  // refuse it, `beyond-tool-capacity`); an unknown tool is left to the command.
+  const bit = boreTool === null ? undefined : catalog.tool(boreTool);
+  const oversized = bit !== undefined && bit.boreDiameterMm !== null && boredHoleTooLarge(bit.boreDiameterMm);
+  const bores = kinds.includes('bore') && boreTool !== null && !oversized;
   if (staples || bores) {
     for (const fixture of world.fixtures) {
       if (fixtureSpec(fixture.ref)?.kind !== 'stud-wall') continue;

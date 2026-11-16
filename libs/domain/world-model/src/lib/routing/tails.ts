@@ -1,5 +1,7 @@
 import type { Catalog } from '@controls/catalog';
 import { findEntity } from '../entity-commands';
+import { fixtureSnapTarget, fixtureSpec } from '../fixtures';
+import { frameAxes } from '../snap/surface';
 import { rotateQuarterTurns } from '../snap/quarter-turn';
 import type { Cable, CableId, Connection, ConnectionId, PositionMm, World } from '../types';
 import { cableEntryFrame, cableJacketEnd, endMethodSpec, landedPoint } from '../wiring/checks';
@@ -14,8 +16,8 @@ import { UNIT, type Vec3 } from './vec';
  *
  * - **The jacket** runs straight in along the entry's inward axis from the entry point to where the
  *   jacket ends (`cableJacketEnd`: the tail less what is stripped). It continues the cable's run.
- * - **Each conductor's tail** starts at the jacket end, fanned across the entry (the `across` axis
- *   below) one conductor diameter apart in assembly order, centred. A landed end runs straight to a
+ * - **Each conductor's tail** starts at the jacket end, fanned across the entry (`fanAxis`: the flat
+ *   jacket's wide axis there, from `cableFaceAxis` on a stud wall) one conductor diameter apart in assembly order, centred. A landed end runs straight to a
  *   12 mm lead-out ({@link ROUTE_LEAD_OUT}) and into its method's entry point; an unlanded one is a
  *   straight stub along the inward axis as long as the stripped length (none while the jacket is on).
  * - **A free cable end** (no entry, so no axis) has no jacket stub: a landed conductor's tail runs from
@@ -46,9 +48,38 @@ export interface BakedCableEnd {
 
 const q = (v: number): number => Math.round(v * BAKE_UNITS_PER_MM) + 0;
 
-/** The fan axis across an entry: +z for an entry along x, +x otherwise (matches the renderer's flat-cable frame). */
-export function fanAxis(inward: PositionMm): PositionMm {
-  return inward.x !== 0 ? UNIT['+z'] : UNIT['+x'];
+/**
+ * The axis a flat cable's wide faces face where it runs vertically (F3.2 part 4, realism review F2):
+ * the `u` axis (across the wall) of the stud wall its first staple or bore is on, so a run up a stud
+ * lies with its wide face against the stud's side face, as NM-B is stapled. `null` for a cable with
+ * no staple or bore on a stud wall the fixtures know (the renderer then uses world +z). Integer unit
+ * vector, pure.
+ */
+export function cableFaceAxis(world: Pick<World, 'fixtures'>, cable: Pick<Cable, 'route'>): PositionMm | null {
+  for (const w of cable.route) {
+    if ((w.kind !== 'staple' && w.kind !== 'bore') || w.fixture === null) continue;
+    const fixture = world.fixtures.find((f) => f.id === w.fixture);
+    if (!fixture || fixtureSpec(fixture.ref)?.kind !== 'stud-wall') continue;
+    const target = fixtureSnapTarget(fixture);
+    if (target) return frameAxes(target.frame).u;
+  }
+  return null;
+}
+
+/**
+ * The fan axis across an entry: the wide axis of a flat cable along `inward`, with the renderer's
+ * frame (`flatThinAxis`): along a vertical entry, across `face` (the cable's `cableFaceAxis`, default
+ * +z), so +x by default; along a horizontal one, flat (thin along +y), so +z for an entry along x and
+ * +x for one along z. Positive components (the fan's order follows it).
+ */
+export function fanAxis(inward: PositionMm, face: PositionMm | null = null): PositionMm {
+  const thin = inward.y !== 0 ? (face ?? UNIT['+z']) : UNIT['+y'];
+  const wide = {
+    x: inward.y * thin.z - inward.z * thin.y,
+    y: inward.z * thin.x - inward.x * thin.z,
+    z: inward.x * thin.y - inward.y * thin.x,
+  };
+  return { x: Math.abs(wide.x) + 0, y: Math.abs(wide.y) + 0, z: Math.abs(wide.z) + 0 };
 }
 
 /** Pushes `p` (mm) as tenths, dropping a repeat of the last point. */
@@ -82,6 +113,7 @@ function bakeEnd(
   cable: Cable,
   end: 'a' | 'b',
   conductors: readonly Connection[],
+  face: PositionMm | null,
 ): BakedCableEnd | null {
   const tails: BakedTail[] = [];
   if (cable[end] === null) {
@@ -104,7 +136,7 @@ function bakeEnd(
   const jacket: number[] = [];
   push(jacket, frame.point);
   push(jacket, jacketEnd);
-  const across = fanAxis(frame.inward);
+  const across = fanAxis(frame.inward, face);
   const pitches = conductors.map((c) => laneSizeTenths(catalog, 'conductor', c.ref).width / BAKE_UNITS_PER_MM);
   const span = pitches.reduce((sum, p) => sum + p, 0);
   const strip = cable.jacketStripMm[end];
@@ -155,8 +187,9 @@ export function bakeCableEnds(world: World, catalog: Catalog): BakedCableEnd[] {
     const conductors = (byCable.get(cable.id) ?? []).sort(
       (p, r) => (p.cable?.conductor ?? 0) - (r.cable?.conductor ?? 0) || p.id - r.id,
     );
+    const face = cableFaceAxis(world, cable);
     for (const end of ['a', 'b'] as const) {
-      const baked = bakeEnd(world, catalog, cable, end, conductors);
+      const baked = bakeEnd(world, catalog, cable, end, conductors, face);
       if (baked !== null) out.push(baked);
     }
   }

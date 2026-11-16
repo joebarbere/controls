@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { BARE, CABLE, CUTTER, freeAt, STRIPPER, WIRE, WIRING_TEST_CATALOG, wiringBench } from '../../testing';
 import { laneSizeTenths, strandedDiameterFactor } from './lanes';
-import { bakeCableEnds, fanAxis } from './tails';
+import { bakeCableEnds, cableFaceAxis, fanAxis } from './tails';
 
 /*
  * Cable ends (F3.2 part 4): the jacket stub into the box and each conductor's tail, baked from the
@@ -99,6 +99,25 @@ describe('bakeCableEnds', () => {
     expect(JSON.stringify(bus.state)).toBe(before);
   });
 
+  it("the face axis is the stud wall's u axis, turned with the wall (realism F2)", () => {
+    const studs = (yaw: number) => ({
+      ...wiringBench('trainee', 7, { studWall: true }).state.fixtures[0],
+      transform: { positionMm: { x: -3000, y: 0, z: -3000 }, orientationMdeg: { yaw, pitch: 0, roll: 0 } },
+    });
+    const staple = {
+      kind: 'staple' as const,
+      positionMm: { x: 0, y: 0, z: 0 },
+      entity: null,
+      fixture: 'studs',
+      tool: null,
+    };
+    expect(cableFaceAxis({ fixtures: [studs(0)] }, { route: [staple] })).toStrictEqual({ x: 1, y: 0, z: 0 });
+    expect(Math.abs(cableFaceAxis({ fixtures: [studs(90_000)] }, { route: [staple] })?.z ?? 0)).toBe(1);
+    expect(cableFaceAxis({ fixtures: [studs(0)] }, { route: [{ ...staple, kind: 'free', fixture: null }] })).toBeNull();
+    // Vertical entries fan across the face axis's perpendicular: along z on a wall whose u is x.
+    expect(fanAxis({ x: 0, y: -1, z: 0 }, { x: 1, y: 0, z: 0 })).toStrictEqual({ x: 0, y: 0, z: 1 });
+  });
+
   it('fans across the entry: +z for an entry along x, +x otherwise', () => {
     expect(fanAxis({ x: -1, y: 0, z: 0 })).toStrictEqual({ x: 0, y: 0, z: 1 });
     expect(fanAxis({ x: 0, y: -1, z: 0 })).toStrictEqual({ x: 1, y: 0, z: 0 });
@@ -113,7 +132,9 @@ describe('stranded conductor diameters (laneSizeTenths, the #111 follow-up)', ()
     expect(strandedDiameterFactor(19)).toBeCloseTo(5 / Math.sqrt(19), 12);
     expect(strandedDiameterFactor(37)).toBeCloseTo(7 / Math.sqrt(37), 12);
     expect(strandedDiameterFactor(3)).toBe(strandedDiameterFactor(7));
-    expect(strandedDiameterFactor(26)).toBeCloseTo(7 / Math.sqrt(26), 12);
+    // Bunched counts (MTW's 16 and 26 strands) are capped at the 7-strand factor (realism F5).
+    expect(strandedDiameterFactor(16)).toBe(strandedDiameterFactor(7));
+    expect(strandedDiameterFactor(26)).toBe(strandedDiameterFactor(7));
   });
 
   it('a stranded THHN is drawn wider than the solid one of the same AWG, by its metal only', () => {

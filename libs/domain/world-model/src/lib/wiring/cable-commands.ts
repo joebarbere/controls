@@ -18,7 +18,7 @@ import {
   type RoutePoint,
   routePoints,
 } from './checks';
-import { checkCableSupport } from './framing';
+import { cableInFraming, checkCableSupport, maxStripAtBoxMm, MIN_SHEATH_IN_BOX } from './framing';
 
 /*
  * The cable commands (ADR 0015, "CableV3"): `cable.add`, `cable.strip`, `cable.delete`,
@@ -103,7 +103,8 @@ export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
       const points = routePoints(ends[0], args.route, ends[1]);
       const geometry = checkGeometry(state, catalog, points, args.lengthMm, args.tailsMm.a + args.tailsMm.b);
       if (geometry) return geometry;
-      const support = checkCableSupport(ends[0]?.positionMm ?? null, args.route, ends[1]?.positionMm ?? null);
+      const framing = cableInFraming(state, catalog, args.a, args.route, args.b);
+      const support = checkCableSupport(ends[0]?.positionMm ?? null, args.route, ends[1]?.positionMm ?? null, framing);
       if (support) return support;
       const cable: Cable = {
         id,
@@ -158,7 +159,8 @@ export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
 /**
  * `cable.strip {id, end, jacketMm, tool}`: strips the jacket at one end to `jacketMm` with a tool that
  * can `stripJacket` the cable's largest conductor. Only more (`cannot-unstrip`), and at most the tail
- * (`strip-too-long`).
+ * (`strip-too-long`); at a box end at least `MIN_SHEATH_IN_BOX` (6.35 mm, NFPA 70 Art. 314.17 by number)
+ * of jacket stays inside the box (`strip-too-long`, F3.2 part 4).
  */
 export function cableStripCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<CableStripArgs, World>({
@@ -181,6 +183,12 @@ export function cableStripCommand(catalog: Catalog = BUILTIN_CATALOG) {
       }
       if (jacketMm > cable.tailsMm[end]) {
         return fail('strip-too-long', `End ${end} of cable ${id} has a ${cable.tailsMm[end]} mm tail`);
+      }
+      if (cable[end] !== null && jacketMm > maxStripAtBoxMm(cable.tailsMm[end])) {
+        return fail(
+          'strip-too-long',
+          `At least ${MIN_SHEATH_IN_BOX.valueMm} mm of jacket stays inside the box at end ${end} of cable ${id}: strip at most ${maxStripAtBoxMm(cable.tailsMm[end])} mm`,
+        );
       }
       return swap(cable, { ...cable, jacketStripMm: { ...cable.jacketStripMm, [end]: jacketMm } });
     },
@@ -237,7 +245,7 @@ export function cableRerouteCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (geometry) return geometry;
       const a = cable.a === null ? null : points[0].positionMm;
       const b = cable.b === null ? null : (points.at(-1) as RoutePoint).positionMm;
-      const support = checkCableSupport(a, route, b);
+      const support = checkCableSupport(a, route, b, cableInFraming(state, catalog, cable.a, route, cable.b));
       if (support) return support;
       const copy = route.map((w) => ({ ...w, positionMm: { ...w.positionMm }, tool: w.tool && { ...w.tool } }));
       const after = { ...cable, route: copy };
