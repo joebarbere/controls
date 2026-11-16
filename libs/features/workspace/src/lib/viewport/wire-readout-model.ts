@@ -1,7 +1,8 @@
 import { formatTemperature, type WireRef } from '@controls/renderer';
 import {
   CONNECTION_AMBIENT_K,
-  CONNECTION_CONDUCTOR_STATES,
+  CONNECTION_CONDUCTOR_CLOSED,
+  CONNECTION_CONDUCTOR_OPEN,
   CONNECTION_OVERHEAT_RISE_K,
   CONNECTION_OXIDATION_ONSET_K,
   CONNECTION_READING_CONDUCTOR_DROP,
@@ -97,7 +98,6 @@ const END_NONE = CONNECTION_RECORD_END_STATES.indexOf('none');
 const END_INTERMITTENT_CLOSED = CONNECTION_RECORD_END_STATES.indexOf('intermittentClosed');
 const END_INTERMITTENT_OPEN = CONNECTION_RECORD_END_STATES.indexOf('intermittentOpen');
 const END_ARCING = CONNECTION_RECORD_END_STATES.indexOf('arcing');
-const CONDUCTOR_CLOSED = CONNECTION_CONDUCTOR_STATES.indexOf('closed');
 const STATUS_OPEN = CONNECTION_RECORD_STATUS_VALUES.indexOf('open');
 const STATUS_SOLVED = CONNECTION_RECORD_STATUS_VALUES.indexOf('solved');
 
@@ -287,9 +287,17 @@ function recordView(reading: NetlistReading, c: number): Pick<WireReadoutView, '
   const volts = (i: number, bit: number) => ((readings & bit) !== 0 ? formatQuantity(v(i), 'V') : NO_READING);
   const gap = (i: number, bit: number) =>
     (readings & bit) !== 0 ? `gap ${formatQuantity(v(i), 'V')}` : 'gap, no reading';
-  // Anything but `closed` is a conductor open in its body (a fused lead; a melted conductor if the
-  // protocol adds one): a gap, never 0 V.
-  const fused = v(I_COND_STATE) !== CONDUCTOR_CLOSED;
+  // `open` is a fused conductor or lead (as `wire.info` prints it); any other code but `closed` can't
+  // come from this protocol, and reads as a conductor open in its body, not as fused. Either is a gap,
+  // never 0 V.
+  const conductorState = v(I_COND_STATE);
+  const body: BodyState =
+    conductorState === CONNECTION_CONDUCTOR_CLOSED
+      ? 'closed'
+      : conductorState === CONNECTION_CONDUCTOR_OPEN
+        ? 'fused'
+        : 'open';
+  const fused = body !== 'closed';
   const parts: WireReadoutPart[] = [
     {
       key: 'conductor',
@@ -320,8 +328,11 @@ function recordView(reading: NetlistReading, c: number): Pick<WireReadoutView, '
     });
   });
   const current = (readings & CONNECTION_READING_CURRENT) !== 0 ? formatQuantity(v(I_CURRENT), 'A') : NO_READING;
-  return { current, parts, state: stateText(status, fused, ends, v(I_INSULATION) === 1) };
+  return { current, parts, state: stateText(status, body, ends, v(I_INSULATION) === 1) };
 }
+
+/** The conductor body: closed, fused (`CONNECTION_CONDUCTOR_OPEN`), or open by an unknown code. */
+type BodyState = 'closed' | 'fused' | 'open';
 
 /** `ends a and b`, `end a`. */
 const endsText = (names: readonly string[]) =>
@@ -335,7 +346,7 @@ const endsText = (names: readonly string[]) =>
  */
 function stateText(
   status: number,
-  fused: boolean,
+  body: BodyState,
   ends: readonly { name: 'a' | 'b'; state: number; tempK: number }[],
   insulationDamaged: boolean,
 ): string {
@@ -349,11 +360,12 @@ function stateText(
     (e) =>
       e.state !== END_INTERMITTENT_OPEN && e.tempK >= READOUT_OVERHEAT_K && e.tempK <= CONNECTION_OXIDATION_ONSET_K,
   );
-  if (fused) states.push('fused');
+  if (body === 'fused') states.push('fused');
+  else if (body === 'open') states.push('conductor open');
   if (openEnds.length > 0) states.push(`intermittent at ${endsText(openEnds)}, open now`);
   if (closedEnds.length > 0) states.push(`intermittent at ${endsText(closedEnds)}, closed now`);
   if (arcing.length > 0) states.push(`arcing at ${endsText(arcing)}`);
-  if (status === STATUS_OPEN && !fused && openEnds.length === 0) states.push('open: not in a circuit');
+  if (status === STATUS_OPEN && body === 'closed' && openEnds.length === 0) states.push('open: not in a circuit');
   if (degrading.length > 0) states.push(`degrading at ${endsText(degrading)} (above the oxidation onset)`);
   if (hot.length > 0) states.push(`overheating at ${endsText(hot)}`);
   if (states.length === 0) {

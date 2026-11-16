@@ -1,5 +1,5 @@
 import type { WireRef } from '@controls/renderer';
-import { fakeSnapshotView } from '@controls/sim-protocol';
+import { CONNECTION_OXIDATION_ONSET_K, fakeSnapshotView, NetlistReadout } from '@controls/sim-protocol';
 import { benchDescriptor, connectionRecords } from '../netlist/netlist.fakes';
 import {
   READOUT_OVERHEAT_K,
@@ -210,6 +210,60 @@ describe('the wire readout (F3.6 part 3)', () => {
     expect(sampler.summary({ kind: 'cable', id: 1 }, world)).toBe(
       'Cable 1 selected: no reading: a cable jacket (its conductors have readings).',
     );
+  });
+});
+
+describe('the wire readout: review cases (F3.6 part 3)', () => {
+  it('a conductorState it does not know reads "conductor open" (a gap), not fused; open is fused', () => {
+    const odd = new WireReadoutSampler();
+    odd.update(view(LOOSE, { ...lead, currentA: 0, conductorState: 7, status: 4, readings: 1 }), LEAD);
+    const r = odd.format(LEAD, world, 'hover');
+    expect(r.parts[0].drop).toBe('gap, no reading');
+    expect(r.state).toBe('conductor open');
+    const fused = new WireReadoutSampler();
+    fused.update(view(LOOSE, { ...lead, currentA: 0, conductorState: 1, status: 4, readings: 1 }), LEAD);
+    expect(fused.format(LEAD, world, 'hover').state).toBe('fused');
+  });
+
+  it('an intermittently open end b without its drop bit reads "gap, no reading", never 0 V', () => {
+    const r = readout({ ...LOOSE, endBState: 3, endBDropV: 0, currentA: 0, status: 4, readings: 1 | 2 | 4 | 16 | 32 });
+    expect(rows(r)[2]).toStrictEqual(['End b', 'gap, no reading', '302 K (29 °C)']);
+    expect(r.state).toBe('intermittent at end b, open now, overheating at end a');
+  });
+
+  it('update() reports state-only changes: an end opening, a readings bit flipping at value 0', () => {
+    const sampler = new WireReadoutSampler();
+    expect(sampler.update(view(LOOSE), WIRE)).toBe(true);
+    expect(sampler.update(view({ ...LOOSE, endAState: 3 }), WIRE)).toBe(true);
+    const zero = { ...LOOSE, endAState: 3, endADropV: 0 };
+    expect(sampler.update(view({ ...zero, readings: 63 }), WIRE)).toBe(true); // 0 V was 300 mV
+    expect(sampler.update(view({ ...zero, readings: 63 & ~4 }), WIRE)).toBe(true); // gap 0 V → gap, no reading
+    expect(sampler.update(view({ ...zero, readings: 63 & ~4 }), WIRE)).toBe(false);
+  });
+
+  it('overheating starts at ambient + 100 K inclusive; degrading only strictly above the oxidation onset', () => {
+    expect(readout({ ...LOOSE, endATempK: READOUT_OVERHEAT_K }).state).toBe('overheating at end a');
+    expect(readout({ ...LOOSE, endATempK: READOUT_OVERHEAT_K - 1e-9 }).state).toBe('normal');
+    expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K }).state).toBe('overheating at end a');
+    expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K + 1e-9 }).state).toBe(
+      'degrading at end a (above the oxidation onset)',
+    );
+  });
+
+  it('allocates its reading once per descriptor, and reads nothing with no target', () => {
+    const create = vi.spyOn(NetlistReadout.prototype, 'createReading');
+    const first = benchDescriptor(1);
+    const records = connectionRecords([lead, lead, lead, LOOSE]);
+    const sampler = new WireReadoutSampler();
+    for (let i = 0; i < 50; i++) sampler.update(fakeSnapshotView({ descriptor: first, connections: records }), WIRE);
+    expect(create).toHaveBeenCalledTimes(1);
+    sampler.update(fakeSnapshotView({ descriptor: benchDescriptor(2), connections: records }), WIRE);
+    expect(create).toHaveBeenCalledTimes(2);
+    create.mockClear();
+    const idle = new WireReadoutSampler();
+    for (let i = 0; i < 50; i++)
+      idle.update(fakeSnapshotView({ descriptor: benchDescriptor(3), connections: records }), null);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 

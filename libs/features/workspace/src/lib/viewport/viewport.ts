@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  linkedSignal,
   DestroyRef,
   effect,
   ElementRef,
@@ -305,12 +306,24 @@ export class Viewport {
    * mode while the console is available (D16).
    */
   protected readonly wireReadout = connectWireReadout(this.state);
-  /** Set when N / Shift+N finds no wire to select; cleared by the next selection. */
-  private readonly wireCycleMiss = signal('');
+  /** The selected wire, changing only when another wire (or none) is selected. */
+  private readonly selectedWire = computed(() => this.state()?.selectedWire ?? null, {
+    equal: (a, b) => a === b || (a !== null && b !== null && wireOwner(a) === wireOwner(b)),
+  });
+  /**
+   * How many times in a row N / Shift+N found no wire to select (0: none since the selection last
+   * changed). Reset by any change of the selected wire, however it was made (a click, N, Escape).
+   */
+  private readonly wireCycleMisses = linkedSignal({ source: this.selectedWire, computation: () => 0 });
   /** A wire as the host's `data-wire-*` attributes write it (`c2`, `k1`; the wire renderer's owner), or absent. */
   protected readonly wireKey = (wire: WireRef | null | undefined): string | null => (wire ? wireOwner(wire) : null);
   /** The wire live region: a selection's announcement, or why N selected nothing. */
-  protected readonly wireStatus = computed(() => this.wireCycleMiss() || this.wireReadout.announcement());
+  protected readonly wireStatus = computed(() => {
+    const misses = this.wireCycleMisses();
+    // Each miss alternates a trailing no-break space, so a repeated miss changes the text and is announced again.
+    if (misses > 0) return `No wire to select.${misses % 2 === 0 ? '\u00a0' : ''}`;
+    return this.wireReadout.announcement();
+  });
   protected readonly session = inject(Session);
   protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
   private readonly keys = inject(KeybindingService);
@@ -461,7 +474,7 @@ export class Viewport {
     const current = this.state()?.selectedWire ?? null;
     const candidates = wireCycleCandidates(wireCycleOrder(this.session.world()), current, step);
     const picked = candidates.find((wire) => this.renderer.selectWire(wire));
-    this.wireCycleMiss.set(picked === undefined ? 'No wire to select.' : '');
+    if (picked === undefined) this.wireCycleMisses.update((n) => n + 1);
   }
 
   /** A gesture's commit point → exactly one Command (or, for a cancelled placement, none). */

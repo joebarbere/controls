@@ -7,7 +7,7 @@ import { within } from '@testing-library/dom';
 import { benchDescriptor, connectionRecords } from '../netlist/netlist.fakes';
 import { Viewport } from './viewport';
 import { WireReadoutPanel } from './wire-readout';
-import type { WireReadoutView } from './wire-readout-model';
+import { WireReadoutSampler, type WireReadoutView } from './wire-readout-model';
 
 /*
  * The wire readout in the viewport (F3.6 part 3): shown for the hovered, else the selected, wire in
@@ -179,6 +179,66 @@ describe('the wire readout in the viewport (F3.6 part 3)', () => {
     host.dispatchEvent(new MouseEvent('pointermove', { clientX: 100, clientY: 520 }));
     await fixture.whenStable();
     expect(element.getAttribute('data-corner')).toBe('top-right');
+  });
+
+  it('re-formats only when the readout changes at display resolution, keeping the same rows', async () => {
+    const { send, set, panel } = await setup();
+    const format = vi.spyOn(WireReadoutSampler.prototype, 'format');
+    await send(snapshot(loose(393.822)));
+    await set({ hoveredWire: WIRE });
+    const calls = format.mock.calls.length;
+    const row = panel()?.querySelector('[data-testid="wire-readout-end-a"]');
+    expect(row).toBeTruthy();
+    // 393.9 K still reads 394 K (121 °C), 11.8061 A still 11.8 A: nothing to show, nothing formatted.
+    await send(snapshot(loose(393.9, 11.8061)));
+    await send(snapshot(loose(393.9, 11.8061)));
+    expect(format.mock.calls.length).toBe(calls);
+    expect(panel()?.querySelector('[data-testid="wire-readout-end-a"]')).toBe(row);
+    await send(snapshot(loose(395)));
+    expect(format.mock.calls.length).toBe(calls + 1);
+  });
+
+  it('goes when the console stops being available while it is shown', async () => {
+    const { send, set, panel, session } = await setup();
+    await send(snapshot(loose(393.822)));
+    await set({ hoveredWire: WIRE });
+    expect(panel()).not.toBeNull();
+    session.setContext(CONSOLE_AVAILABLE_KEY, null);
+    await set({ hoveredWire: WIRE });
+    expect(panel()).toBeNull();
+  });
+
+  it('"No wire to select." gives way to the next selection, however made, and a repeated miss is announced again', async () => {
+    const { session, send, set, status, fixture } = await setup();
+    await send(snapshot(loose(393.822)));
+    const raw = () => (fixture.nativeElement as HTMLElement).querySelector('[data-testid="wire-status"]')?.textContent;
+    session.exec('view.wireNext');
+    await fixture.whenStable();
+    expect(status()).toBe('No wire to select.');
+    const first = raw();
+    session.exec('view.wirePrevious');
+    await fixture.whenStable();
+    expect(status()).toBe('No wire to select.');
+    expect(raw()).not.toBe(first); // the text changed, so the region speaks again
+    // A click selection (the renderer publishes it) is announced over the miss.
+    await set({ selectedWire: WIRE });
+    expect(status().startsWith('Wire 9 selected.')).toBe(true);
+    // Cleared, the miss doesn't come back.
+    await set({ selectedWire: null });
+    expect(status()).toBe('');
+  });
+
+  it('places itself away from a pointer already under its corner when it first appears', async () => {
+    const { set, host } = await setup();
+    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 600));
+    Object.defineProperty(host, 'clientWidth', { value: 1000 });
+    Object.defineProperty(host, 'clientHeight', { value: 600 });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(280);
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(120);
+    // The pointer stops on a wire under the top-right corner; the hover (and the panel) follow a frame later.
+    host.dispatchEvent(new MouseEvent('pointermove', { clientX: 900, clientY: 60 }));
+    await set({ hoveredWire: WIRE });
+    expect(host.querySelector('ctl-wire-readout')?.getAttribute('data-corner')).toBe('bottom-left');
   });
 
   it('N with no wire drawn selects nothing and says so; it never logs or changes the world', async () => {

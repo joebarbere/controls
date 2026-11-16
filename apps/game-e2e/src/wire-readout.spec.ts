@@ -11,9 +11,10 @@ import { startSandbox } from './support/sandbox';
  * 303.0 K conductor) runs through the in-game console's `run`, and `view.focus entity-2` frames the
  * breaker. Then:
  *
- * - the mouse rests on wire 2 (a pixel the wire BVH picks, checked to be on the canvas): the readout
- *   shows end a's temperature separately from the conductor's, never covers the pointer, and the
- *   live region stays quiet (hovers aren't announced);
+ * - the mouse rests on wire 2 (a pixel the hover rule gives to the wire, chosen in the page): the
+ *   readout shows end a's temperature separately from the conductor's, with the state that
+ *   temperature implies, never covers the pointer or takes it, and the live region stays quiet;
+ * - a wire pixel under the panel's top-right corner moves the panel to the bottom left;
  * - keyboard only, with the pointer off the canvas: N selects wire 1, N again wire 2, and the readout
  *   follows the selection; the selection is announced once, with the same temperatures.
  *
@@ -31,6 +32,16 @@ type Hooks = {
   };
 };
 
+interface WirePixel {
+  /** Page px. */
+  readonly x: number;
+  readonly y: number;
+  /** The wire there (`c2`, `k1`). */
+  readonly owner: string;
+  /** Distance (canvas px) from the `near` wire's end a. */
+  readonly d: number;
+}
+
 /** Page errors and console errors, collected from the start of a test (none are expected). */
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -42,10 +53,12 @@ function collectErrors(page: Page): string[] {
 }
 
 /**
- * Canvas pixels (CSS px) on connection `id`'s wire by the wire BVH with no device under them, nearest
- * its end a first, 25 to 320 px out, on a 4 px grid.
+ * Page pixels on a 4 px grid where the hover rule picks a wire: the wire BVH hits it, no device is
+ * under the ray (a device wins unless the wire is more than 2 mm nearer, and near a terminal it isn't),
+ * and the canvas, not an overlay, is under the point (the readout ignores the pointer, so it doesn't
+ * count). Sorted by distance from connection `near`'s end a.
  */
-async function pixelsOnWire(page: Page, id: number): Promise<{ x: number; y: number }[]> {
+async function wirePixels(page: Page, near: number): Promise<WirePixel[]> {
   return page.evaluate(async (wire) => {
     const hook = (window as unknown as Hooks).__controlsViewport;
     if (!hook) throw new Error('viewport hook missing');
@@ -54,57 +67,43 @@ async function pixelsOnWire(page: Page, id: number): Promise<{ x: number; y: num
     if (!route) throw new Error(`wire ${wire} not drawn`);
     const [x, y, z] = route.fromMm;
     const end = hook.projectMm({ x, y, z });
+    if (!end) throw new Error('no projection');
     const canvas = document.querySelector('ctl-viewport canvas') as HTMLCanvasElement;
+    const box = canvas.getBoundingClientRect();
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    if (!end) throw new Error('no projection');
-    const hits: { x: number; y: number; d: number }[] = [];
-    for (let dy = -320; dy <= 320; dy += 4) {
-      for (let dx = -320; dx <= 320; dx += 4) {
-        const d = Math.sqrt(dx * dx + dy * dy);
-        const px = end.x + dx;
-        const py = end.y + dy;
-        if (d < 25 || d > 320 || px < 0 || py < 0 || px >= w || py >= h) continue;
+    const hits: WirePixel[] = [];
+    for (let py = 2; py < h; py += 4) {
+      for (let px = 2; px < w; px += 4) {
         const nx = (2 * px) / w - 1;
         const ny = 1 - (2 * py) / h;
         const hit = hook.pickWireAt(nx, ny);
-        // Only where no device is under the ray: the wire then beats whatever is behind it.
-        if (hit?.kind === 'connection' && hit.id === wire && hook.pickAt(nx, ny)?.kind !== 'device') {
-          hits.push({ x: px, y: py, d });
-        }
+        if (hit === null || hook.pickAt(nx, ny)?.kind === 'device') continue;
+        const at = { x: box.left + px, y: box.top + py };
+        if (document.elementFromPoint(at.x, at.y)?.tagName !== 'CANVAS') continue;
+        const owner = `${hit.kind === 'cable' ? 'k' : 'c'}${hit.id}`;
+        hits.push({ ...at, owner, d: Math.sqrt((px - end.x) ** 2 + (py - end.y) ** 2) });
       }
     }
-    return hits.sort((a, b) => a.d - b.d).map(({ x: hx, y: hy }) => ({ x: hx, y: hy }));
-  }, id);
+    return hits.sort((a, b) => a.d - b.d);
+  }, near);
 }
 
+/** Whether page point `p` is inside `box`. */
+const insideBox = (p: { x: number; y: number }, box: { x: number; y: number; width: number; height: number } | null) =>
+  box !== null && p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height;
+
 /**
- * Moves the mouse to the first of `candidates` (canvas px) that is on the canvas (no overlay over it)
- * and hovers wire `owner` there (the wire beats the device behind it), and returns that page point.
+ * The state line for a loose end a showing `k` kelvin (whole, as displayed) on an otherwise normal
+ * wire: overheating from ambient + 100 K (393.15 K, so a displayed 393 may be either way), degrading
+ * above the oxidation onset (422.15 K, so a displayed 422 may be either way).
  */
-async function hoverWire(
-  page: Page,
-  box: { x: number; y: number },
-  candidates: readonly { x: number; y: number }[],
-  owner: string,
-): Promise<{ x: number; y: number }> {
-  for (const p of candidates.slice(0, 12)) {
-    const point = { x: box.x + p.x, y: box.y + p.y };
-    const onCanvas = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName === 'CANVAS', point);
-    if (!onCanvas) continue;
-    await page.mouse.move(point.x, point.y);
-    try {
-      await page.waitForSelector(`ctl-viewport[data-wire-hovered="${owner}"]`, { timeout: 3_000 });
-      return point;
-    } catch {
-      // the device in front won at this pixel: try the next one
-    }
-  }
-  const state = await page.evaluate(() => {
-    const v = document.querySelector('ctl-viewport');
-    return `hovered ${v?.getAttribute('data-hovered')} wire ${v?.getAttribute('data-wire-hovered')}`;
-  });
-  throw new Error(`no pixel on ${owner} hovers it (${JSON.stringify(candidates.slice(0, 12))}; ${state})`);
+function stateFor(k: number): RegExp {
+  if (k >= 423) return /^State: degrading at end a \(above the oxidation onset\)$/;
+  if (k === 422) return /^State: (degrading at end a \(above the oxidation onset\)|overheating at end a)$/;
+  if (k >= 394) return /^State: overheating at end a$/;
+  if (k === 393) return /^State: (overheating at end a|normal)$/;
+  return /^State: normal$/;
 }
 
 /** The temperature in kelvin at the start of `text` (`394 K (121 °C)`). */
@@ -138,12 +137,14 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   await page.keyboard.press('Backquote'); // close the console
   await expect(viewport).toHaveAttribute('data-mode', 'work');
 
-  // Mouse: rest on wire 2, at the first pixel the wire wins over the breaker behind it.
+  // Mouse: rest on wire 2, at the pixel nearest its loose end that the hover rule gives to the wire.
   const box = await page.locator('ctl-viewport canvas').boundingBox();
   if (!box) throw new Error('no canvas');
-  const candidates = await pixelsOnWire(page, 2);
-  expect(candidates.length, 'wire 2 has pickable pixels near the breaker').toBeGreaterThan(0);
-  const at = await hoverWire(page, box, candidates, 'c2');
+  const pixels = await wirePixels(page, 2);
+  const at = pixels.find((p) => p.owner === 'c2');
+  if (!at) throw new Error('no pixel of wire 2 that the hover rule picks');
+  await page.mouse.move(at.x, at.y);
+  await expect(viewport).toHaveAttribute('data-wire-hovered', 'c2');
   const readout = page.getByRole('region', { name: 'Wire readout: Wire 2' });
   await expect(readout).toBeVisible();
   await expect(readout).toHaveAttribute('data-source', 'hover');
@@ -156,20 +157,30 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   expect(kelvin(await conductor.locator('td').nth(1).textContent())).toBeLessThan(320);
   expect(kelvin(await endB.locator('td').nth(1).textContent())).toBeLessThan(320);
   await expect(endA.locator('td').nth(0)).toHaveText(/^\d+(\.\d+)? mV$/);
-  await expect(readout.getByTestId('wire-readout-state')).toHaveText('State: overheating at end a');
-  // It never covers the pick target: the pointer is still over the canvas, outside the panel.
+  const endAK = kelvin(await endA.locator('td').nth(1).textContent());
+  await expect(readout.getByTestId('wire-readout-state')).toHaveText(stateFor(endAK));
+  // It never covers the pick target, nor takes the pointer.
   await expectOnCanvas(page, at, 'the hovered wire');
-  const panel = await readout.boundingBox();
-  if (!panel) throw new Error('no panel box');
-  const inside = at.x >= panel.x && at.x <= panel.x + panel.width && at.y >= panel.y && at.y <= panel.y + panel.height;
-  expect(inside, 'the readout sits away from the pointer').toBe(false);
+  expect(insideBox(at, await readout.boundingBox()), 'the readout sits away from the pointer').toBe(false);
+  const panel = page.locator('ctl-wire-readout');
+  expect(await panel.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
   const status = page.getByTestId('wire-status');
   await expect(status).toHaveText(''); // a hover isn't announced
+
+  // A wire under the panel's top-right corner: hovering it moves the panel to the bottom left.
+  await expect(panel).toHaveAttribute('data-corner', 'top-right');
+  const topRight = await readout.boundingBox();
+  const under = pixels.find((p) => insideBox(p, topRight));
+  if (!under) throw new Error('no wire pixel under the panel: the framing changed');
+  await page.mouse.move(under.x, under.y);
+  await expect(viewport).toHaveAttribute('data-wire-hovered', under.owner);
+  await expect(panel).toHaveAttribute('data-corner', 'bottom-left');
+  expect(insideBox(under, await page.getByTestId('wire-readout').boundingBox())).toBe(false);
 
   // Keyboard: the pointer leaves the canvas, then N, N select wire 1 and wire 2.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height + 40);
   await expect(viewport).not.toHaveAttribute('data-wire-hovered');
-  await expect(readout).toHaveCount(0);
+  await expect(page.getByTestId('wire-readout')).toHaveCount(0);
   await page.locator('ctl-viewport canvas').focus();
   await expect(page.locator('ctl-viewport canvas')).toBeFocused();
   await page.keyboard.press('N');
@@ -178,7 +189,9 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   await page.keyboard.press('N');
   await expect(viewport).toHaveAttribute('data-wire-selected', 'c2');
   await expect(readout).toHaveAttribute('data-source', 'selection');
-  await expect(readout.getByTestId('wire-readout-state')).toHaveText('State: overheating at end a');
+  await expect(readout.getByTestId('wire-readout-state')).toHaveText(
+    stateFor(kelvin(await endA.locator('td').nth(1).textContent())),
+  );
   await expect(status).toContainText('Wire 2 selected. Current 11.');
   const said = (await status.textContent()) ?? '';
   expect(kelvin(/End a ([^,]+)/.exec(said)?.[1] ?? null)).toBeGreaterThanOrEqual(390);

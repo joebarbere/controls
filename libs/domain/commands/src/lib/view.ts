@@ -3,7 +3,7 @@ import type { AnyCommandDef, CommandDef } from './command';
 import { CONSOLE_AVAILABLE_KEY, defineViewCommand, NoArgs } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
-import { ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
+import { ROUTING_STARTED_KEY, ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
 
 /*
  * The viewport's view commands (plan F1.7, ADR 0006 "View commands versus world commands"): switching
@@ -179,14 +179,18 @@ export function viewNetlistInspectorCommand<S>(): CommandDef<NoArgs, S> {
 export const VIEW_WIRE_NEXT_BINDING = 'view.wireNext';
 export const VIEW_WIRE_PREVIOUS_BINDING = 'view.wirePrevious';
 
+/** Where N and Shift+N apply: the viewport is running and no route is started. */
+const WIRE_CYCLE_WHEN = `${MODE_KEY} && !${ROUTING_STARTED_KEY}`;
+
 /**
  * `view.wireNext` (N) and `view.wirePrevious` (Shift+N), F3.6 part 3: select the next or previous
  * drawn wire (routed conductors, then cables, each by id), wrapping, as a click on it does. They are
  * the keyboard's way to a wire (selection cycling, `[` and `]`, holds entities only), so a keyboard
  * player gets its highlight and hover readout. Selection is view state: UI chrome, `logged: false`,
  * never in the replay log, and the ids are not save format (the binding ids are settings keys, so keep
- * them stable). Offered while the viewport runs (`mode` is set); the workspace applies them through
- * `Session.onCommand`.
+ * them stable). Offered while the viewport runs (`mode` is set) and no route is started
+ * (`!routing.started`, like `entity.delete.selection`: N never changes the selection mid-route); the
+ * workspace applies them through `Session.onCommand`.
  */
 function viewWireCycleCommand<S>(id: string, title: string, chord: string): CommandDef<NoArgs, S> {
   return defineViewCommand<NoArgs, S>({
@@ -194,7 +198,7 @@ function viewWireCycleCommand<S>(id: string, title: string, chord: string): Comm
     title,
     category: 'View',
     args: NoArgs,
-    when: MODE_KEY,
+    when: WIRE_CYCLE_WHEN,
     bindings: [
       {
         id,
@@ -202,7 +206,7 @@ function viewWireCycleCommand<S>(id: string, title: string, chord: string): Comm
         category: 'View',
         target: { kind: 'command', command: id, args: {} },
         defaults: [chord],
-        when: viewportAnd(MODE_KEY),
+        when: viewportAnd(WIRE_CYCLE_WHEN),
       },
     ],
     logged: false,

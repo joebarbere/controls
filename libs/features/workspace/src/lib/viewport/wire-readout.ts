@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  afterRenderEffect,
   computed,
   DestroyRef,
   ElementRef,
@@ -82,14 +83,18 @@ export function connectWireReadout(state: Signal<ViewportState | undefined>): Wi
   });
 
   const corner = signal<WireReadoutCorner>('top-right');
-  // A native listener (not a template binding), so pointer moves never run change detection; the
-  // signal changes only when the pointer crosses into the panel's corner.
-  const onMove = (e: PointerEvent) => {
+  // The pointer's last position over the viewport (client px), kept in plain fields: a native listener
+  // (not a template binding), so pointer moves never run change detection; the corner signal changes
+  // only when the pointer is under the panel's corner.
+  let pointerX = 0;
+  let pointerY = 0;
+  let pointerIn = false;
+  const place = () => {
     const panel = host.querySelector<HTMLElement>('ctl-wire-readout');
-    if (panel === null) return;
+    if (panel === null || !pointerIn) return;
     const rect = host.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = pointerX - rect.left;
+    const y = pointerY - rect.top;
     const w = panel.offsetWidth + POINTER_CLEARANCE_PX;
     const h = panel.offsetHeight + POINTER_CLEARANCE_PX;
     if (corner() === 'top-right' && x >= host.clientWidth - w && y <= h) corner.set('bottom-left');
@@ -97,8 +102,27 @@ export function connectWireReadout(state: Signal<ViewportState | undefined>): Wi
       corner.set('top-right');
     }
   };
+  const onMove = (e: PointerEvent) => {
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    pointerIn = true;
+    place();
+  };
+  const onLeave = () => {
+    pointerIn = false;
+  };
   host.addEventListener('pointermove', onMove, { passive: true });
-  destroyRef.onDestroy(() => host.removeEventListener('pointermove', onMove));
+  host.addEventListener('pointerleave', onLeave, { passive: true });
+  destroyRef.onDestroy(() => {
+    host.removeEventListener('pointermove', onMove);
+    host.removeEventListener('pointerleave', onLeave);
+  });
+  // The panel appears a frame after the pointer stops on a wire (hover is picked on the next frame), so
+  // the pointer may already be under it: place it once it is rendered and has a size.
+  const shown = computed(() => view() !== null);
+  afterRenderEffect(() => {
+    if (shown()) untracked(place);
+  });
 
   return { view, announcement, corner: corner.asReadonly() };
 }

@@ -126,7 +126,7 @@ describe('view.wireNext and view.wirePrevious (F3.6 part 3)', () => {
     for (const def of [viewWireNextCommand(), viewWirePreviousCommand()]) {
       expect(def.logged).toBe(false);
       expect(def.undoable).toBe(false);
-      expect(def.when).toBe('mode');
+      expect(def.when).toBe('mode && !routing.started');
       expect(registry.has(def.id)).toBe(true);
     }
     const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
@@ -143,5 +143,15 @@ describe('view.wireNext and view.wirePrevious (F3.6 part 3)', () => {
     expect(keymap.resolve('Shift+N', work)?.id).toBe('view.wirePrevious');
     expect(keymap.resolve('N', { mode: 'work' })).toBeNull();
     expect(keymap.conflicts).toStrictEqual([]);
+  });
+
+  it('never fire mid-route: a started routing gesture keeps its selection (like Delete)', () => {
+    const routing = { 'viewport.focused': true, mode: 'work', 'routing.active': true };
+    expect(keymap.resolve('N', routing)?.id).toBe('view.wireNext'); // a spool merely armed
+    expect(keymap.resolve('N', { ...routing, 'routing.started': true })).toBeNull();
+    expect(keymap.resolve('Shift+N', { ...routing, 'routing.started': true })).toBeNull();
+    const bus = new CommandBus({ registry, initialState: { n: 1 }, tickOf: () => 0 });
+    expect(registry.isEnabled('view.wireNext', { mode: 'work', 'routing.started': true })).toBe(false);
+    expect(bus.exec('view.wireNext').ok).toBe(true); // the bus doesn't gate on when; the palette and keys do
   });
 });
