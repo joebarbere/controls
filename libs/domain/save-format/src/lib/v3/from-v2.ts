@@ -10,12 +10,13 @@ import type { WorldV3 } from './world';
  * mutates its argument (the tests deep-freeze it and run each step twice). Kept forever. They don't
  * read the catalogue.
  *
- * - World: the new counters start at 1 and there are no cables; each entity is unmounted and
- *   unlabelled; each connection (every v2 connection is a test lead, or a ref the catalogue doesn't
+ * - World: the new counters start at 1 and there are no cables; each entity is unmounted, in no
+ *   entry (v2 has no connectors) and unlabelled; each connection (every v2 connection is a test lead, or a ref the catalogue doesn't
  *   know) becomes lead-shaped, with clip ends (`termination: null`), an empty commanded bag and the
  *   lead kind's initial sim bag.
  * - Replay log: its initial world migrated as above; each `entity.place` entry without its own
- *   `mountedOn` gains `mountedOn: null` (what a v3 bus logs). Every other entry is copied verbatim; an
+ *   `mountedOn` gains `mountedOn: null`, and without its own `inEntry` gains `inEntry: null` (what a
+ *   v3 bus logs). Every other entry is copied verbatim; an
  *   entry that doesn't fit is copied and fails at replay, as before.
  * - Manifest: `schemaVersion` 3, everything else kept.
  */
@@ -45,7 +46,7 @@ export function worldV2ToV3(world: WorldV2): WorldV3 {
     schemaVersion: 3,
     nextCableId: 1,
     nextTerminationId: 1,
-    entities: world.entities.map((entity) => ({ ...entity, mountedOn: null, label: null })),
+    entities: world.entities.map((entity) => ({ ...entity, mountedOn: null, inEntry: null, label: null })),
     connections: world.connections.map((connection) => ({
       id: connection.id,
       ref: connection.ref,
@@ -68,10 +69,22 @@ export function manifestV2ToV3(manifest: ManifestV2): ManifestV3 {
   return { ...manifest, schemaVersion: 3 };
 }
 
-/** An `entity.place` entry gains `mountedOn: null` unless its args already have their own `mountedOn`. */
+/**
+ * An `entity.place` entry gains `mountedOn: null` and `inEntry: null`, each unless its args already
+ * have their own (an odd entry is copied and fails at replay, never here).
+ */
 export function replayEntryV2ToV3(entry: ReplayEntryV2): ReplayEntryV3 {
-  if (entry.id !== 'entity.place' || Object.prototype.hasOwnProperty.call(entry.args, 'mountedOn')) return entry;
-  return { ...entry, args: { ...entry.args, mountedOn: null } };
+  if (entry.id !== 'entity.place') return entry;
+  const own = (key: string) => Object.prototype.hasOwnProperty.call(entry.args, key);
+  if (own('mountedOn') && own('inEntry')) return entry;
+  return {
+    ...entry,
+    args: {
+      ...entry.args,
+      ...(own('mountedOn') ? {} : { mountedOn: null }),
+      ...(own('inEntry') ? {} : { inEntry: null }),
+    },
+  };
 }
 
 export function replayLogV2ToV3(log: ReplayLogV2): ReplayLogV3 {

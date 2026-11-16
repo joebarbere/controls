@@ -17,6 +17,8 @@ export type PositionMm = Transform['positionMm'];
 export type OrientationMdeg = Transform['orientationMdeg'];
 /** What a device is mounted on (D11, world v3): an enclosure entity and one of its catalogue mounts. */
 export type MountedOn = NonNullable<Entity['mountedOn']>;
+/** Which enclosure entry a conduit connector is in (world v3): an enclosure entity and one of its catalogue entries. */
+export type InEntry = NonNullable<Entity['inEntry']>;
 /** Fixed level geometry (F1.9): a wall, bench, backplate or DIN rail that comes with the level. */
 export type Fixture = World['fixtures'][number];
 export type FixtureId = Fixture['id'];

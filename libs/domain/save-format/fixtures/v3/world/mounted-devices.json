@@ -34,6 +34,7 @@
       },
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": "P1",
       "extensions": {}
     },
@@ -66,6 +67,7 @@
         "entity": 1,
         "mount": "rail-1"
       },
+      "inEntry": null,
       "label": "CB1",
       "extensions": {}
     },
@@ -96,6 +98,7 @@
         "entity": 1,
         "mount": "rail-1"
       },
+      "inEntry": null,
       "label": "PS1",
       "extensions": {}
     },
@@ -125,6 +128,7 @@
         "tripped": false
       },
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     }

@@ -238,7 +238,7 @@ describe('checkWorldReferences: world v3 (ADR 0015)', () => {
       );
       Object.assign(d, { nextCableId: 3, nextConnectionId: 9 });
     });
-    expect(messages(twice)).toContain('cables[0].b.entry: More cables than the entry takes');
+    expect(messages(twice)).toContain('cables[0].b.entry: More cables (and connectors) than the entry takes');
   });
 
   it('a cable covers its route and both tails (routeFloorMm)', () => {

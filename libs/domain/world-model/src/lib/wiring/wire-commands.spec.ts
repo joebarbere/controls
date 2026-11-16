@@ -477,7 +477,8 @@ describe('wire.pull', () => {
     fixture: null,
     tool: null,
   });
-  const pullRoute = [freeAt(0, 2500, 0), conduit(500), conduit(1500), freeAt(2000, 2500, 0)];
+  // On the stick's axis (x 400 … 1400): conduit waypoints sit on their part (ADR 0015 F3.4 part 2 note 4).
+  const pullRoute = [freeAt(0, 2500, 0), conduit(500), conduit(1300), freeAt(2000, 2500, 0)];
   const black = { ref: WIRE, colour: { base: 'black', stripe: null } };
   const white = { ref: WIRE, colour: { base: 'white', stripe: null } };
 

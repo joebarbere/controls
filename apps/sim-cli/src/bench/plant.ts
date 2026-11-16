@@ -70,6 +70,7 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
       state,
       sim: {},
       mountedOn: null,
+      inEntry: null,
       label: null,
       extensions: {},
     });

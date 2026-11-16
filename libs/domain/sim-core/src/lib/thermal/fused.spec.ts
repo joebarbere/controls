@@ -62,6 +62,7 @@ function shortWorld(): World {
         state: {},
         sim: {},
         mountedOn: null,
+        inEntry: null,
         label: null,
         extensions: {},
       },

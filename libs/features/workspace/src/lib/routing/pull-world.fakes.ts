@@ -1,7 +1,7 @@
 /*
  * A conduit run for the fish tape specs (F3.4 part 2), as the `drill-and-pull` scenario starts it: the
  * DIN panel on the workshop's stud faces, its 3/4 in top drill site cut with the 1-1/8 in hole saw, a
- * 3/4 in connector in the new hole (entity 2), a stick up from it cut to 600 mm (entity 3), a 90° elbow
+ * 3/4 in connector in the new hole (entity 2, placed in it: `inEntry`), a stick up from it cut to 600 mm (entity 3), a 90° elbow
  * on its top turning towards +x (entity 4) and a second stick from the elbow cut to 400 mm (entity 5).
  * Positions are what `placeInWorld` gives (`apps/sim-cli/scenarios/drill-and-pull.ts`). Ports, world mm:
  *
@@ -20,7 +20,12 @@ export const PULL_RUN_STEPS: readonly (readonly [string, Record<string, unknown>
   ['enclosure.openEntry', { id: 1, entry: 'drill-top-1', tool: ref('tool.corriden-hs-18') }],
   [
     'entity.place',
-    { ref: ref('connector.stavenor-emt-075'), positionMm: { x: -863, y: 1300, z: 62 }, orientationMdeg: ROLL },
+    {
+      ref: ref('connector.stavenor-emt-075'),
+      positionMm: { x: -863, y: 1300, z: 62 },
+      orientationMdeg: ROLL,
+      inEntry: { entity: 1, entry: 'drill-top-1' },
+    },
   ],
   ['entity.place', { ref: ref('emt.stavenor-075'), positionMm: { x: -868, y: 1325, z: 67 }, orientationMdeg: ROLL }],
   ['raceway.cut', { id: 3, lengthMm: 600 }],

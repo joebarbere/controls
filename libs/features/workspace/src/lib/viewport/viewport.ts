@@ -563,6 +563,7 @@ export class Viewport {
             positionMm: intent.positionMm,
             orientationMdeg: intent.orientationMdeg,
             mountedOn: intent.mountedOn,
+            inEntry: intent.inEntry,
           }),
         );
         return;

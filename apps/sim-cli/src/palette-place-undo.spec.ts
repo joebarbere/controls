@@ -14,7 +14,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after the palette scenario: one crate left, `nextEntityId` 2. */
-export const PALETTE_PLACE_UNDO_HASH = '2b6fa876564fdcda8f3ca2bd4c304059b7bc79596cf90ac448ce270367b8a95e';
+export const PALETTE_PLACE_UNDO_HASH = '573a33a935a76d59c17d0f3eb36302ecac279c67705eaf0e8b65c743790ea88b';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/palette-place-undo.console');

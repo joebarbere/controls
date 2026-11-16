@@ -10,10 +10,13 @@ import type { Entity, Fixture, Waypoint } from '../types';
  * - `staple` and `bore`: a stud wall (`prop.stud-wall` fixture; P3 has no stud entities);
  * - `free`: no host (checked by `checkRoute`).
  *
- * Only the host's kind is checked, never whether `positionMm` lies on its axis: the snapper puts it
- * there, the bake draws a hosted waypoint where it is stored (plus its lane), and `routeFloorMm` reads
- * it as stored, so an off-axis waypoint from a hand-written line is a picture problem, not a
- * different circuit. The load check applies the same rule (`checkRouteReferences`) wherever the
+ * Only the host's kind is checked here, never whether `positionMm` lies on its axis: the snapper puts
+ * it there, the bake draws a hosted waypoint where it is stored (plus its lane), and `routeFloorMm`
+ * reads it as stored, so an off-axis duct, staple or bore waypoint from a hand-written line is a
+ * picture problem, not a different circuit. **Conduit waypoints are the exception** (ADR 0015 F3.4
+ * part 2 note 4): a pull's length and bends decide whether the fish tape reaches, so
+ * `conduitContinuityProblem` (`continuity.ts`) also requires each to sit on its part and the run to
+ * follow the parts as joined. The load check applies the host rule (`checkRouteReferences`) wherever the
  * catalogue knows the host entity or `fixtureSpec` knows the fixture; an unknown host is left alone.
  * Once v3 freezes, a model kind's `raceway` flag and a fixture spec's `kind` are save format: changing
  * either changes which logged routes replay and which saves load.

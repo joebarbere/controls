@@ -10,8 +10,8 @@
 #    within 1/16 in of the 1.115 in (28.321 mm) 3/4 in knockout hole).
 entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 0 --orientationMdeg.yaw 0 --positionMm.x -1010 --positionMm.y 800 --positionMm.z -21 --ref.id panel.pellmoor-din-400x500 --ref.version 1
 enclosure.openEntry --entry drill-top-1 --id 1 --tool.id tool.corriden-hs-18 --tool.version 1
-# 2. A 3/4 in connector in the new hole, a stick on its outer end, cut to 1.2 m.
-entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 90000 --orientationMdeg.yaw 0 --positionMm.x -863 --positionMm.y 1300 --positionMm.z 62 --ref.id connector.stavenor-emt-075 --ref.version 1
+# 2. A 3/4 in connector in the new hole (inEntry: the drill site), a stick on its outer end, cut to 1.2 m.
+entity.place --inEntry.entity 1 --inEntry.entry drill-top-1 --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 90000 --orientationMdeg.yaw 0 --positionMm.x -863 --positionMm.y 1300 --positionMm.z 62 --ref.id connector.stavenor-emt-075 --ref.version 1
 entity.place --mountedOn null --orientationMdeg.pitch 0 --orientationMdeg.roll 90000 --orientationMdeg.yaw 0 --positionMm.x -868 --positionMm.y 1325 --positionMm.z 67 --ref.id emt.stavenor-075 --ref.version 1
 raceway.cut --id 3 --lengthMm 1200
 # 3. Black and white 12 AWG THHN pulled from inside the panel up through the run with the 50 ft fish tape

@@ -8,8 +8,8 @@ import { startSandbox } from './support/sandbox';
  */
 const GOLDEN = {
   emptySeed0: '45cb3d322da6233b88642422bee7eaf27cef5325907eaae3b31abd598e6c9fdc',
-  propsAndExtensionsFixture: '2f36913dd627f4eedc5c5d0a1be6749786527f916bafc299336b6fc7af5c5b8f',
-  scenario: '42c47290a6f9e4412d8ed65e6114c3a97f1c3251561fb7884c77121882bc0e67',
+  propsAndExtensionsFixture: '7284d19dee71b4307efd523022ca9d195f9697e4bd14bdf93c90360d211bad6d',
+  scenario: '52f3577dc8a1de1800229970a12a70b3db9ecb6ad571e6af9c6c6123bcc73e93',
   /** `content/levels/workshop.json` (seed 0): the world the game boots with, and New sandbox with seed 0 (F1.9). */
   workshopSeed0: 'dffa0c299298023206d272b7af834fb1f378903058743c5ec89745e15c60a969',
 };

@@ -373,6 +373,7 @@ const cableRawArb = fc.record({
 });
 type CableRaw = typeof cableRawArb extends fc.Arbitrary<infer T> ? T : never;
 const mountRawArb = fc.option(fc.record({ pick: fc.nat(), mount: terminalIdArb }), { nil: null });
+const inEntryRawArb = fc.option(fc.record({ pick: fc.nat(), entry: terminalIdArb }), { nil: null });
 
 type Position = { x: number; y: number; z: number };
 const samePosition = (p: Position, q: Position) => p.x === q.x && p.y === q.y && p.z === q.z;
@@ -425,6 +426,7 @@ export const rawWorldV3Arb = rawWorldV2Arb
     fc.record({
       v2: fc.constant(v2),
       mounts: fc.array(mountRawArb, { minLength: v2.entities.length, maxLength: v2.entities.length }),
+      inEntries: fc.array(inEntryRawArb, { minLength: v2.entities.length, maxLength: v2.entities.length }),
       labels: fc.array(fc.option(labelTextArb, { nil: null }), {
         minLength: v2.entities.length,
         maxLength: v2.entities.length,
@@ -435,7 +437,7 @@ export const rawWorldV3Arb = rawWorldV2Arb
       gaps: fc.tuple(fc.nat({ max: 3 }), fc.nat({ max: 3 }), fc.nat({ max: 3 })),
     }),
   )
-  .map(({ v2, mounts, labels, leadBags, conductors, cables, gaps }) => {
+  .map(({ v2, mounts, inEntries, labels, leadBags, conductors, cables, gaps }) => {
     const v2Entities = v2.entities as readonly (typeof v2.entities)[number][];
     const entityIds = v2Entities.map((e) => e.id);
     const fixtureIds = (v2.fixtures as readonly { id: string }[]).map((f) => f.id);
@@ -513,6 +515,7 @@ export const rawWorldV3Arb = rawWorldV2Arb
       id: index + 1,
       ...c,
     }));
+    const takenEntries = new Set<string>();
     return {
       ...v2,
       schemaVersion: 3 as const,
@@ -521,13 +524,22 @@ export const rawWorldV3Arb = rawWorldV2Arb
       nextTerminationId: nextTermination + gaps[2],
       entities: v2Entities.map((entity, index) => {
         const mount = mounts[index];
-        return {
-          ...entity,
-          // Only on an entity earlier in the list, so mounting never forms a cycle.
-          mountedOn:
-            mount === null || index === 0 ? null : { entity: entityIds[mount.pick % index], mount: mount.mount },
-          label: labels[index],
-        };
+        // Only on an entity earlier in the list, so mounting never forms a cycle.
+        const mountedOn =
+          mount === null || index === 0 ? null : { entity: entityIds[mount.pick % index], mount: mount.mount };
+        // In an entry of an entity earlier in the list (so mounts and entries never form a cycle), when
+        // not mounted, and never an entry another entity is in.
+        const raw = inEntries[index];
+        let inEntry: { entity: number; entry: string } | null = null;
+        if (raw !== null && mountedOn === null && index > 0) {
+          const host = entityIds[raw.pick % index];
+          const key = `${host}:${raw.entry}`;
+          if (!takenEntries.has(key)) {
+            takenEntries.add(key);
+            inEntry = { entity: host, entry: raw.entry };
+          }
+        }
+        return { ...entity, mountedOn, inEntry, label: labels[index] };
       }),
       connections,
       cables: builtCables.map((c) => c.cable),

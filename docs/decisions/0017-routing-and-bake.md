@@ -13,21 +13,22 @@ World v3 stores a conductor's route as explicit integer waypoints and its cut le
 
 ### 1. The modules
 
-| File                 | What                                                                                                                             |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `floor.ts`           | `routeFloorMm`, `coversChord` (unchanged, ADR 0015)                                                                              |
-| `length.ts`          | `routeDefaultLengthMm`, `ROUTE_SLACK_PERCENT`, `defaultTailsMm` (unchanged maths; see §5)                                        |
-| `collide.ts`         | `segmentCrossesBox`, `conservativeCube`, `boxFromCorners`, and the shared `routeCollision` (§4)                                  |
-| `ends.ts`            | `terminalPlace`: a terminal's method entry point and its exit direction in the world (exact quarter-turns)                       |
-| `raceways.ts`        | `racewayPaths`: every axis-aligned duct and conduit part's axis, body, lane frame and drawn centreline (an elbow's legs and arc) |
-| `auto-route.ts`      | `autoRoute(world, catalog, a, b, options)` (§2)                                                                                  |
-| `snap.ts`            | `snapWaypoint(world, catalog, cursor, options)` (§3)                                                                             |
-| `hosts.ts`           | `waypointHostProblem`: which host a waypoint kind accepts (§3)                                                                   |
-| `lanes.ts`           | `assignLanes` (§6)                                                                                                               |
-| `bake.ts`            | `bakeNodes`, `bakeWorldRoutes`, `centrelineHash` (§7)                                                                            |
-| `connector-entry.ts` | `connectorEntries` / `connectorEntry`: which entry a conduit connector is in, derived (§8)                                       |
-| `parity.ts`          | `routingDigests` / `routingDigestsOfDocument`: the cross-runtime goldens (§10)                                                   |
-| `constants.ts`       | Every tunable, each with its source or its game-design label                                                                     |
+| File                 | What                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `floor.ts`           | `routeFloorMm`, `coversChord` (unchanged, ADR 0015)                                                                                        |
+| `length.ts`          | `routeDefaultLengthMm`, `ROUTE_SLACK_PERCENT`, `defaultTailsMm` (unchanged maths; see §5)                                                  |
+| `collide.ts`         | `segmentCrossesBox`, `conservativeCube`, `boxFromCorners`, and the shared `routeCollision` (§4)                                            |
+| `ends.ts`            | `terminalPlace`: a terminal's method entry point and its exit direction in the world (exact quarter-turns)                                 |
+| `raceways.ts`        | `racewayPaths`: every axis-aligned duct and conduit part's axis, body, lane frame and drawn centreline (an elbow's legs and arc)           |
+| `auto-route.ts`      | `autoRoute(world, catalog, a, b, options)` (§2)                                                                                            |
+| `snap.ts`            | `snapWaypoint(world, catalog, cursor, options)` (§3)                                                                                       |
+| `hosts.ts`           | `waypointHostProblem`: which host a waypoint kind accepts (§3)                                                                             |
+| `lanes.ts`           | `assignLanes` (§6)                                                                                                                         |
+| `bake.ts`            | `bakeNodes`, `bakeWorldRoutes`, `centrelineHash` (§7)                                                                                      |
+| `connector-entry.ts` | `connectorEntries` / `connectorEntry`: which entry a conduit connector is in, read from the stored `inEntry` (§8, superseded)              |
+| `continuity.ts`      | `conduitContinuityProblem`: conduit waypoints on their parts, one stretch, joined parts, elbows port to port (ADR 0015 F3.4 part 2 note 4) |
+| `parity.ts`          | `routingDigests` / `routingDigestsOfDocument`: the cross-runtime goldens (§10)                                                             |
+| `constants.ts`       | Every tunable, each with its source or its game-design label                                                                               |
 
 ### 2. The auto-router (one function for every surface)
 
@@ -97,6 +98,8 @@ The output per route is `{ owner, points (flat x, y, z in tenths), coil | null }
 
 ### 8. Which entry a conduit connector occupies: derived, not stored
 
+> **Superseded before the v3 freeze** ([ADR 0015 F3.4 part 2 implementation note 4](0015-world-document-v3.md#implementation-notes-f34-part-2)): the relation is **stored** as `EntityV3.inEntry`, set by `entity.place` under `checkInEntry`'s rules (one connector per entry, an open entry of its size, the exact port, room under `maxCables`), and `connectorEntries` reads the stored field. Cases (a)–(c) below can no longer arise: a second connector is `entry-full`, a closed or wrong-size entry is refused, and the enclosure is `occupied` while a connector is in it. The text below is kept as the record.
+
 **Decision: routing derives it, and storage (if any) stays with F3.4 part 2's `wire.pull`.** `connectorEntries` says a connector is in an entry exactly when, in integer world geometry, its `entry` port is the entry's world point, that port points along the entry's inward axis, their trade sizes are equal, and the entry is open. The save-format caveats' three ambiguous cases each get one answer:
 
 - **(a) two connectors on one entry** (a script's `entity.place` allows it): the lowest entity id is in it, the others in none;
@@ -124,7 +127,7 @@ Why this is enough for F3.2: routing reads it only to **propose** (where a pulle
 - **`routeFloorMm` and `routeDefaultLengthMm`:** unchanged, so no `--lengthMm auto` result moves.
 - **Not persisted, not hashed:** the baked centreline, lanes, coils, the router's proposals and the snapper's points. Their goldens (§10) are test goldens, not save format; a routing change re-pins them and console files that use `--route auto`, never a replay log.
 - **Hashes:** no world hash, scenario hash, fixture or `.ctrl` moved. New pins: the two routing digests, and `scripting-api/src/lib/routing.spec.ts`'s hash of a panel wired by `--route auto` (`16da996f…`).
-- **Connector-in-entry:** derived, not stored (§8).
+- **Connector-in-entry:** derived, not stored (§8). _Superseded: stored as `inEntry` (ADR 0015 F3.4 part 2 note 4)._
 
 ## Deviations from the plan and earlier ADRs
 

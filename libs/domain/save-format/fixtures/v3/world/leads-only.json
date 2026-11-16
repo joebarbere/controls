@@ -55,6 +55,7 @@
         "stateOfCharge": 1
       },
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     },
@@ -81,6 +82,7 @@
       },
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     },
@@ -107,6 +109,7 @@
         "filamentTempK": null
       },
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     }

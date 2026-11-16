@@ -14,7 +14,7 @@ import { startSandbox } from './support/sandbox';
  * slots 4 and 5 (the picker offers placeable catalogue devices since F3.5). Forced WebGL2, the backend
  * CI exercises; the mouse is aimed with the `?e2e=1` hook's `projectMm`.
  */
-const DIN_PANEL_BREAKER_HASH = '7901fbdffe8ca1ee86a6a4259af12d356e79b3fa51a157f8c3ad719d0687ac15';
+const DIN_PANEL_BREAKER_HASH = '1a66183aff4660050c4764268e48c9903553d0e85bb104b4cc13a541af344404';
 
 const PANEL = { id: 'panel.pellmoor-din-400x500', version: 1 };
 const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
@@ -118,4 +118,76 @@ test('mouse and keyboard place a DIN panel and snap the breaker onto its rail, t
   expect(await logged(page)).toHaveLength(6);
 
   expect(await hash(page)).toBe(DIN_PANEL_BREAKER_HASH);
+});
+
+test('the mouse snaps a conduit connector into an open knockout: entity.place logs its inEntry and the panel is occupied', async ({
+  page,
+}) => {
+  // ADR 0015 F3.4 part 2 note 4: which entry a connector is in is stored, so a mouse-placed connector
+  // must log it (the cursor and positions are the raceway-panel scenario's: the panel lands at
+  // (-200, -200, 0), ko-bottom-1 is at (-100, -200, 100), the connector at (-117, -200, 83)).
+  const CONNECTOR = { id: 'connector.stavenor-emt-075', version: 1 };
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await page.getByRole('navigation', { name: 'Controls' }).getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const belt = settings.getByRole('group', { name: 'Tool belt' });
+  await belt.getByRole('combobox', { name: 'Slot 4' }).selectOption(`${PANEL.id}@${PANEL.version}`);
+  await belt.getByRole('combobox', { name: 'Slot 5' }).selectOption(`${CONNECTOR.id}@${CONNECTOR.version}`);
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await startSandbox(page);
+  const viewport = page.locator('ctl-viewport');
+  const canvas = page.locator('ctl-viewport canvas');
+  await expect(viewport).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+
+  await page.keyboard.press('Digit4');
+  const plate = await screen(page, canvas, 0, 50, 0);
+  await page.mouse.move(plate.x, plate.y);
+  await expect(viewport).toHaveAttribute('data-placement-valid', 'true');
+  await page.mouse.click(plate.x, plate.y);
+  await expect.poll(() => logged(page)).toEqual(['toolbelt.select', 'entity.place']);
+  const opened = await page.evaluate(
+    () =>
+      (
+        window as unknown as { __controlsSession: { exec(id: string, args?: unknown): { ok: boolean } } }
+      ).__controlsSession.exec('enclosure.openEntry', {
+        id: 1,
+        entry: 'ko-bottom-1',
+        tool: { id: 'tool.veltmark-sd-2', version: 1 },
+      }).ok,
+  );
+  expect(opened).toBe(true);
+
+  await page.keyboard.press('Digit5');
+  await expect(viewport).toHaveAttribute('data-placement-ref', CONNECTOR.id);
+  const knockout = await screen(page, canvas, -95, -205, 100);
+  await page.mouse.move(knockout.x, knockout.y);
+  await expect(viewport).toHaveAttribute('data-placement-target', 'entity-1:ko-bottom-1');
+  await expect(viewport).toHaveAttribute('data-placement-valid', 'true');
+  await page.mouse.click(knockout.x, knockout.y);
+  const places = async () => (await entries(page)).filter((e) => e.id === 'entity.place');
+  await expect.poll(async () => (await places()).length).toBe(2);
+  expect((await places()).at(-1)?.args).toMatchObject({
+    ref: CONNECTOR,
+    positionMm: { x: -117, y: -200, z: 83 },
+    mountedOn: null,
+    inEntry: { entity: 1, entry: 'ko-bottom-1' },
+  });
+
+  // The panel is occupied now: moving or deleting it is refused, and nothing is logged.
+  const before = (await logged(page)).length;
+  const refusals = await page.evaluate(() => {
+    const session = (
+      window as unknown as {
+        __controlsSession: { exec(id: string, args?: unknown): { ok: boolean; error?: { code: string } } };
+      }
+    ).__controlsSession;
+    return [
+      session.exec('entity.move', { id: 1, positionMm: { x: -200, y: -200, z: 50 } }),
+      session.exec('entity.delete', { id: 1 }),
+    ].map((r) => (r.ok ? 'ok' : (r.error?.code ?? 'refused')));
+  });
+  expect(refusals).toEqual(['occupied', 'occupied']);
+  expect(await logged(page)).toHaveLength(before);
 });

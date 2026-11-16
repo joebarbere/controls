@@ -19,7 +19,7 @@ import { workshopWorld } from './testing/workshop';
  * container, the migration and the load check. The fixture-rebuild check in `sources.spec.ts`
  * rebuilds it from the scenario.
  */
-export const FUSED_LEAD_HASH = '618b81edec473a7102bb4603a492870f58e5eaedea033c731de8eb9458860819';
+export const FUSED_LEAD_HASH = 'a28eea59f735d5eb5d47217e746104dbec5fd6bb90f654cf2dd187fdc7e92705';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/fused-lead.console');
 const COPPER_MELT_K = 1357.77;

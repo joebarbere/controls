@@ -26,10 +26,10 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * What engine 3 (F2.3a, the battery at its nominal-EMF placeholder) wrote for the same session: its
  * `world.json` as this build reads it (migrated to world v3; `5ecdc7c4…cdf8` as world v2).
  */
-const ENGINE_3_HASH = '0194d4c84ebfeaf505e21f4090f9bde461221017707e9b60db234e6a9a50cc2f';
+const ENGINE_3_HASH = '8c62bc4ad04bd59a8a42807ccae73f8816a51e01bdcbdf5a97a148b57572659a';
 /** What engine 4 (F2.4, the lamp unmodelled) wrote for the same session (`df471c07…b48a` as world v2). */
-const ENGINE_4_HASH = '91a543b9cafef2490c5145143114d32e3a78bac5ab80077716528a83ae2741f6';
-export const SIM_STEP_HASH = 'd350f0791b8705347c331b764b3022a7461177e74e4ce0848b067a173ef23732';
+const ENGINE_4_HASH = '7bf02b746282b3ba898b4cdbda10921d75e5382468147d6719bed76835c3f2a8';
+export const SIM_STEP_HASH = 'aa47983d2b1e32da5f9cd1909e29bdaf9c695f7878534579e010aa8dbd930253';
 export const SIM_STEP_SNAPSHOT_HASH = '155c2cd26fb761cff74036f668e10124738b16fb374c274bd90e23f4730cf57f';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');

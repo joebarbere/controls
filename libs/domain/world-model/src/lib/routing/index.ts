@@ -11,5 +11,6 @@ export * from './snap';
 export * from './lanes';
 export * from './bake';
 export * from './connector-entry';
+export * from './continuity';
 export * from './parity';
 export * from './tails';
