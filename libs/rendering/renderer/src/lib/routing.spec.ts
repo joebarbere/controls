@@ -125,6 +125,26 @@ describe('terminal picking (ADR 0017 §9)', () => {
     controller.dispose();
   });
 
+  it('never offers the zoom for the device already framed, however dense it still is', () => {
+    const { canvas, controller, at } = setup();
+    expect(controller.focus(`entity-${rowA(3)}`)).toBe(true);
+    while (controller.update(1 / 60)) {
+      /* settle */
+    }
+    // A synthetic dense layout: the same framing on a 96 × 54 canvas puts the terminals a few px apart.
+    canvas.clientWidth = 96;
+    canvas.clientHeight = 54;
+    controller.resize(96, 54);
+    controller.camera.updateMatrixWorld();
+    expect(controller.terminalPitchPx(rowA(3)) as number).toBeLessThan(24);
+    const p = at(rowA(3), 'a');
+    expect(controller.terminalAt(p.x, p.y)).toMatchObject({ device: rowA(3), zoomSuggested: false });
+    // A neighbour that isn't the focus target still gets the offer.
+    const q = at(rowA(4), 'a');
+    expect(controller.terminalAt(q.x, q.y)).toMatchObject({ device: rowA(4), zoomSuggested: true });
+    controller.dispose();
+  });
+
   it('is occlusion-filtered: a block in front hides the terminal behind it', () => {
     const bus = routingPanelBus();
     // A block 60 mm in front of row A's block 0, on the camera's line of sight to its terminal a's
@@ -145,6 +165,28 @@ describe('terminal picking (ADR 0017 §9)', () => {
   });
 });
 
+describe('terminal occlusion by its own device', () => {
+  it('a terminal on the far side of its own body is not pickable through it (TERMINAL_OWN_DEVICE_TOLERANCE_M)', () => {
+    // Row A's block 0 alone (x 20…26, y 60…108, z 0…47; terminal a's entry on the top face at
+    // (23, 108, 30)), seen from below and in front: the ray to terminal a enters the block's front
+    // face about 44 mm before the entry, so a is hidden by its own body; terminal b, on the bottom
+    // face, is in plain view.
+    const full = routingPanelBus().state;
+    const world: World = { ...full, entities: full.entities.filter((e) => e.id === rowA(0)), connections: [] };
+    const { controller } = setup(world);
+    controller.camera.position.set(0.023, -0.3, 0.2);
+    const orbit = (controller as unknown as { orbit: { target: Vector3; update(): boolean } }).orbit;
+    orbit.target.set(0.023, 0.084, 0.03);
+    orbit.update();
+    controller.camera.updateMatrixWorld();
+    const a = controller.projectTerminal({ entity: rowA(0), terminal: 'a' }) as { x: number; y: number };
+    const b = controller.projectTerminal({ entity: rowA(0), terminal: 'b' }) as { x: number; y: number };
+    expect(controller.terminalAt(a.x, a.y).hit).toBeNull();
+    expect(controller.terminalAt(b.x, b.y).hit).toStrictEqual({ entity: rowA(0), terminal: 'b' });
+    controller.dispose();
+  });
+});
+
 describe('keyboard terminal cycling (ADR 0010 decision 4)', () => {
   it('Tab and Shift+Tab walk the selected device’s terminals in reading order, wrapping', () => {
     const { controller } = setup();
@@ -161,6 +203,31 @@ describe('keyboard terminal cycling (ADR 0010 decision 4)', () => {
     expect(controller.setKeyTerminal({ entity: rowA(2), terminal: 'zz' })).toBe(false);
     expect(controller.setKeyTerminal(null)).toBe(true);
     expect(controller.state.keyTerminal).toBeNull();
+    controller.dispose();
+  });
+});
+
+describe('ending the gesture', () => {
+  it('setRouting(null) drops the keyboard terminal and its marker, so Enter later picks nothing stale', () => {
+    const { controller, events } = setup();
+    controller.setRouting(session());
+    controller.select(`entity-${rowA(2)}`);
+    expect(controller.cycleTerminal(1)).toStrictEqual({ entity: rowA(2), terminal: 'a' });
+    controller.update(0);
+    expect(controller.routingMarkers().map((m) => m.kind)).toContain('focus');
+    controller.setRouting(null);
+    controller.update(0);
+    expect(controller.routingMarkers()).toStrictEqual([]);
+    expect(controller.routingResourceCount).toBe(0);
+    expect(controller.state.keyTerminal).toBeNull();
+    controller.setRouting(session());
+    expect(controller.pickKeyTerminal()).toBe(false);
+    expect(events).toStrictEqual([]);
+    // With terminal picking on (another tool's flow), the keyboard terminal survives the gesture.
+    controller.setTerminalPicking(true);
+    controller.cycleTerminal(1);
+    controller.setRouting(null);
+    expect(controller.state.keyTerminal).toStrictEqual({ entity: rowA(2), terminal: 'a' });
     controller.dispose();
   });
 });

@@ -79,9 +79,9 @@ export function routingTerminalPreviousCommand<S>(): CommandDef<NoArgs, S> {
 
 /**
  * `routing.back` (Backspace): removes the route's last waypoint, or with none un-picks the first
- * terminal. Its `when` needs `routing.active`, so it is provably disjoint from Backspace's
- * `entity.delete.selection` (which needs `!routing.active`): Backspace never deletes the device you are
- * wiring.
+ * terminal. Its `when` needs `routing.started`, so it is provably disjoint from Backspace's
+ * `entity.delete.selection` (which needs `!routing.started`): Backspace never deletes the device you are
+ * wiring, while a player with a spool merely armed can still delete a selected device.
  */
 export function routingBackCommand<S>(): CommandDef<NoArgs, S> {
   return defineViewCommand<NoArgs, S>({

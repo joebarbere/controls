@@ -278,7 +278,7 @@ describe('world registry, replay log and cheats', () => {
       expect.objectContaining({
         id: 'entity.delete.selection',
         defaults: ['Delete', 'Backspace'],
-        when: 'viewport.focused && selection.entityId && !routing.active',
+        when: 'viewport.focused && selection.entityId && !routing.started',
         target: { kind: 'command', command: 'entity.delete', args: {}, contextArgs: { id: 'selection.entityId' } },
       }),
     ]);
@@ -289,6 +289,21 @@ describe('world registry, replay log and cheats', () => {
       const keymap = Keymap.create(defaultBindingDecls(createWorldRegistry()), {}, platform);
       expect(keymap.conflicts).toEqual([]);
     }
+  });
+
+  it('Backspace steps back a started route and Delete does nothing then; with a spool only armed both delete (F3.2 part 3)', () => {
+    const keymap = Keymap.create(defaultBindingDecls(createWorldRegistry()), {}, 'other');
+    const started = {
+      'viewport.focused': true,
+      'selection.entityId': 2,
+      'routing.active': true,
+      'routing.started': true,
+    };
+    expect(keymap.resolve('Backspace', started)?.id).toBe('routing.back');
+    expect(keymap.resolve('Delete', started)).toBeNull();
+    const armed = { 'viewport.focused': true, 'selection.entityId': 2, 'routing.active': true };
+    expect(keymap.resolve('Backspace', armed)?.id).toBe('entity.delete.selection');
+    expect(keymap.resolve('Delete', armed)?.id).toBe('entity.delete.selection');
   });
 
   it('logs toolbelt.select without changing the world or its hash', () => {

@@ -29,14 +29,16 @@ describe('terminalCycleOrder (ADR 0010 decision 4)', () => {
       positionMm: fc.record({
         x: fc.integer({ min: 0, max: 5 }),
         y: fc.integer({ min: 0, max: 5 }),
-        z: fc.constant(0),
+        z: fc.integer({ min: 0, max: 5 }),
       }),
     });
+    const lists = fc.uniqueArray(terminal, { selector: (x) => x.id, maxLength: 7 });
+    // Every permutation is reachable: a shuffled subarray that keeps every element.
+    const withShuffle = lists.chain((list) =>
+      fc.tuple(fc.constant(list), fc.shuffledSubarray(list, { minLength: list.length })),
+    );
     fc.assert(
-      fc.property(fc.uniqueArray(terminal, { selector: (x) => x.id, maxLength: 7 }), fc.nat(), (list, seed) => {
-        const shuffled = [...list].sort(
-          (p, q) => ((p.id.charCodeAt(0) * 31 + seed) % 7) - ((q.id.charCodeAt(0) * 31 + seed) % 7),
-        );
+      fc.property(withShuffle, ([list, shuffled]) => {
         expect(terminalCycleOrder(shuffled)).toStrictEqual(terminalCycleOrder(list));
       }),
     );

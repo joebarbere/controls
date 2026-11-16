@@ -137,6 +137,15 @@ test('the mouse routes a wire with two clicks, after the zoom key frames crowded
   await expect(status(page)).toContainText('Wire added from');
   await expect(viewport).toHaveAttribute('data-routing', 'armed'); // the spool stays armed
 
+  // Everything logged, in order: the gesture's picks never are, only its one wire.add.
+  expect((await entries(page)).map((e) => e.id)).toStrictEqual([
+    'entity.place',
+    'entity.place',
+    'entity.place',
+    'toolbelt.select',
+    'view.focus',
+    'wire.add',
+  ]);
   expect((await wireAdds(page)).map((e) => e.args)).toStrictEqual([ROUTED_ARGS]);
   expect(await hash(page)).toBe(ROUTED_HASH);
   expect(errors).toStrictEqual([]);
@@ -176,6 +185,14 @@ test('the keyboard alone routes the same wire: number key, selection cycling, Ta
   await page.keyboard.press('Enter');
   await expect(status(page)).toContainText('Wire added from');
 
+  // Everything logged, in order: selection cycling, Tab and Enter never are, only the one wire.add.
+  expect((await entries(page)).map((e) => e.id)).toStrictEqual([
+    'entity.place',
+    'entity.place',
+    'entity.place',
+    'toolbelt.select',
+    'wire.add',
+  ]);
   expect((await wireAdds(page)).map((e) => e.args)).toStrictEqual([ROUTED_ARGS]);
   expect(await hash(page)).toBe(ROUTED_HASH);
   // Not routing any more (the spool put away with Escape): Tab moves focus off the canvas again.
@@ -233,7 +250,9 @@ test('Backspace removes the last waypoint, then the first terminal; Escape cance
   expect(errors).toStrictEqual([]);
 });
 
-test('the palette routes the same wire: Add a wire, with the route the gesture would propose', async ({ page }) => {
+test('the palette can express the same wire: Add a wire with the same arguments reaches the same hash', async ({
+  page,
+}) => {
   const errors = collectErrors(page);
   await wiringSandbox(page);
   await page.keyboard.press('Control+K');

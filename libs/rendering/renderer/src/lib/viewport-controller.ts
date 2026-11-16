@@ -91,7 +91,7 @@ import { PropRecipes } from './geometry/props';
 import { buildBaseScene, DEFAULT_ROOM_BOUNDS, describeSceneGraph, disposeScene, type SceneGraphNode } from './scene';
 import { BENCH_FOCUS_ELEVATION_DEG, FixtureSync } from './world/fixture-sync';
 import type { DrawnLamp } from './sim/lamp-display';
-import { WorldSync, type LampOutputs } from './world/world-sync';
+import { entitySelectableId, WorldSync, type LampOutputs } from './world/world-sync';
 
 export interface ViewportControllerOptions {
   readonly bindings?: InputBindings;
@@ -253,6 +253,14 @@ export const CLICK_SLOP_PX = 4;
  * front of it (metres). Entry points sit on or just inside a body face.
  */
 export const TERMINAL_OCCLUSION_TOLERANCE_M = 0.003;
+/**
+ * How far in front of a terminal's entry point its own device may first be hit and the terminal still
+ * count as visible (game-design, metres). A ray to an entry on a block's top face often grazes the
+ * device's own clamp or front face first: measured on the routing panel seen head-on from 1.2 m, up to
+ * 11.3 mm before the entry (2.5 mm for the upper row). Bounded at 15 mm, so a terminal on the far side
+ * of its own body (about 44 mm through a 4 mm² block) isn't pickable through it.
+ */
+export const TERMINAL_OWN_DEVICE_TOLERANCE_M = 0.015;
 /** A wire beats the device behind it unless the device is this much nearer along the ray (mm). */
 const WIRE_OCCLUSION_TOLERANCE_MM = 2;
 
@@ -766,6 +774,9 @@ export class ViewportController {
     if (session && this.moving) this.endMove();
     this.routingSession = session;
     if (!session) {
+      // The keyboard terminal belongs to the gesture: ending it (Escape, another slot, the palette's
+      // routing.cancel) drops it and its marker, unless terminal picking stays on for another tool.
+      if (!this.terminalPickingOn) this.keyTerminalValue = null;
       this.routingView = null;
       this.setPreviewPoints([], null);
     }
@@ -1198,15 +1209,18 @@ export class ViewportController {
 
   /**
    * Occlusion (ADR 0017 §9): the BVH picker's first hit on the ray through terminal `i` must be its
-   * own device, nothing, or no more than {@link TERMINAL_OCCLUSION_TOLERANCE_M} in front of it.
+   * own device no more than {@link TERMINAL_OWN_DEVICE_TOLERANCE_M} in front of it, nothing, or
+   * anything else no more than {@link TERMINAL_OCCLUSION_TOLERANCE_M} in front of it.
    */
   private terminalUnoccluded(i: number): boolean {
     const s = this.terminals.screen;
     const w = this.element.clientWidth || 1;
     const h = this.element.clientHeight || 1;
     const hit = this.picker.pick((s.x(i) / w) * 2 - 1, 1 - (s.y(i) / h) * 2, this.camera);
-    if (!hit || hit.info.entityId === this.terminals.ref(i).entity) return true;
-    return hit.distance >= this.terminals.depthM(i, this.camera.position) - TERMINAL_OCCLUSION_TOLERANCE_M;
+    if (!hit) return true;
+    const own = hit.info.entityId === this.terminals.ref(i).entity;
+    const tolerance = own ? TERMINAL_OWN_DEVICE_TOLERANCE_M : TERMINAL_OCCLUSION_TOLERANCE_M;
+    return hit.distance >= this.terminals.depthM(i, this.camera.position) - tolerance;
   }
 
   private terminalViewOf(pick: ScreenTerminalPick | null, hoveredEntity: EntityId | null): TerminalHoverView {
@@ -1220,7 +1234,9 @@ export class ViewportController {
       pitchPx: near && pick ? finiteOrNull(pick.pitchPx) : null,
       device,
       groupPitchPx: finiteOrNull(groupPitch),
-      zoomSuggested: groupPitch < TERMINAL_TARGET_MIN_PX,
+      // Not for the device already framed: zooming again wouldn't help (a tiny canvas, a dense device).
+      zoomSuggested:
+        groupPitch < TERMINAL_TARGET_MIN_PX && device !== null && this.focusIdValue !== entitySelectableId(device),
     };
   }
 

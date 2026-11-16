@@ -82,7 +82,11 @@ export class RoutingMarkers {
     return this.markers;
   }
 
-  /** GPU resources alive (mesh, its geometry, and the material while shown): 0 with no marker. */
+  /**
+   * GPU resources the shown markers hold: the pool's instanced mesh and its geometry, plus the shared
+   * material, counted while a marker shows (the material object itself lives until `dispose`). 0 with no
+   * marker. A leak check, not a byte count.
+   */
   get resourceCount(): number {
     return this.pool ? 3 : 0;
   }

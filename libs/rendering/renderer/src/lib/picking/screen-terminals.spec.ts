@@ -88,7 +88,8 @@ describe('pickScreenTerminal (ADR 0017 §9)', () => {
   });
 
   it('property: equals a brute-force reference, and the pick is never nearer another visible terminal', () => {
-    const coordinate = fc.integer({ min: 0, max: 400 }).map((v) => v / 4);
+    // Quarter pixels from well off the canvas's top-left to past a 600 px one (the grid is unbounded).
+    const coordinate = fc.integer({ min: -600, max: 2400 }).map((v) => v / 4);
     fc.assert(
       fc.property(
         fc.array(fc.tuple(coordinate, coordinate, fc.boolean(), fc.boolean()), { minLength: 1, maxLength: 40 }),

@@ -81,6 +81,8 @@ export type GestureStep =
   | { readonly kind: 'removedWaypoint'; readonly gesture: RouteGesture; readonly left: number }
   | { readonly kind: 'clearedFrom'; readonly gesture: RouteGesture; readonly end: GestureTerminal }
   | { readonly kind: 'cancelled'; readonly gesture: RouteGesture }
+  /** The first terminal's device (or terminal) left the world: the route starts over. */
+  | { readonly kind: 'fromRemoved'; readonly gesture: RouteGesture; readonly end: GestureTerminal }
   | { readonly kind: 'putAway'; readonly gesture: RouteGesture }
   /** Nothing changed, and the player should hear why (`message`), or nothing at all (`null`). */
   | { readonly kind: 'refused'; readonly gesture: RouteGesture; readonly code: string; readonly message: string }
@@ -153,6 +155,22 @@ export function stepBack(gesture: RouteGesture): GestureStep {
 export function cancelGesture(gesture: RouteGesture): GestureStep {
   if (gesture.from !== null || gesture.waypoints.length > 0) return { kind: 'cancelled', gesture: IDLE_GESTURE };
   return { kind: 'putAway', gesture: IDLE_GESTURE };
+}
+
+/** Whether `end` is still a terminal in `world` (its entity exists and its catalogue entry has it). */
+export function terminalExists(world: World, catalog: Catalog, end: GestureTerminal): boolean {
+  const entity = findEntity(world, end.entity);
+  const device = entity ? catalog.device(entity.ref) : undefined;
+  return device?.terminals.some((t) => t.id === end.terminal) ?? false;
+}
+
+/**
+ * After a world change: a route whose first terminal is gone (an undone `entity.place`, a delete from
+ * the console) starts over, rather than holding a `from` no `wire.add` could land.
+ */
+export function dropMissingFrom(gesture: RouteGesture, world: World, catalog: Catalog): GestureStep {
+  if (gesture.from === null || terminalExists(world, catalog, gesture.from)) return { kind: 'ignored', gesture };
+  return { kind: 'fromRemoved', gesture: IDLE_GESTURE, end: gesture.from };
 }
 
 /** `Screw-clamp feed-through terminal block, … #3, terminal 1`: a terminal as the player reads it. */

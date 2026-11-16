@@ -88,24 +88,32 @@ describe('SegmentBvh (ADR 0017 §9)', () => {
     expect(down(b, 0, -0.9).segment).toBe(0);
   });
 
-  it('property: the BVH answers exactly what testing every segment answers', () => {
+  it('property: the BVH answers exactly what testing every segment answers, for any ray', () => {
     const c = fc.integer({ min: -300, max: 300 });
     const segment = fc.tuple(c, c, c, c, c, c);
+    const o = fc.integer({ min: -1000, max: 1000 });
+    const d = fc.integer({ min: -100, max: 100 });
+    // A unit direction (the zero vector, rare, becomes straight down: mapped, never filtered).
+    const direction = fc.tuple(d, d, d).map(([x, y, z]) => {
+      const len = Math.sqrt(x * x + y * y + z * z);
+      return len === 0 ? ([0, 0, -1] as const) : ([x / len, y / len, z / len] as const);
+    });
     fc.assert(
       fc.property(
         fc.array(segment, { minLength: 1, maxLength: 60 }),
-        c,
-        c,
+        fc.tuple(o, o, o),
+        direction,
         fc.integer({ min: 1, max: 30 }),
-        (segments, x, y, r10) => {
+        (segments, [x, y, z], [dx, dy, dz], r10) => {
           const radius = r10 / 10;
           const b = bvh(segments, radius);
-          const got = down(b, x, y);
+          const got = emptySegmentHit();
+          b.raycast(x, y, z, dx, dy, dz, PX_ANGLE, got);
           // Reference: every segment with the module's ranking.
           let best: SegmentRayHit = emptySegmentHit();
           const out = { s: 0, d2: 0 };
           segments.forEach((s, i) => {
-            rayToSegment(x, y, 1000, 0, 0, -1, ...s, out);
+            rayToSegment(x, y, z, dx, dy, dz, ...s, out);
             const widened = Math.max(radius, WIRE_PICK_MIN_RADIUS_PX * PX_ANGLE * out.s);
             if (out.d2 > widened * widened) return;
             const offset = Math.sqrt(out.d2);

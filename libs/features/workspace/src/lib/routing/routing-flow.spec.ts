@@ -255,8 +255,9 @@ describe('the routing flow (F3.2 part 3)', () => {
     expect(flow.announcement()).toBe(
       'Terminal: Screw-clamp feed-through terminal block, 4 mm² class, grey #2, terminal 2. Enter picks it.',
     );
-    // Backspace is routing.back only once a route is started, and never deletes the selection while routing.
-    expect(keys.keymap().resolve('Backspace', session.contextKeys())).toBeNull();
+    // With the spool only armed, Backspace still deletes the selection; routing.back needs a started route.
+    session.setContext('selection.entityId', 2); // the viewport publishes it from the selection
+    expect(keys.keymap().resolve('Backspace', session.contextKeys())?.id).toBe('entity.delete.selection');
 
     // A device whose terminals are under 24 px apart: Z frames it with view.focus.
     state.set({
@@ -283,5 +284,92 @@ describe('the routing flow (F3.2 part 3)', () => {
     TestBed.tick();
     expect(renderer.current).toBeNull();
     expect(flow.hint()).toBe('1 m 18 AWG test lead with crocodile clips: only single conductors can be routed yet.');
+  });
+  it('a hovered device never takes Tab: only the selection, the focus target or the keyboard terminal do', () => {
+    const { renderer, session, state } = setup();
+    const keys = TestBed.inject(KeybindingService);
+    session.setContext('viewport.focused', true);
+    session.exec('toolbelt.select', { slot: 4 });
+    const hover = {
+      hit: { entity: 3, terminal: 'a' },
+      near: { entity: 3, terminal: 'a' },
+      pitchPx: 30,
+      device: 3,
+      groupPitchPx: 30,
+      zoomSuggested: false,
+    };
+    state.set({ ...STATE, terminal: hover });
+    TestBed.tick();
+    expect(session.contextKeys()['routing.terminalDevice']).toBeUndefined();
+    expect(keys.keymap().resolve('Tab', session.contextKeys())).toBeNull();
+    state.set({ ...STATE, terminal: hover, focusId: 'entity-1' });
+    TestBed.tick();
+    expect(session.contextKeys()['routing.terminalDevice']).toBe(1);
+    state.set({ ...STATE, terminal: hover, keyTerminal: { entity: 2, terminal: 'b' } });
+    TestBed.tick();
+    expect(session.contextKeys()['routing.terminalDevice']).toBe(2);
+    expect(renderer.cycled).toStrictEqual([]);
+  });
+
+  it('a first terminal that leaves the world starts the route over, announced, with no wire.add', () => {
+    const { flow, renderer, session } = setup();
+    session.exec('toolbelt.select', { slot: 4 });
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 2, terminal: 'a' }));
+    TestBed.tick();
+    expect(flow.phase()).toBe('started');
+    expect(session.exec('entity.delete', { id: 2 }).ok).toBe(true);
+    TestBed.tick();
+    expect(flow.phase()).toBe('armed');
+    expect(renderer.current).toMatchObject({ from: null, waypoints: [] });
+    expect(flow.announcement()).toBe('First terminal removed from the world. Pick the first terminal.');
+    expect(wireAdds(session)).toHaveLength(0);
+  });
+
+  it('another spool starts over; the same conductor in another slot keeps the route; a second route is a second wire.add', () => {
+    const { flow, renderer, session } = setup();
+    const store = TestBed.inject(SettingsStore);
+    const slots = [...store.settings().toolBelt.slots];
+    slots[5] = { id: 'conductor.tallowmere-thhn-12-solid', version: 1 };
+    slots[6] = THHN;
+    store.update('toolBelt', { slots });
+    const pickFirst = () => {
+      renderer.send(terminalEvent(session, renderer, { entity: 1, terminal: 'a' }));
+      TestBed.tick();
+      expect(flow.phase()).toBe('started');
+    };
+    session.exec('toolbelt.select', { slot: 4 });
+    TestBed.tick();
+    pickFirst();
+    session.exec('toolbelt.select', { slot: 6 }); // 12 AWG: another spool
+    TestBed.tick();
+    expect(flow.phase()).toBe('armed');
+    expect(renderer.current?.ref).toStrictEqual({ id: 'conductor.tallowmere-thhn-12-solid', version: 1 });
+
+    session.exec('toolbelt.select', { slot: 4 });
+    TestBed.tick();
+    pickFirst();
+    session.exec('toolbelt.select', { slot: 7 }); // the same conductor in another slot
+    TestBed.tick();
+    expect(flow.phase()).toBe('started');
+    expect(renderer.current?.from).toStrictEqual({ entity: 1, terminal: 'a', termination: 'auto' });
+
+    session.exec('toolbelt.select', { slot: 1 }); // a prop
+    TestBed.tick();
+    expect(flow.phase()).toBeNull();
+    session.exec('toolbelt.select', { slot: 4 }); // and back: a fresh route
+    TestBed.tick();
+    expect(flow.phase()).toBe('armed');
+
+    pickFirst();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+    TestBed.tick();
+    expect(wireAdds(session)).toHaveLength(1);
+    expect(flow.phase()).toBe('armed'); // the spool stays armed
+    renderer.send(terminalEvent(session, renderer, { entity: 2, terminal: 'b' }));
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'b' }));
+    TestBed.tick();
+    expect(wireAdds(session)).toHaveLength(2);
   });
 });

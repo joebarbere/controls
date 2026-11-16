@@ -1,4 +1,4 @@
-import { computed, DestroyRef, effect, inject, linkedSignal, signal, type Signal } from '@angular/core';
+import { computed, DestroyRef, effect, inject, linkedSignal, signal, type Signal, untracked } from '@angular/core';
 import {
   type ContextValue,
   ROUTING_ACTIVE_KEY,
@@ -22,6 +22,7 @@ import {
   cancelGesture,
   describeTerminal,
   describeWaypoint,
+  dropMissingFrom,
   type GestureStep,
   IDLE_GESTURE,
   pickTerminal,
@@ -155,6 +156,10 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
         gesture.set(step.gesture);
         announce('Route cancelled.');
         return;
+      case 'fromRemoved':
+        gesture.set(step.gesture);
+        announce('First terminal removed from the world. Pick the first terminal.');
+        return;
       case 'putAway':
         gesture.set(step.gesture);
         toolBelt.clear();
@@ -167,6 +172,13 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
         return;
     }
   };
+
+  // A world change can take the first terminal away (undo, a delete from the console): start over.
+  // The gesture is read untracked, so only world changes re-run this.
+  effect(() => {
+    const world = session.world();
+    untracked(() => apply(dropMissingFrom(gesture(), world, catalog)));
+  });
 
   const offEvents = renderer.onRouting((event) => {
     const s = spool();
@@ -211,7 +223,10 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     offCommands.forEach((off) => off());
   });
 
-  /** The device Tab cycles, as the renderer picks it: selected, focused, the keyboard's, the hovered terminal's. */
+  /**
+   * The device Tab cycles, in the renderer's order: selected, focused, the keyboard terminal's. Never
+   * the hovered one: a pointer resting over a device must not take Tab away from focus traversal.
+   */
   const terminalDevice = computed<number | null>(() => {
     if (routingSession() === null) return null;
     session.world(); // re-check when the world changes (a deleted device)
@@ -221,7 +236,6 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
       s?.selected?.entityId ?? null,
       focused ? Number(focused[1]) : null,
       s?.keyTerminal?.entity ?? null,
-      s?.terminal?.near?.entity ?? null,
     ];
     for (const id of candidates) if (id !== null && renderer.terminalCycleOrder(id).length > 0) return id;
     return null;
