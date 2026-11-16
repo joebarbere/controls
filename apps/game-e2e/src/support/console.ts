@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { settleViewport } from './aim';
 
 /*
  * Console-driven setup that the renderer hook can rely on.
@@ -38,4 +39,18 @@ export async function expectDrawn(page: Page, ids: readonly string[]): Promise<v
       }),
     )
     .toEqual(expect.arrayContaining([...ids]));
+}
+
+/**
+ * Closes the open console with Backquote and waits until the viewport has its full size again: the
+ * panel gone (a change detection after the key) and the renderer resized to the taller canvas
+ * ({@link settleViewport}). Use it before aiming at projected pixels. A bare `press('Backquote')`
+ * returns before either: on a macOS runner (PR #129) the wire readout spec measured wire pixels on
+ * the console-open canvas (473 px tall, not 673), and the pixel it chose for wire 1 was on the
+ * breaker once the canvas grew.
+ */
+export async function closeConsole(page: Page): Promise<void> {
+  await page.keyboard.press('Backquote');
+  await expect(page.getByRole('region', { name: 'Console' })).toBeHidden();
+  await settleViewport(page);
 }

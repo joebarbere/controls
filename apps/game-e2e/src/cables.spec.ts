@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { expectOnCanvas, terminalOnPage } from './support/aim';
-import { expectDrawn, runLogged } from './support/console';
+import { closeConsole, expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -157,7 +157,7 @@ test('a box-to-box NM-B run: staples, the jacket stripped at both ends, and thre
   await sandbox(page);
   // Frame the panel, then step back so the box below it is in view too.
   await runLogged(page, 'view.focus --target entity-2', SETUP.length);
-  await page.keyboard.press('Backquote');
+  await closeConsole(page); // the full-height canvas before its box is measured
   const canvas = page.locator('ctl-viewport canvas');
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();

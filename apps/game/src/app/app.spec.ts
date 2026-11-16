@@ -117,6 +117,20 @@ describe('App', () => {
 
   const canvas = () => document.querySelector('ctl-viewport canvas');
 
+  /**
+   * Resolves once a save has replaced the session (`SaveGames.onLoaded`, after `App` has entered the
+   * game). Subscribe before the key or click that loads. A load is a dozen worker round trips, each a
+   * timer hop, so wait on its own signal rather than polling `hashAt` inside `waitFor`'s 1 s: a slow
+   * macOS runner once spent that second loading and the poll's last answer was still the menu
+   * backdrop's hash (main run 43847852636; ui caveats).
+   */
+  function nextLoad(): Promise<void> {
+    const saves = TestBed.inject(SaveGames);
+    return new Promise((resolve) => {
+      const off = saves.onLoaded(() => (off(), resolve()));
+    });
+  }
+
   it('boots to the main menu over the viewport, with the about box values available', async () => {
     const { fixture } = await setup();
     const el = fixture.nativeElement as HTMLElement;
@@ -425,8 +439,10 @@ describe('App', () => {
       await fixture.whenStable();
       const continueButton = mainMenu().getByRole('button', { name: 'Continue' });
       expect(continueButton.hasAttribute('aria-disabled')).toBe(false);
+      const loaded = nextLoad();
       await user.click(continueButton);
-      await waitFor(async () => expect(await TestBed.inject(Session).hashAt()).toBe(game.hash()));
+      await loaded;
+      expect(await TestBed.inject(Session).hashAt()).toBe(game.hash());
       await fixture.whenStable();
       expect(screen.queryByRole('navigation', { name: 'Controls' })).toBeNull();
       expect(document.activeElement).toBe(document.querySelector('ctl-viewport canvas'));
@@ -443,8 +459,10 @@ describe('App', () => {
       await fixture.whenStable();
       expect(document.getElementById('ctl-main-menu-recovery')?.getAttribute('role')).toBe('alert');
       expect(document.activeElement).toBe(mainMenu().getByRole('button', { name: 'Continue' }));
+      const loaded = nextLoad();
       await user.keyboard('{Enter}');
-      await waitFor(async () => expect(await TestBed.inject(Session).hashAt()).toBe(game.hash()));
+      await loaded;
+      expect(await TestBed.inject(Session).hashAt()).toBe(game.hash());
       await fixture.whenStable();
       expect(io.names()).toEqual(['Autosave 1']); // nothing written on the way
       await user.keyboard('{Escape}'); // back to the menu: the notice was for the start-up only

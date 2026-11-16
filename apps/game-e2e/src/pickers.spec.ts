@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { terminalOnPage } from './support/aim';
-import { expectDrawn, runLogged } from './support/console';
+import { closeConsole, expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -60,7 +60,7 @@ test('terminals are picked in screen space, the zoom is offered under 24 px, and
     await runLogged(page, `entity.place ${BLOCK} --positionMm.x ${x} --positionMm.y 0 --positionMm.z 40`, seq);
   }
   await expectDrawn(page, ['entity-1', 'entity-2', 'entity-3']);
-  await page.keyboard.press('Backquote'); // close the console
+  await closeConsole(page); // the full-height canvas before the pitch and the aims
 
   // The default framing: a few pixels between neighbouring terminals, so hovering offers the zoom.
   const pitch = await pitchOf(page, 1);

@@ -2,6 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expectOnCanvas } from './support/aim';
+import { closeConsole } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -74,16 +75,17 @@ async function wirePixels(page: Page, near: number): Promise<WirePixel[]> {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     const hits: WirePixel[] = [];
-    for (let py = 2; py < h; py += 4) {
-      for (let px = 2; px < w; px += 4) {
-        const nx = (2 * px) / w - 1;
-        const ny = 1 - (2 * py) / h;
-        const hit = hook.hoverTargetAt(nx, ny).wire;
+    // Whole page pixels, where the mouse will go, and the NDC a pointer move there computes
+    // (`offsetX / clientWidth`), so a fractional canvas offset can't move the aim off the tested point.
+    for (let y = Math.ceil(box.top) + 2; y < box.top + h; y += 4) {
+      for (let x = Math.ceil(box.left) + 2; x < box.left + w; x += 4) {
+        const px = x - box.left;
+        const py = y - box.top;
+        const hit = hook.hoverTargetAt((2 * px) / w - 1, 1 - (2 * py) / h).wire;
         if (hit === null) continue;
-        const at = { x: box.left + px, y: box.top + py };
-        if (document.elementFromPoint(at.x, at.y)?.tagName !== 'CANVAS') continue;
+        if (document.elementFromPoint(x, y)?.tagName !== 'CANVAS') continue;
         const owner = `${hit.kind === 'cable' ? 'k' : 'c'}${hit.id}`;
-        hits.push({ ...at, owner, d: Math.sqrt((px - end.x) ** 2 + (py - end.y) ** 2) });
+        hits.push({ x, y, owner, d: Math.sqrt((px - end.x) ** 2 + (py - end.y) ** 2) });
       }
     }
     return hits.sort((a, b) => a.d - b.d);
@@ -138,7 +140,9 @@ test('the wire readout shows the bad termination’s hot end apart from its cond
   await page.keyboard.insertText('view.focus entity-3');
   await page.keyboard.press('Enter');
   await expect(output.last()).toHaveText(/view\.focus: ok/);
-  await page.keyboard.press('Backquote'); // close the console
+  // Close the console and wait for the full-height canvas: pixels measured before the renderer has
+  // resized are for the console-open framing (macOS CI, PR #129: the chosen pixel was on the breaker).
+  await closeConsole(page);
   await expect(viewport).toHaveAttribute('data-mode', 'work');
 
   // Mouse: rest on wire 1, at the pixel nearest its loose end a that the hover rule gives to the wire.

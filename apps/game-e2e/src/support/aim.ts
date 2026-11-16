@@ -13,6 +13,31 @@ type Hook = {
   projectTerminal(ref: TerminalRef): { x: number; y: number } | null;
 };
 
+/**
+ * Resolves once the renderer has taken the viewport's current size and drawn it. The viewport hands
+ * its size to the renderer from a `ResizeObserver` on `ctl-viewport` (`Viewport.resize`), which the
+ * browser notifies at its next rendering step, not when the layout changes. Until then the camera and
+ * the hook's projections are for the old size. An observer made here is notified in that same step,
+ * after the viewport's (observers are notified in creation order), so afterwards they agree; then
+ * `whenIdle` waits for the frame the resize requested. Call it after a layout change (the console
+ * closing, a panel toggling) and before aiming at projected pixels.
+ */
+export async function settleViewport(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const host = document.querySelector('ctl-viewport');
+    const hook = (window as unknown as { __controlsViewport?: { whenIdle(): Promise<void> } }).__controlsViewport;
+    if (!host || !hook) throw new Error('viewport or its hook missing');
+    await new Promise<void>((resolve) => {
+      const observer = new ResizeObserver(() => {
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(host);
+    });
+    await hook.whenIdle();
+  });
+}
+
 /** Expects the page point (`x`, `y`) to be on the viewport canvas, not under an overlay. */
 export async function expectOnCanvas(page: Page, at: { x: number; y: number }, what: string): Promise<void> {
   const over = await page.evaluate(({ x, y }) => {

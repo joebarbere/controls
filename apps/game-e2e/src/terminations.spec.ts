@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { terminalOnPage } from './support/aim';
-import { expectDrawn, runLogged } from './support/console';
+import { closeConsole, expectDrawn, runLogged } from './support/console';
 import { startSandbox } from './support/sandbox';
 
 /**
@@ -67,7 +67,7 @@ async function journeymanSandbox(page: Page): Promise<void> {
     await runLogged(page, `entity.place ${BLOCK} --positionMm.x ${x} --positionMm.y 0 --positionMm.z 40`, seq);
   }
   await expectDrawn(page, ['entity-1', 'entity-2', 'entity-3']);
-  await page.keyboard.press('Backquote');
+  await closeConsole(page); // the full-height canvas before any terminal is aimed at
   await page.locator('ctl-viewport canvas').focus();
 }
 
