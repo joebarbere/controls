@@ -48,6 +48,7 @@ describe('paletteItems', () => {
       'console.toggle',
       'view.netlistInspector', // Toggle netlist inspector
       'routing.cancel', // disabled here: no spool (routing.active), no wire (wiring.*); Wiring, by title
+      'wiring.pull', // "Fish tape: …" sorts first; no conduit (wiring.conduits)
       'wiring.label',
       'wiring.land',
       'routing.terminalNext',

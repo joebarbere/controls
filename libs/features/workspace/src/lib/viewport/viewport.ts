@@ -52,9 +52,11 @@ import {
 import { createAnnouncer } from '../routing/announcer';
 import { connectCableRouting } from '../routing/cable-flow';
 import { CableStripPromptDialog } from '../routing/cable-strip-prompt';
+import { FishTapePromptDialog } from '../routing/fish-tape-prompt';
 import { LabelPromptDialog } from '../routing/label-prompt';
 import { connectRouting } from '../routing/routing-flow';
 import { TerminationPromptDialog } from '../routing/termination-prompt';
+import { connectToolFlow } from '../routing/tool-flow';
 import { connectWiring } from '../routing/wiring-flow';
 import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
@@ -121,6 +123,11 @@ const TEST_HOOK = '__controlsViewport';
  * prompt (one `wire.land`), and `wiring.label` (Shift+L, or a click with the label maker in hand)
  * opens the label prompt (`ctl-label-prompt`: one `wire.label` or `cable.label`).
  *
+ * **Tools in hand** (F3.4 part 2, `connectToolFlow`): a screwdriver, knockout punch, hole saw or bit
+ * arms the entry flow (a click on an enclosure, or Tab and Enter, logs one `enclosure.openEntry`, its
+ * refusals shown first); the fish tape arms the pull flow, and `wiring.pull` (U) opens the fish tape
+ * prompt (`ctl-fish-tape-prompt`) from any tool: its minigame logs one `wire.pull` on success only.
+ *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
  * context keys `mode`, `selection.id`, `selection.kind`, `selection.focusable` and
@@ -133,7 +140,14 @@ const TEST_HOOK = '__controlsViewport';
 @Component({
   selector: 'ctl-viewport',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OverlayLegend, TerminationPromptDialog, WireReadoutPanel, CableStripPromptDialog, LabelPromptDialog],
+  imports: [
+    OverlayLegend,
+    TerminationPromptDialog,
+    WireReadoutPanel,
+    CableStripPromptDialog,
+    LabelPromptDialog,
+    FishTapePromptDialog,
+  ],
   template: `
     <canvas
       #canvas
@@ -189,6 +203,13 @@ const TEST_HOOK = '__controlsViewport';
       [prompt]="wiring.label()"
       (confirm)="wiring.confirmLabel($event)"
       (dismissed)="wiring.cancelLabel()"
+    />
+    <ctl-fish-tape-prompt
+      [prompt]="tools.pull()"
+      [reducedMotion]="overlays.reducedMotion()"
+      [check]="tools.checkPull"
+      (confirm)="tools.confirmPull($event)"
+      (dismissed)="tools.cancelPull()"
     />
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
@@ -335,11 +356,21 @@ export class Viewport {
     this.wiring.openStrip(id),
   );
   /**
+   * Tools in hand (F3.4 part 2): a screwdriver, punch, hole saw or bit opens enclosure entries with a
+   * click (one `enclosure.openEntry`); the fish tape (or `wiring.pull`, U) opens the fish tape prompt,
+   * whose minigame logs one `wire.pull` on success only.
+   */
+  protected readonly tools = connectToolFlow(this.renderer, this.state, this.announcer);
+  /**
    * The routing gesture (F3.2 part 3): a conductor spool on the belt arms it; the renderer's picks and
    * the `routing.*` keys step it; a completed route is one `wire.add`. It pushes whichever mode is in
-   * force (its own, the cable gesture's, landing) to the renderer.
+   * force (its own, the cable gesture's, landing, a tool in hand) to the renderer.
    */
-  protected readonly routing = connectRouting(this.renderer, this.state, this.announcer, [this.cable, this.wiring]);
+  protected readonly routing = connectRouting(this.renderer, this.state, this.announcer, [
+    this.cable,
+    this.wiring,
+    this.tools,
+  ]);
   /**
    * The wire readout (F3.6 part 3): the hovered, else the selected, wire's connection record in work
    * mode while the console is available (D16).
@@ -397,7 +428,10 @@ export class Viewport {
       `${binding(VIEW_WIRE_NEXT_BINDING)} and ${binding(VIEW_WIRE_PREVIOUS_BINDING)} select the next and previous wire. ` +
       `With a cable spool, pick two box entries (${binding('routing.terminalNext')} cycles a selected box's entries); ` +
       `${binding('wiring.strip.selection')} strips, ${binding('wiring.land.selection')} lands and ` +
-      `${binding('wiring.label.selection')} labels the selected cable or conductor.`
+      `${binding('wiring.label.selection')} labels the selected cable or conductor. ` +
+      `With a screwdriver, punch or hole saw, click a box's entry (or ${binding('routing.terminalNext')} and ` +
+      `${key('commitPlacement')}) to open it; ${binding('wiring.pull.selection')} on a selected conduit run, or ` +
+      `the fish tape and a click, pulls conductors through it.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */
@@ -581,6 +615,7 @@ export class Viewport {
     for (const [key, value] of next) this.publish(key, value);
     // The selected wire's keys in the same task as the selection, so L works on the next key press.
     this.wiring.publishSelection(s);
+    this.tools.publishSelection(s);
   }
 
   /** Sets a context key unless it already holds `value`. */
