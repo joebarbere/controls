@@ -12,11 +12,13 @@ import {
 import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
 import { findEntity } from './entity-commands';
 import { fixtureSpec } from './fixtures';
+import { conduitContinuityProblem } from './routing/continuity';
 import { coversChord, routeFloorMm } from './routing/floor';
 import { waypointHostProblem } from './routing/hosts';
 import { entityPointMm, isAxisAligned } from './snap/quarter-turn';
 import { checkTailReach, landedPoint } from './wiring/checks';
 import { boredHoleTooLarge, BORED_HOLE_MAX, cableInFraming, maxStripAtBoxMm, supportGap } from './wiring/framing';
+import { checkInEntry, connectorsInEntry } from './wiring/in-entry';
 import { checkMount } from './wiring/mounting';
 import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
 
@@ -37,7 +39,11 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  * - a built-in prop (`prop.*` at version 1) has no device state: both bags are empty;
  * - an enclosure's `openEntries` has no bit at or above its catalogue entry's number of entries;
  * - `mountedOn` names a mount the host's catalogue entry has, of a type the device declares it fits,
- *   and both are axis-aligned.
+ *   and both are axis-aligned;
+ * - `inEntry` (ADR 0015 F3.4 part 2 note 4) passes exactly `entity.place`'s `checkInEntry`: a conduit
+ *   connector, in an open entry of its trade size of an enclosure, its entry end exactly at the entry
+ *   pointing in, with room (`maxCables`, counting the entry's cable ends). Where the catalogue doesn't
+ *   know the host it is left alone.
  *
  * Connections:
  * - the ref is a connection kind, lead-shaped exactly when the kind isn't a conductor kind, with
@@ -49,13 +55,16 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  * - a bore waypoint's tool (if known) is a tool that can bore, within the bored-hole limit
  *   (`BORED_HOLE_MAX`, F3.2 part 4); a hosted waypoint's known host and a
  *   known device with a landed end are axis-aligned;
+ * - conduit waypoints trace the run as built (`conduitContinuityProblem`: on their parts, one stretch,
+ *   joined parts, elbows port to port), as `wire.pull` requires;
  * - a conductor landed at both ends is at least as long as the straight line between them
  *   (`lengthMm² ≥ Δx² + Δy² + Δz²`, exact integers).
  *
  * Cables:
  * - the ref is a cable assembly, with one conductor per assembly conductor, each of the assembly's
  *   conductor entry and colour;
- * - each end is an open entry of an enclosure with room for it (`maxCables`), axis-aligned;
+ * - each end is an open entry of an enclosure with room for it (`maxCables`, counting a connector in
+ *   it), axis-aligned;
  * - the cut length covers the route's floor plus both tails (`routeFloorMm` through the entry points
  *   and waypoints, ADR 0015);
  * - (F3.2 part 4, as the commands refuse them) a run in framing is supported within the spacing
@@ -94,6 +103,7 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
     for (const bag of ['state', 'sim'] as const) {
       if (Object.keys(entity[bag]).length > 0) add(`${at}.${bag}`, 'A built-in prop has no device state');
     }
+    if (entity.inEntry !== null) add(`${at}.inEntry`, 'A built-in prop is in no entry (only a conduit connector is)');
     return;
   }
   const kind = catalog.kindOf(entity.ref);
@@ -126,6 +136,22 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   if (isCutToLength(device) && device.sizeMm !== null && typeof length === 'number') {
     if (length < device.model.params['minLengthMm'] || length > device.sizeMm.widthMm) {
       add(`${at}.state.${CUT_LENGTH_KEY}`, 'A cut length outside the entry’s minimum and stock length');
+    }
+  }
+  if (entity.inEntry !== null) {
+    const host = findEntity(world, entity.inEntry.entity) as Entity; // the schema guarantees it exists
+    if (catalog.device(host.ref)) {
+      // Exactly the command's check, its own relation excluded from the room count.
+      const refused = checkInEntry(
+        world,
+        catalog,
+        entity.ref,
+        entity.transform,
+        entity.state,
+        entity.inEntry,
+        entity.id,
+      );
+      if (refused) add(`${at}.inEntry`, `Not a place a connector can be in that entry (${refused.code})`);
     }
   }
   if (entity.mountedOn !== null) {
@@ -301,6 +327,9 @@ function checkRouteReferences(
       }
     }
   });
+  // The conduit run as `wire.pull` checks it (ADR 0015 F3.4 part 2 note 4); unknown hosts are left alone.
+  const broken = conduitContinuityProblem(world, catalog, route);
+  if (broken) add(`${at}[${broken.index}]`, `Not a continuous conduit run (${broken.code})`);
 }
 
 function checkCable(world: World, cable: Cable, at: string, catalog: Catalog, add: Add): void {
@@ -354,9 +383,9 @@ function checkCable(world: World, cable: Cable, at: string, catalog: Catalog, ad
       (count, c) =>
         count +
         (['a', 'b'] as const).filter((e) => c[e]?.entity === value.entity && c[e]?.entry === value.entry).length,
-      0,
+      connectorsInEntry(world.entities, value.entity, value.entry),
     );
-    if (using > entry.maxCables) add(`${at}.${end}.entry`, 'More cables than the entry takes');
+    if (using > entry.maxCables) add(`${at}.${end}.entry`, 'More cables (and connectors) than the entry takes');
     const point = entityPointMm(entity.transform, entry.positionMm);
     if (point === null) {
       add(`${at}.${end}.entity`, 'A cable enters only an axis-aligned enclosure');

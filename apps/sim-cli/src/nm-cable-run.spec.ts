@@ -32,7 +32,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `nm-cable-run.ts`. */
-export const NM_CABLE_RUN_HASH = 'e62767746e6aba2686ade9f6f2f9fdb556219f51063245ff79a7f64e8952d070';
+export const NM_CABLE_RUN_HASH = 'b49c8916c38baba2e7eb6fb0ff6c7544547bf8cb552064746a0606acdc97dfad';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const script = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/nm-cable-run.ts');

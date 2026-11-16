@@ -53,6 +53,7 @@
       "state": {},
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": null,
       "extensions": {}
     },
@@ -79,6 +80,7 @@
       },
       "sim": {},
       "mountedOn": null,
+      "inEntry": null,
       "label": "J1",
       "extensions": {}
     }

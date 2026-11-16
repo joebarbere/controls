@@ -165,7 +165,7 @@ export function conduitRun(world: World, catalog: Catalog, entity: number): ({ o
   let start = parts.get(entity);
   if (!start) {
     if (!findEntity(world, entity)) return fail('not-found', `No entity with id ${entity}`);
-    const held = connectorEntries(world, catalog).find((c) => c.enclosure === entity);
+    const held = connectorEntries(world).find((c) => c.enclosure === entity);
     start = held && parts.get(held.connector);
     if (!start) return fail('not-a-conduit', `Entity ${entity} isn't conduit, or a box with a connector in an entry`);
   }
@@ -214,7 +214,7 @@ export function conduitRun(world: World, catalog: Catalog, entity: number): ({ o
     }
     return out;
   };
-  const entries = connectorEntries(world, catalog);
+  const entries = connectorEntries(world);
   const inEntry = (part: Part, end: PartEnd) => {
     if (!part.connector) return null;
     const found = entries.find((c) => c.connector === part.entity);

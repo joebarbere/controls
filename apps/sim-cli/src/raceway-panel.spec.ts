@@ -23,7 +23,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `raceway-panel.console`. */
-export const RACEWAY_PANEL_HASH = 'e3b597900736a54c6e6c3726a0c248fe3bdb1ae0276dae3324f91c0344b48b26';
+export const RACEWAY_PANEL_HASH = '7a83af95f1de1ceba08b1b128994123328d7140a44c33ae931a786f092d097f5';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

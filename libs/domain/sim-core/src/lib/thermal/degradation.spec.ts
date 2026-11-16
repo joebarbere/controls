@@ -110,6 +110,7 @@ function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = TH
         state: { on: true },
         sim: { thermal: 0, tripped: false },
         mountedOn: null,
+        inEntry: null,
         label: null,
         extensions: {},
       },

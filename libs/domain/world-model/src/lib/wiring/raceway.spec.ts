@@ -45,6 +45,7 @@ function place(bus: Bus, ref: CatalogRef, cursor: PositionMm, turn = 0) {
     positionMm: p.positionMm,
     orientationMdeg: p.orientationMdeg,
     mountedOn: p.mountedOn,
+    inEntry: p.inEntry,
   });
   if (!result.ok) throw new Error(JSON.stringify(result.error));
   return p;
@@ -175,6 +176,7 @@ describe('DIN terminal blocks', () => {
         ref: ST4,
         positionMm: at(-69, 126, 22),
         mountedOn: { entity: 1, mount: 'rail-1' },
+        inEntry: null,
       }),
     ).toMatchObject({ ok: false, error: { code: 'overlaps' } });
   });
@@ -227,6 +229,13 @@ describe('EMT-lite snapping', () => {
       positionMm: at(-117, -200, 83),
       orientationMdeg: { yaw: 0, pitch: 0, roll: 270_000 },
       mountedOn: null,
+      inEntry: { entity: 1, entry: 'ko-bottom-1' },
+    });
+    // Placed in the entry (ADR 0015 F3.4 part 2 note 4): stored, and the panel is held by it.
+    expect(bus.state.entities[1].inEntry).toStrictEqual({ entity: 1, entry: 'ko-bottom-1' });
+    expect(bus.exec('entity.move', { id: 1, positionMm: at(-200, -200, 50) })).toMatchObject({
+      ok: false,
+      error: { code: 'occupied' },
     });
     // Its outer end: (-117, -200, 83) + 25 × (−y) + 17 × (+x) + 17 × (+z) = (-100, -225, 100), facing −y.
     const stick = place(bus, STICK, at(-100, -250, 100));
@@ -255,11 +264,8 @@ describe('EMT-lite snapping', () => {
     const bus = withOpenKnockout();
     place(bus, CONNECTOR, at(-95, -205, 100));
     place(bus, STICK, at(-100, -250, 100));
-    expect(racewayTargets(bus.state, BUILTIN_CATALOG, '3/4', true).map((t) => t.id)).toStrictEqual([
-      'entity-1:ko-bottom-1', // still open: a second connector overlaps the first (refused as overlaps)
-      'entity-3:end-b',
-    ]);
-    expect(placeInWorld(bus.state, CONNECTOR, at(-95, -205, 100), [])).toMatchObject({ ok: false, reason: 'overlaps' });
+    // The knockout holds the connector now, so it is no target for a second one (ADR 0015 F3.4 part 2 note 4).
+    expect(racewayTargets(bus.state, BUILTIN_CATALOG, '3/4', true).map((t) => t.id)).toStrictEqual(['entity-3:end-b']);
     expect(snapConduit(bus.state, BUILTIN_CATALOG, ELBOW, at(500, 500, 500))).toBeNull();
     expect(snapConduit(bus.state, BUILTIN_CATALOG, DUCT, at(-100, -1225, 100))).toBeNull();
   });

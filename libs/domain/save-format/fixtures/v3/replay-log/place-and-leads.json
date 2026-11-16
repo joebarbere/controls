@@ -39,7 +39,8 @@
           "pitch": 0,
           "roll": 0
         },
-        "mountedOn": null
+        "mountedOn": null,
+        "inEntry": null
       }
     },
     {
@@ -61,7 +62,8 @@
           "pitch": 0,
           "roll": 0
         },
-        "mountedOn": null
+        "mountedOn": null,
+        "inEntry": null
       }
     },
     {

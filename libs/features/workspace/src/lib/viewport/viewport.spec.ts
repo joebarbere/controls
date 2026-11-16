@@ -87,6 +87,7 @@ describe('Viewport', () => {
       positionMm: { x: -210, y: 260, z: 0 },
       orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
       mountedOn: null,
+      inEntry: null,
     });
     sendIntent(viewport, { kind: 'move', id: 1, positionMm: { x: -70, y: 110, z: 0 } });
     sendIntent(viewport, { kind: 'cancelPlacement' });
@@ -101,6 +102,7 @@ describe('Viewport', () => {
           positionMm: { x: -210, y: 260, z: 0 },
           orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
           mountedOn: null,
+          inEntry: null,
         },
       ],
       ['entity.move', { id: 1, positionMm: { x: -70, y: 110, z: 0 } }],
@@ -136,6 +138,7 @@ describe('Viewport', () => {
       positionMm: { x: 0, y: 0, z: 0 },
       orientationMdeg: Z,
       mountedOn: null,
+      inEntry: null,
     });
     const mountedOn = { entity: 1, mount: 'rail-1' };
     sendIntent(viewport, {
@@ -144,6 +147,7 @@ describe('Viewport', () => {
       positionMm: { x: 35, y: 305, z: 22 },
       orientationMdeg: Z,
       mountedOn,
+      inEntry: null,
     });
     expect(session.world().entities.map((e) => e.mountedOn)).toEqual([null, mountedOn]);
     expect(session.entries().at(-1)?.args).toMatchObject({ mountedOn });
@@ -164,6 +168,41 @@ describe('Viewport', () => {
     placement(null);
     await fixture.whenStable();
     expect(hint()).toBeNull();
+  });
+
+  it('passes inEntry through to entity.place: a connector snapped into an entry holds its enclosure (ADR 0015 F3.4 part 2 note 4)', async () => {
+    const fixture = TestBed.createComponent(Viewport);
+    await fixture.whenStable();
+    const session = TestBed.inject(Session);
+    session.newSandbox({ seed: 0 });
+    const viewport = fixture.componentInstance;
+    const Z = { yaw: 0, pitch: 0, roll: 0 };
+    sendIntent(viewport, {
+      kind: 'place',
+      ref: { id: 'panel.pellmoor-din-400x500', version: 1 },
+      positionMm: { x: 0, y: 0, z: 0 },
+      orientationMdeg: Z,
+      mountedOn: null,
+      inEntry: null,
+    });
+    const tool = { id: 'tool.veltmark-sd-2', version: 1 };
+    expect(session.exec('enclosure.openEntry', { id: 1, entry: 'ko-bottom-1', tool }).ok).toBe(true);
+    // ko-bottom-1 is at (100, 0, 100) pointing in along +y: the 3/4 in connector's entry end goes there.
+    const inEntry = { entity: 1, entry: 'ko-bottom-1' };
+    sendIntent(viewport, {
+      kind: 'place',
+      ref: { id: 'connector.stavenor-emt-075', version: 1 },
+      positionMm: { x: 83, y: 0, z: 83 },
+      orientationMdeg: { yaw: 0, pitch: 0, roll: 270_000 },
+      mountedOn: null,
+      inEntry,
+    });
+    expect(session.entries().at(-1)).toMatchObject({ id: 'entity.place', args: { inEntry } });
+    expect(session.world().entities.at(-1)?.inEntry).toEqual(inEntry);
+    expect(session.exec('entity.move', { id: 1, positionMm: { x: 0, y: 0, z: 50 } })).toMatchObject({
+      ok: false,
+      error: { code: 'occupied' },
+    });
   });
 
   it('applies view.mode and view.focus from any surface without touching the world', async () => {

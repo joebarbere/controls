@@ -45,6 +45,9 @@ describe('completeConsoleInput', () => {
     expect(at('entity.place --ref')?.candidates).toEqual(['--ref.id', '--ref.version']);
     expect(at('entity.place --ref.id prop.crate --')?.candidates).toEqual([
       // World v3 (ADR 0015): a nullable object is a literal (`--mountedOn null`) or dotted flags.
+      '--inEntry',
+      '--inEntry.entity',
+      '--inEntry.entry',
       '--mountedOn',
       '--mountedOn.entity',
       '--mountedOn.mount',

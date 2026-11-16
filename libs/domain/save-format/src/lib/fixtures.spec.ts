@@ -162,6 +162,11 @@ const REFUSED_V3: Record<string, string> = {
   'world/cable-tails-not-shorter-than-cable.json': "A cable's tails are shorter than its length",
   'world/conductor-in-missing-cable.json': 'A conductor names a cable that exists',
   'world/free-end-without-rest-waypoint.json': 'A free end b rests on a last waypoint of kind free',
+  'world/in-entry-and-mounted.json': 'An entity is either mounted or in an entry, not both',
+  'world/in-entry-cycle.json': 'Mounting and entries must not form a cycle',
+  'world/in-entry-of-itself.json': 'An entity is not in an entry of itself',
+  'world/in-entry-host-missing.json': 'An entity is in an entry of an entity that exists',
+  'world/in-entry-shared.json': 'At most one entity is in each entry',
   'world/label-with-trailing-space.json': `Invalid string: must match pattern ${String(LABEL_TEXT_PATTERN)}`,
   'world/landed-conductor-without-termination.json': 'A landed conductor end has a termination',
   'world/lead-with-a-route.json':

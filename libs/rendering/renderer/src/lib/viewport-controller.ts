@@ -41,6 +41,7 @@ import {
   type ConductorColour,
   type Entity,
   type EntityId,
+  type InEntry,
   type MountedOn,
   type OrientationMdeg,
   type PlacementWorld,
@@ -128,6 +129,8 @@ export interface PlacementView {
   readonly reason: WorldPlacementFailure | null;
   /** The enclosure mount it would go on (`entity.place`'s `mountedOn`), or `null`. */
   readonly mountedOn: MountedOn | null;
+  /** The enclosure entry a conduit connector would go in (`entity.place`'s `inEntry`), or `null`. */
+  readonly inEntry: InEntry | null;
   /** The snap target under the cursor, if any. */
   readonly targetId: string | null;
   /** What aims the ghost: the mouse pointer, or the screen-centre reticle (keyboard, pointer lock). */
@@ -269,6 +272,11 @@ export type ViewportIntent =
       readonly orientationMdeg: OrientationMdeg;
       /** The enclosure mount it snapped to (F3.5), or `null` (a fixture). */
       readonly mountedOn: MountedOn | null;
+      /**
+       * The enclosure entry a conduit connector snapped into (ADR 0015 F3.4 part 2 note 4), or `null`;
+       * pass it to `entity.place` as `inEntry`. Always present.
+       */
+      readonly inEntry: InEntry | null;
     }
   | { readonly kind: 'move'; readonly id: EntityId; readonly positionMm: Vec3Mm }
   | { readonly kind: 'cancelPlacement' };
@@ -986,6 +994,7 @@ export class ViewportController {
       valid: r?.ok === true,
       reason: r && !r.ok ? r.reason : null,
       mountedOn: r?.ok ? r.mountedOn : null,
+      inEntry: r?.ok ? r.inEntry : null,
       targetId: r?.targetId ?? null,
       source: this.ghostSource,
     };
@@ -1057,6 +1066,7 @@ export class ViewportController {
         positionMm: r.positionMm,
         orientationMdeg: r.orientationMdeg,
         mountedOn: r.mountedOn,
+        inEntry: r.inEntry,
       });
     }
     this.markHoverDirty();

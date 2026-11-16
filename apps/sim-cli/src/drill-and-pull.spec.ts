@@ -26,7 +26,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `drill-and-pull.ts`. */
-export const DRILL_AND_PULL_HASH = '3e64b7f88f9e82895c9fed3f30ddf34f002acc3e69ee66a750c09e2f9768b329';
+export const DRILL_AND_PULL_HASH = 'd02e5bec4daa15aacd1aa8bb252999460b716a2d6587b2213bff98e96b6ee04d';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const script = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/drill-and-pull.ts');

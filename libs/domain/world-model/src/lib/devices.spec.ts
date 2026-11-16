@@ -19,6 +19,7 @@ const entity = (id: number, ref: Entity['ref'], state: Entity['state'] = {}, sim
   state,
   sim,
   mountedOn: null,
+  inEntry: null,
   label: null,
   extensions: {},
 });

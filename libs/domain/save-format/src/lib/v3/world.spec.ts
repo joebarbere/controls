@@ -19,6 +19,7 @@ const entity = (id: number, overrides: Record<string, unknown> = {}) => ({
   state: {},
   sim: {},
   mountedOn: null,
+  inEntry: null,
   label: null,
   extensions: {},
   ...overrides,
@@ -176,6 +177,43 @@ describe('WorldV3', () => {
       'Mounting must not form a cycle',
     );
     expect(issuesOf(world({ entities: [entity(1), mounted(2, 1), mounted(3, 1)] }))).toStrictEqual([]);
+  });
+
+  it('2b: inEntry names another entity that exists, one entity per entry, never with mountedOn', () => {
+    const inEntry = (id: number, on: number, entry = 'ko-1', overrides: Record<string, unknown> = {}) =>
+      entity(id, { inEntry: { entity: on, entry }, ...overrides });
+    expect(issuesOf(world({ entities: [entity(1), inEntry(2, 2), entity(3)] }))).toContain(
+      'An entity is not in an entry of itself',
+    );
+    expect(issuesOf(world({ entities: [entity(1), inEntry(2, 9), entity(3)] }))).toContain(
+      'An entity is in an entry of an entity that exists',
+    );
+    expect(issuesOf(world({ entities: [entity(1), inEntry(2, 1), inEntry(3, 1)] }))).toContain(
+      'At most one entity is in each entry',
+    );
+    const both = inEntry(2, 1, 'ko-1', { mountedOn: { entity: 3, mount: 'm' } });
+    expect(issuesOf(world({ entities: [entity(1), both, entity(3)] }))).toContain(
+      'An entity is either mounted or in an entry, not both',
+    );
+    expect(issuesOf(world({ entities: [entity(1), inEntry(2, 1, 'ko-1'), inEntry(3, 1, 'ko-2')] }))).toStrictEqual([]);
+  });
+
+  it('2c: mountedOn and inEntry together form no cycle', () => {
+    const cycle = 'Mounting and entries must not form a cycle';
+    const inEntry = (id: number, on: number) => entity(id, { inEntry: { entity: on, entry: 'ko-1' } });
+    const mounted = (id: number, on: number) => entity(id, { mountedOn: { entity: on, mount: 'm' } });
+    // A in an entry of B, B in an entry of A.
+    expect(issuesOf(world({ entities: [inEntry(1, 2), inEntry(2, 1), entity(3)] }))).toContain(cycle);
+    // B mounted on A while A is in an entry of B.
+    expect(issuesOf(world({ entities: [inEntry(1, 2), mounted(2, 1), entity(3)] }))).toContain(cycle);
+    // Three long: 1 in 2, 2 on 3, 3 in 1.
+    expect(issuesOf(world({ entities: [inEntry(1, 2), mounted(2, 3), inEntry(3, 1)] }))).toContain(cycle);
+    // A mount-only cycle keeps its own message, alone.
+    const mountsOnly = issuesOf(world({ entities: [mounted(1, 3), mounted(2, 1), mounted(3, 2)] }));
+    expect(mountsOnly).toContain('Mounting must not form a cycle');
+    expect(mountsOnly).not.toContain(cycle);
+    // A chain is fine: 1 in an entry of 2, 2 mounted on 3.
+    expect(issuesOf(world({ entities: [inEntry(1, 2), mounted(2, 3), entity(3)] }))).toStrictEqual([]);
   });
 
   it('3: a landed end names an entity that exists; two landed ends are different terminals', () => {
@@ -342,6 +380,7 @@ describe('WorldV3', () => {
         }
         if (w.cables.length > 0) seen.add('cable');
         if (w.entities.some((e) => e.mountedOn !== null)) seen.add('mounted');
+        if (w.entities.some((e) => e.inEntry !== null)) seen.add('in entry');
       }),
       { numRuns: 300 },
     );
@@ -352,6 +391,7 @@ describe('WorldV3', () => {
         'conduit',
         'duct',
         'free',
+        'in entry',
         'in-cable',
         'lead',
         'mounted',

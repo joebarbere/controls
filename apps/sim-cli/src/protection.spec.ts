@@ -18,7 +18,7 @@ import { workshopWorld } from './testing/workshop';
  * (a new fixture for a new engine, never a regenerated one). The fixture-rebuild check in
  * `sources.spec.ts` rebuilds it from the scenario.
  */
-export const PROTECTION_HASH = '8ea8205066c5474a9cedec107e6adac0005a8da216b93409509d656bd83316d8';
+export const PROTECTION_HASH = '2635ccff29f623af7fb7344ecd7d8c6df4561e5264da057f52617565f91643eb';
 export const PROTECTION_SNAPSHOT_HASH = '5af97022d2958906709fa3730fe89871e632f8472ec6e9abf0d7570b7dc93e6b';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/protection.console');

@@ -262,7 +262,7 @@ function call(world: World, op: Op): [string, Record<string, unknown>] | null {
       return [
         'wire.pull',
         {
-          route: [freeAt(0, 2500, 0), conduit(500), conduit(1500), freeAt(2000, 2500, 0)],
+          route: [freeAt(0, 2500, 0), conduit(500), conduit(1300), freeAt(2000, 2500, 0)],
           lengthMm: 2100,
           conductors: Array.from({ length: op.count }, (_, i) => ({
             ref: WIRE,

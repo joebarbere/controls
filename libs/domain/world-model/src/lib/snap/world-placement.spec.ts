@@ -58,6 +58,7 @@ function commit(bus: ReturnType<typeof panelBus>, ref: CatalogRef, p: ReturnType
     positionMm: p.positionMm,
     orientationMdeg: p.orientationMdeg,
     mountedOn: p.mountedOn,
+    inEntry: p.inEntry,
   });
   if (!result.ok) throw new Error(JSON.stringify(result.error));
 }
@@ -98,6 +99,7 @@ describe('placeInWorld onto enclosure mounts', () => {
       positionMm: at(-77, 55, 22),
       orientationMdeg: Z,
       mountedOn: { entity: 1, mount: 'rail-1' },
+      inEntry: null,
     });
     commit(bus, BREAKER, p);
     expect(bus.state.entities[1]).toMatchObject({ mountedOn: { entity: 1, mount: 'rail-1' } });

@@ -263,6 +263,7 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
           state,
           sim: {},
           mountedOn: null,
+          inEntry: null,
           label: null,
           extensions: {},
         },

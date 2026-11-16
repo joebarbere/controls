@@ -91,7 +91,7 @@ export function routingPanelBus(wired = false): CommandBus<World> {
  * `apps/sim-cli/scenarios/raceway-panel.console`'s parts on an empty Trainee world (seed 0): the DIN
  * panel (1) at (−200, −200, 0), a 40 × 60 duct (2) on its backplate cut to 250 mm (axis y = 90,
  * z = 44, x −150 … 100), screw blocks (3, 4) at x = −69 and −63 and a ground block (5) on rail 1, a
- * spring-cage block (6), the 3/4 in connector (7) in the opened `ko-bottom-1`, a stick (8) cut to
+ * spring-cage block (6), the 3/4 in connector (7) in the opened `ko-bottom-1` (its `inEntry`), a stick (8) cut to
  * 300 mm and an elbow (9).
  */
 export function racewayPanelBus(): CommandBus<World> {
@@ -101,12 +101,21 @@ export function racewayPanelBus(): CommandBus<World> {
     if (!result.ok) throw new Error(`racewayPanelBus: ${id} failed: ${result.error.message}`);
   };
   const ref = (id: string) => ({ id, version: 1 });
-  const place = (id: string, x: number, y: number, z: number, roll = 0, mountedOn: object | null = null) =>
+  const place = (
+    id: string,
+    x: number,
+    y: number,
+    z: number,
+    roll = 0,
+    mountedOn: object | null = null,
+    inEntry: object | null = null,
+  ) =>
     run('entity.place', {
       ref: ref(id),
       positionMm: at(x, y, z),
       orientationMdeg: { yaw: 0, pitch: 0, roll },
       mountedOn,
+      inEntry,
     });
   place('panel.pellmoor-din-400x500', -200, -200, 0);
   place('duct.lattisby-40x60', -150, 70, 14, 0, { entity: 1, mount: 'plate' });
@@ -116,7 +125,7 @@ export function racewayPanelBus(): CommandBus<World> {
   place('tb.quennick-pe4', -57, 126, 22, 0, { entity: 1, mount: 'rail-1' });
   place('tb.quennick-sc25', -45, 122, 22, 0, { entity: 1, mount: 'rail-1' });
   run('enclosure.openEntry', { id: 1, entry: 'ko-bottom-1', tool: ref('tool.veltmark-sd-2') });
-  place('connector.stavenor-emt-075', -117, -200, 83, 270_000);
+  place('connector.stavenor-emt-075', -117, -200, 83, 270_000, null, { entity: 1, entry: 'ko-bottom-1' });
   place('emt.stavenor-075', -112, -225, 88, 270_000);
   run('raceway.cut', { id: 8, lengthMm: 300 });
   place('elbow.stavenor-emt-075', -88, -525, 88, 180_000);
