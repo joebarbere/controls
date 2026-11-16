@@ -183,7 +183,7 @@ describe('the built-in tools land a conductor (suggestTermination)', () => {
 });
 
 describe('beltChoices', () => {
-  it('offers the built-in props, the placeable catalogue devices (F3.5), the conductor spools (F3.2 part 3), then each catalogue tool once, every choice a slot can hold', () => {
+  it('offers the built-in props, the placeable catalogue devices (F3.5), the conductor spools (F3.2 part 3), the cable spools (F3.2 part 4), then each catalogue tool once, every choice a slot can hold', () => {
     const choices = beltChoices(BUILTIN_CATALOG);
     const inCables = new Set(BUILTIN_CATALOG.cables.flatMap((c) => c.conductors.map((k) => k.conductor.id)));
     expect(choices.map((c) => `${c.group}:${c.ref.id}@${c.ref.version}`)).toStrictEqual([
@@ -197,6 +197,7 @@ describe('beltChoices', () => {
       ...BUILTIN_CATALOG.devices
         .filter((d) => d.model.kind === 'conductor' && !inCables.has(d.id))
         .map((d) => `Spools:${d.id}@1`),
+      ...BUILTIN_CATALOG.cables.map((c) => `Spools:${c.id}@1`),
       ...BUILTIN_CATALOG.tools.map((t) => `Tools:${t.id}@1`),
     ]);
     // The panel and the breaker are among them, and THHN building wire; no lead, and no NM-B inner conductor.
@@ -206,6 +207,7 @@ describe('beltChoices', () => {
         'panel.pellmoor-din-400x500',
         'breaker.saltmere-1p-15a',
         'conductor.tallowmere-thhn-14-solid',
+        'cable.sorrelby-nmb-14-2',
       ]),
     );
     expect(ids.some((id) => id.startsWith('lead.') || id.startsWith('conductor.sorrelby-'))).toBe(false);

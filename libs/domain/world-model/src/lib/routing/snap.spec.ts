@@ -94,6 +94,24 @@ describe('snapWaypoint (ADR 0017)', () => {
     expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2981, 1204, -3040), { kinds: ['bore'] }).kind).toBe('free');
   });
 
+  it('a head-on click on a stud’s front face captures that stud’s staple and bore (F3.2 part 4)', () => {
+    const world = { ...panel, fixtures: [studWall] };
+    // The face is at z = −3000, the staple 44 mm behind it: measured from the cursor at mid-depth.
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2590, 500, -3000))).toMatchObject({
+      kind: 'staple',
+      positionMm: at(-2595, 500, -3044),
+    });
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2570, 500, -3000)).positionMm).toStrictEqual(at(-2555, 500, -3044));
+    expect(
+      snapWaypoint(world, BUILTIN_CATALOG, at(-2575, 500, -3000), { kinds: ['bore'], boreTool: BIT }),
+    ).toMatchObject({
+      kind: 'bore',
+      positionMm: at(-2575, 500, -3044),
+    });
+    // In front of the wall (not on it), the distance is the plain one: nothing within 40 mm.
+    expect(snapWaypoint(world, BUILTIN_CATALOG, at(-2590, 500, -2990)).kind).toBe('free');
+  });
+
   it('gives integer points within the capture distance, a captured one on its host’s axis (property)', () => {
     // Fractional cursors as a ray hit gives them, mostly near a duct (mapped draws, never filtered).
     const paths = racewayPaths(panel, BUILTIN_CATALOG);

@@ -282,12 +282,14 @@ describe('the routing flow (F3.2 part 3)', () => {
     expect(zoom?.id).toBe('view.focus.terminals');
   });
 
-  it('a lead or cable spool is held but not routed (yet)', () => {
+  it('a lead spool is held but not routed (leads are connected with lead.connect)', () => {
     const { flow, renderer, session } = setup();
     session.exec('toolbelt.select', { slot: 5 });
     TestBed.tick();
     expect(renderer.current).toBeNull();
-    expect(flow.hint()).toBe('1 m 18 AWG test lead with crocodile clips: only single conductors can be routed yet.');
+    expect(flow.hint()).toBe(
+      '1 m 18 AWG test lead with crocodile clips: test leads are connected with lead.connect, not routed.',
+    );
   });
   it('a hovered device never takes Tab: only the selection, the focus target or the keyboard terminal do', () => {
     const { renderer, session, state } = setup();

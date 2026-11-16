@@ -153,6 +153,20 @@ export interface RoutingSession {
   readonly auto?: boolean;
   /** What a waypoint click may snap to (default ducts, conduit and staples; bores need a bit). */
   readonly snap?: SnapWaypointOptions;
+  /**
+   * What the gesture's ends are (F3.2 part 4): `terminals` (the default, a conductor's route) or
+   * `entries` (a cable's, between enclosure entries). With `entries` no terminal is hovered, picked or
+   * previewed: a click on an entity reports an `entity` event (the UI resolves the entry), a click
+   * elsewhere a waypoint once the route has started, and Enter an `enter` event.
+   */
+  readonly ends?: 'terminals' | 'entries';
+  /**
+   * Where the route starts when its first end isn't a terminal (a cable's first entry, F3.2 part 4),
+   * else absent: the preview rope and waypoint picks start here while `from` is `null`.
+   */
+  readonly startMm?: PositionMm | null;
+  /** A point the keyboard holds (a cable's entry, cycled by the UI), drawn with the focus marker. */
+  readonly keyPointMm?: PositionMm | null;
 }
 
 /**
@@ -162,6 +176,9 @@ export interface RoutingSession {
  *   `null`.
  * - `waypoint`: a click off any terminal, after the first, put a waypoint here (`snapWaypoint`).
  * - `cancel`: Escape while routing (the UI steps back or ends the gesture).
+ * - `entity` (`ends: 'entries'` only): a click on an entity, at `atMm` on its surface; `waypoint` is
+ *   what a waypoint click there would add (a duct is an entity), or `null`. The UI decides.
+ * - `enter` (`ends: 'entries'` only): Enter, for the UI's keyboard entry.
  */
 export type RoutingEvent =
   | {
@@ -171,7 +188,14 @@ export type RoutingEvent =
       readonly proposal: RouteProposal | null;
     }
   | { readonly kind: 'waypoint'; readonly waypoint: Waypoint }
-  | { readonly kind: 'cancel' };
+  | { readonly kind: 'cancel' }
+  | {
+      readonly kind: 'entity';
+      readonly entity: EntityId;
+      readonly atMm: PositionMm;
+      readonly waypoint: Waypoint | null;
+    }
+  | { readonly kind: 'enter' };
 
 export type RoutingEventListener = (event: RoutingEvent) => void;
 
@@ -1154,7 +1178,7 @@ export class ViewportController {
     this.selection.hover(target?.entity?.id ?? null);
     this.setHoveredWire(target?.wire ?? null);
     const before = `${this.terminalViewKey()}|${this.routingViewKey()}`;
-    if (this.routingSession || this.terminalPickingOn) {
+    if (this.terminalRouting() || this.terminalPickingOn) {
       this.projectTerminals();
       const pick = c ? this.terminals.pick(...this.ndcToPx(c.x, c.y), this.terminalVisible) : null;
       this.terminalView = this.terminalViewOf(pick, this.selection.hovered?.entityId ?? null);
@@ -1252,6 +1276,11 @@ export class ViewportController {
     return null;
   }
 
+  /** Whether a routing session picks terminals (a conductor's route; not a cable's entries). */
+  private terminalRouting(): boolean {
+    return this.routingSession !== null && this.routingSession.ends !== 'entries';
+  }
+
   /** The proposal for a route from the session's first terminal to `target` (cached), or `null`. */
   private proposalTo(target: TerminalRef): RouteProposal | null {
     const session = this.routingSession;
@@ -1278,6 +1307,15 @@ export class ViewportController {
     const world = this.fullWorld;
     if (!session || !world) return;
     const from = session.from && terminalPlace(world, this.catalog, session.from);
+    const startMm = session.from === null ? (session.startMm ?? null) : null;
+    if (startMm !== null) {
+      // A route from a point (a cable's first entry): waypoints and the rope to the cursor only.
+      const waypoints = session.waypoints.map((w) => w.positionMm);
+      const next = c ? this.waypointAt(c.x, c.y, session) : null;
+      this.routingView = { from: null, target: null, proposal: null, next };
+      this.setPreviewPoints([startMm, ...waypoints, ...(next ? [next.positionMm] : [])], session);
+      return;
+    }
     if (!session.from || !from || !from.ok) {
       const ref = session.from && { entity: session.from.entity, terminal: session.from.terminal };
       this.routingView = { from: ref, target: null, proposal: null, next: null };
@@ -1338,11 +1376,13 @@ export class ViewportController {
     if (session && world) {
       const from = session.from && terminalPlace(world, this.catalog, session.from);
       if (from && from.ok) list.push({ kind: 'from', atMm: from.point });
+      else if (session.startMm) list.push({ kind: 'from', atMm: session.startMm });
       for (const w of session.waypoints) list.push({ kind: 'waypoint', atMm: w.positionMm });
       const next = this.routingView?.next;
       if (next) list.push({ kind: 'next', atMm: next.positionMm });
     }
-    if (session || this.terminalPickingOn) {
+    if (session?.keyPointMm) list.push({ kind: 'focus', atMm: session.keyPointMm });
+    if (this.terminalRouting() || this.terminalPickingOn) {
       const view = this.terminalView;
       const shown = view?.hit ?? view?.near ?? null;
       const i = shown ? this.terminals.indexOf(shown) : -1;
@@ -1398,6 +1438,20 @@ export class ViewportController {
     const session = this.routingSession;
     const hit = this.terminalView?.hit ?? null;
     if (!session) return;
+    if (session.ends === 'entries') {
+      const c = this.hoverNdc();
+      const body = c ? this.picker.pick(c.x, c.y, this.camera) : null;
+      const next = this.routingView?.next ?? null;
+      const entity = body?.info.entityId;
+      if (body && entity !== undefined && entity !== null) {
+        const p = body.point;
+        const atMm = { x: metresToMm(p.x), y: metresToMm(p.y), z: metresToMm(p.z) };
+        this.emitRouting({ kind: 'entity', entity, atMm, waypoint: next });
+        return;
+      }
+      if (session.startMm && next) this.emitRouting({ kind: 'waypoint', waypoint: next });
+      return;
+    }
     if (hit) {
       this.emitRouting({ kind: 'terminal', end: hit, source: 'pointer', proposal: this.proposalTo(hit) });
       return;
@@ -1440,6 +1494,10 @@ export class ViewportController {
         this.select(null);
         return true;
       case 'commitPlacement':
+        if (this.routingSession?.ends === 'entries') {
+          this.emitRouting({ kind: 'enter' });
+          return true;
+        }
         if (this.routingSession) return this.pickKeyTerminal();
         return this.commit();
       case 'moveSelection': {

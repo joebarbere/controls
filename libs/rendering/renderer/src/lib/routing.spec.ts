@@ -344,6 +344,53 @@ describe('the routing gesture (F3.2 part 3)', () => {
   });
 });
 
+describe('a cable gesture between entries (F3.2 part 4)', () => {
+  const cable = (startMm: RoutingSession['startMm'] = null, waypoints: RoutingSession['waypoints'] = []) => ({
+    ...session(null, waypoints),
+    ends: 'entries' as const,
+    startMm,
+  });
+
+  it('a click on an entity reports it with the hit point; no terminal is hovered or picked', () => {
+    const { controller, events, click, hover, at } = setup();
+    controller.setRouting(cable());
+    const t = at(rowA(0), 'a');
+    hover(t.x, t.y);
+    expect(controller.state.terminal).toBeNull();
+    click(t.x, t.y);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ kind: 'entity', entity: rowA(0), atMm: expect.any(Object) });
+    // Before the route starts, a click off every entity adds nothing.
+    click(5, 5);
+    expect(events).toHaveLength(1);
+    controller.dispose();
+  });
+
+  it('from a start point, a click off the entities adds a waypoint and the rope starts at the point', () => {
+    const { controller, events, click } = setup();
+    controller.setRouting(cable({ x: 100, y: 200, z: 30 }));
+    // Above the duct (D2: y 300 … 340): over the duct the click hits the duct entity instead.
+    const duct = controller.projectMm({ x: 200, y: 320, z: 60 });
+    click(duct.x, duct.y);
+    expect(events[0]).toMatchObject({ kind: 'entity', entity: 2, waypoint: { kind: 'duct', entity: 2 } });
+    expect(controller.routingMarkers().map((m) => m.kind)).toStrictEqual(['from', 'next']);
+    expect(controller.wireGraph().preview).toMatchObject({ look: expect.any(String) });
+    controller.dispose();
+  });
+
+  it('Enter reports `enter`, and the keyboard point is drawn with the focus marker', () => {
+    const { canvas, controller, events } = setup();
+    controller.setRouting({ ...cable(), keyPointMm: { x: 100, y: 200, z: 30 } });
+    controller.update(0);
+    expect(controller.routingMarkers().map((m) => m.kind)).toStrictEqual(['focus']);
+    canvas.dispatchEvent(key('Enter'));
+    expect(events).toStrictEqual([{ kind: 'enter' }]);
+    canvas.dispatchEvent(key('Escape'));
+    expect(events[1]).toStrictEqual({ kind: 'cancel' });
+    controller.dispose();
+  });
+});
+
 describe('wire picking (ADR 0017 §9)', () => {
   /** A point (mm) on connection `id`'s baked centreline, in the open between its block and its duct. */
   const onWire = (world: World, id: number) => {

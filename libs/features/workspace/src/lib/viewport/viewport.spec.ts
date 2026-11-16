@@ -35,7 +35,9 @@ describe('Viewport', () => {
         'Delete deletes it; Escape cancels. ' +
         "With a spool, pick two terminals to add a wire: Tab and Shift+Tab cycle a device's terminals, Enter picks, " +
         'a click elsewhere adds a waypoint, Backspace steps back, Z zooms to crowded terminals. ' +
-        'N and Shift+N select the next and previous wire.',
+        'N and Shift+N select the next and previous wire. ' +
+        "With a cable spool, pick two box entries (Tab cycles a selected box's entries); " +
+        'J strips, L lands and Shift+L labels the selected cable or conductor.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
