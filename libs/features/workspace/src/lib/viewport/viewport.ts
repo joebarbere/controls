@@ -21,6 +21,7 @@ import {
   SELECTION_ID_KEY,
   SELECTION_KIND_KEY,
   VIEW_FOCUS_SELECTION_BINDING,
+  VIEW_FOCUS_TERMINALS_BINDING,
   VIEW_MODE_WALK_BINDING,
   type ViewFocusArgs,
   type ViewModeArgs,
@@ -43,6 +44,7 @@ import {
   SELECTION_TOGGLE_VALUE_KEY,
   selectionToggle,
 } from '@controls/world-model';
+import { connectRouting } from '../routing/routing-flow';
 import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
 import { OverlayLegend } from './overlay-legend';
@@ -84,6 +86,12 @@ const TEST_HOOK = '__controlsViewport';
  * `device.operate {id, control, value}` on the selection's first toggle (a switch's `closed`), set to
  * its other position: one logged command either way. The toggle is published as the context keys
  * `selection.toggleControl` and `selection.toggleValue` from the commanded state (`selectionToggle`).
+ *
+ * **Routing** (F3.2 part 3, `connectRouting`): a conductor spool on the belt arms the routing gesture;
+ * the renderer's terminal and waypoint picks, Escape and the `routing.*` keys step it, and a completed
+ * route is exactly one `wire.add` through `Session.execFromInput`. A top-centre hint (not a live
+ * region: it follows the pointer) says what the next pick does; a polite status announces picks,
+ * waypoints, completed and cancelled routes. The host's `data-routing` is `armed` or `started`.
  *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
@@ -128,6 +136,12 @@ const TEST_HOOK = '__controlsViewport';
     @if (placementHint(); as hint) {
       <div class="placement-hint" data-testid="placement-hint" role="status" aria-live="polite">{{ hint }}</div>
     }
+    @if (routing.hint(); as hint) {
+      <div class="routing-hint" data-testid="routing-hint">{{ hint }}</div>
+    }
+    <p class="ctl-visually-hidden" role="status" aria-live="polite" data-testid="routing-status">
+      {{ routing.announcement() }}
+    </p>
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
     }
@@ -178,6 +192,22 @@ const TEST_HOOK = '__controlsViewport';
         sans-serif;
       pointer-events: none;
     }
+    .routing-hint {
+      position: absolute;
+      left: 50%;
+      top: 0.75rem;
+      transform: translateX(-50%);
+      max-width: min(40rem, 60%);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      background: rgb(0 0 0 / 65%);
+      color: #e8eaed;
+      font:
+        13px/1.4 system-ui,
+        sans-serif;
+      text-align: center;
+      pointer-events: none;
+    }
     .crosshair {
       position: absolute;
       left: 50%;
@@ -204,6 +234,7 @@ const TEST_HOOK = '__controlsViewport';
     '[attr.data-placement-target]': 'state()?.placement?.targetId ?? null',
     '[attr.data-placement-reason]': 'state()?.placement?.reason ?? null',
     '[attr.data-overlays]': 'overlays.active()',
+    '[attr.data-routing]': 'routing.phase()',
   },
 })
 export class Viewport {
@@ -236,6 +267,11 @@ export class Viewport {
   private readonly renderer = new ViewportRenderer();
   /** The debug overlays (F2.6): `view.overlay`, sim snapshots from `SimHost`, reduced motion, the legend. */
   protected readonly overlays = connectViewportOverlays(this.renderer);
+  /**
+   * The routing gesture (F3.2 part 3): a conductor spool on the belt arms it; the renderer's picks and
+   * the `routing.*` keys step it; a completed route is one `wire.add`.
+   */
+  protected readonly routing = connectRouting(this.renderer, this.state);
   protected readonly session = inject(Session);
   protected readonly viewportFocusedKey = VIEWPORT_FOCUSED_KEY;
   private readonly keys = inject(KeybindingService);
@@ -262,7 +298,11 @@ export class Viewport {
       `Number keys pick a tool-belt slot; a prop is placed with a click or ${key('commitPlacement')} at the pointer or the centre, a tool is held. ` +
       `Drag an object, or ${key('moveSelection')} then ${key('commitPlacement')}, to move it; ` +
       `${binding(DEVICE_OPERATE_SELECTION_BINDING)} or a double-click operates a selected switch; ` +
-      `${binding(ENTITY_DELETE_SELECTION_BINDING)} deletes it; Escape cancels.`
+      `${binding(ENTITY_DELETE_SELECTION_BINDING)} deletes it; Escape cancels. ` +
+      `With a spool, pick two terminals to add a wire: ${binding('routing.terminalNext')} and ` +
+      `${binding('routing.terminalPrevious')} cycle a device's terminals, ${key('commitPlacement')} picks, ` +
+      `a click elsewhere adds a waypoint, ${binding('routing.back')} steps back, ` +
+      `${binding(VIEW_FOCUS_TERMINALS_BINDING)} zooms to crowded terminals.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */

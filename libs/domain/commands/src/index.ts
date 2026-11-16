@@ -5,6 +5,7 @@ export * from './lib/bus';
 export * from './lib/builtin';
 export * from './lib/arg-hints';
 export * from './lib/view';
+export * from './lib/routing';
 export * from './lib/sim-args';
 export * from './lib/file';
 export * from './lib/sim-host';

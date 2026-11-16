@@ -161,7 +161,17 @@ describe('work mode', () => {
     expect(at('-z').position.z).toBeLessThan(1);
     const neg = at('-z');
     expect((neg.minAzimuthAngle + neg.maxAzimuthAngle) / 2).toBeCloseTo(Math.PI, 9);
-    // A tiny target still allows the minimum distance to equal the framing distance.
+    // A tiny target: the minimum distance stays below the framing distance, never on it.
     expect(neg.minDistance).toBeLessThanOrEqual(WORK_LIMITS.minDistanceM);
+  });
+
+  it('never puts the framing distance on the zoom clamp (OrbitControls would re-clamp it every frame)', () => {
+    const framing = (o: { position: { x: number; y: number; z: number } }) =>
+      Math.sqrt(o.position.x ** 2 + o.position.y ** 2 + o.position.z ** 2);
+    for (const radius of [0.005, 0.034, 0.06, 0.2, 1]) {
+      const o = workOrbitFor({ id: 't', center: { x: 0, y: 0, z: 0 }, radius, normal: '+z' }, 45, 16 / 9);
+      expect(o.minDistance).toBeLessThan(framing(o) * 0.99);
+      expect(o.minDistance).toBeLessThanOrEqual(WORK_LIMITS.minDistanceM);
+    }
   });
 });

@@ -3,6 +3,7 @@ import type { AnyCommandDef, CommandDef } from './command';
 import { CONSOLE_AVAILABLE_KEY, defineViewCommand, NoArgs } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
+import { ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
 
 /*
  * The viewport's view commands (plan F1.7, ADR 0006 "View commands versus world commands"): switching
@@ -106,7 +107,9 @@ export function viewModeCommand<S>(): CommandDef<ViewModeArgs, S> {
 /**
  * `view.focus --target <id>`: frames a work-mode target (the backplate, a rail; walls and benches in
  * F1.9) and limits orbit and pan around it, switching to work mode if needed. An id the viewport
- * can't focus is ignored (a view command can't see the scene). `F` focuses the selection.
+ * can't focus is ignored (a view command can't see the scene). `F` focuses the selection; while
+ * routing, `Z` frames the device under the pointer when its terminals are under 24 CSS px apart
+ * (F3.2 part 3, ADR 0017 §9: the target comes from `routing.zoomTarget`).
  */
 export function viewFocusCommand<S>(): CommandDef<ViewFocusArgs, S> {
   return defineViewCommand<ViewFocusArgs, S>({
@@ -122,6 +125,16 @@ export function viewFocusCommand<S>(): CommandDef<ViewFocusArgs, S> {
         target: { kind: 'command', command: 'view.focus', args: {}, contextArgs: { target: SELECTION_ID_KEY } },
         defaults: ['F'],
         when: viewportAnd(SELECTION_FOCUSABLE_KEY),
+      },
+      {
+        id: VIEW_FOCUS_TERMINALS_BINDING,
+        title: 'Zoom to crowded terminals (while routing)',
+        category: 'View',
+        target: { kind: 'command', command: 'view.focus', args: {}, contextArgs: { target: ROUTING_ZOOM_TARGET_KEY } },
+        defaults: ['Z'],
+        // Not gated on viewport focus: the target exists only while the pointer is over a crowded
+        // device, and a mouse player may have last clicked the belt bar (typing still never fires it).
+        when: ROUTING_ZOOM_TARGET_KEY,
       },
     ],
   });
@@ -162,9 +175,18 @@ export function viewNetlistInspectorCommand<S>(): CommandDef<NoArgs, S> {
   });
 }
 
-/** `view.mode`, `view.focus`, `view.overlay` and `view.netlistInspector`, for registering with any state type (world registries add them). */
+/**
+ * `view.mode`, `view.focus`, `view.overlay`, `view.netlistInspector` and the routing gesture's keys
+ * (`routing.*`, F3.2 part 3), for registering with any state type (world registries add them).
+ */
 export function viewportCommands<S>(): AnyCommandDef<S>[] {
-  return [viewModeCommand<S>(), viewFocusCommand<S>(), viewOverlayCommand<S>(), viewNetlistInspectorCommand<S>()];
+  return [
+    viewModeCommand<S>(),
+    viewFocusCommand<S>(),
+    viewOverlayCommand<S>(),
+    viewNetlistInspectorCommand<S>(),
+    ...routingCommands<S>(),
+  ];
 }
 
 /** The extra binding declarations of a list of commands (`CommandDef.bindings`), in list order. */

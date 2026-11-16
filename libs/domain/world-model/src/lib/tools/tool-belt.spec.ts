@@ -183,8 +183,9 @@ describe('the built-in tools land a conductor (suggestTermination)', () => {
 });
 
 describe('beltChoices', () => {
-  it('offers the built-in props, the placeable catalogue devices (F3.5), then each catalogue tool once, every choice a slot can hold', () => {
+  it('offers the built-in props, the placeable catalogue devices (F3.5), the conductor spools (F3.2 part 3), then each catalogue tool once, every choice a slot can hold', () => {
     const choices = beltChoices(BUILTIN_CATALOG);
+    const inCables = new Set(BUILTIN_CATALOG.cables.flatMap((c) => c.conductors.map((k) => k.conductor.id)));
     expect(choices.map((c) => `${c.group}:${c.ref.id}@${c.ref.version}`)).toStrictEqual([
       'Props:prop.bench@1',
       'Props:prop.box@1',
@@ -193,14 +194,24 @@ describe('beltChoices', () => {
       ...BUILTIN_CATALOG.devices
         .filter((d) => d.model.kind !== 'lead' && d.model.kind !== 'conductor')
         .map((d) => `Devices:${d.id}@1`),
+      ...BUILTIN_CATALOG.devices
+        .filter((d) => d.model.kind === 'conductor' && !inCables.has(d.id))
+        .map((d) => `Spools:${d.id}@1`),
       ...BUILTIN_CATALOG.tools.map((t) => `Tools:${t.id}@1`),
     ]);
-    // The panel and the breaker are among them; no lead or conductor (spools) is.
+    // The panel and the breaker are among them, and THHN building wire; no lead, and no NM-B inner conductor.
     const ids = choices.map((c) => c.ref.id);
-    expect(ids).toEqual(expect.arrayContaining(['panel.pellmoor-din-400x500', 'breaker.saltmere-1p-15a']));
-    expect(ids.some((id) => id.startsWith('lead.') || id.startsWith('conductor.'))).toBe(false);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'panel.pellmoor-din-400x500',
+        'breaker.saltmere-1p-15a',
+        'conductor.tallowmere-thhn-14-solid',
+      ]),
+    );
+    expect(ids.some((id) => id.startsWith('lead.') || id.startsWith('conductor.sorrelby-'))).toBe(false);
+    const kinds = { Tools: 'tool', Spools: 'spool', Props: 'placeable', Devices: 'placeable' } as const;
     for (const c of choices) {
-      expect(beltSlotKind(BUILTIN_CATALOG, c.ref)).toBe(c.group === 'Tools' ? 'tool' : 'placeable');
+      expect(beltSlotKind(BUILTIN_CATALOG, c.ref)).toBe(kinds[c.group]);
       expect(c.title).toBe(beltSlotTitle(BUILTIN_CATALOG, c.ref));
     }
   });

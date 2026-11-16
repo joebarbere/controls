@@ -4,7 +4,7 @@ import type { ViewMode } from './cameras/camera-math';
 import type { InputBindings } from './input/input-actions';
 import type { SelectableInfo } from './picking/selection';
 import type { SceneGraphNode } from './scene';
-import type { CatalogRef, Vec3Mm, World } from '@controls/world-model';
+import type { CatalogRef, EntityId, Vec3Mm, World } from '@controls/world-model';
 import type { LampOutputs } from './world/world-sync';
 import { Disposer } from './disposer';
 import type {
@@ -15,10 +15,15 @@ import type {
   SnapshotFeed,
 } from './overlays/sim-overlays';
 import { RenderLoop, windowFrameClock } from './loop/render-loop';
-import type { WireGraph, WirePreview } from './wires/wire-renderer';
+import type { WireGraph, WirePreview, WireRef } from './wires/wire-renderer';
+import type { RoutingMarker } from './overlays/routing-markers';
+import type { TerminalRef } from './picking/terminal-picker';
 import type { FrameTiming } from './stats/frame-timer';
 import {
   ViewportController,
+  type RoutingEventListener,
+  type RoutingSession,
+  type TerminalHoverView,
   type ViewportControllerOptions,
   type ViewportIntentListener,
   type ViewportState,
@@ -80,6 +85,9 @@ export class ViewportRenderer {
   private placement: CatalogRef | null = null;
   private lampOutputs: LampOutputs | null = null;
   private readonly intentListeners = new Set<ViewportIntentListener>();
+  private readonly routingListeners = new Set<RoutingEventListener>();
+  private routing: RoutingSession | null = null;
+  private terminalPicking = false;
   /** Overlay view state (F2.6), kept until the controller exists, like the world. */
   private readonly overlayState = {
     voltage: false,
@@ -133,6 +141,9 @@ export class ViewportRenderer {
     controller.setPlacement(this.placement);
     this.applyOverlayState(controller);
     controller.onIntent((intent) => this.intentListeners.forEach((l) => l(intent)));
+    controller.onRouting((event) => this.routingListeners.forEach((l) => l(event)));
+    controller.setTerminalPicking(this.terminalPicking);
+    controller.setRouting(this.routing);
     loop.requestRender(); // the first frame
     return this.backendName;
   }
@@ -255,6 +266,76 @@ export class ViewportRenderer {
   /** Shows (or hides, `null`) the live preview rope of a wire being routed (F3.2 part 3). View state. */
   setWirePreview(preview: WirePreview | null): void {
     this.controller?.setWirePreview(preview);
+  }
+
+  // --- routing, terminals and wires (F3.2 part 3; see ViewportController) ----------------------
+
+  /** Routing picks (terminal, waypoint, cancel); may subscribe before `init` resolves. */
+  onRouting(listener: RoutingEventListener): () => void {
+    this.routingListeners.add(listener);
+    return () => this.routingListeners.delete(listener);
+  }
+
+  /** Starts, updates or ends (`null`) the routing gesture's drawing and picks. View state; kept until `init`. */
+  setRouting(session: RoutingSession | null): void {
+    this.routing = session;
+    this.controller?.setRouting(session);
+  }
+
+  /** Terminal hover outside routing (tools that act on a terminal). */
+  setTerminalPicking(on: boolean): void {
+    this.terminalPicking = on;
+    this.controller?.setTerminalPicking(on);
+  }
+
+  /** Tab / Shift+Tab: the next keyboard terminal of the device in hand, or `null`. */
+  cycleTerminal(step: 1 | -1): TerminalRef | null {
+    return this.controller?.cycleTerminal(step) ?? null;
+  }
+
+  /** Sets or clears the keyboard terminal; false for one that isn't wireable (or before `init`). */
+  setKeyTerminal(ref: TerminalRef | null): boolean {
+    return this.controller?.setKeyTerminal(ref) ?? false;
+  }
+
+  /** Enter while routing: reports the keyboard terminal as a pick. Whether one was reported. */
+  pickKeyTerminal(): boolean {
+    return this.controller?.pickKeyTerminal() ?? false;
+  }
+
+  /** `entity`'s wireable terminals in Tab order. */
+  terminalCycleOrder(entity: EntityId): readonly string[] {
+    return this.controller?.terminalCycleOrder(entity) ?? [];
+  }
+
+  /** The occlusion-filtered terminal pick at canvas CSS px, or `undefined` before `init`. */
+  terminalAt(x: number, y: number): TerminalHoverView | undefined {
+    return this.controller?.terminalAt(x, y);
+  }
+
+  /** `entity`'s terminal-group pitch on screen (CSS px; `null`: ample or off screen). */
+  terminalPitchPx(entity: EntityId): number | null {
+    return this.controller?.terminalPitchPx(entity) ?? null;
+  }
+
+  /** Canvas CSS px of a terminal's entry point (tests aim the mouse with it), or `null`. */
+  projectTerminal(ref: TerminalRef): { x: number; y: number } | null {
+    return this.controller?.projectTerminal(ref) ?? null;
+  }
+
+  /** The wire under NDC by the wire BVH, or `null`. */
+  pickWireAt(ndcX: number, ndcY: number): WireRef | null {
+    return this.controller?.pickWireAt(ndcX, ndcY) ?? null;
+  }
+
+  /** Selects a drawn wire, or clears the wire selection (`null`). */
+  selectWire(wire: WireRef | null): boolean {
+    return this.controller?.selectWire(wire) ?? false;
+  }
+
+  /** The routing markers drawn now (tests, the e2e hook). */
+  routingMarkers(): readonly RoutingMarker[] {
+    return this.controller?.routingMarkers() ?? [];
   }
 
   /** Arms placement of the active tool's prop, or disarms it (`null`). */
@@ -400,6 +481,8 @@ export class ViewportRenderer {
     this.renderer?.dispose();
     this.renderer = undefined;
     this.intentListeners.clear();
+    this.routingListeners.clear();
+    this.routing = null;
     this.legendListeners.clear();
   }
 

@@ -34,7 +34,25 @@ export * from './lib/sim/overlay-scale';
 export * from './lib/sim/overlay-steps';
 export * from './lib/sim/heat-scale';
 export * from './lib/sim/heat-steps';
-export { WireRenderer, type WireGraph, type WirePreview, type WireTint } from './lib/wires/wire-renderer';
+export {
+  WireRenderer,
+  wireOwner,
+  type WireGraph,
+  type WirePick,
+  type WirePreview,
+  type WireRef,
+  type WireTint,
+} from './lib/wires/wire-renderer';
+export * from './lib/picking/screen-terminals';
+export * from './lib/picking/terminal-order';
+export * from './lib/picking/segment-bvh';
+export { TerminalPicker, type TerminalRef } from './lib/picking/terminal-picker';
+export {
+  RoutingMarkers,
+  ROUTING_MARKER_STYLE,
+  type RoutingMarker,
+  type RoutingMarkerKind,
+} from './lib/overlays/routing-markers';
 export * from './lib/wires/wire-looks';
 export * from './lib/wires/wire-segments';
 export { VerletRope, ROPE_TUNING, type RopePoint } from './lib/wires/rope';

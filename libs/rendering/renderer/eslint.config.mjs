@@ -35,6 +35,10 @@ export default [
       'src/lib/stats/frame-timer*.ts',
       'src/lib/sim/display-curve*.ts',
       'src/lib/sim/lamp-display*.ts',
+      // F3.2 part 3: the picking maths (terminal radius and pitch, Tab order, the wire BVH).
+      'src/lib/picking/screen-terminals*.ts',
+      'src/lib/picking/terminal-order*.ts',
+      'src/lib/picking/segment-bvh*.ts',
     ],
     rules: {
       'no-restricted-imports': [

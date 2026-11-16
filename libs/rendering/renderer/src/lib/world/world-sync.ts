@@ -48,6 +48,7 @@ import {
 import { PropRecipes } from '../geometry/props';
 import { lampDrawLevel, lampDrawStatus, type DrawnLamp, type LampOutput } from '../sim/lamp-display';
 import { markSelectable, UNPICKABLE_KEY } from '../picking/picker';
+import { deviceFocusFrame } from '../picking/terminal-order';
 import type { SelectableInfo } from '../picking/selection';
 
 /** Selectable id of an entity's scene object. */
@@ -258,11 +259,17 @@ export class WorldSync {
         entries = { parts: recipe.entries, all, closed, open, bits: null, owned: [] };
       }
     }
+    // A catalogue device is a work-mode focus target (F3.2 part 3: the zoom to a crowded terminal
+    // group is `view.focus` on it). Its frame follows its orientation; the controller re-reads it from
+    // the entity at focus time, so this only says whether it can be focused.
+    const focusNormal =
+      recipe.label !== null ? deviceFocusFrame(entity.transform.orientationMdeg, 0)?.normal : undefined;
     markSelectable(object, {
       id: entitySelectableId(entity.id),
       kind: recipe.label !== null ? 'device' : 'prop',
       label: `${recipe.spec.title} #${entity.id}`,
       entityId: entity.id,
+      ...(focusNormal ? { focusNormal } : {}),
     });
     this.group.add(object);
     const drawn: Drawn = {

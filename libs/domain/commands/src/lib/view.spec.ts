@@ -52,7 +52,7 @@ describe('view.mode and view.focus (F1.7)', () => {
     expect(formatConsoleLine('view.mode', { mode: 'work' })).toBe('view.mode --mode work');
     expect(formatConsoleLine('view.focus', { target: 'din-rail-2' })).toBe('view.focus --target din-rail-2');
     expect(viewModeCommand().bindings?.map((b) => b.id)).toEqual(['view.mode.walk', 'view.mode.work']);
-    expect(viewFocusCommand().bindings?.map((b) => b.id)).toEqual(['view.focus.selection']);
+    expect(viewFocusCommand().bindings?.map((b) => b.id)).toEqual(['view.focus.selection', 'view.focus.terminals']);
   });
 });
 
