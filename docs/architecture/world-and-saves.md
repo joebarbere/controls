@@ -56,7 +56,7 @@ classDiagram
         lengthMm: int | null (null = a lead)
         colour: base, stripe | null
         label: LabelText | null
-        state, sim: bags (ten sim keys)
+        state, sim: bags (ten sim keys; a conductor's eleven, with fused)
         extensions
     }
     class ConnectionEndV3 {

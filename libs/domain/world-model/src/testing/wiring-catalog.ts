@@ -2,7 +2,7 @@ import {
   BUILTIN_CATALOG,
   type Catalog,
   catalogOrThrow,
-  CONNECTION_SIM_KEYS,
+  CONDUCTOR_SIM_KEYS,
   MODEL_KINDS,
   type ModelKindDef,
 } from '@controls/catalog';
@@ -36,7 +36,7 @@ export const WIRING_TEST_KINDS: Readonly<Record<string, ModelKindDef>> = {
     requires: 'conductor',
     terminals: [],
     params: z.strictObject({}),
-    keys: CONNECTION_SIM_KEYS,
+    keys: CONDUCTOR_SIM_KEYS,
     description: 'test',
   },
   'test.box': {

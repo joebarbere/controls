@@ -9,7 +9,8 @@ import { TABLE_KINDS } from './tables';
  * this test fails they are stale: regenerate them with `pnpm nx test catalog -u` and commit the
  * result. `device-state.<kind>.schema.json` and `connection-state.<kind>.schema.json` are save format
  * (ADR 0013, ADR 0015): an existing kind's file changes only with a `schemaVersion` bump (the lead's
- * connection keys enter saves with world v3).
+ * connection keys enter saves with world v3; the conductor's `fused` was added while v3 is
+ * provisional, before v0.4.0).
  */
 
 const outDir = join(import.meta.dirname, '../../json-schema');

@@ -106,8 +106,9 @@ export interface ConnectionElementInput {
 export interface ConnectionNetlistModel {
   readonly kind: string;
   /**
-   * The sim-owned keys the compiler reads (ADR 0015, F3.6 part 2): `endAState` and `endBState`, and
-   * only whether one is `intermittentOpen`, which takes the connection out of the netlist. Every other
+   * The sim-owned keys the compiler reads (ADR 0015, F3.6 part 2): `endAState` and `endBState` (and a
+   * conductor's `fused`), and only whether one is `intermittentOpen` (or `fused` is `true`), which takes
+   * the connection out of the netlist. Every other
    * connection sim value (temperatures, degradation, the other states) is the bank's at solve time.
    */
   readonly simTopologyKeys: readonly string[];
@@ -241,8 +242,16 @@ const terminalBlock = (kind: string): DeviceNetlistModel => ({
  * A test lead: a resistance from resistivity × length ÷ area at the bench temperature, plus the clip
  * contact resistance at each end (`leadResistanceOhm`, ADR 0013; never from conductor tables).
  */
-/** The connection sim keys that change a connection's topology (open versus not open). */
+/**
+ * The connection sim keys that change a connection's topology (open versus not open): a lead's two end
+ * states (both `intermittentOpen` when it fused).
+ */
 const CONNECTION_TOPOLOGY_KEYS: readonly string[] = Object.freeze(['endAState', 'endBState']);
+/**
+ * A conductor's: its two end states and its sticky `fused` flag (`true` when its conductor node melted,
+ * open for good: re-landing an end resets that end's state, never this).
+ */
+const CONDUCTOR_TOPOLOGY_KEYS: readonly string[] = Object.freeze(['endAState', 'endBState', 'fused']);
 
 const lead: ConnectionNetlistModel = {
   kind: 'lead',
@@ -271,7 +280,7 @@ const lead: ConnectionNetlistModel = {
  */
 const conductor: ConnectionNetlistModel = {
   kind: 'conductor',
-  simTopologyKeys: CONNECTION_TOPOLOGY_KEYS,
+  simTopologyKeys: CONDUCTOR_TOPOLOGY_KEYS,
   element: ({ device, catalog, lengthMm, ends }) => {
     const physics = conductorPhysics(catalog, device);
     if (physics === undefined || lengthMm === null) {

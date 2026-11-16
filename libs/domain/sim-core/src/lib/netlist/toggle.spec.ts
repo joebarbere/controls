@@ -4,7 +4,7 @@ import fc from 'fast-check';
 import { wiredLoopWorld } from '../../testing/wired-loop';
 import { createDcSolution, DcSolver } from '../mna/dc';
 import { dcBranchValues, type DcBranchValues } from '../mna/values';
-import { compileNetlist, NetlistCompiler } from './compile';
+import { compileNetlist, CONNECTION_OPEN_FLAG_KEYS, connectionKeyOpens, NetlistCompiler } from './compile';
 import { computeTopologyHash } from './hash';
 import type { NetlistBranch } from './types';
 
@@ -58,9 +58,14 @@ function loops(tripped: readonly boolean[] = []): World {
   });
 }
 
-const OPEN = Object.freeze({ endAState: 'intermittentOpen', endBState: 'ok' });
-const CLOSED = Object.freeze({ endAState: 'ok', endBState: 'ok' });
-const viewOf = (open: ReadonlySet<number>) => (id: number) => (open.has(id) ? OPEN : CLOSED);
+const OPEN = Object.freeze({ endAState: 'intermittentOpen', endBState: 'ok', fused: false });
+const CLOSED = Object.freeze({ endAState: 'ok', endBState: 'ok', fused: false });
+/** A fused conductor whose ends were both re-made (`ok`): open through `fused` alone; a lead ignores it. */
+const FUSED = Object.freeze({ endAState: 'ok', endBState: 'ok', fused: true });
+const viewOf =
+  (open: ReadonlySet<number>, fused: ReadonlySet<number> = new Set()) =>
+  (id: number) =>
+    fused.has(id) ? FUSED : open.has(id) ? OPEN : CLOSED;
 
 /** A resistor for every branch the DC defaults leave unvalued (the heater's element has a default). */
 const hook = (branch: NetlistBranch, values: DcBranchValues): boolean => {
@@ -73,6 +78,8 @@ describe('the open-toggle path (F3.6 part 2)', () => {
   const steps = fc.array(
     fc.record({
       open: fc.uniqueArray(fc.integer({ min: 1, max: LOOPS * PER_LOOP_CONNECTIONS }), { maxLength: 6 }),
+      // A conductor's sticky `fused` (ends re-made `ok`) opens it as an open end does.
+      fused: fc.uniqueArray(fc.integer({ min: 1, max: LOOPS * PER_LOOP_CONNECTIONS }), { maxLength: 3 }),
       // Now and then a breaker trips or resets (an entity sim view change: the full path's job).
       trip: fc.option(fc.integer({ min: 0, max: LOOPS - 1 }), { nil: undefined, freq: 4 }),
     }),
@@ -85,12 +92,12 @@ describe('the open-toggle path (F3.6 part 2)', () => {
         const compiler = new NetlistCompiler(BUILTIN_CATALOG);
         const tripped = Array.from({ length: LOOPS }, () => false);
         let world = loops(tripped);
-        for (const { open, trip } of sequence) {
+        for (const { open, fused, trip } of sequence) {
           if (trip !== undefined) {
             tripped[trip] = !tripped[trip];
             world = loops(tripped);
           }
-          const options = { connectionSim: viewOf(new Set(open)) };
+          const options = { connectionSim: viewOf(new Set(open), new Set(fused)) };
           const netlist = compiler.compile(world, options);
           const full = compileNetlist(world, BUILTIN_CATALOG, options);
           expect(netlist).toStrictEqual(full);
@@ -113,6 +120,30 @@ describe('the open-toggle path (F3.6 part 2)', () => {
     expect(open.branches).toHaveLength(closed.branches.length - 1);
     // Back closed: the same netlist as the first compile, deeply.
     expect(compiler.compile(world, { connectionSim: viewOf(new Set()) })).toStrictEqual(closed);
+    // A fused conductor (connection 2, a conductor of the first loop) with both ends re-made `ok` is
+    // open through `fused` alone: the same netlist as the open end gave.
+    const fused = compiler.compile(world, { connectionSim: viewOf(new Set(), new Set([2])) });
+    expect(fused).toStrictEqual(open);
+  });
+
+  it('only an intermittentOpen end or a listed flag (`fused`) opens a connection; no other boolean does', () => {
+    expect(CONNECTION_OPEN_FLAG_KEYS).toStrictEqual(['fused']);
+    expect(connectionKeyOpens('endAState', 'intermittentOpen')).toBe(true);
+    expect(connectionKeyOpens('fused', 'intermittentOpen')).toBe(true);
+    expect(connectionKeyOpens('fused', true)).toBe(true);
+    for (const [key, value] of [
+      ['fused', false],
+      ['fused', 'true'],
+      ['fused', 1],
+      ['endAState', true],
+      ['insulationDamaged', true],
+      ['someFutureFlag', true],
+      ['endBState', 'arcing'],
+      ['endBState', 'ok'],
+      ['endBState', null],
+    ] as const) {
+      expect(connectionKeyOpens(key, value), `${key} ${String(value)}`).toBe(false);
+    }
   });
 
   it('a solver reusing unchanged islands solves bit for bit what a fresh solver does', () => {
@@ -124,12 +155,12 @@ describe('the open-toggle path (F3.6 part 2)', () => {
         let world = loops(tripped);
         let values: DcBranchValues | undefined;
         let out = undefined as ReturnType<DcSolver['solve']> | undefined;
-        for (const { open, trip } of sequence) {
+        for (const { open, fused, trip } of sequence) {
           if (trip !== undefined) {
             tripped[trip] = !tripped[trip];
             world = loops(tripped);
           }
-          const netlist = compiler.compile(world, { connectionSim: viewOf(new Set(open)) });
+          const netlist = compiler.compile(world, { connectionSim: viewOf(new Set(open), new Set(fused)) });
           values = dcBranchValues(netlist, hook, values);
           // Into the previous solution's storage when it fits, as a resolver reusing its buffers does.
           out = reusing.solve(netlist, values, out);

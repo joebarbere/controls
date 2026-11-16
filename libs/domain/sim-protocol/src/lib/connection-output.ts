@@ -16,7 +16,8 @@ import { type DeviceOutputField, type DeviceOutputSchema, RECORD_STATUS_VALUES }
  * - `unsolved`, `unsettled`, `singular`: none set;
  * - `open` (the connection isn't netlisted, so no current flows): `currentA` is a reading of 0, and so
  *   is the drop across the conductor body, a closed end or a free end. **A gap is never 0 V**: the drop
- *   across an `intermittentOpen` end, or along a fused lead (`conductorState` `open`), is the
+ *   across an `intermittentOpen` end, or along a fused lead's or conductor's body (`conductorState`
+ *   `open`; a fused conductor's halves each float at their own closed end's terminal), is the
  *   terminal-to-terminal |ΔV| across the gap when both of its sides are on one solved, referenced
  *   island (the conductor floats at the potential of its landed, closed end), else no reading. An end
  *   voltage is the conductor side's potential: a closed landed end's terminal, an open end's floating
@@ -57,7 +58,10 @@ export const CONNECTION_END_INTERMITTENT_CLOSED = 2;
 export const CONNECTION_END_INTERMITTENT_OPEN = 3;
 export const CONNECTION_END_ARCING = 4;
 
-/** `conductorState`: `open` for a fused lead (the gap is in its body; its clip ends stay `none`). */
+/**
+ * `conductorState`: `open` for a fused lead (the gap is in its body; its clip ends stay `none`) or a
+ * fused conductor (its sticky `fused`: open whatever its re-made ends are).
+ */
 export const CONNECTION_CONDUCTOR_STATES: readonly string[] = Object.freeze(['closed', 'open']);
 export const CONNECTION_CONDUCTOR_CLOSED = 0;
 export const CONNECTION_CONDUCTOR_OPEN = 1;

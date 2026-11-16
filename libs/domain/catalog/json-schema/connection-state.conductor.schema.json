@@ -93,6 +93,9 @@
             }
           ]
         },
+        "fused": {
+          "type": "boolean"
+        },
         "insulationDamaged": {
           "type": "boolean"
         }
@@ -107,6 +110,7 @@
         "endBState",
         "endBTempK",
         "endBTerminationId",
+        "fused",
         "insulationDamaged"
       ],
       "additionalProperties": false

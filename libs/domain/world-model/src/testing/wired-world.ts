@@ -81,7 +81,7 @@ export const connection = (id: number, overrides: Record<string, unknown>) => ({
   colour: { base: 'black', stripe: null },
   label: null,
   state: {},
-  sim: { ...LEAD_SIM_BAG_V3 },
+  sim: { ...LEAD_SIM_BAG_V3, fused: false },
   extensions: {},
   ...overrides,
 });
@@ -135,6 +135,7 @@ export function wiredWorldDoc(): Doc {
         b: { entity: 5, terminal: 'neg', termination: null },
         lengthMm: null,
         colour: null,
+        sim: { ...LEAD_SIM_BAG_V3 },
       }),
     ],
     cables: [

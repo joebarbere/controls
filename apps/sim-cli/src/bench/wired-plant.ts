@@ -93,6 +93,7 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
       route: [{ kind: 'free', positionMm: { x: 0, y: 300, z: 0 }, entity: null, fixture: null, tool: null }],
       lengthMm: 1000,
       colour: { base: 'black', stripe: null },
+      sim: { ...LEAD_SIM_BAG_V3, fused: false },
     });
 
   for (let k = 0; k < loops; k++) {

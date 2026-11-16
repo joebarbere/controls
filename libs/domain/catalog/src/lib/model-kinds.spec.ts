@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import {
   bagSchemas,
   checkBags,
+  CONDUCTOR_SIM_KEYS,
   CONNECTION_SIM_KEYS,
   initialBags,
   MODEL_KINDS,
@@ -63,7 +64,8 @@ describe('MODEL_KINDS', () => {
       fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       heater: {},
-      // F3.1: the conductor kind shares the lead's ten connection sim keys (ADR 0015, ADR 0016).
+      // F3.1: the conductor kind shares the lead's ten connection sim keys (ADR 0015, ADR 0016), plus the
+      // sticky `fused` (an eleventh, added while world v3 is provisional: a melted conductor stays open).
       conductor: {
         conductorTempK: 'sim number null',
         endADegradation: 'sim number 1',
@@ -74,6 +76,7 @@ describe('MODEL_KINDS', () => {
         endBState: 'sim enum ok',
         endBTempK: 'sim number null',
         endBTerminationId: 'sim number null',
+        fused: 'sim boolean false',
         insulationDamaged: 'sim boolean false',
       },
       'lamp.incandescent': { filamentTempK: 'sim number null' },
@@ -167,19 +170,45 @@ describe('MODEL_KINDS', () => {
     }
   });
 
-  it('the conductor kind (F3.1) is a conductor connection kind on the same ten keys; its only param is the lay factor', () => {
+  it('the conductor kind (F3.1) is a conductor connection kind on the ten keys and a sticky `fused`; its only param is the lay factor', () => {
     const conductor = MODEL_KINDS['conductor'];
     expect([conductor.placement, conductor.requires, conductor.terminals]).toStrictEqual([
       'connection',
       'conductor',
       [],
     ]);
-    expect(conductor.keys).toBe(CONNECTION_SIM_KEYS);
+    expect(conductor.keys).toBe(CONDUCTOR_SIM_KEYS);
+    expect(Object.keys(CONDUCTOR_SIM_KEYS).sort()).toStrictEqual([...Object.keys(CONNECTION_SIM_KEYS), 'fused'].sort());
+    for (const name of Object.keys(CONNECTION_SIM_KEYS))
+      expect(CONDUCTOR_SIM_KEYS[name]).toBe(CONNECTION_SIM_KEYS[name]);
+    expect([
+      conductor.keys['fused'].owner,
+      conductor.keys['fused'].type,
+      conductor.keys['fused'].initial,
+    ]).toStrictEqual(['sim', 'boolean', false]);
     expect(conductor.params.safeParse({ layFactor: 1 }).success).toBe(true);
     expect(conductor.params.safeParse({ layFactor: 1.02 }).success).toBe(true);
     expect(conductor.params.safeParse({ layFactor: 0.99 }).success).toBe(false);
     expect(conductor.params.safeParse({ layFactor: 1.2 }).success).toBe(false);
     expect(conductor.params.safeParse({ layFactor: 1, resistivityOhmM: 1.7e-8 }).success).toBe(false);
+  });
+
+  it("the load check: a conductor's bag needs `fused` (any value, whatever its ends), a lead's never has it", () => {
+    const conductor = MODEL_KINDS['conductor'];
+    const lead = MODEL_KINDS['lead'];
+    const ten = initialBags(lead).sim;
+    expect(checkBags(conductor, {}, ten)).toStrictEqual([
+      { path: 'sim.fused', message: 'Missing (an absent value is null, never a missing key)' },
+    ]);
+    // A fused conductor whose ends were re-made: new terminations, D = 1, both `ok` (still open).
+    const remade = { ...ten, fused: true, endATerminationId: 3, endBTerminationId: 4 };
+    expect(checkBags(conductor, {}, remade)).toStrictEqual([]);
+    expect(checkBags(conductor, {}, { ...ten, fused: 'yes' })).toStrictEqual([
+      { path: 'sim.fused', message: 'Not a valid conductor fused value' },
+    ]);
+    expect(checkBags(lead, {}, { ...ten, fused: false })).toStrictEqual([
+      { path: 'sim.fused', message: 'Not a sim key of model kind lead' },
+    ]);
   });
 
   it('modelKind looks up own kinds only', () => {
