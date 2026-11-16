@@ -6,6 +6,7 @@ import {
   type ConductorColour,
   findEntity,
   type RouteProposal,
+  type TerminationArg,
   type Waypoint,
   type WireAddArgs,
   type World,
@@ -19,7 +20,8 @@ import {
  * is what is logged. Nothing here touches the world.
  *
  * - The spool (a conductor on the active tool-belt slot) arms the gesture.
- * - The first terminal pick sets `from`; clicks off every terminal after it add waypoints.
+ * - The first terminal pick sets `from` (above Trainee with its termination, from the prompt); clicks
+ *   off every terminal after it add waypoints.
  * - The second terminal pick completes: one `wire.add {ref, a, b, route, lengthMm, colour, tool}`, then
  *   the gesture starts over with the spool still armed (ADR 0010: the spool is kept for the next wire).
  * - Back (Backspace) removes the last waypoint, else un-picks `from`.
@@ -38,6 +40,11 @@ export interface RouteGesture {
   readonly from: GestureTerminal | null;
   /** Waypoints picked so far, in order. */
   readonly waypoints: readonly Waypoint[];
+  /**
+   * How the first terminal lands (F3.3 part 2): the prompt's `TerminationArgs` above Trainee; absent
+   * (or `'auto'`) at Trainee.
+   */
+  readonly fromTermination?: TerminationArg;
 }
 
 export const IDLE_GESTURE: RouteGesture = { from: null, waypoints: [] };
@@ -92,9 +99,10 @@ export type GestureStep =
 export type CutterRef = CatalogRef | null;
 
 /**
- * A terminal pick. Before `from`: it becomes `from`. After: the route to it, `proposal` (the renderer's
- * `proposeRoute` with the gesture's waypoints), completes the gesture with one `wire.add`; a proposal
- * the command would refuse is refused here with its reason, and the gesture keeps its picks.
+ * A terminal pick. Before `from`: it becomes `from`, landing by `termination`. After: the route to it,
+ * `proposal` (the renderer's `proposeRoute` with the gesture's waypoints), completes the gesture with
+ * one `wire.add`, end a landing by the gesture's `fromTermination` and end b by `termination`; a
+ * proposal the command would refuse is refused here with its reason, and the gesture keeps its picks.
  */
 export function pickTerminal(
   gesture: RouteGesture,
@@ -102,10 +110,13 @@ export function pickTerminal(
   proposal: RouteProposal | null,
   spool: Spool,
   cutter: CutterRef,
+  termination: TerminationArg = 'auto',
 ): GestureStep {
   if (gesture.from === null) {
     const from = { entity: end.entity, terminal: end.terminal };
-    return { kind: 'from', gesture: { from, waypoints: [] }, end: from };
+    const next: RouteGesture =
+      termination === 'auto' ? { from, waypoints: [] } : { from, waypoints: [], fromTermination: termination };
+    return { kind: 'from', gesture: next, end: from };
   }
   if (sameTerminal(gesture.from, end)) {
     return { kind: 'refused', gesture, code: 'same-terminal', message: 'That is the first terminal: pick another' };
@@ -117,8 +128,12 @@ export function pickTerminal(
   }
   const args: WireAddArgs = {
     ref: { ...spool.ref },
-    a: { entity: gesture.from.entity, terminal: gesture.from.terminal, termination: 'auto' },
-    b: { entity: end.entity, terminal: end.terminal, termination: 'auto' },
+    a: {
+      entity: gesture.from.entity,
+      terminal: gesture.from.terminal,
+      termination: structuredClone(gesture.fromTermination ?? 'auto'),
+    },
+    b: { entity: end.entity, terminal: end.terminal, termination: structuredClone(termination) },
     route: proposal.route.map((w) => structuredClone(w)),
     lengthMm: proposal.lengthMm,
     colour: { ...spool.colour },

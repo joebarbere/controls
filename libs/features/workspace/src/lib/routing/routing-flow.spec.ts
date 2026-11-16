@@ -11,8 +11,10 @@ import type {
   TerminalRef,
   ViewportState,
 } from '@controls/renderer';
-import { proposeRoute, type Waypoint } from '@controls/world-model';
+import type { Difficulty } from '@controls/save-format';
+import { proposeRoute, type TerminationArgs, type Waypoint } from '@controls/world-model';
 import { connectRouting, type RoutingFlow, type RoutingRenderer } from './routing-flow';
+import { argsOf } from './termination-model';
 
 const THHN = { id: 'conductor.tallowmere-thhn-14-solid', version: 1 };
 const BLOCK = { id: 'tb.quennick-st4', version: 1 };
@@ -67,7 +69,7 @@ interface Setup {
 }
 
 /** A Trainee sandbox with three blocks 6 mm apart, the THHN spool in slot 4, and the flow connected. */
-function setup(difficulty: 'trainee' | 'apprentice' = 'trainee'): Setup {
+function setup(difficulty: Difficulty = 'trainee'): Setup {
   TestBed.configureTestingModule({ providers: [{ provide: KEY_PLATFORM, useValue: 'other' }] });
   const session = TestBed.inject(Session);
   session.newSandbox({ seed: 0, difficulty });
@@ -207,18 +209,20 @@ describe('the routing flow (F3.2 part 3)', () => {
   });
 
   it('a refused wire.add keeps the picks and reaches the toasts; a refused proposal is a warning', () => {
-    const { flow, renderer, session } = setup('apprentice');
+    const { flow, renderer, session } = setup();
     const refusals: string[] = [];
     session.onRefusal((r) => refusals.push(`${r.commandId} ${r.code}`));
     session.exec('toolbelt.select', { slot: 4 });
     TestBed.tick();
-    renderer.send(terminalEvent(session, renderer, { entity: 1, terminal: 'a' }));
-    TestBed.tick();
-    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
-    TestBed.tick();
-    // 'auto' terminations are Trainee's (D9); the termination prompts (F3.3 part 2) supply them above it.
-    expect(refusals).toStrictEqual(['wire.add termination-required']);
-    expect(wireAdds(session)).toHaveLength(0);
+    // The block's terminal takes two conductors by screw: the third wire.add is refused (terminal-full).
+    for (let i = 0; i < 3; i++) {
+      renderer.send(terminalEvent(session, renderer, { entity: 1, terminal: 'a' }));
+      TestBed.tick();
+      renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+      TestBed.tick();
+    }
+    expect(refusals).toStrictEqual(['wire.add terminal-full']);
+    expect(wireAdds(session)).toHaveLength(2);
     expect(renderer.current?.from).toStrictEqual({ entity: 1, terminal: 'a', termination: 'auto' });
 
     renderer.send({
@@ -371,5 +375,184 @@ describe('the routing flow (F3.2 part 3)', () => {
     renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'b' }));
     TestBed.tick();
     expect(wireAdds(session)).toHaveLength(2);
+  });
+});
+
+describe('the termination prompts in the routing flow (F3.3 part 2, D9)', () => {
+  const ref = (id: string) => ({ id, version: 1 });
+  /** The block's screw clamp, landed well: what Apprentice preselects and a Journeyman types. */
+  const IDEAL: TerminationArgs = {
+    method: 'screw',
+    strip: { tool: ref('tool.veltmark-ws-1018'), hole: 'sol14', lengthMm: 9 },
+    accessory: null,
+    clamp: { tool: ref('tool.calderyn-ts-03'), torqueNm: 0.6 },
+  };
+
+  /** Arms the spool and picks block 1's terminal 1. */
+  function firstPick(difficulty: Difficulty) {
+    const setupResult = setup(difficulty);
+    const { renderer, session } = setupResult;
+    session.exec('toolbelt.select', { slot: 4 });
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 1, terminal: 'a' }));
+    TestBed.tick();
+    return setupResult;
+  }
+
+  it('Trainee: no prompt; both ends land auto', () => {
+    const { flow, renderer, session } = firstPick('trainee');
+    expect(flow.mode()).toBe('automatic');
+    expect(flow.prompt()).toBeNull();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+    TestBed.tick();
+    expect(wireAdds(session).map((e) => [e.args['a'], e.args['b']])).toStrictEqual([
+      [
+        { entity: 1, terminal: 'a', termination: 'auto' },
+        { entity: 3, terminal: 'a', termination: 'auto' },
+      ],
+    ]);
+  });
+
+  it('Apprentice: each pick opens a preselected prompt; confirming both logs one wire.add with those terminations', () => {
+    const { flow, renderer, session } = firstPick('apprentice');
+    expect(flow.mode()).toBe('preselected');
+    const a = flow.prompt();
+    expect(a?.request).toMatchObject({ end: 'a', terminal: { entity: 1, terminal: 'a' }, mode: 'preselected' });
+    expect(flow.phase()).toBe('armed'); // the pick waits on its prompt
+    expect(flow.announcement()).toMatch(/^Terminate end a at .*#1, terminal 1\.$/);
+    const aArgs = a && argsOf(a.request, a.request.draft);
+    expect(aArgs).toStrictEqual(IDEAL);
+    flow.confirmTermination(aArgs as TerminationArgs);
+    TestBed.tick();
+    expect(flow.prompt()).toBeNull();
+    expect(flow.phase()).toBe('started');
+    expect(renderer.current?.from).toStrictEqual({ entity: 1, terminal: 'a', termination: IDEAL });
+    expect(flow.announcement()).toMatch(/terminal 1 \(screw clamp\)\. Pick the second terminal\.$/);
+
+    const pick = terminalEvent(session, renderer, { entity: 3, terminal: 'a' });
+    renderer.send(pick);
+    TestBed.tick();
+    expect(wireAdds(session)).toHaveLength(0);
+    const b = flow.prompt();
+    expect(b?.request.end).toBe('b');
+    flow.confirmTermination((b && argsOf(b.request, b.request.draft)) as TerminationArgs);
+    TestBed.tick();
+    const proposal = pick.kind === 'terminal' && pick.proposal?.ok ? pick.proposal : null;
+    expect(wireAdds(session).map((e) => e.args)).toStrictEqual([
+      {
+        ref: THHN,
+        a: { entity: 1, terminal: 'a', termination: IDEAL },
+        b: { entity: 3, terminal: 'a', termination: IDEAL },
+        route: proposal?.route,
+        lengthMm: proposal?.lengthMm,
+        colour: { base: 'black', stripe: null },
+        tool: { id: 'tool.veltmark-dc-8', version: 1 },
+      },
+    ]);
+    // Only the slot pick and the one wire.add are logged.
+    expect(session.entries().map((e) => e.id)).toStrictEqual([
+      'entity.place',
+      'entity.place',
+      'entity.place',
+      'toolbelt.select',
+      'wire.add',
+    ]);
+    const wire = session.world().connections.find((c) => c.ref.id === THHN.id);
+    expect(wire?.a?.termination).toMatchObject({ method: 'screw', auto: false, stripLengthMm: 9 });
+    expect(flow.phase()).toBe('armed');
+  });
+
+  it('Journeyman: a blank prompt; the command’s refusal shows in it and nothing is logged; cancelling un-picks', () => {
+    const { flow, renderer, session } = firstPick('journeyman');
+    expect(flow.mode()).toBe('blank');
+    const a = flow.prompt();
+    expect(a?.request.draft).toMatchObject({ hole: null, stripLengthMm: '', torqueNm: '' });
+    expect(a && argsOf(a.request, a.request.draft)).toBeNull();
+
+    // 3 N·m is beyond the 0.3–1.2 N·m driver: refused in the prompt, which stays open.
+    flow.confirmTermination({ ...IDEAL, clamp: { ...IDEAL.clamp, torqueNm: 3 } });
+    TestBed.tick();
+    expect(flow.prompt()?.refusal).toMatch(/\(beyond-tool-capacity\)$/);
+    expect(flow.phase()).toBe('armed');
+
+    flow.cancelTermination();
+    TestBed.tick();
+    expect(flow.prompt()).toBeNull();
+    expect(flow.phase()).toBe('armed');
+    expect(flow.announcement()).toBe('Termination cancelled. Pick the first terminal.');
+
+    renderer.send(terminalEvent(session, renderer, { entity: 1, terminal: 'a' }));
+    TestBed.tick();
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+    TestBed.tick();
+    // While the prompt is open, picks and the routing keys do nothing.
+    renderer.send(terminalEvent(session, renderer, { entity: 2, terminal: 'a' }));
+    session.exec('routing.back');
+    TestBed.tick();
+    expect(flow.prompt()?.request.terminal).toStrictEqual({ entity: 3, terminal: 'a' });
+    flow.cancelTermination();
+    TestBed.tick();
+    expect(flow.phase()).toBe('started');
+    expect(flow.announcement()).toBe('Termination cancelled. Pick the second terminal.');
+    expect(wireAdds(session)).toHaveLength(0);
+    expect(session.entries().filter((e) => e.id !== 'entity.place' && e.id !== 'toolbelt.select')).toStrictEqual([]);
+  });
+
+  it('Realistic prompts as Journeyman, and the same arguments log the same wire.add', () => {
+    const { flow, renderer, session } = firstPick('realistic');
+    expect(flow.mode()).toBe('blank');
+    expect(flow.prompt()?.request.draft).toMatchObject({ hole: null, torqueNm: '' });
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+    TestBed.tick();
+    flow.confirmTermination(IDEAL);
+    TestBed.tick();
+    expect(wireAdds(session).map((e) => [e.args['a'], e.args['b']])).toStrictEqual([
+      [
+        { entity: 1, terminal: 'a', termination: IDEAL },
+        { entity: 3, terminal: 'a', termination: IDEAL },
+      ],
+    ]);
+  });
+
+  it('end b’s prompt after the first terminal left the world logs nothing', () => {
+    const { flow, renderer, session } = firstPick('apprentice');
+    const a = flow.prompt();
+    flow.confirmTermination((a && argsOf(a.request, a.request.draft)) as TerminationArgs);
+    TestBed.tick();
+    renderer.send(terminalEvent(session, renderer, { entity: 3, terminal: 'a' }));
+    TestBed.tick();
+    const b = flow.prompt();
+    expect(session.exec('entity.delete', { id: 1 }).ok).toBe(true);
+    TestBed.tick();
+    expect(flow.phase()).toBe('armed');
+    flow.confirmTermination((b && argsOf(b.request, b.request.draft)) as TerminationArgs);
+    TestBed.tick();
+    expect(wireAdds(session)).toHaveLength(0);
+    expect(flow.phase()).toBe('armed');
+    expect(renderer.current?.from).toBeNull();
+  });
+
+  it('a clip-only terminal is refused with a warning, without a prompt', () => {
+    const { flow, renderer, session } = setup('journeyman');
+    session.exec('entity.place', {
+      ref: { id: 'lamp.lumivane-12v-5w', version: 1 },
+      positionMm: { x: 0, y: 0, z: 40 },
+      orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
+      mountedOn: null,
+    });
+    session.exec('toolbelt.select', { slot: 4 });
+    TestBed.tick();
+    renderer.send({ kind: 'terminal', end: { entity: 4, terminal: 'a' }, source: 'pointer', proposal: null });
+    TestBed.tick();
+    expect(flow.prompt()).toBeNull();
+    expect(
+      TestBed.inject(NotificationService)
+        .toasts()
+        .map((t) => t.message),
+    ).toStrictEqual([expect.stringMatching(/^Add a wire: .* takes no conductor \(clips only\)$/)]);
   });
 });
