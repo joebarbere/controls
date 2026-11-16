@@ -34,7 +34,8 @@ describe('Viewport', () => {
         'Drag an object, or M then Enter, to move it; E or a double-click operates a selected switch; ' +
         'Delete deletes it; Escape cancels. ' +
         "With a spool, pick two terminals to add a wire: Tab and Shift+Tab cycle a device's terminals, Enter picks, " +
-        'a click elsewhere adds a waypoint, Backspace steps back, Z zooms to crowded terminals.',
+        'a click elsewhere adds a waypoint, Backspace steps back, Z zooms to crowded terminals. ' +
+        'N and Shift+N select the next and previous wire.',
     );
     TestBed.inject(KeybindingService).setBinding('input.moveForward', 'I');
     TestBed.inject(KeybindingService).setBinding('view.mode.walk', null);
@@ -245,7 +246,7 @@ describe('Viewport', () => {
     });
     const fixture = TestBed.createComponent(Viewport);
     await fixture.whenStable();
-    expect(listeners).toHaveLength(1);
+    expect(listeners).toHaveLength(2); // the wire readout's and the lamps'
     const session = TestBed.inject(Session);
     const logged = session.entries().length;
     const descriptor = lampDescriptor([{ entity: 4, kind: 'lamp.incandescent', recordOffset: 0 }]);
@@ -253,9 +254,9 @@ describe('Viewport', () => {
     // A filament warming over three snapshots, with no command in between, then a reset.
     for (const light of [0.02, 0.4, 1]) {
       writeLamp(section, 0, light, 1);
-      listeners[0](fakeView(descriptor, section));
+      for (const listener of listeners) listener(fakeView(descriptor, section));
     }
-    listeners[0](null);
+    for (const listener of listeners) listener(null);
     expect(session.entries().length).toBe(logged);
     expect(drawn).toStrictEqual([
       [0.02, 'solved', 1],
@@ -264,7 +265,7 @@ describe('Viewport', () => {
       [undefined, undefined, 0],
     ]);
     fixture.destroy();
-    expect(off).toHaveBeenCalledOnce();
+    expect(off).toHaveBeenCalledTimes(2);
   });
 
   it('does not expose the E2E hook without ?e2e=1', async () => {

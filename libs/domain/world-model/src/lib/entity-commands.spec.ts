@@ -262,6 +262,8 @@ describe('world registry, replay log and cheats', () => {
       'view.netlistInspector:false',
       'view.overlay:false',
       'view.resetLayout:false',
+      'view.wireNext:false',
+      'view.wirePrevious:false',
       'wire.add:true',
       'wire.delete:true',
       'wire.label:true',
