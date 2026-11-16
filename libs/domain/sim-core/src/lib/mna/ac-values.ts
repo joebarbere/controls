@@ -102,7 +102,7 @@ export class AcBranchValues {
   }
 
   resistor(branch: number, ohms: number): void {
-    if (!(Number.isFinite(ohms) && ohms > 0)) notPositive('ohms', branch, ohms);
+    if (!(ohms > 0 && ohms < Infinity)) notPositive('ohms', branch, ohms);
     this.stamps[branch] = AC_STAMP_RESISTOR;
     this.ohms[branch] = ohms;
   }
@@ -110,19 +110,19 @@ export class AcBranchValues {
   /** `resistor(branch, ohms[i])`, reading by slot (the connection thermal bank, F3.6). */
   resistorAt(branch: number, ohms: Float64Array, i: number): void {
     const r = ohms[i];
-    if (!(Number.isFinite(r) && r > 0)) notPositive('ohms', branch, r);
+    if (!(r > 0 && r < Infinity)) notPositive('ohms', branch, r);
     this.stamps[branch] = AC_STAMP_RESISTOR;
     this.ohms[branch] = r;
   }
 
   inductor(branch: number, henries: number): void {
-    if (!(Number.isFinite(henries) && henries > 0)) notPositive('henries', branch, henries);
+    if (!(henries > 0 && henries < Infinity)) notPositive('henries', branch, henries);
     this.stamps[branch] = AC_STAMP_INDUCTOR;
     this.henries[branch] = henries;
   }
 
   capacitor(branch: number, farads: number): void {
-    if (!(Number.isFinite(farads) && farads > 0)) notPositive('farads', branch, farads);
+    if (!(farads > 0 && farads < Infinity)) notPositive('farads', branch, farads);
     this.stamps[branch] = AC_STAMP_CAPACITOR;
     this.farads[branch] = farads;
   }
@@ -133,10 +133,14 @@ export class AcBranchValues {
    */
   vsource(branch: number, emfRe: number, emfIm: number, ohms: number, henries = 0): void {
     if (!(
-      Number.isFinite(emfRe) &&
-      Number.isFinite(emfIm) &&
-      Number.isFinite(ohms) &&
-      Number.isFinite(henries) &&
+      emfRe > -Infinity &&
+      emfRe < Infinity &&
+      emfIm > -Infinity &&
+      emfIm < Infinity &&
+      ohms > -Infinity &&
+      ohms < Infinity &&
+      henries > -Infinity &&
+      henries < Infinity &&
       ohms >= 0 &&
       henries >= 0 &&
       (henries === 0 || ohms > 0)

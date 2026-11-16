@@ -36,6 +36,10 @@ export const DC_STAMP_ISOURCE = 3;
  * solve with non-integer doubles; a check helper taking the value was a call V8 didn't always inline,
  * which boxed the value into a heap number each time (the regulating DIN PSU's 3.4 B/step second
  * level through `lead` → `resistor` → `finite`; simulation caveats). The throwing helpers are cold.
+ * The checks are comparisons, not `Number.isFinite`: code V8 runs at its mid tier (Maglev) calls that
+ * builtin with the value boxed, a heap number per check (`sim bench`'s wired plant: one per lamp and
+ * per connection each cadence solve, 320 and about 4,200 B per tick). `x > -Infinity && x < Infinity`
+ * is `Number.isFinite(x)` for every number (NaN fails both); `x > 0 && x < Infinity` adds `x > 0`.
  */
 function finite(name: string, branch: number, value: number): void {
   if (!Number.isFinite(value))
@@ -84,13 +88,14 @@ export class DcBranchValues {
   }
 
   resistor(branch: number, ohms: number): void {
-    if (!(Number.isFinite(ohms) && ohms > 0)) badResistor(branch, ohms);
+    if (!(ohms > 0 && ohms < Infinity)) badResistor(branch, ohms);
     this.stamps[branch] = DC_STAMP_RESISTOR;
     this.ohms[branch] = ohms;
   }
 
   vsource(branch: number, emfV: number, ohms: number): void {
-    if (!(Number.isFinite(emfV) && Number.isFinite(ohms) && ohms >= 0)) badVsource(branch, emfV, ohms);
+    if (!(emfV > -Infinity && emfV < Infinity && ohms > -Infinity && ohms < Infinity && ohms >= 0))
+      badVsource(branch, emfV, ohms);
     this.stamps[branch] = DC_STAMP_VSOURCE;
     this.emfV[branch] = emfV;
     // `+ 0` turns −0 into +0, so a zero-ohm source is always the exact zero the singular check tests.
@@ -107,7 +112,7 @@ export class DcBranchValues {
   /** `resistor(branch, source[key])`. */
   resistorFrom(branch: number, source: Readonly<Record<string, number>>, key: string): void {
     const ohms = source[key];
-    if (!(Number.isFinite(ohms) && ohms > 0)) badResistor(branch, ohms);
+    if (!(ohms > 0 && ohms < Infinity)) badResistor(branch, ohms);
     this.stamps[branch] = DC_STAMP_RESISTOR;
     this.ohms[branch] = ohms;
   }
@@ -116,7 +121,7 @@ export class DcBranchValues {
   vsourceAt(branch: number, emfV: Float64Array, ohms: Float64Array, i: number): void {
     const e = emfV[i];
     const r = ohms[i];
-    if (!(Number.isFinite(e) && Number.isFinite(r) && r >= 0)) badVsource(branch, e, r);
+    if (!(e > -Infinity && e < Infinity && r > -Infinity && r < Infinity && r >= 0)) badVsource(branch, e, r);
     this.stamps[branch] = DC_STAMP_VSOURCE;
     this.emfV[branch] = e;
     this.ohms[branch] = r + 0;
@@ -125,7 +130,7 @@ export class DcBranchValues {
   /** `resistor(branch, ohms[i])` (the connection thermal bank's solve-time value, F3.6). */
   resistorAt(branch: number, ohms: Float64Array, i: number): void {
     const r = ohms[i];
-    if (!(Number.isFinite(r) && r > 0)) badResistor(branch, r);
+    if (!(r > 0 && r < Infinity)) badResistor(branch, r);
     this.stamps[branch] = DC_STAMP_RESISTOR;
     this.ohms[branch] = r;
   }
@@ -133,13 +138,13 @@ export class DcBranchValues {
   /** `isource(branch, amps[i])`. */
   isourceAt(branch: number, amps: Float64Array, i: number): void {
     const a = amps[i];
-    if (!Number.isFinite(a)) finite('amps', branch, a);
+    if (!(a > -Infinity && a < Infinity)) finite('amps', branch, a);
     this.stamps[branch] = DC_STAMP_ISOURCE;
     this.amps[branch] = a;
   }
 
   isource(branch: number, amps: number): void {
-    if (!Number.isFinite(amps)) finite('amps', branch, amps);
+    if (!(amps > -Infinity && amps < Infinity)) finite('amps', branch, amps);
     this.stamps[branch] = DC_STAMP_ISOURCE;
     this.amps[branch] = amps;
   }

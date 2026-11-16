@@ -66,3 +66,19 @@ export function tungstenResistivity(kelvin: number): number {
   const r0 = RHO[k - 1];
   return r0 + ((RHO[k] - r0) * (kelvin - t0)) / (T[k] - t0);
 }
+
+/**
+ * `out[j] = tungstenResistivity(kelvin[i])`, bit for bit, with no double crossing the call: the slot
+ * form for per-tick and per-solve paths (simulation caveats, "Pass a slot, not a value"). A double
+ * passed to or returned from a call V8 doesn't inline is boxed into a 16-byte heap number; the lamp's
+ * by-value chain could do that once per lamp per cadence solve (`sim bench`'s `tick-wired-plant`: 320 B
+ * per tick on its 200 lamps).
+ */
+export function tungstenResistivityInto(kelvin: Float64Array, i: number, out: Float64Array, j: number): void {
+  const x = kelvin[i];
+  const bucket = Math.floor(x / BUCKET_K);
+  const k = SEGMENT[bucket < 0 ? 0 : bucket >= SEGMENT.length ? SEGMENT.length - 1 : bucket];
+  const t0 = T[k - 1];
+  const r0 = RHO[k - 1];
+  out[j] = r0 + ((RHO[k] - r0) * (x - t0)) / (T[k] - t0);
+}

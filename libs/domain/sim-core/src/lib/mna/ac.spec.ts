@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { NEC_REGION } from '@controls/catalog';
 import { AC_SOURCE, benchBus, end, LAMP, LEAD, origin, TEST_CATALOG, TEST_MODELS } from '../../testing/bench';
 import { checkAcRows } from '../../testing/ac';
@@ -99,6 +100,44 @@ describe('AcBranchValues', () => {
     v.clear();
     expect(v.stamp(0)).toBeNull();
     expect(Array.from(v.stamps).every((s) => s === AC_STAMP_UNSET)).toBe(true);
+  });
+
+  it("the setters' comparison checks accept exactly what Number.isFinite did (#123: no builtin call)", () => {
+    const accepts = (set: () => void) => {
+      try {
+        set();
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const v = new AcBranchValues(1);
+    const slot = new Float64Array(1);
+    const special = fc.constantFrom(
+      NaN,
+      Infinity,
+      -Infinity,
+      0,
+      -0,
+      Number.MIN_VALUE,
+      -Number.MIN_VALUE,
+      Number.MAX_VALUE,
+    );
+    const value = fc.oneof(fc.double(), special);
+    fc.assert(
+      fc.property(value, value, value, value, (re, im, ohms, henries) => {
+        const positive = Number.isFinite(re) && re > 0;
+        expect(accepts(() => v.resistor(0, re))).toBe(positive);
+        slot[0] = re;
+        expect(accepts(() => v.resistorAt(0, slot, 0))).toBe(positive);
+        expect(accepts(() => v.inductor(0, re))).toBe(positive);
+        expect(accepts(() => v.capacitor(0, re))).toBe(positive);
+        const finite = [re, im, ohms, henries].every((x) => Number.isFinite(x));
+        expect(accepts(() => v.vsource(0, re, im, ohms, henries))).toBe(
+          finite && ohms >= 0 && henries >= 0 && (henries === 0 || ohms > 0),
+        );
+      }),
+    );
   });
 });
 

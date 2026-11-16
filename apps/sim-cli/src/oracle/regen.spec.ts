@@ -20,6 +20,8 @@ const COUNTS = { dc: 4, ac: 3 };
 interface FakeOptions {
   readonly solver?: string;
   readonly batch?: (deck: string) => NgspiceRun | null;
+  /** Awaited before a batch run reads its deck (by path): a test's gate on the run's progress. */
+  readonly gate?: (path: string) => Promise<void>;
   /** Every argument list the fake was called with. */
   readonly calls?: (readonly string[])[];
 }
@@ -29,6 +31,7 @@ function fakeNgspice(options: FakeOptions = {}): NgspiceRunner {
   return async (args) => {
     options.calls?.push(args);
     if (args[0] === '-v') return { status: 0, stdout: BANNER, stderr: '' };
+    await options.gate?.(args[args.length - 1]);
     const deck = await readFile(args[args.length - 1], 'utf8');
     const custom = options.batch?.(deck);
     if (custom) return custom;
@@ -126,9 +129,29 @@ describe('sim oracle regen', () => {
   it('on a failed run, leaves the previous corpus untouched and starts no more ngspice runs', async () => {
     await previousCorpus();
     const calls: (readonly string[])[] = [];
+    // The runs are gated so their order is fixed. Ungated, the other worker ran on through the corpus
+    // while dc-0001's deck read was pending (11 calls on a slow Windows runner, #123), or stopped
+    // before dc-0002 when dc-0001 failed first: the count depended on I/O timing. Gated: worker 1's
+    // dc-0001 waits until worker 0 (done with dc-0000) has started dc-0002, and every later run waits
+    // until dc-0001 has failed. So exactly one run is in flight at the failure; a pool that stops on
+    // a failure starts nothing after it, and one that doesn't runs the other 17.
+    let failed: () => void = () => undefined;
+    const failure = new Promise<void>((resolve) => (failed = resolve));
+    let secondStarted: () => void = () => undefined;
+    const second = new Promise<void>((resolve) => (secondStarted = resolve));
     const crash = fakeNgspice({
       calls,
-      batch: (deck) => (deck.includes('dc-0001') ? { status: 1, stdout: '', stderr: 'boom' } : null),
+      gate: (path) => {
+        if (path.endsWith('dc-0000.cir')) return Promise.resolve();
+        if (path.endsWith('dc-0001.cir')) return second;
+        if (path.endsWith('dc-0002.cir')) secondStarted();
+        return failure;
+      },
+      batch: (deck) => {
+        if (!deck.includes('dc-0001')) return null;
+        failed();
+        return { status: 1, stdout: '', stderr: 'boom' };
+      },
     });
     const crashed = await sim(
       { ngspice: crash, oracleCounts: { dc: 20, ac: 3 } },
@@ -144,8 +167,10 @@ describe('sim oracle regen', () => {
     expect((await readdir(out)).sort()).toEqual(['dc', 'dc.results.txt']);
     expect(await readdir(join(out, 'dc'))).toEqual(['dc-9999.cir']);
     expect(await readFile(join(out, 'dc.results.txt'), 'utf8')).toBe('old results');
-    // -v, dc-0000 and dc-0001, and at most one more run per worker: never the rest of the corpus.
-    expect(calls.length).toBeLessThanOrEqual(1 + 2 + 2);
+    // -v, dc-0000, dc-0001 and the one run in flight on the other worker when dc-0001 failed: no more.
+    const decks = calls.slice(1).map((args) => args[args.length - 1].replace(/^.*[\\/]/, ''));
+    expect(calls[0]).toEqual(['-v']);
+    expect(decks.sort()).toEqual(['dc-0000.cir', 'dc-0001.cir', 'dc-0002.cir']);
   });
 
   it('reports the first failure in corpus order, whichever run finishes first', async () => {

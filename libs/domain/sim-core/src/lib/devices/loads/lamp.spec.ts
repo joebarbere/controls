@@ -23,7 +23,7 @@ import {
   lampResistanceOhm,
   pow17over8,
 } from './lamp';
-import { TUNGSTEN_RESISTIVITY, TUNGSTEN_TABLE_MAX_K, tungstenResistivity } from './tungsten';
+import { TUNGSTEN_RESISTIVITY, TUNGSTEN_TABLE_MAX_K, tungstenResistivity, tungstenResistivityInto } from './tungsten';
 
 /*
  * The incandescent lamp (plan F2.5): tungsten R(T), the filament's thermal ODE, the inrush that
@@ -100,6 +100,20 @@ describe('tungsten resistivity (Jones and Langmuir)', () => {
     expect(zeroK).toBeCloseTo(65.56, 2);
     expect(LAMP_FILAMENT_MIN_K).toBeGreaterThan(zeroK);
     expect(tungstenResistivity(LAMP_FILAMENT_MIN_K)).toBeGreaterThan(0);
+  });
+
+  it('the slot form is the by-value form bit for bit, inside, outside and off the table', () => {
+    const kelvin = new Float64Array(3);
+    const out = new Float64Array(2);
+    const same = (t: number) => {
+      kelvin[1] = t;
+      out[0] = 0;
+      tungstenResistivityInto(kelvin, 1, out, 0);
+      expect(Object.is(out[0], tungstenResistivity(t))).toBe(true);
+    };
+    for (const t of [...TUNGSTEN_RESISTIVITY.temperaturesK, 0, -50, 65.5, 293.15, 2700, 3600.5, 9000, Number.NaN])
+      same(t);
+    fc.assert(fc.property(fc.double({ min: -1000, max: 10_000, noNaN: true }), same));
   });
 
   it('x^(17/8) is x² · ⁸√x within an ulp or two of Math.pow, and 0 for x ≤ 0', () => {

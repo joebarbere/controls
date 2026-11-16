@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import {
   AC_SOURCE,
@@ -49,6 +50,39 @@ describe('DcBranchValues', () => {
     expect(() => values.isource(2, Infinity)).toThrow(RangeError);
     values.clear();
     expect(values.stamp(0)).toBeNull();
+  });
+
+  it("the setters' comparison checks accept exactly what Number.isFinite did (#123: no builtin call)", () => {
+    const accepts = (set: () => void) => {
+      try {
+        set();
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const values = new DcBranchValues(1);
+    const ohms = new Float64Array(1);
+    const special = fc.constantFrom(
+      NaN,
+      Infinity,
+      -Infinity,
+      0,
+      -0,
+      Number.MIN_VALUE,
+      -Number.MIN_VALUE,
+      Number.MAX_VALUE,
+    );
+    fc.assert(
+      fc.property(fc.oneof(fc.double(), special), fc.oneof(fc.double(), special), (x, y) => {
+        const positive = Number.isFinite(x) && x > 0;
+        expect(accepts(() => values.resistor(0, x))).toBe(positive);
+        ohms[0] = x;
+        expect(accepts(() => values.resistorAt(0, ohms, 0))).toBe(positive);
+        expect(accepts(() => values.isource(0, x))).toBe(Number.isFinite(x));
+        expect(accepts(() => values.vsource(0, x, y))).toBe(Number.isFinite(x) && Number.isFinite(y) && y >= 0);
+      }),
+    );
   });
 
   it('stores and refuses exactly the same by slot as by value (resistorFrom, vsourceAt, isourceAt)', () => {

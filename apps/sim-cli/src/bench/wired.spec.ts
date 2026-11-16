@@ -1,7 +1,15 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { compileNetlist } from '@controls/sim-core';
 import { BENCH_CASES } from './cases';
-import { TICK_WIRED_CASE, TOGGLED_CONNECTION, WIRED_START, wiredPlantWorld } from './wired';
+import {
+  TICK_WIRED_CASE,
+  TOGGLED_CONNECTION,
+  WIRED_ALLOCATION_GATE_BYTES,
+  WIRED_START,
+  type WiredAdvance,
+  wiredAllocationInvariant,
+  wiredPlantWorld,
+} from './wired';
 import { buildWiredPlant, WIRED_LOOPS, WIRED_PARALLEL, WIRED_SMOKE_LOOPS } from './wired-plant';
 
 /*
@@ -67,6 +75,49 @@ describe('tick-wired-plant', () => {
     const first = resolve?.run();
     resolve?.prepare?.();
     expect(resolve?.run()).toBe(first);
+  });
+});
+
+/** Where the planted allocations go: a tagged array, so each non-integer double stored is a new heap number. */
+const sink: unknown[] = [null];
+
+/**
+ * The gate's self-test plants: one 16-byte heap number per cadence tick (1.6 B per tick, the shape of
+ * #123's Windows failure at a two-hundredth of its rate) and one small object per tick.
+ */
+const boxedPerCadence: WiredAdvance = (engine, ticks) => {
+  for (let t = 0; t < ticks; t += 10) {
+    engine.advanceTo(engine.tick + 10);
+    sink[0] = engine.tick + 0.5;
+  }
+};
+const objectPerTick: WiredAdvance = (engine, ticks) => {
+  for (let t = 0; t < ticks; t++) {
+    engine.advanceTo(engine.tick + 1);
+    sink[0] = { tick: engine.tick };
+  }
+};
+
+describe("tick-wired-plant's allocation gate", () => {
+  it('passes the engine as it is (the smoke probe; the full one is the bench case)', () => {
+    expect(wiredAllocationInvariant(true)).toStrictEqual({ value: expect.any(Number), failure: null });
+  });
+
+  it('fails on one boxed double per cadence tick, and names where it was allocated', () => {
+    const { value, failure } = wiredAllocationInvariant(true, boxedPerCadence);
+    expect(value).toBeGreaterThanOrEqual(WIRED_ALLOCATION_GATE_BYTES);
+    // 16 B every 10 ticks: measured at exactly 1.60 B per tick, the method resolves it in full.
+    expect(value).toBeGreaterThan(1.2);
+    expect(failure).toMatch(
+      /^the wired plant allocated \d+\.\d\d B per tick \(the gate: under 1 B\); top sites per tick: /,
+    );
+    expect(failure).toContain('boxedPerCadence');
+  });
+
+  it('fails on one small object per tick', () => {
+    const { value, failure } = wiredAllocationInvariant(true, objectPerTick);
+    expect(value).toBeGreaterThan(10);
+    expect(failure).toContain('objectPerTick');
   });
 });
 

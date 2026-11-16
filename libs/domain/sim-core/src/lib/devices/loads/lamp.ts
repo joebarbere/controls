@@ -3,7 +3,7 @@ import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import { AMBIENT_TEMPERATURE_K, type SourcedConstant } from '../../constants';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
 import { branchReading, f64Field, READING_SOLVED, statusField } from '../readings';
-import { tungstenResistivity } from './tungsten';
+import { tungstenResistivity, tungstenResistivityInto } from './tungsten';
 
 /*
  * The incandescent lamp (plan F2.5): a tungsten filament whose resistance follows its temperature,
@@ -192,6 +192,10 @@ export const LAMP_MODEL: SimDeviceModel = {
     const conduction = new Float64Array(n);
     const heatCapacity = new Float64Array(n);
     const ratedSpan4 = new Float64Array(n);
+    // Slots for ρ(T) and R(T): the per-tick and per-solve paths pass a lamp's index, never its
+    // resistance, across a call (a double crossing a call V8 doesn't inline is boxed; see `ohmsAt`).
+    const rho = new Float64Array(n);
+    const ohms = new Float64Array(n);
     devices.forEach((d, i) => {
       const p = d.params as LampIncandescentParams;
       // A null-initial key: a lamp entering the netlist for the first time starts at ambient. A
@@ -213,7 +217,17 @@ export const LAMP_MODEL: SimDeviceModel = {
       conduction[i] = (conductionFraction * p.ratedPowerW) / (tr - ambient);
       heatCapacity[i] = (4 * radiation[i] * tr3 + conduction[i]) * (p.thermalTimeConstantMs / 1000);
     });
-    const resistance = (i: number): number => lampResistanceOhm(ratedOhm[i], rhoRated[i], temp[i]);
+    /**
+     * `ohms[i] = lampResistanceOhm(ratedOhm[i], rhoRated[i], temp[i])`, bit for bit, through slots. The
+     * by-value chain (a closure returning `lampResistanceOhm`, which returned `tungstenResistivity`)
+     * boxed a heap number per lamp per cadence solve whenever V8 left one of its calls un-inlined or
+     * ran the hook as mid-tier code: exactly the 320 B per tick `tick-wired-plant` read now and then
+     * on CI's Windows runners (simulation caveats).
+     */
+    const ohmsAt = (i: number): void => {
+      tungstenResistivityInto(temp, i, rho, i);
+      ohms[i] = (ratedOhm[i] * rho[i]) / rhoRated[i];
+    };
     const light = (i: number): number => {
       const t = temp[i];
       return pow17over8((t * t * t * t - ambient4) / ratedSpan4[i]);
@@ -221,11 +235,13 @@ export const LAMP_MODEL: SimDeviceModel = {
     return {
       bag: (i) => ({ filamentTempK: temp[i] }),
       dcValue: (i, b, values) => {
-        values.resistor(b.index, resistance(i));
+        ohmsAt(i);
+        values.resistorAt(b.index, ohms, i);
         return true;
       },
       acValue: (i, b, values) => {
-        values.resistor(b.index, resistance(i));
+        ohmsAt(i);
+        values.resistorAt(b.index, ohms, i);
         return true;
       },
       // Indexed loops over typed arrays: a step allocates nothing of its own.
@@ -244,7 +260,8 @@ export const LAMP_MODEL: SimDeviceModel = {
           const im = branches[2 * b + 1];
           const i2 = re * re + im * im;
           const t = temp[i];
-          const r = (ratedOhm[i] * tungstenResistivity(t)) / rhoRated[i];
+          tungstenResistivityInto(temp, i, rho, i);
+          const r = (ratedOhm[i] * rho[i]) / rhoRated[i];
           const t4 = t * t * t * t;
           const loss = radiation[i] * (t4 - ambient4) + conduction[i] * (t - ambient);
           const next = t + (dt * (i2 * r - loss)) / heatCapacity[i];
@@ -257,7 +274,9 @@ export const LAMP_MODEL: SimDeviceModel = {
           const vr = nodes[2 * element.a] - nodes[2 * element.b];
           const vi = nodes[2 * element.a + 1] - nodes[2 * element.b + 1];
           const solvedOhm = Math.sqrt((vr * vr + vi * vi) / i2);
-          const now = (ratedOhm[i] * tungstenResistivity(settled)) / rhoRated[i];
+          // ρ at the settled temperature, just stored in temp[i].
+          tungstenResistivityInto(temp, i, rho, i);
+          const now = (ratedOhm[i] * rho[i]) / rhoRated[i];
           const moved = now > solvedOhm ? now - solvedOhm : solvedOhm - now;
           if (moved > RESOLVE_RELTOL * now) resolve = true;
         }
@@ -266,7 +285,8 @@ export const LAMP_MODEL: SimDeviceModel = {
       writeRecord: (i, view, offset, ctx) => {
         const b = branch[i];
         const status = branchReading(ctx, b);
-        const r = resistance(i);
+        ohmsAt(i);
+        const r = ohms[i];
         if (status === READING_SOLVED) {
           const element = ctx.netlist.branches[b];
           const nodes = ctx.solution.nodes;
