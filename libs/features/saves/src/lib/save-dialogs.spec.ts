@@ -50,6 +50,16 @@ async function setup(io = new MemorySaveIo()) {
   return { fixture, io, saves, session: TestBed.inject(Session), user: userEvent.setup() };
 }
 
+/**
+ * Resolves once a save has replaced the session. Subscribe before the key that loads: a load is several
+ * worker round trips, so wait on its own signal rather than polling `hashAt` in `waitFor`'s 1 s.
+ */
+function nextLoad(saves: SaveGames): Promise<void> {
+  return new Promise((resolve) => {
+    const off = saves.onLoaded(() => (off(), resolve()));
+  });
+}
+
 describe('LoadGameDialog', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -88,17 +98,19 @@ describe('LoadGameDialog', () => {
     const io = new MemorySaveIo();
     const shop = savedGame(7);
     io.seed({ kind: 'manual', name: 'Shop' }, shop.bytes);
-    const { fixture, session, user } = await setup(io);
+    const { fixture, saves, session, user } = await setup(io);
     await user.click(screen.getByRole('button', { name: 'Open load' }));
     await fixture.whenStable();
+    const loaded = nextLoad(saves);
     await user.keyboard('{Enter}');
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
-    await waitFor(async () => expect(await session.hashAt()).toBe(shop.hash));
+    await loaded;
+    expect(await session.hashAt()).toBe(shop.hash);
   });
 
   it('says when there are no saves, and Open file… keeps the dialog open if the picker is cancelled', async () => {
-    const { fixture, io, session, user } = await setup();
+    const { fixture, io, saves, session, user } = await setup();
     await user.click(screen.getByRole('button', { name: 'Open load' }));
     await fixture.whenStable();
     const dialog = screen.getByRole('dialog', { name: 'Load game' });
@@ -112,8 +124,10 @@ describe('LoadGameDialog', () => {
 
     const shared = savedGame(11);
     io.nextOpen({ name: 'shared.ctrl', bytes: shared.bytes });
+    const loaded = nextLoad(saves);
     await user.keyboard('{Enter}');
-    await waitFor(async () => expect(await session.hashAt()).toBe(shared.hash));
+    await loaded;
+    expect(await session.hashAt()).toBe(shared.hash);
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
