@@ -122,7 +122,7 @@ flowchart LR
   tool --> change
 ```
 
-`entity.place` checks a non-null `inEntry` (`checkInEntry`: a conduit connector at an open entry of its size, its entry end exactly there, room; then the connector can't move or turn, `in-entry`, and its enclosure is `occupied`), a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry` and (F3.2 part 4) `staple-spacing`.
+`entity.place` checks a non-null `inEntry` (`checkInEntry`: a conduit connector at an open entry of its size, its entry end exactly there, room; then the connector can't move or turn, `in-entry`, and its enclosure is `occupied`), a non-null `mountedOn` (`checkMount`: mount, type, frame, place, room) and, since F3.5, refuses a body overlapping an enclosure or a mounted device (`overlaps`; `entity.move` and, decided before the v3 freeze, `entity.rotate` too); `entity.move` slides a mounted device along its mount; `entity.delete` removes the entity's leads and unlands its conductor ends (an `occupied` entity can't go). Refusal codes: ADR 0015's table, plus `same-entry` and (F3.2 part 4) `staple-spacing`.
 
 ### Cables in framing (F3.2 part 4)
 
