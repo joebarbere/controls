@@ -266,6 +266,26 @@ describe('wire.pull with the fish tape (F3.4 part 2)', () => {
     expect(four.bus.state).toStrictEqual(before);
   });
 
+  it('passes a stick without a waypoint on it (straight parts joined end to end), but never an elbow', () => {
+    // Two sticks end to end, an elbow, a third stick: the fish tape run builder names the first stick's
+    // start and then the elbow's ports, passing the second stick by.
+    const { bus, route, ids } = conduitRun([
+      { id: STICK, lengthMm: 400 },
+      { id: STICK, lengthMm: 400 },
+      { id: ELBOW },
+      { id: STICK, lengthMm: 400 },
+    ]);
+    const [, , elbow] = ids;
+    const pull = (r: Waypoint[]) =>
+      bus.exec('wire.pull', { route: r, lengthMm: lengthOf(r), conductors: [black], tool: TAPE });
+    // route: before, s1 start, s1 end, s2 end (= the elbow's port a), elbow port b, s3 end, after.
+    const [before, start, , joint, elbowB, end, after] = route;
+    const elbowA = { ...joint, entity: elbow };
+    expect(pull([before, start, elbowA, elbowB, end, after]).ok).toBe(true);
+    // Straight from the first stick to the elbow's far port cuts across it.
+    expect(pull([before, start, elbowB, end, after])).toMatchObject(refused('conduit-discontinuous'));
+  });
+
   it('refuses a pull that skips an elbow, leaves the run, cuts a corner or sits off its part (conduit continuity)', () => {
     // A stick, an elbow on its end, a second stick on the elbow: the snapped run, and four ways round it.
     const { bus, route, ids } = conduitRun([{ id: STICK, lengthMm: 500 }, { id: ELBOW }, { id: STICK, lengthMm: 500 }]);
@@ -290,6 +310,14 @@ describe('wire.pull with the fish tape (F3.4 part 2)', () => {
     expect(pull([before, beside, ...route.slice(2)])).toMatchObject(refused('off-raceway'));
     const midBend = { ...elbowB, positionMm: at(elbowB.positionMm.x - 1, elbowB.positionMm.y, elbowB.positionMm.z) };
     expect(pull([before, start, route[2], midBend, end, after])).toMatchObject(refused('off-raceway'));
+    // 5. Coming back: round the elbow and back again (one bend, its arc twice), or back onto the first stick.
+    const elbowA = { ...elbowB, positionMm: route[2].positionMm };
+    const twice = pull([before, start, elbowA, elbowB, elbowA, after]);
+    expect(twice).toMatchObject(refused('conduit-discontinuous'));
+    expect(twice.ok ? '' : twice.error.message).toContain(`doubles back along conduit part ${elbow}`);
+    const back = pull([before, start, route[2], elbowB, middle, after]);
+    expect(back).toMatchObject(refused('conduit-discontinuous'));
+    expect(back.ok ? '' : back.error.message).toContain(`comes back to conduit part ${stick1}, already left`);
     // The run as built pulls, and through the stick a stop mid-stick is fine.
     expect(pull([before, start, middle, ...route.slice(2)]).ok).toBe(true);
   });

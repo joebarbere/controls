@@ -274,9 +274,9 @@ export type ViewportIntent =
       readonly mountedOn: MountedOn | null;
       /**
        * The enclosure entry a conduit connector snapped into (ADR 0015 F3.4 part 2 note 4), or `null`;
-       * pass it to `entity.place` as `inEntry`. Optional: an intent built without it means `null`.
+       * pass it to `entity.place` as `inEntry`. Always present.
        */
-      readonly inEntry?: InEntry | null;
+      readonly inEntry: InEntry | null;
     }
   | { readonly kind: 'move'; readonly id: EntityId; readonly positionMm: Vec3Mm }
   | { readonly kind: 'cancelPlacement' };
@@ -1066,8 +1066,7 @@ export class ViewportController {
         positionMm: r.positionMm,
         orientationMdeg: r.orientationMdeg,
         mountedOn: r.mountedOn,
-        // Only a connector snapped into an entry carries one (absent means `null`).
-        ...(r.inEntry === null ? {} : { inEntry: r.inEntry }),
+        inEntry: r.inEntry,
       });
     }
     this.markHoverDirty();

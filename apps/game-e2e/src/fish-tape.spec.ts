@@ -22,7 +22,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the pull (pinned from this spec; the console twin reaches it too). */
-const PULL_HASH = '8b01204e11ccc61aeaaf817dbcd5f496f5d25479c3a59dbfde765d928fb23308';
+const PULL_HASH = 'afd1b6b29b7fdb5188c8f246fb8386d814dd25d14673fa5cbe4c11c1b9661678';
 
 const THHN = 'conductor.tallowmere-thhn-12-solid';
 const UPRIGHT = '--orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0';
@@ -32,7 +32,7 @@ const place = (id: string, x: number, y: number, z: number, turn = UPRIGHT) =>
 const SETUP = [
   place('panel.pellmoor-din-400x500', -1010, 800, -21),
   'enclosure.openEntry --id 1 --entry drill-top-1 --tool.id tool.corriden-hs-18 --tool.version 1',
-  place('connector.stavenor-emt-075', -863, 1300, 62, ROLLED),
+  `${place('connector.stavenor-emt-075', -863, 1300, 62, ROLLED)} --inEntry.entity 1 --inEntry.entry drill-top-1`,
   place('emt.stavenor-075', -868, 1325, 67, ROLLED),
   'raceway.cut --id 3 --lengthMm 600',
   place('elbow.stavenor-emt-075', -892, 1925, 67),

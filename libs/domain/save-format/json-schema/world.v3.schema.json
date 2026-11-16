@@ -112,7 +112,7 @@
   ],
   "additionalProperties": false,
   "title": "Controls world document, schemaVersion 3",
-  "description": "world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, entries held by one entity that exists and is not mounted, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).",
+  "description": "world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, entries held by one entity that exists and is not mounted, no cycle through mounts and entries, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).",
   "$defs": {
     "FixtureV1": {
       "type": "object",

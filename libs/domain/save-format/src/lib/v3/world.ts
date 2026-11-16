@@ -317,23 +317,33 @@ export const WorldV3 = z
     const cableIds = new Set(world.cables.map((c) => c.id));
 
     // 2. mountedOn names another entity that exists, with no cycle.
-    const hostOf = (entity: EntityV3): EntityV3 | undefined =>
-      entity.mountedOn === null ? undefined : entities.get(entity.mountedOn.entity);
+    // Whether `start` is reachable again from its own hosts, following `mountedOn` (and, with
+    // `entries`, `inEntry` too): a cycle through it.
+    const inCycle = (start: EntityV3, entries: boolean): boolean => {
+      const hostsOf = (e: EntityV3): number[] => [
+        ...(e.mountedOn === null ? [] : [e.mountedOn.entity]),
+        ...(entries && e.inEntry !== null ? [e.inEntry.entity] : []),
+      ];
+      const seen = new Set<number>();
+      const stack = hostsOf(start);
+      while (stack.length > 0) {
+        const id = stack.pop() as number;
+        if (id === start.id) return true;
+        const host = entities.get(id);
+        if (!host || seen.has(id)) continue;
+        seen.add(id);
+        stack.push(...hostsOf(host));
+      }
+      return false;
+    };
     world.entities.forEach((entity, index) => {
       if (entity.mountedOn === null) return;
       if (entity.mountedOn.entity === entity.id) {
         issue(['entities', index, 'mountedOn', 'entity'], 'An entity is not mounted on itself');
       } else if (!entities.has(entity.mountedOn.entity)) {
         issue(['entities', index, 'mountedOn', 'entity'], 'An entity is mounted on an entity that exists');
-      } else {
-        const seen = new Set<number>([entity.id]);
-        for (let host = entities.get(entity.mountedOn.entity); host; host = hostOf(host)) {
-          if (seen.has(host.id)) {
-            issue(['entities', index, 'mountedOn'], 'Mounting must not form a cycle');
-            break;
-          }
-          seen.add(host.id);
-        }
+      } else if (inCycle(entity, false)) {
+        issue(['entities', index, 'mountedOn'], 'Mounting must not form a cycle');
       }
     });
 
@@ -351,6 +361,16 @@ export const WorldV3 = z
       const key = `${entity.inEntry.entity}\u0000${entity.inEntry.entry}`;
       if (entryHolders.has(key)) issue(at, 'At most one entity is in each entry');
       entryHolders.add(key);
+    });
+
+    // 2c. mountedOn and inEntry together form no cycle (A in an entry of B, B in an entry of A; B
+    // mounted on A while A is in an entry of B; …). A cycle of mounts alone is reported by 2.
+    world.entities.forEach((entity, index) => {
+      if (entity.mountedOn === null && entity.inEntry === null) return;
+      if (entity.mountedOn !== null && inCycle(entity, false)) return;
+      if (inCycle(entity, true)) {
+        issue(['entities', index], 'Mounting and entries must not form a cycle');
+      }
     });
 
     // 3–6. Connections: ends, shapes, cables and routes.
@@ -462,6 +482,6 @@ export const WorldV3 = z
   .meta({
     title: 'Controls world document, schemaVersion 3',
     description:
-      'world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, entries held by one entity that exists and is not mounted, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).',
+      'world.json in a .ctrl save (ADR 0004, ADR 0007, ADR 0013, ADR 0015). Zod in @controls/save-format is authoritative; this JSON Schema omits the cross-field rules (sorted unique ids below their counters, unique termination ids, mounts without cycles, entries held by one entity that exists and is not mounted, no cycle through mounts and entries, ends, cables and route hosts that exist, lead and conductor shapes, cable conductor indices and lengths, rest waypoints, distinct consecutive waypoints, tails, sim solution pairs and tick), string well-formedness, a stripe differing from its base, and the per-model-kind state keys (json-schema/device-state.<kind>.schema.json and connection-state.<kind>.schema.json in @controls/catalog).',
   });
 export type WorldV3 = z.infer<typeof WorldV3>;

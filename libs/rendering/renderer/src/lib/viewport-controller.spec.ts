@@ -576,6 +576,7 @@ describe('ViewportController placement', () => {
         positionMm: expected.positionMm,
         orientationMdeg: expected.orientationMdeg,
         mountedOn: null,
+        inEntry: null,
       },
     ]);
     expect(controller.state.selected).toBeNull(); // placing doesn't select
@@ -650,6 +651,7 @@ describe('ViewportController placement', () => {
         positionMm: { x: -60, y: -40, z: 0 },
         orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
         mountedOn: null,
+        inEntry: null,
       },
     ]);
     controller.setPlacement(null);
@@ -897,7 +899,14 @@ describe('ViewportController on the workshop', () => {
     ).map(([ref, cursor]) => {
       const r = placeOnTargets(ref, cursor, targets);
       if (!r.ok) throw new Error(`expected a placement, got ${r.reason}`);
-      return { kind: 'place', ref, positionMm: r.positionMm, orientationMdeg: r.orientationMdeg, mountedOn: null };
+      return {
+        kind: 'place',
+        ref,
+        positionMm: r.positionMm,
+        orientationMdeg: r.orientationMdeg,
+        mountedOn: null,
+        inEntry: null,
+      };
     });
     expect(seen).toEqual(expected);
     expect(expected[1].orientationMdeg).toEqual({ yaw: 0, pitch: 270_000, roll: 0 }); // stood up on the bench
@@ -1160,6 +1169,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
         positionMm: expected.positionMm,
         orientationMdeg: expected.orientationMdeg,
         mountedOn: null,
+        inEntry: null,
       },
     ]);
     controller.dispose();
@@ -1187,6 +1197,7 @@ describe('ViewportController with enclosures (F3.5)', () => {
         positionMm: { x: -77, y: 55, z: 22 },
         orientationMdeg: { yaw: 0, pitch: 0, roll: 0 },
         mountedOn: RAIL,
+        inEntry: null,
       },
     ]);
     controller.dispose();

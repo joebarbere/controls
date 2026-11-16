@@ -19,11 +19,14 @@ import { same, UNIT } from './vec';
  * - **Joined parts** (`conduit-discontinuous`): two consecutive conduit waypoints are on the same part,
  *   or on two parts **joined** at a point J: a joint end of each at J, pointing opposite ways (an
  *   elbow's port on a stick's end, a connector's outer end on a stick, two sticks end to end as a
- *   coupling would join them; two parts merely touching at an angle aren't joined). The segment between
+ *   coupling would join them; two parts merely touching at an angle aren't joined), or on two parts joined through straight parts end to end (a stick passed by without a waypoint; never through an elbow, whose bend that would skip). The segment between
  *   the two waypoints passes through J, and a waypoint on an elbow is J itself unless the other one is
  *   (the segment is then exactly the elbow's two ports). So an elbow is always gone round port to port
  *   (where `pullRun` adds its arc to the chord) and never cut across, and every elbow the run goes
  *   round hosts a waypoint (where `pullRun` counts its bend): two parts an elbow joins aren't joined.
+ * - **Forward only** (`conduit-discontinuous`): the run never comes back to a part it has left, and
+ *   along one part it never doubles back (three waypoints on a part keep one direction), so an elbow
+ *   gone round port 1 → 2 → 1 can't count one bend and its arc twice.
  *
  * A host the catalogue can't place (unknown, or not at quarter-turns) isn't judged here: the commands
  * refuse it first (`bad-waypoint`, `not-axis-aligned`) and the load check leaves an unknown one alone.
@@ -93,6 +96,8 @@ export function conduitContinuityProblem(
   let last = first;
   for (const [i, w] of route.entries()) if (w.kind === 'conduit') last = i;
   const parts = new Map<EntityId, Part | null>();
+  // The parts the run has left (a host waypoint, then a waypoint on another part).
+  const left = new Set<EntityId | null>();
   const part = (id: EntityId | null): Part | null => {
     if (id === null) return null;
     if (!parts.has(id)) parts.set(id, conduitPart(world, catalog, id));
@@ -119,24 +124,103 @@ export function conduitContinuityProblem(
     }
     if (i === first) continue;
     const v = route[i - 1];
-    if (v.entity === w.entity) continue;
+    if (v.entity === w.entity) {
+      // Along one part the run keeps its direction: no doubling back (an elbow port 1 → 2 → 1 would
+      // count one bend and its arc twice).
+      const u = i - 2 >= first ? route[i - 2] : null;
+      if (u !== null && u.entity === w.entity) {
+        const p = v.positionMm;
+        const ahead =
+          (p.x - u.positionMm.x) * (w.positionMm.x - p.x) +
+          (p.y - u.positionMm.y) * (w.positionMm.y - p.y) +
+          (p.z - u.positionMm.z) * (w.positionMm.z - p.z);
+        if (ahead <= 0) {
+          return {
+            index: i,
+            code: 'conduit-discontinuous',
+            message: `${at} doubles back along conduit part ${w.entity}`,
+          };
+        }
+      }
+      continue;
+    }
+    left.add(v.entity);
+    if (left.has(w.entity)) {
+      return {
+        index: i,
+        code: 'conduit-discontinuous',
+        message: `${at} comes back to conduit part ${w.entity}, already left`,
+      };
+    }
     const prior = part(v.entity);
-    if (prior === null) continue;
-    const j = joinedAt(prior, host);
-    // Through the joint; an elbow's waypoint is the joint itself, unless the other waypoint is (then the
-    // segment is exactly that elbow's port-to-port chord, which `pullRun` measures along its bend).
+    if (prior === null || v.entity === null || w.entity === null) continue;
+    const chain = joinedChain(world, part, v.entity, w.entity);
+    if (chain === null) {
+      return {
+        index: i,
+        code: 'conduit-discontinuous',
+        message: `${at}: conduit parts ${v.entity} and ${w.entity} aren't joined (an elbow between them is skipped)`,
+      };
+    }
+    for (const between of chain.through) {
+      if (left.has(between)) {
+        return {
+          index: i,
+          code: 'conduit-discontinuous',
+          message: `${at} comes back to conduit part ${between}, already left`,
+        };
+      }
+      left.add(between);
+    }
+    // Through every joint; an elbow's waypoint is its joint, unless the parts are joined directly and
+    // the other waypoint is (the segment is then that elbow's port-to-port chord, which `pullRun`
+    // measures along its bend).
+    const firstJoint = chain.joints[0];
+    const lastJoint = chain.joints[chain.joints.length - 1];
+    const direct = chain.joints.length === 1;
     const through =
-      j !== null &&
-      onSegment(v.positionMm, j, w.positionMm) &&
-      (!prior.elbow || same(v.positionMm, j) || same(w.positionMm, j)) &&
-      (!host.elbow || same(w.positionMm, j) || same(v.positionMm, j));
+      chain.joints.every((j) => onSegment(v.positionMm, j, w.positionMm)) &&
+      (!prior.elbow || same(v.positionMm, firstJoint) || (direct && same(w.positionMm, firstJoint))) &&
+      (!host.elbow || same(w.positionMm, lastJoint) || (direct && same(v.positionMm, lastJoint)));
     if (!through) {
-      const why =
-        j === null
-          ? `conduit parts ${v.entity} and ${w.entity} aren't joined`
-          : `the run from part ${v.entity} to part ${w.entity} doesn't pass where they join (round an elbow port to port)`;
+      const why = `the run from part ${v.entity} to part ${w.entity} doesn't pass where they join (round an elbow port to port)`;
       return { index: i, code: 'conduit-discontinuous', message: `${at}: ${why}` };
     }
   }
   return null;
+}
+
+/**
+ * How part `from` reaches part `to` along the run: joined directly, or through straight parts (sticks,
+ * connectors) joined end to end, never through an elbow (that would skip its bend). The joints in
+ * order and the parts passed through, or `null`.
+ */
+function joinedChain(
+  world: Pick<World, 'entities'>,
+  part: (id: EntityId | null) => Part | null,
+  from: EntityId,
+  to: EntityId,
+): { joints: PositionMm[]; through: EntityId[] } | null {
+  const conduitIds = world.entities.map((e) => e.id).filter((id) => part(id) !== null);
+  const search = (
+    at: EntityId,
+    came: EntityId | null,
+    seen: Set<EntityId>,
+  ): { joints: PositionMm[]; through: EntityId[] } | null => {
+    const here = part(at);
+    if (here === null) return null;
+    for (const next of conduitIds) {
+      if (next === at || next === came || seen.has(next)) continue;
+      const other = part(next);
+      const j = other && joinedAt(here, other);
+      if (!other || j === null) continue;
+      if (next === to) return { joints: [j], through: [] };
+      if (other.elbow) continue;
+      seen.add(next);
+      const rest = search(next, at, seen);
+      if (rest) return { joints: [j, ...rest.joints], through: [next, ...rest.through] };
+    }
+    return null;
+  };
+  return search(from, null, new Set([from]));
 }

@@ -527,11 +527,12 @@ export const rawWorldV3Arb = rawWorldV2Arb
         // Only on an entity earlier in the list, so mounting never forms a cycle.
         const mountedOn =
           mount === null || index === 0 ? null : { entity: entityIds[mount.pick % index], mount: mount.mount };
-        // In an entry of another entity, when not mounted, and never an entry another entity is in.
+        // In an entry of an entity earlier in the list (so mounts and entries never form a cycle), when
+        // not mounted, and never an entry another entity is in.
         const raw = inEntries[index];
         let inEntry: { entity: number; entry: string } | null = null;
-        if (raw !== null && mountedOn === null && entityIds.length > 1) {
-          const host = entityIds.filter((id) => id !== entity.id)[raw.pick % (entityIds.length - 1)];
+        if (raw !== null && mountedOn === null && index > 0) {
+          const host = entityIds[raw.pick % index];
           const key = `${host}:${raw.entry}`;
           if (!takenEntries.has(key)) {
             takenEntries.add(key);

@@ -230,5 +230,10 @@ describe('the load check re-verifies inEntry and conduit continuity (checkWorldR
     expect(messages(withRoute([before, off, ...pulled.route.slice(2)]))).toContain(
       `${at}[1]: Not a continuous conduit run (off-raceway)`,
     );
+    // Round the elbow and back to its first port: one bend, its arc twice.
+    const elbowA = pulled.route[2];
+    expect(messages(withRoute([before, top, elbowA, elbowB, elbowA, after]))).toContain(
+      `${at}[4]: Not a continuous conduit run (conduit-discontinuous)`,
+    );
   });
 });
