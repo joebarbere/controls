@@ -1,6 +1,6 @@
 # Expansion proposal: power systems, big science and the cities of the future
 
-**Status:** Proposal, 2026-11-16; the user's decisions are recorded in §7. Not yet part of the spec. Nothing here is scheduled until the user approves it and the spec ([`controls-development-plan.md`](../controls-development-plan.md), v1.4) gains a matching section (a v2.0 "Expansions" chapter). Per CLAUDE.md: change the plan first, then the code.
+**Status:** Accepted proposal, 2026-11-16; the user's decisions are recorded in §7. Not yet part of the spec. Nothing here is scheduled until the user approves it and the spec ([`controls-development-plan.md`](../controls-development-plan.md), v1.4) gains a matching section (a v2.0 "Expansions" chapter). Per CLAUDE.md: change the plan first, then the code.
 
 **Relation to the spec.** Everything here is post-1.0. The spec's parked backlog (§6, "Post-1.0 backlog") already lists several pieces: lineman and utility content, generators, transfer switches and backfeed, solar PV, ESS and EV chargers, arc flash via IEEE 1584, and the IEC region profile. This proposal groups them with the new ideas into a dependency-ordered set of expansion phases (X0–X9, plus X7b for high-energy pulsed-power facilities). It also lists the architecture work that has to land first, because the simulator, world model, save format and renderer all assume one building today.
 
@@ -222,8 +222,8 @@ Builds on X7's stored-energy work and X1's protection. Set on fictional secure t
 
 ```mermaid
 graph LR
-  P13[P13 / v1.0] --> X0[X0 Foundations for scale]
-  P13 --> IEC[IEC profile]
+  P13[P13 / v1.0] --> IEC[IEC profile]
+  IEC --> X0[X0 Foundations for scale]
   X0 --> X1[X1 Industrial power]
   X0 --> X2[X2 Lineworker]
   X1 --> X3[X3 Substations]
@@ -243,7 +243,7 @@ graph LR
   X8 --> X9
 ```
 
-**Order (decided, §7):** X0 → X1 → X2 → X3 → X4 → X5 → X6 → X7 → X7b → X8 → X9. X1 first because it needs the least new architecture after X0 and leads straight out of P7, so it tests the network solver on familiar ground. X2 and X3 can run in parallel tracks once X0 lands. The IEC profile can be built any time after 1.0 but must be ready before X7.
+**Order (decided, §7):** IEC profile → X0 → X1 → X2 → X3 → X4 → X5 → X6 → X7 → X7b → X8 → X9. X1 first because it needs the least new architecture after X0 and leads straight out of P7, so it tests the network solver on familiar ground. X2 and X3 can run in parallel tracks once X0 lands. The IEC profile comes first after 1.0, before X0 (decision 3), so X7 is never blocked on it.
 
 X1 stays post-1.0, after X0 (decision 1); pulling an X1 slice in before 1.0 was considered and declined.
 
@@ -270,7 +270,7 @@ X1 stays post-1.0, after X0 (decision 1); pulling an X1 slice in before 1.0 was 
 | --- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | 1   | Pull an X1 slice in before 1.0?              | No. X1 stays post-1.0, after X0.                                                                                        |
 | 2   | Order                                        | As proposed: X0 → X1 → X2 → X3 → X4 → X5 → X6 → X7 → X8 → X9, with X7b added after X7.                                  |
-| 3   | Move the IEC profile up for X7?              | Open. Default: post-1.0, ready before X7.                                                                               |
+| 3   | Move the IEC profile up for X7?              | Post-1.0, and the first thing after it: the IEC profile ships before X0.                                                |
 | 4   | Design X2 for co-op from the start?          | No. Single-player crews; co-op stays parked.                                                                            |
 | 5   | How far into the future?                     | Very far: eras through 3026 AD in X9, each labelled speculative.                                                        |
 | 6   | Nuclear content                              | Abstract reactor; station electrical systems only.                                                                      |
@@ -278,7 +278,7 @@ X1 stays post-1.0, after X0 (decision 1); pulling an X1 slice in before 1.0 was 
 
 ## 8. Next steps after approval
 
-1. Settle the one open question (IEC timing) in §7.
+1. Plan the IEC profile as the first post-1.0 phase (its own `plans/` file and spec section).
 2. Add an "Expansions" chapter to the spec (v2.0) summarising §3–§5; record the plan correction in the version history.
 3. Write the X0 ADRs (network solver and zones; world chunks and templates; region-profile layers; time scales), with `sim-engine-engineer`, `save-format-guardian` and `renderer-engineer` as an agent team, since three areas must agree a contract at once.
 4. A dated research report in `docs/research/` on network-solver methods and permissive oracle licences before X0 starts.
