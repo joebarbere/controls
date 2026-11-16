@@ -142,6 +142,8 @@ Positions are integer mm and angles integer millidegrees, validated by the `save
 
 ## View commands
 
+The cable prompts' keys (F3.2 part 4, `@controls/commands` `wiring.ts`, all `logged: false`, applied by `feature-workspace`'s wiring flow): `wiring.strip {id}` (J, the strip prompt for a cable), `wiring.land {id}` (L, landing a cable conductor's free end), `wiring.label {wire, cable}` (Shift+L, the label prompt). Each opens a prompt or a picking mode; what it logs is the world command (`cable.strip`, `wire.land`, `wire.label` / `cable.label`). The routing gesture's `routing.*` keys are listed in [UI shell](ui-shell.md#routing-a-wire-f32-part-3).
+
 | Id                 | Args                                                                                | Effect (applied by the UI through `Session.onCommand`)                                                        |
 | ------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `view.resetLayout` | none                                                                                | the workspace restores its default panel layout                                                               |

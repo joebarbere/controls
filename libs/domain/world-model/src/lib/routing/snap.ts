@@ -27,6 +27,9 @@ import { distance2 } from './vec';
  *   height; only when the caller names the bit or hole saw (`boreTool`), which a bore stores, and
  *   never with a bit the catalogue says is over the bored-hole limit (F3.2 part 4, `BORED_HOLE_MAX`).
  *
+ * A cursor on a stud wall's face or within its depth is measured from its point at the stud's
+ * mid-depth for the stud candidates (a head-on click lands on a stud's front face).
+ *
  * The nearest candidate within {@link ROUTE_SNAP_CAPTURE} wins (ties: duct, conduit, staple, bore, then
  * the lower entity id or fixture id and stud); otherwise a `free` waypoint at the cursor. Integer in,
  * integer out: the cursor is rounded to whole mm first.
@@ -78,8 +81,8 @@ export function snapWaypoint(
   const boreTool = options.boreTool ?? null;
   const capture = options.captureMm ?? ROUTE_SNAP_CAPTURE.valueMm;
   const candidates: Candidate[] = [];
-  const offer = (kind: HostedWaypointKind, waypoint: Omit<Waypoint, 'kind'>, host: string) => {
-    const d2 = distance2(waypoint.positionMm, at);
+  const offer = (kind: HostedWaypointKind, waypoint: Omit<Waypoint, 'kind'>, host: string, from: PositionMm = at) => {
+    const d2 = distance2(waypoint.positionMm, from);
     if (d2 <= capture * capture)
       candidates.push({ waypoint: { kind, ...waypoint }, d2, rank: KIND_ORDER.indexOf(kind), host });
   };
@@ -109,6 +112,17 @@ export function snapWaypoint(
       if (target === null || target.kind !== 'wall-studs') continue;
       const local = worldToSurface(target.frame, at);
       const v = Math.min(Math.max(local.v, 0), target.heightMm);
+      // A cursor on the wall's face or inside its depth (a head-on click hits a stud's front face, 44 mm
+      // in front of a mid-depth staple) is measured from its point at mid-depth, so the stud under it
+      // captures (F3.2 part 4: from the front no staple was ever within the capture distance).
+      const within =
+        local.w <= 0 &&
+        local.w >= -WALL_STUD_DEPTH.valueMm &&
+        local.u >= 0 &&
+        local.u <= target.widthMm &&
+        local.v >= 0 &&
+        local.v <= target.heightMm;
+      const from = within ? surfaceToWorld(target.frame, { u: local.u, v: local.v }, -BORE_DEPTH_MM) : at;
       const half = SNAP_STEPS.studHalfThicknessMm;
       for (const [index, u] of studCentres(target).entries()) {
         const host = `${fixture.id}\u0000${String(index).padStart(4, '0')}`;
@@ -119,13 +133,14 @@ export function snapWaypoint(
           if (side < 0) side = u + half;
           if (side > target.widthMm) side = u - half;
           const positionMm = surfaceToWorld(target.frame, { u: side, v }, -BORE_DEPTH_MM);
-          offer('staple', { ...base, positionMm }, host);
+          offer('staple', { ...base, positionMm }, host, from);
         }
         if (bores) {
           offer(
             'bore',
             { ...base, tool: boreTool, positionMm: surfaceToWorld(target.frame, { u, v }, -BORE_DEPTH_MM) },
             host,
+            from,
           );
         }
       }

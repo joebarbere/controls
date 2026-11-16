@@ -47,10 +47,13 @@ describe('paletteItems', () => {
       'view.overlay', // (console.available is unset) Show or hide a debug overlay, Toggle console
       'console.toggle',
       'view.netlistInspector', // Toggle netlist inspector
-      'routing.cancel', // disabled here: no spool (routing.active); Wiring, by title
+      'routing.cancel', // disabled here: no spool (routing.active), no wire (wiring.*); Wiring, by title
+      'wiring.label',
+      'wiring.land',
       'routing.terminalNext',
       'routing.terminalPrevious',
       'routing.back',
+      'wiring.strip',
     ]);
     expect(ids(items)).not.toContain('palette.open');
     expect([...PALETTE_HIDDEN_COMMANDS]).toEqual(['palette.open']);

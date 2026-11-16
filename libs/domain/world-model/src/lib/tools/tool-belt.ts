@@ -75,8 +75,8 @@ export interface BeltChoice {
  * catalogue device with a body, so the mouse can place it (`beltSlotKind` says `placeable`: the
  * enclosures, the breaker, the supplies, …), then (F3.2 part 3) every conductor sold as building wire
  * (a spool: a conductor no cable entry lists, so not one of NM-B's inner conductors), then every
- * catalogue tool; each group sorted by id, the newest version of each id. Cable spools join with
- * F3.2 part 4 (`cable.add`); test leads stay `lead.connect`'s.
+ * catalogue tool; each group sorted by id, the newest version of each id. Cable spools (F3.2 part 4,
+ * `cable.add`) follow the conductor spools, sorted by id; test leads stay `lead.connect`'s.
  */
 export function beltChoices(catalog: Catalog): BeltChoice[] {
   const props = BUILTIN_PROPS.map((p) => ({
@@ -112,6 +112,13 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
     title: d.title,
     group: 'Spools' as const,
   }));
+  const newestCable = new Map<string, { id: string; version: number; title: string }>();
+  for (const c of catalog.cables) newestCable.set(c.id, c); // sorted by id, then version
+  const cables = [...newestCable.values()].map((c) => ({
+    ref: { id: c.id, version: c.version },
+    title: c.title,
+    group: 'Spools' as const,
+  }));
   const newest = new Map<string, ToolDefinition>();
   for (const tool of catalog.tools) newest.set(tool.id, tool); // sorted by id, then version
   const tools = [...newest.values()].map((t) => ({
@@ -119,7 +126,7 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
     title: t.title,
     group: 'Tools' as const,
   }));
-  return [...props, ...devices, ...spools, ...tools];
+  return [...props, ...devices, ...spools, ...cables, ...tools];
 }
 
 /**

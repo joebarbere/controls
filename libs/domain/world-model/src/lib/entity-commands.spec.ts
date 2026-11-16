@@ -271,6 +271,9 @@ describe('world registry, replay log and cheats', () => {
       'wire.pull:true',
       'wire.reroute:true',
       'wire.unland:true',
+      'wiring.label:false',
+      'wiring.land:false',
+      'wiring.strip:false',
     ]);
   });
 

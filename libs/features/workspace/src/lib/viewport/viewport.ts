@@ -49,8 +49,13 @@ import {
   SELECTION_TOGGLE_VALUE_KEY,
   selectionToggle,
 } from '@controls/world-model';
+import { createAnnouncer } from '../routing/announcer';
+import { connectCableRouting } from '../routing/cable-flow';
+import { CableStripPromptDialog } from '../routing/cable-strip-prompt';
+import { LabelPromptDialog } from '../routing/label-prompt';
 import { connectRouting } from '../routing/routing-flow';
 import { TerminationPromptDialog } from '../routing/termination-prompt';
+import { connectWiring } from '../routing/wiring-flow';
 import { ActiveTool } from '../tool-belt/active-tool';
 import { LampSnapshotFeed } from './lamp-feed';
 import { OverlayLegend } from './overlay-legend';
@@ -109,6 +114,13 @@ const TEST_HOOK = '__controlsViewport';
  * keyboard; a selection is announced once in the polite `wire-status` region. The host carries
  * `data-wire-hovered` and `data-wire-selected` (`c2`, `k1`).
  *
+ * **Cables** (F3.2 part 4, `connectCableRouting`, `connectWiring`): a cable spool arms the cable
+ * gesture (the renderer in `entries` mode): two enclosure entries and the staples or bores between
+ * them log one `cable.add`, after which the strip prompt (`ctl-cable-strip-prompt`) logs a
+ * `cable.strip` per end. `wiring.land` (L) lands a cable conductor's free end through the termination
+ * prompt (one `wire.land`), and `wiring.label` (Shift+L, or a click with the label maker in hand)
+ * opens the label prompt (`ctl-label-prompt`: one `wire.label` or `cable.label`).
+ *
  * **View commands:** `view.mode` and `view.focus` (keys, palette, console, scripts) take effect
  * here, through `Session.onCommand`. The renderer's mode and selection are published as the `when`
  * context keys `mode`, `selection.id`, `selection.kind`, `selection.focusable` and
@@ -121,7 +133,7 @@ const TEST_HOOK = '__controlsViewport';
 @Component({
   selector: 'ctl-viewport',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OverlayLegend, TerminationPromptDialog, WireReadoutPanel],
+  imports: [OverlayLegend, TerminationPromptDialog, WireReadoutPanel, CableStripPromptDialog, LabelPromptDialog],
   template: `
     <canvas
       #canvas
@@ -162,6 +174,21 @@ const TEST_HOOK = '__controlsViewport';
       [prompt]="routing.prompt()"
       (confirm)="routing.confirmTermination($event)"
       (dismissed)="routing.cancelTermination()"
+    />
+    <ctl-termination-prompt
+      [prompt]="wiring.prompt()"
+      (confirm)="wiring.confirmTermination($event)"
+      (dismissed)="wiring.cancelTermination()"
+    />
+    <ctl-cable-strip-prompt
+      [prompt]="wiring.strip()"
+      (confirm)="wiring.confirmStrip($event)"
+      (dismissed)="wiring.cancelStrip()"
+    />
+    <ctl-label-prompt
+      [prompt]="wiring.label()"
+      (confirm)="wiring.confirmLabel($event)"
+      (dismissed)="wiring.cancelLabel()"
     />
     @if (overlays.active()) {
       <ctl-overlay-legend [state]="overlays.legend()" [reducedMotion]="overlays.reducedMotion()" />
@@ -296,11 +323,23 @@ export class Viewport {
   private readonly renderer = new ViewportRenderer();
   /** The debug overlays (F2.6): `view.overlay`, sim snapshots from `SimHost`, reduced motion, the legend. */
   protected readonly overlays = connectViewportOverlays(this.renderer);
+  /** The wiring flows' one polite live region (`routing-status`). */
+  private readonly announcer = createAnnouncer();
+  /**
+   * The cable prompts (F3.2 part 4): strip (`cable.strip`), landing a cable conductor's free end
+   * (`wire.land`, through the termination prompt) and labels (`wire.label` / `cable.label`).
+   */
+  protected readonly wiring = connectWiring(this.renderer, this.state, this.announcer);
+  /** The cable gesture (F3.2 part 4): a cable spool arms it; the far entry logs one `cable.add`. */
+  protected readonly cable = connectCableRouting(this.renderer, this.state, this.announcer, (id) =>
+    this.wiring.openStrip(id),
+  );
   /**
    * The routing gesture (F3.2 part 3): a conductor spool on the belt arms it; the renderer's picks and
-   * the `routing.*` keys step it; a completed route is one `wire.add`.
+   * the `routing.*` keys step it; a completed route is one `wire.add`. It pushes whichever mode is in
+   * force (its own, the cable gesture's, landing) to the renderer.
    */
-  protected readonly routing = connectRouting(this.renderer, this.state);
+  protected readonly routing = connectRouting(this.renderer, this.state, this.announcer, [this.cable, this.wiring]);
   /**
    * The wire readout (F3.6 part 3): the hovered, else the selected, wire's connection record in work
    * mode while the console is available (D16).
@@ -355,7 +394,10 @@ export class Viewport {
       `${binding('routing.terminalPrevious')} cycle a device's terminals, ${key('commitPlacement')} picks, ` +
       `a click elsewhere adds a waypoint, ${binding('routing.back')} steps back, ` +
       `${binding(VIEW_FOCUS_TERMINALS_BINDING)} zooms to crowded terminals. ` +
-      `${binding(VIEW_WIRE_NEXT_BINDING)} and ${binding(VIEW_WIRE_PREVIOUS_BINDING)} select the next and previous wire.`
+      `${binding(VIEW_WIRE_NEXT_BINDING)} and ${binding(VIEW_WIRE_PREVIOUS_BINDING)} select the next and previous wire. ` +
+      `With a cable spool, pick two box entries (${binding('routing.terminalNext')} cycles a selected box's entries); ` +
+      `${binding('wiring.strip.selection')} strips, ${binding('wiring.land.selection')} lands and ` +
+      `${binding('wiring.label.selection')} labels the selected cable or conductor.`
     );
   });
   /** Context keys last published, so unchanged values aren't re-set on every hover change. */
@@ -537,6 +579,8 @@ export class Viewport {
       [SELECTION_ENTITY_ID_KEY, selected?.entityId ?? null],
     ];
     for (const [key, value] of next) this.publish(key, value);
+    // The selected wire's keys in the same task as the selection, so L works on the next key press.
+    this.wiring.publishSelection(s);
   }
 
   /** Sets a context key unless it already holds `value`. */

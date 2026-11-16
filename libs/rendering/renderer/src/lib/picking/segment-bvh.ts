@@ -10,9 +10,13 @@
  *   for a perspective camera), so a 1.6 mm wire is never thinner than 8 px of target across.
  * - **Ranking:** a ray that passes through a wire's real insulation (distance ≤ its radius) beats one
  *   that only passes within the widened radius; among real hits the nearest along the ray wins; among
- *   widened ones the nearest on screen (pixels from the centreline), then the nearer along the ray;
- *   then the lower segment index (the caller's bake order). So a wire in front wins when the pointer is
- *   on it, and the closest centreline wins in the gaps.
+ *   widened ones the nearest on screen (pixels from the centreline, in steps of
+ *   {@link WIRE_PICK_SCREEN_STEP_PX}), then the nearer along the ray; then the lower segment index (the
+ *   caller's bake order). So a wire in front wins when the pointer is on it, and the closest centreline
+ *   wins in the gaps. The screen step matters for wires that line up along the ray (a cable's tails
+ *   seen end-on from the front, F3.2 part 4): their centrelines are the same distance off on screen up
+ *   to rounding, and without the step that rounding (about 1e-8 px) chose one, often a rear tail hidden
+ *   behind the front one. With it the front one wins, the same way from any traversal order.
  * - **Build:** a binary tree split at the median of the longest axis of the centroids (a deterministic
  *   quickselect, ties by segment index), leaves of up to {@link LEAF_SIZE}; flat typed arrays. Queries
  *   allocate nothing.
@@ -20,6 +24,16 @@
 
 /** Minimum on-screen pick radius of a wire, CSS px (ADR 0010: "about 4 px"). Game-design. */
 export const WIRE_PICK_MIN_RADIUS_PX = 4;
+
+/**
+ * Screen distances that fall in the same step of this many CSS px rank as equal (then nearer along
+ * the ray wins). A quarter pixel: well under the 2 px between side-by-side 14 AWG tails at a metre,
+ * well over float noise. Game-design.
+ */
+export const WIRE_PICK_SCREEN_STEP_PX = 0.25;
+
+/** The screen-distance step a widened hit ranks by (see {@link WIRE_PICK_SCREEN_STEP_PX}). */
+export const screenStep = (offsetPx: number): number => Math.floor(offsetPx / WIRE_PICK_SCREEN_STEP_PX);
 
 const LEAF_SIZE = 4;
 
@@ -239,10 +253,11 @@ export class SegmentBvh {
     if (out.segment < 0) better = true;
     else if (exact !== out.exact) better = exact;
     else if (exact) better = a.s < out.depthMm || (a.s === out.depthMm && i < out.segment);
-    else
-      better =
-        offsetPx < out.offsetPx ||
-        (offsetPx === out.offsetPx && (a.s < out.depthMm || (a.s === out.depthMm && i < out.segment)));
+    else {
+      const step = screenStep(offsetPx);
+      const best = screenStep(out.offsetPx);
+      better = step < best || (step === best && (a.s < out.depthMm || (a.s === out.depthMm && i < out.segment)));
+    }
     if (!better) return;
     out.segment = i;
     out.depthMm = a.s;

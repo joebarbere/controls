@@ -1,4 +1,4 @@
-import { computed, DestroyRef, effect, inject, linkedSignal, signal, type Signal, untracked } from '@angular/core';
+import { computed, DestroyRef, effect, inject, linkedSignal, type Signal, untracked } from '@angular/core';
 import {
   type ContextValue,
   ROUTING_ACTIVE_KEY,
@@ -19,6 +19,7 @@ import {
 } from '@controls/renderer';
 import { type CatalogRef, type RouteProposal, type TerminationArgs } from '@controls/world-model';
 import { ActiveTool } from '../tool-belt/active-tool';
+import { type Announcer, createAnnouncer } from './announcer';
 import {
   addWaypoint,
   cancelGesture,
@@ -80,6 +81,19 @@ export interface RoutingFlow {
   cancelTermination(): void;
 }
 
+/**
+ * Another wiring mode sharing the renderer's routing session (F3.2 part 4: the cable gesture, landing a
+ * free end). The modes are exclusive (each is armed by something the others put away); the routing
+ * flow pushes the first session that is set and publishes the `routing.*` context keys for it.
+ */
+export interface RoutingMode {
+  readonly session: Signal<RoutingSession | null>;
+  readonly phase: Signal<'armed' | 'started' | null>;
+  /** The device Tab cycles in this mode when its ends aren't terminals (a cable's enclosure). */
+  readonly entryDevice?: Signal<number | null>;
+  readonly hint: Signal<string | null>;
+}
+
 /** What a pick waits on while its end's prompt is open. */
 interface PendingPick {
   readonly end: 'a' | 'b';
@@ -89,7 +103,6 @@ interface PendingPick {
 }
 
 const ENTITY_TARGET = /^entity-(\d+)$/;
-const NO_BREAK_SPACE = '\u00a0';
 const sameSpool = (a: Spool | null, b: Spool | null): boolean =>
   a === b || (a !== null && b !== null && a.ref.id === b.ref.id && a.ref.version === b.ref.version);
 
@@ -111,7 +124,12 @@ const sameSpool = (a: Spool | null, b: Spool | null): boolean =>
  *
  * Nothing here mutates the world: the gesture is UI state, and its one outcome is a Command.
  */
-export function connectRouting(renderer: RoutingRenderer, state: Signal<ViewportState | undefined>): RoutingFlow {
+export function connectRouting(
+  renderer: RoutingRenderer,
+  state: Signal<ViewportState | undefined>,
+  announcer: Announcer = createAnnouncer(),
+  modes: readonly RoutingMode[] = [],
+): RoutingFlow {
   const destroyRef = inject(DestroyRef);
   const session = inject(Session);
   const activeTool = inject(ActiveTool);
@@ -152,11 +170,18 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     };
   });
   const phase = computed(() => (routingSession() === null ? null : gesture().from === null ? 'armed' : 'started'));
+  /** The other mode in force (the first with a session), or `null`. */
+  const other = computed(() => (routingSession() !== null ? null : (modes.find((m) => m.session() !== null) ?? null)));
+  /** The session the renderer draws: this gesture's, else the other mode's. */
+  const activeSession = computed(() => routingSession() ?? other()?.session() ?? null);
+  const activePhase = computed(() => phase() ?? other()?.phase() ?? null);
+  /** Whether the session in force picks terminals (not a cable's entries). */
+  const terminalEnds = computed(() => {
+    const s = activeSession();
+    return s !== null && s.ends !== 'entries';
+  });
 
-  const announcement = signal('');
-  // The same words twice still change the region (a trailing no-break space), so they are read again.
-  const announce = (message: string) =>
-    announcement.set(announcement() === message ? `${message}${NO_BREAK_SPACE}` : message);
+  const announce = announcer.announce;
   const describe = (end: { entity: number; terminal: string }) => describeTerminal(session.world(), catalog, end);
   const key = (id: string) => {
     const chord = keys.chordsOf(id)[0];
@@ -164,7 +189,7 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   };
 
   // Pushing the gesture into the framework-free renderer is an imperative side effect.
-  effect(() => renderer.setRouting(routingSession()));
+  effect(() => renderer.setRouting(activeSession()));
   destroyRef.onDestroy(() => renderer.setRouting(null));
 
   const apply = (step: GestureStep): void => {
@@ -362,7 +387,7 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
    * the hovered one: a pointer resting over a device must not take Tab away from focus traversal.
    */
   const terminalDevice = computed<number | null>(() => {
-    if (routingSession() === null) return null;
+    if (!terminalEnds()) return other()?.entryDevice?.() ?? null;
     session.world(); // re-check when the world changes (a deleted device)
     const s = state();
     const focused = ENTITY_TARGET.exec(s?.focusId ?? '');
@@ -375,7 +400,7 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     return null;
   });
   const zoomTarget = computed<string | null>(() => {
-    if (routingSession() === null) return null;
+    if (!terminalEnds()) return null;
     const terminal = state()?.terminal;
     return terminal?.zoomSuggested && terminal.device !== null ? entitySelectableId(terminal.device) : null;
   });
@@ -388,8 +413,8 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
     session.setContext(k, value);
   };
   effect(() => {
-    publish(ROUTING_ACTIVE_KEY, phase() === null ? null : true);
-    publish(ROUTING_STARTED_KEY, phase() === 'started' ? true : null);
+    publish(ROUTING_ACTIVE_KEY, activePhase() === null ? null : true);
+    publish(ROUTING_STARTED_KEY, activePhase() === 'started' ? true : null);
     publish(ROUTING_TERMINAL_DEVICE_KEY, terminalDevice());
     publish(ROUTING_ZOOM_TARGET_KEY, zoomTarget());
   });
@@ -401,9 +426,13 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
 
   const hint = computed<string | null>(() => {
     const slot = spoolSlot();
-    if (slot === null) return null;
+    const elsewhere = other()?.hint() ?? null;
+    if (slot === null) return elsewhere;
     const s = spool();
-    if (s === null) return `${slot.title}: only single conductors can be routed yet.`;
+    if (s === null) {
+      if (elsewhere !== null || catalog.family(slot.ref ?? { id: '', version: 0 }) === 'cable') return elsewhere;
+      return `${slot.title}: test leads are connected with lead.connect, not routed.`;
+    }
     const g = gesture();
     const view = state();
     const zoom = view?.terminal?.zoomSuggested
@@ -432,9 +461,9 @@ export function connectRouting(renderer: RoutingRenderer, state: Signal<Viewport
   return {
     spool,
     gesture: gesture.asReadonly(),
-    phase,
+    phase: activePhase,
     hint,
-    announcement: announcement.asReadonly(),
+    announcement: announcer.message,
     mode,
     prompt,
     confirmTermination,

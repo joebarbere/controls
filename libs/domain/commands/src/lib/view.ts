@@ -4,6 +4,7 @@ import { CONSOLE_AVAILABLE_KEY, defineViewCommand, NoArgs } from './builtin';
 import { VIEWPORT_FOCUSED_KEY } from './keybindings/input-actions';
 import type { BindingDecl } from './keybindings/keymap';
 import { ROUTING_STARTED_KEY, ROUTING_ZOOM_TARGET_KEY, routingCommands, VIEW_FOCUS_TERMINALS_BINDING } from './routing';
+import { wiringCommands } from './wiring';
 
 /*
  * The viewport's view commands (plan F1.7, ADR 0006 "View commands versus world commands"): switching
@@ -225,7 +226,8 @@ export function viewWirePreviousCommand<S>(): CommandDef<NoArgs, S> {
 
 /**
  * `view.mode`, `view.focus`, `view.overlay`, `view.netlistInspector`, `view.wireNext`,
- * `view.wirePrevious` and the routing gesture's keys (`routing.*`, F3.2 part 3), for registering with
+ * `view.wirePrevious`, the routing gesture's keys (`routing.*`, F3.2 part 3) and the cable prompts'
+ * (`wiring.*`, F3.2 part 4), for registering with
  * any state type (world registries add them).
  */
 export function viewportCommands<S>(): AnyCommandDef<S>[] {
@@ -237,6 +239,7 @@ export function viewportCommands<S>(): AnyCommandDef<S>[] {
     viewWireNextCommand<S>(),
     viewWirePreviousCommand<S>(),
     ...routingCommands<S>(),
+    ...wiringCommands<S>(),
   ];
 }
 
