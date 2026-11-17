@@ -4,7 +4,7 @@
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 3 (wires, terminations, enclosures and hand tools) complete on 2026-11-16 and released as v0.4.0. Next: the Phase 4 kickoff.** You can start a sandbox in the workshop, mount boxes and a DIN-rail panel, run NM-B cable along the studs, strip and land every conductor with real tools, and flip the breaker to light a 120 V lamp, from the mouse, keyboard, command palette, dev console or a headless script. Wires heat with the current, and a loose screw shows a measurable voltage drop, runs hot and degrades. See [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md).
+> **Status: Phase 3 (wires, terminations, enclosures and hand tools) complete on 2026-11-16 and released as [v0.4.0](https://github.com/joebarbere/controls/releases). Next: the Phase 4 kickoff (lights, switches, receptacles, panels and protection).** You can start a sandbox in the workshop, mount boxes and a DIN-rail panel, run NM-B cable along the studs, strip and land every conductor with real tools, and flip the breaker to light a 120 V lamp, from the mouse, keyboard, command palette, dev console or a headless script. Wires heat with the current, and a loose screw shows a measurable voltage drop, runs hot and degrades. See [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md).
 
 ## Features
 
@@ -62,7 +62,7 @@ What exists today (Phases 0 to 3):
 
 - Batteries that run down: the EMF follows the state of charge (a new 12 V lead-acid battery rests at 12.9 V), behind its internal resistance, and the charge delivered is counted every millisecond and kept in saves.
 - A bench DC supply (0–30 V, 0–5 A) with a voltage setpoint, a current limit and an output switch, and a clean constant-voltage/constant-current crossover; a 24 V DIN-rail supply whose overload protection hiccups (off for a second, then retry).
-- Mains supplies, from scripts for now: a 120/240 V split-phase utility service and 208Y/120 V and 480Y/277 V three-phase services, each behind its transformer's impedance (so a short draws its real fault current), and the ANSI C84.1 voltage ranges.
+- Mains supplies, placed from the console or scripts for now and drawn as a service cabinet with a lug per terminal: a 120/240 V split-phase utility service and 208Y/120 V and 480Y/277 V three-phase services, each behind its transformer's impedance (so a short draws its real fault current), and the ANSI C84.1 voltage ranges.
 - An incandescent lamp with a real tungsten filament: its resistance rises as it heats, so switching on a cold lamp draws a surge of about 14 times its running current, and its light follows the filament's temperature. Switched off, the filament cools by radiation and through its lead-in wires, so a lamp switched back on five seconds later already surges nearly as much as a cold one. A power resistor that says when it is over its rating, and a 12 V heater element.
 - Protection that behaves like the real thing: a 1 A fast-acting fuse that heats with the current and blows (in under a millisecond on a dead short, never below its minimum fusing current) and stays blown until replaced, and a 15 A thermal-magnetic breaker with a slow thermal trip on overload, an instantaneous magnetic trip on a short, and a handle that must go off and on again to reset it.
 - Wires, test leads and their terminations heat with the current (the heat overlay shows it): a screw landed loose runs hot, degrades for good once it passes 149 °C, then glows, flickers open and shut, arcs and burns open; a wire or lead driven to its metal's melting point fuses, and its insulation is flagged damaged past its rating. An overheating termination or damaged insulation is reported as a sim event.
@@ -121,6 +121,15 @@ pnpm e2e:desktop    # Playwright smoke test against the built Electron app
 
 More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
+### Try the wiring
+
+A new sandbox starts in the workshop with tool-belt slots 1–3 holding props (box, crate, spool); the wiring tools go in slots 4 and up.
+
+- **See a finished circuit:** press **Ctrl+O** and open a frozen save from `libs/domain/save-format/fixtures/v3/ctrl/`, for example `lamp-circuit-engine-7-catalog-2.ctrl` (supply → DIN panel and breaker → NM-B cable → junction box → lamp). Its breaker is off: press **`** for the console, run `device.operate --control on --id 3 --value true`, then press **P** to run the sim. Hover a wire for its readout; **Ctrl+K** → "Show or hide a debug overlay" switches on the voltage, current or heat overlay. `bad-termination-…ctrl` has a loose screw that runs hot.
+- **Wire it yourself:** in **Settings**, set _Default for new games_ to _Trainee_ (no strip and torque prompts) and put a spool, such as 14 AWG THHN, in tool-belt slot 4. Start a new sandbox, place two terminal blocks (`entity.place --ref.id tb.quennick-st4 --ref.version 1 --positionMm.x -100 --positionMm.y 0 --positionMm.z 40` in the console, then again at `x -88`), press **4** and click one terminal, then the other. **Z** zooms in on crowded terminals, **Backspace** steps back and **Esc** cancels. At Journeyman and Realistic each end opens a strip-and-torque prompt.
+- **Keyboard only:** **4** arms the spool, **[** and **]** pick a device, **Tab** cycles its terminals and **Enter** picks one.
+- **Scripted:** every scenario in [`apps/sim-cli/scenarios/`](apps/sim-cli/scenarios/) runs in the game console with `run` (choose the `.console` file) or headless with `pnpm sim run <file> --world content/levels/workshop.json`.
+
 ## TODO
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
@@ -135,19 +144,21 @@ The roadmap is in [`controls-development-plan.md`](controls-development-plan.md)
 - [ ] **P11 PLC II: Structured Text, FBD, PID, VFD** (v0.12.0)
 - [ ] **P12 Networking, SCADA/HMI, alarms, trends** (v0.13.0)
 - [ ] **P13 Campaign completion, polish, signing, modding** (v1.0.0)
+- [ ] **After 1.0:** the IEC region profile, then the power-systems expansions X0–X9 (lineworkers, industrial plants, substations, renewables, AI datacenters, high-rises, big-science and pulsed-power sites, power plants and small modular reactors, and future cities out to 3026), proposed in [`plans/expansion-power-systems.md`](plans/expansion-power-systems.md)
 
 ## Documentation
 
-| Where                                                          | What                                                           |
-| -------------------------------------------------------------- | -------------------------------------------------------------- |
-| [`docs/README.md`](docs/README.md)                             | Documentation hub: start here                                  |
-| [`controls-development-plan.md`](controls-development-plan.md) | The spec: vision, realism charter, architecture, roadmap       |
-| [`docs/architecture/`](docs/architecture/overview.md)          | How it fits together (process model, module boundaries)        |
-| [`docs/decisions/`](docs/decisions/)                           | Architecture decision records                                  |
-| [`docs/caveats/`](docs/caveats/README.md)                      | Per-area gotchas; read before changing an area                 |
-| [`docs/research/`](docs/research/)                             | Background research: stack, solvers, PLC/SCADA, domain realism |
-| [`CHANGELOG.md`](CHANGELOG.md)                                 | Release notes (Keep a Changelog)                               |
-| [`CLAUDE.md`](CLAUDE.md)                                       | Working agreements for AI-assisted development                 |
+| Where                                                          | What                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`docs/README.md`](docs/README.md)                             | Documentation hub: start here                                       |
+| [`controls-development-plan.md`](controls-development-plan.md) | The spec: vision, realism charter, architecture, roadmap            |
+| [`docs/architecture/`](docs/architecture/overview.md)          | How it fits together (process model, module boundaries)             |
+| [`docs/decisions/`](docs/decisions/)                           | Architecture decision records                                       |
+| [`docs/caveats/`](docs/caveats/README.md)                      | Per-area gotchas; read before changing an area                      |
+| [`docs/research/`](docs/research/)                             | Background research: stack, solvers, PLC/SCADA, domain realism      |
+| [`plans/`](plans/)                                             | Per-phase plans with feature checklists, and the expansion proposal |
+| [`CHANGELOG.md`](CHANGELOG.md)                                 | Release notes (Keep a Changelog)                                    |
+| [`CLAUDE.md`](CLAUDE.md)                                       | Working agreements for AI-assisted development                      |
 
 ## Project layout
 
