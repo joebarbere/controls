@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - **Phase 4 kickoff** (docs; [plan](plans/phase-4-residential.md)). The P4 plan (decisions D1–D22, the PR stack and the items carried from P3) and spec v1.6: a breaker above its magnetic pickup opens after a sourced clearing time rather than within the tick, a GFCI follows UL 943 Class A behaviour (a 4–6 mA pickup with an inverse-time curve, so the 25 ms acceptance uses a large ground fault), and the inspector gets its own library, `libs/domain/inspector`.
+- **Electron 45.3.2** (from 45.0.0: Chromium 156.0.8078.100, Node 24.22.2; no breaking changes, Fuses unchanged), **Angular 22.2.6** (CLI and build 22.2.7) and **Nx 24.0.6**, all patch-level. The P4 toolchain re-check is in [`docs/research/2026-11-p4-toolchain-check.md`](docs/research/2026-11-p4-toolchain-check.md): three r187, Playwright 1.65 and Electron 45.3.3 are left for their own PRs, and electron-builder 27 is still alpha.
 
 ## [0.4.0] - 2026-11-16
 
