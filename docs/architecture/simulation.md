@@ -58,7 +58,7 @@ Absent from the netlist, with a diagnostic where useful: props (silently), entit
 Every index is a pure function of the world, never of the edit history. That order is the order of `WorldV2.sim.nodes` and `branches` and of the snapshot payload ([ADR 0013](../decisions/0013-world-document-v2.md)).
 
 - **Terminals** are visited in canonical order: entity id (numerically), then terminal id (UTF-16 code units).
-- **Nodes:** union-find merges ideal joins only. A node is numbered when its first member is visited, so nodes are numbered by their smallest member, whatever order the unions ran in. Members are listed in canonical order.
+- **Nodes:** union-find merges ideal joins only. A node is numbered when its first member is visited, so nodes are numbered by their smallest member, whatever order the unions ran in. Members are listed in canonical order. Joins never cross devices, so the compiler partitions each device's terminals once, with its fragment, and a compile only offsets each device's local nodes.
 - **Branches:** each entity's elements (entity id, then part), then each netlisted connection by id. Each connection is **exactly one branch** from `connection.a`'s node to `connection.b`'s node. A closed switch has no branch, and a lead across one is a branch with `a === b`.
 - **Islands:** connected components of the nodes over the branches, numbered by their smallest node. Each is classified by its source elements: `empty` (none), `dc`, `ac`, or `mixed`, which is also reported as a `mixed-island` diagnostic because P2 has no converters.
 
@@ -662,6 +662,14 @@ The structural recompile after one switch toggle is **0.94 ms, from 1.20 ms** (i
 - **The encoding is written directly** by `TopologyWriter` (`netlist/encode.ts`) into that buffer, one capacity check per member and per branch; `topologyBytes` stays the reference it is checked against.
 
 Rejected: a local renumber (nodes are numbered canonically by their smallest member, so a split shifts every later node and branch end, ADR 0011 §7); hashing only what changed (SHA-256 is sequential, and every later branch's end nodes change, so a tree hash would move every persisted `topologyHash`); caching each fragment's encoded bytes (0.1 ms saved per recompile, 0.75 ms lost per load).
+
+Before v0.4.0, `plant-resolve-topology-change-wired` failed macOS's calibrated gate on every run (scaled 2.01–2.14 ms against 2 ms), and the re-solve was made faster rather than the gate changed. On the reference machine its gated median went from 1.60–1.70 to 1.31–1.35 ms (the plain re-solve's from 1.41–1.48 to 1.11–1.13), every hash and golden unchanged:
+
+- **Each device's nodes are computed once.** Only a device's ideal joins merge terminals, so `DeviceParts` holds the device's local node of each terminal and its shared member lists, and `assemble` offsets them instead of running a union-find over every terminal and building a member array per node.
+- **Less garbage per compile** (about 1.6 MB → 0.45 MB): island lists allocated at their final length, the device entry shared, one placed record per cache entry, lists overwritten in place rather than emptied and refilled, and the DC sparse `assemble` no longer boxes each stamp value.
+- **SHA-256 unrolled by 16** (about 18 % faster), a hex table in `toHex`, the walk guessing each cache entry by position before its `Map`, and the encoder's kind codes read through constants.
+
+What is left is mostly SHA-256 and the solve (about half), which can't shrink without moving bits; the details are in the [simulation caveats](../caveats/simulation.md).
 
 The gate (`apps/sim-cli/src/bench/bench.ts`, `calibration.ts`):
 
