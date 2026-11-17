@@ -15,7 +15,7 @@ import { startSandbox } from './support/sandbox';
 
 type Route = { owner: string; look: string; colour: string; segments: number; label: string | null };
 type WireGraph = { inScene: boolean; routes: Route[]; sleeves: number; looks: { look: string; instances: number }[] };
-type SceneNode = { name: string; wires?: { instances: number; look?: string }; children?: SceneNode[] };
+type SceneNode = { name: string; label?: string; wires?: { instances: number; look?: string }; children?: SceneNode[] };
 type Hooks = {
   __controlsViewport?: {
     wireGraph(): WireGraph | undefined;
@@ -107,6 +107,9 @@ test('routed conductors are drawn from the bake, labelled with sleeves, and remo
   const scene = await page.evaluate(() => (window as unknown as Hooks).__controlsViewport?.sceneGraph());
   const wiresNode = scene?.children?.find((n) => n.name === 'wires');
   expect(wiresNode?.children?.map((c) => [c.name, c.wires?.look])).toStrictEqual([['wires:thhnThwn2', 'thhnThwn2']]);
+  // The L1 conductor lands on a drawn supply: the stand-in's own recipe, not the unknown-object cube.
+  const world = scene?.children?.find((n) => n.name === 'world');
+  expect(world?.children?.find((n) => n.name === 'entity-1')?.label).toBe('Larkmoor Power LP-SP25');
 
   // A printed sleeve marker on wire 2: two sleeves, the text as data.
   let seq = lines.length;

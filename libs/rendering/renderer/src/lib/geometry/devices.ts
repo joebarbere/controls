@@ -62,6 +62,10 @@ import { boxBetween } from './fixtures';
  *
  * Twist-on wire nuts (`splice.twistOn`, F3.3): a flared skirt and a tapered shell up to a domed tip,
  * with a dark mouth at the open end, where the splice terminal's entry point is.
+ *
+ * Utility services (`utility.splitPhase`, `utility.threePhase`): the P3 stand-in supply drawn as a grey
+ * painted service cabinet facing +z, with a box lug on an insulating terminal board at each catalogue
+ * terminal (the conductor leaves the lug's front along +z, the stand-in's exit axis).
  */
 
 /** Material slots, by group index. */
@@ -89,6 +93,9 @@ export const DUCT_KIND = 'raceway.duct';
 /** The twist-on wire nut model kind. */
 export const WIRE_NUT_KIND = 'splice.twistOn';
 
+/** The utility service model kinds (the stand-in supply), drawn as a service cabinet. */
+export const UTILITY_KINDS = ['utility.splitPhase', 'utility.threePhase'] as const;
+
 /** Which recipe draws a model kind (given its body size: a cut part's length). Kinds without one are drawn as unknown objects. */
 const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm) => Part[]>> = {
   battery: batteryParts,
@@ -109,6 +116,8 @@ const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm)
   'terminalBlock.feedThrough': terminalBlockParts,
   'terminalBlock.ground': terminalBlockParts,
   [WIRE_NUT_KIND]: wireNutParts,
+  'utility.splitPhase': utilityParts,
+  'utility.threePhase': utilityParts,
 };
 
 interface Part {
@@ -183,6 +192,18 @@ export const BULB_TINTS: Readonly<Record<DrawnLamp['status'], number>> = {
 export const BULB_EMISSIVE = 0xffb45a;
 /** Emissive intensity at level 255; level n draws at n / 255 of it. game-design: bright enough to read as lit. */
 export const BULB_MAX_EMISSIVE_INTENSITY = 2.5;
+
+/** A utility service cabinet (renderer-local, game-design look; no maker's trade dress). */
+const UTILITY_LOOK: Look = {
+  body: { color: 0x8a9095, roughness: 0.55, metalness: 0.3 }, // grey painted steel
+  panel: plastic(0x2f3338), // insulating terminal board, louvres and door handle
+  label: plastic(0xe6e6e6), // nameplate
+  positive: unused,
+  negative: unused,
+  accent: metal(0xb8bcc0), // tinned box lugs and their set screws
+  bulb: unused,
+  opening: hole, // each lug's conductor bore
+};
 
 const LOOKS: Readonly<Record<string, Look>> = {
   battery: {
@@ -358,6 +379,8 @@ const LOOKS: Readonly<Record<string, Look>> = {
     bulb: unused,
     opening: hole, // the open end, where the conductors go in
   },
+  'utility.splitPhase': UTILITY_LOOK,
+  'utility.threePhase': UTILITY_LOOK,
   'enclosure.panel': {
     body: { ...plastic(0xd7d8d2), side: DoubleSide }, // light grey powder-coated steel
     panel: metal(0xd9a441), // zinc-yellow passivated backplate
@@ -993,4 +1016,41 @@ function wireNutParts(def: DeviceDefinition, size: BodySizeMm): Part[] {
     { slot: 'body', geometry: dome },
     { slot: 'opening', geometry: cylinderY(e.x, e.z, r * 0.7, e.y - 0.3, e.y) },
   ];
+}
+
+/** How far a utility lug stands proud of the cabinet front (z = depth), in mm (game-design). */
+export const UTILITY_LUG_PROUD_MM = 6;
+
+/**
+ * A utility service (the P3 stand-in supply, D12): a grey painted cabinet facing +z with a roof cap, a
+ * door with a nameplate, louvres and a handle, and across its top an insulating terminal board with a
+ * tinned box lug at each catalogue terminal. The terminal's position is in the lug's bore, which opens
+ * on the lug's front ({@link UTILITY_LUG_PROUD_MM} out of the cabinet front, inside the terminal
+ * picker's 15 mm own-device tolerance); the set screw is in the lug's top face. Conductors leave along
+ * +z (the entry's exit axis), so a landed wire comes straight out of its lug. A game-design look, not
+ * a transformer's real secondary terminals (P4's service and load centre replace it).
+ */
+function utilityParts(def: DeviceDefinition): Part[] {
+  const { widthMm: w, heightMm: h, depthMm: d } = def.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+  const front = d - 6; // the cabinet shell's front; the door and terminal board stand on it
+  const proud = UTILITY_LUG_PROUD_MM;
+  const parts: Part[] = [
+    { slot: 'body', geometry: boxBetween(0, 0, 0, w, h - 10, front) },
+    { slot: 'body', geometry: boxBetween(0, h - 10, 0, w, h, front + 4) }, // roof cap, a lip over the front
+    { slot: 'body', geometry: boxBetween(10, 10, front, w - 10, h - 110, front + 3) }, // door leaf
+    { slot: 'panel', geometry: boxBetween(10, h - 100, front, w - 10, h - 20, d - 1) }, // terminal board
+    { slot: 'panel', geometry: boxBetween(w - 30, h / 2 - 90, front + 3, w - 22, h / 2 - 50, front + 9) }, // handle
+    { slot: 'label', geometry: boxBetween(24, h - 150, front + 3, Math.min(w - 40, 150), h - 126, front + 3.5) },
+  ];
+  for (const y of [30, 42, 54]) {
+    parts.push({ slot: 'panel', geometry: boxBetween(24, y, front + 3, w - 50, y + 5, front + 3.5) }); // louvres
+  }
+  for (const t of def.terminals) {
+    const p = t.positionMm;
+    // The lug body around the terminal point, its bore mouth on the front and its set screw on top.
+    parts.push({ slot: 'accent', geometry: boxBetween(p.x - 9, p.y - 9, d - 1, p.x + 9, p.y + 11, d + proud) });
+    parts.push({ slot: 'opening', geometry: cylinderZ(p.x, p.y, 3.5, d + proud, d + proud + 0.3) });
+    parts.push({ slot: 'accent', geometry: cylinderY(p.x, d + proud / 2 - 1, 3.5, p.y + 11, p.y + 14) });
+  }
+  return parts;
 }

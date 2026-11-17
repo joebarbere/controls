@@ -1342,6 +1342,178 @@ exports[`device recipes in the scene (scene-graph snapshot) > draws each placed 
 }
 `;
 
+exports[`utility service recipes > match the geometry snapshot (bounds, vertices and slots per entry) > utility recipes 1`] = `
+[
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      400,
+      300,
+      206.3,
+    ],
+    "id": "utility.larkmoor-208y120-150kva",
+    "slots": [
+      [
+        "body",
+        108,
+      ],
+      [
+        "panel",
+        180,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        1296,
+      ],
+      [
+        "opening",
+        1152,
+      ],
+    ],
+    "vertices": 1496,
+  },
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      400,
+      300,
+      206.3,
+    ],
+    "id": "utility.larkmoor-480y277-1000kva",
+    "slots": [
+      [
+        "body",
+        108,
+      ],
+      [
+        "panel",
+        180,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        1296,
+      ],
+      [
+        "opening",
+        1152,
+      ],
+    ],
+    "vertices": 1496,
+  },
+  {
+    "boundsMm": [
+      0,
+      0,
+      0,
+      300,
+      300,
+      206.3,
+    ],
+    "id": "utility.larkmoor-split-phase-25kva",
+    "slots": [
+      [
+        "body",
+        108,
+      ],
+      [
+        "panel",
+        180,
+      ],
+      [
+        "label",
+        36,
+      ],
+      [
+        "accent",
+        972,
+      ],
+      [
+        "opening",
+        864,
+      ],
+    ],
+    "vertices": 1176,
+  },
+]
+`;
+
+exports[`utility services in the scene > draws the stand-in supply as its recipe, not the unknown cube, and disposes it exactly once > utility services 1`] = `
+{
+  "children": [
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        300,
+        300,
+        206,
+      ],
+      "label": "Larkmoor Power LP-SP25",
+      "name": "entity-1",
+      "positionMm": [
+        -1500,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-1",
+      "type": "Mesh",
+      "visible": true,
+    },
+    {
+      "boundsMm": [
+        0,
+        0,
+        0,
+        400,
+        300,
+        206,
+      ],
+      "label": "Larkmoor Power LP-3W150",
+      "name": "entity-2",
+      "positionMm": [
+        -1000,
+        900,
+        200,
+      ],
+      "rotationMdeg": [
+        270000,
+        0,
+        0,
+      ],
+      "selectable": "device:entity-2",
+      "type": "Mesh",
+      "visible": true,
+    },
+  ],
+  "name": "world",
+  "positionMm": [
+    0,
+    0,
+    0,
+  ],
+  "type": "Group",
+  "visible": true,
+}
+`;
+
 exports[`wire nut recipes > match the geometry snapshot (bounds, vertices and slots per size) > wire nut recipes 1`] = `
 [
   {
