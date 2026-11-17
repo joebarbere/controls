@@ -26,6 +26,8 @@ Release notes 45.0.0 → 45.3.2 ([compare](https://releases.electronjs.org/relea
 
 - 45.1.0 fixes asar archives whose size fields don't match the file length, and inconsistent asar path handling between the main and child processes. Our app is one `app.asar` with embedded integrity validation, so the packaged Fuses check covers it.
 - 45.1.0: `protocol.registerSource` schemes now follow the same fetch rules as `protocol.handle` schemes. We use `protocol.handle` for `app://`, so nothing changes for us.
+- 45.2.0: repeated `net.fetch()` of `file:` URLs is faster. Our `app://` handler serves files exactly that way (`net.fetch` on a `file:` URL), so the change is on our path; behaviour and headers are unchanged, and the `crossOriginIsolated` checks passed on all three OSes.
+- 45.1.0: `utilityProcess` now emits `exit` when the app quits while the process is still starting. Unused today; relevant to P12's opt-in protocol servers.
 - 45.2.2 fixes a Wayland crash with a hidden parent window. 45.3.2 fixes a browser crash in DevTools Fetch interception (Playwright doesn't use it in our specs) and cookies lost shortly before quitting.
 - 45.1.0, 45.2.0 and 45.3.0 are minor releases inside the 45 line (new extension and menu APIs we don't use). Electron ships features in minors of a stable major, so this is still "the latest 45.x" the plan asks for.
 
