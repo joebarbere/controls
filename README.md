@@ -1,10 +1,10 @@
 # Controls
 
-![version](https://img.shields.io/badge/version-0.3.0-blue) ![status](https://img.shields.io/badge/status-Phase%203%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
+![version](https://img.shields.io/badge/version-0.4.0-blue) ![status](https://img.shields.io/badge/status-Phase%203%20complete-green) ![licence](https://img.shields.io/badge/licence-MIT-green)
 
 **Controls** is a realistic simulation game about the electrical trade, from apprentice electrician to controls engineer. You do the physical work in a 3D world (mount devices, pull and terminate wire, probe with meters, lock out equipment) and the engineering work in docked 2D editors (prints, ladder logic, HMI screens). One physically grounded circuit simulator runs underneath both: **it runs what you wired, not what the print says**.
 
-> **Status: Phase 3 (wires, terminations, enclosures and hand tools) complete on 2026-11-16; the v0.4.0 release is pending. Phase 2 (circuit engine) shipped as v0.3.0 on 2026-11-11.** You can start a sandbox in the workshop, mount boxes and a DIN-rail panel, run NM-B cable along the studs, strip and land every conductor with real tools, and flip the breaker to light a 120 V lamp, from the mouse, keyboard, command palette, dev console or a headless script. Wires heat with the current, and a loose screw shows a measurable voltage drop, runs hot and degrades. See [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md).
+> **Status: Phase 3 (wires, terminations, enclosures and hand tools) complete on 2026-11-16 and released as v0.4.0. Next: the Phase 4 kickoff.** You can start a sandbox in the workshop, mount boxes and a DIN-rail panel, run NM-B cable along the studs, strip and land every conductor with real tools, and flip the breaker to light a 120 V lamp, from the mouse, keyboard, command palette, dev console or a headless script. Wires heat with the current, and a loose screw shows a measurable voltage drop, runs hot and degrades. See [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md).
 
 ## Features
 
@@ -125,7 +125,6 @@ More in the [new-developer guide](docs/guides/new-developer-guide.md).
 
 The roadmap is in [`controls-development-plan.md`](controls-development-plan.md) §6. Each phase ships a minor release.
 
-- [ ] **P3 Wires, terminations, enclosures, hand tools** (v0.4.0): every feature has landed; the v0.4.0 release is pending
 - [ ] **P4 Lights, switches, receptacles, panels, protection** (v0.5.0): first playable sandbox
 - [ ] **P5 Instruments, safety, faults, Apprentice career** (v0.6.0)
 - [ ] **P6 Three-phase, control circuits, relays, timers, prints** (v0.7.0)

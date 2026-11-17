@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 3 (Wires, terminations, enclosures and hand tools) complete, 2026-11-16; version 0.3.0; the v0.4.0 release is pending the user's `/release minor`.** Plan: [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md); its "Carried to P4 / later" list holds the items to clear before the release (freeze cables and accessories in `shipped.spec.ts`, the `entity.rotate` overlap decision) and the user's manual checks. Next, after the release: the P4 kickoff (Plan agent → `plans/phase-4-*.md`; create P4's specialists). Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.5).
+**Phase 3 (Wires, terminations, enclosures and hand tools) complete, 2026-11-16; version 0.4.0 (released 2026-11-16, publish pending the user's confirmation to `release-engineer`).** Plan: [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md); its "Carried to P4 / later" list holds the open follow-ups and the user's manual checks. Next: the P4 kickoff (Plan agent → `plans/phase-4-*.md`; create P4's specialists). Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.5).
 
 ## What this project is
 

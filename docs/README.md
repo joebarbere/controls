@@ -67,15 +67,16 @@ Subsystem pages (PLC, HMI, …) are added in the phase that builds them.
 
 ## Reference
 
-| Resource                                    | What it's for                                                                                  |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [Caveats index](caveats/README.md)          | Load-bearing gotchas per area, each with a "Load this when…" trigger                           |
-| [Glossary](glossary.md)                     | Trade terms (NEC, LOTO, MNA…) and codebase terms (`app://`, Command, world document)           |
-| [History](history.md)                       | Phase-by-phase record, plus app, save-format and catalogue version history                     |
-| [Research](research/)                       | The 2026-10 reports behind the plan: tech stack, circuit simulation, PLC/SCADA, domain realism |
-| [Plans](../plans/README.md)                 | Per-phase implementation plans                                                                 |
-| [The spec](../controls-development-plan.md) | Vision, realism charter, architecture, roadmap                                                 |
-| [`CLAUDE.md`](../CLAUDE.md)                 | Working agreements: invariants, Definition of Done, commands, agent routing                    |
+| Resource                                              | What it's for                                                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [Caveats index](caveats/README.md)                    | Load-bearing gotchas per area, each with a "Load this when…" trigger                           |
+| [Glossary](glossary.md)                               | Trade terms (NEC, LOTO, MNA…) and codebase terms (`app://`, Command, world document)           |
+| [History](history.md)                                 | Phase-by-phase record, plus app, save-format and catalogue version history                     |
+| [P3 changelog detail](history/p3-changelog-detail.md) | The full v0.4.0 changelog before it was condensed: re-pinned hashes, benchmarks, APIs, tests   |
+| [Research](research/)                                 | The 2026-10 reports behind the plan: tech stack, circuit simulation, PLC/SCADA, domain realism |
+| [Plans](../plans/README.md)                           | Per-phase implementation plans                                                                 |
+| [The spec](../controls-development-plan.md)           | Vision, realism charter, architecture, roadmap                                                 |
+| [`CLAUDE.md`](../CLAUDE.md)                           | Working agreements: invariants, Definition of Done, commands, agent routing                    |
 
 ## Documentation rules
 
