@@ -1,6 +1,6 @@
 # Phase 3: Wires, terminations, enclosures and hand tools ("Pull, strip, land")
 
-**Release:** v0.4.0 · **Status:** ✅ Complete (2026-11-16); the v0.4.0 release is pending the user's `/release minor` · **Spec:** [plan §6 P3](../controls-development-plan.md#p3--wires-terminations-enclosures-and-hand-tools-v040) (v1.4)
+**Release:** v0.4.0 · **Status:** ✅ Done; released as v0.4.0 (2026-11-16) · **Spec:** [plan §6 P3](../controls-development-plan.md#p3--wires-terminations-enclosures-and-hand-tools-v040) (v1.4)
 
 ## Goal
 
@@ -395,6 +395,6 @@ Collected at the closing sync (2026-11-16). **Before `/release minor`** (they to
 1. [x] `docs-keeper` sync: README features, CHANGELOG, the `docs/history.md` P3 narrative, `schemaVersion` 3, `catalogVersion` 2, `simEngineVersion` 7, `SIM_PROTOCOL_VERSION` 7 (6 since F3.6 part 1, 7 with part 3). _Done in the closing sync (2026-11-16), with the new [wiring architecture](../docs/architecture/wiring.md) map; the CHANGELOG is audited but not rolled (that is `version-keeper`'s)._
    - Before `/release minor`: `shipped.spec.ts` masks only the v2 fields a frozen document lacks (by its release's `catalogVersion`) and its `Shipped` list gains `tools`, so 0.4.0's frozen list locks methods, drives, holes, dies and tools (save-format-guardian, F3.4 review). _Done in F3.6 part 1. The closing sync found that cables and accessories have no frozen list yet: [carried](#carried-to-p4--later), before `/release minor`._
    - Before v0.4.0 (save-format-guardian, F3.6 part 1 review): an engine-7 `.ctrl` fixture with landed conductors and non-null end keys, written from a scenario console file (`sim run … --save`), so a real save carries `endATempK`, `endATerminationId` and degradation through the load path. _Done in F3.6 part 2: `bad-termination-engine-7-catalog-2.ctrl`, from `scenarios/bad-termination.console`._
-2. [ ] `version-keeper`: `0.3.0 → 0.4.0`.
-3. [ ] `release-engineer`: package and smoke-test (new sandbox; the lamp circuit lights; save and load mid-heating), tag on the user's confirmation, check the draft. The user publishes.
-4. [ ] Mark P3 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P4 kickoff writes `plans/phase-4-*.md`; P4 builds wall switches, receptacles and the load centre on P3's terminations, uses `mountedOn` and `interiorVolumeMm3` for box fill, and replaces D12's stand-in supply with the service and load centre.
+2. [x] `version-keeper`: `0.3.0 → 0.4.0`.
+3. [x] `release-engineer`: package and smoke-test (new sandbox; the lamp circuit lights; save and load mid-heating), tag on the user's confirmation, check the draft. The user publishes.
+4. [x] Mark P3 shipped in [`plans/README.md`](README.md) and [`docs/history.md`](../docs/history.md). The P4 kickoff writes `plans/phase-4-*.md`; P4 builds wall switches, receptacles and the load centre on P3's terminations, uses `mountedOn` and `interiorVolumeMm3` for box fill, and replaces D12's stand-in supply with the service and load centre.

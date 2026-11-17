@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- **Phase 4 kickoff** (docs; [plan](plans/phase-4-residential.md)). The P4 plan (decisions D1–D22, the PR stack and the items carried from P3) and spec v1.6: a breaker above its magnetic pickup opens after a sourced clearing time rather than within the tick, a GFCI follows UL 943 Class A behaviour (a 4–6 mA pickup with an inverse-time curve, so the 25 ms acceptance uses a large ground fault), and the inspector gets its own library, `libs/domain/inspector`.
+
 ## [0.4.0] - 2026-11-16
 
 Phase 3, "Pull, strip, land": wires, terminations, enclosures and hand tools. Mount boxes and a DIN-rail panel, run NM-B cable along the studs, strip and land every conductor with the right tool, and flip the breaker to light a 120 V lamp. Conductors heat with the current, and a loose termination shows a measurable voltage drop, runs hot and degrades. Saves move to `schemaVersion` 3 and the catalogue to `catalogVersion` 2; every 0.3.0 save still loads.
