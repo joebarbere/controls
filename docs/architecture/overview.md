@@ -30,6 +30,7 @@ flowchart TB
     subgraph main["Electron main process (Node)"]
         PROTO["app:// protocol handler<br/>COOP/COEP + CSP headers"]
         IPCH["IPC handlers<br/>Zod-validated, senderFrame checked"]
+        NAV["Navigation policy<br/>window.open denied, no openExternal,<br/>navigation only within app://game/"]
         UPD["electron-updater<br/>packaged only, not macOS while unsigned"]
         FILE["Atomic file I/O (P1)<br/>temp file + rename"]
         NET["Optional Modbus/OPC UA server (P12)<br/>utilityProcess, 127.0.0.1, opt-in"]

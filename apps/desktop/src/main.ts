@@ -1,11 +1,12 @@
-import { app, BrowserWindow, dialog, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, net, protocol, session } from 'electron';
 import { rendererCrashRecoveryUrl } from '@controls/ipc-contract';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { APP_ENTRY_URL, APP_HOST, APP_ORIGIN, APP_SCHEME, resolveAppPath, SECURITY_HEADERS } from './app-protocol';
+import { APP_ENTRY_URL, APP_HOST, APP_SCHEME, resolveAppPath, SECURITY_HEADERS } from './app-protocol';
 import { RendererRecovery } from './crash-recovery';
 import { FlushCoordinator, QuitGuard } from './flush-before-quit';
 import { registerIpcHandlers, type RegisteredIpc } from './ipc';
+import { hardenWebContents } from './navigation-policy';
 import { startAutoUpdate } from './updater';
 
 const RENDERER_ROOT = join(__dirname, 'renderer');
@@ -47,16 +48,8 @@ function serveAppProtocol(): void {
 
 function hardenSessions(): void {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  app.on('web-contents-created', (_event, contents) => {
-    contents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('https://')) void shell.openExternal(url); // external docs links open in the OS browser
-      return { action: 'deny' };
-    });
-    contents.on('will-navigate', (event, url) => {
-      if (!url.startsWith(`${APP_ORIGIN}/`)) event.preventDefault();
-    });
-    contents.on('will-attach-webview', (event) => event.preventDefault());
-  });
+  // Every window.open is denied and nothing reaches shell.openExternal; navigation stays on app://game/.
+  app.on('web-contents-created', (_event, contents) => hardenWebContents(contents));
 }
 
 let ipc: RegisteredIpc | undefined;
