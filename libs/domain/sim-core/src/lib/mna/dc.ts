@@ -938,16 +938,18 @@ export class DcSolver {
     const { slots, codes, branches } = symbolic;
     const ohms = values.ohms;
     const gmin = GMIN_S.value;
+    // One store per case, with no shared `v`: a variable that takes a constant on one path and a computed
+    // double on another was boxed into a heap number on every call (about 10,000 a re-solve of the
+    // 2,000-node plant, 160 kB of garbage). Each case is computed exactly as before.
     for (let c = 0; c < slots.length; c++) {
       const code = codes[c];
-      let v: number;
-      if (code === VALUE_GMIN) v = gmin;
-      else if (code === VALUE_ONE) v = 1;
-      else if (code === VALUE_MINUS_ONE) v = -1;
-      else if (code === VALUE_OHMS) v = ohms[branches[c]];
-      else if (code === VALUE_G) v = 1 / ohms[branches[c]];
-      else v = -(1 / ohms[branches[c]]);
-      out[slots[c]] += v;
+      const s = slots[c];
+      if (code === VALUE_GMIN) out[s] += gmin;
+      else if (code === VALUE_ONE) out[s] += 1;
+      else if (code === VALUE_MINUS_ONE) out[s] += -1;
+      else if (code === VALUE_OHMS) out[s] += ohms[branches[c]];
+      else if (code === VALUE_G) out[s] += 1 / ohms[branches[c]];
+      else out[s] += -(1 / ohms[branches[c]]);
     }
     const { rhsTargets, rhsCodes, rhsBranches } = symbolic;
     for (let r = 0; r < rhsTargets.length; r++) {
