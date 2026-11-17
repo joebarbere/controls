@@ -1,6 +1,6 @@
 # Controls — Development Plan
 
-> **Status:** Plan v1.5 (2026-11-12). Phase 3. v1.5 records [ADR 0018](docs/decisions/0018-conductor-and-termination-physics.md): the 0.5–2 Ω arcing band applies to parallel faults (game-design, no measured anchor); a series arc at a termination is V_arc/|I| (ADR 0018). v1.4 (2026-11-11) records the P3 kickoff decisions ([`plans/phase-3-wiring.md`](plans/phase-3-wiring.md)): ampacity is derived from the conductor thermal model and cross-checked against cited published data (never NEC table values); a wire's persisted shape is an analytic bake, with Verlet only for the live preview; the P3 acceptance demo uses the split-phase utility entity as a stand-in supply with a 120 V lamp and heater from the catalogue; test leads join the conductor thermal model. v1.3 records the P2 kickoff decisions ([`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md)): commands reach the sim worker by `postMessage` with their tick, the main thread stays authoritative, and the ngspice oracle is a checked-in corpus regenerated outside `pnpm verify`. v1.1 corrected toolchain facts found during F0.1 (TS 6.0, Vitest 4.1, pnpm 11, e2e split); v1.2 records the P1 kickoff decisions (Node follows Electron's embedded Node, Vitest 4.1 kept by choice, F1.8 split, in-game `run` takes console-line files only).
+> **Status:** Plan v1.6 (2026-11-16). Phase 4. v1.6 records the P4 kickoff decisions ([`plans/phase-4-residential.md`](plans/phase-4-residential.md)): a breaker above its magnetic pickup opens after a sourced clearing time, not within the tick (D6); a GFCI follows UL 943 Class A behaviour, a 4–6 mA pickup with an inverse-time trip curve tabulated from published data, so the 25 ms acceptance uses a large ground fault (D7); the inspector is its own framework-free library, `libs/domain/inspector` (D13). v1.5 (2026-11-12) records [ADR 0018](docs/decisions/0018-conductor-and-termination-physics.md): the 0.5–2 Ω arcing band applies to parallel faults (game-design, no measured anchor); a series arc at a termination is V_arc/|I| (ADR 0018). v1.4 (2026-11-11) records the P3 kickoff decisions ([`plans/phase-3-wiring.md`](plans/phase-3-wiring.md)): ampacity is derived from the conductor thermal model and cross-checked against cited published data (never NEC table values); a wire's persisted shape is an analytic bake, with Verlet only for the live preview; the P3 acceptance demo uses the split-phase utility entity as a stand-in supply with a 120 V lamp and heater from the catalogue; test leads join the conductor thermal model. v1.3 records the P2 kickoff decisions ([`plans/phase-2-circuit-engine.md`](plans/phase-2-circuit-engine.md)): commands reach the sim worker by `postMessage` with their tick, the main thread stays authoritative, and the ngspice oracle is a checked-in corpus regenerated outside `pnpm verify`. v1.1 corrected toolchain facts found during F0.1 (TS 6.0, Vitest 4.1, pnpm 11, e2e split); v1.2 records the P1 kickoff decisions (Node follows Electron's embedded Node, Vitest 4.1 kept by choice, F1.8 split, in-game `run` takes console-line files only).
 > **This document is the spec.** If a request conflicts with it, raise the conflict instead of quietly deviating. Change the plan first, then the code.
 > The supporting research (licences, versions, solver design, domain figures) is in [`docs/research/`](docs/research/). Every version number below was checked on 2026-10-26. `release-engineer` re-checks them at the start of Phase 0.
 
@@ -113,6 +113,7 @@ controls/
       hmi-model/        #   HMI screen documents, tag bindings, alarm model (P12)
       career/           #   work orders, objectives, scoring, progression, fault-injection specs
       scripting-api/    #   typed public API over commands + sim queries (used by console, tests, mods)
+      inspector/        #   data-driven code-compliance rules over the world, catalogue and region profile (P4)
     sim-worker/         # worker entry, SharedArrayBuffer layout, typed message protocol
     rendering/
       renderer/         # Three.js scene, loaders, procedural device geometry, cables, picking, cameras, audio
@@ -187,10 +188,10 @@ The design follows `docs/research/2026-10-circuit-simulation.md`. It reimplement
   - Induction motors use the Steinmetz per-phase equivalent circuit with `J·dω/dt = Te(s,V) − T_load(ω)`. Inrush (about 6–8× FLA at s = 1), voltage-sag stall and single-phasing all _emerge_ from the model.
   - Process models (P8): tanks, pump and system curves, pneumatics.
 - **Protection layer.**
-  - Breakers: thermal state `dθ/dt = ((I/In)² − θ)/τ` plus a seeded magnetic band.
+  - Breakers: thermal state `dθ/dt = ((I/In)² − θ)/τ` plus a seeded magnetic band; above the magnetic pickup a breaker opens after a seeded opening time inside its sourced clearing band (v1.6).
   - Fuses: melting-curve interpolation or I²t.
   - Overload relays: Class 10/20/30 with thermal memory and phase-loss sensitivity.
-  - GFCI: residual current above 5 mA trips in under 25 ms (30 mA in the IEC profile).
+  - GFCI: UL 943 Class A behaviour — a seeded pickup in the 4–6 mA band and an inverse-time trip curve tabulated from published data (small leaks take seconds; a large ground fault trips in under 25 ms). The IEC profile's RCD is 30 mA.
   - A trip changes the topology and forces a re-solve.
 - **Faults are stamps**: bolted short (about 1 mΩ), arcing fault (parallel arcing 0.5–2 Ω, nonlinear, game-design with no measured anchor; a series arc at a termination is R = V_arc/|I|, ADR 0018), ground fault, open, high-resistance joint, lost neutral, open ground (which leaves the chassis floating at line voltage, so a shock hazard).
 - **Instruments are devices too.** A DMM in V mode stamps a 10 MΩ input impedance, which produces ghost voltage. LoZ mode stamps about 3 kΩ. A clamp meter reads the vector sum of the branch currents it encloses.
@@ -375,7 +376,7 @@ Every phase has the same shape:
 - **F4.4** Multiwire branch circuits (MWBC) and the lost-neutral overvoltage effect.
 - **F4.5** **Inspector** rules engine (data-driven, citing article numbers, not quoting them): conductor vs OCPD sizing, box fill, GFCI locations, colour/re-identification, bonding.
 - **F4.6** Audio system v1. Residential sandbox map (a small house plus garage).
-- **Acceptance:** in the house sandbox the player wires the panel and circuits, a 3-way works, and a bolted short trips the breaker within the curve band. A ground fault on a GFCI circuit trips in under 25 ms. The inspector flags an undersized conductor and a missing bond.
+- **Acceptance:** in the house sandbox the player wires the panel and circuits, a 3-way works, and a bolted short trips the breaker within the curve band. A large ground fault (about 12 A) on a GFCI circuit trips in under 25 ms. The inspector flags an undersized conductor and a missing bond.
 
 ### P5 — Instruments, safety, faults and the Apprentice career (v0.6.0)
 

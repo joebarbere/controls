@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Repository state
 
-**Phase 3 (Wires, terminations, enclosures and hand tools) complete, 2026-11-16; version 0.4.0 (released 2026-11-16, publish pending the user's confirmation to `release-engineer`).** Plan: [`plans/phase-3-wiring.md`](plans/phase-3-wiring.md); its "Carried to P4 / later" list holds the open follow-ups and the user's manual checks. Next: the P4 kickoff (Plan agent → `plans/phase-4-*.md`; create P4's specialists). Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.5).
+**Phase 4 (Lights, switches, receptacles, panels and protection) kickoff, 2026-11-16; version 0.4.0 (released 2026-11-16).** Plan: [`plans/phase-4-residential.md`](plans/phase-4-residential.md) (decisions D1–D22, PR stack, carried items). Next: kickoff steps 3–6 (ADR 0019 agent team, version re-check, gate PR, realism pre-audit), then the contract track. Spec: [`controls-development-plan.md`](controls-development-plan.md) (v1.6).
 
 ## What this project is
 
@@ -77,6 +77,7 @@ Project agents live in `.claude/agents/`. Specialists not yet created are made a
 | Changing save or world schemas or migrations                                                                                                                | `save-format-guardian`                                                                                                                 |
 | Changing solvers, device electrical models or the worker protocol                                                                                           | `sim-engine-engineer`, then `electrical-realism-reviewer`                                                                              |
 | Adding or changing devices, conductors, tools, tables, levels, jobs or faults (`content/`, `libs/domain/catalog`)                                           | `content-designer` (`save-format-guardian` first for `MODEL_KINDS` state keys), then `electrical-realism-reviewer`                     |
+| Working on `libs/domain/inspector` or `content/rules/` (P4)                                                                                                 | main agent (engine); `content-designer` for rule data; `electrical-realism-reviewer` reviews every paraphrase and article number       |
 | Working on the PLC runtime, compilers or ladder/ST editors                                                                                                  | `plc-engineer` (created in P10)                                                                                                        |
 | Working on HMI/SCADA, networking or alarms                                                                                                                  | `scada-engineer` (created in P12)                                                                                                      |
 | Starting a phase                                                                                                                                            | Plan agent → `plans/phase-N-*.md`; create that phase's specialists                                                                     |
