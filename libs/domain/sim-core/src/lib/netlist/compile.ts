@@ -40,7 +40,8 @@ import { UnionFind } from './union-find';
  *    model are absent (ADR 0013).
  * 2. Union-find merges the ideal joins only. Terminals are visited in canonical order (entity id, then
  *    terminal id), so numbering each node when its first member is visited numbers nodes by their
- *    smallest member, whatever the union order.
+ *    smallest member, whatever the union order. Joins never cross devices, so each device's partition
+ *    is computed once with its fragment (`DeviceParts.localNode`) and a compile only offsets it.
  * 3. Branches: entity elements (entity id, then part), then each netlisted connection by id, exactly
  *    one branch each (ADR 0011 §7). A connection with an end on an absent entity is absent itself.
  * 4. Islands: connected components over the branches, numbered by their smallest node, classified by
@@ -109,16 +110,25 @@ interface DeviceFragment {
 
 /**
  * What a netlisted entity contributes to every netlist that holds it, built once with its cache
- * entry, so a structural recompile copies it instead of rebuilding it (F2.2 part 3b). The member and
- * element refs are shared by every netlist that reuses the entry, as the values are (netlists are
- * read-only).
+ * entry, so a structural recompile copies it instead of rebuilding it (F2.2 part 3b). The member lists,
+ * element refs and device entry are shared by every netlist that reuses the entry, as the values are
+ * (netlists are read-only).
  */
 interface DeviceParts {
   readonly fragment: DeviceFragment;
-  /** Terminal `i` as a node member. */
-  readonly members: readonly TerminalRef[];
   /** Element `i`'s ref. */
   readonly elementRefs: readonly ElementRef[];
+  /**
+   * The device's own nodes. Only a device's ideal joins merge terminals (a connection is always a
+   * branch), so every node of a netlist lies inside one device, and the partition is a function of the
+   * fragment alone: terminal `i` is in local node `localNode[i]`, local nodes numbered as their smallest
+   * terminal is reached in terminal order, which is the canonical numbering restricted to the device.
+   */
+  readonly localNode: readonly number[];
+  /** Each local node's members in terminal order: the arrays every netlist that holds the device shares. */
+  readonly nodeMembers: readonly (readonly TerminalRef[])[];
+  /** Its entry in `Netlist.devices`, shared likewise. */
+  readonly device: NetlistDevice;
 }
 
 type EntityResult =
@@ -126,6 +136,8 @@ type EntityResult =
   | { readonly netlisted: false; readonly diagnostic: NetlistDiagnostic | null };
 
 interface EntityCacheEntry {
+  /** The entity's id. */
+  readonly id: number;
   readonly refId: string;
   readonly refVersion: number;
   readonly state: StateBag;
@@ -144,6 +156,14 @@ interface EntityCacheEntry {
   epoch: number;
   /** Where a netlisted entity's terminals start in the plant-wide numbering, as of its `epoch`. */
   base: number;
+  /** A netlisted entity's place in a compile's device list (null otherwise). */
+  readonly placed: PlacedDevice | null;
+  /**
+   * A netlisted entity's terminal and element counts (0 otherwise), kept on the entry so the walk reads
+   * them without reaching into the fragment (perf only).
+   */
+  readonly terminals: number;
+  readonly elements: number;
 }
 
 /** What a connection's ref resolves to, fixed while the connection object is the same. */
@@ -198,24 +218,31 @@ interface ConnectionCacheEntry {
   elementBCount: number;
   elementASpec: TerminalMethodSpec | null;
   elementBSpec: TerminalMethodSpec | null;
+  /** Its place in a compile's connection list, made the first time it is netlisted. */
+  placed: PlacedConnection | null;
 }
 
 type Entity = World['entities'][number];
 type Connection = World['connections'][number];
 
-/** A netlisted entity and where its terminals start in the plant-wide terminal numbering. */
+/**
+ * A netlisted entity and where its terminals start in the plant-wide terminal numbering. One per cache
+ * entry, rewritten by each compile that places it (lists of them live only for one compile).
+ */
 interface PlacedDevice {
-  readonly entity: number;
   readonly parts: DeviceParts;
-  readonly base: number;
+  base: number;
 }
 
-/** A netlisted connection, its ends as plant-wide terminal indices. */
+/**
+ * A netlisted connection, its ends as plant-wide terminal indices. One per cache entry, rewritten by
+ * each compile that places it, as {@link PlacedDevice} is.
+ */
 interface PlacedConnection {
   readonly id: number;
-  readonly result: ConnectionElementResult;
-  readonly a: number;
-  readonly b: number;
+  result: ConnectionElementResult;
+  a: number;
+  b: number;
 }
 
 /**
@@ -262,8 +289,19 @@ export class NetlistCompiler {
   private previous: Netlist | null = null;
   /** Buffers `assemble` reuses between structural recompiles. */
   private readonly scratch = new AssembleScratch();
-  /** This compile's connection entries in id order (emptied after each compile). */
+  /** This compile's netlisted devices and connections, in canonical order (rewritten by each compile). */
+  private readonly placedDevices: PlacedDevice[] = [];
+  private readonly placedConnections: PlacedConnection[] = [];
+  /**
+   * The entity and connection entries of the last compile that walked the world, in id order, and
+   * whether that walk finished (perf only). A compile reads position i as a guess at its i-th input's
+   * entry before it overwrites it: one with the same id is that id's cache entry (the walk that wrote it
+   * left it in the cache, and only its own input replaces it), so a world of the same shape is matched
+   * without a map lookup per input. Anything else falls back to the cache's map.
+   */
+  private readonly entityHints: EntityCacheEntry[] = [];
   private readonly entries: ConnectionCacheEntry[] = [];
+  private hintsValid = false;
   /** Conductor ends landed per (plant terminal, method), `terminal × MAX_TERMINAL_METHODS + method`. */
   private counts = new Int32Array(0);
   readonly stats: NetlistCompilerStats = { structural: 0, valuesOnly: 0, unchanged: 0 };
@@ -304,6 +342,8 @@ export class NetlistCompiler {
       if (toggled !== null) return toggled;
     }
     const epoch = ++this.epoch;
+    const hinted = this.hintsValid;
+    this.hintsValid = false;
     const previous = this.previous;
     this.previous = null;
     this.lastWorld = null;
@@ -325,24 +365,35 @@ export class NetlistCompiler {
     const connectionDiagnostics: NetlistDiagnostic[] = [];
 
     // 1. Fragments, in entity id order. Terminal i of a device is plant terminal `base + i`.
-    const devices: PlacedDevice[] = [];
+    // The device and connection lists are overwritten in place and cut to length at the end: setting an
+    // array's length to 0 drops its backing store, so refilling it by `push` reallocated it as it grew.
+    const devices = this.placedDevices;
+    let deviceCount = 0;
     let terminalCount = 0;
     const entities = byId(world.entities);
-    for (const entity of entities) {
-      const entry = this.entityEntry(entity, options, epoch);
+    const entityHints = this.entityHints;
+    const entityHintCount = hinted ? entityHints.length : 0;
+    entityHints.length = entities.length;
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      const hint = i < entityHintCount ? entityHints[i] : undefined;
+      const entry = this.entityEntry(entity, options, epoch, hint !== undefined && hint.id === entity.id ? hint : null);
+      entityHints[i] = entry;
       record('e');
       record(entity.id);
       record(entry.structureKey);
-      if (entry.result.netlisted) {
+      const placed = entry.placed;
+      if (placed !== null) {
         entry.base = terminalCount;
-        devices.push({ entity: entity.id, parts: entry.result.parts, base: terminalCount });
-        terminalCount += entry.result.parts.fragment.terminals.length;
-        deviceBranchCount += entry.result.parts.fragment.elements.length;
+        placed.base = terminalCount;
+        devices[deviceCount++] = placed;
+        terminalCount += entry.terminals;
+        deviceBranchCount += entry.elements;
         if (entry.model !== undefined && entry.model.simTopologyKeys.length > 0) {
           this.simEntities.push(entity);
           this.simEntries.push(entry);
         }
-      } else if (entry.result.diagnostic) {
+      } else if (!entry.result.netlisted && entry.result.diagnostic) {
         entityDiagnostics.push(entry.result.diagnostic);
       }
     }
@@ -352,18 +403,27 @@ export class NetlistCompiler {
     // (ADR 0015 implementation note 3). The counts are values: they never reach the structure list.
     const sortedConnections = byId(world.connections);
     const entries = this.entries;
+    const connectionHintCount = hinted ? entries.length : 0;
     entries.length = sortedConnections.length;
     const slots = terminalCount * MAX_TERMINAL_METHODS;
     const counts = (this.counts = atLeast(this.counts, slots));
     counts.fill(0, 0, slots);
     for (let i = 0; i < sortedConnections.length; i++) {
-      const cached = this.connectionEntry(sortedConnections[i], epoch);
+      const connection = sortedConnections[i];
+      const hint = i < connectionHintCount ? entries[i] : undefined;
+      const cached = this.connectionEntry(
+        connection,
+        epoch,
+        hint !== undefined && hint.connection.id === connection.id ? hint : null,
+      );
       this.resolveEnds(cached, epoch);
       if (cached.aSlot >= 0) counts[cached.aSlot]++;
       if (cached.bSlot >= 0) counts[cached.bSlot]++;
       entries[i] = cached;
     }
-    const connections: PlacedConnection[] = [];
+    devices.length = deviceCount;
+    const connections = this.placedConnections;
+    let connectionCount = 0;
     const slotCount = entries.length;
     if (this.slotState.length < slotCount) {
       const size = Math.max(slotCount, 2 * this.slotState.length);
@@ -414,16 +474,17 @@ export class NetlistCompiler {
       } else {
         const element = this.connectionElement(cached, result, counts);
         record(element.structureKey);
-        connections.push({ id: connection.id, result: element, a, b });
+        connections[connectionCount++] = placeConnection(cached, element, a, b);
       }
     }
-    entries.length = 0;
+    connections.length = connectionCount;
     if (structure.length !== length) {
       structure.length = length;
       same = false;
     }
     prune(this.entityCache, entities.length, epoch);
     prune(this.connectionCache, sortedConnections.length, epoch);
+    this.hintsValid = true;
 
     this.slotCount = slotCount;
     this.deviceBranchCount = deviceBranchCount;
@@ -489,7 +550,8 @@ export class NetlistCompiler {
       this.stats.unchanged++;
       return previous;
     }
-    const connections: PlacedConnection[] = [];
+    const connections = this.placedConnections;
+    let connectionCount = 0;
     const diagnostics: NetlistDiagnostic[] = [...this.lastEntityDiagnostics];
     for (let s = 0; s < this.slotCount; s++) {
       const entry = this.slotEntry[s];
@@ -497,25 +559,28 @@ export class NetlistCompiler {
       const state = states[s];
       if (state === SLOT_PRESENT) {
         const result = entry.result as Extract<ConnectionKindResult, { ok: true }>;
-        connections.push({
-          id,
-          result: this.connectionElement(entry, result, this.counts),
-          a: this.slotA[s],
-          b: this.slotB[s],
-        });
+        const element = this.connectionElement(entry, result, this.counts);
+        connections[connectionCount++] = placeConnection(entry, element, this.slotA[s], this.slotB[s]);
       } else {
         const reason = state === SLOT_OPEN ? 'intermittent-open' : (this.slotReason[s] as AbsentConnectionReason);
         diagnostics.push({ code: 'absent-connection', connection: id, reason });
       }
     }
+    connections.length = connectionCount;
     this.stats.structural++;
     const netlist = reassemble(previous, this.deviceBranchCount, connections, diagnostics, this.scratch);
     this.previous = netlist;
     return netlist;
   }
 
-  private entityEntry(entity: Entity, options: CompileOptions, epoch: number): EntityCacheEntry {
-    const cached = this.entityCache.get(entity.id);
+  /** `hint`: entity `entity.id`'s cache entry if the caller knows it (see `entityHints`), else null. */
+  private entityEntry(
+    entity: Entity,
+    options: CompileOptions,
+    epoch: number,
+    hint: EntityCacheEntry | null,
+  ): EntityCacheEntry {
+    const cached = hint ?? this.entityCache.get(entity.id);
     if (
       cached !== undefined &&
       cached.refId === entity.ref.id &&
@@ -539,11 +604,21 @@ export class NetlistCompiler {
   }
 
   private buildEntityEntry(entity: Entity, options: CompileOptions, epoch: number): EntityCacheEntry {
-    const base = { refId: entity.ref.id, refVersion: entity.ref.version, state: entity.state, epoch, base: 0 };
+    const base = {
+      id: entity.id,
+      refId: entity.ref.id,
+      refVersion: entity.ref.version,
+      state: entity.state,
+      epoch,
+      base: 0,
+    };
     const absent = (diagnostic: NetlistDiagnostic | null): EntityCacheEntry => ({
       ...base,
       model: undefined,
       simKey: '',
+      placed: null,
+      terminals: 0,
+      elements: 0,
       result: { netlisted: false, diagnostic },
       methods: NO_METHODS,
       structureKey: diagnostic === null ? 'prop' : JSON.stringify(diagnostic),
@@ -558,11 +633,15 @@ export class NetlistCompiler {
     const sim = simTopologyView(model, options.sim?.(entity.id) ?? entity.sim);
     const terminals = device.terminals.map((t) => t.id).sort();
     const fragment = buildFragment(model, terminals, device.model.params, entity.state, sim);
+    const parts = deviceParts(entity.id, fragment);
     return {
       ...base,
       model,
       simKey: simKeyOf(model, sim),
-      result: { netlisted: true, parts: deviceParts(entity.id, fragment) },
+      placed: { parts, base: 0 },
+      terminals: fragment.terminals.length,
+      elements: fragment.elements.length,
+      result: { netlisted: true, parts },
       methods: terminals.map((id) => device.terminals.find((t) => t.id === id)?.methods ?? NO_SPECS),
       structureKey: fragmentKey(fragment),
     };
@@ -574,8 +653,13 @@ export class NetlistCompiler {
     return entry !== undefined && entry.epoch === epoch ? entry : null;
   }
 
-  private connectionEntry(connection: Connection, epoch: number): ConnectionCacheEntry {
-    const cached = this.connectionCache.get(connection.id);
+  /** `hint`: connection `connection.id`'s cache entry if the caller knows it (see `entityHints`), else null. */
+  private connectionEntry(
+    connection: Connection,
+    epoch: number,
+    hint: ConnectionCacheEntry | null,
+  ): ConnectionCacheEntry {
+    const cached = hint ?? this.connectionCache.get(connection.id);
     if (cached !== undefined && cached.connection === connection) {
       cached.epoch = epoch;
       return cached;
@@ -609,6 +693,7 @@ export class NetlistCompiler {
       elementBCount: -1,
       elementASpec: null,
       elementBSpec: null,
+      placed: null,
     };
     this.connectionCache.set(connection.id, entry);
     return entry;
@@ -698,6 +783,21 @@ export class NetlistCompiler {
   }
 }
 
+/** `cached`'s {@link PlacedConnection}, rewritten for this compile. */
+function placeConnection(
+  cached: ConnectionCacheEntry,
+  result: ConnectionElementResult,
+  a: number,
+  b: number,
+): PlacedConnection {
+  const placed = cached.placed;
+  if (placed === null) return (cached.placed = { id: cached.connection.id, result, a, b });
+  placed.result = result;
+  placed.a = a;
+  placed.b = b;
+  return placed;
+}
+
 /** A connection slot's state in the open-toggle path's record (`toggleOnly`). */
 const SLOT_ABSENT = 0;
 const SLOT_PRESENT = 1;
@@ -754,7 +854,7 @@ function terminalOf(entry: EntityCacheEntry | null, terminal: string): number {
 
 /** A resolved end's plant-wide terminal index this compile: {@link ABSENT_END}, -1 (unknown terminal) or ≥ 0. */
 function plantTerminal(entry: EntityCacheEntry | null, terminal: number): number {
-  if (entry === null || !entry.result.netlisted) return ABSENT_END;
+  if (entry === null || entry.placed === null) return ABSENT_END;
   return terminal < 0 ? -1 : entry.base + terminal;
 }
 
@@ -848,12 +948,48 @@ function fragmentKey(fragment: DeviceFragment): string {
   ].join('|');
 }
 
-/** Entity `entity`'s {@link DeviceParts}: its members, element refs and their encoded pieces. */
+/** The union-find `deviceParts` partitions one device's terminals with (reset for each device). */
+const LOCAL_SETS = new UnionFind(0);
+
+/** Entity `entity`'s {@link DeviceParts}: its members, element refs, local nodes and device entry. */
 function deviceParts(entity: number, fragment: DeviceFragment): DeviceParts {
+  const terminals = fragment.terminals;
+  const count = terminals.length;
+  const members: TerminalRef[] = [];
+  const localNode: number[] = [];
+  const nodeMembers: TerminalRef[][] = [];
+  for (let i = 0; i < count; i++) members.push({ entity, terminal: terminals[i] });
+  if (fragment.joins.length === 0) {
+    // No joins (a battery, a lamp, an open switch): one node per terminal.
+    for (let i = 0; i < count; i++) {
+      localNode.push(i);
+      nodeMembers.push([members[i]]);
+    }
+  } else {
+    const sets = LOCAL_SETS;
+    sets.reset(count);
+    for (const group of fragment.joins) {
+      for (let i = 1; i < group.length; i++) sets.union(group[0], group[i]);
+    }
+    // Local nodes, numbered as their smallest terminal is reached (as `assemble` numbers plant nodes).
+    const localOfRoot: number[] = [];
+    for (let i = 0; i < count; i++) localOfRoot.push(-1);
+    for (let i = 0; i < count; i++) {
+      const root = sets.find(i);
+      if (localOfRoot[root] < 0) {
+        localOfRoot[root] = nodeMembers.length;
+        nodeMembers.push([]);
+      }
+      localNode.push(localOfRoot[root]);
+      nodeMembers[localOfRoot[root]].push(members[i]);
+    }
+  }
   return {
     fragment,
-    members: fragment.terminals.map((terminal) => ({ entity, terminal })),
     elementRefs: fragment.elements.map((e) => ({ kind: 'entity', entity, part: e.part })),
+    localNode,
+    nodeMembers,
+    device: { entity, kind: fragment.kind },
   };
 }
 
@@ -894,26 +1030,107 @@ function atLeast(array: Int32Array<ArrayBuffer>, length: number): Int32Array<Arr
 
 /**
  * The working storage of `assemble`, kept by a compiler so that a structural recompile reuses it
- * (F2.2 part 3b): the union-finds, the per-terminal and per-branch index arrays and the encoding
- * buffer. They grow to the largest plant seen and never shrink. Nothing in a returned netlist refers
- * to them.
+ * (F2.2 part 3b): the union-find over nodes, the per-terminal, per-node, per-island and per-branch
+ * index arrays and the encoding buffer. They grow to the largest plant seen and never shrink. Nothing
+ * in a returned netlist refers to them.
  */
 class AssembleScratch {
-  readonly terminals = new UnionFind(0);
   readonly nodeSets = new UnionFind(0);
   readonly writer = new TopologyWriter();
-  nodeOfRoot = new Int32Array(0);
   nodeOfTerminal = new Int32Array(0);
   endA = new Int32Array(0);
   endB = new Int32Array(0);
   islandOfRoot = new Int32Array(0);
   islandOfNode = new Int32Array(0);
+  /** Per island, its node and branch counts, then the fill cursors of its lists (`partitionIslands`). */
+  islandNodeCount = new Int32Array(0);
+  islandBranchCount = new Int32Array(0);
   /**
    * The SHA-256 midstate of the writer's node section (whole blocks only) and how many bytes it covers,
    * for `reassemble`; `null` after every full `assemble` (its nodes may differ).
    */
   nodesState: Int32Array | null = null;
   nodesStateBytes = 0;
+}
+
+/**
+ * The islands of `nodeCount` nodes over the `branchCount` branches whose ends are in `scratch.endA` and
+ * `scratch.endB`: connected components numbered by their smallest node, as `[nodes, branches]`, each
+ * island's list ascending and allocated at its final length. Writes `scratch.islandOfNode`.
+ */
+function partitionIslands(
+  scratch: AssembleScratch,
+  nodeCount: number,
+  branchCount: number,
+): readonly [number[][], number[][]] {
+  const { endA, endB, nodeSets } = scratch;
+  nodeSets.reset(nodeCount);
+  for (let i = 0; i < branchCount; i++) nodeSets.union(endA[i], endB[i]);
+  const islandOfRoot = (scratch.islandOfRoot = atLeast(scratch.islandOfRoot, nodeCount));
+  islandOfRoot.fill(-1, 0, nodeCount);
+  const islandOfNode = (scratch.islandOfNode = atLeast(scratch.islandOfNode, nodeCount));
+  const nodeTally = (scratch.islandNodeCount = atLeast(scratch.islandNodeCount, nodeCount));
+  const branchTally = (scratch.islandBranchCount = atLeast(scratch.islandBranchCount, nodeCount));
+  let islandCount = 0;
+  for (let node = 0; node < nodeCount; node++) {
+    const root = nodeSets.find(node);
+    let island = islandOfRoot[root];
+    if (island < 0) {
+      island = islandCount++;
+      islandOfRoot[root] = island;
+      nodeTally[island] = 0;
+      branchTally[island] = 0;
+    }
+    islandOfNode[node] = island;
+    nodeTally[island]++;
+  }
+  for (let i = 0; i < branchCount; i++) branchTally[islandOfNode[endA[i]]]++;
+  const nodes = new Array<number[]>(islandCount);
+  const branches = new Array<number[]>(islandCount);
+  for (let k = 0; k < islandCount; k++) {
+    nodes[k] = new Array<number>(nodeTally[k]);
+    branches[k] = new Array<number>(branchTally[k]);
+    nodeTally[k] = 0;
+    branchTally[k] = 0;
+  }
+  for (let node = 0; node < nodeCount; node++) {
+    const k = islandOfNode[node];
+    nodes[k][nodeTally[k]++] = node;
+  }
+  for (let i = 0; i < branchCount; i++) {
+    const k = islandOfNode[endA[i]];
+    branches[k][branchTally[k]++] = i;
+  }
+  return [nodes, branches];
+}
+
+/**
+ * The islands' records, classified by the sources on their branches (`mixed` islands are diagnosed).
+ * Only entity elements can be sources (a connection's branch is passive), and they are the first
+ * `deviceBranchCount` branches, so each island's ascending list is read only that far.
+ */
+function islandRecords(
+  islandNodes: number[][],
+  islandBranches: number[][],
+  branches: readonly NetlistBranch[],
+  deviceBranchCount: number,
+  diagnostics: NetlistDiagnostic[],
+): NetlistIsland[] {
+  const islands = new Array<NetlistIsland>(islandNodes.length);
+  for (let k = 0; k < islandNodes.length; k++) {
+    const own = islandBranches[k];
+    let dc = false;
+    let ac = false;
+    for (let j = 0; j < own.length && own[j] < deviceBranchCount; j++) {
+      const source = branches[own[j]].source;
+      if (source === 'dc') dc = true;
+      else if (source === 'ac') ac = true;
+    }
+    const kind: IslandKind = dc && ac ? 'mixed' : dc ? 'dc' : ac ? 'ac' : 'empty';
+    if (kind === 'mixed') diagnostics.push({ code: 'mixed-island', island: k });
+    islands[k] = { index: k, kind, nodes: islandNodes[k], branches: own };
+  }
+  return islands;
 }
 
 function assemble(
@@ -923,106 +1140,92 @@ function assemble(
   diagnostics: NetlistDiagnostic[],
   scratch: AssembleScratch,
 ): Netlist {
-  // Partition: ideal joins only.
-  const terminals = scratch.terminals;
-  terminals.reset(terminalCount);
-  for (const { parts, base } of devices) {
-    for (const group of parts.fragment.joins) {
-      for (let i = 1; i < group.length; i++) terminals.union(base + group[0], base + group[i]);
-    }
-  }
-  // Nodes, numbered as their smallest member is reached in canonical terminal order.
-  const nodeOfRoot = (scratch.nodeOfRoot = atLeast(scratch.nodeOfRoot, terminalCount));
-  nodeOfRoot.fill(-1, 0, terminalCount);
+  // Nodes: each device's own nodes in turn. Only a device's ideal joins merge terminals, so this
+  // numbers plant nodes as their smallest member is reached in canonical terminal order, and each
+  // node's members are the device's shared list (`DeviceParts.localNode`).
   const nodeOfTerminal = (scratch.nodeOfTerminal = atLeast(scratch.nodeOfTerminal, terminalCount));
-  const members: TerminalRef[][] = [];
-  for (const { parts, base } of devices) {
-    const count = parts.members.length;
-    for (let i = 0; i < count; i++) {
-      const root = terminals.find(base + i);
-      if (nodeOfRoot[root] < 0) {
-        nodeOfRoot[root] = members.length;
-        members.push([]);
-      }
-      nodeOfTerminal[base + i] = nodeOfRoot[root];
-      members[nodeOfRoot[root]].push(parts.members[i]);
-    }
+  let nodeCount = 0;
+  let branchCount = connections.length;
+  for (let d = 0; d < devices.length; d++) {
+    const parts = devices[d].parts;
+    nodeCount += parts.nodeMembers.length;
+    branchCount += parts.fragment.elements.length;
   }
-  const nodeCount = members.length;
+  const members = new Array<readonly TerminalRef[]>(nodeCount);
+  let nodeBase = 0;
+  for (let d = 0; d < devices.length; d++) {
+    const { parts, base } = devices[d];
+    const local = parts.localNode;
+    for (let i = 0; i < local.length; i++) nodeOfTerminal[base + i] = nodeBase + local[i];
+    const own = parts.nodeMembers;
+    for (let l = 0; l < own.length; l++) members[nodeBase + l] = own[l];
+    nodeBase += own.length;
+  }
 
   // Branch ends as nodes, in canonical branch order: entity elements, then connections.
-  let branchCount = connections.length;
-  for (const { parts } of devices) branchCount += parts.fragment.elements.length;
   const endA = (scratch.endA = atLeast(scratch.endA, branchCount));
   const endB = (scratch.endB = atLeast(scratch.endB, branchCount));
   let index = 0;
-  for (const { parts, base } of devices) {
-    for (const element of parts.fragment.elements) {
-      endA[index] = nodeOfTerminal[base + element.a];
-      endB[index++] = nodeOfTerminal[base + element.b];
+  for (let d = 0; d < devices.length; d++) {
+    const { parts, base } = devices[d];
+    const elements = parts.fragment.elements;
+    for (let j = 0; j < elements.length; j++) {
+      endA[index] = nodeOfTerminal[base + elements[j].a];
+      endB[index++] = nodeOfTerminal[base + elements[j].b];
     }
   }
-  for (const { a, b } of connections) {
-    endA[index] = nodeOfTerminal[a];
-    endB[index++] = nodeOfTerminal[b];
+  for (let j = 0; j < connections.length; j++) {
+    endA[index] = nodeOfTerminal[connections[j].a];
+    endB[index++] = nodeOfTerminal[connections[j].b];
   }
 
   // Islands: connected components of the nodes over the branches, numbered by their smallest node.
-  const nodeSets = scratch.nodeSets;
-  nodeSets.reset(nodeCount);
-  for (let i = 0; i < branchCount; i++) nodeSets.union(endA[i], endB[i]);
-  const islandOfRoot = (scratch.islandOfRoot = atLeast(scratch.islandOfRoot, nodeCount));
-  islandOfRoot.fill(-1, 0, nodeCount);
-  const islandOfNode = (scratch.islandOfNode = atLeast(scratch.islandOfNode, nodeCount));
-  const islandNodes: number[][] = [];
-  for (let node = 0; node < nodeCount; node++) {
-    const root = nodeSets.find(node);
-    if (islandOfRoot[root] < 0) {
-      islandOfRoot[root] = islandNodes.length;
-      islandNodes.push([]);
-    }
-    islandOfNode[node] = islandOfRoot[root];
-    islandNodes[islandOfRoot[root]].push(node);
-  }
+  const [islandNodes, islandBranches] = partitionIslands(scratch, nodeCount, branchCount);
+  const islandOfNode = scratch.islandOfNode;
 
   const nodes: NetlistNode[] = new Array<NetlistNode>(nodeCount);
   for (let i = 0; i < nodeCount; i++) nodes[i] = { index: i, island: islandOfNode[i], members: members[i] };
-  const islandBranches: number[][] = islandNodes.map(() => []);
-  const hasDc = new Uint8Array(islandNodes.length);
-  const hasAc = new Uint8Array(islandNodes.length);
   const branches: NetlistBranch[] = new Array<NetlistBranch>(branchCount);
-  const addBranch = (
-    i: number,
-    element: ElementRef,
-    model: string,
-    kind: ElementKind,
-    source: SourceDomain | null,
-    values: Readonly<Record<string, number>>,
-  ) => {
-    const island = islandOfNode[endA[i]];
-    islandBranches[island].push(i);
-    if (source === 'dc') hasDc[island] = 1;
-    else if (source === 'ac') hasAc[island] = 1;
-    branches[i] = { index: i, element, kind, model, source, a: endA[i], b: endB[i], island, values };
-  };
   index = 0;
-  for (const { parts } of devices) {
-    const { fragment, elementRefs } = parts;
+  for (let d = 0; d < devices.length; d++) {
+    const { fragment, elementRefs } = devices[d].parts;
     for (let j = 0; j < fragment.elements.length; j++) {
       const e = fragment.elements[j];
-      addBranch(index++, elementRefs[j], fragment.kind, e.kind, e.source, e.values);
+      const a = endA[index];
+      branches[index] = {
+        index,
+        element: elementRefs[j],
+        kind: e.kind,
+        model: fragment.kind,
+        source: e.source,
+        a,
+        b: endB[index],
+        island: islandOfNode[a],
+        values: e.values,
+      };
+      index++;
     }
   }
-  for (const { result } of connections) {
-    addBranch(index++, result.elementRef, result.model, result.kind, null, result.values);
+  for (let j = 0; j < connections.length; j++) {
+    const result = connections[j].result;
+    const a = endA[index];
+    branches[index] = {
+      index,
+      element: result.elementRef,
+      kind: result.kind,
+      model: result.model,
+      source: null,
+      a,
+      b: endB[index],
+      island: islandOfNode[a],
+      values: result.values,
+    };
+    index++;
   }
 
-  const islands: NetlistIsland[] = islandNodes.map((n, i) => {
-    const kind: IslandKind = hasDc[i] && hasAc[i] ? 'mixed' : hasDc[i] ? 'dc' : hasAc[i] ? 'ac' : 'empty';
-    if (kind === 'mixed') diagnostics.push({ code: 'mixed-island', island: i });
-    return { index: i, kind, nodes: n, branches: islandBranches[i] };
-  });
-  const deviceList: NetlistDevice[] = devices.map(({ entity, parts }) => ({ entity, kind: parts.fragment.kind }));
+  const islands = islandRecords(islandNodes, islandBranches, branches, branchCount - connections.length, diagnostics);
+  const deviceList = new Array<NetlistDevice>(devices.length);
+  for (let d = 0; d < devices.length; d++) deviceList[d] = devices[d].parts.device;
   scratch.nodesState = null;
   return {
     nodes,
@@ -1065,38 +1268,18 @@ function reassemble(
   }
 
   // Islands, exactly as `assemble` builds them.
-  const nodeSets = scratch.nodeSets;
-  nodeSets.reset(nodeCount);
-  for (let i = 0; i < branchCount; i++) nodeSets.union(endA[i], endB[i]);
-  const islandOfRoot = (scratch.islandOfRoot = atLeast(scratch.islandOfRoot, nodeCount));
-  islandOfRoot.fill(-1, 0, nodeCount);
-  const islandOfNode = (scratch.islandOfNode = atLeast(scratch.islandOfNode, nodeCount));
-  const islandNodes: number[][] = [];
-  for (let node = 0; node < nodeCount; node++) {
-    const root = nodeSets.find(node);
-    if (islandOfRoot[root] < 0) {
-      islandOfRoot[root] = islandNodes.length;
-      islandNodes.push([]);
-    }
-    islandOfNode[node] = islandOfRoot[root];
-    islandNodes[islandOfRoot[root]].push(node);
-  }
+  const [islandNodes, islandBranches] = partitionIslands(scratch, nodeCount, branchCount);
+  const islandOfNode = scratch.islandOfNode;
 
   const nodes: NetlistNode[] = new Array<NetlistNode>(nodeCount);
   for (let i = 0; i < nodeCount; i++) {
     const old = previous.nodes[i];
     nodes[i] = old.island === islandOfNode[i] ? old : { index: i, island: islandOfNode[i], members: old.members };
   }
-  const islandBranches: number[][] = islandNodes.map(() => []);
-  const hasDc = new Uint8Array(islandNodes.length);
-  const hasAc = new Uint8Array(islandNodes.length);
   const branches: NetlistBranch[] = new Array<NetlistBranch>(branchCount);
   for (let i = 0; i < deviceBranchCount; i++) {
     const old = before[i];
     const island = islandOfNode[endA[i]];
-    islandBranches[island].push(i);
-    if (old.source === 'dc') hasDc[island] = 1;
-    else if (old.source === 'ac') hasAc[island] = 1;
     branches[i] = old.island === island ? old : { ...old, island };
   }
   let p = deviceBranchCount;
@@ -1104,7 +1287,6 @@ function reassemble(
     const { id, result } = connections[j];
     const i = deviceBranchCount + j;
     const island = islandOfNode[endA[i]];
-    islandBranches[island].push(i);
     // The previous branch of the same connection, if it had one (both lists ascend by connection id).
     let old: NetlistBranch | null = null;
     while (p < before.length) {
@@ -1133,11 +1315,7 @@ function reassemble(
           };
   }
 
-  const islands: NetlistIsland[] = islandNodes.map((n, i) => {
-    const kind: IslandKind = hasDc[i] && hasAc[i] ? 'mixed' : hasDc[i] ? 'dc' : hasAc[i] ? 'ac' : 'empty';
-    if (kind === 'mixed') diagnostics.push({ code: 'mixed-island', island: i });
-    return { index: i, kind, nodes: n, branches: islandBranches[i] };
-  });
+  const islands = islandRecords(islandNodes, islandBranches, branches, deviceBranchCount, diagnostics);
   // The node section is the previous encoding's: rewrite only the branches, and resume the hash from
   // the node section's midstate (computed once per partition).
   const bytes = scratch.writer.encodeBranches(branches);

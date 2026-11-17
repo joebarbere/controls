@@ -17,6 +17,16 @@ import type { NetlistBranch, NetlistNode } from './types';
 /** The most bytes one member or one branch can take: two strings of at most 255 code units and some varints. */
 const MAX_ITEM_BYTES = 2 * 256 + 4 * 8 + 3;
 
+/**
+ * The codes of the kinds every netlist holds, read once: a keyed load from the code tables by a string
+ * that varies branch to branch was about a fifth of `writeBranches` (perf only; the tables stay the
+ * definition, and any other kind is still looked up there).
+ */
+const RESISTOR_CODE = ELEMENT_KIND_CODES.resistor;
+const VSOURCE_CODE = ELEMENT_KIND_CODES.vsource;
+const DC_CODE = SOURCE_CODES.dc;
+const AC_CODE = SOURCE_CODES.ac;
+
 export class TopologyWriter {
   private buffer = new Uint8Array(0);
   private length = 0;
@@ -31,10 +41,12 @@ export class TopologyWriter {
     this.reserve(TOPOLOGY_ENCODING_HEADER.length + 8 * nodes.length + 32 * branches.length + 16);
     for (const byte of TOPOLOGY_ENCODING_HEADER) this.buffer[this.length++] = byte;
     this.varint(nodes.length);
-    for (const node of nodes) {
+    for (let n = 0; n < nodes.length; n++) {
+      const members = nodes[n].members;
       this.reserve(8);
-      this.varint(node.members.length);
-      for (const member of node.members) {
+      this.varint(members.length);
+      for (let m = 0; m < members.length; m++) {
+        const member = members[m];
         this.reserve(MAX_ITEM_BYTES);
         this.varint(member.entity);
         this.ascii(member.terminal);
@@ -60,7 +72,8 @@ export class TopologyWriter {
   private writeBranches(branches: readonly NetlistBranch[]): void {
     this.reserve(8);
     this.varint(branches.length);
-    for (const branch of branches) {
+    for (let i = 0; i < branches.length; i++) {
+      const branch = branches[i];
       this.reserve(MAX_ITEM_BYTES);
       const element = branch.element;
       if (element.kind === 'entity') {
@@ -71,8 +84,12 @@ export class TopologyWriter {
         this.buffer[this.length++] = 1;
         this.varint(element.connection);
       }
-      this.buffer[this.length++] = ELEMENT_KIND_CODES[branch.kind];
-      this.buffer[this.length++] = branch.source === null ? 0 : SOURCE_CODES[branch.source];
+      const kind = branch.kind;
+      this.buffer[this.length++] =
+        kind === 'resistor' ? RESISTOR_CODE : kind === 'vsource' ? VSOURCE_CODE : ELEMENT_KIND_CODES[kind];
+      const source = branch.source;
+      this.buffer[this.length++] =
+        source === null ? 0 : source === 'dc' ? DC_CODE : source === 'ac' ? AC_CODE : SOURCE_CODES[source];
       this.ascii(branch.model);
       this.varint(branch.a);
       this.varint(branch.b);
