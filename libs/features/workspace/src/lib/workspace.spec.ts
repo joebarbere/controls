@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, output, signal, viewChild } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { Session } from '@controls/feature-session';
@@ -21,6 +21,15 @@ import { Workspace } from './workspace';
 })
 class FakeViewport {
   readonly backendChange = output<string>();
+  /** What the workspace reads and calls on the viewport; no renderer, so no state. */
+  readonly state = signal(undefined);
+  readonly highlighted: unknown[] = [];
+  highlightTerminals(terminals: unknown): void {
+    this.highlighted.push(terminals);
+  }
+  captureThumbnail(): Promise<Uint8Array | null> {
+    return Promise.resolve(null);
+  }
 }
 
 @Component({
@@ -41,8 +50,14 @@ class Host {
   resets = 0;
 }
 
-async function setup() {
+/** Swaps in the fake viewport. The real one is a `@defer` block (D19), so its metadata resolves first. */
+async function useFakeViewport() {
   TestBed.overrideComponent(Workspace, { remove: { imports: [Viewport] }, add: { imports: [FakeViewport] } });
+  await TestBed.compileComponents();
+}
+
+async function setup() {
+  await useFakeViewport();
   const fixture = TestBed.createComponent(Host);
   document.body.appendChild(fixture.nativeElement);
   await fixture.whenStable();
@@ -155,11 +170,48 @@ class ConsoleHost {
   readonly layout = signal<WorkspaceLayout>(DEFAULT_WORKSPACE_LAYOUT);
 }
 
+describe('Workspace lazy viewport (P4 D19)', () => {
+  afterEach(() => (document.body.innerHTML = ''));
+
+  /** The viewport's chunk held back (`Manual`), so focus can be asked for before it has loaded. */
+  async function setupUnloaded() {
+    TestBed.configureTestingModule({ deferBlockBehavior: DeferBlockBehavior.Manual });
+    await useFakeViewport();
+    const fixture = TestBed.createComponent(Host);
+    document.body.appendChild(fixture.nativeElement);
+    await fixture.whenStable();
+    const [viewport] = await fixture.getDeferBlocks();
+    return { fixture, host: fixture.componentInstance, viewport };
+  }
+
+  it('renders the rest of the workspace while the viewport loads, then focuses the canvas once it has', async () => {
+    const { fixture, host, viewport } = await setupUnloaded();
+    expect(screen.getByTestId('viewport-placeholder')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reset layout' })).toBeTruthy();
+    expect(screen.queryByLabelText('3D workspace')).toBeNull();
+
+    host.workspace().focusViewport(); // New sandbox before the chunk arrived
+    await viewport.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(screen.getByLabelText('3D workspace'));
+  });
+
+  it("doesn't take focus back when the player has moved it while the viewport loaded", async () => {
+    const { fixture, host, viewport } = await setupUnloaded();
+    host.workspace().focusViewport();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    menu.focus();
+    await viewport.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(menu);
+  });
+});
+
 describe('Workspace console.toggle (F1.5)', () => {
   afterEach(() => (document.body.innerHTML = ''));
 
   async function setupConsole() {
-    TestBed.overrideComponent(Workspace, { remove: { imports: [Viewport] }, add: { imports: [FakeViewport] } });
+    await useFakeViewport();
     const fixture = TestBed.createComponent(ConsoleHost);
     document.body.appendChild(fixture.nativeElement);
     await fixture.whenStable();
@@ -222,8 +274,11 @@ describe('Workspace view.netlistInspector (F2.6)', () => {
     await fixture.whenStable();
     expect(host.layout().inspector.collapsed).toBe(false);
     expect(within(inspector).queryByText('Selected: panel')).toBeNull(); // the netlist replaces the projected content
+    // The inspector is lazy (D19): focus moves once its chunk has loaded and it has rendered.
     // No sim yet (no worker in this spec): the hint takes focus.
-    expect(document.activeElement).toBe(within(inspector).getByText('No sim snapshot yet.'));
+    const hint = await within(inspector).findByText('No sim snapshot yet.');
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(hint);
 
     session.exec('view.netlistInspector'); // focus is in it: close it
     await fixture.whenStable();

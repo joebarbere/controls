@@ -5,12 +5,14 @@ import {
   computed,
   DestroyRef,
   effect,
+  type EffectRef,
   ElementRef,
   inject,
   Injector,
   input,
   model,
   output,
+  type Signal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -82,7 +84,12 @@ type PanelId = keyof WorkspaceLayout;
       </div>
     }
     <section #viewportPane class="viewport-pane" aria-label="3D viewport">
-      <ctl-viewport (backendChange)="backendChange.emit($event)" />
+      <!-- Lazy (D19): the renderer and three.js are most of the bundle; the menu paints without them. -->
+      @defer (on immediate) {
+        <ctl-viewport #viewport (backendChange)="backendChange.emit($event)" />
+      } @placeholder {
+        <div data-testid="viewport-placeholder"></div>
+      }
       <div class="overlay"><ng-content select="[ctlViewportOverlay]" /></div>
       <div class="overlay-bottom"><ng-content select="[ctlViewportBottom]" /></div>
     </section>
@@ -109,7 +116,10 @@ type PanelId = keyof WorkspaceLayout;
       >
         <h2 id="ctl-inspector-title" class="panel-title">Inspector</h2>
         @if (netlistOpen()) {
-          <ctl-netlist-inspector />
+          <!-- Lazy (D19): loaded the first time the inspector opens; focus waits for it (afterLoaded). -->
+          @defer (on immediate) {
+            <ctl-netlist-inspector #netlist />
+          }
         } @else {
           <ng-content select="[ctlInspector]"
             ><p class="ctl-hint" data-testid="inspector-placeholder">
@@ -161,7 +171,7 @@ export class Workspace {
   protected readonly inspectorTrack = computed(() => track(this.layout().inspector));
   protected readonly bottomTrack = computed(() => track(this.layout().bottom));
   private readonly viewportPane = viewChild.required<ElementRef<HTMLElement>>('viewportPane');
-  private readonly viewport = viewChild(Viewport);
+  private readonly viewport = viewChild<Viewport>('viewport');
   /** The renderer's view state (mode, hover, selection), for the HUD. Undefined until it starts. */
   readonly viewState = computed<ViewportState | undefined>(() => this.viewport()?.state());
 
@@ -170,9 +180,25 @@ export class Workspace {
     return this.viewport()?.captureThumbnail() ?? Promise.resolve(null);
   }
 
-  /** Moves keyboard focus to the viewport canvas (after New sandbox or Resume). */
+  /**
+   * Moves keyboard focus to the viewport canvas (after New sandbox or Resume). The viewport is a lazy
+   * `@defer` block (D19): asked before its chunk has loaded, focus moves once it renders, unless focus
+   * has gone somewhere else by then.
+   */
   focusViewport(): void {
-    this.viewportPane().nativeElement.querySelector<HTMLElement>('canvas')?.focus();
+    const pane = this.viewportPane().nativeElement;
+    const canvas = () => pane.querySelector<HTMLElement>('canvas');
+    if (canvas()) {
+      this.cancelPendingFocus();
+      canvas()?.focus();
+      return;
+    }
+    const doc = pane.ownerDocument;
+    const before = doc.activeElement;
+    this.afterLoaded(this.viewport, () => {
+      const active = doc.activeElement;
+      if (active === before || active === null || active === doc.body) canvas()?.focus();
+    });
   }
 
   private readonly session = inject(Session);
@@ -189,7 +215,7 @@ export class Workspace {
 
   /** Whether the side panel shows the netlist inspector (UI state, toggled by `view.netlistInspector`). */
   protected readonly netlistOpen = signal(false);
-  private readonly netlist = viewChild(NetlistInspector);
+  private readonly netlist = viewChild<NetlistInspector>('netlist');
   private readonly inspectorPanel = viewChild<ElementRef<HTMLElement>>('inspectorPanel');
   /** Where focus was before `view.netlistInspector` moved it into the side panel. */
   private netlistOpener: Element | null = null;
@@ -219,7 +245,37 @@ export class Workspace {
     }
     this.netlistOpen.set(true);
     if (this.layout().inspector.collapsed) this.update('inspector', { ...this.layout().inspector, collapsed: false });
-    afterNextRender(focusPanel, { injector: this.injector }); // once it has rendered
+    // Once it has rendered: the inspector is a lazy `@defer` block, so the first time that is after its
+    // chunk loads (D19). Closed again before then, nothing is focused.
+    this.afterLoaded(this.netlist, () => {
+      if (this.netlistOpen()) focusPanel();
+    });
+  }
+
+  /** The focus request still waiting for a lazy block to render; a newer request replaces it. */
+  private pendingFocus: EffectRef | null = null;
+
+  /**
+   * Runs `run` after the render in which `query` (a lazy `@defer` component) is present: on the next
+   * render if it already is, else once its chunk has loaded and it has rendered (plan P4 D19).
+   */
+  private afterLoaded(query: Signal<unknown>, run: () => void): void {
+    this.cancelPendingFocus();
+    const ref = effect(
+      () => {
+        if (query() === undefined) return;
+        ref.destroy();
+        if (this.pendingFocus === ref) this.pendingFocus = null;
+        afterNextRender(run, { injector: this.injector });
+      },
+      { injector: this.injector },
+    );
+    this.pendingFocus = ref;
+  }
+
+  private cancelPendingFocus(): void {
+    this.pendingFocus?.destroy();
+    this.pendingFocus = null;
   }
 
   private readonly bottomPanel = viewChild<ElementRef<HTMLElement>>('bottomPanel');
