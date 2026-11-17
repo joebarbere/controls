@@ -3,6 +3,7 @@ import {
   DoubleSide,
   Group,
   Mesh,
+  Raycaster,
   Scene,
   Vector3,
   type BufferGeometry,
@@ -14,6 +15,7 @@ import { initialBags } from '@controls/catalog';
 import type { Entity, World } from '@controls/world-model';
 import { describeSceneGraph } from '../scene';
 import { WorldSync } from '../world/world-sync';
+import { TERMINAL_OWN_DEVICE_TOLERANCE_M } from '../viewport-controller';
 import {
   BULB_SLOT,
   BULB_TINTS,
@@ -29,8 +31,10 @@ import {
   entryIsOpen,
   leverAngle,
   OPENING_SLOT,
+  UTILITY_KINDS,
+  UTILITY_LUG_PROUD_MM,
 } from './devices';
-import { PropRecipes } from './props';
+import { PropRecipes, UNKNOWN_PROP } from './props';
 
 const BATTERY = { id: 'battery.ferrovane-12v-7ah', version: 1 };
 const BENCH_SUPPLY = { id: 'supply.brindlecore-bench-30v-5a', version: 1 };
@@ -741,6 +745,137 @@ describe('wire nuts in the scene', () => {
       }
     });
     expect(geometries.size).toBe(3);
+    const spies = [...geometries, ...materials].map((r) => vi.spyOn(r, 'dispose'));
+    sync.dispose();
+    spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
+    expect(sync.recipes.size).toBe(0);
+    expect(scene.children).toHaveLength(0);
+  });
+});
+
+// --- Utility services: the P3 stand-in supply (D12) and the three-phase services --------------
+
+const UTILITIES = BUILTIN_CATALOG.devices
+  .filter((d) => d.model.kind.startsWith('utility.'))
+  .map((d) => ({ id: d.id, version: d.version }));
+
+describe('every drawn catalogue device has a recipe', () => {
+  it('no device with a body size falls back to the unknown-object cube', () => {
+    const missing = BUILTIN_CATALOG.devices
+      .filter((d) => d.sizeMm !== null && deviceDefinitionFor(d) === undefined)
+      .map((d) => `${d.id} (${d.model.kind})`);
+    expect(missing).toStrictEqual([]);
+  });
+});
+
+describe('utility service recipes', () => {
+  it('draw the split-phase stand-in and both three-phase services, with their fictional label', () => {
+    expect(UTILITIES.map((r) => r.id)).toStrictEqual([
+      'utility.larkmoor-208y120-150kva',
+      'utility.larkmoor-480y277-1000kva',
+      'utility.larkmoor-split-phase-25kva',
+    ]);
+    expect(new Set(UTILITIES.map((r) => def(r).model.kind))).toStrictEqual(new Set(UTILITY_KINDS));
+    for (const ref of UTILITIES) expect(deviceDefinitionFor(ref)?.id).toBe(ref.id);
+    expect(UTILITIES.map((ref) => deviceLabel(def(ref)))).toStrictEqual([
+      'Larkmoor Power LP-3W150',
+      'Larkmoor Power LP-3W1000',
+      'Larkmoor Power LP-SP25',
+    ]);
+  });
+
+  it.each(UTILITIES)('%o fills its catalogue size, with a lug at every terminal standing out of the front', (ref) => {
+    const d = def(ref);
+    const size = d.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+    const g = buildDeviceGeometry(d);
+    const b = bounds(g);
+    // The cabinet spans the body box from the min corner; only the lugs (bore mouths) stand proud of the front.
+    expect(toMm(b.min)).toStrictEqual([0, 0, 0]);
+    expect(toMm(b.max)).toStrictEqual([size.widthMm, size.heightMm, size.depthMm + UTILITY_LUG_PROUD_MM + 0.3]);
+    // Looking straight at each terminal along −z, the first thing hit is its lug's dark bore, just in
+    // front of it (within the picker's 15 mm own-device tolerance); just beside the bore, the tinned lug.
+    expect(UTILITY_LUG_PROUD_MM + 0.3).toBeLessThan(TERMINAL_OWN_DEVICE_TOLERANCE_M * 1000);
+    const mesh = new Mesh(g, buildDeviceMaterials(d));
+    const ray = new Raycaster();
+    const firstHit = (x: number, y: number) => {
+      ray.set(new Vector3(x / 1000, y / 1000, 1), new Vector3(0, 0, -1));
+      const hit = ray.intersectObject(mesh)[0];
+      return hit && { slot: DEVICE_SLOTS[hit.face?.materialIndex as number], zMm: Math.round(hit.point.z * 1e4) / 10 };
+    };
+    for (const t of d.terminals) {
+      const p = t.positionMm;
+      expect(firstHit(p.x, p.y), `${ref.id} ${t.id}`).toStrictEqual({
+        slot: 'opening',
+        zMm: p.z + UTILITY_LUG_PROUD_MM + 0.3,
+      });
+      expect(firstHit(p.x + 6, p.y), `${ref.id} ${t.id} lug`).toStrictEqual({
+        slot: 'accent',
+        zMm: p.z + UTILITY_LUG_PROUD_MM,
+      });
+      // Its entry point (where a landed wire ends) is the terminal's position, on the cabinet front.
+      expect(p.z).toBe(size.depthMm);
+      for (const m of t.methods) expect(m.entryMm).toStrictEqual(p);
+    }
+    (mesh.material as Material[]).forEach((m) => m.dispose());
+    expect(new Set(g.groups.map((group) => DEVICE_SLOTS[group.materialIndex as number]))).toStrictEqual(
+      new Set(['body', 'panel', 'label', 'accent', 'opening']),
+    );
+    g.dispose();
+  });
+
+  it('match the geometry snapshot (bounds, vertices and slots per entry)', () => {
+    const summary = UTILITIES.map((ref) => {
+      const g = buildDeviceGeometry(def(ref));
+      const b = bounds(g);
+      const out = {
+        id: ref.id,
+        boundsMm: [...toMm(b.min), ...toMm(b.max)],
+        vertices: g.getAttribute('position').count,
+        slots: g.groups.map((group) => [DEVICE_SLOTS[group.materialIndex as number], group.count]),
+      };
+      g.dispose();
+      return out;
+    });
+    expect(summary).toMatchSnapshot('utility recipes');
+  });
+
+  it('draw a grey painted cabinet with tinned lugs and dark bores, and have no lever, entries or cover', () => {
+    const d = def(UTILITIES[2]);
+    const materials = buildDeviceMaterials(d);
+    expect(materials[DEVICE_SLOTS.indexOf('body')].color.getHex()).toBe(0x8a9095);
+    expect(materials[DEVICE_SLOTS.indexOf('accent')].color.getHex()).toBe(0xb8bcc0);
+    expect(materials[OPENING_SLOT].color.getHex()).toBe(0x101214);
+    materials.forEach((m) => m.dispose());
+    expect(buildDeviceLever(d)).toBeNull();
+    expect(buildDeviceEntries(d)).toStrictEqual([]);
+    expect(buildDeviceCover(d)).toBeNull();
+  });
+});
+
+describe('utility services in the scene', () => {
+  it('draws the stand-in supply as its recipe, not the unknown cube, and disposes it exactly once', () => {
+    const scene = new Scene();
+    const sync = new WorldSync(scene);
+    sync.sync(worldOf(deviceEntity(1, UTILITIES[2], -1500), deviceEntity(2, UTILITIES[0], -1000)));
+    const graph = describeSceneGraph(scene.getObjectByName('world') as Group);
+    expect(graph).toMatchSnapshot('utility services');
+    expect(graph.children?.map((c) => [c.name, c.label, c.selectable])).toStrictEqual([
+      ['entity-1', 'Larkmoor Power LP-SP25', 'device:entity-1'],
+      ['entity-2', 'Larkmoor Power LP-3W150', 'device:entity-2'],
+    ]);
+    const supply = sync.recipes.acquire(UTILITIES[2]);
+    expect(supply.spec).not.toBe(UNKNOWN_PROP);
+    expect(supply.spec.sizeMm).toStrictEqual(def(UTILITIES[2]).sizeMm);
+    sync.recipes.release(UTILITIES[2]);
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    scene.traverse((o) => {
+      if (o instanceof Mesh) {
+        geometries.add(o.geometry);
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => materials.add(m));
+      }
+    });
+    expect(geometries.size).toBe(2);
     const spies = [...geometries, ...materials].map((r) => vi.spyOn(r, 'dispose'));
     sync.dispose();
     spies.forEach((s) => expect(s).toHaveBeenCalledTimes(1));
