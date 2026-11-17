@@ -12,7 +12,8 @@ import { WORKSPACE_ROOT } from './script-loader';
  * - D6 (plans/phase-2-circuit-engine.md; ADR 0014, to be written in F2.1): no engine-dependent
  *   Math functions or `**` in sim-core source, nor (P3 decisions D5 and D13, kickoff step 6) in
  *   libs/domain/world-model/src/lib/routing/ (`Math.sqrt` is allowed), nor (P3 PR 8, ADR 0015) in
- *   libs/domain/world-model/src/lib/termination/ (a stored termination outcome);
+ *   libs/domain/world-model/src/lib/termination/ (a stored termination outcome), nor (P4 decision
+ *   D13, kickoff step 4) in libs/domain/inspector/;
  * - no Node built-ins in domain or sim-worker source.
  */
 
@@ -44,6 +45,8 @@ const SIM_CORE_SOURCE = 'libs/domain/sim-core/src/lib/probe.ts';
 const SIM_CORE_SPEC = 'libs/domain/sim-core/src/lib/probe.spec.ts';
 const ROUTING_SOURCE = 'libs/domain/world-model/src/lib/routing/probe.ts';
 const ROUTING_SPEC = 'libs/domain/world-model/src/lib/routing/probe.spec.ts';
+const INSPECTOR_SOURCE = 'libs/domain/inspector/src/lib/probe.ts';
+const INSPECTOR_SPEC = 'libs/domain/inspector/src/lib/probe.spec.ts';
 const WORKER_SOURCE = 'libs/sim-worker/src/lib/probe.ts';
 const WORKER_PACING = 'libs/sim-worker/src/lib/pacing/probe.ts';
 const WORKER_PACING_NESTED = 'libs/sim-worker/src/lib/pacing/clock/probe.ts';
@@ -208,6 +211,55 @@ describe('D6 in world-model termination and wiring (ADR 0015)', () => {
   });
 });
 
+describe('D6 in the inspector (P4 decision D13, kickoff step 4)', () => {
+  // A finding (a derived ampacity against an OCPD, a box-fill volume) must not flip between sim-cli in
+  // Node and the inspector panel in Chromium, so the whole lib's source is held to D6. One probe is
+  // nested: check kinds will live in submodules.
+  const INSPECTOR_SOURCES = [INSPECTOR_SOURCE, 'libs/domain/inspector/src/lib/checks/probe.ts'];
+
+  it.each(D6_FUNCTIONS)('rejects Math.%s in inspector source', async (fn) => {
+    for (const file of INSPECTOR_SOURCES) {
+      expect(await restrictions(`export const x = Math.${fn}(0.5, 0.5);`, file)).toEqual([
+        `no-restricted-properties: Math.${fn}() is engine-dependent and banned in inspector source`,
+      ]);
+    }
+  });
+
+  it('rejects the ** and **= operators and destructured Math in inspector source', async () => {
+    const source = 'export let x = 2 ** 0.5;\nx **= 3;\nconst { hypot } = Math;\nexport const y = hypot(3, 4);';
+    expect(await restrictions(source, INSPECTOR_SOURCE)).toEqual([
+      'no-restricted-syntax: The ** operator is engine-dependent (it is Math.pow) and banned in inspector source',
+      'no-restricted-syntax: The **= operator is engine-dependent (it is Math.pow) and banned in inspector source',
+      'no-restricted-properties: Math.hypot() is engine-dependent and banned in inspector source',
+    ]);
+  });
+
+  it('allows Math.sqrt and the other IEEE-exact operations', async () => {
+    const source = [
+      'export const d = Math.sqrt(3 * 3 + 4 * 4);',
+      'export const y = [Math.fround(d), Math.abs(d), Math.min(d, 1), Math.max(d, 1), Math.ceil(d / 10) * 10];',
+    ].join('\n');
+    expect(await restrictions(source, INSPECTOR_SOURCE)).toEqual([]);
+  });
+
+  it('keeps the determinism lint in inspector source and specs (D6 merges with it, not replaces it)', async () => {
+    expect(await restrictions(WALL_CLOCK, INSPECTOR_SOURCE)).toEqual(WALL_CLOCK_ERRORS);
+    expect(await restrictions(WALL_CLOCK, INSPECTOR_SPEC)).toEqual(WALL_CLOCK_ERRORS);
+  });
+
+  it('exempts inspector specs, so a golden can compare with Math', async () => {
+    expect(await restrictions('export const x = [Math.hypot(3, 4), 2 ** 0.5];', INSPECTOR_SPEC)).toEqual([]);
+  });
+
+  it('rejects Node built-ins in inspector source, but not in specs', async () => {
+    const source = "import { readFileSync } from 'node:fs';\nexport const probe = readFileSync;";
+    expect(await restrictions(source, INSPECTOR_SOURCE)).toEqual([
+      'no-restricted-imports: Node built-ins are banned in domain source: it must also run in the browser and the sim worker.',
+    ]);
+    expect(await restrictions(source, INSPECTOR_SPEC)).toEqual([]);
+  });
+});
+
 describe('determinism lint in libs/sim-worker', () => {
   it('rejects the wall clock and ambient randomness outside pacing', async () => {
     expect(await restrictions(WALL_CLOCK, WORKER_SOURCE)).toEqual(WALL_CLOCK_ERRORS);
@@ -266,6 +318,7 @@ describe('zod namespace imports, everywhere', () => {
     'libs/domain/commands/src/lib/probe.spec.ts',
     SIM_CORE_SOURCE,
     ROUTING_SOURCE,
+    INSPECTOR_SOURCE,
     WORKER_SOURCE,
     WORKER_PACING,
     'apps/sim-cli/src/probe.ts',

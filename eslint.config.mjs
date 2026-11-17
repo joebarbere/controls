@@ -53,6 +53,12 @@ const terminationDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/
  * mounts) decide which logged commands replay, so they are held to D6 too.
  */
 const wiringDir = fileURLToPath(new URL('./libs/domain/world-model/src/lib/wiring', import.meta.url));
+/**
+ * libs/domain/inspector (P4 decision D13, kickoff step 4): its findings are derived and never hashed,
+ * but a finding's judgement (a derived ampacity against an OCPD, a box-fill volume) must not flip
+ * between Node (`sim-cli`, goldens) and Chromium (the panel), so its source is held to D6 too.
+ */
+const inspectorDir = fileURLToPath(new URL('./libs/domain/inspector', import.meta.url));
 
 /** Every file pattern the path-scoped rules below apply to. */
 const sourceFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs'];
@@ -164,6 +170,9 @@ const d6Hint =
 
 const terminationD6Hint =
   'Termination outcomes and the wiring commands geometry checks may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a stored termination and what a logged command decides are byte-identical in Node and Chromium (ADR 0015, decision D6 in plans/phase-2-circuit-engine.md).';
+
+const inspectorD6Hint =
+  'Inspector checks may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a finding is the same in sim-cli (Node) and the game (Chromium) (decision D13 in plans/phase-4-residential.md, D6 in plans/phase-2-circuit-engine.md).';
 
 const routingD6Hint =
   'Routing maths may use only IEEE-exact operations (+ - * /, Math.sqrt, …), so a baked route and its lengthMm are byte-identical in Node and Chromium (decisions D5 and D13 in plans/phase-3-wiring.md, D6 in plans/phase-2-circuit-engine.md).';
@@ -277,14 +286,16 @@ export default [
     ignores: [...toolingConfigs, ...ignores],
     rules: determinismRules,
   })),
-  // D6 deterministic maths in sim-core source and (P3, D5/D13) world-model's routing source, after the
-  // determinism block above, which these extend. Specs are exempt so they can compare against Math; they
-  // run only in Node, so their rounding never reaches a hash.
+  // D6 deterministic maths in sim-core source, (P3, D5/D13) world-model's routing, termination and wiring
+  // source and (P4, D13) the inspector's source, after the determinism block above, which these extend.
+  // Specs are exempt so they can compare against Math; they run only in Node, so their rounding never
+  // reaches a hash.
   ...[
     { basePath: simCoreDir, rules: d6Rules('sim-core source', d6Hint) },
     { basePath: routingDir, rules: d6Rules('world-model routing source', routingD6Hint) },
     { basePath: terminationDir, rules: d6Rules('world-model termination source', terminationD6Hint) },
     { basePath: wiringDir, rules: d6Rules('world-model wiring source', terminationD6Hint) },
+    { basePath: inspectorDir, rules: d6Rules('inspector source', inspectorD6Hint) },
   ].map(({ basePath, rules }) => ({
     basePath,
     files: sourceFiles,

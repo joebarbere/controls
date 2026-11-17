@@ -428,6 +428,7 @@ describe('script import boundary', () => {
     expect([...aliases].sort()).toEqual([
       '@controls/catalog',
       '@controls/commands',
+      '@controls/inspector',
       '@controls/save-format',
       '@controls/save-format/testing',
       '@controls/scripting-api',

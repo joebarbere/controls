@@ -31,6 +31,7 @@
       "@controls/sim-core/testing": ["./libs/domain/sim-core/src/testing/index.ts"],
       "@controls/sim-protocol": ["./libs/domain/sim-protocol/src/index.ts"],
       "@controls/catalog": ["./libs/domain/catalog/src/index.ts"],
+      "@controls/inspector": ["./libs/domain/inspector/src/index.ts"],
       "@controls/sim-worker": ["./libs/sim-worker/src/index.ts"],
       "@controls/ipc-contract": ["./libs/ipc-contract/src/index.ts"],
       "@controls/ipc-contract/preload": ["./libs/ipc-contract/src/preload.ts"],

@@ -58,6 +58,62 @@ describe('scope:headless lint boundary', () => {
 });
 
 /*
+ * P4 kickoff step 4 (decision D13): `@controls/inspector` is an ordinary type:domain lib. It reads the
+ * world, the catalogue and sim-core's wiringGraph, and must never reach a framework, the DOM, Electron
+ * or any UI-side workspace lib, because sim-cli runs it headless (`inspect`, `game.inspect()`).
+ */
+describe('the inspector lint boundary (type:domain)', () => {
+  const inspectorProbe = 'libs/domain/inspector/src/lib/boundary-probe.ts';
+
+  it('lets the inspector import the domain libs D13 names', async () => {
+    const source = [
+      "import { CATALOG_VERSION } from '@controls/catalog';",
+      "import { migrateWorld } from '@controls/save-format';",
+      "import { worldHash } from '@controls/world-model';",
+      "import { SIM_ENGINE_VERSION } from '@controls/sim-core';",
+      'export const probe = [CATALOG_VERSION, migrateWorld, worldHash, SIM_ENGINE_VERSION];',
+    ].join('\n');
+    expect(await boundaryErrors(source, inspectorProbe)).toEqual([]);
+  });
+
+  it('rejects feature, UI, rendering, platform and worker libs', async () => {
+    const source = [
+      "import { Session } from '@controls/feature-session';",
+      "import { Button } from '@controls/ui';",
+      "import { Renderer } from '@controls/renderer';",
+      "import { Platform } from '@controls/platform-api';",
+      "import { SimWorkerRunner } from '@controls/sim-worker';",
+      'export const probe = [Session, Button, Renderer, Platform, SimWorkerRunner];',
+    ].join('\n');
+    expect(await boundaryErrors(source, inspectorProbe)).toEqual(
+      Array(5).fill('A project tagged with "type:domain" can only depend on libs tagged with "type:domain"'),
+    );
+  });
+
+  it('rejects Angular, rxjs, Electron, three and DOM emulation', async () => {
+    const source = [
+      "import { Component } from '@angular/core';",
+      "import { Subject } from 'rxjs';",
+      "import { ipcRenderer } from 'electron';",
+      "import { Scene } from 'three';",
+      "import { JSDOM } from 'jsdom';",
+      'export const probe = [Component, Subject, ipcRenderer, Scene, JSDOM];',
+    ].join('\n');
+    const errors = await boundaryErrors(source, inspectorProbe);
+    for (const pkg of ['@angular/core', 'rxjs', 'electron', 'three', 'jsdom']) {
+      expect(errors).toContain(`A project tagged with "type:domain" is not allowed to import "${pkg}"`);
+    }
+  });
+
+  it.each([
+    ['type:feature', 'libs/features/session/src/lib/boundary-probe.ts'],
+    ['type:ui', 'libs/ui/src/lib/boundary-probe.ts'],
+  ])('lets %s import the inspector (its panel reads findings)', async (_tag, file) => {
+    expect(await boundaryErrors("export { INSPECTOR_PACKAGE } from '@controls/inspector';", file)).toEqual([]);
+  });
+});
+
+/*
  * P2 kickoff step 6: `type:worker` (libs/sim-worker) may depend only on type:domain, with domain's
  * banned npm imports; nothing but an app may depend on it, so the renderer and features read
  * snapshot types from @controls/sim-protocol (type:domain).
