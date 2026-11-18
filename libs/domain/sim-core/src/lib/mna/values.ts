@@ -174,7 +174,8 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  *   nominal voltage is never an EMF: a lead-acid battery resting at its nominal 12.0 V is only about a
  *   quarter charged (plan F2.4, #46 review);
  * - `resistor` and `heater` (F2.5): their fixed `resistanceOhm` (the heater's V_r² / P_r);
- * - `fuse` and `breaker.thermalMagnetic` (F2.5 part 2): a closed link's or pole's `resistanceOhm`.
+ * - `fuse` and `breaker.thermalMagnetic` (F2.5 part 2): a closed link's or pole's `resistanceOhm`; the
+ *   breakers v2 kinds (P4 PR 10) likewise, a pole's, a sensing neutral's or a held GFCI test resistor's.
  *
  * Kinds whose value is sim-owned state with no placeholder (the lamp's filament R(T), F2.5) have no
  * default: the engine's hook must set them.
@@ -187,6 +188,10 @@ export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Objec
   heater: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   fuse: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   'breaker.thermalMagnetic': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  'breaker.plugOn1p': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  'breaker.plugOn2p': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  'breaker.gfci1p': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  'breaker.afci1p': (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   battery: (branch, values) =>
     values.vsource(branch.index, branch.values['openCircuitVoltageFullV'], branch.values['internalResistanceOhm']),
 });
@@ -204,6 +209,10 @@ export const RESISTOR_DEFAULT_MODELS: ReadonlySet<string> = new Set([
   'heater',
   'fuse',
   'breaker.thermalMagnetic',
+  'breaker.plugOn1p',
+  'breaker.plugOn2p',
+  'breaker.gfci1p',
+  'breaker.afci1p',
 ]);
 
 /**

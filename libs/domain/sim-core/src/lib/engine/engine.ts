@@ -1,5 +1,5 @@
 import { BUILTIN_CATALOG, type Catalog, type RegionProfile, regionProfile } from '@controls/catalog';
-import type { ReplayEntry, World } from '@controls/save-format';
+import type { DeviceStateValue, ReplayEntry, World } from '@controls/save-format';
 import {
   compareSimEvents,
   CONNECTION_OUTPUT_SCHEMAS,
@@ -21,7 +21,7 @@ import {
   type SnapshotSource,
   type TopologyDescriptor,
 } from '@controls/sim-protocol';
-import { deriveStream, entityStreamKey } from '@controls/world-model';
+import { deriveStream, entityPurposeStreamKey, entityStreamKey } from '@controls/world-model';
 import {
   createDcSolution,
   type DcIterationHook,
@@ -62,6 +62,7 @@ import { islandNominalBands, type NominalBandReason, SOURCE_BAND_RULES } from '.
 import { buildTopologyDescriptor, type DescriptorConnectionRecord } from './descriptor';
 import { readingStatusCode } from '../devices/readings';
 import {
+  type CommandedContext,
   type LayerContext,
   type SimIslandStatus,
   type SimDevice,
@@ -418,13 +419,36 @@ export class SimEngine {
     islandReadable(island: number): boolean;
     islandStatus(island: number): SimIslandStatus;
     emit: LayerContext['emit'];
+    arcingCount(): number;
+    arcingBranch(k: number): number;
   };
+  /** What a bank's `commanded` hook sees (engine 8): the command's tick and the last solution. */
+  private readonly commandedCtx: {
+    tick: number;
+    netlist: Netlist;
+    solution: DcSolution;
+    islandReadable(island: number): boolean;
+    emit: CommandedContext['emit'];
+  };
+  /**
+   * The branches of the netlisted connections with an arcing end (engine 8, the AFCI), collected lazily
+   * once per step: `arcingTick` is the step they were collected for (−1: stale).
+   */
+  private arcing = new Int32Array(0);
+  private arcingCountNow = 0;
+  private arcingTick = -1;
   private readonly hook: DcIterationHook;
   private readonly nonlinear: { hook: DcIterationHook; warmStart: DcSolution | null };
   private readonly simOf = (entity: number): StateBag | undefined => this.liveBag(entity);
   /** The compiler's view of a connection's end states: the bank's (ADR 0015, F3.6 part 2). */
   private readonly connectionSimOf = (connection: number) => this.connectionBank.topologyView(connection);
-  private readonly compileOptions = { sim: this.simOf, connectionSim: this.connectionSimOf };
+  /** One sim key of an entity, without building its bag (the compiler's structure code, engine 8). */
+  private readonly simValueOf = (entity: number, key: string) => this.liveValue(entity, key);
+  private readonly compileOptions = {
+    sim: this.simOf,
+    simValue: this.simValueOf,
+    connectionSim: this.connectionSimOf,
+  };
 
   private constructor(world: World, options: SimEngineOptions) {
     this.options = options;
@@ -464,6 +488,15 @@ export class SimEngine {
       islandReadable: (island) => this.readable(island),
       islandStatus: (island) => this.status(island),
       emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
+      arcingCount: () => this.arcingCountAt(this.ctx.tick),
+      arcingBranch: (k) => this.arcing[k],
+    };
+    this.commandedCtx = {
+      tick: this.tickNow,
+      netlist: this.current,
+      solution: this.solution,
+      islandReadable: (island) => this.readable(island),
+      emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.commandedCtx.tick),
     };
     this.rebuild();
     this.syncConnections();
@@ -550,6 +583,7 @@ export class SimEngine {
   private syncConnections(): void {
     const bank = this.connectionBank;
     bank.sync(this.world, this.current);
+    this.arcingTick = -1;
     this.pointConnections();
     // Each end's terminal node is resolved before the next record write, not here: a sync runs on the
     // re-solve path (an intermittent toggle), and the lookup is a string key per end.
@@ -627,13 +661,17 @@ export class SimEngine {
   /** Calls `commanded` on each netlisted device whose commanded `state` bag the command replaced. */
   private notifyCommanded(previous: World, world: World): void {
     const before = previous.entities;
+    const ctx = this.commandedCtx;
+    ctx.tick = this.tickNow;
+    ctx.netlist = this.current;
+    ctx.solution = this.solution;
     let j = 0;
     for (const entity of world.entities) {
       while (j < before.length && before[j].id < entity.id) j++;
       if (j < before.length && before[j].id === entity.id && before[j].state === entity.state) continue;
       const slot = this.devices.get(entity.id);
       if (slot === undefined || slot.bank === null) continue;
-      slot.bank.bank.commanded?.(slot.index, entity.state);
+      slot.bank.bank.commanded?.(slot.index, entity.state, ctx);
     }
   }
 
@@ -1217,6 +1255,42 @@ export class SimEngine {
     return entity < this.world.nextEntityId ? this.tombstones.get(entity) : undefined;
   }
 
+  /**
+   * One key of a device's live sim state, as {@link liveBag} would hold it, without building a bag
+   * (engine 8: the compiler's structure code reads it per toggle). `null` for a key the live state
+   * lacks; `undefined` when the device has no live state (the compiler then reads the world's bag).
+   */
+  private liveValue(entity: number, key: string): DeviceStateValue | undefined {
+    const slot = this.devices.get(entity);
+    let value: DeviceStateValue | undefined;
+    if (slot !== undefined) {
+      if (slot.bank === null) value = slot.bag[key];
+      else {
+        const bank = slot.bank.bank;
+        value = bank.simValue !== undefined ? bank.simValue(slot.index, key) : bank.bag(slot.index)[key];
+      }
+    } else {
+      const tombstone = entity < this.world.nextEntityId ? this.tombstones.get(entity) : undefined;
+      if (tombstone === undefined) return undefined;
+      value = tombstone[key];
+    }
+    return value === undefined ? null : value;
+  }
+
+  /**
+   * How many netlisted connections have an arcing end at step `tick` (engine 8, the AFCI): collected
+   * from the connection bank once per step, in member (connection-id) order, into `arcing`.
+   */
+  private arcingCountAt(tick: number): number {
+    if (this.arcingTick !== tick) {
+      const bank = this.connectionBank;
+      if (this.arcing.length < bank.count) this.arcing = new Int32Array(bank.count);
+      this.arcingCountNow = bank.arcingBranches(this.arcing);
+      this.arcingTick = tick;
+    }
+    return this.arcingCountNow;
+  }
+
   /** A source branch's nominal band (`SOURCE_BAND_RULES` by its model kind, from its entity's nameplate). */
   private sourceBand(branch: NetlistBranch, entities: ReadonlyMap<number, World['entities'][number]>): number {
     if (branch.element.kind !== 'entity') return 0;
@@ -1250,12 +1324,17 @@ export class SimEngine {
     const byKind = new Map<string, SimDevice[]>();
     const devices = new Map<number, DeviceSlot>();
     const branchesOf = new Map<number, number[]>();
+    const partsOf = new Map<number, string[]>();
     for (const branch of netlist.branches) {
       if (branch.element.kind !== 'entity') continue;
       let list = branchesOf.get(branch.element.entity);
+      let parts = partsOf.get(branch.element.entity);
       if (list === undefined) branchesOf.set(branch.element.entity, (list = []));
+      if (parts === undefined) partsOf.set(branch.element.entity, (parts = []));
       list.push(branch.index);
+      parts.push(branch.element.part);
     }
+    const regionProtection = this.region.protection;
     for (const device of netlist.devices) {
       const entity = entities.get(device.entity) as World['entities'][number];
       const bag = live.get(device.entity) ?? this.tombstones.get(device.entity) ?? entity.sim;
@@ -1276,8 +1355,11 @@ export class SimEngine {
         bag,
         state: entity.state,
         branches: branchesOf.get(id) ?? [],
+        parts: partsOf.get(id) ?? [],
         frequencyHz: this.frequencyHz,
+        protection: regionProtection,
         stream: () => deriveStream(seed, entityStreamKey(id)),
+        purposeStream: (purpose) => deriveStream(seed, entityPurposeStreamKey(id, purpose)),
       });
     }
 

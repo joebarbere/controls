@@ -7,6 +7,7 @@ import { BUILTIN_DEVICE_MODELS, GENERATOR_STUB_NAMEPLATE } from '../lib/devices'
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../lib/engine/device-model';
 import type { SimEngineOptions } from '../lib/engine/engine';
 import type { DeviceNetlistModel, NetlistModels } from '../lib/netlist/models';
+import { PLUG_ON_DOCUMENTS } from './plug-on';
 import {
   BATTERY,
   end,
@@ -397,6 +398,7 @@ export const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(AC_TWIN, 'Test AC twin source', 'test.acTwin', {}, ['n', 'l']),
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
+  ...PLUG_ON_DOCUMENTS,
 ];
 
 /** The built-in catalogue, `bench.ts`'s test entries and the engine's. */

@@ -20,7 +20,14 @@ import {
   utilityThreePhaseNetlistModel,
 } from '../devices/sources/netlist-models';
 import { heaterNetlistModel, resistorNetlistModel } from '../devices/loads/netlist-models';
-import { breakerNetlistModel, fuseNetlistModel } from '../devices/protection/netlist-models';
+import {
+  afci1pNetlistModel,
+  breakerNetlistModel,
+  fuseNetlistModel,
+  gfci1pNetlistModel,
+  plugOn1pNetlistModel,
+  plugOn2pNetlistModel,
+} from '../devices/protection/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -358,6 +365,10 @@ function endContact(device: DeviceDefinition, end: ConnectionEndInput, conductor
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
+  'breaker.afci1p': afci1pNetlistModel,
+  'breaker.gfci1p': gfci1pNetlistModel,
+  'breaker.plugOn1p': plugOn1pNetlistModel,
+  'breaker.plugOn2p': plugOn2pNetlistModel,
   'breaker.thermalMagnetic': breakerNetlistModel,
   'electrode.groundRod': groundRodNetlistModel,
   'enclosure.box': enclosureBox,

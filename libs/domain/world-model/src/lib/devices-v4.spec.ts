@@ -1,7 +1,9 @@
-import { MAX_PANEL_SPACES } from '@controls/catalog';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { BUILTIN_CATALOG, catalogOrThrow, checkBags, MAX_PANEL_SPACES, MODEL_KINDS } from '@controls/catalog';
 import { createWorld, World } from '@controls/save-format';
 import { RESIDENTIAL, RESIDENTIAL_TEST_CATALOG, RESIDENTIAL_TEST_KINDS } from '../testing';
-import { checkWorldReferences, directoryKeyProblems } from './devices';
+import { checkWorldReferences, directoryKeyProblems, tripCauseProblems } from './devices';
 import { createWorldBus, createWorldRegistry } from './session';
 import type { Connection, Entity } from './types';
 import { checkMount } from './wiring/mounting';
@@ -263,5 +265,160 @@ describe('plug occupancy in the P3 entity commands', () => {
     const bus = createWorldBus(world([]), registry);
     expect(bus.exec('entity.place', { ref: KETTLE, positionMm: at(0) })).toMatchObject({ ok: true });
     expect(bus.state.entities[0].pluggedInto).toBeNull();
+  });
+});
+
+describe('the tripCause rule (P4 PR 10, ADR 0019 "Schema invariants")', () => {
+  /** A one-entry catalogue holding a TEST-ONLY GFCI breaker entry (no real product: game-design test data). */
+  const breakerCatalog = catalogOrThrow(BUILTIN_CATALOG.version, {
+    devices: [
+      {
+        id: 'breaker.test-gfci',
+        version: 1,
+        title: 'Test GFCI breaker',
+        brand: 'Testbrand',
+        modelName: 'G-1',
+        category: 'protection',
+        sizeMm: { widthMm: 20, heightMm: 80, depthMm: 70 },
+        terminals: ['line', 'load', 'loadNeutral', 'pigtail'].map((id) => ({
+          id,
+          label: id,
+          positionMm: at(0),
+          methods: [],
+          role: null,
+          side: null,
+          access: 'clip',
+        })),
+        mounts: [],
+        enclosure: null,
+        hostMounts: [],
+        outlets: [],
+        plug: null,
+        supersededBy: null,
+        conductor: null,
+        model: {
+          kind: 'breaker.gfci1p',
+          params: {
+            ratedCurrentA: 20,
+            thermalTimeConstantS: 60,
+            ultimateTripRatio: 1.25,
+            magneticPickupMinA: 240,
+            magneticPickupMaxA: 400,
+            openingTimeMinMs: 8,
+            openingTimeMaxMs: 20,
+            contactResistanceOhm: 0.005,
+            residualPickupMinA: 0.004,
+            residualPickupMaxA: 0.006,
+            mechanismTimeMinMs: 3,
+            mechanismTimeMaxMs: 14,
+            testResistanceOhm: 15000,
+          },
+        },
+        controls: [
+          { id: 'on', label: 'Handle on', type: 'toggle' },
+          { id: 'test', label: 'Test', type: 'momentary' },
+        ],
+        sources: [
+          {
+            id: 'test',
+            kind: 'game-design',
+            citation: 'game-design: test only, never a real device',
+            covers: [
+              'sizeMm',
+              'terminals',
+              ...[
+                'ratedCurrentA',
+                'thermalTimeConstantS',
+                'ultimateTripRatio',
+                'magneticPickupMinA',
+                'magneticPickupMaxA',
+                'openingTimeMinMs',
+                'openingTimeMaxMs',
+                'contactResistanceOhm',
+                'residualPickupMinA',
+                'residualPickupMaxA',
+                'mechanismTimeMinMs',
+                'mechanismTimeMaxMs',
+                'testResistanceOhm',
+              ].map((p) => `model.params.${p}`),
+            ],
+          },
+        ],
+        extensions: {},
+      },
+    ],
+    tables: BUILTIN_CATALOG.tables,
+  });
+  const GFCI = ref('breaker.test-gfci');
+  const sim = (overrides: Record<string, unknown>) => ({
+    magneticSinceTick: null,
+    residualIntegral: 0,
+    residualSinceTick: null,
+    testHeldSinceTick: null,
+    thermal: 0,
+    tripCause: null,
+    tripped: false,
+    ...overrides,
+  });
+  const breaker = (s: Record<string, unknown>) =>
+    world([entity(1, GFCI, 0, { state: { on: true, test: 0 }, sim: sim(s) as Entity['sim'] })]);
+  const problems = (s: Record<string, unknown>) =>
+    checkWorldReferences(breaker(s), breakerCatalog).map((i) => `${i.path}: ${i.message}`);
+
+  it('a breaker’s cause is null exactly when it is not tripped', () => {
+    expect(problems({})).toStrictEqual([]);
+    expect(problems({ tripped: true, tripCause: 'groundFault' })).toStrictEqual([]);
+    expect(problems({ tripped: true, tripCause: null })).toStrictEqual([
+      'entities[0].sim.tripCause: A tripped device names its cause',
+    ]);
+    expect(problems({ tripped: false, tripCause: 'test' })).toStrictEqual([
+      'entities[0].sim.tripCause: A device that is not tripped has no cause',
+    ]);
+    // An invalid cause is checkBags's to report, once.
+    expect(problems({ tripped: true, tripCause: 'overload' })).toHaveLength(1);
+  });
+
+  it('a latched GFCI (a receptacle kind, F4.1 part 2) has no cause; an unlatched one may; a kind without the key has nothing to check', () => {
+    const keys = MODEL_KINDS['breaker.gfci1p'].keys;
+    const receptacle = {
+      ...MODEL_KINDS['breaker.gfci1p'],
+      keys: { latched: keys['tripped'], tripCause: keys['tripCause'] },
+    };
+    expect(tripCauseProblems(receptacle, { latched: true, tripCause: null })).toStrictEqual([]);
+    expect(tripCauseProblems(receptacle, { latched: false, tripCause: 'groundFault' })).toStrictEqual([]);
+    expect(tripCauseProblems(receptacle, { latched: false, tripCause: null })).toStrictEqual([]);
+    expect(tripCauseProblems(receptacle, { latched: true, tripCause: 'test' })).toStrictEqual([
+      { path: 'sim.tripCause', message: 'A latched device has no trip cause' },
+    ]);
+    expect(tripCauseProblems(MODEL_KINDS['breaker.thermalMagnetic'], { tripped: true })).toStrictEqual([]);
+  });
+
+  it('save-format’s protection-state fixture holds exactly the final key sets of the kinds its fixture-only refs stand for (ADR 0021 part 2)', () => {
+    const fixture = World.parse(
+      JSON.parse(
+        readFileSync(
+          resolve(import.meta.dirname, '../../../save-format/fixtures/v4/world/protection-state.json'),
+          'utf8',
+        ),
+      ),
+    );
+    // The fixture keeps its fixture-only refs (no real entry exists before the content PRs); each
+    // stands for one of the kinds ADR 0021 part 2 finalised.
+    const standsFor: Readonly<Record<string, string>> = {
+      'breaker.fixture-plug-on-1p-20a': 'breaker.plugOn1p',
+      'breaker.fixture-plug-on-2p-30a': 'breaker.plugOn2p',
+      'breaker.fixture-gfci-1p-20a': 'breaker.gfci1p',
+      'breaker.fixture-afci-1p-15a': 'breaker.afci1p',
+    };
+    const checked = fixture.entities.filter((e) => standsFor[e.ref.id] !== undefined);
+    expect(checked.map((e) => e.ref.id).sort()).toStrictEqual(Object.keys(standsFor).sort());
+    for (const e of checked) {
+      const kind = MODEL_KINDS[standsFor[e.ref.id]];
+      expect(checkBags(kind, e.state, e.sim), e.ref.id).toStrictEqual([]);
+      expect(tripCauseProblems(kind, e.sim), e.ref.id).toStrictEqual([]);
+    }
+    // The GFCI breaker is saved inside its mechanism window: the integral at 1, the excursion 10 ticks old.
+    const gfci = checked.find((e) => e.ref.id === 'breaker.fixture-gfci-1p-20a');
+    expect(gfci?.sim).toMatchObject({ residualIntegral: 1, residualSinceTick: fixture.tick - 10, tripped: false });
   });
 });

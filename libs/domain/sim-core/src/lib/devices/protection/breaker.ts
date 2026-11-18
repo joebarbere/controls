@@ -90,6 +90,8 @@ export const BREAKER_MODEL: SimDeviceModel = {
     });
     return {
       bag: (i) => ({ thermal: thermal[i], tripped: tripped[i] === 1 }),
+      // The compiler's structure code reads `tripped` without a bag (engine 8).
+      simValue: (i, key) => (key === 'tripped' ? tripped[i] === 1 : undefined),
       commanded: (i, state) => {
         handleOn[i] = state['on'] === true ? 1 : 0;
         // Turning the handle off resets a tripped breaker (it closes when turned on again).

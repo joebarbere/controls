@@ -1,4 +1,5 @@
 import { type AcSourceParams, BUILTIN_CATALOG, NEC_REGION, voltageBand } from '@controls/catalog';
+import { deviceExtras } from '../../../testing/devices';
 import { BUSBAR, GENERATOR, RESISTOR_100, RESISTOR_12, ENGINE_TEST_CATALOG } from '../../../testing/engine';
 import { SourceHost, UTILITY_208, UTILITY_480, UTILITY_SPLIT } from '../../../testing/sources';
 import type { NetlistBranch } from '../../netlist/types';
@@ -123,6 +124,7 @@ describe('the region frequency reaches the bank (SimDevice.frequencyHz)', () => 
         state: {},
         branches: [0, 1],
         frequencyHz: 50,
+        ...deviceExtras(0, 1, ['l1', 'l2']),
         stream: () => deriveStream(0, 'x'),
       },
     ]);

@@ -23,6 +23,7 @@ import { ENGINE_TEST_CATALOG, GENERATOR, ROD, SERVICE } from '../../testing/engi
 import { MODEL_KINDS } from '@controls/catalog';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
+import { AFCI_15, GFCI_20, PLUG_ON_15, PLUG_ON_2P_20 } from '../../testing/plug-on';
 import { free, SPLIT_PHASE, THHN_14_SOLID, wireArgs, wiredBus } from '../../testing/wired';
 import { WIRING_TEST_CATALOG } from '@controls/world-model/testing';
 
@@ -70,6 +71,13 @@ const MODEL_KIND_TOPOLOGY = {
   terminalBlockGround: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
   serviceSplitPhase: '67bb50ca6f36ca6d398ed554f073d60e482fce65af6c9a5e289189f07e9ef872',
   electrodeGroundRod: '0ee4b43a535e223ef7651250bd17b7cbff249c758bf45703b9cf0d8ec719576a',
+  plugOn1pOff: '5b7e7d973bfcf376679cee1f29d5d298fc67ae0b5c0f5b3949f9d0df5ec5708e',
+  plugOn1pOn: 'e85df90e35c329296260cd6d5c878a02cb69f1b904d259729216756b3b0f2c08',
+  plugOn2pOn: '46d7a794ee4ee3dea11544a397405e71bcbde2ad4cdad7efc59e1f87f88f0c37',
+  gfci1pOff: 'f1fb6ce7ac4452757fdde1d81cf70e9cf438ca4bb55e8a08bc8a47ed4368afc8',
+  gfci1pOn: '5d73d2eb00a7dd458f914f5762a1f21d0e1ec7578439254f1e63adadf8b3649b',
+  gfci1pTestHeld: 'd3a3ca6c3e89faf7efcfab2eb021f29598bfbe957d21d64effea190b7b9977d8',
+  afci1pOn: '5be6e63cd04b8997eda7695e7d85c25862396180d54d027aca6ee29a5db77bd6',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -102,6 +110,13 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   terminalBlockGround: 'terminalBlock.ground',
   serviceSplitPhase: 'service.splitPhase',
   electrodeGroundRod: 'electrode.groundRod',
+  plugOn1pOff: 'breaker.plugOn1p',
+  plugOn1pOn: 'breaker.plugOn1p',
+  plugOn2pOn: 'breaker.plugOn2p',
+  gfci1pOff: 'breaker.gfci1p',
+  gfci1pOn: 'breaker.gfci1p',
+  gfci1pTestHeld: 'breaker.gfci1p',
+  afci1pOn: 'breaker.afci1p',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -209,6 +224,15 @@ describe('topologyHash', () => {
       if (closed !== undefined) run(bus, 'device.operate', { id: 1, control: 'closed', value: closed });
       return compileNetlist(bus.state, catalog).topologyHash;
     };
+    /** A test breaker with its handle on, its sim bag patched with `sim` (what a save would hold). */
+    const handleOn = (ref: typeof LEAD, sim: Record<string, number> = {}) => {
+      const bus = benchBus(ENGINE_TEST_CATALOG);
+      run(bus, 'entity.place', { ref, positionMm: origin });
+      run(bus, 'device.operate', { id: 1, control: 'on', value: true });
+      const world = bus.state;
+      const patched = { ...world, entities: world.entities.map((e) => ({ ...e, sim: { ...e.sim, ...sim } })) };
+      return compileNetlist(patched, ENGINE_TEST_CATALOG).topologyHash;
+    };
     const lead = () => {
       const bus = benchBus();
       for (const ref of [LAMP, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
@@ -231,6 +255,15 @@ describe('topologyHash', () => {
       // through the test catalogue's entries until the content PRs ship real ones.
       serviceSplitPhase: one(SERVICE, undefined, ENGINE_TEST_CATALOG),
       electrodeGroundRod: one(ROD, undefined, ENGINE_TEST_CATALOG),
+      // P4 PR 10 (breakers v2, ADR 0021 part 2), on the test catalogue's entries fed by nothing: a pole
+      // per closed pole; the GFCI's and AFCI's neutral always; the GFCI's test resistor while held.
+      plugOn1pOff: one(PLUG_ON_15, undefined, ENGINE_TEST_CATALOG),
+      plugOn1pOn: handleOn(PLUG_ON_15),
+      plugOn2pOn: handleOn(PLUG_ON_2P_20),
+      gfci1pOff: one(GFCI_20, undefined, ENGINE_TEST_CATALOG),
+      gfci1pOn: handleOn(GFCI_20),
+      gfci1pTestHeld: handleOn(GFCI_20, { testHeldSinceTick: 0 }),
+      afci1pOn: handleOn(AFCI_15),
       resistor: one(RESISTOR_10R),
       heater: one(HEATER),
       fuse: one(FUSE_1A),

@@ -93,6 +93,8 @@ export const FUSE_MODEL: SimDeviceModel = {
     });
     return {
       bag: (i) => ({ blown: blown[i] === 1, bodyHeat: body[i], elementHeat: element[i] }),
+      // The compiler's structure code reads `blown` without a bag (engine 8).
+      simValue: (i, key) => (key === 'blown' ? blown[i] === 1 : undefined),
       protection: (ctx) => {
         let changed = false;
         const dt = ctx.dtS;

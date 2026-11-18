@@ -141,6 +141,8 @@ function rig(world: World = thermalWorld(), options: ConnectionBankOptions = {})
     islandReadable: () => true,
     islandStatus: () => 'solved',
     emit: () => undefined,
+    arcingCount: () => 0,
+    arcingBranch: () => -1,
   };
   const setAmps = (connection: number, amps: number) => {
     const branch = bank.branch[bank.indexOf(connection)];

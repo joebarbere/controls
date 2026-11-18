@@ -228,6 +228,10 @@ export const AC_DEFAULT_VALUES: Readonly<Record<string, AcDefaultValue>> = Objec
   heater: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   fuse: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   'breaker.thermalMagnetic': (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  'breaker.plugOn1p': (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  'breaker.plugOn2p': (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  'breaker.gfci1p': (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  'breaker.afci1p': (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
 });
 
 /**

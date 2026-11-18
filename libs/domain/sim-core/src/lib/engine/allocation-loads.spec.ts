@@ -1,4 +1,13 @@
 import { Session } from 'node:inspector';
+import { type BankRig, bankRig } from '../../testing/breakers';
+import { GFCI_SENSE_PARAMS, plugOnParams } from '../../testing/plug-on';
+import {
+  AFCI_BREAKER_MODEL,
+  GFCI_BREAKER_MODEL,
+  PLUG_ON_1P_MODEL,
+  PLUG_ON_2P_MODEL,
+} from '../devices/protection/plug-on';
+import { deviceExtras } from '../../testing/devices';
 import { BATTERY, end, LAMP, LEAD, origin } from '../../testing/bench';
 import { ENGINE_TEST_CATALOG, engineBus, engineTestOptions, THERMAL_LOAD } from '../../testing/engine';
 import { BENCH_SUPPLY } from '../../testing/sources';
@@ -320,6 +329,7 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
       state,
       branches: [0],
       frequencyHz: 60,
+      ...deviceExtras(11, 2, ['element']),
       stream: () => deriveStream(11, entityStreamKey(2)),
     });
     const layers: [string, () => void][] = [
@@ -353,6 +363,38 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
       const bytes = sampledLoopBytes(call, 200_000);
       if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${bytes / 200_000}`);
       // Under 1 B a call: one heap number a call is 16 B; the window's own noise measured 0.01–0.07.
+      expect(bytes / 200_000, name).toBeLessThan(1);
+    }
+  });
+
+  // Breakers v2 (P4 PR 10): each kind's protection layer on its bank, a loaded closed breaker every tick
+  // (the AFCI's bucket boundaries included, with nothing arcing; the GFCI's residual 0).
+  it('each breakers-v2 layer alone (bank calls on a fixed solution) allocates nothing per call', () => {
+    const p20 = plugOnParams(20);
+    const rigs: [string, BankRig][] = [
+      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15)],
+      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15).amps('pole2', -15)],
+      [
+        'gfci1p',
+        bankRig(GFCI_BREAKER_MODEL, { ...p20, ...GFCI_SENSE_PARAMS }, ['neutral', 'pole'], {
+          state: { on: true, test: 0 },
+        })
+          .amps('pole', 15)
+          .amps('neutral', -15),
+      ],
+      [
+        'afci1p',
+        bankRig(AFCI_BREAKER_MODEL, p20, ['neutral', 'pole'], { state: { on: true, test: 0 } })
+          .amps('pole', 15)
+          .amps('neutral', -15),
+      ],
+    ];
+    for (const [name, rig] of rigs) {
+      const call = () => rig.step();
+      for (let k = 0; k < 200_000; k++) call(); // tier up
+      const bytes = sampledLoopBytes(call, 200_000);
+      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${bytes / 200_000}`);
+      expect(rig.events, name).toStrictEqual([]);
       expect(bytes / 200_000, name).toBeLessThan(1);
     }
   });

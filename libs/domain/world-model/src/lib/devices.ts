@@ -56,7 +56,9 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  *   entry that both fits a mount and has a plug is refused by the catalogue itself (`parseCatalog`);
  * - (world v4) a `directory<n>` text key above the entry's panel `spaces` is `null`
  *   (`directoryKeyProblems`). Counters (catalogue v3 `counter` keys) are non-negative integers through
- *   `checkBags`, like every key's own schema.
+ *   `checkBags`, like every key's own schema;
+ * - (world v4, P4 PR 10) a breaker's `tripCause` is `null` exactly when it isn't `tripped`, and a GFCI
+ *   receptacle's is non-null only while it is unlatched (`tripCauseProblems`).
  *
  * Areas (world v4): each `use` is a row of `AREA_USES`.
  *
@@ -125,6 +127,33 @@ export function directoryKeyProblems(
   return problems;
 }
 
+/**
+ * A device's `tripCause` against its trip state (world v4, ADR 0019 "Schema invariants", the breakers
+ * v2 load check of P4 PR 10): on a kind with `tripped`, the cause is `null` exactly when it isn't
+ * tripped; on a kind with `latched` (a GFCI receptacle, from F4.1 part 2), the cause is non-null only
+ * while it is unlatched. Values its keys' own schemas refuse are `checkBags`'s to report, so they are
+ * left alone here. A kind without `tripCause` has no problems.
+ */
+export function tripCauseProblems(kind: ModelKindDef, sim: Readonly<Record<string, unknown>>): ValidationIssue[] {
+  const causeKey = kind.keys['tripCause'];
+  if (causeKey?.owner !== 'sim' || !causeKey.schema.safeParse(sim['tripCause']).success) return [];
+  const cause = sim['tripCause'];
+  const tripped = sim['tripped'];
+  const latched = sim['latched'];
+  if (kind.keys['tripped'] !== undefined && typeof tripped === 'boolean' && tripped !== (cause !== null)) {
+    return [
+      {
+        path: 'sim.tripCause',
+        message: tripped ? 'A tripped device names its cause' : 'A device that is not tripped has no cause',
+      },
+    ];
+  }
+  if (kind.keys['latched'] !== undefined && latched === true && cause !== null) {
+    return [{ path: 'sim.tripCause', message: 'A latched device has no trip cause' }];
+  }
+  return [];
+}
+
 const sameRef = (a: CatalogRef, b: CatalogRef): boolean => a.id === b.id && a.version === b.version;
 
 /**
@@ -184,6 +213,7 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
     }
   }
   for (const problem of directoryKeyProblems(kind, device, entity.state)) add(`${at}.${problem.path}`, problem.message);
+  for (const problem of tripCauseProblems(kind, entity.sim)) add(`${at}.${problem.path}`, problem.message);
   if (entity.pluggedInto !== null) {
     const host = findEntity(world, entity.pluggedInto.entity) as Entity; // the schema guarantees it exists
     // A built-in prop isn't a catalogue device, but it is known: it has no outlets (`plug.insert` refuses

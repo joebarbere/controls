@@ -10,7 +10,14 @@ import {
   UTILITY_THREE_PHASE_MODEL,
 } from './sources';
 import { HEATER_MODEL, LAMP_MODEL, RESISTOR_MODEL } from './loads';
-import { BREAKER_MODEL, FUSE_MODEL } from './protection';
+import {
+  AFCI_BREAKER_MODEL,
+  BREAKER_MODEL,
+  FUSE_MODEL,
+  GFCI_BREAKER_MODEL,
+  PLUG_ON_1P_MODEL,
+  PLUG_ON_2P_MODEL,
+} from './protection';
 
 export * from './loads';
 export * from './protection';
@@ -22,11 +29,16 @@ export * from './sources';
  * battery (state of charge), the bench supply and the DIN PSU (CV/CC, hiccup), the utility services
  * (split-phase and three-phase) and the portable generator stub. F2.5: the incandescent lamp (its
  * filament's R(T) and temperature), the resistor and the heater; part 2's fuse and thermal-magnetic breaker. Engine 8:
- * the service (`service.splitPhase`, the T-equivalent and its drop). A kind without an engine model keeps
+ * the service (`service.splitPhase`, the T-equivalent and its drop); breakers v2 (the plug-on, GFCI and AFCI
+ * breakers, `plug-on.ts`). A kind without an engine model keeps
  * its bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
   battery: BATTERY_MODEL,
+  'breaker.afci1p': AFCI_BREAKER_MODEL,
+  'breaker.gfci1p': GFCI_BREAKER_MODEL,
+  'breaker.plugOn1p': PLUG_ON_1P_MODEL,
+  'breaker.plugOn2p': PLUG_ON_2P_MODEL,
   'breaker.thermalMagnetic': BREAKER_MODEL,
   fuse: FUSE_MODEL,
   'generator.portable': GENERATOR_PORTABLE_MODEL,

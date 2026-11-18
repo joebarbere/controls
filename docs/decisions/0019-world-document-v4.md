@@ -431,3 +431,14 @@ Engine 8 part 1 (`sim-engine-engineer`) implements "What the netlist compiler re
 4. **The lamp's `burnedOut` and `overvoltageSinceTick` are still carried through** (note 6 of PR 7 said engine 8 sets them): setting them needs protocol 8's `lampBurnout` and `overvoltage` events (PR 11) and F4.4's dwell, so they move to that work. The `overvoltageSinceTick` exemption in `scripting-api`'s `save.spec.ts` is kept.
 5. **The numeric structure code** for topology keys waits for the first kinds with sim topology keys (PR 10).
 6. **Contact ids** in the descriptor are camelCase ASCII up to 255 characters (§8); in the catalogue `ContactId` stays at 32. ADR 0020's `ElementRef.part` question is settled by the `contact` kind.
+
+## Implementation notes (P4 PR 10, 2026-11-18)
+
+Breakers v2, the GFCI breaker and the AFCI breaker (`sim-engine-engineer`); the physics and the deviations are in [ADR 0021](0021-service-grounding-and-protection-physics.md) part 2.
+
+1. **The four breaker kinds' keys are final as this ADR's table has them** (`breaker.plugOn1p`, `breaker.plugOn2p`, `breaker.gfci1p`, `breaker.afci1p`): no key added, renamed or reshaped. `tripCause` is one enum for every kind (`TRIP_CAUSES`). The GFCI receptacle's keys settle with F4.1 part 2.
+2. **The `tripCause` load check** landed (`tripCauseProblems` in world-model, deferred from PR 7's note 8): `null` exactly when not `tripped`; for a kind with `latched`, non-null only while unlatched.
+3. **`protection-state.json` needed no change**: its fixture-only bags already held these key sets. It keeps its fixture-only refs; a world-model spec checks each bag against the kind its ref stands for.
+4. **The numeric structure code** (PR 9's note 5) landed: each sim topology key is projected to a boolean and the compiler keeps one number per entity, read without building a bag (`CompileOptions.simValue`).
+5. **The `commanded` hook gets read-only access to the last solution** (`CommandedContext`), as "Derived on load, never persisted" anticipated; the AFCI's test press uses it now, the GFCI receptacle's reset will.
+6. **`GFCI_TEST_HOLD_TICKS` is fixed at 5000, not "about 1000"** (the realism review): a realistic test circuit (at most about 9 mA, UL 943 by number; 6.8 mA from a 15 kΩ resistor at 85 % voltage) takes up to 4.60 s at the Class A limit, which the hold must cover. The key's type and meaning are unchanged.
