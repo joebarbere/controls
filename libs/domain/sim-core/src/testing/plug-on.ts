@@ -10,8 +10,8 @@
  *   8–20 ms (the top read from the curve, the bottom game-design); a pole contact of 5 mΩ (inside the
  *   vetted 5–10 mΩ); the bus stab contact 5 mΩ (test data, PR 9's);
  * - the GFCI breaker: residual pickup 4–6 mA and the mechanism 3–14 ms (vetted); the test resistor
- *   3.9 kΩ (game-design test data: about 31 mA at 120 V, so a held test trips at the Class A limit in
- *   about 0.54 s, inside `GFCI_TEST_HOLD_TICKS`);
+ *   15 kΩ (game-design test data inside a UL 943 test circuit of at most about 9 mA: 8.0 mA at 120 V, so a
+ *   held test trips at the Class A limit in about 3.64 s, inside `GFCI_TEST_HOLD_TICKS`);
  * - the AFCI breakers: a plug-on pole; their detection limits are the region's (UL 1699 by number).
  *
  * Every terminal is clip-reachable so a spec can feed a breaker with a lead as well as from a bus stab.
@@ -47,7 +47,7 @@ export const GFCI_SENSE_PARAMS = {
   residualPickupMaxA: 0.006,
   mechanismTimeMinMs: 3,
   mechanismTimeMaxMs: 14,
-  testResistanceOhm: 3900,
+  testResistanceOhm: 15000,
 };
 
 const terminal = (id: string, x: number) => ({

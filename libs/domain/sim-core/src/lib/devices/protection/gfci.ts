@@ -27,7 +27,8 @@ import { GFCI_INTEGRAL_TOLERANCE } from './constants';
  *
  * **Ticks.** The device opens at the last tick at or before the integral reaches 1 at the present rate,
  * so at a constant residual I it is open max(t_m, ⌊t(I) / 1 ms⌋) ticks after the excursion began:
- * never later than the limit, at most a tick early (a tabulated point that is a whole number of ticks,
+ * never later than the region's tabulated limit (each point within 0.15 % of the published curve), at
+ * most a tick early (a tabulated point that is a whole number of ticks,
  * such as 2.695 s at 10 mA, lands exactly on it). Only `+ − × ÷` and `Math.ceil` here (D6).
  */
 
@@ -136,8 +137,9 @@ export class GfciSensor {
     const rate = gfciTripRate(this.table, amps);
     if (rate === Infinity) this.integral[i] = 1;
     else this.integral[i] = Math.min(1, this.integral[i] + dtS * rate);
-    // Open at the last tick at or before the integral reaches 1 at the present rate: never later than
-    // the limit, at most a tick early (a tabulated point, a whole number of ticks, lands exactly on it).
+    // Open at the last tick at or before the integral reaches 1 at the present rate: never later than the
+    // region's tabulated limit (each point within 0.15 % of the published curve), at most a tick early
+    // (a tabulated point, a whole number of ticks, lands exactly on it).
     const due = rate === Infinity || this.integral[i] + dtS * rate > TRIP_AT;
     return due && tick + 1 - this.since[i] >= this.mechanismTicks[i];
   }

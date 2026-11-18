@@ -9,11 +9,11 @@ import type { SourcedConstant } from '../../constants';
 
 /** How long a GFCI's test contact stays closed after a press, if it doesn't trip first (ADR 0019 S8). */
 export const GFCI_TEST_HOLD_TICKS: SourcedConstant = {
-  value: 1000,
+  value: 5000,
   unit: 'tick',
   kind: 'game-design',
   source:
-    'game-design (ADR 0019, fixed in ADR 0021 part 2): a press holds the test contact, and so the internal test resistor, in circuit for 1 s or until the device trips, standing in for a finger on the button. The test resistor of an entry must draw enough residual current to trip well inside it at the region’s limit (the test entries draw about 31 mA at 120 V, a limit of about 0.54 s).',
+    "game-design: covers the region's Class A limit at the smallest realistic test current, a test circuit of at most about 9 mA at rated voltage that must still trip at 85 % voltage (UL 943 by number). A 15 kΩ resistor at 102 V draws 6.8 mA, giving a limit of 4.60 s. A press holds the test contact, and so the internal test resistor, in circuit for 5 s or until the device trips (ADR 0019 S8, fixed in ADR 0021 part 2).",
 };
 
 /**

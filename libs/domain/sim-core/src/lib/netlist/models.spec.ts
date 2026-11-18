@@ -41,7 +41,7 @@ describe('netlist models', () => {
   });
 
   it('breakers v2 (P4 PR 10): every pole while closed (a common trip), the sensing neutral always, the GFCI test resistor while held; the wiring view intact', () => {
-    const params = { contactResistanceOhm: 0.005, testResistanceOhm: 3900 };
+    const params = { contactResistanceOhm: 0.005, testResistanceOhm: 15_000 };
     const parts = (kind: string, on: boolean, sim: Record<string, boolean>) =>
       DEVICE_NETLIST_MODELS[kind]
         .topology({ params, state: { on }, sim })

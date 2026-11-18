@@ -476,8 +476,12 @@ const plugOnShape = {
   ratedCurrentA: positive,
   /** The bimetal's time constant (s), every pole. */
   thermalTimeConstantS: positive,
-  /** The smallest multiple of the rating that trips it thermally at all: above 1, at most 1.35. */
-  ultimateTripRatio: FiniteNumber.gt(1).max(1.35),
+  /**
+   * The smallest multiple of the rating that trips it thermally at all: above 1 and **below** 1.35, so the
+   * bimetal trips at 135 % in finite time (UL 489's 1 h ceiling at 135 %, by number); at k_u = 1.35 it
+   * never would. (The frozen DIN `BreakerParams` keeps its P2 bound, at most 1.35.)
+   */
+  ultimateTripRatio: FiniteNumber.gt(1).lt(1.35),
   /** The instantaneous pickup band (A, absolute): each pole draws its pickup inside it. */
   magneticPickupMinA: positive,
   magneticPickupMaxA: positive,

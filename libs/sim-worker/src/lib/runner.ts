@@ -104,8 +104,15 @@ export class SimWorkerRunner {
   /** Per watch: (tick, value) pairs sampled since its last `trace` batch (ADR 0011 §4, F2.6). */
   private readonly traceSamples = new Map<number, number[]>();
   private readonly sampleTraces = (tick: number): void => this.sample(tick);
-  /** Events at or before this tick are a replay start's history, not news: dropped. */
+  /** Trace samples at or before this tick are a replay start's history, not news: dropped. */
   private quietThrough = -1;
+  /**
+   * A replay start's closing `advance` (the message object), while the replay is still being run: every
+   * engine event until it is done is history and is discarded, then the engine is drained once more, as
+   * headless replays do (`replayWithEngine`). Events are never filtered by tick: a command at the
+   * replay's end tick (an AFCI's test press) raises its event at that tick, and it is news (ADR 0011 §4).
+   */
+  private replayEnd: HostToWorker | null = null;
   /**
    * Events taken from the engine and not yet posted: sorted batches, one per stretch between command
    * boundaries, concatenated (ADR 0011 §4). Cutting at each command, as headless delivers per call,
@@ -248,7 +255,8 @@ export class SimWorkerRunner {
       // commands, so it is sliced and published the same way.
       this.quietThrough = start.log.endTick;
       for (const entry of start.log.entries) this.inbox.push({ type: 'command', entry });
-      this.inbox.push({ type: 'advance', tick: start.log.endTick });
+      this.replayEnd = { type: 'advance', tick: start.log.endTick };
+      this.inbox.push(this.replayEnd);
       this.schedulePump();
     }
   }
@@ -299,7 +307,12 @@ export class SimWorkerRunner {
           this.yieldSlice(); // yielded mid-message: carry on after the queue
           return;
         }
-        this.inbox.shift();
+        const done = this.inbox.shift();
+        if (done !== undefined && done === this.replayEnd) {
+          // The replay start is complete: its events are history, drained and discarded once.
+          (this.engine as SimEngine).takeEvents();
+          this.replayEnd = null;
+        }
         if (this.phase !== 'running') return;
         // A burst of commands is drained in slices too, so `release`, `stop` and the host's own
         // supervision get through, and the host hears from a busy worker (never a false watchdog).
@@ -494,7 +507,8 @@ export class SimWorkerRunner {
   /** Ends the current batch: the engine's events since the last cut, sorted, after the pending ones. */
   private cutEvents(): void {
     const all = (this.engine as SimEngine).takeEvents();
-    for (const event of all) if (event.tick > this.quietThrough) this.pendingEvents.push(event);
+    // While a replay start runs, its events are history (discarded); after it, every event is news.
+    if (this.replayEnd === null) for (const event of all) this.pendingEvents.push(event);
   }
 
   private flushEvents(): void {

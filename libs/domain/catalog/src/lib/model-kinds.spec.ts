@@ -278,6 +278,23 @@ describe('MODEL_KINDS', () => {
       expect(parses('breaker.plugOn1p', { ...plugOn, magneticPickupMinA: 25, magneticPickupMaxA: 30 })).toBe(false);
       expect(parses('breaker.plugOn1p', { ...plugOn, openingTimeMaxMs: 7 })).toBe(false);
       expect(parses('breaker.plugOn1p', { ...plugOn, ultimateTripRatio: 1.4 })).toBe(false);
+      // k_u = 1.35 would never trip at 135 % (UL 489's 1 h ceiling): strictly below it, on every v2 kind.
+      for (const kind of ['breaker.plugOn1p', 'breaker.plugOn2p', 'breaker.afci1p']) {
+        expect(parses(kind, { ...plugOn, ultimateTripRatio: 1.35 }), kind).toBe(false);
+        expect(parses(kind, { ...plugOn, ultimateTripRatio: 1.349 }), kind).toBe(true);
+      }
+      expect(parses('breaker.gfci1p', { ...gfci, ultimateTripRatio: 1.35 })).toBe(false);
+      // The frozen DIN kind keeps its P2 bound (at most 1.35).
+      expect(
+        parses('breaker.thermalMagnetic', {
+          ratedCurrentA: 15,
+          thermalTimeConstantS: 60,
+          ultimateTripRatio: 1.35,
+          magneticTripMinRatio: 8,
+          magneticTripMaxRatio: 12,
+          contactResistanceOhm: 0.01,
+        }),
+      ).toBe(true);
       expect(parses('breaker.gfci1p', { ...gfci, residualPickupMaxA: 0.004 })).toBe(false);
       expect(parses('breaker.gfci1p', { ...gfci, mechanismTimeMaxMs: 2 })).toBe(false);
     });

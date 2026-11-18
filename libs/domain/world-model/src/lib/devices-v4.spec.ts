@@ -311,7 +311,7 @@ describe('the tripCause rule (P4 PR 10, ADR 0019 "Schema invariants")', () => {
             residualPickupMaxA: 0.006,
             mechanismTimeMinMs: 3,
             mechanismTimeMaxMs: 14,
-            testResistanceOhm: 3900,
+            testResistanceOhm: 15000,
           },
         },
         controls: [

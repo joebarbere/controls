@@ -1,3 +1,4 @@
+import { replayEntries } from '@controls/commands';
 import { BUILTIN_CATALOG, NEC_REGION } from '@controls/catalog';
 import { LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { deriveStream, entityPurposeStreamKey, worldHash } from '@controls/world-model';
@@ -257,6 +258,34 @@ describe('the AFCI breaker in a circuit (arcing ends from ADR 0018)', () => {
     return { arced, trip: undefined };
   }
 
+  /** |I| (A) of connection `id`'s branch in the held solution, 0 when it isn't netlisted. */
+  function conductorAmps(h: SourceHost, id: number): number {
+    const branch = h.engine.netlist.branches.find(
+      (b) => b.element.kind === 'connection' && b.element.connection === id,
+    );
+    if (branch === undefined) return 0;
+    const s = h.engine.exportState().solution?.branches as number[];
+    return Math.hypot(s[2 * branch.index], s[2 * branch.index + 1]);
+  }
+
+  /** Re-leads the circuit (the conductor between nuts 3 and 4 stays) so the conductor is on `where` of the AFCI. */
+  function rewire(h: SourceHost, where: Where): void {
+    for (const c of [...h.bus.state.connections]) if (c.lengthMm === null) h.exec('lead.disconnect', { id: c.id });
+    const lead = (a: number, ta: string, b: number, tb: string) =>
+      h.exec('lead.connect', { ref: LEAD_REF, a: { entity: a, terminal: ta }, b: { entity: b, terminal: tb } });
+    lead(2, 'pigtail', 1, 'n');
+    lead(5, 'b', 2, 'loadNeutral');
+    if (where === 'downstream') {
+      lead(1, 'l1', 2, 'line');
+      lead(2, 'load', 3, 'splice');
+      lead(4, 'splice', 5, 'a');
+    } else {
+      lead(1, 'l1', 3, 'splice');
+      lead(4, 'splice', 2, 'line');
+      lead(2, 'load', 5, 'a');
+    }
+  }
+
   it('end A at 0.4 Ω is intermittent and at 0.12 Ω glowing; the made contact is the twist-on’s', () => {
     expect(BUILTIN_CATALOG.device(NUT_REF)).toBeDefined();
     expect(madeOhm('downstream')).toBeGreaterThan(0);
@@ -272,6 +301,125 @@ describe('the AFCI breaker in a circuit (arcing ends from ADR 0018)', () => {
       expect((trip?.tick ?? 0) % 100, `seed ${seed}`).toBe(1);
       expect(h.sim(2)).toMatchObject({ tripped: true, tripCause: 'arcFault' });
     }
+  });
+
+  it('counts no more arcing buckets before the trip than fit inside the limit at the measured arc current', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const h = host('downstream', 0.4, seed);
+      let counted = 0;
+      let smallest = Infinity;
+      let tripped = false;
+      for (let k = 0; k < 600 && !tripped; k++) {
+        // At a boundary tick B the engine holds bucket B − 1's end state and its solution; step B judges it.
+        const arcing = h.engine.exportState().connections.find((c) => c.id === 4)?.state['endAState'] === 'arcing';
+        const amps = arcing ? conductorAmps(h, 4) : 0;
+        const boundary = h.engine.tick;
+        h.advance(100);
+        const bag = h.sim(2);
+        tripped = bag['tripped'] === true;
+        if (bag['arcLastSeenTick'] === boundary) {
+          counted++;
+          smallest = Math.min(smallest, amps);
+          expect(amps, `seed ${seed}`).toBeGreaterThanOrEqual(5);
+        } else if (bag['arcLastSeenTick'] === null) {
+          counted = 0;
+          smallest = Infinity;
+        }
+      }
+      expect(tripped, `seed ${seed}`).toBe(true);
+      expect(counted, `seed ${seed}`).toBeGreaterThan(0);
+      expect(counted, `seed ${seed}`).toBeLessThanOrEqual(afciDetectionBuckets(smallest, 15, LIMITS));
+    }
+  });
+
+  it('the exposure follows a rewire: an arcing conductor moved from the load side to the line side stops counting, and back', () => {
+    const h = host('downstream', 0.4, 3);
+    for (let k = 0; k < 600 && (h.sim(2)['arcExposure'] as number) === 0; k++) h.advance(100);
+    expect(h.sim(2)).toMatchObject({ tripped: false });
+    const before = h.sim(2)['arcExposure'] as number;
+    expect(before).toBeGreaterThan(0);
+    // Upstream: L1 → nut 3, the conductor, nut 4 → the AFCI's line; the load straight off its load screw.
+    rewire(h, 'upstream');
+    const upstream = watch(h, 300);
+    expect(upstream.arced).toBeGreaterThan(10);
+    expect(upstream.trip).toBeUndefined();
+    expect(h.sim(2)).toMatchObject({ arcExposure: 0, arcLastSeenTick: null, tripped: false });
+    // And back downstream: it counts again, and trips.
+    rewire(h, 'downstream');
+    const downstream = watch(h, 600);
+    expect(downstream.trip?.detail['cause']).toBe('arcFault');
+  });
+
+  it('save, load and replay equal the straight run over random AFCI arcing sessions (property)', () => {
+    type Op =
+      | { kind: 'advance'; ticks: number }
+      | { kind: 'rewire'; to: Where }
+      | { kind: 'handle'; on: boolean }
+      | { kind: 'press' }
+      | { kind: 'load'; ohms: number };
+    const opArb: fc.Arbitrary<Op> = fc.oneof(
+      {
+        weight: 5,
+        arbitrary: fc.record({ kind: fc.constant('advance' as const), ticks: fc.integer({ min: 1, max: 1500 }) }),
+      },
+      {
+        weight: 1,
+        arbitrary: fc.record({
+          kind: fc.constant('rewire' as const),
+          to: fc.constantFrom<Where>('downstream', 'upstream'),
+        }),
+      },
+      { weight: 1, arbitrary: fc.record({ kind: fc.constant('handle' as const), on: fc.boolean() }) },
+      { weight: 1, arbitrary: fc.constant({ kind: 'press' as const }) },
+      { weight: 1, arbitrary: fc.record({ kind: fc.constant('load' as const), ohms: fc.constantFrom(12, 40) }) },
+    );
+    const apply = (h: SourceHost, op: Op) => {
+      if (op.kind === 'advance') h.advance(op.ticks);
+      else if (op.kind === 'rewire') rewire(h, op.to);
+      else if (op.kind === 'handle') h.operate(2, 'on', op.on);
+      else if (op.kind === 'press') h.exec('device.press', { id: 2, control: 'test' });
+      else h.operate(5, 'ohms', op.ohms);
+    };
+    const fingerprint = (h: SourceHost) => ({
+      tick: h.engine.tick,
+      snapshot: h.engine.snapshotHash(),
+      world: worldHash(h.materialised()),
+    });
+    let arcTrips = 0;
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 1000 }),
+        fc.array(opArb, { minLength: 1, maxLength: 5 }),
+        fc.array(opArb, { minLength: 1, maxLength: 5 }),
+        (seed, before, after) => {
+          const straight = host('downstream', 0.4, seed);
+          before.forEach((op) => apply(straight, op));
+          const loaded = straight.reload();
+          straight.bus.clearHistory();
+          straight.events.length = 0;
+          for (const op of after) {
+            apply(straight, op);
+            apply(loaded, op);
+          }
+          expect(loaded.events).toStrictEqual(straight.events);
+          expect(fingerprint(loaded)).toStrictEqual(fingerprint(straight));
+          // A replay of the whole log from the start reaches the same bytes and events.
+          const live = host('downstream', 0.4, seed);
+          [...before, ...after].forEach((op) => apply(live, op));
+          const replay = host('downstream', 0.4, seed);
+          expect(
+            replayEntries(replay.bus, live.bus.entries, { time: replay.engine, endTick: live.engine.tick }),
+          ).toStrictEqual({ ok: true });
+          replay.events.push(...replay.engine.takeEvents());
+          expect(replay.events).toStrictEqual(live.events);
+          expect(fingerprint(replay)).toStrictEqual(fingerprint(live));
+          arcTrips += live.events.filter((e) => e.kind === 'tripped' && e.detail['cause'] === 'arcFault').length;
+        },
+      ),
+      { numRuns: 12, seed: 20261118 },
+    );
+    // Generator health: the sessions do reach arc-fault trips.
+    expect(arcTrips).toBeGreaterThan(0);
   });
 
   it('never trips on an arcing end that is not downstream (on its line side)', () => {

@@ -2,7 +2,9 @@ import { createWorld, type ReplayEntry, type World } from '@controls/save-format
 import { createGame, type Game } from '@controls/scripting-api';
 import { type SimDeviceModel, SimEngine } from '@controls/sim-core';
 import {
+  AFCI_15,
   BATTERY,
+  BUSBAR,
   end,
   ENGINE_BENCH,
   ENGINE_TEST_CATALOG,
@@ -10,7 +12,9 @@ import {
   FLIP,
   LEAD,
   origin,
+  RHEOSTAT,
   THERMAL_LOAD,
+  UTILITY_SPLIT,
   wiredLoopWorld,
 } from '@controls/sim-core/testing';
 import {
@@ -202,6 +206,38 @@ describe('following the host', () => {
     expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
     expect(RunnerHarness.hashOf(game.world() as World, h.query('state', 400))).toBe(game.hash());
     expect(h.of('events')).toEqual([]); // the replay's events are history, not news
+  });
+
+  it('after a replay start, an event a command raises at the replay’s end tick is news (an AFCI test press)', () => {
+    // A commanded event is stamped at the command's tick, which equals the replay's end tick when the
+    // player presses while paused right after a load (ADR 0011 §4: the same events as headless).
+    const game = reference();
+    const events: unknown[] = [];
+    game.on('sim', (event) => events.push(event));
+    for (const ref of [UTILITY_SPLIT, AFCI_15, RHEOSTAT]) game.execOrThrow('entity.place', { ref, positionMm: origin });
+    const link = (a: number, ta: string, b: number, tb: string) =>
+      game.execOrThrow('lead.connect', { ref: BUSBAR, a: end(a, ta), b: end(b, tb) });
+    link(1, 'l1', 2, 'line');
+    link(2, 'pigtail', 1, 'n');
+    link(2, 'load', 3, 'a');
+    link(3, 'b', 2, 'loadNeutral');
+    game.execOrThrow('device.operate', { id: 3, control: 'ohms', value: 12 });
+    game.execOrThrow('device.operate', { id: 2, control: 'on', value: true });
+    game.advance(50);
+    const h = harness();
+    h.init({ kind: 'replay', log: game.replayLog() });
+    h.drain();
+    expect(h.of('events')).toEqual([]);
+    events.length = 0;
+    game.execOrThrow('device.press', { id: 2, control: 'test' });
+    h.send({ type: 'command', entry: game.entries().at(-1) as ReplayEntry });
+    h.drain();
+    const delivered = h.of('events').flatMap((m) => m.events);
+    expect(delivered).toEqual([
+      expect.objectContaining({ kind: 'tripped', tick: 50, entity: 2, detail: { cause: 'test' } }),
+    ]);
+    expect(delivered).toEqual(events);
+    expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
   });
 
   it('forwards sim events with the publish after them', () => {

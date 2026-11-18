@@ -303,9 +303,12 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
       const branches = ctx.netlist.branches;
       const boundary = variant.afci && tick % BUCKET_TICKS === 0;
       for (let i = 0; i < n; i++) {
+        // Whether the test was held over this step (its resistor drew this step's residual): the cause of
+        // a trip at this step, even on the step the hold lets go.
+        const held = sensor !== null && sensor.testHeld[i] >= 0;
         // A held test lets go after the hold (a topology change), whatever else happens.
-        if (sensor !== null && sensor.testHeld[i] >= 0 && tick + 1 - sensor.testHeld[i] >= HOLD_TICKS) {
-          sensor.testHeld[i] = -1;
+        if (held && tick + 1 - (sensor as GfciSensor).testHeld[i] >= HOLD_TICKS) {
+          (sensor as GfciSensor).testHeld[i] = -1;
           changed = true;
         }
         const h0 = hot[2 * i];
@@ -347,7 +350,7 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
           const im = s[2 * h0 + 1] + s[2 * nb + 1];
           const residual = Math.sqrt(re * re + im * im);
           if (sensor.step(i, residual, tick, dt) && code === CAUSE_NONE) {
-            code = sensor.testHeld[i] >= 0 ? CAUSE_TEST : CAUSE_GROUND_FAULT;
+            code = held ? CAUSE_TEST : CAUSE_GROUND_FAULT;
           }
         }
         if (boundary && arcBoundary(i, ctx, true) && code === CAUSE_NONE) code = CAUSE_ARC_FAULT;
