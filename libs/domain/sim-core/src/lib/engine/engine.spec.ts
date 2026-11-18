@@ -219,6 +219,10 @@ describe('SimEngine: electrical results', () => {
   it('never presents an unmodelled island as a reading: an element no model can value', () => {
     expect(Object.keys(BUILTIN_DEVICE_MODELS)).toStrictEqual([
       'battery',
+      'breaker.afci1p',
+      'breaker.gfci1p',
+      'breaker.plugOn1p',
+      'breaker.plugOn2p',
       'breaker.thermalMagnetic',
       'fuse',
       'generator.portable',

@@ -5,7 +5,7 @@ import {
   offeredMounts,
   type TerminalMethodSpec,
 } from '@controls/catalog';
-import { isBuiltinPropRef, type World } from '@controls/save-format';
+import { type DeviceStateValue, isBuiltinPropRef, type World } from '@controls/save-format';
 import { busStabIndex, busStabLeg, sha256, sha256Finish, sha256Prefix, toHex } from '@controls/world-model';
 import { TopologyWriter } from './encode';
 import { RELATION_CODES } from './hash';
@@ -81,6 +81,13 @@ export interface CompileOptions {
    * the bags hold what was materialised; during play the engine must pass its live state.
    */
   readonly sim?: (entity: number) => StateBag | undefined;
+  /**
+   * One key of an entity's sim-owned state, without building a bag (engine 8): preferred over `sim`
+   * when given. `null` for a key the live state lacks; `undefined` when there is no live state for the
+   * entity, so the world's own bag is read (as `sim` returning `undefined`). Models see each
+   * `simTopologyKeys` value projected to a boolean ({@link simTopologyFlag}).
+   */
+  readonly simValue?: (entity: number, key: string) => DeviceStateValue | undefined;
   /**
    * The engine's sim-owned state of a connection (ADR 0015, F3.6 part 2): only the keys its model lists
    * in `simTopologyKeys` (`endAState`, `endBState`, a conductor's `fused`) are read, and only whether one
@@ -179,7 +186,8 @@ interface EntityCacheEntry {
    * read its fits, offered mounts, outlets and plug (engine 8). `null` for a prop or an unknown ref.
    */
   readonly device: DeviceDefinition | null;
-  readonly simKey: string;
+  /** The sim topology keys projected to booleans, one bit per key in `simTopologyKeys` order (engine 8). */
+  readonly simCode: number;
   readonly result: EntityResult;
   /** A netlisted entity's termination methods per fragment terminal (sorted terminal ids); empty otherwise. */
   readonly methods: readonly (readonly TerminalMethodSpec[])[];
@@ -705,7 +713,7 @@ export class NetlistCompiler {
       const entity = this.simEntities[k];
       const entry = this.simEntries[k];
       const model = entry.model as DeviceNetlistModel;
-      if (simKeyOf(model, simTopologyView(model, options.sim?.(entity.id) ?? entity.sim)) !== entry.simKey) return null;
+      if (simCodeOf(model, entity, options) !== entry.simCode) return null;
     }
     const states = this.slotState;
     let changed = false;
@@ -781,7 +789,7 @@ export class NetlistCompiler {
         model === undefined ||
         this.wiring ||
         model.simTopologyKeys.length === 0 ||
-        simKeyOf(model, simTopologyView(model, options.sim?.(entity.id) ?? entity.sim)) === cached.simKey
+        simCodeOf(model, entity, options) === cached.simCode
       ) {
         cached.epoch = epoch;
         return cached;
@@ -808,7 +816,7 @@ export class NetlistCompiler {
       ...base,
       model: undefined,
       device,
-      simKey: '',
+      simCode: 0,
       placed: null,
       terminals: 0,
       elements: 0,
@@ -825,7 +833,8 @@ export class NetlistCompiler {
     if (!model || kind.placement !== 'entity') {
       return absent({ code: 'no-model', entity: entity.id, kind: kind.kind }, device);
     }
-    const sim = this.wiring ? NO_SIM : simTopologyView(model, options.sim?.(entity.id) ?? entity.sim);
+    const simCode = this.wiring ? 0 : simCodeOf(model, entity, options);
+    const sim = this.wiring ? NO_SIM : simTopologyView(model, simCode);
     const terminals = device.terminals.map((t) => t.id).sort();
     const fragment = buildFragment(model, terminals, device.model.params, entity.state, sim, this.wiring);
     const parts = deviceParts(entity.id, fragment);
@@ -833,7 +842,7 @@ export class NetlistCompiler {
       ...base,
       model,
       device,
-      simKey: this.wiring ? '' : simKeyOf(model, sim),
+      simCode,
       placed: { parts, base: 0 },
       terminals: fragment.terminals.length,
       elements: fragment.elements.length,
@@ -1204,16 +1213,52 @@ function openEnd(model: ConnectionNetlistModel, sim: Readonly<Record<string, unk
   return false;
 }
 
-/** The keys of `sim` that `model` lists in `simTopologyKeys`, in that order; a missing key is `null`. */
-function simTopologyView(model: DeviceNetlistModel, sim: StateBag): StateBag {
-  if (model.simTopologyKeys.length === 0) return NO_SIM;
-  const view: Record<string, StateBag[string]> = {};
-  for (const key of model.simTopologyKeys) view[key] = Object.prototype.hasOwnProperty.call(sim, key) ? sim[key] : null;
-  return view;
+/**
+ * A sim topology key's value projected to a boolean (ADR 0019 "Sim and commanded state keys"): `true`
+ * unless it is `false`, `null` or missing, so a since-tick is "null or not" and a flag is itself.
+ */
+export function simTopologyFlag(value: unknown): boolean {
+  return value !== false && value !== null && value !== undefined;
 }
 
-const simKeyOf = (model: DeviceNetlistModel, view: StateBag): string =>
-  model.simTopologyKeys.length === 0 ? '' : JSON.stringify(view);
+/** The most sim topology keys a model may list: one bit each in the structure code. */
+export const MAX_SIM_TOPOLOGY_KEYS = 30;
+
+/**
+ * An entity's sim topology keys as a number (engine 8, the non-allocating structure code): bit k set
+ * when key k of `simTopologyKeys` projects to `true`. Read through `options.simValue` (no bag built),
+ * else `options.sim`, else the world's bag. Equal codes, equal topology inputs.
+ */
+function simCodeOf(model: DeviceNetlistModel, entity: Entity, options: CompileOptions): number {
+  const keys = model.simTopologyKeys;
+  if (keys.length === 0) return 0;
+  if (keys.length > MAX_SIM_TOPOLOGY_KEYS) {
+    throw new Error(`netlist model ${model.kind}: at most ${MAX_SIM_TOPOLOGY_KEYS} sim topology keys`);
+  }
+  let code = 0;
+  if (options.simValue !== undefined) {
+    for (let k = 0; k < keys.length; k++) {
+      let value: unknown = options.simValue(entity.id, keys[k]);
+      if (value === undefined) value = ownValue(entity.sim, keys[k]);
+      if (simTopologyFlag(value)) code |= 1 << k;
+    }
+    return code;
+  }
+  const sim = options.sim?.(entity.id) ?? entity.sim;
+  for (let k = 0; k < keys.length; k++) if (simTopologyFlag(ownValue(sim, keys[k]))) code |= 1 << k;
+  return code;
+}
+
+const ownValue = (bag: StateBag, key: string): unknown =>
+  Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : null;
+
+/** What a model's `topology` sees of its sim topology keys: each key's boolean projection, from the code. */
+function simTopologyView(model: DeviceNetlistModel, code: number): StateBag {
+  if (model.simTopologyKeys.length === 0) return NO_SIM;
+  const view: Record<string, boolean> = {};
+  model.simTopologyKeys.forEach((key, k) => (view[key] = (code & (1 << k)) !== 0));
+  return view;
+}
 
 function sortedValues(values: Readonly<Record<string, number>>): Readonly<Record<string, number>> {
   const sorted: Record<string, number> = {};

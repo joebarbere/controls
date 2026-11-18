@@ -170,6 +170,8 @@ function rig(world: World, options: ConnectionBankOptions = {}) {
     islandReadable: () => true,
     islandStatus: () => 'solved' as const,
     emit: () => undefined,
+    arcingCount: () => 0,
+    arcingBranch: () => -1,
   } satisfies LayerContext;
   const setAmps = (connection: number, amps: number) => {
     const branch = bank.branch[bank.indexOf(connection)];

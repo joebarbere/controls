@@ -1,6 +1,7 @@
+import type { RegionProtection } from '@controls/catalog';
 import type { DeviceStateValue } from '@controls/save-format';
 import type { DeviceOutputSchema, SimEventKind } from '@controls/sim-protocol';
-import type { Sfc32 } from '@controls/world-model';
+import type { EntityPurpose, Sfc32 } from '@controls/world-model';
 import type { AcBranchValues } from '../mna/ac-values';
 import type { DcSolution } from '../mna/dc';
 import type { DcBranchValues } from '../mna/values';
@@ -42,10 +43,37 @@ export interface SimDevice {
   readonly state: StateBag;
   /** Its branches in this topology, in part order (an element per branch). */
   readonly branches: readonly number[];
+  /** The part of each of `branches`, in the same order (engine 8: a model whose parts come and go). */
+  readonly parts: readonly string[];
   /** The region's supply frequency (Hz): the AC islands' analysis frequency (F2.4's source reactance). */
   readonly frequencyHz: number;
+  /** The region's GFCI and AFCI limits (engine 8, ADR 0021 part 2). */
+  readonly protection: RegionProtection;
   /** Its seeded stream, fresh on every call: `deriveStream(world.seed, entityStreamKey(entity))`. */
   stream(): Sfc32;
+  /**
+   * One of its purpose streams, fresh on every call: `deriveStream(world.seed,
+   * entityPurposeStreamKey(entity, purpose))` (world v4, ADR 0019 "PRNG stream keys"). Each value a
+   * model takes from one is its first output.
+   */
+  purposeStream(purpose: EntityPurpose): Sfc32;
+}
+
+/**
+ * What a bank's `commanded` hook sees (engine 8, ADR 0019 "Derived on load"): the command's tick and,
+ * read-only, the last solution and its netlist (a GFCI's reset decided on line voltage; an AFCI's test
+ * press). Events it emits describe the state at `tick` and are stamped `tick`. The same object every
+ * call: never keep it.
+ */
+export interface CommandedContext {
+  /** The command's tick. */
+  readonly tick: number;
+  /** The netlist of the last solution: the one before this command's recompile. */
+  readonly netlist: Netlist;
+  readonly solution: DcSolution;
+  islandReadable(island: number): boolean;
+  /** Reports a device event at `tick` (a test press that trips an AFCI). */
+  emit(kind: SimEventKind, entity: number, detail?: Readonly<Record<string, number | string | boolean>>): void;
 }
 
 /**
@@ -77,6 +105,13 @@ export interface LayerContext {
   islandStatus(island: number): SimIslandStatus;
   /** Reports a device event (`blown`, `tripped`, `hiccup`, `overRated`) at `tick + 1`. */
   emit(kind: SimEventKind, entity: number, detail?: Readonly<Record<string, number | string | boolean>>): void;
+  /**
+   * How many netlisted connections have an end in the `arcing` state now (engine 8, the AFCI, D8): the
+   * state of the bucket the last step decided. Usually 0; cheap to ask once per step.
+   */
+  arcingCount(): number;
+  /** The branch of the `k`-th connection with an arcing end (0 ≤ k < `arcingCount()`), in connection-id order. */
+  arcingBranch(k: number): number;
 }
 
 /**
@@ -86,6 +121,12 @@ export interface LayerContext {
 export interface SimDeviceBank {
   /** Device `index`'s sim bag now: every sim key of its kind, finite numbers (allocates; never per tick). */
   bag(index: number): Record<string, DeviceStateValue>;
+  /**
+   * Device `index`'s value of one sim key now, without allocating (engine 8): what the compiler's
+   * structure code reads for a kind's `simTopologyKeys`, so an open/close toggle elsewhere doesn't build
+   * a bag per device. A kind with `simTopologyKeys` should have it; without it the engine reads `bag`.
+   */
+  simValue?(index: number, key: string): DeviceStateValue | undefined;
   /**
    * Sets the DC value of `branch` (one of device `index`'s) in `values` before a solve, and returns
    * `true`; or returns `false` for the kind's default (`DC_DEFAULT_VALUES`). A branch with neither
@@ -119,9 +160,11 @@ export interface SimDeviceBank {
    * never read sim state; this is the sim resolving their effect. Not called for a bank build. It may
    * be called with a bag equal to the last one it saw (a command that set a control to the value it
    * already had, or one changing another key), so it **must be idempotent**: the same bag twice leaves
-   * the bank as once.
+   * the bank as once. A momentary control's press is its counter rising above the bank's copy (a bank
+   * build adopts the saved counter as already seen). `ctx` gives the tick and the last solution,
+   * read-only (engine 8).
    */
-  commanded?(index: number, state: StateBag): void;
+  commanded?(index: number, state: StateBag, ctx: CommandedContext): void;
   /**
    * The discrete layer (relays, P6). Returns whether it changed what the electrical layer sees: the
    * topology, or a value a model's `dcValue` reads from its bank. Either way the engine re-solves at

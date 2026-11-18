@@ -138,6 +138,10 @@ describe('dcBranchValues', () => {
       'heater',
       'fuse',
       'breaker.thermalMagnetic',
+      'breaker.plugOn1p',
+      'breaker.plugOn2p',
+      'breaker.gfci1p',
+      'breaker.afci1p',
       'battery',
     ]);
   });

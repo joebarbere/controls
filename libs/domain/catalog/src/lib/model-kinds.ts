@@ -462,6 +462,83 @@ export const BreakerParams = z
   });
 export type BreakerParams = z.infer<typeof BreakerParams>;
 
+/*
+ * Breakers v2 (P4 D6, ADR 0021 part 2): the residential plug-on breakers. The thermal element is the
+ * P2 bimetal law (a lag of `thermalTimeConstantS` towards (I / I_n)², tripping at `ultimateTripRatio`²),
+ * one per pole. The magnetic element is an **absolute** pickup band in amperes, published per rating
+ * on makers' residential time-current curves (240–400 A for 15 and 20 A), never a multiple of the
+ * rating: the DIN entry's "near ten times" band (`magneticTripMinRatio`) is not a field here. Above the
+ * drawn pickup the breaker opens after an opening time drawn inside [`openingTimeMinMs`,
+ * `openingTimeMaxMs`], not within the tick.
+ */
+const plugOnShape = {
+  /** Rated current I_n (A), every pole. */
+  ratedCurrentA: positive,
+  /** The bimetal's time constant (s), every pole. */
+  thermalTimeConstantS: positive,
+  /** The smallest multiple of the rating that trips it thermally at all: above 1, at most 1.35. */
+  ultimateTripRatio: FiniteNumber.gt(1).max(1.35),
+  /** The instantaneous pickup band (A, absolute): each pole draws its pickup inside it. */
+  magneticPickupMinA: positive,
+  magneticPickupMaxA: positive,
+  /** The opening time above the pickup (ms), drawn once per breaker inside the band; whole ticks, rounded up. */
+  openingTimeMinMs: positive,
+  openingTimeMaxMs: positive,
+  /** One closed pole's contact resistance (Ω), the bus stab to the load screw. */
+  contactResistanceOhm: positive,
+};
+
+type PlugOnShape = { [K in keyof typeof plugOnShape]: number };
+
+function plugOnRefined<T extends PlugOnShape>(schema: z.ZodType<T>): z.ZodType<T> {
+  return schema
+    .refine((p) => p.magneticPickupMaxA > p.magneticPickupMinA, {
+      message: 'magneticPickupMaxA must be above magneticPickupMinA',
+    })
+    .refine((p) => p.magneticPickupMinA > p.ultimateTripRatio * p.ratedCurrentA, {
+      message: 'the magnetic band must lie above the ultimate trip current',
+    })
+    .refine((p) => p.openingTimeMaxMs >= p.openingTimeMinMs, {
+      message: 'openingTimeMaxMs must be at least openingTimeMinMs',
+    });
+}
+
+/** A plug-on breaker, one or two poles (`breaker.plugOn1p`, `breaker.plugOn2p`; common trip). */
+export const PlugOnBreakerParams = plugOnRefined(z.strictObject(plugOnShape));
+export type PlugOnBreakerParams = z.infer<typeof PlugOnBreakerParams>;
+
+/**
+ * The ground-fault sensing of a GFCI device (P4 D7, ADR 0021 part 2), shared by the GFCI breaker and,
+ * from F4.1 part 2, the GFCI receptacle: the drawn pickup band (A), the drawn mechanism time (ms) that
+ * floors every trip, and the test circuit's internal resistor (Ω) from the load-side hot to the
+ * line-side neutral. The inverse-time limit is the region's (`RegionProfile.protection.gfci`).
+ */
+export const gfciShape = {
+  residualPickupMinA: positive,
+  residualPickupMaxA: positive,
+  mechanismTimeMinMs: positive,
+  mechanismTimeMaxMs: positive,
+  testResistanceOhm: positive,
+};
+
+/** A plug-on GFCI breaker (`breaker.gfci1p`): a plug-on pole plus ground-fault sensing on its hot and neutral. */
+export const GfciBreakerParams = plugOnRefined(z.strictObject({ ...plugOnShape, ...gfciShape }))
+  .refine((p) => p.residualPickupMaxA > p.residualPickupMinA, {
+    message: 'residualPickupMaxA must be above residualPickupMinA',
+  })
+  .refine((p) => p.mechanismTimeMaxMs >= p.mechanismTimeMinMs, {
+    message: 'mechanismTimeMaxMs must be at least mechanismTimeMinMs',
+  });
+export type GfciBreakerParams = z.infer<typeof GfciBreakerParams>;
+
+/**
+ * A plug-on combination AFCI breaker (`breaker.afci1p`): a plug-on pole; its series-arc detection
+ * limits are the region's (`RegionProfile.protection.afci`), so it has no parameters of its own beyond
+ * the pole's. No ground-fault sensing (an AFCI with it would be another kind).
+ */
+export const AfciBreakerParams = PlugOnBreakerParams;
+export type AfciBreakerParams = PlugOnBreakerParams;
+
 /** Heater parameters (F2.5): rated watts at rated volts, a fixed resistance R = V_r² / P_r. */
 export const HeaterParams = z.strictObject({
   /** Rated voltage (V). */
@@ -702,6 +779,78 @@ export const CONDUCTOR_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object.
   ),
 });
 
+/** Why a breaker or GFCI is tripped (ADR 0019, ADR 0021 part 2): the `tripped` event's `detail.cause`. */
+export const TRIP_CAUSES = ['thermal', 'magnetic', 'groundFault', 'arcFault', 'test'] as const;
+export type TripCause = (typeof TRIP_CAUSES)[number];
+
+/** A sim key holding a tick or `null` (an excursion's first tick). */
+const sinceTickKey = (description: string): StateKeyDef =>
+  key('sim', 'number', Int.min(0).nullable(), null, description);
+
+/**
+ * The keys every breakers-v2 kind shares (ADR 0019 "Sim and commanded state keys", finalised by
+ * ADR 0021 part 2): the handle, the trip and its cause, and the magnetic excursion's first tick.
+ */
+const BREAKER_V2_KEYS: Readonly<Record<string, StateKeyDef>> = {
+  on: key(
+    'commanded',
+    'boolean',
+    z.boolean(),
+    false,
+    'Whether the handle is on (device.operate). The sim never moves it: a tripped breaker keeps its handle where the player left it. A new breaker starts off.',
+  ),
+  tripped: key(
+    'sim',
+    'boolean',
+    z.boolean(),
+    false,
+    'Whether it has tripped (every pole open, a common trip). Cleared when the handle is turned off; it closes when turned on again.',
+  ),
+  tripCause: {
+    owner: 'sim',
+    type: 'enum',
+    schema: z.enum(TRIP_CAUSES).nullable(),
+    initial: null,
+    values: TRIP_CAUSES,
+    description:
+      'Why it is tripped (thermal, magnetic, groundFault, arcFault or test), so a reloaded panel shows the same cause; null exactly when it is not tripped.',
+  },
+  magneticSinceTick: sinceTickKey(
+    'The tick of the protection step that first saw a pole above its drawn magnetic pickup in the current excursion: the breaker opens at it plus its drawn opening time. null below the pickup.',
+  ),
+};
+
+const thermalKey = (pole: string): StateKeyDef =>
+  key(
+    'sim',
+    'number',
+    FiniteNumber.min(0),
+    0,
+    `The ${pole} bimetal's state, in units of its rated-current steady state ((I / I_n)² when settled); it trips at ultimateTripRatio².`,
+  );
+
+/** A GFCI's ground-fault keys (ADR 0019; shared with the GFCI receptacle from F4.1 part 2). */
+const GFCI_SENSE_KEYS: Readonly<Record<string, StateKeyDef>> = {
+  residualIntegral: key(
+    'sim',
+    'number',
+    FiniteNumber.min(0).max(1),
+    0,
+    "The inverse-time integral Σ dt / t(I) of the residual current against the region's limit, clamped at 1 (a trip floored by the mechanism time can reach 1 before it opens); 0 below the drawn pickup.",
+  ),
+  residualSinceTick: sinceTickKey(
+    'The first tick of the current excursion above the drawn residual pickup: a trip is floored at it plus the drawn mechanism time. null below the pickup.',
+  ),
+  testHeldSinceTick: sinceTickKey(
+    'The tick of the last test press while its internal test resistor is in circuit (until the device trips or GFCI_TEST_HOLD_TICKS pass); null otherwise.',
+  ),
+};
+
+/** The test button of a GFCI or AFCI breaker (ADR 0019): a press counter; reset is the handle. */
+const TEST_BUTTON_KEY: StateKeyDef = counterKey(
+  "The test button's press count (device.press). The sim sees each press through its commanded hook; reset is the handle.",
+);
+
 /**
  * Every model kind, by name. Keys sorted. P2: the battery, the SPST switch and the incandescent lamp
  * (the bench demo), the test lead, F2.4's bench supply, DIN-rail supply, utility services
@@ -710,7 +859,9 @@ export const CONDUCTOR_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object.
  * lead's ten connection keys plus `fused` (`CONDUCTOR_SIM_KEYS`), F3.5's enclosure kinds (`enclosure.box`, `enclosure.panel`), F3.3's
  * twist-on splice, and F3.5 part 2's raceways (`raceway.*`) and terminal blocks (`terminalBlock.*`).
  * P4 engine 8 part 1: the utility service (`service.splitPhase`) and the ground rod
- * (`electrode.groundRod`), both stateless. Adding a kind needs no `schemaVersion` bump.
+ * (`electrode.groundRod`), both stateless. P4 PR 10 (breakers v2, ADR 0021 part 2): the plug-on breakers
+ * (`breaker.plugOn1p`, `breaker.plugOn2p`), the GFCI breaker (`breaker.gfci1p`) and the combination AFCI
+ * breaker (`breaker.afci1p`), with ADR 0019's keys. Adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -759,6 +910,56 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     },
     description:
       'A single-pole thermal-magnetic circuit breaker: an inverse-time thermal trip and an instantaneous magnetic trip; after a trip the handle must go off, then on.',
+  },
+  'breaker.afci1p': {
+    kind: 'breaker.afci1p',
+    placement: 'entity',
+    terminals: ['line', 'load', 'loadNeutral', 'pigtail'],
+    params: AfciBreakerParams,
+    keys: {
+      ...BREAKER_V2_KEYS,
+      thermal: thermalKey("pole's"),
+      arcExposure: key(
+        'sim',
+        'number',
+        FiniteNumber.min(0).max(1),
+        0,
+        "Σ Δt / T_limit(I) over the 100-tick buckets in which an end downstream of it arced at 5 A or more: the cumulative trip probability, which reaches 1 by the region's detection limit. Reset to 0 a quiet gap after arcLastSeenTick.",
+      ),
+      arcLastSeenTick: sinceTickKey(
+        'The last bucket boundary at which an end downstream of it was arcing at 5 A or more; null when none has since the last reset.',
+      ),
+      test: TEST_BUTTON_KEY,
+    },
+    description:
+      "A plug-on combination arc-fault breaker (P4): a plug-on pole, its load neutral through the breaker to a pigtail, and series-arc detection on its load side (probabilistic, inside the region's limit); a test button.",
+  },
+  'breaker.gfci1p': {
+    kind: 'breaker.gfci1p',
+    placement: 'entity',
+    terminals: ['line', 'load', 'loadNeutral', 'pigtail'],
+    params: GfciBreakerParams,
+    keys: { ...BREAKER_V2_KEYS, thermal: thermalKey("pole's"), ...GFCI_SENSE_KEYS, test: TEST_BUTTON_KEY },
+    description:
+      "A plug-on ground-fault breaker (P4): a plug-on pole and its load neutral through the breaker to a pigtail; it senses the residual of the two and trips inside the region's inverse-time limit; a test button.",
+  },
+  'breaker.plugOn1p': {
+    kind: 'breaker.plugOn1p',
+    placement: 'entity',
+    terminals: ['line', 'load'],
+    params: PlugOnBreakerParams,
+    keys: { ...BREAKER_V2_KEYS, thermal: thermalKey("pole's") },
+    description:
+      'A single-pole plug-on thermal-magnetic breaker (P4): an inverse-time thermal trip and a magnetic trip that opens after its drawn opening time; after a trip the handle must go off, then on.',
+  },
+  'breaker.plugOn2p': {
+    kind: 'breaker.plugOn2p',
+    placement: 'entity',
+    terminals: ['line1', 'line2', 'load1', 'load2'],
+    params: PlugOnBreakerParams,
+    keys: { ...BREAKER_V2_KEYS, thermalL1: thermalKey("first pole's"), thermalL2: thermalKey("second pole's") },
+    description:
+      'A two-pole plug-on thermal-magnetic breaker (P4): one bimetal and one magnetic pickup per pole and a common trip, so a fault on either pole opens both.',
   },
   conductor: {
     kind: 'conductor',

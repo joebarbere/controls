@@ -14,9 +14,13 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice and engine 8’s service and ground rod, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice, engine 8’s service and ground rod and the breakers v2 kinds, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
+      'breaker.afci1p',
+      'breaker.gfci1p',
+      'breaker.plugOn1p',
+      'breaker.plugOn2p',
       'breaker.thermalMagnetic',
       'conductor',
       'electrode.groundRod',
@@ -58,6 +62,43 @@ describe('MODEL_KINDS', () => {
       'breaker.thermalMagnetic': {
         on: 'commanded boolean false',
         thermal: 'sim number 0',
+        tripped: 'sim boolean false',
+      },
+      // P4 PR 10 (ADR 0019's table, finalised by ADR 0021 part 2): breakers v2, GFCI and AFCI breakers.
+      'breaker.afci1p': {
+        arcExposure: 'sim number 0',
+        arcLastSeenTick: 'sim number null',
+        magneticSinceTick: 'sim number null',
+        on: 'commanded boolean false',
+        test: 'commanded counter 0',
+        thermal: 'sim number 0',
+        tripCause: 'sim enum null',
+        tripped: 'sim boolean false',
+      },
+      'breaker.gfci1p': {
+        magneticSinceTick: 'sim number null',
+        on: 'commanded boolean false',
+        residualIntegral: 'sim number 0',
+        residualSinceTick: 'sim number null',
+        test: 'commanded counter 0',
+        testHeldSinceTick: 'sim number null',
+        thermal: 'sim number 0',
+        tripCause: 'sim enum null',
+        tripped: 'sim boolean false',
+      },
+      'breaker.plugOn1p': {
+        magneticSinceTick: 'sim number null',
+        on: 'commanded boolean false',
+        thermal: 'sim number 0',
+        tripCause: 'sim enum null',
+        tripped: 'sim boolean false',
+      },
+      'breaker.plugOn2p': {
+        magneticSinceTick: 'sim number null',
+        on: 'commanded boolean false',
+        thermalL1: 'sim number 0',
+        thermalL2: 'sim number 0',
+        tripCause: 'sim enum null',
         tripped: 'sim boolean false',
       },
       // F3.5 (ADR 0015, D11): the commanded knockout bit set; provisional until v0.4.0.
@@ -200,6 +241,59 @@ describe('MODEL_KINDS', () => {
     expect(conductor.params.safeParse({ layFactor: 0.99 }).success).toBe(false);
     expect(conductor.params.safeParse({ layFactor: 1.2 }).success).toBe(false);
     expect(conductor.params.safeParse({ layFactor: 1, resistivityOhmM: 1.7e-8 }).success).toBe(false);
+  });
+
+  describe('breakers v2 (P4 D6, ADR 0021 part 2)', () => {
+    const plugOn = {
+      ratedCurrentA: 20,
+      thermalTimeConstantS: 60,
+      ultimateTripRatio: 1.25,
+      magneticPickupMinA: 240,
+      magneticPickupMaxA: 400,
+      openingTimeMinMs: 8,
+      openingTimeMaxMs: 20,
+      contactResistanceOhm: 0.005,
+    };
+    const gfci = {
+      ...plugOn,
+      residualPickupMinA: 0.004,
+      residualPickupMaxA: 0.006,
+      mechanismTimeMinMs: 3,
+      mechanismTimeMaxMs: 14,
+      testResistanceOhm: 3900,
+    };
+    const parses = (kind: string, params: object) => MODEL_KINDS[kind].params.safeParse(params).success;
+
+    it('the plug-on pickup is an absolute band in amperes: the DIN entry’s “near ten times” ratio fields are refused', () => {
+      for (const kind of ['breaker.plugOn1p', 'breaker.plugOn2p', 'breaker.afci1p']) {
+        expect(parses(kind, plugOn), kind).toBe(true);
+        expect(parses(kind, { ...plugOn, magneticTripMinRatio: 8, magneticTripMaxRatio: 12 }), kind).toBe(false);
+      }
+      expect(parses('breaker.gfci1p', gfci)).toBe(true);
+      expect(parses('breaker.gfci1p', plugOn)).toBe(false);
+    });
+
+    it('refuses an inverted band, a pickup at or below k_u I_n, an inverted opening or mechanism time, an inverted residual band', () => {
+      expect(parses('breaker.plugOn1p', { ...plugOn, magneticPickupMaxA: 240 })).toBe(false);
+      expect(parses('breaker.plugOn1p', { ...plugOn, magneticPickupMinA: 25, magneticPickupMaxA: 30 })).toBe(false);
+      expect(parses('breaker.plugOn1p', { ...plugOn, openingTimeMaxMs: 7 })).toBe(false);
+      expect(parses('breaker.plugOn1p', { ...plugOn, ultimateTripRatio: 1.4 })).toBe(false);
+      expect(parses('breaker.gfci1p', { ...gfci, residualPickupMaxA: 0.004 })).toBe(false);
+      expect(parses('breaker.gfci1p', { ...gfci, mechanismTimeMaxMs: 2 })).toBe(false);
+    });
+
+    it('tripCause takes the five causes or null; the since-ticks are null or a tick; the exposure and integral stay in 0–1', () => {
+      const keys = MODEL_KINDS['breaker.afci1p'].keys;
+      expect(keys['tripCause'].values).toStrictEqual(['thermal', 'magnetic', 'groundFault', 'arcFault', 'test']);
+      for (const cause of [...(keys['tripCause'].values ?? []), null]) {
+        expect(keys['tripCause'].schema.safeParse(cause).success).toBe(true);
+      }
+      expect(keys['tripCause'].schema.safeParse('overload').success).toBe(false);
+      expect(keys['magneticSinceTick'].schema.safeParse(1.5).success).toBe(false);
+      expect(keys['arcExposure'].schema.safeParse(1.01).success).toBe(false);
+      expect(MODEL_KINDS['breaker.gfci1p'].keys['residualIntegral'].schema.safeParse(1).success).toBe(true);
+      expect(MODEL_KINDS['breaker.gfci1p'].keys['residualIntegral'].schema.safeParse(1.01).success).toBe(false);
+    });
   });
 
   it("the load check: a conductor's bag needs `fused` (any value, whatever its ends), a lead's never has it", () => {

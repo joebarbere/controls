@@ -171,6 +171,10 @@ describe('acBranchValues', () => {
       'heater',
       'fuse',
       'breaker.thermalMagnetic',
+      'breaker.plugOn1p',
+      'breaker.plugOn2p',
+      'breaker.gfci1p',
+      'breaker.afci1p',
     ]);
     expect(acBranchValues(netlist, hook, values)).toBe(values);
     expect(acBranchValues(netlist, hook, new AcBranchValues(1))).not.toBe(values);

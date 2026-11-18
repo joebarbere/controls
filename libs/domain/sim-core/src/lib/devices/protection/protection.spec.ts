@@ -1,6 +1,7 @@
 import { BUILTIN_CATALOG, type BreakerParams, type FuseParams } from '@controls/catalog';
 import { deviceOutputSchemaProblems } from '@controls/sim-protocol';
 import { deriveStream, entityStreamKey } from '@controls/world-model';
+import { deviceExtras } from '../../../testing/devices';
 import { BATTERY } from '../../../testing/bench';
 import { BUSBAR, engineBus, OPAQUE, RHEOSTAT } from '../../../testing/engine';
 import { BREAKER, FUSE_1A } from '../../../testing/protection';
@@ -281,6 +282,7 @@ describe('the thermal-magnetic breaker (golden)', () => {
         state: { on: true },
         branches: [0],
         frequencyHz: 60,
+        ...deviceExtras(11, 2, ['pole']),
         stream: () => deriveStream(11, entityStreamKey(2)),
       },
     ]);

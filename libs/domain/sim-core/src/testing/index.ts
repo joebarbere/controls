@@ -5,3 +5,5 @@ export * from './protection';
 export * from './sources';
 export * from './wired-loop';
 export * from './residential';
+export * from './devices';
+export * from './plug-on';

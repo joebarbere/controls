@@ -457,6 +457,22 @@ export class ConnectionThermalBank {
     return TOPOLOGY_VIEWS[16 * this.fused[i] + 4 * this.state[2 * i] + this.state[2 * i + 1]];
   }
 
+  /**
+   * Writes into `out` the netlist branch of every netlisted member with an end in the `arcing` state,
+   * in member (connection-id) order, and returns how many (engine 8, the AFCI, D8). `out` holds at
+   * least `count` entries. Allocates nothing.
+   */
+  arcingBranches(out: Int32Array): number {
+    let n = 0;
+    const state = this.state;
+    for (let i = 0; i < this.count; i++) {
+      const b = this.branch[i];
+      if (b < 0) continue;
+      if (state[2 * i] === END_ARCING || state[2 * i + 1] === END_ARCING) out[n++] = b;
+    }
+    return n;
+  }
+
   /** The member netlist branch `branch` belongs to, or −1 (not a connection's, or not a member). */
   memberOf(branch: number): number {
     return branch < this.memberOfBranch.length ? this.memberOfBranch[branch] : -1;
