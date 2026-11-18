@@ -10,6 +10,9 @@
     "sim": {
       "type": "object",
       "properties": {
+        "burnedOut": {
+          "type": "boolean"
+        },
         "filamentTempK": {
           "anyOf": [
             {
@@ -21,10 +24,24 @@
               "type": "null"
             }
           ]
+        },
+        "overvoltageSinceTick": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
-        "filamentTempK"
+        "burnedOut",
+        "filamentTempK",
+        "overvoltageSinceTick"
       ],
       "additionalProperties": false
     }

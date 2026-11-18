@@ -2,6 +2,7 @@ import { APP_VERSION } from '@controls/units';
 import { migrateManifest } from '../documents';
 import { manifestV1ToV2 } from '../v2/from-v1';
 import { manifestV2ToV3 } from '../v3/from-v2';
+import { manifestV3ToV4 } from '../v4/from-v3';
 import { CTRL_FORMAT, ManifestV1 } from './manifest';
 
 /** A v1 manifest as P1 builds wrote it (no catalogue yet). */
@@ -30,6 +31,10 @@ describe('ManifestV1', () => {
   it('loads through the migrator, round-trips through JSON and migrates to the current version', () => {
     const manifest = ManifestV1.parse(v1());
     const loaded = migrateManifest(JSON.parse(JSON.stringify(manifest)));
-    expect(loaded).toStrictEqual({ ok: true, value: manifestV2ToV3(manifestV1ToV2(manifest)), fromVersion: 1 });
+    expect(loaded).toStrictEqual({
+      ok: true,
+      value: manifestV3ToV4(manifestV2ToV3(manifestV1ToV2(manifest))),
+      fromVersion: 1,
+    });
   });
 });

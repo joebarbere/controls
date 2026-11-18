@@ -169,6 +169,7 @@ describe('ViewportRenderer (fake GPU)', () => {
       sim: {},
       mountedOn: null,
       inEntry: null,
+      pluggedInto: null,
       label: null,
       extensions: {},
     };

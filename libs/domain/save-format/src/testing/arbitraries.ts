@@ -563,6 +563,95 @@ export const rawReplayLogV3Arb = fc
     return { schemaVersion: 3 as const, initialWorld, firstSeq, entries, endTick: tick + tail };
   });
 
+export const rawManifestV4Arb = rawManifestV3Arb.map((v3) => ({ ...v3, schemaVersion: 4 as const }));
+
+const areaUseArb = fc.constantFrom('kitchen', 'bathroom', 'garage', 'crawlSpace', 'fixtureUse');
+const areaRawArb = fc.record({
+  id: fixtureIdArb,
+  use: areaUseArb,
+  min: positionArb,
+  size: fc.record({
+    x: fc.integer({ min: 1, max: 9000 }),
+    y: fc.integer({ min: 1, max: 9000 }),
+    z: fc.integer({ min: 1, max: 9000 }),
+  }),
+});
+const plugRawArb = fc.option(fc.record({ pick: fc.nat(), outlet: terminalIdArb }), { nil: null });
+const markingArb = fc.record({
+  a: fc.option(colourIdArb, { nil: null }),
+  b: fc.option(colourIdArb, { nil: null }),
+});
+
+/*
+ * A raw world document that `WorldV4` accepts: v3's world plus areas (sorted, never a fixture id,
+ * non-empty boxes), entities plugged into earlier entities (so mounts, entries and plugs never form a
+ * cycle; never with a mount or an entry; one per outlet) and tape on conductor ends (never on a lead).
+ */
+export const rawWorldV4Arb = rawWorldV3Arb
+  .chain((v3) =>
+    fc.record({
+      v3: fc.constant(v3),
+      plugs: fc.array(plugRawArb, { minLength: v3.entities.length, maxLength: v3.entities.length }),
+      markings: fc.array(markingArb, { minLength: v3.connections.length, maxLength: v3.connections.length }),
+      areas: fc.array(areaRawArb, { maxLength: 3 }),
+    }),
+  )
+  .map(({ v3, plugs, markings, areas }) => {
+    const entities = v3.entities as readonly (typeof v3.entities)[number][];
+    const fixtureIds = new Set((v3.fixtures as readonly { id: string }[]).map((f) => f.id));
+    const taken = new Set<string>();
+    const clamp = (n: number) => Math.min(n, MAX_COORDINATE_MM);
+    const byId = new Map<string, (typeof areas)[number]>();
+    for (const area of areas) if (!fixtureIds.has(area.id) && !byId.has(area.id)) byId.set(area.id, area);
+    return {
+      ...v3,
+      schemaVersion: 4 as const,
+      areas: [...byId.values()]
+        .sort((p, q) => byCodeUnits(p.id, q.id))
+        .map((area) => {
+          // A non-empty box inside the coordinate range: shift the corner down if the size would leave it.
+          const min = {
+            x: Math.min(area.min.x, MAX_COORDINATE_MM - area.size.x),
+            y: Math.min(area.min.y, MAX_COORDINATE_MM - area.size.y),
+            z: Math.min(area.min.z, MAX_COORDINATE_MM - area.size.z),
+          };
+          const max = { x: clamp(min.x + area.size.x), y: clamp(min.y + area.size.y), z: clamp(min.z + area.size.z) };
+          return { id: area.id, use: area.use, minMm: min, maxMm: max };
+        }),
+      entities: entities.map((entity, index) => {
+        const raw = plugs[index];
+        let pluggedInto: { entity: number; outlet: string } | null = null;
+        if (raw !== null && entity.mountedOn === null && entity.inEntry === null && index > 0) {
+          const host = entities[raw.pick % index].id;
+          const key = `${host}:${raw.outlet}`;
+          if (!taken.has(key)) {
+            taken.add(key);
+            pluggedInto = { entity: host, outlet: raw.outlet };
+          }
+        }
+        return { ...entity, pluggedInto };
+      }),
+      connections: (v3.connections as readonly (typeof v3.connections)[number][]).map((c, index) => ({
+        ...c,
+        marking: c.lengthMm === null ? { a: null, b: null } : markings[index],
+      })),
+    };
+  });
+
+/** A raw replay log that `ReplayLogV4` accepts. */
+export const rawReplayLogV4Arb = rawReplayLogV3Arb.chain((v3) =>
+  rawWorldV4Arb.map((initialWorld) => {
+    const shift = initialWorld.tick - v3.initialWorld.tick;
+    return {
+      ...v3,
+      schemaVersion: 4 as const,
+      initialWorld,
+      entries: v3.entries.map((e) => ({ ...e, tick: e.tick + shift })),
+      endTick: v3.endTick + shift,
+    };
+  }),
+);
+
 /** Bytes that start with the PNG signature (the container checks the signature, not the image). */
 export const pngBytesArb = fc
   .uint8Array({ maxLength: 64 })

@@ -19,6 +19,8 @@ export type OrientationMdeg = Transform['orientationMdeg'];
 export type MountedOn = NonNullable<Entity['mountedOn']>;
 /** Which enclosure entry a conduit connector is in (world v3): an enclosure entity and one of its catalogue entries. */
 export type InEntry = NonNullable<Entity['inEntry']>;
+/** Which receptacle outlet an entity's cord plug is in (world v4, ADR 0019): a relation, not a transform. */
+export type PluggedInto = NonNullable<Entity['pluggedInto']>;
 /** Fixed level geometry (F1.9): a wall, bench, backplate or DIN rail that comes with the level. */
 export type Fixture = World['fixtures'][number];
 export type FixtureId = Fixture['id'];
@@ -33,6 +35,11 @@ export type Termination = NonNullable<ConnectionEnd['termination']>;
 export type Waypoint = NonNullable<Connection['route']>[number];
 /** A conductor's colour: base and optional tracer stripe, colour-table ids. */
 export type ConductorColour = NonNullable<Connection['colour']>;
+/** Re-identification tape at each end of a conductor (world v4, ADR 0019): colour ids or `null`. */
+export type Marking = Connection['marking'];
+/** A level area the inspector reads (world v4, ADR 0019): an axis-aligned half-open box with a use. */
+export type Area = World['areas'][number];
+export type AreaId = Area['id'];
 /** A cable assembly in the world (world v3): owns its conductors. */
 export type Cable = World['cables'][number];
 export type CableId = Cable['id'];

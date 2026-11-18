@@ -17,13 +17,13 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * connector at an entry and an enclosure with an open entry, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/raceway-panel.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/raceway-panel-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/raceway-panel-engine-7-catalog-3.ctrl
  *
  * and rebuilt from the scenario by `sources.spec.ts`'s fixture-rebuild check.
  */
 
 /** world.hash after `raceway-panel.console`. */
-export const RACEWAY_PANEL_HASH = '7a83af95f1de1ceba08b1b128994123328d7140a44c33ae931a786f092d097f5';
+export const RACEWAY_PANEL_HASH = '0a4649db786e7c252fb73c162def525d66eeb63adf9f1b037504319771e9e52c';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

@@ -8,8 +8,9 @@ import { tungstenResistivity, tungstenResistivityInto } from './tungsten';
 /*
  * The incandescent lamp (plan F2.5): a tungsten filament whose resistance follows its temperature,
  * heated by I²R and cooled by radiation and by conduction along the filament into its two lead-ins. The
- * filament temperature is the only sim-owned value (`filamentTempK` in the `sim` bag), so a save or a
- * topology change carries it exactly.
+ * filament temperature is the only sim-owned value engine 7 models (`filamentTempK` in the `sim` bag),
+ * so a save or a topology change carries it exactly; world v4's `burnedOut` and `overvoltageSinceTick`
+ * (ADR 0019) are carried through as saved until engine 8 models them.
  *
  * **R(T).** The filament's resistance is its rated (hot) resistance scaled by tungsten's resistivity
  * (`tungsten.ts`, Jones and Langmuir's measurements):
@@ -196,7 +197,15 @@ export const LAMP_MODEL: SimDeviceModel = {
     // resistance, across a call (a double crossing a call V8 doesn't inline is boxed; see `ohmsAt`).
     const rho = new Float64Array(n);
     const ohms = new Float64Array(n);
+    // World v4's two lamp keys (ADR 0019): engine 7 models neither, so each lamp's saved values are
+    // carried through its bag unchanged (engine 8 sets them). A hand-built bag without them starts at
+    // the kind's initial values, as `filamentTempK` does.
+    const burnedOut = new Uint8Array(n);
+    const overvoltageSinceTick: (number | null)[] = new Array<number | null>(n).fill(null);
     devices.forEach((d, i) => {
+      burnedOut[i] = d.bag['burnedOut'] === true ? 1 : 0;
+      const since = d.bag['overvoltageSinceTick'];
+      overvoltageSinceTick[i] = typeof since === 'number' ? since : null;
       const p = d.params as LampIncandescentParams;
       // A null-initial key: a lamp entering the netlist for the first time starts at ambient. A
       // hand-built world may lack the key altogether (the bench plant's `sim: {}`); the same applies.
@@ -233,7 +242,11 @@ export const LAMP_MODEL: SimDeviceModel = {
       return pow17over8((t * t * t * t - ambient4) / ratedSpan4[i]);
     };
     return {
-      bag: (i) => ({ filamentTempK: temp[i] }),
+      bag: (i) => ({
+        burnedOut: burnedOut[i] === 1,
+        filamentTempK: temp[i],
+        overvoltageSinceTick: overvoltageSinceTick[i],
+      }),
       dcValue: (i, b, values) => {
         ohmsAt(i);
         values.resistorAt(b.index, ohms, i);

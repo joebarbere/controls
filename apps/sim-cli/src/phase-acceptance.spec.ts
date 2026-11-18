@@ -17,7 +17,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `phase-acceptance.console`. Every game-e2e driver must match it. */
-export const PHASE_ACCEPTANCE_HASH = '60726d27858e701a86798b344bf5b2f62864f28cdd9ba36351051e2789107ab8';
+export const PHASE_ACCEPTANCE_HASH = 'bb5fe5ef7033bd31044ba26e3f9decd2152e8c13aac6a7803e58764138811995';
 
 /** The logged command ids, in order: the same on every surface. */
 const LOGGED = [

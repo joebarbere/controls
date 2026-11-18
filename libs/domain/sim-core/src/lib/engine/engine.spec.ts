@@ -533,7 +533,7 @@ describe('SimEngine: state, saves and starts (ADR 0011 §9.6, ADR 0013)', () => 
       [2, {}],
       [3, { tempK: expect.any(Number) }],
       [4, { blown: false, heatA2s: expect.any(Number) }],
-      [5, { filamentTempK: 293.15 }], // initialised at ambient on entering the netlist (F2.5), unwired so cold
+      [5, { burnedOut: false, filamentTempK: 293.15, overvoltageSinceTick: null }], // initialised at ambient on entering the netlist (F2.5), unwired so cold
     ]);
     expect(world.entities[2].sim['tempK']).toBeGreaterThan(THERMAL_PARAMS.ambientK);
     expect(world.entities[0].sim['stateOfCharge']).toBeLessThan(1);

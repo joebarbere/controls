@@ -1,12 +1,12 @@
 {
   "lampCircuit": {
-    "litHash": "ffe1dc35c5d71981a87b893b9bbd9a2d8750b2b80f35519346c8abfc49982f08",
+    "litHash": "a415511d10217f32c935fbc61d318d653f69e47bc92c012a90ef9bb51f70cac0",
     "litSnapshotHash": "32359c6e8550025059811c601e209054d9d98fa8b5be0e74afa65f9c76e072cc",
-    "hash": "a3b98b17b9c974915a4422b83312c669feeb63d67db32319d5eab31205b49c48",
+    "hash": "7c783759d747ec52060eccee7a2f1107a9bd8ef3602e7412910ad9056edc57b0",
     "snapshotHash": "ac9772f41ef7d35b1779a2cfe59ff5e74f08be8ac983f72ec44e3e85e4d03939"
   },
   "badTermination": {
-    "hash": "53c822210a1912b21d8e28f4e838296aaf7ac87c8c42434e3e5e6103f97d2de5",
+    "hash": "c5cdc73729a32640e02a6d4d244a7777266fe46e602518c8425820f1fa0ad6fb",
     "snapshotHash": "b35794ea6f84fc9f11767cd3ea35988d4aa2b8a38d05c0f4d471a212fe6be8e1"
   }
 }

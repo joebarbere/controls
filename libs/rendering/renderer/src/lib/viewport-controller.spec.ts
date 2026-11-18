@@ -372,6 +372,7 @@ const entity = (id: number, ref: typeof BOX, x: number, y: number, yaw = 0): Ent
   sim: {},
   mountedOn: null,
   inEntry: null,
+  pluggedInto: null,
   label: null,
   extensions: {},
 });
@@ -944,6 +945,7 @@ describe('ViewportController on the workshop', () => {
           sim: {},
           mountedOn: null,
           inEntry: null,
+          pluggedInto: null,
           label: null,
           extensions: {},
         },

@@ -1,5 +1,5 @@
 import { createWorld, migrateWorld, World } from '@controls/save-format';
-import { rawWorldV3Arb } from '@controls/save-format/testing';
+import { rawWorldV4Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -82,7 +82,7 @@ describe('canonicalJson', () => {
 
   it('agrees with the reference canonicaliser on any valid world', () => {
     fc.assert(
-      fc.property(rawWorldV3Arb, (raw) => {
+      fc.property(rawWorldV4Arb, (raw) => {
         const world = World.parse(raw);
         expect(canonicalJson(world)).toBe(referenceCanonical(world));
       }),
@@ -93,7 +93,7 @@ describe('canonicalJson', () => {
 describe('world.hash', () => {
   it('is SHA-256 of the canonical JSON, as lower-case hex, for any valid world', () => {
     fc.assert(
-      fc.property(rawWorldV3Arb, (raw) => {
+      fc.property(rawWorldV4Arb, (raw) => {
         const world = World.parse(raw);
         const hash = worldHash(world);
         expect(hash).toMatch(/^[0-9a-f]{64}$/);
@@ -129,11 +129,11 @@ describe('world.hash', () => {
  * tests prove the hash is identical in Node and Chromium. Change both or neither.
  */
 const GOLDEN = {
-  emptySeed0: '45cb3d322da6233b88642422bee7eaf27cef5325907eaae3b31abd598e6c9fdc',
-  propsAndExtensionsFixture: '7284d19dee71b4307efd523022ca9d195f9697e4bd14bdf93c90360d211bad6d',
-  scenario: '52f3577dc8a1de1800229970a12a70b3db9ecb6ad571e6af9c6c6123bcc73e93',
+  emptySeed0: '8b28cd0b4bbe1a9acc6c02df20f144c8548a9c55b1a11e12bf0a2c01bb049e3b',
+  propsAndExtensionsFixture: '97bf8bac0667dde1722d0e01711f99a24f59d7d995f99a8fe7534a3eac47ea4d',
+  scenario: '4a295adc03a63bbd02579fe306b6f4142c9a50fedc781c7addd6767d3f27c439',
   /** `content/levels/workshop.json` (seed 0): New sandbox with seed 0 starts here (F1.9). */
-  workshopSeed0: 'dffa0c299298023206d272b7af834fb1f378903058743c5ec89745e15c60a969',
+  workshopSeed0: '89152b3aad738c92776f210e3b7f82092e8ed934d447e7758fd034dea79b000f',
 } as const;
 
 /**

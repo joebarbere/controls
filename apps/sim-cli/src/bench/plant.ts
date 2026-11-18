@@ -1,4 +1,4 @@
-import { type ConnectionV3, type EntityV3, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
+import { type ConnectionV4, type EntityV4, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { deriveStream } from '@controls/world-model';
 
 /*
@@ -56,11 +56,11 @@ interface Unit {
 /** Builds the plant. Pure: the same seed gives the same world. */
 export function buildPlant(seed: number = PLANT_SEED): Plant {
   const rng = deriveStream(seed, 'bench:plant');
-  const entities: EntityV3[] = [];
-  const connections: ConnectionV3[] = [];
+  const entities: EntityV4[] = [];
+  const connections: ConnectionV4[] = [];
   let openSwitches = 0;
   let ties = 0;
-  const place = (ref: { id: string; version: number }, state: EntityV3['state'] = {}): number => {
+  const place = (ref: { id: string; version: number }, state: EntityV4['state'] = {}): number => {
     const id = entities.length + 1;
     const position = { x: (id % 100) * 200, y: 0, z: Math.floor(id / 100) * 200 };
     entities.push({
@@ -71,6 +71,7 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
       sim: {},
       mountedOn: null,
       inEntry: null,
+      pluggedInto: null,
       label: null,
       extensions: {},
     });
@@ -90,6 +91,7 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
       state: {},
       sim: { ...LEAD_SIM_BAG_V3 },
       extensions: {},
+      marking: { a: null, b: null },
     });
 
   const batteries: number[] = [];
@@ -149,7 +151,7 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
   const switches = entities.filter((entity) => entity.ref.id === SWITCH.id);
   const lamps = entities.filter((entity) => entity.ref.id === LAMP.id).length;
   const world = World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed,
     tick: 0,
     nextEntityId: entities.length + 1,
@@ -160,6 +162,7 @@ export function buildPlant(seed: number = PLANT_SEED): Plant {
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities,
     connections,
     cables: [],

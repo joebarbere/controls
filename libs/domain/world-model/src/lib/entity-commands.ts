@@ -49,6 +49,12 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * its entry end exactly there, room in the entry). A connector in an entry can't move or turn
  * (`in-entry`), and holds its enclosure (`occupied`).
  *
+ * World v4 (ADR 0019, P4 PR 7's interim guards): `entity.place` makes an unplugged entity
+ * (`pluggedInto: null`); a plugged entity can't move or turn (`plugged`), and a receptacle holding a
+ * plug is `occupied` (no move, turn or delete). Deleting a plugged appliance takes its plug with it
+ * (the relation is the appliance's own). PR 8's `plug.*` commands and `entity.delete` unplugging a
+ * receptacle's plugs relax the delete refusal; refusals aren't logged, so relaxing changes no log.
+ *
  * F3.5: `entity.place`, `entity.move` and `entity.rotate` refuse a body that would overlap another
  * entity's when either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of
  * `wiring/overlap.ts`; pre-v3 logs stack free props, so free bodies among themselves are only kept
@@ -139,11 +145,16 @@ export function isLead(connection: Connection): boolean {
 
 /**
  * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a connector or a cable end is
- * in one of its entries, or a route waypoint names it. An occupied entity can't move, turn or be
- * deleted.
+ * in one of its entries, a route waypoint names it, or (world v4, ADR 0019) a cord is plugged into one
+ * of its outlets. An occupied entity can't move, turn or be deleted (until PR 8's `entity.delete`
+ * unplugs what a receptacle holds).
  */
 export function entityOccupied(world: Pick<World, 'entities' | 'cables' | 'connections'>, id: EntityId): boolean {
-  if (world.entities.some((e) => e.mountedOn?.entity === id || e.inEntry?.entity === id)) return true;
+  if (
+    world.entities.some((e) => e.mountedOn?.entity === id || e.inEntry?.entity === id || e.pluggedInto?.entity === id)
+  ) {
+    return true;
+  }
   if (world.cables.some((c) => c.a?.entity === id || c.b?.entity === id || c.route.some((w) => w.entity === id))) {
     return true;
   }
@@ -170,7 +181,7 @@ export function entityHold(
 
 function holdFailure(hold: 'occupied' | 'wired', id: EntityId) {
   return hold === 'occupied'
-    ? fail('occupied', `Entity ${id} holds a mounted device, a connector, a cable end or a route`)
+    ? fail('occupied', `Entity ${id} holds a mounted device, a connector, a cable end, a route or a plug`)
     : fail('wired', `Entity ${id} has a conductor landed on it: unland it first`);
 }
 
@@ -185,6 +196,11 @@ function withoutEntity(entities: readonly Entity[], id: EntityId): Entity[] {
 
 function withEntity(entities: readonly Entity[], id: EntityId, update: (e: Entity) => Entity): Entity[] {
   return entities.map((e) => (e.id === id ? update(e) : e));
+}
+
+/** A plugged entity can't move or turn (world v4, ADR 0019): unplug it first. */
+function pluggedFailure(entity: Entity) {
+  return fail('plugged', `Entity ${entity.id} is plugged into entity ${entity.pluggedInto?.entity}: unplug it first`);
 }
 
 function inEntryFailure(entity: Entity) {
@@ -271,6 +287,8 @@ export function entityPlaceCommand(catalog: Catalog = BUILTIN_CATALOG) {
         inEntry: args.inEntry && { ...args.inEntry },
         label: null,
         extensions: {},
+        // World v4: a placed appliance is unplugged; plugging is always `plug.insert` (ADR 0019).
+        pluggedInto: null,
       };
       return succeed({
         // The new id is above every existing one, so appending keeps the order.
@@ -297,6 +315,7 @@ export function entityMoveCommand(catalog: Catalog = BUILTIN_CATALOG) {
       const entity = findEntity(state, id);
       if (!entity) return notFound(id);
       if (entity.inEntry !== null) return inEntryFailure(entity);
+      if (entity.pluggedInto !== null) return pluggedFailure(entity);
       const hold = entityHold(state, id);
       if (hold !== null) return holdFailure(hold, id);
       if (entity.mountedOn !== null) {
@@ -341,6 +360,7 @@ export function entityRotateCommand(catalog: Catalog = BUILTIN_CATALOG) {
       if (!entity) return notFound(id);
       if (entity.mountedOn !== null) return fail('mounted', `Entity ${id} is mounted: it can't be rotated`);
       if (entity.inEntry !== null) return inEntryFailure(entity);
+      if (entity.pluggedInto !== null) return pluggedFailure(entity);
       const hold = entityHold(state, id);
       if (hold !== null) return holdFailure(hold, id);
       const turned = {

@@ -1,9 +1,9 @@
-import { Int } from '@controls/save-format';
+import { DeviceStateBagV4, Int, MAX_DEVICE_STATE_KEYS } from '@controls/save-format';
 import * as z from 'zod';
 import { BUILTIN_CATALOG } from './builtin';
 import { type CatalogInput, checkControlValue, offeredMounts, parseCatalog } from './catalog';
-import type { DeviceControl } from './device';
-import { counterKey, MODEL_KINDS, type ModelKindDef, textKey } from './model-kinds';
+import { type DeviceControl, MAX_PANEL_SPACES } from './device';
+import { checkBags, counterKey, initialBags, MODEL_KINDS, type ModelKindDef, textKey } from './model-kinds';
 import { NEC_REGION } from './region';
 import {
   AREA_USES,
@@ -490,6 +490,29 @@ describe('catalogue format v3 (ADR 0020) on test fixtures', () => {
       expect(counter.schema.safeParse(3).success).toBe(true);
       expect(counter.schema.safeParse(-1).success).toBe(false);
       expect(counter.schema.safeParse(1.5).success).toBe(false);
+    });
+
+    it("a load centre's commanded bag (on, coverOn, openEntries, directory1 … directory42) fits MAX_DEVICE_STATE_KEYS", () => {
+      // World v4 (ADR 0019 deviation 5): one commanded text key per panel space. 45 keys ≤ 64.
+      const keys: ModelKindDef['keys'] = {
+        on: MODEL_KINDS['switch.spst'].keys['closed'],
+        coverOn: MODEL_KINDS['switch.spst'].keys['closed'],
+        openEntries,
+        ...Object.fromEntries(Array.from({ length: MAX_PANEL_SPACES }, (_, i) => [`directory${i + 1}`, textKey('t')])),
+      };
+      const kind: ModelKindDef = { ...MODEL_KINDS['switch.spst'], kind: 'enclosure.test', keys };
+      const { state, sim } = initialBags(kind);
+      expect(Object.keys(state)).toHaveLength(3 + MAX_PANEL_SPACES);
+      expect(Object.keys(state).length).toBeLessThanOrEqual(MAX_DEVICE_STATE_KEYS);
+      expect(DeviceStateBagV4.safeParse(state).success).toBe(true);
+      const filled = { ...state, directory1: 'KITCHEN SA 1', directory42: 'SPARE' };
+      expect(checkBags(kind, filled, sim)).toStrictEqual([]);
+      // Counters are non-negative integers through the same check (the load check's `checkBags`).
+      const counted: ModelKindDef = { ...kind, keys: { ...keys, test: counterKey('c') } };
+      const pressed = { ...filled, test: 0 };
+      expect(checkBags(counted, pressed, sim)).toStrictEqual([]);
+      expect(checkBags(counted, { ...pressed, test: -1 }, sim).map((i) => i.path)).toStrictEqual(['state.test']);
+      expect(checkBags(counted, { ...pressed, test: 2.5 }, sim).map((i) => i.path)).toStrictEqual(['state.test']);
     });
   });
 

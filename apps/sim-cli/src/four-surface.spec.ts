@@ -28,7 +28,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after the scenario. The game-e2e drivers (mouse, palette, console) must match it. */
-export const FOUR_SURFACE_HASH = 'c56fb0a815c229a3f27e3b14df7da6796b310a9692587fbc1c45942ee8738491';
+export const FOUR_SURFACE_HASH = '1585900a8bcb2bfdf2c8eb1b3fb4539ab2e8a36b6a07b912ff103413a44fb16d';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 4,
+  "seed": 20261117,
+  "tick": 0,
+  "nextEntityId": 6,
+  "nextConnectionId": 3,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "areas": [
+    {
+      "id": "kitchen",
+      "use": "kitchen",
+      "minMm": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "maxMm": {
+        "x": 3000,
+        "y": 2700,
+        "z": 4000
+      }
+    },
+    {
+      "id": "bathroom",
+      "use": "bathroom",
+      "minMm": {
+        "x": 3000,
+        "y": 0,
+        "z": 0
+      },
+      "maxMm": {
+        "x": 5400,
+        "y": 2700,
+        "z": 2400
+      }
+    },
+    {
+      "id": "basement-east",
+      "use": "basement",
+      "minMm": {
+        "x": -6000,
+        "y": -2700,
+        "z": -4000
+      },
+      "maxMm": {
+        "x": 0,
+        "y": 0,
+        "z": 4000
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "receptacle.fixture-duplex-5-15r",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1200,
+          "y": 300,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": "K1",
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "appliance.fixture-kettle",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1000,
+          "y": 900,
+          "z": 300
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": false
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": {
+        "entity": 1,
+        "outlet": "top"
+      }
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "appliance.fixture-toaster",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 1500,
+          "y": 900,
+          "z": 300
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": {
+        "entity": 1,
+        "outlet": "bottom"
+      }
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "receptacle.fixture-power-strip",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 4200,
+          "y": 0,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "appliance.fixture-lamp",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 4600,
+          "y": 0,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": {
+        "entity": 4,
+        "outlet": "socket-3"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "conductor.fixture-thhn-14",
+        "version": 1
+      },
+      "a": null,
+      "b": null,
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 0,
+            "y": 1200,
+            "z": 0
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 0,
+            "y": 2400,
+            "z": 0
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1300,
+      "colour": {
+        "base": "white",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {},
+      "extensions": {},
+      "marking": {
+        "a": "black",
+        "b": "black"
+      }
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "conductor.fixture-thhn-14",
+        "version": 1
+      },
+      "a": null,
+      "b": null,
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 100,
+            "y": 1200,
+            "z": 0
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 100,
+            "y": 2400,
+            "z": 0
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1300,
+      "colour": {
+        "base": "black",
+        "stripe": null
+      },
+      "label": "S1",
+      "state": {},
+      "sim": {},
+      "extensions": {},
+      "marking": {
+        "a": null,
+        "b": "red"
+      }
+    }
+  ],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

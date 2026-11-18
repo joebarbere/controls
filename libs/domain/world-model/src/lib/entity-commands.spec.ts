@@ -28,6 +28,7 @@ function entity(id: number, x = 0): Entity {
     sim: {},
     mountedOn: null,
     inEntry: null,
+    pluggedInto: null,
     label: null,
     extensions: {},
   };
@@ -64,6 +65,7 @@ describe('entity.place', () => {
       inEntry: null,
       label: null,
       extensions: {},
+      pluggedInto: null,
     });
     expect(World.safeParse(bus.state).success).toBe(true);
   });
@@ -347,6 +349,7 @@ describe('world registry, replay log and cheats', () => {
         inEntry: null,
         label: null,
         extensions: {},
+        pluggedInto: null,
       },
     ]);
     expect(result.world.nextEntityId).toBe(2);
@@ -356,7 +359,7 @@ describe('world registry, replay log and cheats', () => {
 
   it('reports a log that no longer replays', () => {
     const log = ReplayLog.parse({
-      schemaVersion: 3,
+      schemaVersion: 4,
       initialWorld: createWorld({ seed: 0 }),
       firstSeq: 0,
       entries: [{ seq: 0, tick: 0, id: 'entity.delete', args: { id: 1 } }],
@@ -433,6 +436,7 @@ describe('world v2: devices and connections (ADR 0013)', () => {
     state: {},
     sim: { ...LEAD_SIM_BAG_V3 },
     extensions: {},
+    marking: { a: null, b: null },
   });
 
   it('a placed catalogue device starts with its model kind’s initial bags', () => {

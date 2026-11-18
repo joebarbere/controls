@@ -1,7 +1,7 @@
 import { BUILTIN_CATALOG, type Catalog } from '@controls/catalog';
 import type { CommandBus } from '@controls/commands';
 import { World } from '@controls/save-format';
-import { deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
+import { deepFreeze, rawWorldV4Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import {
   AC_SOURCE,
@@ -344,7 +344,7 @@ function checkInvariants(world: World, netlist: Netlist, catalog: Catalog = TEST
  * compiles real circuits, not only absent refs.
  */
 const BUILTIN_DEVICES = [BATTERY, SPST, LAMP];
-const mappedWorldArb = rawWorldV3Arb.map((raw) => {
+const mappedWorldArb = rawWorldV4Arb.map((raw) => {
   const world = World.parse(raw);
   const entities = world.entities.map((e) => (e.id % 4 === 0 ? e : { ...e, ref: BUILTIN_DEVICES[e.id % 3] }));
   const realTerminal = <E extends { entity: number; terminal: string }>(end: E | null, salt: number): E | null => {

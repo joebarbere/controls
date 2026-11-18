@@ -3,6 +3,7 @@ import { rawManifestV2Arb } from '../../testing/arbitraries';
 import { migrateManifest } from '../documents';
 import { CTRL_FORMAT } from '../v1/manifest';
 import { manifestV2ToV3 } from '../v3/from-v2';
+import { manifestV3ToV4 } from '../v4/from-v3';
 import { ManifestV2 } from './manifest';
 
 describe('ManifestV2', () => {
@@ -29,7 +30,7 @@ describe('ManifestV2', () => {
         const manifest = ManifestV2.parse(raw);
         expect(migrateManifest(JSON.parse(JSON.stringify(manifest)))).toStrictEqual({
           ok: true,
-          value: manifestV2ToV3(manifest),
+          value: manifestV3ToV4(manifestV2ToV3(manifest)),
           fromVersion: 2,
         });
       }),

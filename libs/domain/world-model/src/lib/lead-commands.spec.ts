@@ -141,6 +141,7 @@ const leadOf = (id: number, a: { entity: number; terminal: string }, b: { entity
   state: {},
   sim: { ...LEAD_SIM_BAG_V3 },
   extensions: {},
+  marking: { a: null, b: null },
 });
 
 describe('lead helpers', () => {

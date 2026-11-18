@@ -50,6 +50,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
     sim: {},
     mountedOn: null,
     inEntry: null,
+    pluggedInto: null,
     label: null,
     extensions: {},
   });
@@ -62,7 +63,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
     torqueNm: method === 'screw' ? torqueNm : null,
     accessory: null,
   });
-  const base = { cable: null, label: null, state: {}, extensions: {} };
+  const base = { cable: null, label: null, state: {}, extensions: {}, marking: { a: null, b: null } };
   const lead = (id: number, a: [number, string], b: [number, string]) => ({
     ...base,
     sim: { ...LEAD_SIM_BAG_V3 },
@@ -87,7 +88,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
   });
   const nut = (entity: number, t: number) => ({ entity, terminal: 'splice', termination: termination(t, 'twistOn') });
   return World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed: options.seed ?? 5,
     tick: options.tick ?? 0,
     nextEntityId: 6,
@@ -98,6 +99,7 @@ export function wiredLoopWorld(options: WiredLoopOptions = {}): World {
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities: [
       entity(1, BATTERY),
       entity(2, BREAKER_REF, { on: true }),

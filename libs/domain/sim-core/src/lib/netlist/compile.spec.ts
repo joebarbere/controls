@@ -25,6 +25,7 @@ import type { Netlist } from './types';
 
 /** A raw connection `{ ref, a, b }` as world v3 holds a test lead: clip ends, lead-shaped, with the lead's bags. */
 const v3Lead = (c: { ref: object; a: object | null; b: object | null }) => ({
+  marking: { a: null, b: null },
   cable: null,
   route: null,
   lengthMm: null,
@@ -181,6 +182,7 @@ describe('compileNetlist: what is absent', () => {
         sim: ref === BATTERY ? { stateOfCharge: 1 } : ref === LAMP ? { filamentTempK: null } : {},
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       })),
@@ -217,6 +219,7 @@ describe('compileNetlist: what is absent', () => {
         sim: {},
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       })),

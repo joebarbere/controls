@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { assertNoNegativeZero, rawWorldV2Arb } from '../../testing/arbitraries';
 import { migrateWorld } from '../documents';
 import { worldV2ToV3 } from '../v3/from-v2';
+import { worldV3ToV4 } from '../v4/from-v3';
 import { WorldV2 } from './world';
 
 const Z = { yaw: 0, pitch: 0, roll: 0 };
@@ -140,7 +141,11 @@ describe('WorldV2', () => {
         expect(again).toStrictEqual(w);
         expect(JSON.stringify(again)).toBe(text);
         expect(WorldV2.parse(w)).toStrictEqual(w);
-        expect(migrateWorld(JSON.parse(text))).toStrictEqual({ ok: true, value: worldV2ToV3(w), fromVersion: 2 });
+        expect(migrateWorld(JSON.parse(text))).toStrictEqual({
+          ok: true,
+          value: worldV3ToV4(worldV2ToV3(w)),
+          fromVersion: 2,
+        });
       }),
     );
   });

@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { assertNoNegativeZero, rawWorldV3Arb } from '../../testing/arbitraries';
-import { createWorld, migrateWorld } from '../documents';
+import { migrateWorld } from '../documents';
+import { worldV3ToV4 } from '../v4/from-v3';
 import { LabelText } from '../primitives';
 import { ConductorColourV3, MAX_ROUTE_WAYPOINTS, WorldV3 } from './world';
 
@@ -129,24 +130,6 @@ describe('WorldV3', () => {
   it('accepts a world with a lead, a routed conductor, a cable and a mounted device', () => {
     expect(issuesOf(world())).toStrictEqual([]);
     expect(WorldV3.parse(world())).toStrictEqual(world());
-  });
-
-  it('createWorld builds an empty, never-solved world with every counter at 1', () => {
-    expect(createWorld({ seed: 7 })).toStrictEqual(
-      world({
-        seed: 7,
-        tick: 0,
-        nextEntityId: 1,
-        nextConnectionId: 1,
-        nextCableId: 1,
-        nextTerminationId: 1,
-        fixtures: [],
-        entities: [],
-        connections: [],
-        cables: [],
-      }),
-    );
-    expect(() => createWorld({ seed: 2 ** 32 })).toThrow();
   });
 
   it('1: ids sorted and below their counters; termination ids unique and below nextTerminationId', () => {
@@ -360,7 +343,7 @@ describe('WorldV3', () => {
         const again = WorldV3.parse(JSON.parse(text));
         expect(again).toStrictEqual(w);
         expect(JSON.stringify(again)).toBe(text);
-        expect(migrateWorld(JSON.parse(text))).toStrictEqual({ ok: true, value: w, fromVersion: 3 });
+        expect(migrateWorld(JSON.parse(text))).toStrictEqual({ ok: true, value: worldV3ToV4(w), fromVersion: 3 });
       }),
       { numRuns: 200 },
     );

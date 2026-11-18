@@ -17,7 +17,7 @@ import { startSandbox } from './support/sandbox';
  * state only), and snapping turns each into the file's exact positions, as in `placement.spec.ts`.
  * Forced WebGL2, the backend CI exercises on GPU-less runners.
  */
-const PHASE_ACCEPTANCE_HASH = '60726d27858e701a86798b344bf5b2f62864f28cdd9ba36351051e2789107ab8';
+const PHASE_ACCEPTANCE_HASH = 'bb5fe5ef7033bd31044ba26e3f9decd2152e8c13aac6a7803e58764138811995';
 
 const SCENARIO_FILE = 'phase-acceptance.console';
 const SCENARIO = readFileSync(join(workspaceRoot, 'apps/sim-cli/scenarios', SCENARIO_FILE), 'utf8');

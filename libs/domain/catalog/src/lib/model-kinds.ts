@@ -806,6 +806,25 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
         null,
         'Filament temperature (K), 200 to 3600. null until the engine first netlists the lamp; it then initialises it at a sourced ambient constant and never exports null again.',
       ),
+      /*
+       * World v4 (ADR 0019): the kind's only key change in P4, so its migration rides on schemaVersion
+       * 4 (`LAMP_SIM_KEYS_V4` in save-format's v3 → v4 step adds both to the shipped lamps' bags).
+       * Engine 7 carries them through unchanged; engine 8 (PR 9) sets them.
+       */
+      burnedOut: key(
+        'sim',
+        'boolean',
+        z.boolean(),
+        false,
+        'Sticky: the filament opened at the burnout temperature and never closes (an open filament has no element). false until then.',
+      ),
+      overvoltageSinceTick: key(
+        'sim',
+        'number',
+        Int.min(0).nullable(),
+        null,
+        'The first tick of the current excursion above ANSI C84.1 Range B for the lamp’s rated-voltage class (the overvoltage event fires after a dwell from it), or null: no excursion, or a rated voltage with no region range.',
+      ),
     },
     description: 'An incandescent lamp: a tungsten filament whose resistance rises with its temperature.',
   },

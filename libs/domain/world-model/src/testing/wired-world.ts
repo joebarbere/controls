@@ -1,7 +1,7 @@
 import { LEAD_SIM_BAG_V3 } from '@controls/save-format';
 
 /*
- * A TEST-ONLY wired world v3 document over `WIRING_TEST_CATALOG` (`wiring-catalog.ts`): what the load
+ * A TEST-ONLY wired world v4 document (v3 until P4 PR 7) over `WIRING_TEST_CATALOG` (`wiring-catalog.ts`): what the load
  * check and the world v3 guards of the existing commands are tested against (P3 PR 7).
  */
 
@@ -52,6 +52,7 @@ export const entity = (id: number, ref: object, position: object, overrides: Rec
   inEntry: null,
   label: null,
   extensions: {},
+  pluggedInto: null,
   ...overrides,
 });
 export const termination = (id: number, overrides: Record<string, unknown> = {}) => ({
@@ -84,6 +85,7 @@ export const connection = (id: number, overrides: Record<string, unknown>) => ({
   state: {},
   sim: { ...LEAD_SIM_BAG_V3, fused: false },
   extensions: {},
+  marking: { a: null, b: null },
   ...overrides,
 });
 
@@ -94,7 +96,7 @@ export const connection = (id: number, overrides: Record<string, unknown>) => ({
  */
 export function wiredWorldDoc(): Doc {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed: 1,
     tick: 0,
     nextEntityId: 6,
@@ -105,6 +107,7 @@ export function wiredWorldDoc(): Doc {
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities: [
       entity(1, SPLIT, at(0, 900, -2000)),
       entity(2, BOX, at(1000, 1000, -2000), { state: { openEntries: 2 } }),

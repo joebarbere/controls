@@ -266,3 +266,70 @@ export const LabelText = z.string().max(32).regex(LABEL_TEXT_PATTERN).meta({
   description: 'Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space.',
 });
 export type LabelText = z.infer<typeof LabelText>;
+
+/*
+ * World v4 primitives (ADR 0019, P4). New names, so no published version changes. `OutletId` and
+ * `AreaUseId` were defined in `@controls/catalog` by catalogue v3 (ADR 0020) until world v4 stored
+ * them; they live here now and the catalogue re-exports them (ADR 0016's precedent): two schemas with
+ * the same `.meta({ id })` would collide in the JSON Schema export.
+ */
+
+/** A receptacle outlet of a catalogue entry (`top`, `bottom`), unique within the entry (TerminalId's grammar). */
+export const OutletId = terminalGrammar(
+  'OutletId',
+  'A receptacle outlet id within one catalogue entry (TerminalId grammar).',
+);
+export type OutletId = z.infer<typeof OutletId>;
+
+/** A row of the catalogue `AREA_USES` registry (`kitchen`, `crawlSpace`); the registry is append-only. */
+export const AreaUseId = camelId('AreaUseId', 'An area use: a row of the catalogue AREA_USES registry.');
+export type AreaUseId = z.infer<typeof AreaUseId>;
+
+/**
+ * A level area's id grammar: the fixture-id grammar (lower-case words joined by single hyphens), equal
+ * to `FIXTURE_ID_PATTERN` (`v1/world.ts`, which imports this module; a test pins the two together).
+ */
+export const AREA_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/** The prefix no area id may start with (the entity view-id prefix, as for fixture ids). */
+export const RESERVED_AREA_ID_PREFIX = 'entity-';
+
+/**
+ * A level area's id (ADR 0019): {@link AREA_ID_PATTERN}, at most 64 characters, never starting with
+ * `entity-`, so a later `view.focus` on an area is unambiguous.
+ */
+export const AreaId = z
+  .string()
+  .max(64)
+  .regex(AREA_ID_PATTERN)
+  .refine((id) => !id.startsWith(RESERVED_AREA_ID_PREFIX), {
+    message: `Area ids may not start with "${RESERVED_AREA_ID_PREFIX}" (reserved for entity view ids)`,
+  })
+  .meta({ id: 'AreaId', description: 'A level area id: lower-case words joined by single hyphens, at most 64.' });
+export type AreaId = z.infer<typeof AreaId>;
+
+/**
+ * One value in a world v4 device state bag: exactly what v2 and v3 accept, described for catalogue
+ * v3's key types too (a `text` key holds label text, a `counter` key a non-negative integer). A new
+ * schema rather than a new description on {@link DeviceStateValue}, which published versions export.
+ */
+export const DeviceStateValueV4 = z
+  .union([FiniteNumber, z.boolean(), SafeString.max(MAX_DEVICE_STATE_STRING), z.null()])
+  .meta({
+    id: 'DeviceStateValueV4',
+    description:
+      'A finite number (a counter key holds a non-negative integer), a boolean, a string of at most 32 characters (an enum value, or label text for a text key), or null for absent.',
+  });
+export type DeviceStateValueV4 = z.infer<typeof DeviceStateValueV4>;
+
+/** A world v4 device state bag: {@link DeviceStateBag}'s rules over {@link DeviceStateValueV4}. */
+export const DeviceStateBagV4 = z
+  .record(DeviceStateKey, DeviceStateValueV4)
+  .refine((bag) => Object.keys(bag).length <= MAX_DEVICE_STATE_KEYS, {
+    message: `A device state bag holds at most ${MAX_DEVICE_STATE_KEYS} keys`,
+  })
+  .meta({
+    id: 'DeviceStateBagV4',
+    description: 'Named device state values; keys are lower camelCase (at most 64 characters, at most 64 keys).',
+  });
+export type DeviceStateBagV4 = z.infer<typeof DeviceStateBagV4>;

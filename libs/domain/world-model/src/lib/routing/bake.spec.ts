@@ -25,6 +25,7 @@ function pulled(world: World, id: number, route: Waypoint[], lengthMm: number): 
     state: {},
     sim: {},
     extensions: {},
+    marking: { a: null, b: null },
   };
 }
 

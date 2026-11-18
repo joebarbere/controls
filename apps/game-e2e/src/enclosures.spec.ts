@@ -14,7 +14,7 @@ import { startSandbox } from './support/sandbox';
  * slots 4 and 5 (the picker offers placeable catalogue devices since F3.5). Forced WebGL2, the backend
  * CI exercises; the mouse is aimed with the `?e2e=1` hook's `projectMm`.
  */
-const DIN_PANEL_BREAKER_HASH = '1a66183aff4660050c4764268e48c9903553d0e85bb104b4cc13a541af344404';
+const DIN_PANEL_BREAKER_HASH = 'a2e7b4ef67142be2f7229161016f73b70f18c2016122ab3d687e578ca97d7822';
 
 const PANEL = { id: 'panel.pellmoor-din-400x500', version: 1 };
 const BREAKER = { id: 'breaker.saltmere-1p-15a', version: 1 };
