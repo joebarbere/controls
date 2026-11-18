@@ -451,8 +451,39 @@ function bagDigest(engine: SimEngine): string {
 }
 
 /**
- * Cases that wait for the code they measure (P3 kickoff step 6; plans/phase-3-wiring.md, "Budgets").
- * Listed in the report; not run, no timing, never fail it. The feature named in `enabledBy` moves
- * each into `BENCH_CASES` with its real workload and removes it here.
+ * Cases that wait for the code they measure (P4 kickoff step 4; plans/phase-4-residential.md,
+ * "Budgets"; P3's were all moved over). Listed in the report; not run, no timing, never fail it. The
+ * feature named in `enabledBy` moves each into `BENCH_CASES` with its real workload and removes it here.
  */
-export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [];
+export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
+  {
+    name: 'tick-house',
+    budgetMs: 0.3,
+    enabledBy: 'F4.6 part 2',
+    note: 'Spec §4.5 per cadence tick on the acceptance house (content/levels/house.json, every circuit loaded), median, with a 0 B/tick allocation gate like tick-wired-plant.',
+  },
+  {
+    name: 'tick-protected-plant',
+    budgetMs: 0.3,
+    enabledBy: 'F4.2 part 1',
+    note: 'Spec §4.5 per tick on the wired plant with plug-on breakers, 100 GFCIs and 50 AFCIs (the protection layer runs every tick), median, allocation-gated.',
+  },
+  {
+    name: 'house-trip-resolve',
+    budgetMs: RESOLVE_BUDGET_MS,
+    enabledBy: 'F4.6 part 2',
+    note: 'Spec §4.5 re-solve after a breaker trip in the acceptance house, calibrated like plant-resolve-topology-change.',
+  },
+  {
+    name: 'inspect-house',
+    budgetMs: null,
+    enabledBy: 'F4.6 part 2',
+    note: 'One full inspector run (D13) over the acceptance house; reported only (the spec sets no inspector budget); over one 60 Hz frame moves the panel to a worker.',
+  },
+  {
+    name: 'inspect-wired-plant',
+    budgetMs: null,
+    enabledBy: 'F4.5 part 1',
+    note: 'One full inspector run (D13) over the 2,000-node wired plant, wiringGraph included; reported only (the spec sets no inspector budget).',
+  },
+];

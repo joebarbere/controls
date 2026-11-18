@@ -93,7 +93,7 @@ flowchart LR
     WM["libs/domain/world-model<br/>type:domain"]:::p0
     SAPI["libs/domain/scripting-api<br/>type:domain"]:::p0
     CONTENT["content/ (F1.9)<br/>type:content: levels"]:::p0
-    DOM["libs/domain/* (P2+)<br/>sim-core, catalog…"]:::later
+    DOM["libs/domain/* (P2+)<br/>sim-core, catalog, inspector (P4)…"]:::later
     WORKER["libs/sim-worker (P2)"]:::later
 
     GAME --> FEAT & UI & REND & PAPI & PEL & PWEB & CONTENT

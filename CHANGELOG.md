@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Developer (P4 kickoff step 4, the boundary and gate PR; [workspace caveats](docs/caveats/workspace.md)):
+  - `libs/domain/inspector` (`@controls/inspector`, `type:domain`): the inspector's library (decision D13), scaffolding only until F4.5 part 1, with a placeholder export and a test. Probes in `apps/sim-cli/src/lint-boundary.spec.ts` prove it may import `catalog`, `save-format`, `world-model` and `sim-core`, is refused feature, UI, rendering, platform and worker libs and Angular, RxJS, Electron, three and jsdom, and that features and UI may import it.
+  - The D6 deterministic-maths lint now covers `libs/domain/inspector` source (no `Math.hypot`, `**` or transcendental `Math` functions; `Math.sqrt` is allowed), so a finding is the same in `sim-cli` and the game. Probes in `apps/sim-cli/src/lint-determinism.spec.ts`, including a nested file, the determinism lint, the spec exemption and the Node built-ins ban.
+  - `sim bench` declares the P4 cases as pending: `tick-house` (0.3 ms, F4.6 part 2), `tick-protected-plant` (0.3 ms, F4.2 part 1), `house-trip-resolve` (2 ms calibrated, F4.6 part 2), `inspect-house` (reported, F4.6 part 2) and `inspect-wired-plant` (reported, F4.5 part 1). They are listed under `pending` in the JSON report and never fail `pnpm verify`.
+  - `apps/game-e2e/src/house-frame-time.spec.ts`: a frame-time scaffold for the wired house, skipped unless `CONTROLS_MEASURE_HOUSE=1` (filled in by F4.6 part 2).
+
 ### Changed
 
 - **ADR 0019 accepted: world document v4 and the residential contract** (docs, P4 kickoff step 3; [ADR 0019](docs/decisions/0019-world-document-v4.md)). The agent-team contract for `schemaVersion` 4 before any v4 code, approved with changes by the four specialists: cord plugs as an entity relation (`pluggedInto`), re-identification tape on conductor ends (`marking`), level `areas` for the inspector, the lamp's sticky `burnedOut`, which breaker, GFCI and AFCI state is saved and which is derived on load, the five new commands with their refusals and bindings, how the netlist compiler reads mount and plug contacts and remote earth, the new stream keys, the catalogue-free v3 → v4 migration and the protocol 8 records and events at contract level. The plan is amended to match: bus legs alternate by row, the T-equivalent is pinned at its terminals, a GFCI resets on line voltage, the AFCI's keys and stream, `basement`, and EMT as a ground path deferred past P4.

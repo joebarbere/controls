@@ -431,12 +431,19 @@ describe('the shipped bench cases', () => {
   });
 });
 
-describe('the pending bench cases (P3 kickoff step 6)', () => {
-  it('are all real now: none is left pending', () => {
-    // F3.6 part 1 moved tick-wired-plant and plant-resolve-topology-change-wired into BENCH_CASES,
-    // F3.6 part 2 intermittent-toggle-wired, F3.4 part 1 cable-add-worst-command and F3.2 part 1
-    // route-bake-500-wires (its budget from ADR 0017's measurement).
-    expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([]);
+describe('the pending bench cases (P4 kickoff step 4)', () => {
+  it('declare the P4 budgets with the feature that implements each, and no timing', () => {
+    // P3's pending cases are all real (F3.6 parts 1 and 2, F3.4 part 1, F3.2 part 1). P4's, from
+    // plans/phase-4-residential.md "Budgets":
+    expect(PENDING_BENCH_CASES.map((c) => [c.name, c.budgetMs, c.enabledBy])).toStrictEqual([
+      // Spec §4.5: per tick (allocation-gated), and the calibrated re-solve after a trip.
+      ['tick-house', 0.3, 'F4.6 part 2'],
+      ['tick-protected-plant', 0.3, 'F4.2 part 1'],
+      ['house-trip-resolve', 2, 'F4.6 part 2'],
+      // The spec sets no inspector budget: reported only.
+      ['inspect-house', null, 'F4.6 part 2'],
+      ['inspect-wired-plant', null, 'F4.5 part 1'],
+    ]);
     for (const c of PENDING_BENCH_CASES) {
       expect(c.note).not.toBe('');
       expect(Object.keys(c).sort()).toStrictEqual(['budgetMs', 'enabledBy', 'name', 'note']);
