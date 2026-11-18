@@ -396,25 +396,27 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
   });
 
   // Breakers v2 (P4 PR 10): each kind's protection layer on its bank, a loaded closed breaker every tick
-  // (the AFCI's bucket boundaries included, with nothing arcing; the GFCI's residual 0).
+  // (the AFCI's bucket boundaries included, with nothing arcing; the GFCI's residual 2 mA, under its
+  // pickup). The currents aren't whole amps: a whole |I|² is a small integer, which V8 tags without a
+  // heap number, so a double crossing a call that isn't inlined (16 B a call) would go unseen.
   it('each breakers-v2 layer alone (bank calls on a fixed solution) allocates nothing per call', () => {
     const p20 = plugOnParams(20);
     const rigs: [string, BankRig][] = [
-      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15)],
-      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15).amps('pole2', -15)],
+      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15.3)],
+      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15.3).amps('pole2', -15.3)],
       [
         'gfci1p',
         bankRig(GFCI_BREAKER_MODEL, { ...p20, ...GFCI_SENSE_PARAMS }, ['neutral', 'pole'], {
           state: { on: true, test: 0 },
         })
-          .amps('pole', 15)
-          .amps('neutral', -15),
+          .amps('pole', 15.3)
+          .amps('neutral', -15.298),
       ],
       [
         'afci1p',
         bankRig(AFCI_BREAKER_MODEL, p20, ['neutral', 'pole'], { state: { on: true, test: 0 } })
-          .amps('pole', 15)
-          .amps('neutral', -15),
+          .amps('pole', 15.3)
+          .amps('neutral', -15.3),
       ],
     ];
     for (const [name, rig] of rigs) {
