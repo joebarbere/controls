@@ -868,6 +868,35 @@ flowchart LR
 - **Reading.** `NetlistReadout` reads every record into `connectionValues` (18 values each, `CONNECTION_VALUE_INDEX`) with a plan built once per descriptor; for the protocol layout it copies each record's 12 f64 words and 6 bytes in order. Headless, `SimEngine.connectionRecord(id)` decodes one (`game.connection`), and `wireInfo(world, id)` formats it for the `wire.info <id>` console query, a pure function of the materialised world like `netlist.dump`.
 - **Bench.** `snapshot-read-500-devices` and `overlay-read-500-devices` carry 2,000 records (about 208 KB): still 0 B per read.
 
+## Engine 8 part 1: contacts, remote earth and the service (P4)
+
+[ADR 0021](../decisions/0021-service-grounding-and-protection-physics.md) part 1 implements [ADR 0019](../decisions/0019-world-document-v4.md)'s "What the netlist compiler reads": three world relations become **relation contacts**, one resistor branch each after every connection, and an implicit **remote-earth** node joins the netlist when a link reaches it. Every split-phase source becomes a T-equivalent held as a coupled source pair. `SIM_ENGINE_VERSION` 8 and `SIM_PROTOCOL_VERSION` 8 (the descriptor's part), both provisional until v0.5.0.
+
+```mermaid
+flowchart LR
+    subgraph service["service.splitPhase (one entity)"]
+      X0(("x0")) -->|"winding l1: E∠0°, Z_LN + R_drop<br/>+ Z_n · I₂ (coupled)"| L1(("l1"))
+      X0 -->|"winding l2: E∠180°, Z_LN + R_drop<br/>+ Z_n · I₁ (coupled)"| L2(("l2"))
+      X0 -->|"dropN: ρL/A"| N(("n"))
+    end
+    X0 -->|"earth contact 'grounding'<br/>utilityGroundingOhm"| E(("remote earth<br/>entity 0, node 0"))
+    L1 -->|"wires (connections)"| BUS1["load centre busL1"]
+    N -->|"wires"| NB["neutral bar"]
+    BUS1 -->|"mount contact 'line1'<br/>busStabIndex + busStabLeg"| BRK["plug-on breaker"]
+    NB -->|"mount contacts 'neutral', 'chassis'"| MBJ["main bonding jumper"] --> CAN["can (chassis)"]
+    CAN -->|"GEC (a wire)"| ROD["electrode.groundRod clamp"]
+    ROD -->|"earth contact 'electrode'<br/>earthResistanceOhm"| E
+    REC["receptacle slots"] -->|"plug contacts per pin<br/>outlet contactOhm"| APP["appliance pins"]
+```
+
+- **Relation contacts** (`netlist/compile.ts`, step 3). For each entity in id order: its **mount** contacts (each contact of its fit for the host mount's type that the mount offers; on a bus, `busStabIndex` plus the contact's `positionOffset` and `busStabLeg` give the leg), its **plug** contacts (one per plug pin, to the outlet's slot, the outlet's `contactOhm`) and its **earth** links (declared by its netlist model, `DeviceTopology.earth`). Each is a `contact`-model resistor from the dependent device's terminal (end a) to the host's or earth (end b), element ref `{ kind: 'contact', entity, relation, contact }`, valued by its `resistanceOhm` (the DC and AC defaults), never an ideal join, so stab, bond and plug currents are in the solution. A contact both sides declare whose terminal isn't netlisted is `absent-contact`. Contact specs are cached per entity while the entity, its entry, its host and the host's entry are the same objects; the structure list records each contact's ends, so the incremental compiler equals a from-scratch compile (property-tested).
+- **Remote earth** is entity 0, terminal `earth`: plant terminal 0 is reserved for it, and when an earth link compiles it is node 0 (every other node one on). No P3 world has a link, so no P3 netlist or `topologyHash` changed. `CNT` stays at version 1: a contact branch is tag 2 (varint entity, u8 relation code `mount` 0 / `entry` 1 / `plug` 2 / `earth` 3, str contact id).
+- **The T-equivalent** (`devices/sources/ac-source.ts`). Each winding is a `vsource` behind the half winding's Z_LN (0.375 R + j0.3 X of the full winding), coupled to the other winding by the neutral arm Z_n = Z_LN − Z_full / 2 (negative) through `AcBranchValues.couple`; the phasor solver stamps the mutual term as one more source-row entry (`VALUE_ZM`) and checks the pair is symmetric with a positive definite real block. A lone line-to-neutral fault sees Z_LN (8230 A on the 25 kVA unit), a line-to-line one Z_full (5208 A).
+- **The service** (`service.splitPhase`, `devices/sources/service.ts`): the T-equivalent from `x0`, each line's drop added to its winding's R, the drop neutral a resistor `x0` → `n` (ρL/A at the 20 °C ambient), the utility's grounding an earth link from `x0`. **The ground rod** (`electrode.groundRod`): an earth link from its clamp of `earthResistanceOhm` (Dwight's formula, computed offline).
+- **`wiringGraph`** (`netlist/wiring-graph.ts`): the compiler in its wiring view (switches closed, protective devices intact, every landed connection present), then a union over connections, contacts and protective paths; for the inspector (PR 20), never hashed.
+- **Protocol 8** (descriptor part): `ElementRef` gains `contact`, a node member may be entity 0 only as `earth`, a trace may watch a contact; the netlist panel names contacts `e<entity>:<relation>.<contact>` and the earth node "remote earth".
+- **The oracle corpus** gains coupled source pairs (about half the AC circuits with two sources), decked as an `H` (R_m times the partner's sense current) and an `ED` over an `F`-driven 1 H inductor (L_m times jω I_p).
+
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.

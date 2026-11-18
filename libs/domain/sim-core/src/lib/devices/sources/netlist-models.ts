@@ -1,3 +1,5 @@
+import type { GroundRodParams, ServiceSplitPhaseParams } from '@controls/catalog';
+import { AMBIENT_TEMPERATURE_K } from '../../constants';
 import type { DeviceNetlistModel, DeviceTopology, ElementSpec } from '../../netlist/models';
 
 /*
@@ -78,4 +80,61 @@ export const utilityThreePhaseNetlistModel: DeviceNetlistModel = {
   kind: 'utility.threePhase',
   simTopologyKeys: [],
   topology: () => THREE_PHASE,
+};
+
+/** A drop conductor's resistance at the game's ambient (Ω): ρ₀ · L / A · (1 + α (T − T₀)). */
+export function serviceDropOhm(params: ServiceSplitPhaseParams, areaM2: number): number {
+  const lengthM = params.dropLengthMm / 1000;
+  const atReference = (params.dropResistivityOhmM * lengthM) / areaM2;
+  return (
+    atReference *
+    (1 + params.dropTemperatureCoefficientPerK * (AMBIENT_TEMPERATURE_K.value - params.dropReferenceTemperatureK))
+  );
+}
+
+/** `service.splitPhase`: the drop neutral, the two windings, and the utility's neutral grounding to earth. */
+export const serviceSplitPhaseNetlistModel: DeviceNetlistModel = {
+  kind: 'service.splitPhase',
+  simTopologyKeys: [],
+  // The drop neutral is a conductor: the wiring graph joins x0 and n through it (never the windings).
+  wiringPathParts: ['dropN'],
+  topology: ({ params }): DeviceTopology => {
+    const p = params as ServiceSplitPhaseParams;
+    return {
+      joins: [],
+      elements: [
+        {
+          part: 'dropN',
+          kind: 'resistor',
+          source: null,
+          a: 'x0',
+          b: 'n',
+          values: { resistanceOhm: serviceDropOhm(p, p.dropNeutralAreaM2) },
+        },
+        { part: 'l1', kind: 'vsource', source: 'ac', a: 'x0', b: 'l1', values: {} },
+        { part: 'l2', kind: 'vsource', source: 'ac', a: 'x0', b: 'l2', values: {} },
+      ],
+      earth: [{ contact: 'grounding', terminal: 'x0', values: { resistanceOhm: p.utilityGroundingOhm } }],
+    };
+  },
+};
+
+/**
+ * `electrode.groundRod` (engine 8, D5): its acorn clamp, linked to remote earth through the rod's
+ * earth resistance. No element of its own: the link is the compiler's `earth` contact.
+ */
+export const groundRodNetlistModel: DeviceNetlistModel = {
+  kind: 'electrode.groundRod',
+  simTopologyKeys: [],
+  topology: ({ params }): DeviceTopology => ({
+    joins: [],
+    elements: [],
+    earth: [
+      {
+        contact: 'electrode',
+        terminal: 'clamp',
+        values: { resistanceOhm: (params as GroundRodParams).earthResistanceOhm },
+      },
+    ],
+  }),
 };

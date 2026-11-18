@@ -57,6 +57,7 @@ describe('nominal bands', () => {
     expect(builtIn).toStrictEqual([
       'battery',
       'generator.portable',
+      'service.splitPhase',
       'supply.bench',
       'supply.dinPsu',
       'utility.splitPhase',

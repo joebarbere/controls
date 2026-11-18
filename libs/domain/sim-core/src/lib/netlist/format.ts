@@ -28,6 +28,8 @@ function formatDiagnostic(diagnostic: NetlistDiagnostic): string {
       return `diagnostic no-model entity ${diagnostic.entity} kind ${diagnostic.kind}`;
     case 'absent-connection':
       return `diagnostic absent-connection connection ${diagnostic.connection} ${diagnostic.reason}`;
+    case 'absent-contact':
+      return `diagnostic absent-contact entity ${diagnostic.entity} ${diagnostic.relation} ${diagnostic.contact}`;
     case 'mixed-island':
       return `diagnostic mixed-island island ${diagnostic.island}`;
   }

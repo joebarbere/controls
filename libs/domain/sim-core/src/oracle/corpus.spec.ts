@@ -154,6 +154,14 @@ function worstResidual(netlist: ReturnType<typeof oracleNetlist>, result: Oracle
         // Z = r + jωL (F2.4's series inductance; 0 for DC and for a purely resistive source).
         const x = netlist.domain === 'dc' ? 0 : omega * values['seriesInductanceH'];
         const zi = [r * ik[0] - x * ik[1], r * ik[1] + x * ik[0]];
+        // Engine 8: a coupled source's row also carries (R_m + jωL_m) I_p, its partner's current.
+        if (values['partner'] !== undefined) {
+          const ip = i(values['partner']);
+          const rm = values['mutualResistanceOhm'];
+          const xm = omega * values['mutualInductanceH'];
+          zi[0] += rm * ip[0] - xm * ip[1];
+          zi[1] += rm * ip[1] + xm * ip[0];
+        }
         residual = [-drop[0] - (emf[0] - zi[0]), -drop[1] - (emf[1] - zi[1])];
         break;
       }

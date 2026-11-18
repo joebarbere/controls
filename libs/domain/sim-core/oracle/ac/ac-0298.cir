@@ -29,11 +29,19 @@ R7 s7 4 15e3
 VS8 0 s8 0
 V8 e8 s8 DC 0 AC 56e-1 120
 RI8 e8 m8 15e-1
-LI8 m8 7 10e-7
+LI8 m8 n8 10e-7
+H8 n8 h8 VS9 -22e-3
+ED8 h8 7 d8 0 -56e-6
+F8 0 d8 VS9 1
+LD8 d8 0 1
 VS9 2 s9 0
 V9 e9 s9 DC 0 AC 47e0 -120
 RI9 e9 m9 68e-2
-LI9 m9 8 22e-5
+LI9 m9 n9 22e-5
+H9 n9 h9 VS8 -22e-3
+ED9 h9 8 d9 0 -56e-6
+F9 0 d9 VS8 1
+LD9 d9 0 1
 VS10 5 s10 0
 C10 s10 2 18e-4
 VS11 3 s11 0

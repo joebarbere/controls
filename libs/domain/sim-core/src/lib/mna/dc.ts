@@ -10,6 +10,7 @@ import {
 } from '../constants';
 import { DenseLu } from '../lu/dense-lu';
 import { SparseFactors, SparseLu } from '../lu/sparse-lu';
+import { sameElement } from '../netlist/hash';
 import type { Netlist, NetlistIsland } from '../netlist/types';
 import { FactorisationCache, type IslandSymbolic } from './factorisation-cache';
 import { buildSymbolic, endsChecksum, find, grow, type StampProgram } from './shared';
@@ -355,21 +356,7 @@ export class DcSolver {
       ) {
         return false;
       }
-      const element = branch.element;
-      const otherElement = other.element;
-      if (element !== otherElement) {
-        if (element.kind === 'entity') {
-          if (
-            otherElement.kind !== 'entity' ||
-            element.entity !== otherElement.entity ||
-            element.part !== otherElement.part
-          ) {
-            return false;
-          }
-        } else if (otherElement.kind !== 'connection' || element.connection !== otherElement.connection) {
-          return false;
-        }
-      }
+      if (!sameElement(branch.element, other.element)) return false;
     }
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];

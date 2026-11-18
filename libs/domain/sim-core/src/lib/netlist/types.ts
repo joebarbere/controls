@@ -10,7 +10,8 @@ import type { DeviceStateValue } from '@controls/save-format';
  *
  * - **nodes** are numbered by their smallest member terminal, ordered by entity id (numerically), then
  *   terminal id (UTF-16 code units);
- * - **branches** are entity elements first, by entity id then part (code units), then connections by id;
+ * - **branches** are entity elements first, by entity id then part (code units), then connections by id,
+ *   then relation contacts (engine 8, ADR 0019) by entity id, relation code, then contact id;
  * - **islands** are numbered by their smallest node.
  *
  * That order is the order of `WorldV2.sim.nodes` and `branches` and of the snapshot payload.
@@ -22,10 +23,39 @@ export interface TerminalRef {
   readonly terminal: string;
 }
 
-/** What a branch stands for (ADR 0011 §7's `ElementRef`): a device's internal element or a connection. */
+/**
+ * Which world relation a contact branch comes from (engine 8, ADR 0019 "What the netlist compiler
+ * reads"): a device mounted on a host (`mountedOn`), a part in an enclosure entry (`inEntry`, reserved:
+ * nothing compiles one in P4), an appliance's plug in an outlet (`pluggedInto`), or a link to remote
+ * earth (a service's utility grounding, a ground rod). Hashed by {@link RELATION_CODES}.
+ */
+export type ContactRelation = 'mount' | 'entry' | 'plug' | 'earth';
+
+/**
+ * What a branch stands for (ADR 0011 §7's `ElementRef`): a device's internal element, a connection, or
+ * (engine 8) a relation contact: `entity` is the dependent entity (the mounted device, the appliance,
+ * the service or rod), `contact` the contact's id (a fit contact's id, a plug pin, an earth link's id).
+ */
 export type ElementRef =
   | { readonly kind: 'entity'; readonly entity: number; readonly part: string }
-  | { readonly kind: 'connection'; readonly connection: number };
+  | { readonly kind: 'connection'; readonly connection: number }
+  | {
+      readonly kind: 'contact';
+      readonly entity: number;
+      readonly relation: ContactRelation;
+      readonly contact: string;
+    };
+
+/**
+ * Remote earth (engine 8, D5, ADR 0019): the implicit one-terminal pseudo-fragment every earth link
+ * reaches, entity 0 with terminal `earth`. Never in the world; present only when a link reaches it,
+ * and then node 0, every other node one index on.
+ */
+export const EARTH_ENTITY = 0;
+export const EARTH_TERMINAL = 'earth';
+
+/** The model kind of every relation contact branch (a resistor of its `resistanceOhm`). Hashed. */
+export const CONTACT_MODEL = 'contact';
 
 /**
  * How the solver stamps a branch (F2.2). Part of the topology:
@@ -110,7 +140,7 @@ export type AbsentConnectionReason =
    */
   | 'intermittent-open';
 
-/** Something the compiler noticed. Deterministic order: entities, connections, islands, each ascending. */
+/** Something the compiler noticed. Deterministic order: entities, connections, contacts, islands, each ascending. */
 export type NetlistDiagnostic =
   /** An entity whose ref the catalogue doesn't know: absent from the netlist (ADR 0013). */
   | { readonly code: 'unknown-device'; readonly entity: number }
@@ -118,6 +148,16 @@ export type NetlistDiagnostic =
   | { readonly code: 'no-model'; readonly entity: number; readonly kind: string }
   /** A connection left out of the netlist. */
   | { readonly code: 'absent-connection'; readonly connection: number; readonly reason: AbsentConnectionReason }
+  /**
+   * A relation contact both sides declare but that can't compile (engine 8, ADR 0019 5): an end's
+   * terminal isn't netlisted (its entity is absent, or lacks the terminal), or a bus contact has no stab.
+   */
+  | {
+      readonly code: 'absent-contact';
+      readonly entity: number;
+      readonly relation: ContactRelation;
+      readonly contact: string;
+    }
   /** An island with both DC and AC sources; P2 has no converters (plan F2.1). */
   | { readonly code: 'mixed-island'; readonly island: number };
 

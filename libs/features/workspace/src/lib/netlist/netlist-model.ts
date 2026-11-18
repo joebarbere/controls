@@ -63,13 +63,22 @@ export function formatQuantity(value: number, unit: string): string {
   return `${value.toExponential(2)} ${unit}`;
 }
 
-/** A descriptor element as `netlist.dump` writes it: `e3.filament`, `c2`. */
+/**
+ * A descriptor element as `netlist.dump` writes it: `e3.filament`, `c2`, and (protocol 8, engine 8) a
+ * relation contact `e5:mount.line1`.
+ */
 export function elementKey(element: DescriptorElementRef): string {
-  return element.kind === 'entity' ? `e${element.entity}.${element.part}` : `c${element.connection}`;
+  if (element.kind === 'entity') return `e${element.entity}.${element.part}`;
+  if (element.kind === 'connection') return `c${element.connection}`;
+  return `e${element.entity}:${element.relation}.${element.contact}`;
 }
 
-/** A terminal as `netlist.dump` writes it: `3:a`. */
-export const terminalKey = (t: DescriptorTerminalRef): string => `${t.entity}:${t.terminal}`;
+/**
+ * A terminal as `netlist.dump` writes it: `3:a`. Remote earth (protocol 8: entity 0, terminal `earth`)
+ * is never an entity of the world and reads `remote earth` (ADR 0019).
+ */
+export const terminalKey = (t: DescriptorTerminalRef): string =>
+  t.entity === 0 ? 'remote earth' : `${t.entity}:${t.terminal}`;
 
 /** The display name of a nominal band index (`none`, `dc12`, …), or `band <n>` past the table. */
 export const bandName = (band: number): string => NOMINAL_BANDS[band] ?? `band ${band}`;

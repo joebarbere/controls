@@ -33,11 +33,11 @@ import { workshopWorldAt } from './testing/workshop';
  * lamp circuit (`lamp-circuit.console`, at Journeyman) with the breaker's load screw (wire 1, end a)
  * landed at 20 % of its marked 4 N·m, plus the D12 120 V 1500 W heater on the junction box's splices, for
  * 600 s with the breaker on. Its hashes are pinned here, and
- * `fixtures/v4/ctrl/bad-termination-engine-7-catalog-3.ctrl` is its save (replaced in place by the
+ * `fixtures/v4/ctrl/bad-termination-engine-8-catalog-3.ctrl` is its save (replaced in place by the
  * acceptance PR: world v3 and engine 7 are provisional until v0.4.0), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/bad-termination.console --world content/levels/workshop.json \
- *     --difficulty journeyman --save libs/domain/save-format/fixtures/v4/ctrl/bad-termination-engine-7-catalog-3.ctrl
+ *     --difficulty journeyman --save libs/domain/save-format/fixtures/v4/ctrl/bad-termination-engine-8-catalog-3.ctrl
  *
  * **Every expectation is derived from the built circuit's current** (ADR 0018 §7): the conductor's
  * steady state T_c is the §3.5 fixed point at that current, the hot spot's the two-node closed form
@@ -50,17 +50,18 @@ import { workshopWorldAt } from './testing/workshop';
  * **The built circuit, by hand.** The heater is 120² / 1500 = 9.6 Ω and the lamp, hot, about 238.7 Ω
  * (240 Ω at 120 V, a little less at its 118.6 V); each with its own leads (the heater's 0.8 m of 14 AWG,
  * the lamp's 3.2 m of cable 2) and contacts, in parallel 9.2366 Ω. In series with them: the source's
- * half winding (10.304 + j20.608 mΩ), the breaker's closed pole (10 mΩ), 7.071 m of 14 AWG copper (wire
- * 8 1.363 m, the jumper 0.157 m, cable 1's black and white 2 × 2.303 m, wire 9 0.945 m; 8.2855 mΩ/m at
- * 20 °C, 4.5 % more at 304.6 K: 61.2 mΩ) and the contacts (the loose end 24.9 mΩ, nine more of 0.3–0.5
- * mΩ: 28.3 mΩ in all). R = 9.3465 Ω, X = 20.6 mΩ, so I = 120 / 9.3465 = 12.839 A. The engine solves
- * 12.8393 A: inside §7's 12.01–13.07 A window and next to its expected 12.8 A (the D12 content review's
- * 12.27 A assumed a 30 m run; the built run is 3.9 m of NM-B).
+ * half winding as a line-to-neutral load sees it (engine 8's T-equivalent: Z_LN = 7.728 + j12.365 mΩ;
+ * engine 7 took Z_full / 2 = 10.304 + j20.608 mΩ), the breaker's closed pole (10 mΩ), 7.071 m of 14 AWG
+ * copper (wire 8 1.363 m, the jumper 0.157 m, cable 1's black and white 2 × 2.303 m, wire 9 0.945 m;
+ * 8.2855 mΩ/m at 20 °C, 4.5 % more at 304.6 K: 61.2 mΩ) and the contacts (the loose end 24.9 mΩ, nine
+ * more of 0.3–0.5 mΩ: 28.3 mΩ in all). R = 9.3439 Ω, X = 12.4 mΩ, so I = 120 / 9.3439 = 12.843 A (engine
+ * 7: 12.839 A). Inside §7's 12.01–13.07 A window and next to its expected 12.8 A (the D12 content
+ * review's 12.27 A assumed a 30 m run; the built run is 3.9 m of NM-B).
  *
  * **The loose end** draws 0.8127 N·m on the ±6 % driver (r = 0.2032, the clamp stream of termination 1
- * under seed 0), so a = 0.3/√0.4 = 0.4743 mΩ and b = 100 · (1 − 0.2032/0.4)² = 24.21 mΩ: at 12.839 A,
- * T_c ≈ 304.61 K and T_h ≈ 409.29 K, 16.1 K past the overheat threshold (393.15 K), 6.13 K past the
- * insulation-damage temperature (403.15 K) and 12.87 K short of the oxidation onset (422.15 K). So
+ * under seed 0), so a = 0.3/√0.4 = 0.4743 mΩ and b = 100 · (1 − 0.2032/0.4)² = 24.21 mΩ: at 12.843 A,
+ * T_c ≈ 304.62 K and T_h ≈ 409.35 K, 16.2 K past the overheat threshold (393.15 K), 6.20 K past the
+ * insulation-damage temperature (403.15 K) and 12.80 K short of the oxidation onset (422.15 K). So
  * `terminationOverheat` is raised and `insulationDamaged` set, each with at least 5 K to spare (the D12
  * content review's note: key the flag on the engine's own peak T_h, never a flag 0.03 A from its
  * threshold), and D stays 1: a steady state to compare against at 600 s.
@@ -195,11 +196,11 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
         .slice(-5),
     ).toStrictEqual(['entity.place', 'wire.add', 'wire.add', 'device.operate', 'sim.step']);
     // The built current: the lamp and the heater through the loose screw, inside §7's window, and the
-    // header's hand calculation (12.839 A) within 0.5 %.
+    // header's hand calculation (12.843 A) within 0.5 %.
     const amps = game.connection(LOOSE)?.values['currentA'] as number;
     expect(amps).toBeGreaterThan(12.01);
     expect(amps).toBeLessThan(13.07);
-    expect(relative(amps, 12.839)).toBeLessThan(0.005);
+    expect(relative(amps, 12.843)).toBeLessThan(0.005);
     // KCL at the junction box's black nut: the lamp's and the heater's currents add up to the feed's.
     const lampAmps = game.device(ids.lamp)?.values['currentA'] as number;
     const heaterAmps = game.device(13)?.values['currentA'] as number;
@@ -305,7 +306,7 @@ describe('the bad-termination scenario (P3 phase acceptance, ADR 0018 §7)', () 
     }
     expect(stepped.hash()).toBe(game.hash());
     // Scenario-design guard, not physics: the build keeps its peak at least 5 K from the threshold
-    // (409.29 K, 6.13 K past it), so a small change elsewhere can't flip the flag unnoticed.
+    // (409.35 K, 6.20 K past it), so a small change elsewhere can't flip the flag unnoticed.
     expect(
       Math.abs(peak - damageK),
       `peak T_h ${peak} K is within 5 K of ${damageK} K; ${DRAW_CAVEAT}`,

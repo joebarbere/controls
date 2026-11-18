@@ -8,6 +8,8 @@ import {
   NO_READING,
   netlistSampler,
   sameNetlistValues,
+  elementKey,
+  terminalKey,
 } from './netlist-model';
 import { BENCH_BRANCHES, BENCH_CONNECTIONS, BENCH_NODES, benchDescriptor, connectionRecords } from './netlist.fakes';
 
@@ -34,6 +36,16 @@ describe('formatQuantity', () => {
     expect(bandName(0)).toBe('none');
     expect(bandName(1)).toBe('dc12');
     expect(bandName(200)).toBe('band 200');
+  });
+});
+
+describe('elementKey and terminalKey (protocol 8)', () => {
+  it('name relation contacts as netlist.dump does and remote earth in words', () => {
+    expect(elementKey({ kind: 'entity', entity: 3, part: 'filament' })).toBe('e3.filament');
+    expect(elementKey({ kind: 'connection', connection: 2 })).toBe('c2');
+    expect(elementKey({ kind: 'contact', entity: 5, relation: 'mount', contact: 'line1' })).toBe('e5:mount.line1');
+    expect(terminalKey({ entity: 3, terminal: 'a' })).toBe('3:a');
+    expect(terminalKey({ entity: 0, terminal: 'earth' })).toBe('remote earth');
   });
 });
 

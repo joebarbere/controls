@@ -11,11 +11,36 @@ import type { DeviceOutputField, DeviceOutputFieldType, DeviceOutputSchema } fro
 const Count = z.int().min(0);
 const EntityId = z.int().min(1);
 
-const TerminalRefSchema = z.strictObject({ entity: EntityId, terminal: TerminalId });
+/**
+ * A node member: an entity's terminal, or (protocol 8, engine 8, ADR 0019) remote earth, the implicit
+ * entity 0 whose only terminal is `earth`. Entity 0 is allowed with that terminal only; readers never
+ * look it up in the world (the netlist panel labels it "remote earth").
+ */
+const TerminalRefSchema = z.union([
+  z.strictObject({ entity: EntityId, terminal: TerminalId }),
+  z.strictObject({ entity: z.literal(0), terminal: z.literal('earth') }),
+]);
 
-const ElementRefSchema = z.discriminatedUnion('kind', [
+/** A relation contact's id (protocol 8): ASCII lower camelCase, at most 255 characters (ADR 0019 §8). */
+const ContactIdSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[a-z][a-zA-Z0-9]*$/);
+
+/**
+ * What a branch stands for: a device's element, a connection, or (protocol 8) a relation contact, the
+ * dependent entity (a mounted device, an appliance, a service or rod), its relation and contact id.
+ */
+export const ElementRefSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('entity'), entity: EntityId, part: z.string().min(1).max(32) }),
   z.strictObject({ kind: z.literal('connection'), connection: EntityId }),
+  z.strictObject({
+    kind: z.literal('contact'),
+    entity: EntityId,
+    relation: z.enum(['mount', 'entry', 'plug', 'earth']),
+    contact: ContactIdSchema,
+  }),
 ]);
 
 const DeviceOutputFieldSchema = z.strictObject({

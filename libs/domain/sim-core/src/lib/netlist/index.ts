@@ -3,3 +3,4 @@ export * from './models';
 export * from './compile';
 export * from './hash';
 export * from './format';
+export * from './wiring-graph';

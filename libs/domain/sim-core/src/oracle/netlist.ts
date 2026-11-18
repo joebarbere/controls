@@ -86,13 +86,25 @@ function branchOf(domain: OracleDomain, index: number, element: OracleElement): 
       if (domain === 'dc') return { index, kind, source: domain, a, b, values: { emfV: emf, internalResistanceOhm } };
       const unit = phasorUnit(element.angleDeg);
       const seriesInductanceH = element.seriesInductanceH === undefined ? 0 : valueNumber(element.seriesInductanceH);
+      const coupling = element.coupling;
       return {
         index,
         kind,
         source: domain,
         a,
         b,
-        values: { emfIm: emf * unit.im, emfRe: emf * unit.re, internalResistanceOhm, seriesInductanceH },
+        values:
+          coupling === undefined
+            ? { emfIm: emf * unit.im, emfRe: emf * unit.re, internalResistanceOhm, seriesInductanceH }
+            : {
+                emfIm: emf * unit.im,
+                emfRe: emf * unit.re,
+                internalResistanceOhm,
+                mutualInductanceH: valueNumber(coupling.mutualInductanceH),
+                mutualResistanceOhm: valueNumber(coupling.mutualResistanceOhm),
+                partner: coupling.partner,
+                seriesInductanceH,
+              },
       };
     }
   }
@@ -215,6 +227,11 @@ export function oracleAcInput(circuit: OracleCircuit): {
           valueNumber(element.internalResistanceOhm),
           element.seriesInductanceH === undefined ? 0 : valueNumber(element.seriesInductanceH),
         );
+        if (element.coupling !== undefined) {
+          // Engine 8: the coupled pair's mutual impedance (each side sets its own row).
+          const { partner, mutualResistanceOhm, mutualInductanceH } = element.coupling;
+          values.couple(index, partner, valueNumber(mutualResistanceOhm), valueNumber(mutualInductanceH));
+        }
         return { ...base, kind: 'vsource', source: 'ac' };
       default:
         throw new RangeError(`${circuit.name}: ${element.kind} is not an AC element`);

@@ -14,6 +14,8 @@ import {
   benchSupplyNetlistModel,
   dinPsuNetlistModel,
   generatorPortableNetlistModel,
+  groundRodNetlistModel,
+  serviceSplitPhaseNetlistModel,
   utilitySplitPhaseNetlistModel,
   utilityThreePhaseNetlistModel,
 } from '../devices/sources/netlist-models';
@@ -46,11 +48,27 @@ export interface ElementSpec {
   readonly values: Readonly<Record<string, number>>;
 }
 
+/**
+ * A link from one of a device's terminals to remote earth (engine 8, D5, ADR 0019): a service's
+ * utility neutral grounding, a ground rod's earth resistance. The compiler makes it a `contact` branch
+ * of relation `earth` (never an entity element) from `terminal` to the implicit earth node.
+ */
+export interface EarthLinkSpec {
+  /** The contact id (lower camelCase), unique within the device's earth links. */
+  readonly contact: string;
+  /** The device's terminal it joins to earth. */
+  readonly terminal: string;
+  /** `resistanceOhm` (Ω, > 0): the link's resistance. Never in the topology hash. */
+  readonly values: Readonly<Record<string, number>>;
+}
+
 /** A device's topology at one moment. */
 export interface DeviceTopology {
   /** Groups of terminals joined ideally (each at least two). A closed switch is `[['a', 'b']]`. */
   readonly joins: readonly (readonly string[])[];
   readonly elements: readonly ElementSpec[];
+  /** Links to remote earth (engine 8); absent or empty for every other kind. */
+  readonly earth?: readonly EarthLinkSpec[];
 }
 
 export interface DeviceTopologyInput {
@@ -72,6 +90,22 @@ export interface DeviceNetlistModel {
   readonly simTopologyKeys: readonly string[];
   /** Pure. Terminal ids must be the kind's; parts unique. */
   topology(input: DeviceTopologyInput): DeviceTopology;
+  /**
+   * The wiring view's topology (engine 8, `wiringGraph`), for kinds whose topology switches: a switch
+   * closed, a protective device intact (its line → load element present) whatever its handle or trip.
+   * Absent: the wiring view is `topology` with no sim state. Pure.
+   */
+  wiring?(input: DeviceTopologyInput): DeviceTopology;
+  /**
+   * Whether `wiringGraph` follows this kind's elements as conductive paths (a protective device's
+   * line → load), rather than as loads or sources it never crosses. Absent: no.
+   */
+  readonly wiringPath?: boolean;
+  /**
+   * The parts `wiringGraph` follows as conductive paths when the kind's other elements aren't (the
+   * service's drop neutral `dropN`, a conductor inside a source). Absent: none.
+   */
+  readonly wiringPathParts?: readonly string[];
 }
 
 /**
@@ -202,6 +236,7 @@ const switchSpst: DeviceNetlistModel = {
   kind: 'switch.spst',
   simTopologyKeys: [],
   topology: ({ state }) => (state['closed'] === true ? SPST_CLOSED : SPST_OPEN),
+  wiring: () => SPST_CLOSED,
 };
 
 const NO_TOPOLOGY: DeviceTopology = { joins: NO_JOINS, elements: [] };
@@ -324,6 +359,7 @@ function endContact(device: DeviceDefinition, end: ConnectionEndInput, conductor
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
   'breaker.thermalMagnetic': breakerNetlistModel,
+  'electrode.groundRod': groundRodNetlistModel,
   'enclosure.box': enclosureBox,
   'enclosure.panel': enclosurePanel,
   fuse: fuseNetlistModel,
@@ -335,6 +371,7 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'raceway.conduitElbow': raceway('raceway.conduitElbow'),
   'raceway.duct': raceway('raceway.duct'),
   resistor: resistorNetlistModel,
+  'service.splitPhase': serviceSplitPhaseNetlistModel,
   'splice.twistOn': spliceTwistOn,
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,

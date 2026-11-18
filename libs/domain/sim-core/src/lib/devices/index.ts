@@ -5,6 +5,7 @@ import {
   BENCH_SUPPLY_MODEL,
   DIN_PSU_MODEL,
   GENERATOR_PORTABLE_MODEL,
+  SERVICE_SPLIT_PHASE_MODEL,
   UTILITY_SPLIT_PHASE_MODEL,
   UTILITY_THREE_PHASE_MODEL,
 } from './sources';
@@ -20,7 +21,8 @@ export * from './sources';
  * The engine models of the built-in device kinds (plan F2.4, F2.5), by catalogue model kind. F2.4: the
  * battery (state of charge), the bench supply and the DIN PSU (CV/CC, hiccup), the utility services
  * (split-phase and three-phase) and the portable generator stub. F2.5: the incandescent lamp (its
- * filament's R(T) and temperature), the resistor and the heater; part 2's fuse and thermal-magnetic breaker. A kind without an engine model keeps
+ * filament's R(T) and temperature), the resistor and the heater; part 2's fuse and thermal-magnetic breaker. Engine 8:
+ * the service (`service.splitPhase`, the T-equivalent and its drop). A kind without an engine model keeps
  * its bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
@@ -31,6 +33,7 @@ export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = O
   heater: HEATER_MODEL,
   'lamp.incandescent': LAMP_MODEL,
   resistor: RESISTOR_MODEL,
+  'service.splitPhase': SERVICE_SPLIT_PHASE_MODEL,
   'supply.bench': BENCH_SUPPLY_MODEL,
   'supply.dinPsu': DIN_PSU_MODEL,
   'utility.splitPhase': UTILITY_SPLIT_PHASE_MODEL,

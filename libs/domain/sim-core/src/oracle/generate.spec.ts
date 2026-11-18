@@ -143,6 +143,34 @@ describe('series inductance behind AC sources (F2.4)', () => {
   });
 });
 
+describe('coupled source pairs in the AC corpus (engine 8)', () => {
+  it("about half the circuits with two sources couple the first two, symmetric, |R_m| below both r's", () => {
+    const circuits = oracleCorpus('ac');
+    const eligible = circuits.filter((c) => c.elements.filter((e) => e.kind === 'vsource').length >= 2);
+    let coupled = 0;
+    for (const circuit of circuits) {
+      const pairs = circuit.elements.flatMap((e, k) =>
+        e.kind === 'vsource' && e.coupling !== undefined ? [[k, e] as const] : [],
+      );
+      if (pairs.length === 0) continue;
+      coupled++;
+      expect(pairs).toHaveLength(2);
+      const [[ka, a], [kb, b]] = pairs;
+      const sources = circuit.elements.flatMap((e, k) => (e.kind === 'vsource' ? [k] : []));
+      expect([ka, kb]).toStrictEqual(sources.slice(0, 2));
+      expect(a.coupling?.partner).toBe(kb);
+      expect(b.coupling?.partner).toBe(ka);
+      expect(a.coupling?.mutualResistanceOhm).toStrictEqual(b.coupling?.mutualResistanceOhm);
+      expect(a.coupling?.mutualInductanceH).toStrictEqual(b.coupling?.mutualInductanceH);
+      const rm = Math.abs(valueNumber(a.coupling?.mutualResistanceOhm as never));
+      expect(rm).toBeLessThan(Math.min(valueNumber(a.internalResistanceOhm), valueNumber(b.internalResistanceOhm)));
+    }
+    expect(coupled / eligible.length).toBeGreaterThan(0.4);
+    expect(coupled / eligible.length).toBeLessThan(0.6);
+    expect(oracleCorpus('dc').some((c) => c.elements.some((e) => e.kind === 'vsource' && e.coupling))).toBe(false);
+  });
+});
+
 describe('articulation', () => {
   const r = { mantissa: 10, exponent: 0 };
   const R = (a: number, b: number): OracleElement => ({ kind: 'resistor', a, b, resistanceOhm: r });

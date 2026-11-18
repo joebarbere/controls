@@ -4,10 +4,18 @@ controls oracle ac-0443
 RG1 1 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 39e1 180
-RI0 e0 1 39e-3
+RI0 e0 n0 39e-3
+H0 n0 h0 VS1 18e-4
+ED0 h0 1 d0 0 -39e-6
+F0 0 d0 VS1 1
+LD0 d0 0 1
 VS1 0 s1 0
 V1 e1 s1 DC 0 AC 82e1 -120
-RI1 e1 1 68e-1
+RI1 e1 n1 68e-1
+H1 n1 h1 VS0 18e-4
+ED1 h1 1 d1 0 -39e-6
+F1 0 d1 VS0 1
+LD1 d1 0 1
 .control
 set numdgt=17
 ac lin 1 60 60

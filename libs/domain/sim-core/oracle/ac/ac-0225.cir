@@ -11,7 +11,11 @@ RG7 7 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 10e-1 120
 RI0 e0 m0 10e-2
-LI0 m0 5 68e-5
+LI0 m0 n0 68e-5
+H0 n0 h0 VS5 -82e-3
+ED0 h0 5 d0 0 -22e-6
+F0 0 d0 VS5 1
+LD0 d0 0 1
 VS1 4 s1 0
 R1 s1 3 22e0
 VS2 1 s2 0
@@ -22,7 +26,11 @@ VS4 1 s4 0
 L4 s4 7 56e-4
 VS5 0 s5 0
 V5 e5 s5 DC 0 AC 68e1 0
-RI5 e5 2 15e-2
+RI5 e5 n5 15e-2
+H5 n5 h5 VS0 -82e-3
+ED5 h5 2 d5 0 -22e-6
+F5 0 d5 VS0 1
+LD5 d5 0 1
 VS6 3 s6 0
 R6 s6 6 82e0
 VS7 6 s7 0

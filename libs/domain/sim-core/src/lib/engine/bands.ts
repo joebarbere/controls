@@ -74,7 +74,7 @@ const splitPhaseBand: SourceBandRule = (params, region) =>
  * profile's nominal systems (`RegionProfile`, sourced to ANSI C84.1 there), matched exactly on the
  * line-to-neutral voltage the source model builds its phases from. Split-phase 120/240 V and
  * 208Y/120 V both have 120 V line to neutral, so they are told apart by **model kind**
- * (`utility.splitPhase` and `generator.portable` against `utility.threePhase`), never by voltage;
+ * (`utility.splitPhase`, `service.splitPhase` and `generator.portable` against `utility.threePhase`), never by voltage;
  * among three-phase services the line-to-neutral voltage then picks 208Y/120 or 480Y/277.
  */
 export const SOURCE_BAND_RULES: Readonly<Record<string, SourceBandRule>> = Object.freeze({
@@ -84,6 +84,8 @@ export const SOURCE_BAND_RULES: Readonly<Record<string, SourceBandRule>> = Objec
   // overlay can't know the setpoint class without guessing).
   'supply.bench': () => NOMINAL_BAND_NONE,
   'utility.splitPhase': splitPhaseBand,
+  // Engine 8's service (the pole transformer and its drop) is the same 120/240 V split-phase system.
+  'service.splitPhase': splitPhaseBand,
   // The stub's nameplate is 120/240 V split-phase (`GENERATOR_STUB_NAMEPLATE`).
   'generator.portable': splitPhaseBand,
   'utility.threePhase': (params, region) => {

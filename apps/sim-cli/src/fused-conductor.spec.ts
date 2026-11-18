@@ -15,12 +15,12 @@ import { workshopWorld } from './testing/workshop';
  * written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/fused-conductor.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v4/ctrl/fused-conductor-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/fused-conductor-engine-8-catalog-3.ctrl
  *
  * carries `fused: true` with `ok` ends through the container, the migration and the load check, and
  * loads open. The fixture-rebuild check in `sources.spec.ts` rebuilds it from the scenario.
  */
-export const FUSED_CONDUCTOR_HASH = '14dd52d64a57bcf74f72704747a6326cb8a9be7fe50e2065d5b99d0f235b432e';
+export const FUSED_CONDUCTOR_HASH = '4fdad66a97eb648253adb5e264d090e0c0f12ca8855bf8789c83eb308bd9711d';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/fused-conductor.console');
 

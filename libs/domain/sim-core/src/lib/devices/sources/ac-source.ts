@@ -1,5 +1,9 @@
 import type { AcSourceParams } from '@controls/catalog';
-import type { SourcedConstant } from '../../constants';
+import {
+  SPLIT_PHASE_HALF_WINDING_R_FACTOR,
+  SPLIT_PHASE_HALF_WINDING_X_FACTOR,
+  type SourcedConstant,
+} from '../../constants';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
 import { AC_STAMP_VSOURCE, AcBranchValues } from '../../mna/ac-values';
 import { angularFrequency, type PhasorAngle } from '../../mna/phasor';
@@ -20,21 +24,20 @@ import { angularFrequency, type PhasorAngle } from '../../mna/phasor';
  * - **Three-phase:** V_LL = √3 · V_LN (from `Math.sqrt`, never the 208 or 480 name), and Z_base is the
  *   per-phase wye impedance base, so each phase gets the whole R + jX. Phases at 0°, −120°, +120°
  *   (L1, L2, L3), from the exact constants (`phasorUnit`). A bolted three-phase fault draws V_LN / |Z|.
- * - **Split-phase:** V_LL = 2 · V_LN, the full winding's |Z| on that base, and each half (L1–N, L2–N)
- *   takes half of it; L1 at 0°, L2 at 180°. A bolted L1–L2 fault draws V_LL / |Z|. **Abstraction:** a
- *   real centre-tapped transformer's half-winding impedance is less than half the full winding's, so
- *   its line-to-neutral bolted fault current is higher than the line-to-line one (about 1.5× is the
- *   usual rule of thumb in short-circuit guides); here they are equal, which is acceptable while P2's
- *   services are headless and have no protective devices. The standard simple model that gives both
- *   is a T-equivalent: Z_full / 2 in each of L1 and L2 plus a neutral branch Z_n = Z_LN − Z_full / 2,
- *   with the half-winding impedance R_LN = 1.5 R, X_LN = 1.2 X in per-unit on the 120 V base (0.375 R
- *   and 0.3 X of the full winding in ohms). Z_n is then negative (about −0.125 R − j0.2 X), which a
- *   phasor MNA accepts because the network stays passive, and I_LN / I_LL ≈ 1.5 (8.2 kA against 5.2 kA
- *   here); mutual coupling between the halves would do too. P4's service entrance must adopt one, with
- *   an I_LN / I_LL ≈ 1.5 test (simulation caveats). Note for P4: the resistor stamp's validation
- *   (`AcBranchValues.resistor`, R > 0) refuses the T-equivalent's negative neutral R, so either permit
- *   a negative R on an AC island's internal source branch (the network stays passive) or use coupled
- *   halves instead. The generator stub inherits the same abstraction.
+ * - **Split-phase** (engine 8, D4, ADR 0021): V_LL = 2 · V_LN and the full winding's Z_full on that
+ *   base, held as a **T-equivalent**: Z_full / 2 in each of L1 and L2 and a neutral branch
+ *   Z_n = Z_LN − Z_full / 2, where Z_LN is the half winding's own impedance (R_LN = 1.5 R and
+ *   X_LN = 1.2 X of the full winding in per-unit on the 120 V base, {@link SPLIT_PHASE_HALF_WINDING_R_FACTOR}
+ *   and {@link SPLIT_PHASE_HALF_WINDING_X_FACTOR}; 0.375 R and 0.3 X in ohms). Z_n is negative, so it is
+ *   never a branch: it is eliminated into a coupled 2 × 2 source impedance, each winding's row
+ *   carrying Z_h + Z_n on its own current and Z_n on the other's (`AcBranchValues.couple`), whose real
+ *   part [[R_h + R_n, R_n], [R_n, R_h + R_n]] is positive definite (eigenvalues R_h and R_h + 2 R_n).
+ *   A bolted L1–N fault then draws V_LN / |Z_LN| and an L1–L2 fault V_LL / |Z_full|, about 1.58 : 1
+ *   (8230 A and 5208 A on the 25 kVA unit; 1.5 is the rule of thumb). L1 at 0°, L2 at 180°. The
+ *   factors are for typical single-phase centre-tapped distribution transformers (Kersting's
+ *   approximation, ADR 0021 reference notes); applying them to
+ *   the generator stub is a labelled abstraction (its alternator has no centre-tapped winding of that
+ *   construction). The terminals' structure is unchanged, so no `topologyHash` moves.
  * - The EMF is the open-circuit (no-load) voltage: the source impedance alone gives the voltage drop
  *   under load. No tap changer, regulation or frequency dynamics.
  */
@@ -64,10 +67,40 @@ function series(r: number, x: number, frequencyHz: number): SourceImpedance {
   return { ohms: r, henries: x / angularFrequency(frequencyHz), magnitudeOhm: Math.sqrt(r * r + x * x) };
 }
 
-/** Each half winding's impedance of a split-phase source: half the full winding's. */
-export function splitPhaseWinding(params: AcSourceParams, frequencyHz: number): SourceImpedance {
+/**
+ * A split-phase source's T-equivalent (engine 8, D4): `line` is Z_full / 2 (each of L1 and L2),
+ * `lineToNeutral` the half winding's Z_LN (a winding's own series impedance in the coupled block) and
+ * `neutral` Z_n = Z_LN − Z_full / 2 (the block's mutual impedance; negative R and L). R_LN and X_LN are
+ * the full winding's R and X times the half-winding factors on the 120 V base: (V_LN / V_LL)² = 1/4 of
+ * the factor, exactly.
+ */
+export interface SplitPhaseImpedance {
+  readonly line: SourceImpedance;
+  readonly lineToNeutral: SourceImpedance;
+  readonly neutral: { readonly ohms: number; readonly henries: number };
+}
+
+export function splitPhaseTEquivalent(params: AcSourceParams, frequencyHz: number): SplitPhaseImpedance {
   const { r, x } = ratedImpedance(params, splitPhaseLineToLineV(params));
-  return series(r / 2, x / 2, frequencyHz);
+  const line = series(r / 2, x / 2, frequencyHz);
+  const lineToNeutral = series(
+    (SPLIT_PHASE_HALF_WINDING_R_FACTOR.value * r) / 4,
+    (SPLIT_PHASE_HALF_WINDING_X_FACTOR.value * x) / 4,
+    frequencyHz,
+  );
+  return {
+    line,
+    lineToNeutral,
+    neutral: { ohms: lineToNeutral.ohms - line.ohms, henries: lineToNeutral.henries - line.henries },
+  };
+}
+
+/**
+ * The bolted line-to-neutral fault current at a split-phase source's terminals (A, RMS): V_LN / |Z_LN|
+ * (engine 8's T-equivalent). Transformer limited, as {@link boltedFaultCurrentA}.
+ */
+export function splitPhaseLineToNeutralFaultA(params: AcSourceParams, frequencyHz: number): number {
+  return params.lineToNeutralV / splitPhaseTEquivalent(params, frequencyHz).lineToNeutral.magnitudeOhm;
 }
 
 /** Each phase's impedance of a three-phase wye source. */
@@ -90,10 +123,30 @@ export function boltedFaultCurrentA(params: AcSourceParams, phases: 1 | 3): numb
 const SPLIT_ANGLES: Readonly<Record<string, PhasorAngle>> = { l1: 0, l2: 180 };
 const THREE_PHASE_ANGLES: Readonly<Record<string, PhasorAngle>> = { l1: 0, l2: -120, l3: 120 };
 
+/** One winding's series values: its own R and L, and for a coupled split-phase winding the mutual R and L. */
+interface WindingValues {
+  readonly ohms: number;
+  readonly henries: number;
+  /** The mutual impedance to the other winding of the pair, or null (three-phase: uncoupled). */
+  readonly mutual: { readonly ohms: number; readonly henries: number } | null;
+}
+
+/** A three-phase winding: the phase impedance, uncoupled. */
+const threePhaseValues = (p: AcSourceParams, f: number): WindingValues => {
+  const z = threePhaseWinding(p, f);
+  return { ohms: z.ohms, henries: z.henries, mutual: null };
+};
+
+/** A split-phase winding (engine 8): Z_LN on its own current, Z_n on the other's (the T-equivalent's block). */
+const splitPhaseValues = (p: AcSourceParams, f: number): WindingValues => {
+  const t = splitPhaseTEquivalent(p, f);
+  return { ohms: t.lineToNeutral.ohms, henries: t.lineToNeutral.henries, mutual: t.neutral };
+};
+
 function acSourceModel(
   kind: string,
   angles: Readonly<Record<string, PhasorAngle>>,
-  winding: (p: AcSourceParams, f: number) => SourceImpedance,
+  winding: (p: AcSourceParams, f: number) => WindingValues,
 ): SimDeviceModel {
   return {
     kind,
@@ -109,6 +162,10 @@ function acSourceModel(
       const im = new Float64Array(winds);
       const ohms = new Float64Array(winds);
       const henries = new Float64Array(winds);
+      // A coupled winding's partner branch (−1: none) and the mutual impedance (engine 8's split phase).
+      const partner = new Int32Array(winds).fill(-1);
+      const mutualOhms = new Float64Array(winds);
+      const mutualHenries = new Float64Array(winds);
       let w = 0;
       devices.forEach((d) => {
         const p = d.params as AcSourceParams;
@@ -120,6 +177,12 @@ function acSourceModel(
           im[w] = scratch.emfIm[0];
           ohms[w] = scratch.ohms[0];
           henries[w] = scratch.seriesHenries[0];
+          if (z.mutual !== null) {
+            // The pair's two windings couple to each other (l1 ↔ l2).
+            partner[w] = d.branches[1 - j];
+            mutualOhms[w] = z.mutual.ohms;
+            mutualHenries[w] = z.mutual.henries;
+          }
           slot[branch] = w++;
         });
       });
@@ -133,6 +196,12 @@ function acSourceModel(
           values.emfIm[k] = im[at];
           values.ohms[k] = ohms[at];
           values.seriesHenries[k] = henries[at];
+          const other = partner[at];
+          if (other >= 0) {
+            values.partner[k] = other;
+            values.mutualOhms[k] = mutualOhms[at];
+            values.mutualHenries[k] = mutualHenries[at];
+          }
           return true;
         },
       };
@@ -141,19 +210,20 @@ function acSourceModel(
 }
 
 /** The utility service, 120/240 V split-phase (headless in P2). */
-export const UTILITY_SPLIT_PHASE_MODEL = acSourceModel('utility.splitPhase', SPLIT_ANGLES, splitPhaseWinding);
+export const UTILITY_SPLIT_PHASE_MODEL = acSourceModel('utility.splitPhase', SPLIT_ANGLES, splitPhaseValues);
 
 /** The utility service, three-phase wye: 208Y/120 V or 480Y/277 V by its catalogue entry (headless in P2). */
-export const UTILITY_THREE_PHASE_MODEL = acSourceModel('utility.threePhase', THREE_PHASE_ANGLES, threePhaseWinding);
+export const UTILITY_THREE_PHASE_MODEL = acSourceModel('utility.threePhase', THREE_PHASE_ANGLES, threePhaseValues);
 
 /**
  * The portable generator, **a stub** (plan F2.4): its nameplate EMF behind its source impedance, as
  * the split-phase utility is modelled, with no engine, governor or voltage-regulator dynamics, no fuel
  * and no overload. It has no catalogue entry, so it can't be placed; generators and transfer switches
- * are in the backlog. Its nameplate is {@link GENERATOR_STUB_NAMEPLATE}. It shares the split-phase
- * abstraction above (line-to-neutral fault equal to line-to-line).
+ * are in the backlog. Its nameplate is {@link GENERATOR_STUB_NAMEPLATE}. It takes the split-phase
+ * T-equivalent above (engine 8): the half-winding factors are for distribution transformers, so on the
+ * stub they are a labelled abstraction.
  */
-export const GENERATOR_PORTABLE_MODEL = acSourceModel('generator.portable', SPLIT_ANGLES, splitPhaseWinding);
+export const GENERATOR_PORTABLE_MODEL = acSourceModel('generator.portable', SPLIT_ANGLES, splitPhaseValues);
 
 /** The generator stub's nameplate, for a catalogue entry once generators are placeable (and for tests). */
 export const GENERATOR_STUB_NAMEPLATE: Readonly<Record<keyof AcSourceParams, SourcedConstant>> = Object.freeze({

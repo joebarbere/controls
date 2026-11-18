@@ -265,7 +265,7 @@ describe('AcSolver sparse path', () => {
     const moved = circuit.netlist.branches.findIndex((b) => b.kind === 'resistor' && b.a !== b.b);
     const branches = circuit.netlist.branches.map((b, i) => (i === moved ? { ...b, a: b.b, b: b.a === 0 ? 1 : 0 } : b));
     const forged: Netlist = { ...circuit.netlist, branches };
-    expect(() => solver.solve(forged, circuit.values, 60)).toThrow(/branch ends differ/);
+    expect(() => solver.solve(forged, circuit.values, 60)).toThrow(/branch ends or source couplings differ/);
     // The same hash with one more node in the island: its unknown count differs from the cached one.
     const extra = circuit.netlist.nodes.length;
     const grown: Netlist = {

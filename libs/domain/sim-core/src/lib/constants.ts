@@ -136,3 +136,25 @@ export const OUTER_LOOP_MIN_DAMPING: SourcedConstant = {
   source:
     'numerical: a damped fixed-point iteration x ← x + α (f(x) − x) contracts where its local slope f′ satisfies 1 − 2/α < f′ < 1, so α = 1/16 tames slopes down to −31; four halvings from 1 reach it.',
 };
+
+/**
+ * The half-winding resistance factor of a 120/240 V centre-tapped single-phase transformer (engine 8,
+ * D4, ADR 0021): a line-to-neutral fault sees the half winding's resistance, taken as this factor
+ * times the full winding's per-unit resistance on the 120 V base (0.375 of the full winding's ohms).
+ */
+export const SPLIT_PHASE_HALF_WINDING_R_FACTOR: SourcedConstant = {
+  value: 1.5,
+  unit: '1',
+  kind: 'real-world',
+  source:
+    "real-world: the half winding of a typical single-phase centre-tapped distribution transformer has 1.5 times the full winding's per-unit R and 1.2 times its per-unit X on the 120 V base, so a line-to-neutral bolted fault at the terminals is about 1.5 times the line-to-line one (1.58 for 2 % and X/R 2). Applied to every split-phase source (the utility stand-in, the service and, as a labelled abstraction, the generator stub). Pre-audit 2026-11-17 (Kersting's centre-tapped transformer approximation; reproduced from EPRI's published 25 kVA example; ADR 0021 reference notes).",
+};
+
+/** The half-winding reactance factor (engine 8): see {@link SPLIT_PHASE_HALF_WINDING_R_FACTOR}. */
+export const SPLIT_PHASE_HALF_WINDING_X_FACTOR: SourcedConstant = {
+  value: 1.2,
+  unit: '1',
+  kind: 'real-world',
+  source:
+    "real-world: the line-to-neutral reactance factor of a typical single-phase centre-tapped distribution transformer: 1.2 times the full winding's per-unit X on the 120 V base (0.3 of the full winding's ohms). Pre-audit 2026-11-17 (Kersting's centre-tapped transformer approximation; reproduced from EPRI's published 25 kVA example; ADR 0021 reference notes).",
+};

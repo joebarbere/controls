@@ -27,5 +27,13 @@
  *   Later P3 PRs that change engine-7 behaviour re-pin in place (no 7 → 7′), until v0.4.0 freezes it.
  *   D12 (no re-pin): a lamp entry may carry its own `conductionFraction`; entries without it keep
  *   `LAMP_CONDUCTION_FRACTION`, so every existing scenario computes the same.
+ * - 8 (P4 engine 8 part 1, **provisional until v0.5.0**, ADR 0019, ADR 0021): every split-phase source
+ *   (the utility stand-in, the service and the generator stub) is the T-equivalent, a coupled 2 × 2
+ *   source impedance with the half winding's 1.5 R and 1.2 X on the 120 V base, so a line-to-neutral
+ *   load sees Z_LN where it saw Z_full / 2: every scenario with a split-phase line-to-neutral load moves
+ *   (line-to-line loads and the three-phase services don't). The compiler reads mount contacts, plug
+ *   contacts and earth links (relation contact branches) and remote earth; no P3 world has one, so no
+ *   P3 `topologyHash` moves. The new kinds `service.splitPhase` and `electrode.groundRod`. Later P4 PRs
+ *   that change engine-8 behaviour re-pin in place, until v0.5.0 freezes it.
  */
-export const SIM_ENGINE_VERSION = 7;
+export const SIM_ENGINE_VERSION = 8;

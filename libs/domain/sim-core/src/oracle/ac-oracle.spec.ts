@@ -78,6 +78,14 @@ function adaptedResidual(netlist: Netlist, values: AcBranchValues, result: Oracl
         const r = values.ohms[k];
         const x = omega * values.seriesHenries[k];
         const zi = [r * ik[0] - x * ik[1], r * ik[1] + x * ik[0]];
+        // Engine 8: a coupled source's row also carries (R_m + jωL_m) I_p.
+        const p = values.partner[k];
+        if (p >= 0) {
+          const ip = i(p);
+          const xm = omega * values.mutualHenries[k];
+          zi[0] += values.mutualOhms[k] * ip[0] - xm * ip[1];
+          zi[1] += values.mutualOhms[k] * ip[1] + xm * ip[0];
+        }
         residual = [-drop[0] - (values.emfRe[k] - zi[0]), -drop[1] - (values.emfIm[k] - zi[1])];
       }
     }

@@ -179,6 +179,40 @@ describe('the topology descriptor', () => {
     expect(DescriptorIndex.of(orphan).field(7, 'x')).toBeNull();
   });
 
+  it('carries relation contacts and remote earth (protocol 8, engine 8 part 1, ADR 0019)', () => {
+    const earthed = {
+      ...descriptor,
+      nodes: [{ island: 0, members: [{ entity: 0, terminal: 'earth' }] }, ...descriptor.nodes],
+      branches: [
+        ...descriptor.branches,
+        { element: { kind: 'contact', entity: 1, relation: 'earth', contact: 'electrode' }, a: 1, b: 0, island: 0 },
+        { element: { kind: 'contact', entity: 4, relation: 'mount', contact: 'line1' }, a: 2, b: 1, island: 0 },
+        { element: { kind: 'contact', entity: 4, relation: 'plug', contact: 'hot' }, a: 2, b: 1, island: 0 },
+      ],
+    };
+    expect(TopologyDescriptorSchema.safeParse(earthed).success).toBe(true);
+    // Entity 0 is remote earth only, with its one terminal.
+    const badEarth = { ...earthed, nodes: [{ island: 0, members: [{ entity: 0, terminal: 'pos' }] }] };
+    expect(TopologyDescriptorSchema.safeParse(badEarth).success).toBe(false);
+    const contact = (fields: object) => ({
+      ...descriptor,
+      branches: [
+        { element: { kind: 'contact', entity: 1, relation: 'mount', contact: 'x', ...fields }, a: 0, b: 1, island: 0 },
+      ],
+    });
+    expect(TopologyDescriptorSchema.safeParse(contact({ relation: 'cord' })).success).toBe(false);
+    expect(TopologyDescriptorSchema.safeParse(contact({ entity: 0 })).success).toBe(false);
+    expect(TopologyDescriptorSchema.safeParse(contact({ contact: 'Line-1' })).success).toBe(false);
+    expect(TopologyDescriptorSchema.safeParse(contact({ contact: 'a'.repeat(255) })).success).toBe(true);
+    // A trace may watch a contact's current.
+    const watch = {
+      type: 'watch',
+      id: 1,
+      target: { kind: 'branch', element: { kind: 'contact', entity: 4, relation: 'plug', contact: 'hot' } },
+    };
+    expect(HostToWorker.safeParse(watch).success).toBe(true);
+  });
+
   it('looks connection record fields up by connection and kind (protocol 7)', () => {
     const index = DescriptorIndex.of(descriptor);
     expect(index.connection(5)).toStrictEqual({ connection: 5, kind: 'conductor', recordOffset: 104, branch: -1 });

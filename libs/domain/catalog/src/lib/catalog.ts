@@ -492,6 +492,12 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
         'A terminal is "land" exactly when it has termination methods ("clip" or "none" without them)',
       );
     }
+    if (kind.sealedTerminals?.includes(terminal.id) === true && terminal.access !== 'none') {
+      add(
+        `terminals.${terminal.id}.access`,
+        `Model kind ${kind.kind}'s ${terminal.id} is out of reach: its access must be "none"`,
+      );
+    }
   }
   if (kind.placement === 'connection') {
     if (device.sizeMm !== null) add('sizeMm', 'A connection kind has no body: sizeMm must be null');

@@ -165,6 +165,7 @@ describe('acBranchValues', () => {
     expect(values.ohms[lead?.index ?? -1]).toBe(lead?.values['resistanceOhm']);
     expect(Object.keys(AC_DEFAULT_VALUES)).toStrictEqual([
       'conductor',
+      'contact',
       'lead',
       'resistor',
       'heater',

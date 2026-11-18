@@ -1,3 +1,4 @@
+import { describeElement } from '../netlist/hash';
 import { ownModel } from '../netlist/models';
 import type { Netlist, NetlistBranch } from '../netlist/types';
 import { type PhasorAngle, phasorUnit } from './phasor';
@@ -19,6 +20,13 @@ import { type PhasorAngle, phasorUnit } from './phasor';
  *   series inductance (F2.4) is a utility transformer's or a generator's source reactance; requiring
  *   R > 0 with it keeps "singular ⇔ a loop of zero-impedance sources" structural (`ac.ts`), and every
  *   real source has some resistance.
+ * - **coupled sources** (engine 8, ADR 0021): two `vsource` branches may share a mutual series
+ *   impedance Z_m = R_m + jωL_m (`couple`), so each source's row reads Vb − Va + Z·I + Z_m·I_p = E,
+ *   with I_p its partner's current. It is how a split-phase transformer's T-equivalent is held without
+ *   an internal centre-tap node: the 2 × 2 source-impedance block [[Z_h + Z_n, Z_n], [Z_n, Z_h + Z_n]]
+ *   with Z_n the (negative) neutral branch eliminated into it (D4). R_m and L_m may be negative; the
+ *   block's real part must be positive definite (R_a, R_b > 0 and R_a · R_b > R_m²), which keeps the
+ *   solver's "singular ⇔ a loop of ideal sources" argument (`ac.ts`).
  *
  * Passive elements are all F2.1 `resistor` elements: inductance and capacitance are stamp modes, as a
  * DC current source is, so F2.1's `ElementKind` and `topologyHash` are unchanged (ADR 0012's adapter
@@ -79,6 +87,14 @@ export class AcBranchValues {
   readonly emfIm: Float64Array;
   /** `vsource`: the series inductance (H) behind the EMF, beside its series R (F2.4). */
   readonly seriesHenries: Float64Array;
+  /**
+   * `vsource` (engine 8): the branch whose current this source's row couples to through a mutual
+   * impedance (`couple`), or −1 for none. Reset to −1 by `clear`.
+   */
+  readonly partner: Int32Array;
+  /** The mutual impedance's resistance (Ω) and inductance (H) towards `partner`; either may be negative. */
+  readonly mutualOhms: Float64Array;
+  readonly mutualHenries: Float64Array;
 
   constructor(count: number) {
     this.count = count;
@@ -89,11 +105,15 @@ export class AcBranchValues {
     this.emfRe = new Float64Array(count);
     this.emfIm = new Float64Array(count);
     this.seriesHenries = new Float64Array(count);
+    this.partner = new Int32Array(count).fill(-1);
+    this.mutualOhms = new Float64Array(count);
+    this.mutualHenries = new Float64Array(count);
   }
 
   /** Forgets every branch's value. */
   clear(): void {
     this.stamps.fill(AC_STAMP_UNSET);
+    this.partner.fill(-1);
   }
 
   /** The branch's stamp, or `null` if it has none. */
@@ -156,6 +176,25 @@ export class AcBranchValues {
   }
 
   /**
+   * Couples `branch`'s source row to `partner`'s current through the mutual impedance `ohms` + jω`henries`
+   * (engine 8, ADR 0021): set after `vsource` on the branch, and on the partner the other way round with
+   * the same values (the block is symmetric; the solver checks both sides and the block's positive
+   * definite real part). `vsource` on the branch afterwards keeps it; `clear` drops it.
+   */
+  couple(branch: number, partner: number, ohms: number, henries: number): void {
+    if (!(ohms > -Infinity && ohms < Infinity && henries > -Infinity && henries < Infinity)) {
+      finite('mutualOhms', branch, ohms);
+      finite('mutualHenries', branch, henries);
+    }
+    if (partner === branch || !(partner >= 0 && partner < this.count) || !Number.isInteger(partner)) {
+      throw new RangeError(`vsource branch ${branch} can't couple to branch ${partner}`);
+    }
+    this.partner[branch] = partner;
+    this.mutualOhms[branch] = ohms + 0;
+    this.mutualHenries[branch] = henries + 0;
+  }
+
+  /**
    * A phasor EMF `rmsV`∠`angle` behind `ohms` and `henries`, from the exact angle constants (D6):
    * `rmsV · cos θ` and `rmsV · sin θ` with cos and sin from `phasorUnit`.
    */
@@ -183,6 +222,7 @@ export type AcDefaultValue = (branch: NetlistBranch, values: AcBranchValues) => 
  */
 export const AC_DEFAULT_VALUES: Readonly<Record<string, AcDefaultValue>> = Object.freeze({
   conductor: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
+  contact: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   lead: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   resistor: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
   heater: (branch, values) => values.resistor(branch.index, branch.values['resistanceOhm']),
@@ -212,10 +252,7 @@ export function acBranchValues(netlist: Netlist, hook?: AcValueHook, out?: AcBra
       }
       const fallback = ownModel(AC_DEFAULT_VALUES, branch.model);
       if (fallback === undefined) {
-        const what =
-          branch.element.kind === 'entity'
-            ? `entity ${branch.element.entity} ${branch.element.part}`
-            : `connection ${branch.element.connection}`;
+        const what = describeElement(branch.element);
         throw new Error(`no AC value for branch ${index} (${branch.model}, ${what}): its device model must supply one`);
       }
       fallback(branch, values);

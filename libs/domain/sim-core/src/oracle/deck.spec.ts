@@ -109,6 +109,36 @@ describe('oracleDeck', () => {
     expect(oracleAcInput(withL).values.seriesHenries[0]).toBe(47e-6);
   });
 
+  it('chains a coupled source through an H for R_m and an E on an F-driven 1 H for jωL_m (engine 8)', () => {
+    const coupling = (partner: number) => ({ partner, mutualResistanceOhm: v(-27, -4), mutualInductanceH: v(33, -6) });
+    const source = AC.elements[0] as OracleVoltageSource;
+    const coupled: OracleCircuit = {
+      ...AC,
+      elements: [
+        { ...source, seriesInductanceH: v(47, -6), coupling: coupling(1) },
+        { ...source, a: 0, b: 2, coupling: coupling(0) },
+        ...AC.elements.slice(1),
+      ],
+    };
+    const lines = oracleDeck(coupled).split('\n');
+    expect(lines).toContain('LI0 m0 n0 47e-6');
+    expect(lines).toContain('H0 n0 h0 VS1 -27e-4');
+    expect(lines).toContain('ED0 h0 1 d0 0 33e-6');
+    expect(lines).toContain('F0 0 d0 VS1 1');
+    expect(lines).toContain('LD0 d0 0 1');
+    expect(lines).toContain('RI1 e1 n1 10e-2');
+    expect(lines).toContain('H1 n1 h1 VS0 -27e-4');
+    expect(oracleNetlist(coupled).branches[0].values).toMatchObject({
+      partner: 1,
+      mutualResistanceOhm: -27e-4,
+      mutualInductanceH: 33e-6,
+    });
+    const { values } = oracleAcInput(coupled);
+    expect([values.partner[0], values.partner[1], values.mutualOhms[0], values.mutualHenries[1]]).toStrictEqual([
+      1, 0, -27e-4, 33e-6,
+    ]);
+  });
+
   it('prints at most ten vectors per line', () => {
     const big: OracleCircuit = {
       ...DC,

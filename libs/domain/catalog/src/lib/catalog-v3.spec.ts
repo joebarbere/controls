@@ -173,6 +173,35 @@ describe('catalogue format v3 (ADR 0020) on test fixtures', () => {
       ok([device({ terminals: [terminal('a', { access: 'none' }), terminal('b'), terminal('ground')] })]);
     });
 
+    it("a kind's sealed terminals must be access none: the service's x0 is out of reach (engine 8)", () => {
+      expect(MODEL_KINDS['service.splitPhase'].sealedTerminals).toStrictEqual(['x0']);
+      const params = {
+        ratedKva: 25,
+        percentImpedance: 2,
+        xOverR: 2,
+        lineToNeutralV: 120,
+        dropLengthMm: 30000,
+        dropLineAreaM2: 3.3631e-5,
+        dropNeutralAreaM2: 2.115e-5,
+        dropResistivityOhmM: 2.8264e-8,
+        dropTemperatureCoefficientPerK: 0.00403,
+        dropReferenceTemperatureK: 293.15,
+        utilityGroundingOhm: 5,
+      };
+      const service = (x0: string) =>
+        device({
+          id: 'service.test',
+          category: 'source',
+          terminals: [terminal('l1'), terminal('l2'), terminal('n'), terminal('x0', { access: x0 })],
+          model: { kind: 'service.splitPhase', params },
+          sources: source(['sizeMm', 'terminals', ...Object.keys(params).map((k) => `model.params.${k}`)]),
+        });
+      ok([service('none')]);
+      expect(messages([service('clip')])).toStrictEqual([
+        '[0] service.test@1: terminals.x0.access: Model kind service.splitPhase\'s x0 is out of reach: its access must be "none"',
+      ]);
+    });
+
     it('take a role and a side, read by the inspector only (any combination loads)', () => {
       const roled = device({
         terminals: [
