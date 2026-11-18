@@ -43,7 +43,13 @@ describe('the snapshot read rig', () => {
     let records = 0;
     for (let i = 0; i < READ_PLANT.connections; i++) records += 300 + (i % 5) + 1;
     expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25) + records, 6);
-    expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000)).toBeLessThan(
+    // Windows scaled to the read's cost: under Vitest's module runner a full-plant readout costs about
+    // 0.6 ms (one core; 15× the bench's plain-Node 0.077 ms), so 1,000-read windows after a 20,000-read
+    // warm-up took 25 s on one core and timed out on macOS CI (60.5 s). Each read runs about 4,500
+    // record loops, so 2,500 reads warm it up; 250-read windows still read a planted 32 B object at
+    // 41–45 B a read. Measured on one core: 4.5–5.4 s, 0 B in 10 of 10 fresh processes. The full-size
+    // gate is the bench's `overlay-read-500-devices`, in plain Node.
+    expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 250, 7, 2_500)).toBeLessThan(
       READ_ALLOCATION_GATE_BYTES,
     );
   });
