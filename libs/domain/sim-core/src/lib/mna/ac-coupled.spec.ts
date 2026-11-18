@@ -152,6 +152,63 @@ describe('coupled source pairs (engine 8, the split-phase T-equivalent)', () => 
     for (let i = 0; i < coupled.length; i++) expect(Math.abs(coupled[i] - dense.branches[i])).toBeLessThan(1e-9);
   });
 
+  it("never reuses a cached factorisation for another pairing of one topology's sources", () => {
+    // Four sources paired (0, 1) and (2, 3), then (0, 2) and (1, 3), under one topologyHash: the same
+    // class signature (all coupled), so the partners are folded into the cached checksum and the second
+    // pairing is refused, never solved on the first's pattern (a pairing is a function of the topology
+    // for every real device model, so a mismatch is a stale or reused hash).
+    const solver = new AcSolver({ sparseMinUnknowns: 1 });
+    const netlist = syntheticNetlist(
+      3,
+      [
+        { a: 0, b: 1, kind: 'vsource' },
+        { a: 0, b: 2, kind: 'vsource' },
+        { a: 0, b: 1, kind: 'vsource' },
+        { a: 0, b: 2, kind: 'vsource' },
+        { a: 1, b: 2, kind: 'resistor' },
+      ],
+      'ac',
+    );
+    const values = (pairs: readonly (readonly [number, number])[]) => {
+      const v = new AcBranchValues(5);
+      for (let k = 0; k < 4; k++) v.vsource(k, k % 2 === 0 ? 120 : -120, 0, 0.01, 1e-5);
+      for (const [x, y] of pairs) {
+        v.couple(x, y, -0.003, 0);
+        v.couple(y, x, -0.003, 0);
+      }
+      v.resistor(4, 10);
+      return v;
+    };
+    solver.solve(
+      netlist,
+      values([
+        [0, 1],
+        [2, 3],
+      ]),
+      60,
+    );
+    expect(() =>
+      solver.solve(
+        netlist,
+        values([
+          [0, 2],
+          [1, 3],
+        ]),
+        60,
+      ),
+    ).toThrow(/source couplings differ/);
+    expect(() =>
+      solver.solve(
+        netlist,
+        values([
+          [0, 1],
+          [2, 3],
+        ]),
+        60,
+      ),
+    ).not.toThrow();
+  });
+
   it('refuses a one-sided or asymmetric pairing and a real block that is not positive definite', () => {
     const netlist = syntheticNetlist(
       3,

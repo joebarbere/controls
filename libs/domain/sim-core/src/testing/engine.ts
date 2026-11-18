@@ -84,7 +84,7 @@ export const ROD = { id: 'electrode.test-rod', version: 1 };
 
 /**
  * The test service (`service.splitPhase`, engine 8): 25 kVA, 2 %, X/R 2, 120/240 V (the utility
- * stand-in's transformer); a 30 m drop of 33.62 mm² aluminium lines and a 21.15 mm² neutral (the 2 AWG
+ * stand-in's transformer); a 30 m drop of 33.631 mm² aluminium lines and a 21.15 mm² neutral (the 2 AWG
  * and 4 AWG areas from the AWG geometry, NBS Handbook 100), aluminium at 2.8264e-8 Ω·m and α 0.00403 /K
  * at 20 °C (61 % IACS, the published figure for 1350 conductor alloy); utility grounding 5 Ω (the
  * plan's vetted game-design value inside 1–25 Ω). Test data, not a product.
@@ -95,7 +95,7 @@ export const SERVICE_PARAMS = {
   xOverR: 2,
   lineToNeutralV: 120,
   dropLengthMm: 30_000,
-  dropLineAreaM2: 3.362e-5,
+  dropLineAreaM2: 3.3631e-5,
   dropNeutralAreaM2: 2.115e-5,
   dropResistivityOhmM: 2.8264e-8,
   dropTemperatureCoefficientPerK: 0.00403,
@@ -366,10 +366,12 @@ export const ENGINE_DOCUMENTS: readonly unknown[] = [
       ...Object.keys(TEST_LEAD_THERMAL),
     ]).map((s) => ({ ...s, covers: s.covers.filter((c) => c !== 'sizeMm' && c !== 'terminals') })),
   },
-  {
-    ...entry(SERVICE, 'Test 25 kVA service', 'service.splitPhase', { ...SERVICE_PARAMS }, ['l1', 'l2', 'n', 'x0']),
+  ((service) => ({
+    ...service,
     category: 'source',
-  },
+    // The transformer neutral at the pole is out of reach (a `service.splitPhase` catalogue rule).
+    terminals: service.terminals.map((t) => (t.id === 'x0' ? { ...t, access: 'none' } : t)),
+  }))(entry(SERVICE, 'Test 25 kVA service', 'service.splitPhase', { ...SERVICE_PARAMS }, ['l1', 'l2', 'n', 'x0'])),
   entry(ROD, 'Test ground rod', 'electrode.groundRod', { earthResistanceOhm: ROD_OHM }, ['clamp']),
   entry(THERMAL_LOAD, 'Test thermal load', 'test.thermalLoad', THERMAL_PARAMS),
   entry(I2T_FUSE, 'Test I²t fuse', 'test.i2tFuse', { resistanceOhm: 0.01, meltA2s: 4 }),

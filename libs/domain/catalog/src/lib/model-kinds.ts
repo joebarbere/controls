@@ -94,6 +94,12 @@ export interface ModelKindDef {
   readonly raceway?: 'duct' | 'conduit';
   /** The terminal ids every device of this kind has, sorted. Empty for connections. */
   readonly terminals: readonly string[];
+  /**
+   * Terminals no entry of this kind may make reachable (engine 8): each must be declared
+   * `access: 'none'` (load-checked), so no lead or conductor can land on it. The service's `x0`, the
+   * transformer neutral at the pole. Absent: none.
+   */
+  readonly sealedTerminals?: readonly string[];
   /** Terminal families each entry numbers for itself (catalogue v3); absent: none, the terminals are exactly `terminals`. */
   readonly terminalFamilies?: readonly TerminalFamily[];
   /** Validates `model.params` of a catalogue entry (a strict object of numbers). */
@@ -926,6 +932,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     kind: 'service.splitPhase',
     placement: 'entity',
     terminals: ['l1', 'l2', 'n', 'x0'],
+    sealedTerminals: ['x0'],
     params: ServiceSplitPhaseParams,
     keys: {},
     description:

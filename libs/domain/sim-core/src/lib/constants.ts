@@ -147,7 +147,7 @@ export const SPLIT_PHASE_HALF_WINDING_R_FACTOR: SourcedConstant = {
   unit: '1',
   kind: 'real-world',
   source:
-    "real-world: published short-circuit calculation guides for single-phase centre-tapped distribution transformers (the point-to-point method's line-to-neutral multipliers for the 25–100 kVA class, paraphrased) take the half winding's resistance as 1.5 times the full winding's per-unit R on the 120 V base and its reactance as 1.2 times X, so a line-to-neutral bolted fault at the terminals is about 1.5 times the line-to-line one (1.58 for 2 % and X/R 2). Applied to every split-phase source (the utility stand-in, the service and, as a labelled abstraction, the generator stub). Pre-audit 2026-11-17; references in ADR 0021.",
+    "real-world: the half winding of a typical single-phase centre-tapped distribution transformer has 1.5 times the full winding's per-unit R and 1.2 times its per-unit X on the 120 V base, so a line-to-neutral bolted fault at the terminals is about 1.5 times the line-to-line one (1.58 for 2 % and X/R 2). Applied to every split-phase source (the utility stand-in, the service and, as a labelled abstraction, the generator stub). Pre-audit 2026-11-17 (Kersting's centre-tapped transformer approximation; reproduced from EPRI's published 25 kVA example; ADR 0021 reference notes).",
 };
 
 /** The half-winding reactance factor (engine 8): see {@link SPLIT_PHASE_HALF_WINDING_R_FACTOR}. */
@@ -156,5 +156,5 @@ export const SPLIT_PHASE_HALF_WINDING_X_FACTOR: SourcedConstant = {
   unit: '1',
   kind: 'real-world',
   source:
-    "real-world: the same short-circuit calculation guides' line-to-neutral reactance multiplier for 120/240 V centre-tapped transformers of the 25–100 kVA class: 1.2 times the full winding's per-unit X on the 120 V base (0.3 of the full winding's ohms). Pre-audit 2026-11-17; references in ADR 0021.",
+    "real-world: the line-to-neutral reactance factor of a typical single-phase centre-tapped distribution transformer: 1.2 times the full winding's per-unit X on the 120 V base (0.3 of the full winding's ohms). Pre-audit 2026-11-17 (Kersting's centre-tapped transformer approximation; reproduced from EPRI's published 25 kVA example; ADR 0021 reference notes).",
 };

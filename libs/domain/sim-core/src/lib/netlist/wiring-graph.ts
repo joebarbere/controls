@@ -13,12 +13,15 @@ import { UnionFind } from './union-find';
  * topology), every protective device intact whatever its handle or trip, every landed connection present
  * whatever its ends' sim state, every mount, plug and earth contact as the electrical netlist has them.
  * Then two terminals are **joined** when they are in one node, or in nodes linked by connections,
- * contacts and the elements of kinds marked `wiringPath` (a breaker's or fuse's line → load), never
- * through a load's or a source's element.
+ * mount and plug contacts, the elements of kinds marked `wiringPath` (a breaker's or fuse's line →
+ * load) and the parts a model lists in `wiringPathParts` (the service's drop neutral), never through a
+ * load's or a source's element, and **never through soil**: an `earth` contact joins nothing, so two
+ * ground rods with no conductor between them are not joined (a missing GEC or bonding jumper stays
+ * visible to the inspector). Whether a terminal reaches an electrode by wiring is `earthed`.
  *
- * Derived, never stored or hashed (ADR 0019 "Hash scope"); not on any per-tick path. The property that
- * ties it to `compileNetlist` (every pair of terminals in one electrical node, with switches closed,
- * is joined here) is in `wiring-graph.spec.ts`.
+ * Derived, never stored or hashed (ADR 0019 "Hash scope"); not on any per-tick path. The properties
+ * that tie it to `compileNetlist` (every pair of terminals in one electrical node, with switches
+ * closed, is joined here; unconnected rods are not) are in `contacts-properties.spec.ts`.
  */
 
 /** The wiring view of a world (see the file comment). */
@@ -31,6 +34,8 @@ export interface WiringGraph {
   component(node: number): number;
   /** Whether two terminals are joined by wiring (one node, or nodes linked by conductors, contacts and protective paths). */
   joined(a: TerminalRef, b: TerminalRef): boolean;
+  /** Whether a terminal's wiring component holds an earth link (a rod's clamp, the service's x0): it reaches an electrode by wiring. */
+  earthed(ref: TerminalRef): boolean;
 }
 
 export interface WiringGraphOptions {
@@ -49,7 +54,13 @@ export function wiringGraph(world: World, catalog: Catalog, options: WiringGraph
   const sets = new UnionFind(netlist.nodes.length);
   for (const branch of netlist.branches) {
     const element = branch.element;
-    const path = element.kind !== 'entity' || ownModel(models.devices, branch.model)?.wiringPath === true;
+    let path: boolean;
+    if (element.kind === 'connection') path = true;
+    else if (element.kind === 'contact') path = element.relation !== 'earth';
+    else {
+      const model = ownModel(models.devices, branch.model);
+      path = model?.wiringPath === true || model?.wiringPathParts?.includes(element.part) === true;
+    }
     if (path && branch.a !== branch.b) sets.union(branch.a, branch.b);
   }
   // Each component by its smallest node (union-find roots are arbitrary).
@@ -60,6 +71,11 @@ export function wiringGraph(world: World, catalog: Catalog, options: WiringGraph
   }
   const component = (node: number): number => smallest[sets.find(node)];
   const nodeOf = (ref: TerminalRef): number => nodeIndex.get(`${ref.entity}:${ref.terminal}`) ?? -1;
+  // The components that hold an earth link's device end (a rod's clamp, the service's x0).
+  const grounded = new Set<number>();
+  for (const branch of netlist.branches) {
+    if (branch.element.kind === 'contact' && branch.element.relation === 'earth') grounded.add(component(branch.a));
+  }
   return {
     netlist,
     nodeOf,
@@ -68,6 +84,10 @@ export function wiringGraph(world: World, catalog: Catalog, options: WiringGraph
       const na = nodeOf(a);
       const nb = nodeOf(b);
       return na >= 0 && nb >= 0 && component(na) === component(nb);
+    },
+    earthed: (ref) => {
+      const node = nodeOf(ref);
+      return node >= 0 && grounded.has(component(node));
     },
   };
 }

@@ -96,6 +96,8 @@ export function serviceDropOhm(params: ServiceSplitPhaseParams, areaM2: number):
 export const serviceSplitPhaseNetlistModel: DeviceNetlistModel = {
   kind: 'service.splitPhase',
   simTopologyKeys: [],
+  // The drop neutral is a conductor: the wiring graph joins x0 and n through it (never the windings).
+  wiringPathParts: ['dropN'],
   topology: ({ params }): DeviceTopology => {
     const p = params as ServiceSplitPhaseParams;
     return {

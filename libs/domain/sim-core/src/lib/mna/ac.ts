@@ -359,7 +359,13 @@ export class AcSolver {
             ? CLASS_SOURCE_COUPLED
             : CLASS_SOURCE;
     }
-    const ends = endsChecksum(netlist, island);
+    // Coupled sources (engine 8): the pattern also depends on which branch each one couples to, so fold
+    // each coupled branch's partner into the checksum a cached factorisation is checked against.
+    let ends = endsChecksum(netlist, island);
+    for (let i = 0; i < count; i++) {
+      const partner = values.partner[island.branches[i]];
+      if (signature[i] === CLASS_SOURCE_COUPLED) ends = (Math.imul(ends, 31) + partner + 1) | 0;
+    }
     const cached = this.cache.find(netlist.topologyHash, island.index, signature, count);
     if (cached !== undefined) {
       if (cached.unknowns !== n) {
@@ -369,7 +375,7 @@ export class AcSolver {
       }
       if (cached.ends !== ends) {
         throw new Error(
-          `AcSolver: island ${island.index}'s branch ends differ from its cached symbolic factorisation: a stale or mismatched topologyHash ${netlist.topologyHash}`,
+          `AcSolver: island ${island.index}'s branch ends or source couplings differ from its cached symbolic factorisation: a stale or mismatched topologyHash ${netlist.topologyHash}`,
         );
       }
       return cached;

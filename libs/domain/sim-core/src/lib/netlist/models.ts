@@ -101,6 +101,11 @@ export interface DeviceNetlistModel {
    * line → load), rather than as loads or sources it never crosses. Absent: no.
    */
   readonly wiringPath?: boolean;
+  /**
+   * The parts `wiringGraph` follows as conductive paths when the kind's other elements aren't (the
+   * service's drop neutral `dropN`, a conductor inside a source). Absent: none.
+   */
+  readonly wiringPathParts?: readonly string[];
 }
 
 /**

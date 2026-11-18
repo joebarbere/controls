@@ -21,6 +21,8 @@ import {
   STAB_OHM,
 } from '../../testing/residential';
 import { UTILITY_SPLIT } from '../../testing/sources';
+import { LEAD } from '../../testing/bench';
+import { wiringGraph } from './wiring-graph';
 import { compileNetlist, NetlistCompiler } from './compile';
 import { formatNetlist } from './format';
 import { computeTopologyHash, topologyBytes } from './hash';
@@ -243,6 +245,31 @@ describe('remote earth (D5, ADR 0019 6)', () => {
     expect(withEarth.nodes.slice(1, 4).map((n) => n.members)).toStrictEqual(without.nodes.map((n) => n.members));
     exec(bus, 'entity.delete', { id: rod });
     expect(compile(bus.state)).toStrictEqual(without);
+  });
+});
+
+describe('wiringGraph and earth (ADR 0021 §6)', () => {
+  it('never joins through soil: two rods with no conductor are each earthed, not joined', () => {
+    const bus = residentialBus();
+    const a = place(bus, ROD, at(0, 0, 1000));
+    const b = place(bus, ROD, at(0, 0, 2000));
+    const service = place(bus, SERVICE, at(0, 0, 3000));
+    const graph = wiringGraph(bus.state, RESIDENTIAL_TEST_CATALOG, { models: RESIDENTIAL_TEST_MODELS });
+    const clamp = (id: number) => ({ entity: id, terminal: 'clamp' });
+    expect(graph.joined(clamp(a), clamp(b))).toBe(false);
+    expect(graph.joined(clamp(a), { entity: service, terminal: 'x0' })).toBe(false);
+    expect(graph.joined(clamp(a), { entity: EARTH_ENTITY, terminal: EARTH_TERMINAL })).toBe(false);
+    expect([graph.earthed(clamp(a)), graph.earthed(clamp(b))]).toStrictEqual([true, true]);
+    // The service's drop neutral is a conductor (x0 to n, so n is earthed); its windings are not paths.
+    expect(graph.joined({ entity: service, terminal: 'x0' }, { entity: service, terminal: 'n' })).toBe(true);
+    expect(graph.earthed({ entity: service, terminal: 'n' })).toBe(true);
+    expect(graph.joined({ entity: service, terminal: 'n' }, { entity: service, terminal: 'l1' })).toBe(false);
+    expect(graph.earthed({ entity: service, terminal: 'l1' })).toBe(false);
+    // A GEC (a lead here) from the service neutral to rod a joins them; rod b stays apart.
+    exec(bus, 'lead.connect', { ref: LEAD, a: { entity: service, terminal: 'n' }, b: clamp(a) });
+    const wired = wiringGraph(bus.state, RESIDENTIAL_TEST_CATALOG, { models: RESIDENTIAL_TEST_MODELS });
+    expect(wired.joined(clamp(a), { entity: service, terminal: 'x0' })).toBe(true);
+    expect(wired.joined(clamp(a), clamp(b))).toBe(false);
   });
 });
 

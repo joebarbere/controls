@@ -32,7 +32,8 @@ import { wiringGraph } from './wiring-graph';
  * - permuting the world's entities and connections gives an identical netlist;
  * - `topologyHash` is the hash of the netlist's own nodes and branches;
  * - `wiringGraph` agrees with the compiler: every two terminals in one electrical node are joined in
- *   the wiring graph, and so are both ends of every connection and contact branch.
+ *   the wiring graph, and so are both ends of every connection, mount and plug contact; never through
+ *   soil (an earth contact joins nothing: two unconnected rods are not joined) and never through a load;
  *
  * The generator-health test pins floors on how often runs mount, plug and reach earth.
  */
@@ -211,7 +212,7 @@ describe('residential netlist properties (engine 8 part 1)', () => {
     );
   });
 
-  it('wiringGraph joins every pair the compiler puts in one node, and both ends of every connection and contact', () => {
+  it('wiringGraph joins every pair the compiler puts in one node and both ends of every conductor and contact, never through soil', () => {
     fc.assert(
       fc.property(runArb, (steps) => {
         const bus = start();
@@ -221,15 +222,31 @@ describe('residential netlist properties (engine 8 part 1)', () => {
         for (const node of netlist.nodes) {
           for (const member of node.members) expect(graph.joined(node.members[0], member)).toBe(true);
         }
+        const end = (node: number) => netlist.nodes[node].members[0];
         for (const branch of netlist.branches) {
-          if (
-            branch.element.kind === 'entity' &&
-            branch.model !== 'test.plugOn1p' &&
-            branch.model !== 'test.plugOn2p'
-          ) {
+          const element = branch.element;
+          if (element.kind === 'contact' && element.relation === 'earth') {
+            // An earth link joins nothing, but its device end is earthed.
+            expect(graph.earthed(end(branch.a))).toBe(true);
             continue;
           }
-          expect(graph.joined(netlist.nodes[branch.a].members[0], netlist.nodes[branch.b].members[0])).toBe(true);
+          const path =
+            element.kind !== 'entity' ||
+            branch.model === 'test.plugOn1p' ||
+            branch.model === 'test.plugOn2p' ||
+            (branch.model === 'service.splitPhase' && element.part === 'dropN');
+          if (path) expect(graph.joined(end(branch.a), end(branch.b))).toBe(true);
+        }
+        // Never through soil: a rod with nothing landed on it is joined to nothing but itself.
+        const wired = (id: number) => bus.state.connections.some((c) => [c.a, c.b].some((e) => e?.entity === id));
+        const rods = of(bus.state, [ROD]);
+        for (const rod of rods) {
+          const clamp = { entity: rod.id, terminal: 'clamp' };
+          expect(graph.earthed(clamp)).toBe(true);
+          if (wired(rod.id)) continue;
+          for (const other of netlist.nodes.flatMap((n) => n.members)) {
+            if (other.entity !== rod.id) expect(graph.joined(clamp, other)).toBe(false);
+          }
         }
         // Never through a load: an appliance's element alone joins nothing.
         for (const appliance of of(bus.state, [APPLIANCE_12R, LAMP_PLUG])) {
@@ -243,6 +260,36 @@ describe('residential netlist properties (engine 8 part 1)', () => {
       }),
       { numRuns: 60 },
     );
+  });
+
+  it('the open-toggle path (reassemble) equals a full compile with contacts and earth, hash and diagnostics included', () => {
+    const masks = fc.array(fc.array(fc.boolean(), { minLength: 24, maxLength: 24 }), { minLength: 2, maxLength: 8 });
+    let toggled = 0;
+    fc.assert(
+      fc.property(runArb, masks, (steps, opens) => {
+        const bus = start();
+        for (const [op] of steps) apply(bus, op);
+        const world = bus.state;
+        const compiler = new NetlistCompiler(RESIDENTIAL_TEST_CATALOG, { models: RESIDENTIAL_TEST_MODELS });
+        compiler.compile(world);
+        const ids = [...world.connections].map((c) => c.id).sort((x, y) => x - y);
+        for (const mask of opens) {
+          const open = new Set(ids.filter((_, i) => mask[i % mask.length]));
+          const options = {
+            connectionSim: (id: number) => (open.has(id) ? { endAState: 'intermittentOpen' } : undefined),
+          };
+          const before = compiler.stats.structural;
+          const got = compiler.compile(world, options);
+          if (compiler.stats.structural > before) toggled++;
+          const want = compileNetlist(world, RESIDENTIAL_TEST_CATALOG, { models: RESIDENTIAL_TEST_MODELS, ...options });
+          expect(got).toStrictEqual(want);
+          expect(got.topologyHash).toBe(computeTopologyHash(got.nodes, got.branches));
+        }
+      }),
+      { numRuns: 60 },
+    );
+    // Not vacuous: the toggle path re-assembled many times.
+    expect(toggled).toBeGreaterThan(30);
   });
 
   it('generator health: runs mount, slide, plug and reach earth often enough (fixed seed)', () => {

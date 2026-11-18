@@ -32,12 +32,12 @@ export { ROD, ROD_OHM, SERVICE, SERVICE_PARAMS } from './engine';
  *   face's slots, one 5-15R outlet `face` (3 mΩ per pin contact).
  * - `test.appliance` (`APPLIANCE_12R`, `LAMP_PLUG`): a 5-15P (or two-blade 1-15P) appliance whose element
  *   is 12 Ω between its hot and neutral pins.
- * - `SERVICE` (`service.splitPhase`, in the engine test catalogue, `engine.ts`): 25 kVA, 2 %, X/R 2, 120/240 V, a 30 m drop of 33.62 mm² aluminium
+ * - `SERVICE` (`service.splitPhase`, in the engine test catalogue, `engine.ts`): 25 kVA, 2 %, X/R 2, 120/240 V, a 30 m drop of 33.631 mm² aluminium
  *   lines and a 21.15 mm² neutral (2 AWG and 4 AWG areas, NBS Handbook 100's AWG geometry), aluminium
  *   at 2.8264e-8 Ω·m and α 0.00403 /K at 20 °C (61 % IACS conductivity, the published 1350 alloy
  *   figure), utility grounding 5 Ω (the plan's vetted game-design value inside 1–25 Ω).
  * - `ROD` (`electrode.groundRod`, likewise): 39.90 Ω, the pre-audit's 8 ft × 5/8 in rod at 100 Ω·m by Dwight's
- *   formula with the radius (recomputed in `earth.spec.ts`).
+ *   formula with the radius (recomputed in `service.spec.ts`).
  */
 
 export const PANEL = { id: 'panel.test-residential', version: 1 };

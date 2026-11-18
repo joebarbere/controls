@@ -21,7 +21,7 @@ import { serviceDropOhm } from './netlist-models';
 /*
  * The utility service and remote earth (engine 8 part 1, D4 and D5, ADR 0021), headless, on the
  * TEST-ONLY residential catalogue's 25 kVA service (`SERVICE_PARAMS`): 2 %, X/R 2, 120/240 V; a 30 m
- * aluminium drop (33.62 mm² lines, 21.15 mm² neutral, 2.8264e-8 Ω·m at 20 °C); utility grounding 5 Ω;
+ * aluminium drop (33.631 mm² lines, 21.15 mm² neutral, 2.8264e-8 Ω·m at 20 °C); utility grounding 5 Ω;
  * ground rods of 39.9 Ω.
  *
  * Hand calculations (complex phasors; every value from the parameters, never from the engine):
@@ -29,18 +29,24 @@ import { serviceDropOhm } from './netlist-models';
  * - the transformer's T-equivalent (`ac-source.spec.ts`): Z_full / 2 = 10.30380 + j20.60760 mΩ per line
  *   arm, Z_LN = 7.72785 + j12.36456 mΩ, Z_n = −2.57595 − j8.24304 mΩ;
  * - the drop at 20 °C (the reference temperature, so α plays no part):
- *   R_L = 2.8264e-8 × 30 / 3.362e-5 = 25.2207 mΩ per line, R_N = 2.8264e-8 × 30 / 2.115e-5 = 40.0907 mΩ;
+ *   R_L = 2.8264e-8 × 30 / 3.3631e-5 = 25.2125 mΩ per line, R_N = 2.8264e-8 × 30 / 2.115e-5 = 40.0907 mΩ;
  * - a bolted L1–N fault at the meter base's lugs: I = 120 / |Z_LN + R_L + R_N|
- *   = 120 / |73.0393 + j12.3646 mΩ| = 120 / 74.0785 mΩ = 1619.9 A;
- * - a bolted L1–L2 fault there: I = 240 / |Z_full + 2 R_L| = 240 / |71.0490 + j41.2152 mΩ|
- *   = 240 / 82.1380 mΩ = 2921.9 A;
+ *   = 120 / |73.0311 + j12.3646 mΩ| = 120 / 74.0704 mΩ = 1620.08 A;
+ * - a bolted L1–L2 fault there: I = 240 / |Z_full + 2 R_L| = 240 / |71.0325 + j41.2152 mΩ|
+ *   = 240 / 82.1238 mΩ = 2922.42 A;
  * - **the earth path** (the plan's `earth-path` teaching point, Art. 250.4(A)(5) by number): L1 faulted
  *   into a separate rod (R_rod 39.9 Ω) returns through remote earth to the transformer neutral x0 by two
  *   parallel paths, the utility's grounding (5 Ω) and the service's own rod (39.9 Ω) through the GEC,
  *   the bonding jumper's two contacts (2 mΩ each), the neutral lead and the drop neutral:
- *   R_ret = 5 ∥ (39.9 + 2 × 0.002 + R_N + 3 R_bb) = 4.44446 Ω, so
- *   I = 120 / |Z_LN + R_L + R_bb + 39.9 + R_ret| ≈ 120 / 44.3778 Ω = 2.7041 A, which trips nothing
- *   (≈ 2.70 A in the plan, at 40 Ω, 5 Ω and 40 Ω). R_bb is the test busbar link, 17 nΩ.
+ *   R_ret = 5 ∥ (39.9 + 2 × 0.002 + R_N + 2 R_bb) = 4.44375 Ω, so
+ *   I = 120 / |Z_LN + R_L + R_bb + 39.9 + R_ret| ≈ 120 / 44.3767 Ω = 2.70412 A, which trips nothing
+ *   (≈ 2.70 A in the plan, at 40 Ω, 5 Ω and 40 Ω). R_bb is the test busbar link, 17 nΩ;
+ * - a fault into the **service's own** rod: from its clamp the metallic return (the GEC, the bond's two
+ *   contacts, the neutral lead and the drop neutral, R_metal = 2 R_bond + R_N + 2 R_bb = 44.09 mΩ) is
+ *   in parallel with the rod and the utility's grounding through earth (39.9 + 5 = 44.9 Ω), so
+ *   I = 120 / |Z_LN + R_L + R_bb + (R_metal ∥ 44.9 Ω)| = 1538.97 A, about 1.54 kA;
+ * - without the bonding jumper the service rod is in series with earth:
+ *   I = 120 / |Z_LN + R_L + R_bb + 39.9 + 5| = 2.67065 A.
  */
 
 const p = SERVICE_PARAMS as ServiceSplitPhaseParams;
@@ -53,7 +59,7 @@ const parallel = (a: number, b: number) => (a * b) / (a + b);
 const T = splitPhaseTEquivalent(p, 60);
 const Z_LN: Complex = [T.lineToNeutral.ohms, T.lineToNeutral.henries * OMEGA];
 const Z_FULL: Complex = [2 * T.line.ohms, 2 * T.line.henries * OMEGA];
-const R_L = (2.8264e-8 * 30) / 3.362e-5;
+const R_L = (2.8264e-8 * 30) / 3.3631e-5;
 const R_N = (2.8264e-8 * 30) / 2.115e-5;
 const R_BB = leadResistanceOhm(
   RESIDENTIAL_TEST_CATALOG.device(BUSBAR)?.model.params as LeadParams,
@@ -86,7 +92,7 @@ const contact = (entity: number, name: string) => (b: NetlistBranch) =>
 describe('the service drop (ρL/A, never a table)', () => {
   it('derives each conductor from resistivity × length ÷ area at the 20 °C ambient', () => {
     expect(AMBIENT_TEMPERATURE_K.value).toBe(p.dropReferenceTemperatureK);
-    near(serviceDropOhm(p, p.dropLineAreaM2), 0.0252207, 1e-5);
+    near(serviceDropOhm(p, p.dropLineAreaM2), 0.0252125, 1e-5);
     near(serviceDropOhm(p, p.dropNeutralAreaM2), 0.0400907, 1e-5);
     expect(serviceDropOhm(p, p.dropLineAreaM2)).toBeCloseTo(R_L, 15);
     // At 75 °C the coefficient applies: R(T) = R₀ (1 + α ΔT).
@@ -96,19 +102,19 @@ describe('the service drop (ρL/A, never a table)', () => {
 });
 
 describe('the service in the engine (hand calculations within 0.5 %)', () => {
-  it('a bolted L1–N fault at the meter base draws 120 / |Z_LN + R_L + R_N| (1619.9 A)', () => {
+  it('a bolted L1–N fault at the meter base draws 120 / |Z_LN + R_L + R_N| (1620.08 A)', () => {
     const want = 120 / abs(add(Z_LN, [R_L + R_N + R_BB, 0]));
-    near(want, 1619.9, 1e-4);
+    near(want, 1620.08, 1e-4);
     const h = host();
     const service = place(h, SERVICE);
     busbar(h, service, 'l1', service, 'n');
     near(abs(current(h, connection(1))), want, 1e-6);
-    near(abs(current(h, connection(1))), 1619.9, 0.005);
+    near(abs(current(h, connection(1))), 1620.08, 0.005);
   });
 
-  it('a bolted L1–L2 fault draws 240 / |Z_full + 2 R_L| (2921.9 A)', () => {
+  it('a bolted L1–L2 fault draws 240 / |Z_full + 2 R_L| (2922.42 A)', () => {
     const want = 240 / abs(add(Z_FULL, [2 * R_L + R_BB, 0]));
-    near(want, 2921.9, 1e-4);
+    near(want, 2922.42, 1e-4);
     const h = host();
     const service = place(h, SERVICE);
     busbar(h, service, 'l1', service, 'l2');
@@ -143,22 +149,25 @@ describe('remote earth (D5): the earth path', () => {
     busbar(h, service, 'l1', other, 'clamp'); // connection 3: the fault
     const returnOhm = parallel(p.utilityGroundingOhm, ROD_OHM + R_BB + 2 * BOND_OHM + R_BB + R_N);
     const want = 120 / abs(add(Z_LN, [R_L + R_BB + ROD_OHM + returnOhm, 0]));
-    near(want, 2.7041, 1e-4);
+    near(want, 2.70412, 1e-4);
     near(abs(current(h, connection(3))), want, 1e-6);
-    near(abs(current(h, connection(3))), 2.7041, 0.005);
+    near(abs(current(h, connection(3))), 2.70412, 0.005);
     // The fault current enters the far rod and splits at earth by the current divider.
     near(abs(current(h, contact(other, 'electrode'))), want, 1e-6);
     const viaUtility = abs(current(h, contact(service, 'grounding')));
     const viaRod = abs(current(h, contact(rod, 'electrode')));
     near(viaUtility + viaRod, want, 1e-6);
-    near(viaRod / viaUtility, p.utilityGroundingOhm / (ROD_OHM + 3 * R_BB + 2 * BOND_OHM + R_N), 1e-6);
+    near(viaRod / viaUtility, p.utilityGroundingOhm / (ROD_OHM + 2 * R_BB + 2 * BOND_OHM + R_N), 1e-6);
   });
 
-  it('a fault into the service rod returns through the GEC and the bond: a fault current, not 2.7 A', () => {
+  it('a fault into the service rod returns through the GEC and the bond: a fault current (1.54 kA), not 2.7 A', () => {
     const { h, service, rod, mbj } = bonded();
     busbar(h, service, 'l1', rod, 'clamp');
     const fault = abs(current(h, connection(3)));
-    expect(fault).toBeGreaterThan(1000);
+    const metal = 2 * BOND_OHM + R_N + 2 * R_BB;
+    const want = 120 / abs(add(Z_LN, [R_L + R_BB + parallel(metal, ROD_OHM + p.utilityGroundingOhm), 0]));
+    near(want, 1538.97, 1e-4);
+    near(fault, want, 0.005);
     near(abs(current(h, contact(mbj, 'neutral'))), fault, 0.01);
     expect(abs(current(h, contact(rod, 'electrode')))).toBeLessThan(0.01 * fault);
   });
@@ -173,7 +182,7 @@ describe('remote earth (D5): the earth path', () => {
     busbar(h, service, 'l1', rod, 'clamp'); // the fault into the service rod, no MBJ
     const want = 120 / abs(add(Z_LN, [R_L + R_BB + ROD_OHM + p.utilityGroundingOhm, 0]));
     near(abs(current(h, connection(3))), want, 1e-6);
-    near(want, 2.6713, 1e-3);
+    near(want, 2.67065, 1e-4);
   });
 
   it('the earth node survives a save and load, and the replayed world solves bit for bit', () => {

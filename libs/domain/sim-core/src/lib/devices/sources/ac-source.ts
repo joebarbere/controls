@@ -34,7 +34,8 @@ import { angularFrequency, type PhasorAngle } from '../../mna/phasor';
  *   part [[R_h + R_n, R_n], [R_n, R_h + R_n]] is positive definite (eigenvalues R_h and R_h + 2 R_n).
  *   A bolted L1–N fault then draws V_LN / |Z_LN| and an L1–L2 fault V_LL / |Z_full|, about 1.58 : 1
  *   (8230 A and 5208 A on the 25 kVA unit; 1.5 is the rule of thumb). L1 at 0°, L2 at 180°. The
- *   factors are for the 25–100 kVA class of centre-tapped distribution transformers; applying them to
+ *   factors are for typical single-phase centre-tapped distribution transformers (Kersting's
+ *   approximation, ADR 0021 reference notes); applying them to
  *   the generator stub is a labelled abstraction (its alternator has no centre-tapped winding of that
  *   construction). The terminals' structure is unchanged, so no `topologyHash` moves.
  * - The EMF is the open-circuit (no-load) voltage: the source impedance alone gives the voltage drop
