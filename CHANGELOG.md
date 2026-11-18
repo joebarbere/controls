@@ -8,6 +8,48 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **World document v4 and `schemaVersion` 4** (P4 PR 7, decision D1; [ADR 0019](docs/decisions/0019-world-document-v4.md), [save-format caveats](docs/caveats/save-format.md#world-v4-p4-pr-7-adr-0019)), provisional until 0.5.0. A save can now hold what the house needs: an appliance's cord plug in a receptacle outlet (`EntityV4.pluggedInto: { entity, outlet } | null`, a relation, not a transform), re-identification tape at each conductor end (`ConnectionV4.marking: { a, b }`, colour-table ids), level areas the inspector will read (`WorldV4.areas`: sorted, non-empty half-open boxes in integer mm with a use from `AREA_USES`, at most 256), and an incandescent lamp's two new sim keys (`burnedOut`, `overvoltageSinceTick`). The commands that set them arrive in PR 8, the engine that reads them in PR 9.
+  - **Migration:** a total, pure v3 → v4 step (`v4/from-v3.ts`): no areas, every entity unplugged, every connection untaped, and the shipped lamps (`LAMP_INCANDESCENT_REFS_V3`, a frozen list tested against 0.4.0's frozen catalogue) gain `burnedOut: false` and `overvoltageSinceTick: null`; replay-log entries are copied verbatim. Every v1, v2 and v3 fixture migrates and validates; 0.4.0's saves still load as `engine-changed`, never refused.
+  - **Schema rules** (each with a refused fixture under `fixtures/v4/refused/world/`): a plug names another entity that exists, one plug per outlet, never with `mountedOn` or `inEntry`; mounts, entries and plugs form no cycle (one walk and one message, replacing v3's two); a lead carries no tape; area ids are sorted, never a fixture id, with non-empty boxes.
+  - **Load checks** (`checkWorldReferences`): a stored plug passes the new shared `checkPlugInsert` (the appliance has a plug, the receptacle that outlet, `nemaMates`, quarter-turns, the cord reaches in exact integers); tape is in the colour table and never `bare`; area uses are in `AREA_USES`; a panel's `directory<n>` keys above its `spaces` are `null`; `mountedOn` resolves through `offeredMounts`, so a lampholder's `hostMounts` can hold a bulb. Counters are checked by their key schema as before.
+  - **Interim guards in the P3 entity commands:** a plugged entity can't move or turn (`plugged`) and a receptacle holding a plug is `occupied`; deleting a plugged appliance takes its plug with it. PR 8 makes deleting a receptacle unplug what it holds.
+  - **The catalogue** re-exports `OutletId` and `AreaUseId` from `@controls/save-format` (its own copies are gone; `device.v3.schema.json` is unchanged), and `lamp.incandescent` gains its two sim keys (`device-state.lamp.incandescent.schema.json` regenerated). Engine 7 carries them through as saved: no engine version, `topologyHash` or snapshot hash moved.
+  - **Fixtures and JSON Schema:** `fixtures/v4/{world,manifest,replay-log,ctrl,refused}`: the v3 documents migrated; `house-relations.json` (and `house-relations.ctrl`) with plugs, tape and areas; `protection-state.json` with a tripped GFCI receptacle, a GFCI breaker past its integral but inside its mechanism time, a part-heated breaker inside its opening window, a tripped AFCI, a filled panel directory and a burned-out lamp, under fixture-only refs and provisional keys until ADR 0021. The twelve `-engine-7-catalog-3.ctrl` saves are now written as v4; the v3 ones from the catalogue v3 PR are kept, never regenerated, and migrate to them exactly. `world.v4`, `manifest.v4` and `replay-log.v4.schema.json` are new; the workshop level is rewritten as v4. The `.ctrl` container golden moved once with its sample documents (`cbc85866…1d7c` → `6d8e771c…22ba`).
+  - **Every pinned world hash moved once** (every world gains `"areas":[]`, `"pluggedInto":null` per entity, `"marking":{"a":null,"b":null}` per connection and the lamps' two keys; ADR 0019 "Hash scope"). No snapshot or topology hash moved. Old → new:
+
+  | Pin                                                                | Old                 | New                 |
+  | ------------------------------------------------------------------ | ------------------- | ------------------- |
+  | world-model `GOLDEN.emptySeed0` (Node, Chromium)                   | `45cb3d32…8e6c9fdc` | `8b28cd0b…bb049e3b` |
+  | world-model `GOLDEN.propsAndExtensionsFixture` (Node, Chromium)    | `7284d19d…211bad6d` | `97bf8bac…ac47ea4d` |
+  | world-model `GOLDEN.scenario` (Node, Chromium)                     | `52f3577d…bcc73e93` | `4a295adc…3f27c439` |
+  | `WORKSHOP_HASH`, `GOLDEN.workshopSeed0`, `CONSOLE_PLACE_UNDO_HASH` | `dffa0c29…5c60a969` | `89152b3a…a79b000f` |
+  | `PALETTE_PLACE_UNDO_HASH`                                          | `573a33a9…790ea88b` | `e89fd4ed…809fc8cc` |
+  | `MOUSE_PLACE_MOVE_DELETE_HASH` (`MOUSE_HASH` in the e2e)           | `6c369870…9be52936` | `621cfdda…1183d550` |
+  | `FOUR_SURFACE_HASH`                                                | `c56fb0a8…e8738491` | `1585900a…a44fb16d` |
+  | `PHASE_ACCEPTANCE_HASH`                                            | `60726d27…89107ab8` | `bb5fe5ef…38811995` |
+  | `BENCH_LEADS_HASH`                                                 | `e4aa3771…69330d37` | `116c53b7…0229588d` |
+  | bench-leads `ENGINE_3_HASH`                                        | `5d8ac8b0…3a73ee7a` | `f1f41d23…a212a4fd` |
+  | bench-leads `ENGINE_1_HASH`                                        | `68e0ba45…f2f2f574` | `7bcc776d…c097e1a4` |
+  | `SIM_STEP_HASH`                                                    | `aa47983d…bd930253` | `fd82e0a5…5c711c98` |
+  | sim-step `ENGINE_3_HASH`                                           | `8c62bc4a…7572659a` | `b4a179eb…5bb78605` |
+  | sim-step `ENGINE_4_HASH`                                           | `7bf02b74…35c3f2a8` | `83785838…a3c812ae` |
+  | `SOURCES_HASH`                                                     | `58be51c3…be1eea2b` | `9175709a…24a11b16` |
+  | `MAINS_HASH`                                                       | `7e85756b…5cd9e173` | `24ffa339…1ada8853` |
+  | `BENCH_LAMP_LIT_HASH`                                              | `5c4941c0…c544fc67` | `aa1a6b79…754ac9af` |
+  | `BENCH_LAMP_HASH`                                                  | `b2871e6d…48d7d4ba` | `45aebef1…c2107c04` |
+  | `PROTECTION_HASH`                                                  | `2635ccff…f91643eb` | `1f57f7ed…5e0f445d` |
+  | `DIN_PANEL_BREAKER_HASH`                                           | `1a66183a…af344404` | `a2e7b4ef…a97d7822` |
+  | `RACEWAY_PANEL_HASH`                                               | `7a83af95…92d097f5` | `0a4649db…71e9e52c` |
+  | `DRILL_AND_PULL_HASH`                                              | `d02e5bec…6b6ee04d` | `68341a59…c91bce37` |
+  | `NM_CABLE_RUN_HASH`                                                | `b49c8916…dc97dfad` | `f4460ea0…4f99ffdd` |
+  | `FUSED_LEAD_HASH`                                                  | `a28eea59…c7e92705` | `5b512ec2…df9af65d` |
+  | `FUSED_CONDUCTOR_HASH`                                             | `e2aed0b0…422c64e7` | `14dd52d6…235b432e` |
+  | `LAMP_CIRCUIT_LIT_HASH` (`acceptance-hashes.json`)                 | `ffe1dc35…49982f08` | `a415511d…1f70cac0` |
+  | `LAMP_CIRCUIT_HASH` (`acceptance-hashes.json`)                     | `a3b98b17…05b49c48` | `7c783759…6edc57b0` |
+  | `BAD_TERMINATION_HASH` (`acceptance-hashes.json`)                  | `53c82221…f97d2de5` | `c5cdc737…fa0ad6fb` |
+  | scripting-api `wiring.spec.ts` `HASH`                              | `8b8adc0d…6daf5773` | `efcd0fc4…be7ff5bb` |
+  | scripting-api `routing.spec.ts` `HASH`                             | `38e77ea6…60798807` | `de210ce5…ecb90eac` |
+
 - **Catalogue format v3 and `catalogVersion` 3** (P4 PR 6, decision D2; [ADR 0020](docs/decisions/0020-catalogue-format-v3.md), [authoring guide](docs/guides/authoring-content.md#catalogue-v3-p4s-devices-adr-0020)), provisional until 0.5.0. The catalogue can now describe P4's house: what a terminal is for (`role`, `side`) and what reaches it (`access`); a two-conductor size cap per termination method; the contacts a mounted device makes with its host (a breaker on a bus stab, a bulb in an E26 socket, a yoke on a metal box) and a bus's stab pitch and leg pattern; a box's marked volume and material and a load centre's panel spaces; receptacle outlets and appliance plugs over a NEMA configuration registry (which plug enters which receptacle); `supersededBy`; label-text and press-counter state keys and momentary buttons; the append-only area uses; and the GFCI (UL 943 Class A) and AFCI (UL 1699) limits in the NEC region, cited by number. Inspector rule sets are a new mirrored family, `content/rules/`, seeded with `nec.v1.json` (articles by number and our own paraphrases, NFPA 70-2023). The 4 mm² screw terminal block gains a version 2 that takes two conductors only of equal size up to 16 AWG, as the product class does; version 1 is unchanged for old saves. Saves from 0.4.0 (catalogue 2) load as `engine-changed`, never refused; no world hash moved.
 - Developer (P4 kickoff step 4, the boundary and gate PR; [workspace caveats](docs/caveats/workspace.md)):
   - `libs/domain/inspector` (`@controls/inspector`, `type:domain`): the inspector's library (decision D13), scaffolding only until F4.5 part 1, with a placeholder export and a test. Probes in `apps/sim-cli/src/lint-boundary.spec.ts` prove it may import `catalog`, `save-format`, `world-model` and `sim-core`, is refused feature, UI, rendering, platform and worker libs and Angular, RxJS, Electron, three and jsdom, and that features and UI may import it.
