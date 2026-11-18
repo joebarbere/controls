@@ -283,6 +283,10 @@ const KIND_CODES: Readonly<Record<IslandKind, number>> = {
 };
 
 const terminalKey = (ref: TerminalRef): string => `${ref.entity}:${ref.terminal}`;
+
+/** A typed `emit`'s detail argument as the event's detail record (`{}` for a kind with none). */
+const detailOf = (args: readonly unknown[]): Readonly<Record<string, number | string | boolean>> =>
+  (args[0] ?? {}) as Readonly<Record<string, number | string | boolean>>;
 /** An element as `netlist.dump` names it: `e3.filament`, `c2`, `e5:mount.line1` (`hash.ts`'s `elementKey`). */
 const elementKey = (ref: ElementRef): string => netlistElementKey(ref);
 
@@ -488,7 +492,7 @@ export class SimEngine {
       solution: this.solution,
       islandReadable: (island) => this.readable(island),
       islandStatus: (island) => this.status(island),
-      emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.ctx.tick + 1),
+      emit: (kind, entity, ...detail) => this.emit(kind, entity, [], detailOf(detail), this.ctx.tick + 1),
       arcingCount: () => this.arcingCountAt(this.ctx.tick),
       arcingBranch: (k) => this.arcing[k],
     };
@@ -497,7 +501,7 @@ export class SimEngine {
       netlist: this.current,
       solution: this.solution,
       islandReadable: (island) => this.readable(island),
-      emit: (kind, entity, detail = {}) => this.emit(kind, entity, [], detail, this.commandedCtx.tick),
+      emit: (kind, entity, ...detail) => this.emit(kind, entity, [], detailOf(detail), this.commandedCtx.tick),
     };
     this.rebuild();
     this.syncConnections();

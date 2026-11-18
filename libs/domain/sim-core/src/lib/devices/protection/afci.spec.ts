@@ -1,16 +1,12 @@
 import { replayEntries } from '@controls/commands';
 import { BUILTIN_CATALOG, NEC_REGION } from '@controls/catalog';
-import { LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 import { deriveStream, entityPurposeStreamKey, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
-import { engineBus, engineTestOptions, ENGINE_TEST_CATALOG, RHEOSTAT } from '../../../testing/engine';
-import { AFCI_15 } from '../../../testing/plug-on';
-import { SourceHost, UTILITY_SPLIT } from '../../../testing/sources';
-import { LEAD_REF, NUT_REF, THHN_14 } from '../../../testing/wired-loop';
-import { AMBIENT_TEMPERATURE_K } from '../../constants';
-import { compileNetlist } from '../../netlist/compile';
+import { SourceHost } from '../../../testing/sources';
+import { LEAD_REF, NUT_REF } from '../../../testing/wired-loop';
 import { afciBucket, afciDetectionBuckets, afciDraw, afciLimitS, afciLimitValues } from './afci';
 import { AFCI_QUIET_RESET_TICKS } from './constants';
+import { type AfciWhere, afciHost, afciMadeOhm } from '../../../testing/afci';
 
 /*
  * The combination AFCI (P4 D8, ADR 0021 part 2). Hand calculations:
@@ -137,113 +133,9 @@ describe('the probabilistic trip (D8): within the limit for every seed (property
 });
 
 describe('the AFCI breaker in a circuit (arcing ends from ADR 0018)', () => {
-  type Where = 'downstream' | 'upstream';
-  const termination = (id: number) => ({
-    id,
-    method: 'twistOn',
-    auto: false,
-    stripLengthMm: 13,
-    nickedStrandFraction: 0,
-    torqueNm: null,
-    accessory: null,
-  });
-
-  /** The circuit above with the conductor's end A at degradation `d`, at `ohms`. */
-  function afciWorld(where: Where, d: number, seed: number, ohms = 12): World {
-    const entity = (id: number, ref: { id: string; version: number }, state: Record<string, unknown> = {}) => ({
-      id,
-      ref,
-      transform: { positionMm: { x: 0, y: 0, z: 0 }, orientationMdeg: { yaw: 0, pitch: 0, roll: 0 } },
-      state,
-      sim: {},
-      mountedOn: null,
-      inEntry: null,
-      pluggedInto: null,
-      label: null,
-      extensions: {},
-    });
-    const base = { cable: null, label: null, state: {}, extensions: {}, marking: { a: null, b: null } };
-    const lead = (id: number, a: [number, string], b: [number, string]) => ({
-      ...base,
-      sim: { ...LEAD_SIM_BAG_V3 },
-      id,
-      ref: LEAD_REF,
-      a: { entity: a[0], terminal: a[1], termination: null },
-      b: { entity: b[0], terminal: b[1], termination: null },
-      route: null,
-      lengthMm: null,
-      colour: null,
-    });
-    const conductor = (id: number, from: number, to: number) => ({
-      ...base,
-      sim: { ...LEAD_SIM_BAG_V3, fused: false, endADegradation: d, endATerminationId: 1, endBTerminationId: 2 },
-      id,
-      ref: THHN_14,
-      a: { entity: from, terminal: 'splice', termination: termination(1) },
-      b: { entity: to, terminal: 'splice', termination: termination(2) },
-      route: [{ kind: 'free', positionMm: { x: 0, y: 300, z: 0 }, entity: null, fixture: null, tool: null }],
-      lengthMm: 1500,
-      colour: { base: 'black', stripe: null },
-    });
-    const connections =
-      where === 'downstream'
-        ? [
-            lead(1, [1, 'l1'], [2, 'line']),
-            lead(2, [2, 'pigtail'], [1, 'n']),
-            lead(3, [2, 'load'], [3, 'splice']),
-            conductor(4, 3, 4),
-            lead(5, [4, 'splice'], [5, 'a']),
-            lead(6, [5, 'b'], [2, 'loadNeutral']),
-          ]
-        : [
-            lead(1, [1, 'l1'], [3, 'splice']),
-            conductor(2, 3, 4),
-            lead(3, [4, 'splice'], [2, 'line']),
-            lead(4, [2, 'pigtail'], [1, 'n']),
-            lead(5, [2, 'load'], [5, 'a']),
-            lead(6, [5, 'b'], [2, 'loadNeutral']),
-          ];
-    return World.parse({
-      schemaVersion: 4,
-      seed,
-      tick: 0,
-      nextEntityId: 6,
-      nextConnectionId: 7,
-      nextCableId: 1,
-      nextTerminationId: 3,
-      regionId: 'nec',
-      difficulty: 'apprentice',
-      assisted: false,
-      fixtures: [],
-      areas: [],
-      entities: [
-        entity(1, UTILITY_SPLIT),
-        entity(2, AFCI_15, { on: true, test: 0 }),
-        entity(3, NUT_REF),
-        entity(4, NUT_REF),
-        entity(5, RHEOSTAT, { ohms }),
-      ],
-      connections,
-      cables: [],
-      sim: null,
-      extensions: {},
-    });
-  }
-
-  /** The conductor's end A as made (Ω), from a compile of the undegraded world. */
-  const madeOhm = (where: Where) => {
-    const netlist = compileNetlist(afciWorld(where, 1, 1), ENGINE_TEST_CATALOG);
-    const branch = netlist.branches.find((b) => b.element.kind === 'connection' && b.model === 'conductor');
-    return branch?.values['endAContactOhm'] as number;
-  };
-
-  const options = () => ({
-    ...engineTestOptions(),
-    connectionBank: { holdEndTempK: AMBIENT_TEMPERATURE_K.value },
-  });
-  /** A host on the circuit with end A at R_deg = `ohm` (0.4 Ω: intermittent; 0.12 Ω: glowing, never arcing). */
-  const host = (where: Where, ohm: number, seed: number, ohms = 12) =>
-    new SourceHost(engineBus(seed, afciWorld(where, ohm / madeOhm(where), seed, ohms)), options());
+  type Where = AfciWhere;
+  const madeOhm = afciMadeOhm;
+  const host = afciHost;
 
   /** Advances bucket by bucket up to `buckets`, returning how many buckets the conductor's end A arced in, and the first arcFault trip. */
   function watch(h: SourceHost, buckets: number) {

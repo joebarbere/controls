@@ -1,8 +1,12 @@
 import {
+  afciHost,
+  afciOptions,
   BUSBAR,
   ENGINE_TEST_CATALOG,
   engineTestOptions,
+  GFCI_20,
   PLUG_ON_20,
+  PLUG_ON_2P_20,
   RHEOSTAT,
   UTILITY_SPLIT,
 } from '@controls/sim-core/testing';
@@ -81,5 +85,107 @@ describe('protocol 8 in the scripting API', () => {
     game.advance(100);
     loaded.advance(100);
     expect(loaded.device(2)).toStrictEqual(game.device(2));
+  });
+});
+
+/*
+ * Save-and-load parity of the protocol 8 records whose state is the subtlest (PR 11 review): a GFCI
+ * with its test held (`testHeldSinceTick`, the held resistor's residual integrating), an AFCI with an
+ * end arcing downstream (`arcExposure`, the downstream marks rebuilt after the load) and a 2-pole
+ * breaker. At the save and after running on, the loaded game's snapshot and record equal the straight
+ * run's, and so do its events from there.
+ */
+describe('protocol 8 records survive a save and load', () => {
+  type Engine = Parameters<typeof createGame>[0]['engine'];
+
+  /** A game on `world` (or a fresh one) with the test catalogue and `engine`, its events collected. */
+  function game(engine: Engine, world?: Parameters<typeof createGame>[0]['world']) {
+    const g = createGame({
+      ...(world === undefined ? { seed: 11 } : { world }),
+      registry: createWorldRegistry({ catalog: ENGINE_TEST_CATALOG }),
+      engine,
+    });
+    const events: SimEvent[] = [];
+    g.on('sim', (event) => events.push(event));
+    return { g, events };
+  }
+
+  /** Saves `live`, loads it, and checks the loaded game against it now and `after` ticks on. */
+  function checkParity(live: { g: Game; events: SimEvent[] }, engine: Engine, id: number, after: number) {
+    const result = loadGame(live.g.save(), { registry: createWorldRegistry({ catalog: ENGINE_TEST_CATALOG }), engine });
+    if (!result.ok) throw new Error(result.error.message);
+    const loaded = result.game;
+    const loadedEvents: SimEvent[] = [];
+    loaded.on('sim', (event) => loadedEvents.push(event));
+    expect(loaded.snapshot()).toStrictEqual(live.g.snapshot());
+    expect(loaded.device(id)).toStrictEqual(live.g.device(id));
+    const seen = live.events.length;
+    live.g.advance(after);
+    loaded.advance(after);
+    expect(loaded.snapshot()).toStrictEqual(live.g.snapshot());
+    expect(loaded.device(id)).toStrictEqual(live.g.device(id));
+    expect(loadedEvents).toStrictEqual(live.events.slice(seen));
+    return loaded;
+  }
+
+  const at = { x: 0, y: 0, z: 0 };
+  const build = (g: Game, steps: readonly (readonly [string, object])[]) => {
+    for (const [id, args] of steps) expect(g.exec(id, args).ok, id).toBe(true);
+  };
+  const link = (a: number, ta: string, b: number, tb: string) =>
+    ['lead.connect', { ref: BUSBAR, a: { entity: a, terminal: ta }, b: { entity: b, terminal: tb } }] as const;
+
+  it('a GFCI breaker with its test held: testHeld, the integral and the trip at the same tick', () => {
+    const engine = engineTestOptions();
+    const live = game(engine);
+    build(live.g, [
+      ['entity.place', { ref: UTILITY_SPLIT, positionMm: at }],
+      ['entity.place', { ref: GFCI_20, positionMm: at }],
+      ['entity.place', { ref: RHEOSTAT, positionMm: at }],
+      link(1, 'l1', 2, 'line'),
+      link(2, 'pigtail', 1, 'n'),
+      link(2, 'load', 3, 'a'),
+      link(3, 'b', 2, 'loadNeutral'),
+      ['device.operate', { id: 3, control: 'ohms', value: 12 }],
+      ['device.operate', { id: 2, control: 'on', value: true }],
+    ]);
+    live.g.advance(10);
+    build(live.g, [['device.press', { id: 2, control: 'test' }]]);
+    live.g.advance(1500);
+    expect(live.g.device(2)?.values).toMatchObject({ testHeld: 'yes', state: 'on' });
+    checkParity(live, engine, 2, 3000);
+    expect(live.g.device(2)?.values).toMatchObject({ testHeld: 'no', state: 'tripped', tripCause: 'test' });
+  });
+
+  it('an AFCI breaker with an end arcing downstream: arcingDownstream and arcExposure', () => {
+    const engine = afciOptions();
+    // The circuit's hand-built world, materialised by an engine run on it (its bags filled), as a save holds it.
+    const live = game(engine, afciHost('downstream', 0.4, 3).materialised());
+    for (let k = 0; k < 40 && live.g.device(2)?.values['arcingDownstream'] !== 'yes'; k++) live.g.advance(100);
+    expect(live.g.device(2)?.values).toMatchObject({ arcingDownstream: 'yes', state: 'on' });
+    checkParity(live, engine, 2, 500);
+  });
+
+  it('a 2-pole breaker: both poles’ currents and fractions, one state', () => {
+    const engine = engineTestOptions();
+    const live = game(engine);
+    build(live.g, [
+      ['entity.place', { ref: UTILITY_SPLIT, positionMm: at }],
+      ['entity.place', { ref: PLUG_ON_2P_20, positionMm: at }],
+      ['entity.place', { ref: RHEOSTAT, positionMm: at }],
+      ['entity.place', { ref: RHEOSTAT, positionMm: at }],
+      link(1, 'l1', 2, 'line1'),
+      link(1, 'l2', 2, 'line2'),
+      link(2, 'load1', 3, 'a'),
+      link(2, 'load2', 4, 'a'),
+      link(3, 'b', 1, 'n'),
+      link(4, 'b', 1, 'n'),
+      ['device.operate', { id: 3, control: 'ohms', value: 1.2 }],
+      ['device.operate', { id: 4, control: 'ohms', value: 24 }],
+      ['device.operate', { id: 2, control: 'on', value: true }],
+    ]);
+    live.g.advance(1000);
+    expect(live.g.device(2)?.values['pole1ThermalFraction'] as number).toBeGreaterThan(0);
+    checkParity(live, engine, 2, 2000);
   });
 });

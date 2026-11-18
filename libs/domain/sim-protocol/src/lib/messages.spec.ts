@@ -9,6 +9,9 @@ import {
 } from './connection-output';
 import {
   BREAKER_STATE_VALUES,
+  DEVICE_OUTPUT_SCHEMAS,
+  deviceOutputSchemaProblems,
+  isDeviceReading,
   DEVICE_READING_CURRENT,
   DEVICE_READING_LINE_VOLTAGE,
   DEVICE_READING_LOAD_VOLTAGE,
@@ -344,6 +347,46 @@ describe('protocol 8: typed event details, the connection layout and the trip ca
     expect(connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, 124)).toStrictEqual([
       'the record is not a multiple of 8 bytes',
     ]);
+  });
+
+  it("puts each sensing field's readings bit in its schema, and isDeviceReading reads it (never 0 V)", () => {
+    for (const kind of ['breaker.gfci1p', 'breaker.afci1p']) {
+      const schema = DEVICE_OUTPUT_SCHEMAS[kind];
+      const bit = (name: string) => schema.fields.find((f) => f.name === name)?.readingBit;
+      expect(bit('currentA'), kind).toBe(DEVICE_READING_CURRENT);
+      expect(bit('neutralCurrentA'), kind).toBe(DEVICE_READING_NEUTRAL_CURRENT);
+      expect(bit('lineVoltageV'), kind).toBe(DEVICE_READING_LINE_VOLTAGE);
+      expect(bit('loadVoltageV'), kind).toBe(DEVICE_READING_LOAD_VOLTAGE);
+      expect(bit('thermalFraction'), kind).toBeUndefined();
+      const values = { lineVoltageV: 0, loadVoltageV: 119.8, readings: DEVICE_READING_LOAD_VOLTAGE };
+      expect(isDeviceReading(schema, values, 'lineVoltageV')).toBe(false); // 0 here is no reading
+      expect(isDeviceReading(schema, values, 'loadVoltageV')).toBe(true);
+      expect(isDeviceReading(schema, values, 'thermalFraction')).toBe(true); // no bit: the status rule
+      expect(isDeviceReading(schema, values, 'nope')).toBe(true);
+    }
+    expect(DEVICE_OUTPUT_SCHEMAS['breaker.gfci1p'].fields.find((f) => f.name === 'residualMa')?.readingBit).toBe(
+      DEVICE_READING_RESIDUAL,
+    );
+    // A bit that isn't one bit, or a bit without a readings field, is a schema problem.
+    const bad = {
+      kind: 'test',
+      recordBytes: 16,
+      fields: [
+        { name: 'volts', type: 'f64' as const, offset: 0, unit: 'V', values: null, readingBit: 3 },
+        { name: 'status', type: 'u8' as const, offset: 8, unit: null, values: ['unsolved'] },
+      ],
+    };
+    expect(deviceOutputSchemaProblems(bad)).toStrictEqual([
+      'volts: readingBit must be one bit of a u8',
+      'volts: a readingBit needs a u8 readings field',
+    ]);
+    // The descriptor carries the bit.
+    const parsed = TopologyDescriptorSchema.parse({
+      ...descriptor,
+      devices: [{ entity: 1, kind: 'breaker.gfci1p', recordOffset: 0 }],
+      schemas: { 'breaker.gfci1p': DEVICE_OUTPUT_SCHEMAS['breaker.gfci1p'] },
+    });
+    expect(parsed.schemas['breaker.gfci1p'].fields[0].readingBit).toBe(DEVICE_READING_CURRENT);
   });
 
   it('keeps the device readings bits disjoint', () => {

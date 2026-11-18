@@ -17,7 +17,7 @@ import {
   type NetlistReading,
   type SnapshotView,
 } from '@controls/sim-protocol';
-import { formatQuantity, NO_READING } from '../netlist/netlist-model';
+import { formatQuantity, NO_READING, shownDegradation } from '../netlist/netlist-model';
 
 /*
  * The wire hover readout's model (F3.6 part 3, plan D16), framework-free so it is unit-tested without
@@ -198,11 +198,12 @@ export class WireReadoutSampler {
   /** One sentence for a live region: the title, current, temperatures, drops and state. Doesn't touch what is shown. */
   summary(target: WireRef, world: ReadoutWorld | null): string {
     const r = this.build(target, world, 'selection');
-    if (r.parts.length === 0) return `${r.title} selected: ${r.state}.`;
+    if (r.parts.length === 0) return `${r.title} selected: ${r.state.replace(/×/g, ' times')}.`;
     const parts = r.parts.map((p) =>
       p.terminated ? `${p.name} ${p.temperature}, drop ${p.drop}` : `${p.name} no termination`,
     );
-    return `${r.title} selected. Current ${r.current}. ${parts.join('. ')}. State: ${r.state}.`;
+    // The state's `3.22×` reads "3.22 times" aloud (protocol 8's degradation factor).
+    return `${r.title} selected. Current ${r.current}. ${parts.join('. ')}. State: ${r.state.replace(/×/g, ' times')}.`;
   }
 
   /** The readout of `target` (fills `key` and `record`). */
@@ -280,8 +281,8 @@ export class WireReadoutSampler {
       k[11 + 2 * i] = Math.round(t);
       k[12 + 2 * i] = Math.round(t - 273.15);
     }
-    k[17] = sigFig3(v[at + END[0].degradation]);
-    k[18] = sigFig3(v[at + END[1].degradation]);
+    k[17] = shownDegradation(v[at + END[0].degradation]) ?? 1;
+    k[18] = shownDegradation(v[at + END[1].degradation]) ?? 1;
   }
 
   private keyShown(): boolean {
@@ -366,9 +367,10 @@ const endsText = (names: readonly string[]) =>
 /**
  * The connection's state in words, worst first: fused; intermittent (open now, or closed now);
  * arcing; open (not in a circuit); degrading (a hot spot above the oxidation onset, where contact
- * resistance grows); degraded (protocol 8: an end whose degradation factor D shows above 1 at three
- * significant figures, below the onset: its contact is D times its as-made value, for good, however cool
- * it is now); overheating (at or above the engine's `terminationOverheat` point); else normal (or,
+ * resistance grows; with its factor once D shows above 1); degraded (protocol 8: an end not degrading now
+ * whose degradation factor D shows above 1 at three significant figures, `shownDegradation`, an
+ * intermittently open end included: its contact resistance is D times its original value, for good,
+ * however cool it is now; `×` reads "times" in the live region's summary); overheating (at or above the engine's `terminationOverheat` point); else normal (or,
  * unsolved, not solved). `insulation damaged` is added to any of them.
  */
 function stateText(status: number, body: BodyState, ends: readonly EndView[], insulationDamaged: boolean): string {
@@ -377,10 +379,13 @@ function stateText(status: number, body: BodyState, ends: readonly EndView[], in
   const openEnds = at((e) => e.state === END_INTERMITTENT_OPEN);
   const closedEnds = at((e) => e.state === END_INTERMITTENT_CLOSED);
   const arcing = at((e) => e.state === END_ARCING);
-  const degrading = at((e) => e.state !== END_INTERMITTENT_OPEN && e.tempK > CONNECTION_OXIDATION_ONSET_K);
-  const degraded = ends.filter(
-    (e) => e.state !== END_INTERMITTENT_OPEN && e.tempK <= CONNECTION_OXIDATION_ONSET_K && sigFig3(e.degradation) > 1,
-  );
+  const isDegrading = (e: EndView) => e.state !== END_INTERMITTENT_OPEN && e.tempK > CONNECTION_OXIDATION_ONSET_K;
+  // Degrading ends without a shown factor are named together, as before protocol 8; each with one, alone.
+  const degrading = at((e) => isDegrading(e) && shownDegradation(e.degradation) === null);
+  const degradingBy = ends.filter((e) => isDegrading(e) && shownDegradation(e.degradation) !== null);
+  // A degraded factor is persisted and never falls: shown whenever the end isn't degrading now, an
+  // intermittently open end included.
+  const degraded = ends.filter((e) => !isDegrading(e) && shownDegradation(e.degradation) !== null);
   const hot = at(
     (e) =>
       e.state !== END_INTERMITTENT_OPEN && e.tempK >= READOUT_OVERHEAT_K && e.tempK <= CONNECTION_OXIDATION_ONSET_K,
@@ -392,7 +397,13 @@ function stateText(status: number, body: BodyState, ends: readonly EndView[], in
   if (arcing.length > 0) states.push(`arcing at ${endsText(arcing)}`);
   if (status === STATUS_OPEN && body === 'closed' && openEnds.length === 0) states.push('open: not in a circuit');
   if (degrading.length > 0) states.push(`degrading at ${endsText(degrading)} (above the oxidation onset)`);
-  for (const e of degraded) states.push(`degraded at end ${e.name} (contact ${sigFig3(e.degradation)} times as made)`);
+  for (const e of degradingBy) {
+    const d = shownDegradation(e.degradation);
+    states.push(`degrading at end ${e.name} (above the oxidation onset; contact resistance ${d}× original)`);
+  }
+  for (const e of degraded) {
+    states.push(`degraded at end ${e.name} (contact resistance ${shownDegradation(e.degradation)}× original)`);
+  }
   if (hot.length > 0) states.push(`overheating at ${endsText(hot)}`);
   if (states.length === 0) {
     // Every end is `ok` or has no termination here (any other end state was named above).

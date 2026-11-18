@@ -1,11 +1,19 @@
 import type { RegionProtection } from '@controls/catalog';
 import type { DeviceStateValue } from '@controls/save-format';
-import type { DeviceOutputSchema, SimEventKind } from '@controls/sim-protocol';
+import type { DeviceOutputSchema, SimEventDetails, SimEventKind } from '@controls/sim-protocol';
 import type { EntityPurpose, Sfc32 } from '@controls/world-model';
 import type { AcBranchValues } from '../mna/ac-values';
 import type { DcSolution } from '../mna/dc';
 import type { DcBranchValues } from '../mna/values';
 import type { ContactRelation, Netlist, NetlistBranch, StateBag } from '../netlist/types';
+
+/**
+ * The detail argument of a device event of kind `K` (protocol 8): none for a kind whose detail is empty
+ * (`blown`), else exactly its `SimEventDetails[K]` (`tripped` takes `{ cause }`). The worker parses each
+ * kind's detail exactly, and a mismatch fails the whole sim link, so a wrong detail must not compile.
+ */
+export type SimEventDetailArgs<K extends SimEventKind> =
+  SimEventDetails[K] extends Readonly<Record<string, never>> ? [] : [detail: SimEventDetails[K]];
 
 /** One relation contact branch whose dependent entity is a device (engine 8, protocol 8's records). */
 export interface SimDeviceContact {
@@ -94,7 +102,7 @@ export interface CommandedContext {
   readonly solution: DcSolution;
   islandReadable(island: number): boolean;
   /** Reports a device event at `tick` (a test press that trips an AFCI). */
-  emit(kind: SimEventKind, entity: number, detail?: Readonly<Record<string, number | string | boolean>>): void;
+  emit<K extends SimEventKind>(kind: K, entity: number, ...detail: SimEventDetailArgs<K>): void;
 }
 
 /**
@@ -125,7 +133,7 @@ export interface LayerContext {
   /** Island `island`'s status in the last solution (what `islandReadable` tests for `solved`). */
   islandStatus(island: number): SimIslandStatus;
   /** Reports a device event (`blown`, `tripped`, `hiccup`, `overRated`) at `tick + 1`. */
-  emit(kind: SimEventKind, entity: number, detail?: Readonly<Record<string, number | string | boolean>>): void;
+  emit<K extends SimEventKind>(kind: K, entity: number, ...detail: SimEventDetailArgs<K>): void;
   /**
    * How many netlisted connections have an end in the `arcing` state now (engine 8, the AFCI, D8): the
    * state of the bucket the last step decided. Usually 0; cheap to ask once per step.

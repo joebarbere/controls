@@ -136,7 +136,7 @@ describe('connectionDetail (protocol 7)', () => {
     ]);
     const values = read(wire);
     expect(values.connections[2]).toBe(
-      'drop 201 mV, 303 K, end a 300 mV, 394 K, end b 6.10 mV, 302 K, arcing, degraded 41.4×, insulation damaged',
+      'drop 201 mV, 303 K, end a 300 mV, 394 K, end b 6.10 mV, 302 K, arcing, degraded 41.4 times, insulation damaged',
     );
     expect(values.connections[3]).toBe(`drop ${NO_READING}, 300 K, end a ${NO_READING}, 310 K, intermittentClosed`);
     expect(values.connections[4]).toBe(`drop ${NO_READING}, 300 K`);

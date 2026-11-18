@@ -49,6 +49,8 @@ const DeviceOutputFieldSchema = z.strictObject({
   offset: Count,
   unit: z.string().max(16).nullable(),
   values: z.array(z.string().max(32)).nullable(),
+  /** Protocol 8: the field's bit in the record's `readings`, when it has one. */
+  readingBit: z.int().min(1).max(128).optional(),
 });
 
 const DeviceOutputSchemaSchema = z.strictObject({

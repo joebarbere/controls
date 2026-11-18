@@ -6,6 +6,7 @@ import {
   SNAPSHOT_MAGIC,
   slotBytesFor,
 } from './layout';
+import { CONNECTION_RECORD_BYTES } from './connection-output';
 import { MAX_SLOT_BYTES } from './timing';
 
 /*
@@ -62,9 +63,10 @@ export type SimDiagnostics = { -readonly [K in keyof typeof DIAG_OFFSETS]: numbe
 
 /**
  * The smallest slot the worker allocates (ADR 0011 §7): 1 024 nodes, 2 048 branches, 256 islands,
- * 64 KiB of device records and (protocol 7) 1 024 connection records of 104 bytes.
+ * 64 KiB of device records and (protocol 7) 1 024 connection records of `CONNECTION_RECORD_BYTES`
+ * (120 since protocol 8; 104 in protocol 7).
  */
-export const MIN_SLOT_BYTES = align64(slotBytesFor(1024, 2048, 256, 64 * 1024, 1024 * 104));
+export const MIN_SLOT_BYTES = align64(slotBytesFor(1024, 2048, 256, 64 * 1024, 1024 * CONNECTION_RECORD_BYTES));
 
 /** Rounds `n` up to a multiple of 64. */
 export function align64(n: number): number {

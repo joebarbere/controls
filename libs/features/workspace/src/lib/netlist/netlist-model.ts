@@ -215,6 +215,17 @@ export interface NetlistValues {
 }
 
 /**
+ * A connection end's degradation factor D as shown (protocol 8): rounded to three significant figures
+ * (`toPrecision(3)`), or `null` when that shows 1 or less (as made: a fresh end is exactly 1, and a brief
+ * excursion can leave 1.0004). The one rounding the netlist panel and the wire readout share.
+ */
+export function shownDegradation(d: number): number | null {
+  if (!(d > 0) || !Number.isFinite(d)) return null;
+  const shown = Number(d.toPrecision(3));
+  return shown > 1 ? shown : null;
+}
+
+/**
  * A temperature for display: whole kelvin, never an SI prefix (a fusing end at 1358 K reads `1358 K`,
  * not `1.36 kK`). Temperatures have their own formatter (UI caveats); everything else uses
  * {@link formatQuantity}.
@@ -228,8 +239,8 @@ export function formatTemperature(kelvin: number): string {
  * line, comma-separated so it reads aloud cleanly: the conductor's drop (or `open` when not
  * netlisted, `fused` for a fused lead) and temperature, then each end that has a termination node:
  * its drop (a gap's voltage for an open end), its hot-spot temperature, its state when not `ok` and
- * (protocol 8) its degradation factor when above 1 (`degraded 3.2×`: its contact that many times its
- * as-made value, for good, however cool the end is now). An
+ * (protocol 8) its degradation factor when above 1 (`degraded 3.2 times`: its contact resistance that
+ * many times its original value, for good, however cool the end is now). An
  * electrical value whose `readings` bit is clear is {@link NO_READING}, never 0 V; an end whose state
  * is `none` (a lead's clip, a free end) is left out, never shown as 0 K. Unknown status or state codes
  * fall back to `unsolved` and `none` (they can't come from this protocol: the version is checked).
@@ -255,9 +266,10 @@ export function connectionDetail(reading: NetlistReading, c: number): string {
     else if (status !== 'open') end.push(volts(`end${side}DropV`, bit));
     parts.push(end.join(' '), formatTemperature(v(`end${side}TempK`)));
     if (state !== 'ok' && state !== 'intermittentOpen') parts.push(state);
-    // Protocol 8: an end that has degraded (D above 1 at three significant figures) says by how much.
-    const degradation = Number(v(`end${side}Degradation`).toPrecision(3));
-    if (degradation > 1) parts.push(`degraded ${degradation}×`);
+    // Protocol 8: an end that has degraded (D above 1 at three significant figures) says by how much,
+    // spelled out for screen readers.
+    const degradation = shownDegradation(v(`end${side}Degradation`));
+    if (degradation !== null) parts.push(`degraded ${degradation} times`);
   }
   if (v('insulationDamaged') === 1) parts.push('insulation damaged');
   return parts.join(', ');

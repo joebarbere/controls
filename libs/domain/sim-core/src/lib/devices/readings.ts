@@ -57,9 +57,11 @@ export function statusField(offset: number): DeviceOutputField {
   return enumField('status', offset, READING_STATUS_VALUES);
 }
 
-/** An `f64` field. */
-export function f64Field(name: string, offset: number, unit: string | null): DeviceOutputField {
-  return { name, type: 'f64', offset, unit, values: null };
+/** An `f64` field; with `readingBit`, a reading only while that bit is set in the record's `readings` (protocol 8). */
+export function f64Field(name: string, offset: number, unit: string | null, readingBit?: number): DeviceOutputField {
+  return readingBit === undefined
+    ? { name, type: 'f64', offset, unit, values: null }
+    : { name, type: 'f64', offset, unit, values: null, readingBit };
 }
 
 /*

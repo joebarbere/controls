@@ -159,7 +159,8 @@ export const CONNECTION_OUTPUT_FIELDS: readonly DeviceOutputField[] = Object.fre
 
 /** The protocol layout's shape (readers' fast path): its f64 fields, contiguous from byte 0, then its u8 fields. */
 export const CONNECTION_F64_COUNT = CONNECTION_OUTPUT_FIELDS.filter((f) => f.type === 'f64').length;
-export const CONNECTION_U8_OFFSET = CONNECTION_RECORD_OFFSETS.endAState;
+/** The first u8 field's offset: right after the f64 block (`connectionLayoutProblems` checks the table agrees). */
+export const CONNECTION_U8_OFFSET = 8 * CONNECTION_F64_COUNT;
 export const CONNECTION_U8_COUNT = CONNECTION_OUTPUT_FIELDS.length - CONNECTION_F64_COUNT;
 
 /**
@@ -182,6 +183,10 @@ export function connectionLayoutProblems(fields: readonly DeviceOutputField[], r
 }
 
 const layoutProblems = connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, CONNECTION_RECORD_BYTES);
+// The named offset table agrees with the derived u8 block (the writer uses the table, readers the constant).
+if (CONNECTION_RECORD_OFFSETS.endAState !== CONNECTION_U8_OFFSET) {
+  layoutProblems.push(`endAState is at ${CONNECTION_RECORD_OFFSETS.endAState}, not CONNECTION_U8_OFFSET`);
+}
 if (layoutProblems.length > 0) {
   throw new Error(`The connection record layout is not the fast path's: ${layoutProblems.join('; ')}`);
 }

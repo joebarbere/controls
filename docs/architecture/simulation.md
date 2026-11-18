@@ -899,7 +899,7 @@ flowchart LR
 
 ## Protocol 8 records and events (P4 PR 11)
 
-[ADR 0011's protocol 8 amendment](../decisions/0011-sim-worker-contract.md#amendment-protocol-8-residential-records-and-events-p4) completes protocol 8 (provisional until v0.5.0; sign-off by `renderer-engineer` and `angular-ui-engineer` pending): records for the engine 8 kinds, the connection records' degradation factors and typed events. The engine computes nothing new (`SIM_ENGINE_VERSION` stays 8); only snapshot bytes moved.
+[ADR 0011's protocol 8 amendment](../decisions/0011-sim-worker-contract.md#amendment-protocol-8-residential-records-and-events-p4) completes protocol 8 (provisional until v0.5.0; signed off by `renderer-engineer` and `angular-ui-engineer`): records for the engine 8 kinds, the connection records' degradation factors and typed events. The engine computes nothing new (`SIM_ENGINE_VERSION` stays 8); only snapshot bytes moved.
 
 ```mermaid
 flowchart LR
@@ -916,7 +916,7 @@ flowchart LR
     LP -->|"+ burnedOut"| DEV
     CB -->|"+ endA/BDegradation<br/>(120 B)"| CONN["slot connection section"]
     DEV --> DEVICE["game.device, DescriptorIndex.field<br/>(panel UI, audio: PRs 18, 23)"]
-    CONN --> READOUT["NetlistReadout"] --> PANEL["netlist panel: degraded N×"]
+    CONN --> READOUT["NetlistReadout"] --> PANEL["netlist panel: degraded N times"]
     READOUT --> WIRE["wire readout: degraded at end a"]
     CONN --> INFO["wire.info: degradation"]
     PO -->|"tripped {cause}"| EV["SimEventSchema<br/>(detail parsed per kind)"]

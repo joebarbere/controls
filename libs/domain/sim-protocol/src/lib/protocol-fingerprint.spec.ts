@@ -5,13 +5,18 @@ import * as connectionOutput from './connection-output';
 import { TopologyDescriptorSchema } from './descriptor';
 import {
   DEVICE_OUTPUT_SCHEMAS,
+  DEVICE_READING_CURRENT,
+  DEVICE_READING_LINE_VOLTAGE,
+  DEVICE_READING_LOAD_VOLTAGE,
+  DEVICE_READING_NEUTRAL_CURRENT,
+  DEVICE_READING_RESIDUAL,
   NOMINAL_BANDS,
   PENDING_DEVICE_OUTPUT_SCHEMAS,
   RECORD_STATUS_VALUES,
   RECORD_TRIP_CAUSE_VALUES,
   TRIP_CAUSE_VALUES,
 } from './device-output';
-import { CONNECTION_EVENT_KINDS, SIM_EVENT_KINDS } from './events';
+import { CONNECTION_EVENT_KINDS, DEVICE_EVENT_KINDS, SIM_EVENT_KINDS } from './events';
 import * as layout from './layout';
 import { HostToWorker, SimErrorCode, SimStartReason, WorkerToHost } from './messages';
 import { snapshotHash } from './snapshot';
@@ -61,9 +66,11 @@ const PINNED: Readonly<Record<number, string>> = {
   // breakers, the service and the ground rod, the lamp's `burnedOut`, the pending LED and dimmer
   // schemas (`PENDING_DEVICE_OUTPUT_SCHEMAS`, fingerprinted with the registered ones as one map), the
   // connection records' degradation factors (120 bytes), the trip causes, the `lampBurnout` and
-  // `overvoltage` events and every event kind's typed detail. A later P4 PR that changes protocol 8
-  // replaces it in place again; from v0.5.0 the pin is frozen like every other.
-  8: '7ad9a96f62a838cd63f8db4f18b3f99a0b2899e2c4216c665f459b751673921e',
+  // `overvoltage` events and every event kind's typed detail; after its review round, the fields'
+  // `readingBit`, the device `readings` bits and device event kinds in the contract data, and
+  // `MIN_SLOT_BYTES` sized at 120-byte connection records (`7ad9a96f…1673921e` before the review). A
+  // later P4 PR that changes protocol 8 replaces it in place again; from v0.5.0 it is frozen.
+  8: 'ff52fee2faa9754e274a14b4572e760125e06cb5edd55f24027e777a289b2de7',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */
@@ -110,6 +117,16 @@ function protocolContract(): unknown {
     // Protocol 8: the trip causes (the records' `tripCause` and the `tripped` event's `detail.cause`).
     tripCauses: TRIP_CAUSE_VALUES,
     recordTripCauses: RECORD_TRIP_CAUSE_VALUES,
+    // Protocol 8 (PR 11 review): the device `readings` bits and the device event kinds, so a consistent
+    // renumbering on both sides still moves the fingerprint.
+    deviceReadings: {
+      DEVICE_READING_CURRENT,
+      DEVICE_READING_NEUTRAL_CURRENT,
+      DEVICE_READING_RESIDUAL,
+      DEVICE_READING_LINE_VOLTAGE,
+      DEVICE_READING_LOAD_VOLTAGE,
+    },
+    deviceEvents: DEVICE_EVENT_KINDS,
     events: SIM_EVENT_KINDS,
     // Protocol 7: the connection records and events.
     connectionOutput: constants(connectionOutput as unknown as Record<string, unknown>),

@@ -18,6 +18,12 @@ export interface DeviceOutputField {
   readonly unit: string | null;
   /** `u8` enums: the code-to-name table; `null` otherwise. */
   readonly values: readonly string[] | null;
+  /**
+   * Protocol 8: the bit in the record's `readings` field that says whether this field is a reading
+   * (`DEVICE_READING_*`; absent for a field without one). A field whose bit is clear is no reading,
+   * never 0 A or 0 V: read it through {@link isDeviceReading}.
+   */
+  readonly readingBit?: number;
 }
 
 export interface DeviceOutputSchema {
@@ -56,6 +62,15 @@ export function deviceOutputSchemaProblems(schema: DeviceOutputSchema): string[]
     if (field.offset + size > schema.recordBytes) problems.push(`${field.name}: past the end of the record`);
     if (FIELD_RANK[field.type] < rank) problems.push(`${field.name}: out of order (f64, then 4-byte, then u8)`);
     if (field.values !== null && field.type !== 'u8') problems.push(`${field.name}: only u8 fields have enum values`);
+    if (field.readingBit !== undefined) {
+      const bit = field.readingBit;
+      if (!(Number.isInteger(bit) && bit > 0 && bit <= 128 && (bit & (bit - 1)) === 0)) {
+        problems.push(`${field.name}: readingBit must be one bit of a u8`);
+      }
+      if (!schema.fields.some((f) => f.name === 'readings' && f.type === 'u8' && f.values === null)) {
+        problems.push(`${field.name}: a readingBit needs a u8 readings field`);
+      }
+    }
     rank = FIELD_RANK[field.type];
     end = field.offset + size;
   }
@@ -69,8 +84,12 @@ export function deviceOutputSchemaProblems(schema: DeviceOutputSchema): string[]
  */
 export const RECORD_STATUS_VALUES: readonly string[] = Object.freeze(['unsolved', 'solved', 'unsettled', 'singular']);
 
-const f64 = (name: string, offset: number, unit: string | null): DeviceOutputField =>
-  Object.freeze({ name, type: 'f64', offset, unit, values: null });
+const f64 = (name: string, offset: number, unit: string | null, readingBit?: number): DeviceOutputField =>
+  Object.freeze(
+    readingBit === undefined
+      ? { name, type: 'f64', offset, unit, values: null }
+      : { name, type: 'f64', offset, unit, values: null, readingBit },
+  );
 const u8Enum = (name: string, offset: number, values: readonly string[]): DeviceOutputField =>
   Object.freeze({ name, type: 'u8', offset, unit: null, values: Object.freeze([...values]) });
 const u8Bits = (name: string, offset: number): DeviceOutputField =>
@@ -208,7 +227,7 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
       f64('currentA', 0, 'A'),
       f64('thermalFraction', 8, null),
       f64('magneticPickupA', 16, 'A'),
-      u8Enum('state', 24, ['off', 'on', 'tripped']),
+      u8Enum('state', 24, BREAKER_STATE_VALUES),
       status(25),
     ]),
   }),
@@ -248,11 +267,11 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
     kind: 'breaker.gfci1p',
     recordBytes: 88,
     fields: Object.freeze([
-      f64('currentA', 0, 'A'),
-      f64('neutralCurrentA', 8, 'A'),
-      f64('residualMa', 16, 'mA'),
-      f64('lineVoltageV', 24, 'V'),
-      f64('loadVoltageV', 32, 'V'),
+      f64('currentA', 0, 'A', DEVICE_READING_CURRENT),
+      f64('neutralCurrentA', 8, 'A', DEVICE_READING_NEUTRAL_CURRENT),
+      f64('residualMa', 16, 'mA', DEVICE_READING_RESIDUAL),
+      f64('lineVoltageV', 24, 'V', DEVICE_READING_LINE_VOLTAGE),
+      f64('loadVoltageV', 32, 'V', DEVICE_READING_LOAD_VOLTAGE),
       f64('thermalFraction', 40, null),
       f64('magneticPickupA', 48, 'A'),
       f64('openingMs', 56, 'ms'),
@@ -269,10 +288,10 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
     kind: 'breaker.afci1p',
     recordBytes: 72,
     fields: Object.freeze([
-      f64('currentA', 0, 'A'),
-      f64('neutralCurrentA', 8, 'A'),
-      f64('lineVoltageV', 16, 'V'),
-      f64('loadVoltageV', 24, 'V'),
+      f64('currentA', 0, 'A', DEVICE_READING_CURRENT),
+      f64('neutralCurrentA', 8, 'A', DEVICE_READING_NEUTRAL_CURRENT),
+      f64('lineVoltageV', 16, 'V', DEVICE_READING_LINE_VOLTAGE),
+      f64('loadVoltageV', 24, 'V', DEVICE_READING_LOAD_VOLTAGE),
       f64('thermalFraction', 32, null),
       f64('magneticPickupA', 40, 'A'),
       f64('openingMs', 48, 'ms'),
@@ -360,6 +379,20 @@ export function decodeDeviceRecord(schema: DeviceOutputSchema, data: DataView, o
     }
   }
   return values;
+}
+
+/**
+ * Whether field `field` of a record decoded by `schema` (`decodeDeviceRecord`) is a reading by its
+ * `readings` bit (protocol 8): `false` when the field has a `readingBit` and the record's `readings`
+ * lacks it, so a generic display shows no reading, never 0 A or 0 V. A field without a bit (and an
+ * unknown field name) returns `true`: its validity is the record's `status` rule (§5.4), which the
+ * caller still applies to solved quantities.
+ */
+export function isDeviceReading(schema: DeviceOutputSchema, values: DecodedDeviceRecord, field: string): boolean {
+  const def = schema.fields.find((f) => f.name === field);
+  if (def?.readingBit === undefined) return true;
+  const readings = values['readings'];
+  return typeof readings === 'number' && (readings & def.readingBit) !== 0;
 }
 
 /**
