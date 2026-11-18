@@ -187,7 +187,7 @@
     {
       "id": "lampholder-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
       "covers": ["model.params.ratedPowerW", "model.params.ratedVoltageV"]
     },
     {
@@ -211,7 +211,7 @@
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing read (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
+      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing seen in a search summary (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",

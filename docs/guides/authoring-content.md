@@ -165,3 +165,5 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Thimbleby      | Ferrules and insulated ring and fork lugs                                    |
 | Tinmoor        | Outlet and junction boxes (steel and PVC)                                    |
 | Veltmark       | Hand tools (strippers, cutters, drivers, crimper, knockout punch, fish tape) |
+
+**Brand names to review before 1.0.** _Lumivane_ is close to a real French LED maker's name (Lumiven; raised by the realism review, 2026-11-18). It shipped in P3 (`lamp.lumivane-120v-60w`), and saves reference entries by id, so ids are never renamed; a display-only `brand` change is the option to weigh before 1.0. Check every new brand against real makers' names, near spellings included.

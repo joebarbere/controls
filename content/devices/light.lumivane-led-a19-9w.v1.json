@@ -83,7 +83,7 @@
     {
       "id": "led-a19-class",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: an A19 LED lamp datasheet for a 60 W incandescent replacement gives an E26 base, 120 V rated, 9 W rated power and power factor 0.9 (makers' 9 W A19 sheets range from about 0.5 to 0.94; the model carries it as a lagging displacement, ADR 0021 L3). ENERGY STAR's lamps specification, version 2.0, lowered its power-factor minimum for 5 to 10 W lamps from 0.7 to 0.6 (a trade summary read 2026-11-18), so 0.9 is a high-power-factor product of the class.",
+      "citation": "real-world (product class), read 2026-11-18: an A19 LED lamp datasheet for a 60 W incandescent replacement gives an E26 base, 120 V rated, 9 W rated power and power factor 0.9 (other makers' 9 W A19 sheets, seen in search summaries, not read in full, range from about 0.5 to 0.94; the model carries it as a lagging displacement, ADR 0021 L3). ENERGY STAR's lamps specification, version 2.0, lowered its power-factor minimum for 5 to 10 W lamps from 0.7 to 0.6 (a trade summary read 2026-11-18), so 0.9 is a high-power-factor product of the class.",
       "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW", "model.params.powerFactor"]
     },
     {
@@ -113,7 +113,7 @@
     {
       "id": "e26-contact",
       "kind": "game-design",
-      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.2 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
       "covers": ["fits.e26.contacts.foot.contactOhm", "fits.e26.contacts.shell.contactOhm"]
     }
   ],

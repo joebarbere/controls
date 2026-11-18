@@ -4545,7 +4545,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "dimmer-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: single-pole forward-phase (leading-edge) wall dimmers for incandescent loads are commonly marked 600 W at 120 V AC (about 5 A) on makers' listings; wall dimmers are listed to UL 1472 (cited by number). The model takes the rated voltage only as its first guess at the circuit (it then measures it); the rated power is the inspector's.",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: single-pole forward-phase (leading-edge) wall dimmers for incandescent loads are commonly marked 600 W at 120 V AC (about 5 A) on makers' listings; wall dimmers are listed to UL 1472 (cited by number). The model takes the rated voltage only as its first guess at the circuit (it then measures it); the rated power is the inspector's.",
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedPowerW"
@@ -4554,7 +4554,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "body-layout",
       "kind": "game-design",
-      "citation": "game-design: the body is drawn 44 × 70 mm (a dimmer's heat sink makes it wider than a switch) and 60 mm deep from a box's back wall to a single-gang box's opening; line and load screws on the side faces, the green grounding screw on the bottom face. Many real dimmers have wire leads instead (one listing read gives flying leads for 14 to 10 AWG); a device's own leads can't be spliced in the game, so this one is side-wired like a switch. Not modelled on a product drawing.",
+      "citation": "game-design: the body is drawn 44 × 70 mm (a dimmer's heat sink makes it wider than a switch) and 60 mm deep from a box's back wall to a single-gang box's opening; line and load screws on the side faces, the green grounding screw on the bottom face. Many real dimmers have wire leads instead (one listing seen in a search summary gives flying leads for 14 to 10 AWG); a device's own leads can't be spliced in the game, so this one is side-wired like a switch. Not modelled on a product drawing.",
       "covers": [
         "sizeMm",
         "terminals"
@@ -4579,7 +4579,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional dimmer is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional dimmer is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": [
         "terminals.*.methods.screw.torqueNm"
       ]
@@ -4587,7 +4587,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the dimmer's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the dimmer's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -6133,7 +6133,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "e26-contact",
       "kind": "game-design",
-      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.2 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
       "covers": [
         "fits.e26.contacts.foot.contactOhm",
         "fits.e26.contacts.shell.contactOhm"
@@ -6292,7 +6292,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "e26-contact",
       "kind": "game-design",
-      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.2 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
       "covers": [
         "fits.e26.contacts.foot.contactOhm",
         "fits.e26.contacts.shell.contactOhm"
@@ -6508,7 +6508,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "lampholder-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
       "covers": [
         "model.params.ratedPowerW",
         "model.params.ratedVoltageV"
@@ -6542,7 +6542,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing read (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
+      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing seen in a search summary (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -6817,7 +6817,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "lampholder-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
       "covers": [
         "model.params.ratedPowerW",
         "model.params.ratedVoltageV"
@@ -6851,7 +6851,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing read (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
+      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing seen in a search summary (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -7207,7 +7207,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "led-fixture-class",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: 15 W, 120 V surface-mounted LED fixtures list power factors from about 0.7 to 0.98 on makers' sheets, several at or above 0.9; 0.9 is taken (carried as a lagging displacement, ADR 0021 L3). Fixtures are listed to UL 1598 (cited by number).",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: 15 W, 120 V surface-mounted LED fixtures list power factors from about 0.7 to 0.98 on makers' sheets, several at or above 0.9; 0.9 is taken (carried as a lagging displacement, ADR 0021 L3). Fixtures are listed to UL 1598 (cited by number).",
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedPowerW",
@@ -7235,7 +7235,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "yoke-fit",
       "kind": "game-design",
-      "citation": "game-design: the light's strap screws to a device box's two device-mounting holes, as a light wall-mounted fixture may (NFPA 70-2023 Art. 314.27(A)(1), cited by number, allows a light wall luminaire on other boxes by two screws, which the inspector does not check), so it fits the deviceYoke mount, centred on the gang: its origin 37 mm left of and 24 mm below the gang's corner. The ceiling boxes offer no mount yet. Its one strap contact joins its ground terminal to a metal box's chassis.",
+      "citation": "game-design: the light's strap screws to a device box's two device-mounting holes, as a light wall-mounted fixture may (NFPA 70-2023 Art. 314.27(A)(1) Exception, cited by number, allows a wall luminaire of not more than 3 kg (6 lb) on other boxes when secured by at least two screws, which the inspector does not check; the fixture's mass isn't modelled), so it fits the deviceYoke mount, centred on the gang: its origin 37 mm left of and 24 mm below the gang's corner. The ceiling boxes offer no mount yet. Its one strap contact joins its ground terminal to a metal box's chassis.",
       "covers": [
         "fits.deviceYoke"
       ]
@@ -7363,7 +7363,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "led-a19-class",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: an A19 LED lamp datasheet for a 60 W incandescent replacement gives an E26 base, 120 V rated, 9 W rated power and power factor 0.9 (makers' 9 W A19 sheets range from about 0.5 to 0.94; the model carries it as a lagging displacement, ADR 0021 L3). ENERGY STAR's lamps specification, version 2.0, lowered its power-factor minimum for 5 to 10 W lamps from 0.7 to 0.6 (a trade summary read 2026-11-18), so 0.9 is a high-power-factor product of the class.",
+      "citation": "real-world (product class), read 2026-11-18: an A19 LED lamp datasheet for a 60 W incandescent replacement gives an E26 base, 120 V rated, 9 W rated power and power factor 0.9 (other makers' 9 W A19 sheets, seen in search summaries, not read in full, range from about 0.5 to 0.94; the model carries it as a lagging displacement, ADR 0021 L3). ENERGY STAR's lamps specification, version 2.0, lowered its power-factor minimum for 5 to 10 W lamps from 0.7 to 0.6 (a trade summary read 2026-11-18), so 0.9 is a high-power-factor product of the class.",
       "covers": [
         "model.params.ratedVoltageV",
         "model.params.ratedPowerW",
@@ -7406,7 +7406,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "e26-contact",
       "kind": "game-design",
-      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.2 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
       "covers": [
         "fits.e26.contacts.foot.contactOhm",
         "fits.e26.contacts.shell.contactOhm"
@@ -8722,7 +8722,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "switch-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC on makers' product listings; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
       "covers": [
         "model.params.ratedCurrentA",
         "model.params.ratedVoltageV"
@@ -8756,7 +8756,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": [
         "terminals.*.methods.screw.torqueNm"
       ]
@@ -8764,7 +8764,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -8815,7 +8815,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-class",
       "kind": "real-world",
-      "citation": "real-world (product class and the P4 pre-audit), read 2026-11-18: the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only (makers' listings), the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
+      "citation": "real-world (product class and the P4 pre-audit), a maker's product page read in full 2026-11-18 (realism review): the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only, the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
       "covers": [
         "terminals.*.methods.backStab.ratedConductors",
         "terminals.*.methods.backStab.maxConductors",
@@ -8827,7 +8827,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-rules",
       "kind": "game-design",
-      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; an installation sheet read 2026-11-18), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
+      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; makers' listings seen in search summaries, 2026-11-18, not read in full), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
       "covers": [
         "terminals.*.methods.backStab.stripLengthMm",
         "terminals.*.methods.backStab.clampType",
@@ -9202,7 +9202,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "switch-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC on makers' product listings; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
       "covers": [
         "model.params.ratedCurrentA",
         "model.params.ratedVoltageV"
@@ -9211,7 +9211,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "body-layout",
       "kind": "game-design",
-      "citation": "game-design: the body is drawn 33 mm wide (a residential switch body is about 1.3 in) and 64 mm tall, and 60 mm deep from a box's back wall to a single-gang box's opening, so its face sits at the box front (the strap's ears and the toggle aren't drawn); brass screws on the side faces, 45 mm from the back, the green grounding screw on the bottom face. Not modelled on a product drawing.",
+      "citation": "game-design: the body is drawn 33 mm wide (a residential switch body is about 1.3 in) and 64 mm tall, and 60 mm deep from a box's back wall to a single-gang box's opening, so its face sits at the box front (the strap's ears and the toggle aren't drawn); brass traveller screws and a dark common screw on the side faces, 45 mm from the back, the green grounding screw on the bottom face. Not modelled on a product drawing.",
       "covers": [
         "sizeMm",
         "terminals"
@@ -9236,7 +9236,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": [
         "terminals.*.methods.screw.torqueNm"
       ]
@@ -9244,7 +9244,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -9295,7 +9295,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-class",
       "kind": "real-world",
-      "citation": "real-world (product class and the P4 pre-audit), read 2026-11-18: the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only (makers' listings), the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
+      "citation": "real-world (product class and the P4 pre-audit), a maker's product page read in full 2026-11-18 (realism review): the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only, the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
       "covers": [
         "terminals.*.methods.backStab.ratedConductors",
         "terminals.*.methods.backStab.maxConductors",
@@ -9307,7 +9307,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-rules",
       "kind": "game-design",
-      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; an installation sheet read 2026-11-18), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
+      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; makers' listings seen in search summaries, 2026-11-18, not read in full), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
       "covers": [
         "terminals.*.methods.backStab.stripLengthMm",
         "terminals.*.methods.backStab.clampType",
@@ -9506,7 +9506,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "b1",
-      "label": "BRASS",
+      "label": "DARK",
       "positionMm": {
         "x": 33,
         "y": 44,
@@ -9588,7 +9588,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     },
     {
       "id": "b2",
-      "label": "BRASS",
+      "label": "DARK",
       "positionMm": {
         "x": 33,
         "y": 20,
@@ -9764,7 +9764,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "switch-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC on makers' product listings; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
       "covers": [
         "model.params.ratedCurrentA",
         "model.params.ratedVoltageV"
@@ -9773,7 +9773,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "body-layout",
       "kind": "game-design",
-      "citation": "game-design: the body is drawn 33 mm wide (a residential switch body is about 1.3 in) and 64 mm tall, and 60 mm deep from a box's back wall to a single-gang box's opening, so its face sits at the box front (the strap's ears and the toggle aren't drawn); brass screws on the side faces, 45 mm from the back, the green grounding screw on the bottom face. Not modelled on a product drawing.",
+      "citation": "game-design: the body is drawn 33 mm wide (a residential switch body is about 1.3 in) and 64 mm tall, and 60 mm deep from a box's back wall to a single-gang box's opening, so its face sits at the box front (the strap's ears and the toggle aren't drawn); brass a1 and a2 screws on one side and dark b1 and b2 screws on the other (the colours are game-design, so the pairs can be told apart) on the side faces, 45 mm from the back, the green grounding screw on the bottom face. Not modelled on a product drawing.",
       "covers": [
         "sizeMm",
         "terminals"
@@ -9798,7 +9798,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": [
         "terminals.*.methods.screw.torqueNm"
       ]
@@ -9806,7 +9806,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -9857,7 +9857,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-class",
       "kind": "real-world",
-      "citation": "real-world (product class and the P4 pre-audit), read 2026-11-18: the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only (makers' listings), the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
+      "citation": "real-world (product class and the P4 pre-audit), a maker's product page read in full 2026-11-18 (realism review): the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only, the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
       "covers": [
         "terminals.*.methods.backStab.ratedConductors",
         "terminals.*.methods.backStab.maxConductors",
@@ -9869,7 +9869,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "push-in-rules",
       "kind": "game-design",
-      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; an installation sheet read 2026-11-18), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
+      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; makers' listings seen in search summaries, 2026-11-18, not read in full), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
       "covers": [
         "terminals.*.methods.backStab.stripLengthMm",
         "terminals.*.methods.backStab.clampType",

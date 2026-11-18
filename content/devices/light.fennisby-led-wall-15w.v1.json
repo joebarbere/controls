@@ -182,7 +182,7 @@
     {
       "id": "led-fixture-class",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: 15 W, 120 V surface-mounted LED fixtures list power factors from about 0.7 to 0.98 on makers' sheets, several at or above 0.9; 0.9 is taken (carried as a lagging displacement, ADR 0021 L3). Fixtures are listed to UL 1598 (cited by number).",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: 15 W, 120 V surface-mounted LED fixtures list power factors from about 0.7 to 0.98 on makers' sheets, several at or above 0.9; 0.9 is taken (carried as a lagging displacement, ADR 0021 L3). Fixtures are listed to UL 1598 (cited by number).",
       "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW", "model.params.powerFactor"]
     },
     {
@@ -200,7 +200,7 @@
     {
       "id": "yoke-fit",
       "kind": "game-design",
-      "citation": "game-design: the light's strap screws to a device box's two device-mounting holes, as a light wall-mounted fixture may (NFPA 70-2023 Art. 314.27(A)(1), cited by number, allows a light wall luminaire on other boxes by two screws, which the inspector does not check), so it fits the deviceYoke mount, centred on the gang: its origin 37 mm left of and 24 mm below the gang's corner. The ceiling boxes offer no mount yet. Its one strap contact joins its ground terminal to a metal box's chassis.",
+      "citation": "game-design: the light's strap screws to a device box's two device-mounting holes, as a light wall-mounted fixture may (NFPA 70-2023 Art. 314.27(A)(1) Exception, cited by number, allows a wall luminaire of not more than 3 kg (6 lb) on other boxes when secured by at least two screws, which the inspector does not check; the fixture's mass isn't modelled), so it fits the deviceYoke mount, centred on the gang: its origin 37 mm left of and 24 mm below the gang's corner. The ceiling boxes offer no mount yet. Its one strap contact joins its ground terminal to a metal box's chassis.",
       "covers": ["fits.deviceYoke"]
     },
     {

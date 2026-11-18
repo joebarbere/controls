@@ -194,13 +194,13 @@
     {
       "id": "dimmer-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: single-pole forward-phase (leading-edge) wall dimmers for incandescent loads are commonly marked 600 W at 120 V AC (about 5 A) on makers' listings; wall dimmers are listed to UL 1472 (cited by number). The model takes the rated voltage only as its first guess at the circuit (it then measures it); the rated power is the inspector's.",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: single-pole forward-phase (leading-edge) wall dimmers for incandescent loads are commonly marked 600 W at 120 V AC (about 5 A) on makers' listings; wall dimmers are listed to UL 1472 (cited by number). The model takes the rated voltage only as its first guess at the circuit (it then measures it); the rated power is the inspector's.",
       "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
     },
     {
       "id": "body-layout",
       "kind": "game-design",
-      "citation": "game-design: the body is drawn 44 × 70 mm (a dimmer's heat sink makes it wider than a switch) and 60 mm deep from a box's back wall to a single-gang box's opening; line and load screws on the side faces, the green grounding screw on the bottom face. Many real dimmers have wire leads instead (one listing read gives flying leads for 14 to 10 AWG); a device's own leads can't be spliced in the game, so this one is side-wired like a switch. Not modelled on a product drawing.",
+      "citation": "game-design: the body is drawn 44 × 70 mm (a dimmer's heat sink makes it wider than a switch) and 60 mm deep from a box's back wall to a single-gang box's opening; line and load screws on the side faces, the green grounding screw on the bottom face. Many real dimmers have wire leads instead (one listing seen in a search summary gives flying leads for 14 to 10 AWG); a device's own leads can't be spliced in the game, so this one is side-wired like a switch. Not modelled on a product drawing.",
       "covers": ["sizeMm", "terminals"]
     },
     {
@@ -218,13 +218,13 @@
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional dimmer is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional dimmer is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": ["terminals.*.methods.screw.torqueNm"]
     },
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the dimmer's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the dimmer's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",

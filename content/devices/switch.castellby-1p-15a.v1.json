@@ -245,7 +245,7 @@
     {
       "id": "switch-rating",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC on makers' product listings; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
       "covers": ["model.params.ratedCurrentA", "model.params.ratedVoltageV"]
     },
     {
@@ -269,13 +269,13 @@
     {
       "id": "screw-torque",
       "kind": "real-world",
-      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "citation": "real-world (product class), a maker's product page read in full 2026-11-18 (realism review): a 15 A residential toggle switch's page gives a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
       "covers": ["terminals.*.methods.screw.torqueNm"]
     },
     {
       "id": "screw-terminal-class",
       "kind": "game-design",
-      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). A 15 A switch's page (a maker's product page read in full 2026-11-18 (realism review)) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
       "covers": [
         "terminals.*.methods.screw.ratedConductors",
         "terminals.*.methods.screw.maxConductors",
@@ -319,7 +319,7 @@
     {
       "id": "push-in-class",
       "kind": "real-world",
-      "citation": "real-world (product class and the P4 pre-audit), read 2026-11-18: the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only (makers' listings), the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
+      "citation": "real-world (product class and the P4 pre-audit), a maker's product page read in full 2026-11-18 (realism review): the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only, the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
       "covers": [
         "terminals.*.methods.backStab.ratedConductors",
         "terminals.*.methods.backStab.maxConductors",
@@ -331,7 +331,7 @@
     {
       "id": "push-in-rules",
       "kind": "game-design",
-      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; an installation sheet read 2026-11-18), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
+      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; makers' listings seen in search summaries, 2026-11-18, not read in full), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
       "covers": [
         "terminals.*.methods.backStab.stripLengthMm",
         "terminals.*.methods.backStab.clampType",
