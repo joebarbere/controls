@@ -170,7 +170,10 @@ export interface LargeAcCircuitSpec {
   /** Extra loop-closing elements per 100 nodes (0–30). */
   readonly meshPercent: number;
   readonly wellConditioned: boolean;
-  /** Non-ideal sources get a series inductance too (F2.4); off by default, so pinned draws are unchanged. */
+  /**
+   * Non-ideal sources get a series inductance too (F2.4), and each island's root source is non-ideal,
+   * so at least one source is inductive. Off by default, so pinned draws are unchanged.
+   */
   readonly sourceInductance?: boolean;
 }
 
@@ -223,8 +226,14 @@ export function largeAcCircuit(spec: LargeAcCircuitSpec): AcCircuit {
     for (let node = first + 1; node < end; node++) {
       const parent = rng.below(2) === 0 ? node - 1 : first + rng.below(node - first);
       const roll = rng.below(20);
-      const kind = roll < 2 || node === first + 1 ? 10 : rng.below(7);
-      const stamp = drawStamp(element(kind), well, true, withL);
+      const root = node === first + 1;
+      const kind = roll < 2 || root ? 10 : rng.below(7);
+      const drawn = element(kind);
+      // With source inductance asked for, the island's root source is never ideal, so every such
+      // circuit has at least one inductive source. Otherwise all of a small island's sources could draw
+      // ideal (1 in 6 each; 1 in 36 with two) and get no L, and the F2.4 specs would test nothing new
+      // (CI run 44236709059). The RNG is consumed as before, and draws without it are unchanged.
+      const stamp = drawStamp(withL && root && drawn.ideal === 0 ? { ...drawn, ideal: 1 } : drawn, well, true, withL);
       if (rng.below(2) === 0) push(parent, node, stamp);
       else push(node, parent, stamp);
     }

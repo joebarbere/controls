@@ -9,7 +9,7 @@ import { GMIN_S, SPARSE_MIN_UNKNOWNS } from '../constants';
 import type { ComplexSparseFactors } from '../lu/complex-sparse-lu';
 import type { Netlist } from '../netlist/types';
 import { AcSolver } from './ac';
-import { AcBranchValues } from './ac-values';
+import { AC_STAMP_VSOURCE, AcBranchValues } from './ac-values';
 import type { DcSolution } from './dc';
 import { FactorisationCache } from './factorisation-cache';
 
@@ -251,10 +251,36 @@ describe('AcSolver sparse path', () => {
         const changed = { ...circuit, values: nudged(circuit.values, nudge) };
         expectSameBits(solveWith(warm, circuit, hz), solveWith(sparse(), circuit, hz));
         expectSameBits(solveWith(warm, changed), solveWith(sparse(), changed));
-        expect(Array.from(circuit.values.seriesHenries).some((h) => h > 0)).toBe(true);
+        expect(
+          Array.from(circuit.values.seriesHenries).some((h) => h > 0),
+          'generator health: some source has series inductance',
+        ).toBe(true);
       }),
-      { numRuns: 4 },
+      {
+        numRuns: 4,
+        // CI run 44236709059 (macOS, but platform-free): both sources of this island drew ideal, so it had
+        // no series L and failed the health check above. The generator now keeps each root source non-ideal.
+        examples: [[{ nodes: 40, islands: 1, seed: -1700298289, meshPercent: 0, wellConditioned: false }, 50, 1]],
+      },
     );
+  });
+
+  it('draws an inductive source on every island when asked (generator health, fixed seed)', () => {
+    const draws = fc.sample(midArb, { seed: 20261117, numRuns: 2000 });
+    draws.push({ nodes: 40, islands: 1, seed: -1700298289, meshPercent: 0, wellConditioned: false });
+    for (const spec of draws) {
+      const { netlist, values } = largeAcCircuit({ ...spec, sourceInductance: true });
+      for (const island of netlist.islands) {
+        if (island.kind !== 'ac') continue;
+        const inductive = island.branches.some(
+          (b) => values.stamps[b] === AC_STAMP_VSOURCE && values.seriesHenries[b] > 0,
+        );
+        expect(inductive, `spec ${JSON.stringify(spec)}, island ${island.index}`).toBe(true);
+      }
+      // Without it the draw is untouched: no series L anywhere (the pinned hashes depend on it).
+      const plain = largeAcCircuit(spec).values;
+      expect(plain.seriesHenries.every((h) => h === 0)).toBe(true);
+    }
   });
 
   it('refuses a cached factorisation whose topologyHash another netlist reuses (the tripwire)', () => {
