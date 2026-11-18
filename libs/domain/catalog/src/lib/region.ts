@@ -245,7 +245,7 @@ const fraction = (volts120: number, what: string): RegionValue => ({
  * inverse-time limit is the published power law t = (20 mA / I)^1.43 s for residual currents from 6 to
  * 264 mA (a GFCI maker's public FAQ and an industry research report on appliance leakage, both read
  * 2026-11-17; maker not named in content), tabulated here offline at the P4 pre-audit's points, so no
- * fractional power runs in the game (D6); `region.spec.ts` recomputes every point within 0.5 %.
+ * fractional power runs in the game (D6); `catalog-v3.spec.ts` recomputes every point within 0.15 %.
  */
 const UL_943_CLASS_A =
   'UL 943 (cited by number, paraphrased): a US Class A ground-fault circuit interrupter for personnel protection trips when the residual (ground-fault) current reaches 6 mA and does not trip below 4 mA; above that its trip time is limited by an inverse-time curve published in makers’ application notes and FAQs as t = (20 mA / I)^1.43 seconds for 6 to 264 mA (read 2026-11-17). Faster is allowed: the curve is an upper limit only. Vetted by the P4 source pre-audit (electrical-realism-reviewer, 2026-11-17)';

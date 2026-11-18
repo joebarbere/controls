@@ -23,11 +23,13 @@ import type { Catalog } from './catalog';
  *   globally): a catalogue-1 release (0.3.0) lacked v2's `mounts`, `enclosure`, `conductor` and
  *   `terminals[].methods`, and its `lead` entries lacked the six thermal params F3.6 part 1 and the two
  *   failure params F3.6 part 2 added at entry version 1. A catalogue-1 or catalogue-2 release (0.4.0)
- *   lacked catalogue v3's fields (ADR 0020): `hostMounts`, `outlets`, `plug`, `supersededBy`, terminal
- *   `role`, `side` and `access`, a method's `multiConductor`, a fit's `alongMm` and `contacts`, an
- *   enclosure's `markedVolumeMm3`, `material` and `spaces` and its mounts' `contacts` and `bus`. Every
- *   other field of 0.4.0's entries (method specs, drives, the §8 fields) stays locked, and a catalogue-3
- *   or later release masks no field;
+ *   lacked catalogue v3's fields (ADR 0020). Of those, only the inspector's data and metadata are free
+ *   (terminal `role` and `side`, an enclosure's `markedVolumeMm3` and `material`, `supersededBy`); the
+ *   rest must hold their neutral values on a shipped entry (every `multiConductor` null, `access`
+ *   following the methods, `alongMm` 0, no fit or host-mount contacts, no bus, no spaces, no host mounts,
+ *   outlets or plug), because they change what an old save simulates or accepts. Every other field of
+ *   0.4.0's entries (method specs, drives, the §8 fields) stays locked, and a catalogue-3 or later
+ *   release masks no field;
  * - rule sets (catalogue 3 onwards, `content/rules/`) keep every rule's id, article, severity and check;
  *   their prose (`title`, a rule's `title` and `paraphrase`) may be corrected, and a changed rule is a
  *   new rule-set version;
@@ -138,23 +140,46 @@ const V2_LEAD_PARAMS = [
 const without = (record: Record<string, unknown>, keys: readonly string[]) =>
   Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
 
-/** Top-level fields catalogue format v3 added to a device entry (ADR 0020). */
-const V3_DEVICE_FIELDS = ['hostMounts', 'outlets', 'plug', 'supersededBy'];
-/** Fields catalogue format v3 added inside a device entry, by where they sit (ADR 0020). */
-const V3_TERMINAL_FIELDS = ['role', 'side', 'access'];
-const V3_METHOD_FIELDS = ['multiConductor'];
-const V3_FIT_FIELDS = ['alongMm', 'contacts'];
-const V3_ENCLOSURE_FIELDS = ['markedVolumeMm3', 'material', 'spaces'];
-const V3_HOST_MOUNT_FIELDS = ['contacts', 'bus'];
+/*
+ * Catalogue format v3's fields (ADR 0020), for a release that lacked them (catalogue 1 or 2). Two
+ * groups (save-format-guardian's review):
+ *
+ * - **free**: inspector-only data and prose-like metadata a shipped entry may gain with any value
+ *   (`role`, `side`, `markedVolumeMm3`, `material`, `supersededBy`): dropped before comparing;
+ * - **neutral**: fields that change what an old save simulates or accepts. A shipped entry may gain them
+ *   only at their "nothing" value (`multiConductor: null`, `access` following its methods, `alongMm: 0`,
+ *   no contacts, no bus, no spaces, no host mounts, outlets or plug): dropped when neutral, and kept
+ *   (so the comparison fails) otherwise.
+ */
+const V3_FREE_DEVICE_FIELDS = ['supersededBy'];
+const V3_FREE_TERMINAL_FIELDS = ['role', 'side'];
+const V3_FREE_ENCLOSURE_FIELDS = ['markedVolumeMm3', 'material'];
+const V3_NEUTRAL_DEVICE: Readonly<Record<string, unknown>> = { hostMounts: [], outlets: [], plug: null };
+const V3_NEUTRAL_METHOD: Readonly<Record<string, unknown>> = { multiConductor: null };
+const V3_NEUTRAL_FIT: Readonly<Record<string, unknown>> = { alongMm: 0, contacts: [] };
+const V3_NEUTRAL_ENCLOSURE: Readonly<Record<string, unknown>> = { spaces: [] };
+const V3_NEUTRAL_HOST_MOUNT: Readonly<Record<string, unknown>> = { contacts: [], bus: null };
 
 type Rec = Record<string, unknown>;
+
+/** `record` without the keys of `neutral` whose value is exactly the neutral one. */
+const withoutNeutral = (record: Rec, neutral: Readonly<Record<string, unknown>>): Rec =>
+  Object.fromEntries(
+    Object.entries(record).filter(
+      ([key, value]) => !(Object.hasOwn(neutral, key) && isDeepStrictEqual(value, neutral[key])),
+    ),
+  );
 
 /** A terminal as a release of catalogue format `catalogVersion` shipped it. */
 function terminalValues(terminal: Rec, catalogVersion: number): Rec {
   if (catalogVersion >= 3) return terminal;
-  const t = without(terminal, V3_TERMINAL_FIELDS);
+  const methods = (terminal['methods'] as Rec[] | undefined) ?? [];
+  // `access` is neutral when it follows the methods (`land` with methods, `clip` without; never `none`).
+  const t = withoutNeutral(without(terminal, V3_FREE_TERMINAL_FIELDS), {
+    access: methods.length > 0 ? 'land' : 'clip',
+  });
   if (catalogVersion < 2) return without(t, ['methods']);
-  return { ...t, methods: (t['methods'] as Rec[]).map((m) => without(m, V3_METHOD_FIELDS)) };
+  return { ...t, methods: methods.map((m) => withoutNeutral(m, V3_NEUTRAL_METHOD)) };
 }
 
 /**
@@ -168,16 +193,17 @@ function deviceValues(doc: Record<string, unknown>, catalogVersion: number): Rec
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(doc)) {
     if (key === 'title' || key === 'sources' || (v1 && V2_DEVICE_FIELDS.includes(key))) continue;
-    if (v2 && V3_DEVICE_FIELDS.includes(key)) continue;
+    if (v2 && V3_FREE_DEVICE_FIELDS.includes(key)) continue;
+    if (v2 && Object.hasOwn(V3_NEUTRAL_DEVICE, key) && isDeepStrictEqual(value, V3_NEUTRAL_DEVICE[key])) continue;
     if (key === 'terminals') {
       out[key] = (value as Rec[]).map((terminal) => terminalValues(terminal, catalogVersion));
     } else if (v2 && key === 'mounts') {
-      out[key] = (value as Rec[]).map((fit) => without(fit, V3_FIT_FIELDS));
+      out[key] = (value as Rec[]).map((fit) => withoutNeutral(fit, V3_NEUTRAL_FIT));
     } else if (v2 && key === 'enclosure' && value !== null) {
       const enclosure = value as Rec;
       out[key] = {
-        ...without(enclosure, V3_ENCLOSURE_FIELDS),
-        mounts: (enclosure['mounts'] as Rec[]).map((mount) => without(mount, V3_HOST_MOUNT_FIELDS)),
+        ...withoutNeutral(without(enclosure, V3_FREE_ENCLOSURE_FIELDS), V3_NEUTRAL_ENCLOSURE),
+        mounts: (enclosure['mounts'] as Rec[]).map((mount) => withoutNeutral(mount, V3_NEUTRAL_HOST_MOUNT)),
       };
     } else if (v1 && lead && key === 'model') {
       const model = value as Record<string, unknown>;
@@ -433,39 +459,74 @@ describe('shipped catalogue documents', () => {
       expect(same({ ...structuredClone(shipped), version: shipped.version + 1 }, shipped, 1)).toBe(false);
     });
 
-    it('a catalogue-2 release masks the v3 fields only; a catalogue-3 release masks none (ADR 0020)', () => {
-      const st4 = BUILTIN_CATALOG.device({ id: 'tb.quennick-st4', version: 2 }) as unknown as Doc;
-      type Terminal = { methods: Record<string, unknown>[] } & Record<string, unknown>;
-      const asShipped = structuredClone(st4) as Doc & { terminals: Terminal[] };
-      for (const key of V3_DEVICE_FIELDS) delete asShipped[key];
-      asShipped.terminals = asShipped.terminals.map((t) => ({
-        ...without(t, V3_TERMINAL_FIELDS),
-        methods: t.methods.map((m) => without(m, V3_METHOD_FIELDS)),
-      })) as Terminal[];
-      asShipped['mounts'] = (asShipped['mounts'] as Rec[]).map((m) => without(m, V3_FIT_FIELDS));
-      expect(same(st4, asShipped, 2)).toBe(true);
-      expect(same(st4, asShipped, 3)).toBe(false);
-      // A v3 value masked for a catalogue-2 release; locked for a catalogue-3 one.
-      const capped = structuredClone(st4) as Doc & { terminals: Terminal[] };
-      capped.terminals[0].methods[0]['multiConductor'] = { awgRange: { smallest: 22, largest: 14 }, equalSize: false };
-      expect(same(capped, st4, 2)).toBe(true);
-      expect(same(capped, st4, 3)).toBe(false);
-      const roled = structuredClone(st4) as Doc & { terminals: Terminal[] };
-      roled.terminals[0]['role'] = 'ungrounded';
-      expect(same(roled, st4, 2)).toBe(true);
-      expect(same(roled, st4, 3)).toBe(false);
-      // A catalogue-2 value next to them is still locked.
-      const torqued = structuredClone(st4) as Doc & { terminals: Terminal[] };
-      torqued.terminals[0].methods[0]['torqueNm'] = 0.8;
-      expect(same(torqued, st4, 2)).toBe(false);
-      const box = BUILTIN_CATALOG.device({ id: 'box.tinmoor-1g-steel', version: 1 }) as unknown as Doc;
-      const nm = structuredClone(box) as Doc & { enclosure: Rec };
-      nm.enclosure['material'] = 'nonmetallic';
-      expect(same(nm, box, 2)).toBe(true);
-      expect(same(nm, box, 3)).toBe(false);
-      const vol = structuredClone(box) as Doc & { enclosure: Rec };
-      vol.enclosure['interiorVolumeMm3'] = 1;
-      expect(same(vol, box, 2)).toBe(false);
+    describe('catalogue v3 fields against a catalogue-2 release (ADR 0020)', () => {
+      type Terminal = { methods: Rec[] } & Rec;
+      const v040 = releases.find((r) => r.release === '0.4.0') as Shipped;
+      const shippedOf = (id: string) => v040.devices.find((d) => d.id === id && d.version === 1) as Doc;
+      const current = (id: string) =>
+        structuredClone(BUILTIN_CATALOG.device({ id, version: 1 })) as unknown as Doc & {
+          terminals: Terminal[];
+          mounts: Rec[];
+          enclosure: (Rec & { mounts: Rec[] }) | null;
+        };
+      const ST4 = 'tb.quennick-st4';
+      const BOX = 'box.tinmoor-1g-steel';
+      const PANEL = 'panel.pellmoor-din-400x500';
+
+      it('the current entries, with their neutral v3 values, equal what 0.4.0 shipped', () => {
+        for (const id of [ST4, BOX, PANEL]) expect(same(current(id), shippedOf(id), 2), id).toBe(true);
+        // A catalogue-3 release compares every field, so the v3 fields themselves count.
+        expect(same(current(ST4), shippedOf(ST4), 3)).toBe(false);
+      });
+
+      it('free fields (role, side, markedVolumeMm3, material, supersededBy) may take any value', () => {
+        const roled = current(ST4);
+        roled.terminals[0]['role'] = 'ungrounded';
+        roled.terminals[1]['side'] = 'line';
+        roled['supersededBy'] = { id: ST4, version: 9 };
+        expect(same(roled, shippedOf(ST4), 2)).toBe(true);
+        const box = current(BOX);
+        if (box.enclosure === null) throw new Error('not an enclosure');
+        box.enclosure['material'] = 'nonmetallic';
+        box.enclosure['markedVolumeMm3'] = 200000;
+        expect(same(box, shippedOf(BOX), 2)).toBe(true);
+      });
+
+      it('neutral fields fail at any other value: a two-conductor cap, access none, an anchor, contacts, a bus, spaces, host mounts, outlets, a plug', () => {
+        const changes: [string, (d: ReturnType<typeof current>) => void][] = [
+          [
+            ST4,
+            (d) =>
+              (d.terminals[0].methods[0]['multiConductor'] = {
+                awgRange: { smallest: 22, largest: 16 },
+                equalSize: true,
+              }),
+          ],
+          [ST4, (d) => (d.terminals[0]['access'] = 'none')],
+          [ST4, (d) => (d.terminals[0]['access'] = 'clip')],
+          [ST4, (d) => (d.mounts[0]['alongMm'] = 3)],
+          [
+            ST4,
+            (d) =>
+              (d.mounts[0]['contacts'] = [{ id: 'x', terminal: 'a', host: 'stab', positionOffset: 0, contactOhm: 1 }]),
+          ],
+          [ST4, (d) => (d['hostMounts'] = [{ id: 'm' }])],
+          [ST4, (d) => (d['outlets'] = [{ id: 'top' }])],
+          [ST4, (d) => (d['plug'] = { config: '5-15P' })],
+          [PANEL, (d) => ((d.enclosure as Rec)['spaces'] = [{ mount: 'rail-1', index: 0 }])],
+          [PANEL, (d) => ((d.enclosure?.mounts[0] as Rec)['bus'] = { pitchMm: 25, stabs: 1, legs: ['a', 'b'] })],
+          [PANEL, (d) => ((d.enclosure?.mounts[0] as Rec)['contacts'] = [{ id: 'chassis', terminal: 'x' }])],
+        ];
+        changes.forEach(([id, change], i) => {
+          const d = current(id);
+          change(d);
+          expect(same(d, shippedOf(id), 2), `change ${i}`).toBe(false);
+        });
+        // A catalogue-2 value next to them stays locked.
+        const torqued = current(ST4);
+        torqued.terminals[0].methods[0]['torqueNm'] = 0.8;
+        expect(same(torqued, shippedOf(ST4), 2)).toBe(false);
+      });
     });
 
     it('a catalogue-2 release masks no catalogue-2 field: a changed method, §8 or drives field fails', () => {

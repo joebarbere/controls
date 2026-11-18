@@ -8,7 +8,7 @@
       "id": "smallConductorOcpd",
       "article": "240.4(D)",
       "title": "Small conductor on too large a breaker",
-      "paraphrase": "A small branch-circuit conductor may not be protected by an overcurrent device larger than the limit the code sets for its size and material, whatever its ampacity. The inspector reads each conductor entry's own published rating, never a size-to-amperes table.",
+      "paraphrase": "Small conductors (the smallest copper and aluminium sizes) may not be protected by an overcurrent device larger than the limit the code sets for their size and material, whatever their ampacity, unless another rule permits it. The inspector reads each conductor entry's own published rating.",
       "severity": "violation",
       "check": null
     },
@@ -16,7 +16,7 @@
       "id": "metalBoxBonded",
       "article": "250.148(C)",
       "title": "Metal box not bonded",
-      "paraphrase": "Where an equipment grounding conductor is spliced in or passes through a metal box, the box itself must be connected to it, by a grounding screw used for nothing else or by a listed grounding device; passing the conductor through without reaching the box leaves the box unbonded.",
+      "paraphrase": "Where circuit conductors are spliced or terminated in a metal box, the equipment grounding conductors that go with them are joined in the box and the box itself is connected to them, by a screw used only for grounding or by a listed grounding device.",
       "severity": "violation",
       "check": null
     },
@@ -24,7 +24,7 @@
       "id": "kitchenSmallApplianceCircuits",
       "article": "210.11(C)(1)",
       "title": "Two small-appliance circuits",
-      "paraphrase": "A dwelling's kitchen and dining-area countertop and wall receptacles are to be served by at least two small-appliance branch circuits. Listed here, not checked: the inspector never claims a full inspection.",
+      "paraphrase": "A dwelling needs at least two 20 A small-appliance branch circuits for the receptacle outlets of its kitchen, pantry, breakfast room and dining room. Listed here, not checked: the inspector never claims a full inspection.",
       "severity": "violation",
       "check": null
     }
@@ -33,7 +33,7 @@
     {
       "id": "nfpa-70-2023",
       "kind": "real-world",
-      "citation": "NFPA 70-2023 (National Electrical Code), cited by article number only; each paraphrase is written in our own words and reproduces no code text or table (realism charter, ADR 0003; P4 Q2: the 2023 edition). 240.4(D) and 250.148(C) are the numbering the P4 source pre-audit confirmed (electrical-realism-reviewer, 2026-11-17); 210.11(C)(1) is the plan's example of a rule listed but not checked, for the realism review to confirm. Which check kind runs each rule is the inspector's (F4.5); until then every rule here is listed, not checked.",
+      "citation": "NFPA 70-2023 (National Electrical Code), cited by article number only; each paraphrase is written in our own words and reproduces no code text or table (realism charter, ADR 0003; P4 Q2: the 2023 edition). 240.4(D) and 250.148(C) are the numbering the P4 source pre-audit confirmed (electrical-realism-reviewer, 2026-11-17); 210.11(C)(1): number confirmed by the realism review 2026-11-17 against secondary sources; NFPA text not read. Which check kind runs each rule is the inspector's (F4.5); until then every rule here is listed, not checked.",
       "covers": ["rules.*.article"]
     }
   ],

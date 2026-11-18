@@ -367,7 +367,7 @@ PRs 2–4 and 25 run in parallel with the contract track; after PR 9 the physics
 - GFCI (UL 943 Class A): pickup 4–6 mA; limit stored as rate points at 6, 10, 20, 30, 50, 100, 150, 264 mA (5.594, 2.695, 1.000, 0.560, 0.2697, 0.1001, 0.0561, 0.0250 s); mechanism 3–14 ms.
 - AFCI (UL 1699): ≤ 1 s at 5 A, < 0.2 s at 1.5× rated; nothing required below 5 A.
 - Push-in: 14 AWG solid copper, 15 A devices only (receptacles UL 498, switches UL 20, by number); no push-in on 5-20R or GFCI receptacles.
-- NEMA WD 6 mating: 5-20R takes 5-15P and 5-20P; 6-20R takes 6-15P and 6-20P; 5-15R, 14-30R and 14-50R take their own plug only.
+- NEMA WD 6 mating: 5-15R takes 1-15P and 5-15P; 5-20R takes 1-15P, 5-15P and 5-20P; 6-20R takes 6-15P and 6-20P; 14-30R and 14-50R take their own plug only. _(Corrected by the realism review, 2026-11-17: a two-blade 1-15P enters a 5-15R and a 5-20R; it read "5-15R … take their own plug only"; ADR 0020 deviation 10.)_
 - LED driver: constant power from 108 V, dropout about 90 V (labelled), PF 0.9. Appliances as labelled class figures; the dryer and range carry a 120 V L1–N share; constant-power loads state a PF.
 - Subpanel EGC share 38.6 % (39.1 % with a 2 % stranding factor on 8 AWG). Lost-neutral divider 40.00 V and 200.00 V for 9.6 Ω and 48 Ω.
 

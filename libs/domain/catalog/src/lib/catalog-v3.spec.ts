@@ -5,7 +5,18 @@ import { type CatalogInput, checkControlValue, offeredMounts, parseCatalog } fro
 import type { DeviceControl } from './device';
 import { counterKey, MODEL_KINDS, type ModelKindDef, textKey } from './model-kinds';
 import { NEC_REGION } from './region';
-import { AREA_USES, areaUse, MOUNT_TYPES, NEMA_CONFIGS, nemaConfig, nemaMates } from './registries';
+import {
+  AREA_USES,
+  areaUse,
+  AreaUseId,
+  ContactId,
+  MOUNT_TYPES,
+  NEMA_CONFIGS,
+  nemaConfig,
+  NemaConfigId,
+  nemaMates,
+  PinId,
+} from './registries';
 import { ARTICLE_PATTERN } from './rules';
 import { coversPath } from './sources';
 
@@ -533,12 +544,25 @@ describe('catalogue format v3 (ADR 0020) on test fixtures', () => {
 });
 
 describe('catalogue v3 registries and region data', () => {
-  it('NEMA_CONFIGS: the pre-audit mating matrix, and a 1-15P where its blades fit', () => {
+  it('every registry id parses as its save-format grammar', () => {
+    for (const id of Object.keys(AREA_USES)) expect(AreaUseId.safeParse(id).success, id).toBe(true);
+    for (const type of Object.values(MOUNT_TYPES)) {
+      for (const id of type.hostContacts) expect(ContactId.safeParse(id).success, id).toBe(true);
+    }
+    for (const config of Object.values(NEMA_CONFIGS)) {
+      expect(NemaConfigId.safeParse(config.id).success, config.id).toBe(true);
+      for (const pin of config.pins) expect(PinId.safeParse(pin).success, pin).toBe(true);
+      for (const plug of config.accepts) expect(NemaConfigId.safeParse(plug).success, plug).toBe(true);
+    }
+  });
+
+  it('NEMA_CONFIGS: the mating matrix (the pre-audit as corrected 2026-11-17), and a 1-15P where its blades fit', () => {
     const receptacles = Object.values(NEMA_CONFIGS).filter((c) => c.form === 'receptacle');
     const plugs = Object.values(NEMA_CONFIGS).filter((c) => c.form === 'plug');
     const matrix = Object.fromEntries(
       receptacles.map((r) => [r.id, plugs.filter((p) => nemaMates(p.id, r.id)).map((p) => p.id)]),
     );
+    // A save-format freeze from v0.5.0 (plug.insert's wrong-configuration): append only, never change a row.
     expect(matrix).toStrictEqual({
       '5-15R': ['1-15P', '5-15P'],
       '5-20R': ['1-15P', '5-15P', '5-20P'],
@@ -574,6 +598,7 @@ describe('catalogue v3 registries and region data', () => {
   });
 
   it('AREA_USES: the ten ADR 0019 rows, append-only from here on', () => {
+    // A save-format freeze from v0.5.0 (AreaV4.use): append only, never rename or remove a row.
     expect(Object.keys(AREA_USES)).toStrictEqual([
       'kitchen',
       'bathroom',
@@ -601,7 +626,7 @@ describe('catalogue v3 registries and region data', () => {
     }
   });
 
-  it("the GFCI Class A limit points are t = (20 mA / I)^1.43 within 0.5 %, the pre-audit's points", () => {
+  it("the GFCI Class A limit points are t = (20 mA / I)^1.43 within 0.15 %, the pre-audit's points", () => {
     const gfci = NEC_REGION.protection.gfci;
     expect([gfci.className, gfci.pickupMinA.value, gfci.pickupMaxA.value]).toStrictEqual(['A', 0.004, 0.006]);
     // Hand calculation: t(6 mA) = (20/6)^1.43 = e^(1.43 × 1.20397) = 5.5938 s; t(10) = 2^1.43 = 2.6945 s;
@@ -611,7 +636,7 @@ describe('catalogue v3 registries and region data', () => {
     expect(points.map((p) => Math.round(p.x * 1e6) / 1e3)).toStrictEqual([6, 10, 20, 30, 50, 100, 150, 264]);
     for (const { x, y } of points) {
       const exact = Math.pow(0.02 / x, 1.43);
-      expect(Math.abs(y - exact) / exact, `${x} A`).toBeLessThan(0.005);
+      expect(Math.abs(y - exact) / exact, `${x} A`).toBeLessThan(0.0015);
     }
     // Strictly falling with the residual, and the rate 1/t rising, so a linear-in-rate read is monotone.
     for (let i = 1; i < points.length; i++) expect(points[i].y).toBeLessThan(points[i - 1].y);
