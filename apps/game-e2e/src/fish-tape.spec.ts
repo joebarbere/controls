@@ -22,7 +22,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the pull (pinned from this spec; the console twin reaches it too). */
-const PULL_HASH = 'afd1b6b29b7fdb5188c8f246fb8386d814dd25d14673fa5cbe4c11c1b9661678';
+const PULL_HASH = 'db465aad0ce35150701fda519a655e3e4899c7dcc2e4cfafa1b6d3fe6b4dbdb8';
 
 const THHN = 'conductor.tallowmere-thhn-12-solid';
 const UPRIGHT = '--orientationMdeg.yaw 0 --orientationMdeg.pitch 0 --orientationMdeg.roll 0';
