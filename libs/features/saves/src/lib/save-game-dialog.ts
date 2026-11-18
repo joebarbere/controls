@@ -8,7 +8,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { SaveNameSchema } from '@controls/ipc-contract';
+import { saveNameKey, SaveNameSchema } from '@controls/ipc-contract';
 import { Session } from '@controls/feature-session';
 import { Button, Dialog } from '@controls/ui';
 import { SaveGames, suggestedSaveName } from './save-games';
@@ -97,17 +97,19 @@ export class SaveGameDialog {
   private readonly confirmed = linkedSignal<boolean, string | null>({ source: this.open, computation: () => null });
   private readonly trimmed = computed(() => this.name().trim());
   protected readonly error = computed(() => (this.submitted() ? saveNameError(this.trimmed()) : null));
-  /** Another save already has this name (compared without case: Windows and macOS file names ignore it). */
-  private readonly clashes = computed(() => {
-    const name = this.trimmed().toLowerCase();
-    const own = this.saves.saveName()?.toLowerCase();
-    return name !== own && this.saves.saves().some((e) => e.kind === 'manual' && e.name.toLowerCase() === name);
+  /** Another save already has this name, ignoring case (`saveNameKey`: the platforms keep one save per key). */
+  private readonly clashing = computed(() => {
+    const name = saveNameKey(this.trimmed());
+    const own = this.saves.saveName();
+    if (own !== null && saveNameKey(own) === name) return null;
+    return this.saves.saves().find((e) => e.kind === 'manual' && saveNameKey(e.name) === name) ?? null;
   });
+  private readonly clashes = computed(() => this.clashing() !== null);
   protected readonly replacing = computed(() => this.clashes() && this.confirmed() === this.trimmed());
   protected readonly message = computed(() => {
     const error = this.error();
     if (error) return error;
-    return this.replacing() ? `A save named “${this.trimmed()}” exists. Replace it?` : '';
+    return this.replacing() ? `A save named “${this.clashing()?.name ?? this.trimmed()}” exists. Replace it?` : '';
   });
   private readonly pending = signal<{ name: string; overwrite: boolean } | null>(null);
 
@@ -131,7 +133,7 @@ export class SaveGameDialog {
     // Overwrite this game's own save, or one the player agreed to replace; otherwise main refuses an existing name.
     this.pending.set({
       name,
-      overwrite: this.clashes() || name.toLowerCase() === this.saves.saveName()?.toLowerCase(),
+      overwrite: this.clashes() || saveNameKey(name) === saveNameKey(this.saves.saveName() ?? ''),
     });
     this.open.set(false);
   }

@@ -6,6 +6,7 @@ import {
   type SaveIoErrorCode,
   type SaveTarget,
 } from '@controls/ipc-contract';
+import { createManifest, createWorld, writeCtrl } from '@controls/save-format';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DialogService, FileService } from '../lib/files';
 
@@ -29,6 +30,15 @@ export interface SaveIoHarness {
 }
 
 const bytes = (...values: number[]) => new Uint8Array(values);
+/** A PNG-signed thumbnail (the container checks the signature, not the image). */
+const PNG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7);
+/** A real `.ctrl` holding `thumbnail` (or none), as the game writes it. */
+const ctrl = (thumbnail: Uint8Array | null) =>
+  writeCtrl({
+    manifest: createManifest({ catalogVersion: 1, simEngineVersion: 1 }),
+    world: createWorld({ seed: 5 }),
+    thumbnail,
+  });
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function codeOf(promise: Promise<unknown>): Promise<SaveIoErrorCode | 'resolved'> {
@@ -153,6 +163,82 @@ export function describeSaveIoContract(
         h.failNextCommit();
         expect(await codeOf(h.files.write({ kind: 'autosave', slotCount: 2 }, bytes(1)))).toBe('io');
         await expect(h.files.list()).resolves.toEqual([]);
+      });
+    });
+
+    describe('manual names ignore case', () => {
+      it('refuses a name that differs only by case, and an overwrite keeps the existing name', async () => {
+        const first = await h.files.write(manual('Shop'), bytes(1));
+        expect(await codeOf(h.files.write(manual('SHOP'), bytes(2)))).toBe('exists');
+        const again = await h.files.write(manual('SHOP', true), bytes(3, 3));
+        expect(again).toMatchObject({ handle: first.handle, name: 'Shop', kind: 'manual', sizeBytes: 2 });
+        expect((await h.files.list()).map((e) => e.name)).toEqual(['Shop']);
+        await expect(h.files.read(first.handle)).resolves.toEqual(bytes(3, 3));
+      });
+    });
+
+    describe('delete', () => {
+      it('deletes a manual save and an autosave slot', async () => {
+        const kept = await h.files.write(manual('Keep'), bytes(1));
+        const shop = await h.files.write(manual('Shop'), bytes(2));
+        const slot = await h.files.write({ kind: 'autosave', slotCount: 2 }, bytes(3));
+        await expect(h.files.delete(shop.handle)).resolves.toBeUndefined();
+        await expect(h.files.delete(slot.handle)).resolves.toBeUndefined();
+        expect((await h.files.list()).map((e) => e.name)).toEqual([kept.name]);
+        expect(await codeOf(h.files.read(shop.handle))).toBe('not-found');
+        expect(await codeOf(h.files.delete(shop.handle))).toBe('not-found');
+        // The name is free again, and its handle still names it.
+        const back = await h.files.write(manual('Shop'), bytes(4));
+        expect(back.handle).toBe(shop.handle);
+        await expect(h.files.read(back.handle)).resolves.toEqual(bytes(4));
+      });
+
+      it('never deletes an opened file or a Save As target', async () => {
+        h.nextOpen({ fileName: 'shared.ctrl', bytes: bytes(7) });
+        const opened = await h.dialogs.open({ fileType: 'ctrl' });
+        expect(await codeOf(h.files.delete(opened?.handle ?? ''))).toBe('read-only');
+        await expect(h.files.read(opened?.handle ?? '')).resolves.toEqual(bytes(7));
+        h.nextSaveAs({ fileName: 'Workshop.ctrl' });
+        const target = await h.dialogs.saveAs({ fileType: 'ctrl', suggestedName: 'Workshop' });
+        expect(await codeOf(h.files.delete(target?.handle ?? ''))).toBe('read-only');
+      });
+
+      it('refuses forged and malformed handles', async () => {
+        await h.files.write(manual('A'), bytes(1));
+        expect(await codeOf(h.files.delete('AAAAAAAAAAAAAAAAAAAAAA'))).toBe('unknown-handle');
+        for (const forged of ['../../etc/passwd', 'A.ctrl', 'autosave/slot-1.ctrl', ''])
+          expect(await codeOf(h.files.delete(forged))).toBe('invalid');
+        expect(await h.files.list()).toHaveLength(1);
+      });
+    });
+
+    describe('thumbnail', () => {
+      it('reads the PNG inside a save, or null for a save without one or a file that is no save', async () => {
+        const withPng = await h.files.write(manual('With'), ctrl(PNG));
+        const without = await h.files.write(manual('Without'), ctrl(null));
+        const junk = await h.files.write(manual('Junk'), bytes(1, 2, 3));
+        await expect(h.files.thumbnail(withPng.handle)).resolves.toEqual(PNG);
+        await expect(h.files.thumbnail(without.handle)).resolves.toBeNull();
+        await expect(h.files.thumbnail(junk.handle)).resolves.toBeNull();
+        const slot = await h.files.write({ kind: 'autosave', slotCount: 1 }, ctrl(PNG));
+        await expect(h.files.thumbnail(slot.handle)).resolves.toEqual(PNG);
+      });
+
+      it('reads an opened file’s thumbnail; a Save As target is write-only', async () => {
+        h.nextOpen({ fileName: 'shared.ctrl', bytes: ctrl(PNG) });
+        const opened = await h.dialogs.open({ fileType: 'ctrl' });
+        await expect(h.files.thumbnail(opened?.handle ?? '')).resolves.toEqual(PNG);
+        h.nextSaveAs({ fileName: 'Workshop.ctrl' });
+        const target = await h.dialogs.saveAs({ fileType: 'ctrl', suggestedName: 'Workshop' });
+        expect(await codeOf(h.files.thumbnail(target?.handle ?? ''))).toBe('write-only');
+      });
+
+      it('refuses forged and malformed handles, and a save that has gone', async () => {
+        const entry = await h.files.write(manual('A'), ctrl(PNG));
+        expect(await codeOf(h.files.thumbnail('AAAAAAAAAAAAAAAAAAAAAA'))).toBe('unknown-handle');
+        expect(await codeOf(h.files.thumbnail('../A.ctrl'))).toBe('invalid');
+        await h.files.delete(entry.handle);
+        expect(await codeOf(h.files.thumbnail(entry.handle))).toBe('not-found');
       });
     });
 

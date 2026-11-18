@@ -76,6 +76,8 @@ async function electronHarness(): Promise<SaveIoHarness> {
     listSaves: () => invoke('save:list', () => handlers.list(event)),
     readSave: (request) => invoke('save:read', () => handlers.read(event, structuredClone(request))),
     writeSave: (request) => invoke('save:write', () => handlers.write(event, structuredClone(request))),
+    deleteSave: (request) => invoke('save:delete', () => handlers.delete(event, structuredClone(request))),
+    readSaveThumbnail: (request) => invoke('save:thumbnail', () => handlers.thumbnail(event, structuredClone(request))),
     showOpenDialog: (request) => invoke('dialog:open', () => handlers.dialogOpen(event, structuredClone(request))),
     showSaveAsDialog: (request) =>
       invoke('dialog:saveAs', () => handlers.dialogSaveAs(event, structuredClone(request))),

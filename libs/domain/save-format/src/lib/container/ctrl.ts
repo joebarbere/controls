@@ -86,6 +86,11 @@ export interface CtrlInput {
   readonly world: World;
   readonly replayLog?: ReplayLog | null;
   readonly thumbnail?: Uint8Array | null;
+  /**
+   * Lower caps for this write (tests, and a writer that wants headroom). Each is clamped to
+   * {@link CTRL_LIMITS}: a write can never produce a save over the caps a read applies.
+   */
+  readonly limits?: Partial<CtrlLimits>;
 }
 
 /**
@@ -240,7 +245,7 @@ export class CtrlWriteError extends Error {
  * a thumbnail that isn't a PNG, or a save over a cap.
  */
 export function writeCtrl(input: CtrlInput): Uint8Array {
-  const limits = CTRL_LIMITS;
+  const limits = clampLimits(input.limits);
   const manifest = checkCurrent(CTRL_ENTRY.manifest, migrateManifest(input.manifest));
   const world = checkCurrent(CTRL_ENTRY.world, migrateWorld(input.world));
   const replayLog =

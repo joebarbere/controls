@@ -1,4 +1,10 @@
 export * from './ctrl';
+export {
+  bytesSource,
+  MAX_THUMBNAIL_CENTRAL_DIRECTORY_BYTES,
+  readCtrlThumbnail,
+  type RandomAccessBytes,
+} from './thumbnail';
 export { checkEntryName, MAX_ZIP_NAME_BYTES, ZIP_DEFLATE_OPTIONS, ZIP_FIXED_DOS_DATE, ZIP_FIXED_DOS_TIME } from './zip';
 export type { ZipError } from './zip';
 export { crc32 } from './crc32';

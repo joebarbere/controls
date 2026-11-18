@@ -1,3 +1,5 @@
+import { saveNameKey } from '@controls/ipc-contract';
+import { bytesSource, readCtrlThumbnail } from '@controls/save-format';
 import {
   type DialogService,
   type FileService,
@@ -51,6 +53,19 @@ export class MemorySaveIo {
       write: async (target, bytes) => {
         this.check('write');
         return this.write(target, bytes);
+      },
+      delete: async (handle) => {
+        this.check('delete');
+        const found = this.stored.get(handle);
+        if (!found) throw new SaveIoError('not-found');
+        if (found.entry.kind === 'external') throw new SaveIoError('read-only');
+        this.stored.delete(handle);
+      },
+      thumbnail: async (handle) => {
+        this.check('thumbnail');
+        const found = this.stored.get(handle);
+        if (!found) throw new SaveIoError('not-found');
+        return readCtrlThumbnail(bytesSource(found.bytes));
       },
     };
     this.dialogs = {
@@ -106,7 +121,7 @@ export class MemorySaveIo {
     this.lastSlot = 0;
   }
 
-  /** The next call of `op` (`list`, `read`, `write`, `open`, `saveAs`) rejects with `code`. */
+  /** The next call of `op` (`list`, `read`, `write`, `delete`, `thumbnail`, `open`, `saveAs`) rejects with `code`. */
   failNext(op: string, code: SaveIoErrorCode): void {
     this.failure = { op, code };
   }
@@ -131,12 +146,14 @@ export class MemorySaveIo {
   private write(target: SaveTarget, bytes: Uint8Array): SaveEntry {
     switch (target.kind) {
       case 'manual': {
+        // Names are unique ignoring case, as on both platforms: an overwrite keeps the existing spelling.
         const existing = [...this.stored.values()].find(
-          (s) => s.entry.kind === 'manual' && s.entry.name === target.name,
+          (s) => s.entry.kind === 'manual' && saveNameKey(s.entry.name) === saveNameKey(target.name),
         );
         if (existing && !target.overwrite) throw new SaveIoError('exists');
         if (existing) this.stored.delete(existing.entry.handle);
-        return this.put({ kind: 'manual', name: target.name, slot: null }, bytes, existing?.entry.handle);
+        const name = existing?.entry.name ?? target.name;
+        return this.put({ kind: 'manual', name, slot: null }, bytes, existing?.entry.handle);
       }
       case 'autosave': {
         const slot = this.lastSlot === 0 ? this.firstSlot(target.slotCount) : (this.lastSlot % target.slotCount) + 1;

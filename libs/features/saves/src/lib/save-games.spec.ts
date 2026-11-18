@@ -422,6 +422,84 @@ function entryNamed(saves: SaveGames, name: string): SaveEntry {
   return entry;
 }
 
+describe('deleting saves and reading thumbnails (P4 Saves)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('deletes a save, says so and lists again; a save already gone counts as deleted', async () => {
+    const io = new MemorySaveIo();
+    const shop = io.seed({ kind: 'manual', name: 'Shop' }, otherSave().bytes);
+    const keep = io.seed({ kind: 'manual', name: 'Keep' }, thirdSave().bytes);
+    const { saves, toasts } = setup({ io });
+    await saves.ready;
+    expect(await saves.delete(shop)).toBe(true);
+    expect(io.names()).toEqual(['Keep']);
+    expect(saves.saves().map((e) => e.name)).toEqual(['Keep']);
+    expect(toasts()).toContain('success: Deleted “Shop”.');
+    expect(await saves.delete(shop)).toBe(true); // gone already: nothing to tell the player
+    io.failNext('delete', 'io');
+    expect(await saves.delete(keep)).toBe(false);
+    expect(toasts()).toContain('error: Couldn’t delete “Keep”. The file couldn’t be deleted.');
+    expect(io.names()).toEqual(['Keep']);
+  });
+
+  it('clears the Continue pointer to a deleted save, and the game it held is autosaved back in', async () => {
+    const { io, saves, session, storedPointer } = setup();
+    await saves.ready;
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(5));
+    expect(await saves.saveNamed('Shop', false)).toBe('saved');
+    expect(await storedPointer()).toEqual({ kind: 'manual', name: 'Shop' });
+    expect(await saves.isDirty()).toBe(false);
+    const [entry] = saves.saves();
+    expect(await saves.delete(entry as SaveEntry)).toBe(true);
+    expect(await storedPointer()).toBeNull();
+    // The directory no longer holds the game being played: the next autosave copies it in.
+    expect(await saves.isDirty()).toBe(true);
+    expect(await saves.autosave()).toBe(true);
+    expect(await storedPointer()).toEqual({ kind: 'autosave', slot: 1 });
+    expect(io.names()).toEqual(['Autosave 1']);
+  });
+
+  it('keeps the pointer when another save is deleted', async () => {
+    const io = new MemorySaveIo();
+    const other = io.seed({ kind: 'manual', name: 'Other' }, thirdSave().bytes);
+    const { saves, session, storedPointer } = setup({ io });
+    await saves.ready;
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(5));
+    await saves.saveNamed('Shop', false);
+    await saves.delete(other);
+    expect(await storedPointer()).toEqual({ kind: 'manual', name: 'Shop' });
+    expect(await saves.isDirty()).toBe(false);
+  });
+
+  it('reads a save’s thumbnail, and null (never a rejection) when it has none or it fails', async () => {
+    const io = new MemorySaveIo();
+    const game = createGame({ seed: 5 });
+    const withPng = io.seed({ kind: 'manual', name: 'With' }, game.save({ thumbnail: PNG }));
+    const without = io.seed({ kind: 'manual', name: 'Without' }, game.save());
+    const { saves } = setup({ io });
+    await saves.ready;
+    await expect(saves.thumbnail(withPng)).resolves.toEqual(PNG);
+    await expect(saves.thumbnail(without)).resolves.toBeNull();
+    io.failNext('thumbnail', 'io');
+    await expect(saves.thumbnail(withPng)).resolves.toBeNull();
+  });
+
+  it('saving under a name that differs only by case keeps the existing save’s name', async () => {
+    const io = new MemorySaveIo();
+    io.seed({ kind: 'manual', name: 'Shop' }, otherSave().bytes);
+    const { saves, session, storedPointer, toasts } = setup({ io });
+    await saves.ready;
+    session.newSandbox({ seed: 3 });
+    expect(await saves.saveNamed('SHOP', true)).toBe('saved');
+    expect(saves.saveName()).toBe('Shop');
+    expect(io.names()).toEqual(['Shop']);
+    expect(await storedPointer()).toEqual({ kind: 'manual', name: 'Shop' });
+    expect(toasts()).toContain('success: Saved “Shop”.');
+  });
+});
+
 describe('Continue resumes the game the player was last in (settings.saves.lastPlayed)', () => {
   afterEach(() => TestBed.resetTestingModule());
   const pointer = () => TestBed.inject(SettingsStore).settings().saves.lastPlayed;
@@ -600,8 +678,9 @@ describe('Continue resumes the game the player was last in (settings.saves.lastP
       entry({ name: 'Shop', handle: 'b' }),
       entry({ kind: 'autosave', name: 'Autosave 1', slot: 1, handle: 'c' }),
     ];
-    expect(findLastPlayed(list, { kind: 'manual', name: 'Shop' })?.handle).toBe('b'); // exact name first
-    expect(findLastPlayed(list, { kind: 'manual', name: 'SHOP' })?.handle).toBe('a'); // then ignoring case
+    expect(findLastPlayed(list, { kind: 'manual', name: 'Shop' })?.handle).toBe('b'); // the exact name
+    // Never ignoring case: on a case-sensitive file system "SHOP" is another save (P4 Saves).
+    expect(findLastPlayed(list, { kind: 'manual', name: 'SHOP' })).toBeUndefined();
     expect(findLastPlayed(list, { kind: 'autosave', slot: 1 })?.handle).toBe('c');
     expect(findLastPlayed(list, { kind: 'autosave', slot: 2 })).toBeUndefined();
   });

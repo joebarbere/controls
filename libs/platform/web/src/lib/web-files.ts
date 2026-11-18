@@ -12,7 +12,10 @@ import {
   MAX_SAVE_LIST_ENTRIES,
   pickAutosaveSlot,
   SAVE_FILE_EXTENSION,
+  SaveDeleteRequestSchema,
   SaveHandleSchema,
+  saveNameKey,
+  SaveThumbnailRequestSchema,
   SaveWriteRequestSchema,
   type DialogFileType,
   type SaveAsTarget,
@@ -23,6 +26,7 @@ import {
   type SaveTarget,
 } from '@controls/ipc-contract';
 import { SaveIoError, type DialogService, type FileService } from '@controls/platform-api';
+import { readCtrlThumbnail } from '@controls/save-format';
 
 /*
  * Web harness saves (F1.8b, ADR 0009) in the **origin-private file system** (OPFS). Only the slices
@@ -40,6 +44,8 @@ export interface OpfsFile {
   readonly size: number;
   readonly lastModified: number;
   arrayBuffer(): Promise<ArrayBuffer>;
+  /** `Blob.slice`: a byte range, read without reading the rest (thumbnails). */
+  slice(start: number, end: number): { arrayBuffer(): Promise<ArrayBuffer> };
 }
 
 export interface OpfsFileHandle {
@@ -124,6 +130,8 @@ export class WebSaveStore {
       list: () => this.guard(() => this.list()),
       read: (handle) => this.guard(() => this.read(handle)),
       write: (target, bytes) => this.guard(() => this.write(target, bytes)),
+      delete: (handle) => this.guard(() => this.delete(handle)),
+      thumbnail: (handle) => this.guard(() => this.thumbnail(handle)),
     };
     this.dialogs = {
       open: (options) => this.guard(() => this.open(options)),
@@ -163,6 +171,36 @@ export class WebSaveStore {
     return data;
   }
 
+  /** A manual save or an autosave slot; uploads and downloads are never deleted (`read-only`). */
+  private delete(handle: SaveHandle): Promise<void> {
+    if (!SaveDeleteRequestSchema.safeParse({ handle }).success) throw new SaveIoError('invalid');
+    const location = this.locate(handle);
+    if (location.kind === 'upload' || location.kind === 'download') throw new SaveIoError('read-only');
+    return this.serialised(async () => {
+      await this.fileHandleOf(location, false); // `not-found` if it has gone
+      try {
+        await this.remove(location);
+      } catch (error) {
+        if (domName(error) === 'NotFoundError') throw new SaveIoError('not-found');
+        throw error;
+      }
+    });
+  }
+
+  /** The PNG inside a readable save (`readCtrlThumbnail`, through `File.slice`), or null. */
+  private async thumbnail(handle: SaveHandle): Promise<Uint8Array | null> {
+    if (!SaveThumbnailRequestSchema.safeParse({ handle }).success) throw new SaveIoError('invalid');
+    const location = this.locate(handle);
+    if (location.kind === 'download') throw new SaveIoError('write-only');
+    const file =
+      location.kind === 'upload' ? location.file : await (await this.fileHandleOf(location, false)).getFile();
+    if (file.size > MAX_SAVE_BYTES) throw new SaveIoError('too-large');
+    return readCtrlThumbnail({
+      size: file.size,
+      read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+    });
+  }
+
   private write(target: SaveTarget, bytes: Uint8Array): Promise<SaveEntry> {
     const parsed = SaveWriteRequestSchema.safeParse({ target, bytes });
     if (!parsed.success) throw new SaveIoError('invalid');
@@ -171,10 +209,11 @@ export class WebSaveStore {
     return this.serialised(async () => {
       switch (request.target.kind) {
         case 'manual': {
-          const location = { kind: 'manual', name: request.target.name } as const;
-          const exists = await this.exists(location);
-          if (exists && !request.target.overwrite) throw new SaveIoError('exists');
-          return this.commit(location, request.bytes, !exists);
+          // Names are unique ignoring case, as on desktop: a clash is `exists`, or replaced under its own name.
+          const onDisk = await this.manualNameOnDisk(request.target.name);
+          if (onDisk !== null && !request.target.overwrite) throw new SaveIoError('exists');
+          const location = { kind: 'manual', name: onDisk ?? request.target.name } as const;
+          return this.commit(location, request.bytes, !(await this.exists(location)));
         }
         case 'autosave':
           return this.writeAutosave(request.target.slotCount, request.bytes);
@@ -190,6 +229,21 @@ export class WebSaveStore {
         }
       }
     });
+  }
+
+  /** The listed manual save `name` clashes with (`saveNameKey`): itself, else the first by code units, else null. */
+  private async manualNameOnDisk(name: SaveName): Promise<SaveName | null> {
+    const saves = await this.savesDir(false);
+    if (!saves) return null;
+    const key = saveNameKey(name);
+    let clash: SaveName | null = null;
+    for await (const entry of saves.values()) {
+      const other = entry.kind === 'file' ? manualSaveNameOf(entry.name) : null;
+      if (other === null) continue;
+      if (other === name) return name;
+      if (saveNameKey(other) === key && (clash === null || other < clash)) clash = other;
+    }
+    return clash;
   }
 
   private async writeAutosave(slotCount: number, bytes: Uint8Array): Promise<SaveEntry> {

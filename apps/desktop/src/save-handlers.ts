@@ -6,9 +6,11 @@ import {
   manualSaveFileName,
   MAX_SAVE_BYTES,
   MAX_SAVE_LIST_ENTRIES,
+  SaveDeleteRequestSchema,
   SaveListRequestSchema,
   SaveReadRequestSchema,
   saveRefusalMessage,
+  SaveThumbnailRequestSchema,
   SaveWriteRequestSchema,
   type SaveAsTarget,
   type SaveEntry,
@@ -45,6 +47,8 @@ type Channel =
   | typeof IpcChannel.SaveList
   | typeof IpcChannel.SaveRead
   | typeof IpcChannel.SaveWrite
+  | typeof IpcChannel.SaveDelete
+  | typeof IpcChannel.SaveThumbnail
   | typeof IpcChannel.DialogOpen
   | typeof IpcChannel.DialogSaveAs;
 
@@ -147,6 +151,26 @@ export function createSaveHandlers(deps: SaveHandlerDeps) {
             throw new SaveRefusal('read-only'); // autosave slots rotate; opened files are never written
           }
         }
+      });
+    },
+
+    /** `save:delete`: a manual save or an autosave slot; a file outside the save directory is `read-only`. */
+    delete(event: SaveIpcEvent, payload: unknown): Promise<void> {
+      return guarded(IpcChannel.SaveDelete, event, async () => {
+        const parsed = SaveDeleteRequestSchema.safeParse(payload);
+        if (!parsed.success) throw new SaveRefusal('invalid');
+        await store.delete(locate(event, parsed.data.handle));
+      });
+    },
+
+    /** `save:thumbnail`: the PNG inside a readable save (only that ZIP entry is read), or null. */
+    thumbnail(event: SaveIpcEvent, payload: unknown): Promise<Uint8Array | null> {
+      return guarded(IpcChannel.SaveThumbnail, event, async () => {
+        const parsed = SaveThumbnailRequestSchema.safeParse(payload);
+        if (!parsed.success) throw new SaveRefusal('invalid');
+        const location = locate(event, parsed.data.handle);
+        if (location.kind === 'external' && location.access === 'write') throw new SaveRefusal('write-only');
+        return store.readThumbnail(location);
       });
     },
 

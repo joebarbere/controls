@@ -26,6 +26,10 @@ export interface ControlsBridge {
   readonly readSave: (request: unknown) => Promise<unknown>;
   /** `save:write` (`SaveWriteRequestSchema`): the written file's `SaveEntry`. */
   readonly writeSave: (request: unknown) => Promise<unknown>;
+  /** `save:delete` (`SaveDeleteRequestSchema`): resolves once the file is gone. */
+  readonly deleteSave: (request: unknown) => Promise<unknown>;
+  /** `save:thumbnail` (`SaveThumbnailRequestSchema`): PNG bytes (a `Uint8Array`), or null. */
+  readonly readSaveThumbnail: (request: unknown) => Promise<unknown>;
   /** `dialog:open` (`DialogOpenRequestSchema`): a read-only `SaveEntry`, or null if cancelled. */
   readonly showOpenDialog: (request: unknown) => Promise<unknown>;
   /** `dialog:saveAs` (`DialogSaveAsRequestSchema`): a write-only `SaveAsTarget`, or null if cancelled. */

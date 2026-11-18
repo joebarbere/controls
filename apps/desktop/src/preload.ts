@@ -17,6 +17,8 @@ const bridge: ControlsBridge = {
   listSaves: () => ipcRenderer.invoke(IpcChannel.SaveList),
   readSave: (request) => ipcRenderer.invoke(IpcChannel.SaveRead, request),
   writeSave: (request) => ipcRenderer.invoke(IpcChannel.SaveWrite, request),
+  deleteSave: (request) => ipcRenderer.invoke(IpcChannel.SaveDelete, request),
+  readSaveThumbnail: (request) => ipcRenderer.invoke(IpcChannel.SaveThumbnail, request),
   showOpenDialog: (request) => ipcRenderer.invoke(IpcChannel.DialogOpen, request),
   showSaveAsDialog: (request) => ipcRenderer.invoke(IpcChannel.DialogSaveAs, request),
 };

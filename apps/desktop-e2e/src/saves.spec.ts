@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { crc32 } from 'node:zlib';
 import { BENCH_LAMP_HASH, BENCH_LAMP_LIT_HASH, benchLampScenario, hashAfter, newSandbox, PLACE } from './game';
 import { createProfile, launchControls, removeProfile, type LaunchedControls } from './launch';
 
@@ -19,8 +20,45 @@ interface Bridge {
   writeSave(
     request: unknown,
   ): Promise<{ handle: string; name: string; kind: string; slot: number | null; sizeBytes: number }>;
+  deleteSave(request: unknown): Promise<void>;
+  readSaveThumbnail(request: unknown): Promise<Uint8Array | null>;
   showOpenDialog(request: unknown): Promise<{ handle: string; name: string; kind: string } | null>;
   showSaveAsDialog(request: unknown): Promise<{ handle: string; name: string } | null>;
+}
+
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3];
+
+/**
+ * A one-entry ZIP holding `thumbnail.png`, stored (as the game writes it). Not a loadable save, but
+ * `save:thumbnail` reads only the ZIP's directory and that entry, so it is all main needs.
+ */
+function zipWithThumbnail(png: readonly number[]): number[] {
+  const name = Buffer.from('thumbnail.png', 'ascii');
+  const data = Buffer.from(png);
+  const crc = crc32(data);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(10, 4);
+  local.writeUInt32LE(crc, 14);
+  local.writeUInt32LE(data.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(name.length, 26);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(10, 6);
+  central.writeUInt32LE(crc, 16);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(name.length, 28);
+  const centralStart = local.length + name.length + data.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + name.length, 12);
+  end.writeUInt32LE(centralStart, 16);
+  return [...Buffer.concat([local, name, data, central, name, end])];
 }
 
 test.describe.serial('desktop saves', () => {
@@ -114,6 +152,54 @@ test.describe.serial('desktop saves', () => {
     });
     expect(slots).toEqual([1, 2, 1]);
     expect(readdirSync(join(profile, 'saves', 'autosave')).sort()).toEqual(['slot-1.ctrl', 'slot-2.ctrl']);
+  });
+
+  test('save:thumbnail and save:delete work on save-directory handles only, never echoing a payload (P4)', async () => {
+    const result = await running().window.evaluate(async (zip) => {
+      const bridge = (globalThis as unknown as { controls: Bridge }).controls;
+      const attempt = (call: () => Promise<unknown>) =>
+        call().then(
+          () => 'accepted',
+          (error: Error) => error.message,
+        );
+      const pictured = await bridge.writeSave({
+        target: { kind: 'manual', name: 'Pictured', overwrite: false },
+        bytes: new Uint8Array(zip),
+      });
+      const thumbnail = await bridge.readSaveThumbnail({ handle: pictured.handle });
+      const junk = (await bridge.listSaves()).find((e) => e.name === 'E2E save');
+      const none = await bridge.readSaveThumbnail({ handle: junk?.handle });
+      const refusals = {
+        forged: await attempt(() => bridge.deleteSave({ handle: 'AAAAAAAAAAAAAAAAAAAAAA' })),
+        traversal: await attempt(() => bridge.deleteSave({ handle: '../../do-not-echo/settings.json' })),
+        path: await attempt(() => bridge.deleteSave({ path: '/tmp/do-not-echo' })),
+        thumbnailPath: await attempt(() => bridge.readSaveThumbnail({ handle: pictured.handle, path: '/do-not-echo' })),
+      };
+      await bridge.deleteSave({ handle: pictured.handle });
+      const again = await attempt(() => bridge.deleteSave({ handle: pictured.handle }));
+      return {
+        thumbnail: thumbnail === null ? null : [...thumbnail],
+        isUint8: thumbnail instanceof Uint8Array,
+        none,
+        refusals,
+        again,
+        after: (await bridge.listSaves()).map((e) => e.name).sort(),
+      };
+    }, zipWithThumbnail(PNG));
+    expect(result.thumbnail).toEqual(PNG);
+    expect(result.isUint8).toBe(true);
+    expect(result.none).toBeNull(); // not a ZIP: no thumbnail, and no error
+    expect(result.refusals).toEqual({
+      forged: expect.stringContaining('save:delete refused (unknown-handle).'),
+      traversal: expect.stringContaining('save:delete refused (invalid).'),
+      path: expect.stringContaining('save:delete refused (invalid).'),
+      thumbnailPath: expect.stringContaining('save:thumbnail refused (invalid).'),
+    });
+    expect(result.again).toContain('save:delete refused (not-found).');
+    expect(result.after).toEqual(['Autosave 1', 'Autosave 2', 'E2E save']);
+    expect(readdirSync(join(profile, 'saves')).sort()).toEqual(['E2E save.ctrl', 'autosave']);
+    expect(JSON.stringify(result)).not.toContain('do-not-echo');
+    expect(JSON.stringify(result)).not.toContain(profile);
   });
 
   test('Save As and Open hand out handles for the picked files, never their paths', async () => {
@@ -228,5 +314,37 @@ test.describe.serial('desktop saves', () => {
     await expect(simTime).toHaveText('0:00:01.500');
     expect(await hashAfter(window, ...out)).toBe(BENCH_LAMP_HASH);
     await expect(simTime).toHaveText('0:00:02.000');
+  });
+
+  test('the Load list shows each save’s thumbnail and deletes a save after a confirmation (P4)', async () => {
+    const { window } = running();
+    const menu = window.getByRole('navigation', { name: 'Controls' });
+    await window.getByRole('button', { name: 'Menu' }).click();
+    await menu.getByRole('button', { name: 'Load' }).click();
+    const load = window.getByRole('dialog', { name: 'Load game' });
+    const row = load
+      .getByTestId('load-row')
+      .filter({ has: window.getByRole('button', { name: 'Desktop E2E', exact: true }) });
+    // The viewport PNG saved with it, read from the ZIP by main and drawn from a blob: URL.
+    await expect
+      .poll(() =>
+        row.getByTestId('load-thumbnail').evaluate((img) => {
+          const { naturalWidth: w, naturalHeight: h } = img as HTMLImageElement;
+          return w > 0 && w <= 320 && h > 0 && h <= 180; // at most 320 × 180, the viewport's aspect
+        }),
+      )
+      .toBe(true);
+    expect(await row.getByTestId('load-thumbnail').getAttribute('src')).toMatch(/^blob:app:\/\/game\//);
+
+    await row.getByRole('button', { name: 'Delete Desktop E2E' }).click();
+    const question = load.getByRole('group', { name: 'Delete “Desktop E2E”? This can’t be undone.' });
+    await expect(question.getByRole('button', { name: 'Keep' })).toBeFocused();
+    await question.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(window.getByText('Deleted “Desktop E2E”.')).toBeVisible();
+    await expect(load.getByRole('button', { name: 'Desktop E2E', exact: true })).toHaveCount(0);
+    expect(readdirSync(join(profile, 'saves'))).not.toContain('Desktop E2E.ctrl');
+    expect(readdirSync(join(profile, 'saves'))).toContain('Bench lamp lit.ctrl');
+    await window.keyboard.press('Escape');
+    await expect(load).toBeHidden();
   });
 });

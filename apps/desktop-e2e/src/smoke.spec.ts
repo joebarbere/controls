@@ -79,6 +79,8 @@ test.describe.serial('desktop smoke', () => {
         'listSaves',
         'readSave',
         'writeSave',
+        'deleteSave',
+        'readSaveThumbnail',
         'showOpenDialog',
         'showSaveAsDialog',
       ],

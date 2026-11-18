@@ -122,6 +122,36 @@ export const SaveListRequestSchema = z.undefined();
 export const SaveReadRequestSchema = z.strictObject({ handle: SaveHandleSchema });
 export type SaveReadRequest = z.infer<typeof SaveReadRequestSchema>;
 
+/**
+ * `save:delete` request: a save-directory handle (a manual save or an autosave slot). A file outside
+ * the directory (an Open or Save As handle) is never deleted: `read-only`. Resolves with nothing.
+ */
+export const SaveDeleteRequestSchema = z.strictObject({ handle: SaveHandleSchema });
+export type SaveDeleteRequest = z.infer<typeof SaveDeleteRequestSchema>;
+
+/**
+ * `save:thumbnail` request: any readable handle. The response is the save's `thumbnail.png` (read on
+ * its own from the ZIP, never the whole save), or null when it has none or it can't be read as one.
+ */
+export const SaveThumbnailRequestSchema = z.strictObject({ handle: SaveHandleSchema });
+export type SaveThumbnailRequest = z.infer<typeof SaveThumbnailRequestSchema>;
+
+/** Largest thumbnail `save:thumbnail` returns: `CTRL_LIMITS.maxThumbnailBytes` (4 MiB), pinned in a test. */
+export const MAX_SAVE_THUMBNAIL_BYTES = 4 * 1024 * 1024;
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/** A `save:thumbnail` response: null, or PNG-signed bytes within {@link MAX_SAVE_THUMBNAIL_BYTES}. */
+export function isSaveThumbnail(value: unknown): value is Uint8Array | null {
+  if (value === null) return true;
+  return (
+    isUint8Array(value) &&
+    value.byteLength >= PNG_SIGNATURE.length &&
+    value.byteLength <= MAX_SAVE_THUMBNAIL_BYTES &&
+    PNG_SIGNATURE.every((byte, i) => value[i] === byte)
+  );
+}
+
 /** True for a real `Uint8Array` from any realm (IPC and `contextBridge` copy them across worlds). */
 export function isUint8Array(value: unknown): value is Uint8Array {
   return ArrayBuffer.isView(value) && Object.prototype.toString.call(value) === '[object Uint8Array]';
@@ -167,6 +197,14 @@ export const DialogSaveAsResponseSchema = SaveAsTargetSchema.nullable();
 
 /** File name of a manual save. */
 export const manualSaveFileName = (name: SaveName): string => `${name}.${SAVE_FILE_EXTENSION}`;
+
+/**
+ * The key two manual save names clash under: NFC, then lower case. Windows and macOS file names
+ * ignore case (and APFS ignores normalisation), so both platforms keep at most one manual save per
+ * key: a write whose name clashes with another save's is `exists`, or with `overwrite` replaces that
+ * save under its existing name. Continue's last-played pointer can then match names exactly.
+ */
+export const saveNameKey = (name: string): string => name.normalize('NFC').toLowerCase();
 
 /** Name of a manual save from its file name, or null if the file isn't one (wrong extension, bad name). */
 export function manualSaveNameOf(fileName: string): SaveName | null {
