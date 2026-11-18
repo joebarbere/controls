@@ -24,6 +24,10 @@ export const IpcChannel = {
   SaveRead: 'save:read',
   /** Atomically write bytes to a manual save, the next autosave slot or a writable handle (`SaveWriteRequestSchema`). */
   SaveWrite: 'save:write',
+  /** Delete a manual save or an autosave slot in the save directory (`SaveDeleteRequestSchema`). */
+  SaveDelete: 'save:delete',
+  /** The `thumbnail.png` of a save, read on its own from the ZIP (`SaveThumbnailRequestSchema`), or null. */
+  SaveThumbnail: 'save:thumbnail',
   /** Native Open dialog; the picked file becomes a read-only handle (`DialogOpenRequestSchema`). */
   DialogOpen: 'dialog:open',
   /** Native Save As dialog; the picked path becomes a write-only handle (`DialogSaveAsRequestSchema`). */

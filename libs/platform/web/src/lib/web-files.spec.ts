@@ -11,6 +11,17 @@ import { WebPlatform } from './web-platform';
 
 const domError = (name: string) => Object.assign(new Error(name), { name });
 
+/** A `File`-like view of `data`, with `slice` (copies, as `Blob.slice` does). */
+function memoryFile(data: Uint8Array, lastModified: number): OpfsFile {
+  const buffer = (bytes: Uint8Array) => bytes.slice().buffer as ArrayBuffer;
+  return {
+    size: data.byteLength,
+    lastModified,
+    arrayBuffer: async () => buffer(data),
+    slice: (start, end) => ({ arrayBuffer: async () => buffer(data.subarray(start, end)) }),
+  };
+}
+
 /**
  * An in-memory OPFS with the semantics the store relies on: `getFileHandle({ create: true })`
  * creates an empty file at once, and a writable stream buffers into a swap copy that only
@@ -29,8 +40,7 @@ class FakeOpfs {
       getFile: async (): Promise<OpfsFile> => {
         const file = files.get(fileName);
         if (!file) throw domError('NotFoundError');
-        const data = file.data.slice();
-        return { size: data.byteLength, lastModified: file.lastModified, arrayBuffer: async () => data.buffer };
+        return memoryFile(file.data.slice(), file.lastModified);
       },
       createWritable: async (): Promise<OpfsWritable> => {
         let swap = new Uint8Array();
@@ -110,14 +120,17 @@ function webHarness(): SaveIoHarness & { opfs: FakeOpfs; downloads: { fileName: 
     dialogs: store.dialogs,
     nextOpen: (pick) => {
       const data = pick?.bytes.slice();
-      nextPick =
-        pick && data
-          ? { name: pick.fileName, size: data.byteLength, lastModified: 42, arrayBuffer: async () => data.buffer }
-          : null;
+      nextPick = pick && data ? { name: pick.fileName, ...memoryFile(data, 42) } : null;
     },
     nextSaveAs: () => undefined, // a download has no picker
     lastSavedAs: async () => downloads.at(-1),
     failNextCommit: () => (opfs.failNextClose = true),
+    plantManual: async (name, bytes) => {
+      const saves = await root.getDirectoryHandle('saves', { create: true });
+      const writable = await (await saves.getFileHandle(`${name}.ctrl`, { create: true })).createWritable();
+      await writable.write(bytes);
+      await writable.close();
+    },
     dispose: async () => undefined,
   };
 }

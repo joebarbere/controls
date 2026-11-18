@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Session, SIM_TRANSPORT, SIM_WORKER_FACTORY } from '@controls/feature-session';
+import { KEY_PLATFORM, Session, SIM_TRANSPORT, SIM_WORKER_FACTORY } from '@controls/feature-session';
 import { FakeSimWorker } from '@controls/feature-session/testing';
 import { createGame } from '@controls/scripting-api';
 import { screen, waitFor, within } from '@testing-library/dom';
@@ -76,8 +76,9 @@ describe('LoadGameDialog', () => {
     await fixture.whenStable();
     const dialog = screen.getByRole('dialog', { name: 'Load game' });
     const list = within(dialog).getByRole('list', { name: 'Saved games' });
-    const entries = within(list).getAllByRole('button');
+    const entries = within(list).getAllByTestId('load-entry');
     expect(entries.map((b) => b.querySelector('.name')?.textContent)).toEqual(['Autosave 1', 'Shop']);
+    expect(within(list).getByRole('button', { name: 'Delete Shop' })).toBeTruthy();
     expect(within(list).getByRole('button', { name: 'Shop', description: /^Saved game · .+ · \d/ })).toBeTruthy();
     expect(document.activeElement).toBe(entries[0]); // the newest save has focus
 
@@ -130,6 +131,113 @@ describe('LoadGameDialog', () => {
     expect(await session.hashAt()).toBe(shared.hash);
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('deletes a save after a confirmation, all from the keyboard, and never loses focus', async () => {
+    const io = new MemorySaveIo();
+    io.seed({ kind: 'manual', name: 'Old' }, savedGame(1).bytes);
+    io.seed({ kind: 'manual', name: 'Shop' }, savedGame(2).bytes);
+    io.seed({ kind: 'manual', name: 'New' }, savedGame(3).bytes);
+    const { fixture, user } = await setup(io);
+    await user.click(screen.getByRole('button', { name: 'Open load' }));
+    await fixture.whenStable();
+    const dialog = screen.getByRole('dialog', { name: 'Load game' });
+    await user.keyboard('{ArrowDown}'); // Shop
+    expect(document.activeElement?.querySelector('.name')?.textContent).toBe('Shop');
+
+    // The Delete key asks; focus goes to Keep; Escape goes back without closing the dialog.
+    await user.keyboard('{Delete}');
+    await fixture.whenStable();
+    const question = within(dialog).getByRole('group', { name: 'Delete “Shop”? This can’t be undone.' });
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Keep' }));
+    await user.keyboard('{Escape}');
+    await fixture.whenStable();
+    expect(screen.getByRole('dialog', { name: 'Load game' })).toBeTruthy();
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Delete Shop' }));
+    expect(io.names()).toContain('Shop');
+
+    // The row's Delete button asks again; Delete in the question deletes.
+    await user.keyboard('{Enter}');
+    await fixture.whenStable();
+    const again = within(dialog).getByRole('group', { name: /Delete “Shop”/ });
+    await user.keyboard('{Shift>}{Tab}{/Shift}'); // Keep → Delete
+    expect(document.activeElement).toBe(within(again).getByRole('button', { name: 'Delete' }));
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(io.names()).not.toContain('Shop'));
+    await fixture.whenStable();
+    expect(
+      within(dialog)
+        .getAllByTestId('load-entry')
+        .map((b) => b.querySelector('.name')?.textContent),
+    ).toEqual(['New', 'Old']);
+    // Focus moved to the save that took its place.
+    await waitFor(() => expect(document.activeElement?.querySelector('.name')?.textContent).toBe('Old'));
+    expect(io.calls).not.toContain('read'); // nothing was loaded
+  });
+
+  it.each([
+    ['other', '{Backspace}', false],
+    ['mac', '{Backspace}', true],
+    ['mac', '{Meta>}{Backspace}{/Meta}', true],
+  ] as const)('on %s, %s on a save asks to delete it: %s', async (platform, keys, asks) => {
+    const io = new MemorySaveIo();
+    io.seed({ kind: 'manual', name: 'Shop' }, savedGame(1).bytes);
+    TestBed.configureTestingModule({ providers: [{ provide: KEY_PLATFORM, useValue: platform }] });
+    const { fixture, user } = await setup(io);
+    await user.click(screen.getByRole('button', { name: 'Open load' }));
+    await fixture.whenStable();
+    const dialog = screen.getByRole('dialog', { name: 'Load game' });
+    await user.keyboard(keys);
+    await fixture.whenStable();
+    expect(within(dialog).queryByRole('group', { name: /Delete “Shop”/ }) !== null).toBe(asks);
+  });
+
+  it('after deleting the last save in the list, focus goes to the one before, then to Open file…', async () => {
+    const io = new MemorySaveIo();
+    io.seed({ kind: 'manual', name: 'Only' }, savedGame(1).bytes);
+    const { fixture, user } = await setup(io);
+    await user.click(screen.getByRole('button', { name: 'Open load' }));
+    await fixture.whenStable();
+    const dialog = screen.getByRole('dialog', { name: 'Load game' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete Only' }));
+    await fixture.whenStable();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(within(dialog).getByText(/No saved games yet/)).toBeTruthy());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Open file…' })),
+    );
+  });
+
+  it('shows each save’s thumbnail as a blob: image, and releases them when it closes', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+    const created: Blob[] = [];
+    const revoked: string[] = [];
+    // jsdom has no object URLs.
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+    URL.createObjectURL = (blob: Blob) => (created.push(blob), `blob:thumb-${created.length}`);
+    URL.revokeObjectURL = (url: string) => void revoked.push(url);
+    try {
+      const io = new MemorySaveIo();
+      const game = createGame({ seed: 4 });
+      io.seed({ kind: 'manual', name: 'Pictured' }, game.save({ thumbnail: png }));
+      io.seed({ kind: 'manual', name: 'Plain' }, game.save());
+      const { fixture, user } = await setup(io);
+      await user.click(screen.getByRole('button', { name: 'Open load' }));
+      await waitFor(() => expect(io.calls.filter((c) => c === 'thumbnail')).toHaveLength(2));
+      await fixture.whenStable();
+      const dialog = screen.getByRole('dialog', { name: 'Load game' });
+      const images = within(dialog).getAllByTestId('load-thumbnail');
+      expect(images.map((img) => img.getAttribute('src'))).toEqual(['blob:thumb-1']);
+      expect(images[0]?.getAttribute('alt')).toBe(''); // decorative: the button is named by the save
+      expect(images[0]?.closest('[data-testid="load-entry"]')?.querySelector('.name')?.textContent).toBe('Pictured');
+      expect(created[0]?.type).toBe('image/png');
+      await user.keyboard('{Escape}');
+      await fixture.whenStable();
+      expect(revoked).toEqual(['blob:thumb-1']);
+    } finally {
+      URL.createObjectURL = original.create;
+      URL.revokeObjectURL = original.revoke;
+    }
   });
 
   it('formats sizes in decimal units', () => {
@@ -191,12 +299,58 @@ describe('SaveGameDialog', () => {
     await user.clear(field);
     await user.type(field, 'shop{Enter}');
     await fixture.whenStable();
-    expect(within(dialog).getByRole('alert').textContent).toBe('A save named “shop” exists. Replace it?');
+    // The existing save's own spelling: the platform keeps it when replacing (names are unique ignoring case).
+    expect(within(dialog).getByRole('alert').textContent).toBe('A save named “Shop” exists. Replace it?');
     expect(within(dialog).getByRole('button', { name: 'Replace' })).toBeTruthy();
     await user.click(within(dialog).getByRole('button', { name: 'Replace' }));
     await fixture.whenStable();
     expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => expect(io.calls.filter((c) => c === 'write')).toHaveLength(1));
+  });
+
+  // Two spellings left by an older build on a case-sensitive file system (or OPFS): the dialog resolves
+  // the exact save it means and submits that name, so the store never picks between them.
+  it('with "Shop" and "shop" on disk, "SHOP" asks about one of them and replaces that one', async () => {
+    const io = new MemorySaveIo();
+    const shop = savedGame(1).bytes;
+    const lower = savedGame(2).bytes;
+    io.seed({ kind: 'manual', name: 'Shop' }, shop);
+    io.seed({ kind: 'manual', name: 'shop' }, lower);
+    const { dialog, field, fixture, saves, user } = await openSave(io);
+    await saves.refresh();
+    await user.clear(field);
+    await user.type(field, 'SHOP{Enter}');
+    await fixture.whenStable();
+    // The newest of the two (listing order); the store is then sent exactly that name.
+    expect(within(dialog).getByRole('alert').textContent).toBe('A save named “shop” exists. Replace it?');
+    await user.click(within(dialog).getByRole('button', { name: 'Replace' }));
+    await waitFor(() => expect(io.bytesOf('shop')).not.toEqual(lower));
+    expect(io.bytesOf('Shop')).toEqual(shop);
+    expect(saves.saveName()).toBe('shop');
+  });
+
+  it('with "Shop" and "shop" on disk, "SHOP" in a game saved as "shop" replaces its own save, unasked', async () => {
+    const io = new MemorySaveIo();
+    const shop = savedGame(1).bytes;
+    io.seed({ kind: 'manual', name: 'Shop' }, shop);
+    const { dialog, field, fixture, saves, user } = await openSave(io);
+    // The game saves as "shop" outside the dialog first (its own save), next to the older "Shop".
+    io.seed({ kind: 'manual', name: 'shop' }, savedGame(2).bytes);
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(await saves.saveNamed('shop', true)).toBe('saved');
+    expect(saves.saveName()).toBe('shop');
+    await user.click(screen.getByRole('button', { name: 'Open save' }));
+    await fixture.whenStable();
+    const again = screen.getByRole('dialog', { name: 'Save game' });
+    const input = within(again).getByRole('textbox', { name: 'Save name' });
+    await user.clear(input);
+    await user.type(input, 'SHOP{Enter}');
+    await fixture.whenStable();
+    expect(screen.queryByRole('dialog')).toBeNull(); // no prompt: it is this game's own save
+    await waitFor(() => expect(io.calls.filter((c) => c === 'write')).toHaveLength(2));
+    expect(io.bytesOf('Shop')).toEqual(shop);
+    expect(io.names().sort()).toEqual(['Shop', 'shop']);
+    expect(saves.saveName()).toBe('shop');
   });
 
   it('validates names like the save directory does', () => {

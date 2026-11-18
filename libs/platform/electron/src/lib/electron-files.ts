@@ -3,12 +3,15 @@ import {
   DialogOpenResponseSchema,
   DialogSaveAsRequestSchema,
   DialogSaveAsResponseSchema,
+  isSaveThumbnail,
   isUint8Array,
   MAX_SAVE_BYTES,
+  SaveDeleteRequestSchema,
   saveErrorCodeOf,
   SaveEntrySchema,
   SaveListResponseSchema,
   SaveReadRequestSchema,
+  SaveThumbnailRequestSchema,
   SaveWriteRequestSchema,
   type ControlsBridge,
   type DialogFileType,
@@ -47,7 +50,7 @@ function request<T>(
 }
 
 /**
- * Saves over `save:list` / `save:read` / `save:write`. Main owns the directory, the paths and the
+ * Saves over `save:list` / `save:read` / `save:write` / `save:delete` / `save:thumbnail`. Main owns the directory, the paths and the
  * atomic writes; this side checks requests before sending them (same schemas, same codes) and
  * re-validates every response, so a bad reply never reaches the game.
  */
@@ -78,6 +81,27 @@ export class ElectronFileService implements FileService {
     return call(
       () => this.bridge.writeSave(payload),
       (r) => SaveEntrySchema.parse(r),
+    );
+  }
+
+  async delete(handle: SaveHandle): Promise<void> {
+    const payload = request(SaveDeleteRequestSchema, { handle });
+    await call(
+      () => this.bridge.deleteSave(payload),
+      (r) => {
+        if (r !== undefined) throw new Error('unexpected delete response');
+      },
+    );
+  }
+
+  async thumbnail(handle: SaveHandle): Promise<Uint8Array | null> {
+    const payload = request(SaveThumbnailRequestSchema, { handle });
+    return call(
+      () => this.bridge.readSaveThumbnail(payload),
+      (r) => {
+        if (!isSaveThumbnail(r)) throw new Error('not a thumbnail');
+        return r;
+      },
     );
   }
 }

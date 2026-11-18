@@ -8,10 +8,12 @@ import {
   MAX_SAVE_BYTES,
   pickAutosaveSlot,
   SAVE_FILE_EXTENSION,
+  saveNameKey,
   type SaveIoErrorCode,
   type SaveKind,
   type SaveName,
 } from '@controls/ipc-contract';
+import { readCtrlThumbnail } from '@controls/save-format';
 import { constants } from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
@@ -49,6 +51,7 @@ export interface SaveFs extends AtomicWriteFs {
   lstat: typeof fsp.lstat;
   readdir: typeof fsp.readdir;
   realpath: typeof fsp.realpath;
+  unlink: typeof fsp.unlink;
 }
 
 /** No `O_NOFOLLOW` on Windows; there the `lstat` check before opening is what refuses a symlink. */
@@ -63,6 +66,11 @@ const errno = (error: unknown): string | undefined => (error as NodeJS.ErrnoExce
  *   check the size cap, then open with `O_NOFOLLOW` and check again on the open descriptor.
  * - Writes are atomic (`writeFileAtomic`) and serialised, so autosave slot choice can't race.
  * - Listing skips symlinks, temp files and names that aren't valid save names.
+ * - Manual names are unique ignoring case (`saveNameKey`): a write whose name clashes with another
+ *   save's file is `exists`, or with `overwrite` replaces that file under its existing name, so the
+ *   name a write returns is the one a listing shows, on every file system.
+ * - Deletes are serialised with the writes, refuse anything but a regular file and never follow a
+ *   link; thumbnails read only the ZIP's directory and the `thumbnail.png` entry.
  */
 export class SaveStore {
   private queue: Promise<unknown> = Promise.resolve();
@@ -136,6 +144,45 @@ export class SaveStore {
 
   /** The bytes at `location`: a regular file (no symlinks), at most `MAX_SAVE_BYTES`. */
   async read(location: SaveLocation): Promise<Uint8Array> {
+    return this.withRegularFile(location, async (handle) => {
+      const data = await handle.readFile();
+      if (data.byteLength > MAX_SAVE_BYTES) throw new SaveRefusal('too-large'); // grew while reading
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    });
+  }
+
+  /**
+   * The PNG thumbnail inside the save at `location`, or null (`readCtrlThumbnail`): reads the ZIP's
+   * end record, its central directory and the `thumbnail.png` entry, never the rest of the file. The
+   * same checks as {@link read} before any byte is read.
+   */
+  async readThumbnail(location: SaveLocation): Promise<Uint8Array | null> {
+    return this.withRegularFile(location, (handle, size) =>
+      readCtrlThumbnail({
+        size,
+        read: async (offset, length) => {
+          const buffer = Buffer.alloc(length);
+          let done = 0;
+          while (done < length) {
+            const { bytesRead } = await handle.read(buffer, done, length - done, offset + done);
+            if (bytesRead === 0) break; // the file shrank: the reader sees a short range and gives up
+            done += bytesRead;
+          }
+          return new Uint8Array(buffer.buffer, buffer.byteOffset, done);
+        },
+      }),
+    );
+  }
+
+  /**
+   * Opens the regular file at `location` and runs `body` on it: `lstat` first (regular file only,
+   * size ≤ `MAX_SAVE_BYTES`), then open with `O_NOFOLLOW` and check again on the descriptor, so a
+   * file swapped for a symlink in between is refused.
+   */
+  private async withRegularFile<T>(
+    location: SaveLocation,
+    body: (handle: fsp.FileHandle, size: number) => Promise<T>,
+  ): Promise<T> {
     if (location.kind === 'autosave') await this.checkAutosaveDir();
     const path = this.pathOf(location);
     const stat = await this.lstatOrRefuse(path);
@@ -154,21 +201,44 @@ export class SaveStore {
       const opened = await handle.stat();
       if (!opened.isFile()) throw new SaveRefusal('not-a-file');
       if (opened.size > MAX_SAVE_BYTES) throw new SaveRefusal('too-large');
-      const data = await handle.readFile();
-      if (data.byteLength > MAX_SAVE_BYTES) throw new SaveRefusal('too-large'); // grew while reading
-      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      return await body(handle, opened.size);
     } finally {
       await handle.close();
     }
   }
 
   /**
-   * Writes a manual save. With `overwrite` false, an existing file (any kind) is `exists`.
-   * Something that isn't a regular file or a symlink at that name (a directory) is `not-a-file`.
+   * Deletes a manual save or an autosave slot. Files outside the save directory are never deleted
+   * (`read-only`). Only a regular file is removed; `unlink` removes a name, so a link swapped in
+   * after the check is removed itself and its target is untouched. Serialised with the writes.
+   */
+  delete(location: SaveLocation): Promise<void> {
+    return this.serialised(async () => {
+      if (location.kind === 'external') throw new SaveRefusal('read-only');
+      if (location.kind === 'autosave') await this.checkAutosaveDir();
+      const path = this.pathOf(location);
+      const stat = await this.lstatOrRefuse(path);
+      if (!stat.isFile()) throw new SaveRefusal('not-a-file');
+      try {
+        await this.fs.unlink(path);
+      } catch (error) {
+        if (errno(error) === 'ENOENT') throw new SaveRefusal('not-found');
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Writes a manual save. With `overwrite` false, an existing file (any kind) is `exists`, and so is
+   * a save whose name differs only by case (`saveNameKey`); with `overwrite` that save is replaced
+   * under its own name. Something that isn't a regular file or a symlink at that name (a directory)
+   * is `not-a-file`.
    */
   writeManual(name: SaveName, bytes: Uint8Array, overwrite: boolean): Promise<SaveFileInfo> {
     return this.serialised(async () => {
-      const location: SaveLocation = { kind: 'manual', name };
+      const onDisk = await this.manualNameOnDisk(name);
+      if (onDisk !== null && !overwrite) throw new SaveRefusal('exists');
+      const location: SaveLocation = { kind: 'manual', name: onDisk ?? name };
       const path = this.pathOf(location);
       const existing = await this.lstatOrNull(path);
       if (existing && !overwrite) throw new SaveRefusal('exists');
@@ -227,6 +297,23 @@ export class SaveStore {
   /** The Save As path with `.ctrl` added if the player left it off. */
   static withSaveExtension(path: string): string {
     return extname(path).toLowerCase() === `.${SAVE_FILE_EXTENSION}` ? path : `${path}.${SAVE_FILE_EXTENSION}`;
+  }
+
+  /**
+   * The name of the manual save `name` clashes with: itself if its file is listed, else another
+   * listed save with the same {@link saveNameKey} (the first by code units), else null. On a
+   * case-insensitive file system this is also the case the file actually has on disk.
+   */
+  private async manualNameOnDisk(name: SaveName): Promise<SaveName | null> {
+    const key = saveNameKey(name);
+    let clash: SaveName | null = null;
+    for (const file of await this.fileNames(this.root)) {
+      const other = manualSaveNameOf(file);
+      if (other === null) continue;
+      if (other === name) return name;
+      if (saveNameKey(other) === key && (clash === null || other < clash)) clash = other;
+    }
+    return clash;
   }
 
   private async autosaveSlots(): Promise<{ slot: number; modifiedMs: number }[]> {

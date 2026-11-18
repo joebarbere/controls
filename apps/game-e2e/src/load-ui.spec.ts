@@ -150,3 +150,68 @@ test('Save to a file downloads the save, and Open file uploads it back to the sa
   await expect(page.getByText('Loaded “Sandbox 0.ctrl”.')).toBeVisible();
   expect(await hash(page)).toBe(saved);
 });
+
+/**
+ * Saves the game as `name` through the Save game dialog: opened with Mod+S (a game without a name
+ * yet: it asks) or from the open menu's Save game (it always asks).
+ */
+async function saveAs(page: Page, name: string, via: 'keys' | 'menu'): Promise<void> {
+  if (via === 'menu') await menu(page).getByRole('button', { name: 'Save game' }).click();
+  else await page.keyboard.press('Control+S');
+  await expect(page.getByRole('textbox', { name: 'Save name' })).toBeFocused();
+  await page.keyboard.insertText(name); // replaces the selected suggestion
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(`Saved “${name}”.`)).toBeVisible();
+}
+
+// P4 Saves: the Load list shows each save's thumbnail (read on its own from the ZIP) and deletes a
+// save after a confirmation, all from the keyboard, with focus never falling to the page.
+test('the Load list shows thumbnails and deletes a save after a confirmation from the keyboard', async ({ page }) => {
+  await open(page);
+  await startSandbox(page);
+  await placeCrate(page);
+  // Saved before the menu opens, so returning to it has nothing unsaved to autosave into the list.
+  await saveAs(page, 'Keep me', 'keys');
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(menu(page)).toBeVisible();
+  await saveAs(page, 'Delete me', 'menu');
+
+  await menu(page).getByRole('button', { name: 'Load' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Load game' });
+  await expect(dialog.getByRole('button', { name: 'Delete me', exact: true })).toBeFocused();
+  // Both saves carry a viewport PNG (at most 320 × 180, the viewport's aspect), decoded and drawn.
+  const thumbnails = dialog.getByTestId('load-thumbnail');
+  await expect(thumbnails).toHaveCount(2);
+  await expect
+    .poll(() =>
+      thumbnails.evaluateAll((images) =>
+        images.map((img) => {
+          const { naturalWidth: w, naturalHeight: h } = img as HTMLImageElement;
+          return w > 0 && w <= 320 && h > 0 && h <= 180;
+        }),
+      ),
+    )
+    .toEqual([true, true]);
+  expect(await thumbnails.first().getAttribute('src')).toMatch(/^blob:/);
+
+  // Delete asks, with focus on Keep; Escape goes back to the row's Delete button and the dialog stays.
+  await page.keyboard.press('Delete');
+  const question = dialog.getByRole('group', { name: 'Delete “Delete me”? This can’t be undone.' });
+  await expect(question.getByRole('button', { name: 'Keep' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Delete Delete me' })).toBeFocused();
+
+  await page.keyboard.press('Enter'); // the row's Delete button asks again
+  await expect(question.getByRole('button', { name: 'Keep' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(question.getByRole('button', { name: 'Delete', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Deleted “Delete me”.')).toBeVisible();
+  await expect(dialog.getByTestId('load-entry')).toHaveCount(1);
+  await expect(dialog.getByRole('button', { name: 'Keep me', exact: true })).toBeFocused();
+  const names = await page.evaluate(async () =>
+    (await (globalThis as unknown as Hooks).__controlsPlatform.files.list()).map((e) => e.name),
+  );
+  expect(names).toEqual(['Keep me']);
+});

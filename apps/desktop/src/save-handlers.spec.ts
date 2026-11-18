@@ -53,6 +53,8 @@ describe('save handlers: sender checks', () => {
         handlers.list(event),
         handlers.read(event, { handle: SECRET }),
         handlers.write(event, { target: { kind: 'manual', name: 'A', overwrite: false }, bytes: bytes(1) }),
+        handlers.delete(event, { handle: SECRET }),
+        handlers.thumbnail(event, { handle: SECRET }),
         handlers.dialogOpen(event, { fileType: 'ctrl' }),
         handlers.dialogSaveAs(event, { fileType: 'ctrl', suggestedName: 'A' }),
       ];
@@ -76,6 +78,10 @@ describe('save handlers: validation', () => {
       (h: ReturnType<typeof setup>['handlers']) =>
         h.write(window1, { target: { kind: 'path', path: `/tmp/${SECRET}` }, bytes: bytes(1) }),
     ],
+    ['save:delete', (h: ReturnType<typeof setup>['handlers']) => h.delete(window1, { handle: `../${SECRET}` })],
+    ['save:delete', (h: ReturnType<typeof setup>['handlers']) => h.delete(window1, { path: `/tmp/${SECRET}` })],
+    ['save:thumbnail', (h: ReturnType<typeof setup>['handlers']) => h.thumbnail(window1, { handle: SECRET })],
+    ['save:thumbnail', (h: ReturnType<typeof setup>['handlers']) => h.thumbnail(window1, undefined)],
     ['dialog:open', (h: ReturnType<typeof setup>['handlers']) => h.dialogOpen(window1, { fileType: SECRET })],
     [
       'dialog:saveAs',
@@ -171,5 +177,71 @@ describe('save handlers: dialogs', () => {
     expect(showSaveAs).toHaveBeenCalledWith(window1, { defaultPath: join(root, 'Shop.ctrl') });
     expect(target).toEqual({ handle: expect.any(String), name: 'out.ctrl' });
     expect(JSON.stringify([opened, target])).not.toContain(dir);
+  });
+});
+
+describe('save handlers: delete and thumbnail', () => {
+  it('delete removes a save of this window only; another window’s or a forged handle is unknown', async () => {
+    const { handlers } = setup();
+    const entry = await handlers.write(window1, {
+      target: { kind: 'manual', name: 'Shop', overwrite: false },
+      bytes: bytes(1),
+    });
+    expect(await messageOf(handlers.delete(window2, { handle: entry.handle }))).toBe(
+      'save:delete refused (unknown-handle).',
+    );
+    expect(await messageOf(handlers.delete(window1, { handle: 'AAAAAAAAAAAAAAAAAAAAAA' }))).toBe(
+      'save:delete refused (unknown-handle).',
+    );
+    await expect(handlers.list(window1)).resolves.toHaveLength(1);
+    await expect(handlers.delete(window1, { handle: entry.handle })).resolves.toBeUndefined();
+    await expect(handlers.list(window1)).resolves.toEqual([]);
+    expect(await messageOf(handlers.delete(window1, { handle: entry.handle }))).toBe(
+      'save:delete refused (not-found).',
+    );
+  });
+
+  it('never deletes an opened file or a Save As target', async () => {
+    const picked = join(dir, 'picked.ctrl');
+    writeFileSync(picked, 'x');
+    const { handlers } = setup({ showOpen: async () => picked, showSaveAs: async () => picked });
+    const opened = await handlers.dialogOpen(window1, { fileType: 'ctrl' });
+    const target = await handlers.dialogSaveAs(window1, { fileType: 'ctrl', suggestedName: 'A' });
+    for (const handle of [opened?.handle, target?.handle])
+      expect(await messageOf(handlers.delete(window1, { handle }))).toBe('save:delete refused (read-only).');
+    await expect(fsp.readFile(picked, 'utf8')).resolves.toBe('x');
+  });
+
+  it('thumbnail is null for a file that isn’t a save, and write-only for a Save As target', async () => {
+    const picked = join(dir, 'picked.ctrl');
+    const { handlers } = setup({ showSaveAs: async () => picked });
+    const entry = await handlers.write(window1, {
+      target: { kind: 'manual', name: 'Junk', overwrite: false },
+      bytes: bytes(1, 2, 3),
+    });
+    await expect(handlers.thumbnail(window1, { handle: entry.handle })).resolves.toBeNull();
+    expect(await messageOf(handlers.thumbnail(window2, { handle: entry.handle }))).toBe(
+      'save:thumbnail refused (unknown-handle).',
+    );
+    const target = await handlers.dialogSaveAs(window1, { fileType: 'ctrl', suggestedName: 'A' });
+    expect(await messageOf(handlers.thumbnail(window1, { handle: target?.handle }))).toBe(
+      'save:thumbnail refused (write-only).',
+    );
+  });
+
+  it('a file-system error is io, with only its errno code logged', async () => {
+    const store = new SaveStore(root, {
+      ...fsp,
+      unlink: async () =>
+        Promise.reject(Object.assign(new Error(`EACCES: permission denied, '${root}/${SECRET}'`), { code: 'EACCES' })),
+    });
+    const { handlers, log } = setup({}, store);
+    const entry = await handlers.write(window1, {
+      target: { kind: 'manual', name: 'Shop', overwrite: false },
+      bytes: bytes(1),
+    });
+    expect(await messageOf(handlers.delete(window1, { handle: entry.handle }))).toBe('save:delete refused (io).');
+    expect(log).toHaveBeenCalledWith('save:delete failed (EACCES).');
+    expect(JSON.stringify(log.mock.calls)).not.toContain(SECRET);
   });
 });

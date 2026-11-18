@@ -27,6 +27,13 @@ export const REPLAY_RESTARTED_MESSAGE =
 /** `Game.save` refused to write the game (over a `CTRL_LIMITS` cap even without a thumbnail). */
 const TOO_LARGE_TO_SAVE = 'The game is too large to save.';
 
+/** A delete through a handle the platform no longer knows, of a save that is still listed. */
+const STALE_LIST = 'The list was out of date, so nothing was deleted. Try again.';
+
+/** The same save-directory entry, by kind and name or slot (handles may differ between listings). */
+const sameSave = (a: SaveEntry, b: SaveEntry) =>
+  a.kind === b.kind && (a.kind === 'autosave' ? a.slot === b.slot : a.name === b.name);
+
 /** Saving while the sim has crashed is refused (ADR 0011 §9.5, R1): restart it first. */
 export const RESTART_FIRST = 'Restart simulation first.';
 
@@ -51,16 +58,26 @@ export function lastPlayedOf(entry: SaveEntry): LastPlayedSave | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** The listing's entry for `pointer`: exact name first, then ignoring case (case-insensitive file systems). */
+/**
+ * The listing's entry for `pointer`, by exact name (or slot). Both platforms keep manual names unique
+ * ignoring case and return the name a listing shows from every write (`saveNameKey`, ADR 0009
+ * amendment 2026-11-18), so the pointer always holds the listed spelling: a case-insensitive match
+ * could only pick another save (`SHOP` when the last-played `Shop` was deleted outside the game on
+ * a case-sensitive file system), and is never tried.
+ */
 export function findLastPlayed(entries: readonly SaveEntry[], pointer: LastPlayedSave): SaveEntry | undefined {
   if (pointer.kind === 'autosave') return entries.find((e) => e.kind === 'autosave' && e.slot === pointer.slot);
-  const manual = entries.filter((e) => e.kind === 'manual');
-  const folded = pointer.name.toLowerCase();
-  return manual.find((e) => e.name === pointer.name) ?? manual.find((e) => e.name.toLowerCase() === folded);
+  return entries.find((e) => e.kind === 'manual' && e.name === pointer.name);
 }
 
 const pointerName = (pointer: LastPlayedSave) =>
   pointer.kind === 'manual' ? pointer.name : `Autosave ${pointer.slot}`;
+
+/** Whether `pointer` names `entry`. */
+const pointsAt = (pointer: LastPlayedSave | null, entry: SaveEntry) => {
+  const target = lastPlayedOf(entry);
+  return pointer !== null && target !== null && samePointer(pointer, target);
+};
 
 const samePointer = (a: LastPlayedSave | null, b: LastPlayedSave | null) =>
   a === b ||
@@ -257,8 +274,10 @@ export class SaveGames {
         return saveIoCodeOf(error) === 'exists' ? 'exists' : 'failed';
       }
       this.markStored(snapshot, written);
-      this.named.set({ generation: snapshot.generation, name });
-      this.notifications.notify(`Saved ${quoted(name)}.`, { level: 'success' });
+      // The platform may have kept an existing save's spelling (names are unique ignoring case).
+      const savedAs = written.kind === 'manual' ? written.name : name;
+      this.named.set({ generation: snapshot.generation, name: savedAs });
+      this.notifications.notify(`Saved ${quoted(savedAs)}.`, { level: 'success' });
       void this.refresh();
       return 'saved';
     });
@@ -362,6 +381,56 @@ export class SaveGames {
         () => undefined,
         () => undefined,
       );
+  }
+
+  /**
+   * Deletes a manual save or an autosave slot from the save directory (the Load list's Delete, after
+   * the player confirmed). A save that had already gone (`not-found`) counts as deleted; a refused
+   * handle (`unknown-handle`) counts only if a fresh listing no longer has the save, else nothing
+   * changes and the player is asked to try again (the list now has fresh handles). If Continue pointed at it,
+   * the pointer is cleared; if it held the game running now, that game counts as not held, so the
+   * next autosave copies it back in and Continue can still resume it (ADR 0009). Lists again either
+   * way. Resolves `true` if the save is gone. Never rejects.
+   */
+  async delete(entry: SaveEntry): Promise<boolean> {
+    try {
+      await this.files.delete(entry.handle);
+    } catch (error) {
+      const code = saveIoCodeOf(error);
+      if (code === 'unknown-handle') {
+        // The handle is stale (evicted, or from before a reload), which says nothing about the file:
+        // list again, and call it gone only if the listing agrees.
+        await this.refresh();
+        if (this.entries().some((e) => sameSave(e, entry))) {
+          this.error(`Couldn’t delete ${quoted(entry.name)}. ${STALE_LIST}`);
+          return false;
+        }
+      } else if (code !== 'not-found') {
+        this.error(`Couldn’t delete ${quoted(entry.name)}. ${saveIoReason(error, 'delete')}`);
+        await this.refresh();
+        return false;
+      }
+    }
+    if (pointsAt(this.settings.settings().saves.lastPlayed, entry)) {
+      const generation = this.session.generation();
+      if (this.session.active() && this.stored?.generation === generation) this.stored = { generation, hash: null };
+      this.setLastPlayed(null);
+    }
+    this.notifications.notify(`Deleted ${quoted(entry.name)}.`, { level: 'success' });
+    await this.refresh();
+    return true;
+  }
+
+  /**
+   * The PNG thumbnail inside `entry` (only that ZIP entry is read), or null when it has none or it
+   * can't be read. Never rejects: a missing thumbnail is not an error worth telling the player.
+   */
+  async thumbnail(entry: SaveEntry): Promise<Uint8Array | null> {
+    try {
+      return await this.files.thumbnail(entry.handle);
+    } catch {
+      return null;
+    }
   }
 
   /** `file.load`: lists the saves again and shows the Load game dialog. */

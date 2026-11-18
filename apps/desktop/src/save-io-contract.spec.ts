@@ -76,6 +76,8 @@ async function electronHarness(): Promise<SaveIoHarness> {
     listSaves: () => invoke('save:list', () => handlers.list(event)),
     readSave: (request) => invoke('save:read', () => handlers.read(event, structuredClone(request))),
     writeSave: (request) => invoke('save:write', () => handlers.write(event, structuredClone(request))),
+    deleteSave: (request) => invoke('save:delete', () => handlers.delete(event, structuredClone(request))),
+    readSaveThumbnail: (request) => invoke('save:thumbnail', () => handlers.thumbnail(event, structuredClone(request))),
     showOpenDialog: (request) => invoke('dialog:open', () => handlers.dialogOpen(event, structuredClone(request))),
     showSaveAsDialog: (request) =>
       invoke('dialog:saveAs', () => handlers.dialogSaveAs(event, structuredClone(request))),
@@ -91,6 +93,10 @@ async function electronHarness(): Promise<SaveIoHarness> {
         ? undefined
         : { fileName: basename(savedAsPath), bytes: new Uint8Array(readFileSync(savedAsPath)) },
     failNextCommit: () => (failCommit = true),
+    plantManual: async (name, bytes) => {
+      mkdirSync(join(dir, 'saves'), { recursive: true });
+      writeFileSync(join(dir, 'saves', `${name}.ctrl`), bytes);
+    },
     dispose: async () => rmSync(dir, { recursive: true, force: true }),
   };
 }

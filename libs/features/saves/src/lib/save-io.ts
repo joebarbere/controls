@@ -10,7 +10,13 @@ const unavailable = (): Promise<never> => Promise.reject(new SaveIoError('unavai
  */
 export const SAVE_FILES = new InjectionToken<FileService>('controls.saveFiles', {
   providedIn: 'root',
-  factory: () => ({ list: unavailable, read: unavailable, write: unavailable }),
+  factory: () => ({
+    list: unavailable,
+    read: unavailable,
+    write: unavailable,
+    delete: unavailable,
+    thumbnail: unavailable,
+  }),
 });
 
 /** The host's Open and Save As pickers (`Platform.dialogs`). Call them from a user gesture. */

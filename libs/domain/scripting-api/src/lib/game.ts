@@ -11,9 +11,13 @@ import {
 import { BUILTIN_CATALOG, CATALOG_VERSION, type Catalog } from '@controls/catalog';
 import {
   createManifest,
+  createReplayLog,
   createWorld,
   type CtrlContents,
   type CtrlError,
+  CTRL_ENTRY,
+  type CtrlLimits,
+  CtrlWriteError,
   type LoadError,
   type Manifest,
   migrateReplayLog,
@@ -22,6 +26,7 @@ import {
   type ReplayEntry,
   type ReplayLog,
   TerminalId,
+  utf8ByteLength,
   type ValidationIssue,
   World as WorldSchema,
   writeCtrl,
@@ -122,6 +127,12 @@ interface CommonOptions {
    * live entry and advance goes to `time`.
    */
   readonly time?: TimeHost;
+  /**
+   * The size, in UTF-8 bytes of compact JSON, of the entries logged since the latest checkpoint at which
+   * the game takes an extra one, at the next tick time reaches (default {@link LOG_CHECKPOINT_BYTES}).
+   * Lower it in tests to reach the `replay.log` cap without logging megabytes.
+   */
+  readonly checkpointLogBytes?: number;
 }
 
 /**
@@ -160,6 +171,8 @@ export type GameEventName = keyof GameEvents;
 export interface SaveGameOptions {
   /** PNG bytes for `thumbnail.png` (the renderer's capture), or `null` for none. */
   readonly thumbnail?: Uint8Array | null;
+  /** Lower container caps for this save (tests); clamped to `CTRL_LIMITS`, like `writeCtrl`'s. */
+  readonly limits?: Partial<CtrlLimits>;
 }
 
 /** Thrown by {@link createGame} for options that can't start a game. Never echoes the input. */
@@ -406,6 +419,21 @@ function parseProbeEnd(text: string, end: 'a' | 'b'): { entity: number; terminal
   return { entity, terminal: match[2] };
 }
 
+/**
+ * The UTF-8 size of a replay entry's compact JSON: what the log-size checkpoint trigger counts.
+ * Today's command arguments are ASCII (`LabelText`), so this equals the UTF-16 length, but a later
+ * free-text argument must not undercount.
+ */
+export function entryBytes(entry: ReplayEntry): number {
+  return utf8ByteLength(JSON.stringify(entry));
+}
+
+/** `options.checkpointLogBytes` if it is a positive safe integer, else {@link LOG_CHECKPOINT_BYTES}. */
+function checkpointLogBytesOf(options: CommonOptions): number {
+  const value = options.checkpointLogBytes;
+  return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : LOG_CHECKPOINT_BYTES.value;
+}
+
 /** Starts the engine for `world`, or returns `null` for `engine: false` or a time host. Throws `SimStartError`. */
 function startEngine(world: World, options: CommonOptions): SimEngine | null {
   return options.engine === false || options.time !== undefined ? null : SimEngine.start(world, options.engine ?? {});
@@ -415,7 +443,13 @@ function startEngine(world: World, options: CommonOptions): SimEngine | null {
  * Wraps an existing world bus and the engine following it (at the bus's tick). Neither may be driven
  * from anywhere else afterwards. Events the engine raised before (a replay's) are dropped.
  */
-function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | null, time?: TimeHost): Game {
+function wrap(
+  bus: CommandBus<World>,
+  initialWorld: World,
+  engine: SimEngine | null,
+  time?: TimeHost,
+  checkpointLogBytes: number = LOG_CHECKPOINT_BYTES.value,
+): Game {
   deepFreeze(initialWorld);
   deepFreeze(bus.state);
   const executedListeners = new Set<(event: ExecutedEvent<World>) => void>();
@@ -450,6 +484,15 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     | { readonly count: number; readonly world: World; readonly pending: null }
     | { readonly count: number; readonly world: null; readonly pending: Promise<World> }
     | null = null;
+  /**
+   * The log-size trigger (P4 Saves): UTF-8 bytes of the entries' compact JSON logged since the latest
+   * checkpoint, and whether they have passed `checkpointLogBytes`, so the next tick time reaches
+   * takes a checkpoint even off the {@link CHECKPOINT_TICKS} grid. It starts from the entries the bus
+   * carries (a loaded game continues its saved log, with no checkpoint yet), so it stays a pure
+   * function of the log.
+   */
+  let tailBytes = bus.entries.reduce((sum, entry) => sum + entryBytes(entry), 0);
+  let checkpointDue = tailBytes >= checkpointLogBytes;
   const step = (tick: number) => {
     engine?.advanceTo(tick);
     time?.advanceTo(tick);
@@ -457,6 +500,8 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
     deepFreeze(bus.state);
   };
   const takeCheckpoint = () => {
+    tailBytes = 0;
+    checkpointDue = false;
     const count = bus.entries.length;
     if (time !== undefined && time.exportState === undefined) {
       if (time.captureWorld === undefined) return; // no checkpoint: saves keep the whole log
@@ -478,7 +523,11 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
       step(cut);
       takeCheckpoint();
     }
+    // The log since the latest checkpoint has grown past the trigger: one at `tick`, like the grid's,
+    // before any command there. Time standing still takes none; `writeSave`'s cap fallback covers that.
+    const due = checkpointDue && tick > bus.currentTick();
     step(tick);
+    if (due) takeCheckpoint();
   };
   /** `log` rebased onto `world`, the checkpoint after `count` entries, or `log` if that isn't exact. */
   const rebased = (log: ReplayLog, count: number, world: World): ReplayLog => {
@@ -517,6 +566,8 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
       if (result.ok && result.logged) {
         engine?.applied(result.entry, bus.state);
         time?.applied(result.entry, bus.state);
+        tailBytes += entryBytes(result.entry);
+        if (tailBytes >= checkpointLogBytes) checkpointDue = true;
         // `sim.step` is carried out by the time host, right after it is logged (ADR 0011 §3, §11).
         if (result.entry.id === SIM_STEP_COMMAND) moveTo(bus.currentTick() + (result.entry.args['ticks'] as number));
       }
@@ -634,9 +685,35 @@ function wrap(bus: CommandBus<World>, initialWorld: World, engine: SimEngine | n
  * A save of this build: its manifest, `world` (materialised: the commanded world with the engine's
  * export written in), the replay log and an optional thumbnail. What `Game.save` writes, and what the
  * game's saver writes once the sim worker has answered (ADR 0011 §9.5).
+ *
+ * **The log cap (P4 Saves).** If the log would put the save over a cap (`replay.log`'s 32 MiB, or the
+ * container's total), it is rebased onto the save's own world: {@link rebasedAtSave}, no entries,
+ * the same `firstSeq` numbering. That save loads `continued` (replaying no entries from `world`
+ * gives `world`) and its log continues from it. Reached only when time stood still while the log
+ * grew (no checkpoint since), or when an undo reached across the latest checkpoint (the rebase
+ * wasn't exact) in a long session; any other over-cap error (the world, the thumbnail) is thrown.
  */
 export function writeSave(world: World, replayLog: ReplayLog, options: SaveGameOptions = {}): Uint8Array {
-  return writeCtrl({ manifest: createSaveManifest(), world, replayLog, thumbnail: options.thumbnail ?? null });
+  const input = { manifest: createSaveManifest(), world, thumbnail: options.thumbnail ?? null, limits: options.limits };
+  try {
+    return writeCtrl({ ...input, replayLog });
+  } catch (error) {
+    const logTooLarge =
+      error instanceof CtrlWriteError &&
+      error.kind === 'too-large' &&
+      (error.entry === CTRL_ENTRY.replayLog || error.entry === null) &&
+      replayLog.entries.length > 0;
+    if (!logTooLarge) throw error;
+    return writeCtrl({ ...input, replayLog: rebasedAtSave(world, replayLog) });
+  }
+}
+
+/**
+ * `log` rebased onto `world`, the materialised world at its end: no entries, numbering continued
+ * (`firstSeq` is the next `seq`), `endTick` the world's tick. What a save over the log cap writes.
+ */
+export function rebasedAtSave(world: World, log: ReplayLog): ReplayLog {
+  return createReplayLog(world, [], { firstSeq: log.firstSeq + log.entries.length, endTick: world.tick });
 }
 
 function startFailedIssues(error: SimStartError): ValidationIssue[] {
@@ -697,6 +774,7 @@ export function createGame(options: GameOptions): Game {
     world,
     engine,
     options.time,
+    checkpointLogBytesOf(options),
   );
 }
 
@@ -745,7 +823,10 @@ function replayWithEngine(log: ReplayLog, options: CommonOptions): Replayed {
 export function replayLogGame(log: ReplayLog, options: CommonOptions = {}): ReplayGameResult {
   const replayed = replayWithEngine(log, options);
   if (!replayed.ok) return replayed;
-  return { ok: true, game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time) };
+  return {
+    ok: true,
+    game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time, checkpointLogBytesOf(options)),
+  };
 }
 
 /**
@@ -757,7 +838,10 @@ export function resumeLogGame(log: ReplayLog, options: CommonOptions = {}): Repl
   const replayed = replayWithEngine(log, options);
   if (!replayed.ok) return replayed;
   replayed.bus.clearHistory();
-  return { ok: true, game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time) };
+  return {
+    ok: true,
+    game: wrap(replayed.bus, log.initialWorld, replayed.engine, options.time, checkpointLogBytesOf(options)),
+  };
 }
 
 /**
@@ -886,6 +970,20 @@ export const CHECKPOINT_TICKS: SourcedConstant = {
 };
 
 /**
+ * The log-size checkpoint trigger (P4 Saves): once the entries logged since the latest checkpoint
+ * pass this many UTF-8 bytes of compact JSON (counted from the entries a loaded game carries too), the game takes a checkpoint at the next tick time reaches,
+ * as if it were on the {@link CHECKPOINT_TICKS} grid. Not save format; like `CHECKPOINT_TICKS`, it
+ * decides only where a long session's saved log starts.
+ */
+export const LOG_CHECKPOINT_BYTES: SourcedConstant = {
+  value: 4 * 1024 * 1024,
+  unit: 'B',
+  kind: 'numerical',
+  source:
+    'numerical (P4 Saves, the carried P1 "replay log never shrinks" item): `replay.log` is capped at 32 MiB (`CTRL_LIMITS`), and a saved log is the checkpoint world (at most 16 MiB, `world.json`\'s cap) plus the entries after it, written with two-space indents, which measured up to about 3× their compact JSON for `wire.add` waypoint arrays. 4 MiB compact is then at most about 12 MiB written: with a 16 MiB world that is 28 MiB, under the cap, and the 48 MiB total leaves room for `world.json` and a 4 MiB thumbnail. About 30 000 `entity.place` entries (about 140 bytes each), or 4 000 `wire.add` (about 1 KB), so a save\'s rebase replays at most that many.',
+};
+
+/**
  * What a load does with a save's replay log, decided before anything is replayed (D8 and
  * {@link MAX_VERIFY_TICKS}): pure, and the one rule for the headless `gameFromSave` and the game's
  * load through the sim worker, so both verify exactly the same saves.
@@ -991,7 +1089,12 @@ export function gameFromSave(
     const replayed = replayWithEngine(plan.log, options);
     if (replayed.ok && replayed.hash === worldHash(world)) {
       replayed.bus.clearHistory();
-      return done(wrap(replayed.bus, plan.log.initialWorld, replayed.engine, options.time), { status: 'continued' });
+      return done(
+        wrap(replayed.bus, plan.log.initialWorld, replayed.engine, options.time, checkpointLogBytesOf(options)),
+        {
+          status: 'continued',
+        },
+      );
     }
     replay = verifyFailure(
       plan.compatibility,
@@ -1027,5 +1130,8 @@ export function gameFromSave(
       replay = { status: 'restarted', reason: 'engine-changed', message: ENGINE_CHANGED_MESSAGE };
     }
   }
-  return done(wrap(createWorldBus(start, registry, { firstSeq }), start, engine, options.time), replay);
+  return done(
+    wrap(createWorldBus(start, registry, { firstSeq }), start, engine, options.time, checkpointLogBytesOf(options)),
+    replay,
+  );
 }

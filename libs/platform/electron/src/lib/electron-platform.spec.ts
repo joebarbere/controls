@@ -21,6 +21,8 @@ function bridge(overrides: Partial<ControlsBridge> = {}): ControlsBridge {
     listSaves: async () => [],
     readSave: async () => new Uint8Array([1]),
     writeSave: async () => Promise.reject(new Error('not used')),
+    deleteSave: async () => Promise.reject(new Error('not used')),
+    readSaveThumbnail: async () => null,
     showOpenDialog: async () => null,
     showSaveAsDialog: async () => null,
     ...overrides,

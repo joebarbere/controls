@@ -46,6 +46,28 @@ export function utf8Encode(text: string): Uint8Array {
   return bytes.slice(0, n);
 }
 
+/**
+ * The length of `text` in UTF-8 bytes, without encoding it (what {@link utf8Encode} would return, for
+ * well-formed text). Never throws: an unpaired surrogate counts as the 3 bytes of U+FFFD. Used where
+ * only a size is needed (the replay-log size trigger), so nothing is allocated.
+ */
+export function utf8ByteLength(text: string): number {
+  let length = 0;
+  for (let i = 0; i < text.length; i++) {
+    const cu = text.charCodeAt(i);
+    if (cu < 0x80) length += 1;
+    else if (cu < 0x800) length += 2;
+    else if (cu >= 0xd800 && cu <= 0xdbff) {
+      const next = text.charCodeAt(i + 1); // NaN past the end
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        length += 4;
+        i++;
+      } else length += 3;
+    } else length += 3;
+  }
+  return length;
+}
+
 /** Code units are flushed to a string in chunks of this size (`String.fromCharCode` argument limit). */
 const CHUNK = 8192;
 

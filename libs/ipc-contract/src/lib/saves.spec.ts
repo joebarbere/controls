@@ -3,15 +3,20 @@ import {
   autosaveSlotOf,
   compareSaveEntries,
   DialogSaveAsRequestSchema,
+  isSaveThumbnail,
   isUint8Array,
   manualSaveFileName,
   manualSaveNameOf,
   MAX_SAVE_NAME_LENGTH,
+  MAX_SAVE_THUMBNAIL_BYTES,
   pickAutosaveSlot,
+  SaveDeleteRequestSchema,
   saveErrorCodeOf,
   SaveHandleSchema,
+  saveNameKey,
   SaveNameSchema,
   saveRefusalMessage,
+  SaveThumbnailRequestSchema,
   SaveWriteRequestSchema,
   type SaveEntry,
 } from './saves';
@@ -168,5 +173,47 @@ describe('isUint8Array', () => {
     expect(isUint8Array(Buffer.from('x'))).toBe(true);
     for (const other of [new ArrayBuffer(1), new Int8Array(1), new DataView(new ArrayBuffer(1)), [1], null])
       expect(isUint8Array(other)).toBe(false);
+  });
+});
+
+describe('save:delete and save:thumbnail requests', () => {
+  const handle = 'A'.repeat(22);
+  it.each([SaveDeleteRequestSchema, SaveThumbnailRequestSchema])('take exactly one handle', (schema) => {
+    expect(schema.safeParse({ handle }).success).toBe(true);
+    for (const bad of [
+      undefined,
+      {},
+      { handle: '../saves/x.ctrl' },
+      { handle: 'Shop.ctrl' },
+      { handle, path: '/etc/passwd' },
+      { handle: 'A'.repeat(23) },
+    ])
+      expect(schema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe('isSaveThumbnail', () => {
+  const png = (length: number) => {
+    const bytes = new Uint8Array(length);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    return bytes;
+  };
+  it('accepts null and PNG-signed bytes within the cap only', () => {
+    expect(isSaveThumbnail(null)).toBe(true);
+    expect(isSaveThumbnail(png(8))).toBe(true);
+    expect(isSaveThumbnail(png(MAX_SAVE_THUMBNAIL_BYTES))).toBe(true);
+    expect(isSaveThumbnail(png(MAX_SAVE_THUMBNAIL_BYTES + 1))).toBe(false);
+    expect(isSaveThumbnail(png(8).subarray(0, 7))).toBe(false);
+    expect(isSaveThumbnail(new Uint8Array(16))).toBe(false);
+    expect(isSaveThumbnail(undefined)).toBe(false);
+    expect(isSaveThumbnail([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])).toBe(false);
+  });
+});
+
+describe('saveNameKey', () => {
+  it('folds case and Unicode normalisation, nothing else', () => {
+    expect(saveNameKey('Shop')).toBe(saveNameKey('SHOP'));
+    expect(saveNameKey('Caf\u00e9')).toBe(saveNameKey('CAFE\u0301'));
+    expect(saveNameKey('Shop 1')).not.toBe(saveNameKey('Shop1'));
   });
 });

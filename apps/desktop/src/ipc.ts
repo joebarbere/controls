@@ -87,6 +87,8 @@ export function registerIpcHandlers(flush: FlushCoordinator): RegisteredIpc {
   ipcMain.handle(IpcChannel.SaveList, (event, payload: unknown) => saves.list(event, payload));
   ipcMain.handle(IpcChannel.SaveRead, (event, payload: unknown) => saves.read(event, payload));
   ipcMain.handle(IpcChannel.SaveWrite, (event, payload: unknown) => saves.write(event, payload));
+  ipcMain.handle(IpcChannel.SaveDelete, (event, payload: unknown) => saves.delete(event, payload));
+  ipcMain.handle(IpcChannel.SaveThumbnail, (event, payload: unknown) => saves.thumbnail(event, payload));
   ipcMain.handle(IpcChannel.DialogOpen, (event, payload: unknown) => saves.dialogOpen(event, payload));
   ipcMain.handle(IpcChannel.DialogSaveAs, (event, payload: unknown) => saves.dialogSaveAs(event, payload));
 

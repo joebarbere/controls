@@ -218,8 +218,8 @@ Owners `angular-ui-engineer` + `renderer-engineer`. One PR, or two if large:
 
 Owners `electron-platform-engineer` + `angular-ui-engineer`; `sim-engine-engineer` + `save-format-guardian` for the log cap.
 
-- [ ] `save:delete` and `save:thumbnail` IPC (reading only the thumbnail entry from the ZIP; an ADR 0009 amendment), the Load list's delete and thumbnails, Continue's case-insensitive fallback; `desktop-e2e` and web-harness specs.
-- [ ] Rebase the in-session replay log onto the last checkpoint before it reaches the `replay.log` cap (32 MiB), with a property that a capped session saves, loads `continued` and replays to the same hash.
+- [x] `save:delete` and `save:thumbnail` IPC (reading only the thumbnail entry from the ZIP; an ADR 0009 amendment), the Load list's delete and thumbnails, Continue's case-insensitive fallback; `desktop-e2e` and web-harness specs. _Done (PR 25):_ `readCtrlThumbnail` in `save-format` reads tail, central directory and the one entry on both platforms (main through the descriptor, the web store through `File.slice()`); delete is save-directory handles only (`read-only` otherwise) and clears Continue's pointer; the fallback became case-unique names on both platforms (`saveNameKey`) and an exact-only Continue match. ADR 0009 amended.
+- [x] Rebase the in-session replay log onto the last checkpoint before it reaches the `replay.log` cap (32 MiB), with a property that a capped session saves, loads `continued` and replays to the same hash. _Done (PR 25):_ a log-size checkpoint (`LOG_CHECKPOINT_BYTES`, 4 MiB compact, taken at the next tick) plus `writeSave`'s fallback onto the save's own world for a log still over a cap (time standing still, or an undo across the checkpoint); the in-memory bus log is not trimmed (it still backs `sim.restart` and undo). No engine, protocol or hash change; `sim-engine-engineer` review requested for the checkpoint trigger.
 
 ## Budgets
 
@@ -347,7 +347,7 @@ PRs 2–4 and 25 run in parallel with the contract track; after PR 9 the physics
 | Pickable test leads (P3)                                                                        | **Deferred to P5** (meters and leads are reworked there).                                               |
 | Drawn label text / font atlas (P3)                                                              | **Deferred to P6** (prints and wire numbers); the panel directory is DOM text.                          |
 | Vertical duct; drag-to-length (P3)                                                              | **Deferred to P6** (control-panel building).                                                            |
-| Load list delete and thumbnails; Continue's case fallback; log-cap rebase (P1/P2)               | **In:** Saves PR (25).                                                                                  |
+| Load list delete and thumbnails; Continue's case fallback; log-cap rebase (P1/P2)               | **Done:** Saves PR (25).                                                                                |
 | Initial bundle 2.53 MB over the 2.00 MB warning (P3 D18)                                        | **In:** PR 3 (D19).                                                                                     |
 | Electron 45.0.0 → 45.x patch; three r186 currency; `WasmTrapHandlers` on electron-builder 27    | **In:** kickoff step 5, PR 2.                                                                           |
 | `intermittent-toggle-wired` headroom; `route-bake-500-wires` calibrated gate (P3)               | **In** (headroom: profile or report); the calibrated bake gate **deferred** (not on P4's path).         |

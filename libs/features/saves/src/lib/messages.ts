@@ -47,7 +47,7 @@ export function loadErrorReason(error: GameLoadError): string {
   }
 }
 
-export type SaveAction = 'save' | 'load' | 'list';
+export type SaveAction = 'save' | 'load' | 'list' | 'delete';
 
 /** The `SaveIoError` code of a rejection, or `io` for anything else (a host error we don't trust). */
 export function saveIoCodeOf(error: unknown): SaveIoErrorCode {
@@ -58,7 +58,11 @@ export function saveIoCodeOf(error: unknown): SaveIoErrorCode {
 export function saveIoReason(error: unknown, action: SaveAction): string {
   switch (saveIoCodeOf(error)) {
     case 'invalid':
-      return action === 'save' ? 'That name can’t be used for a save.' : 'The save couldn’t be read.';
+      return action === 'save'
+        ? 'That name can’t be used for a save.'
+        : action === 'delete'
+          ? 'The save couldn’t be deleted.'
+          : 'The save couldn’t be read.';
     case 'unknown-handle':
     case 'not-found':
       return 'The save isn’t there any more.';
@@ -77,6 +81,10 @@ export function saveIoReason(error: unknown, action: SaveAction): string {
     case 'unavailable':
       return 'Saving isn’t available here: this browser gives the game no storage.';
     case 'io':
-      return action === 'save' ? 'The file couldn’t be written.' : 'The file couldn’t be read.';
+      return action === 'save'
+        ? 'The file couldn’t be written.'
+        : action === 'delete'
+          ? 'The file couldn’t be deleted.'
+          : 'The file couldn’t be read.';
   }
 }

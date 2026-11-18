@@ -41,6 +41,8 @@ export class SaveIoError extends Error {
  * Handles from {@link list} and {@link write} name a manual save or an autosave slot. Manual saves
  * are readable and writable; autosave slots are read-only (only `write({ kind: 'autosave' })`
  * writes them, so rotation stays with the platform). Handles are valid for this window's lifetime.
+ * Manual names are unique ignoring case (`saveNameKey`): a write whose name clashes with another
+ * save's is `exists`, or with `overwrite` replaces that save, which keeps its existing name.
  *
  * Every method rejects with {@link SaveIoError} on refusal or failure.
  */
@@ -56,6 +58,18 @@ export interface FileService {
    * Resolves with the written file's entry.
    */
   write(target: SaveTarget, bytes: Uint8Array): Promise<SaveEntry>;
+  /**
+   * Deletes a manual save or an autosave slot (a handle from {@link list} or {@link write}). A file
+   * outside the save directory (an Open or Save As handle) is never deleted (`read-only`); a save
+   * that has already gone is `not-found`. The handle stays valid: writing that name again reuses it.
+   */
+  delete(handle: SaveHandle): Promise<void>;
+  /**
+   * The PNG thumbnail inside a readable save, or null when it has none or the file isn't a save the
+   * thumbnail can be read from. Reads only that ZIP entry, never the whole save (ADR 0009 amendment).
+   * A null is not a verdict on the save: it may still load, or fail to.
+   */
+  thumbnail(handle: SaveHandle): Promise<Uint8Array | null>;
 }
 
 /**

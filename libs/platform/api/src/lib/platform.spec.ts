@@ -26,6 +26,8 @@ describe('Platform', () => {
         list: async () => [],
         read: async () => Promise.reject(new SaveIoError('unknown-handle')),
         write: async () => Promise.reject(new SaveIoError('unavailable')),
+        delete: async () => Promise.reject(new SaveIoError('unknown-handle')),
+        thumbnail: async () => null,
       },
       dialogs: { open: async () => null, saveAs: async () => null },
     };
