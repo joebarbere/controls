@@ -1,5 +1,4 @@
-// First: Zod without its eval probe, before any schema compiles (the CSP has no 'unsafe-eval').
-import './zod-config';
+// Zod's jitless mode is set by the `polyfills` entry (`zod-config.ts`), which runs before this bundle.
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';

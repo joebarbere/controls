@@ -77,8 +77,10 @@ async function closeAndSave(page: Page, keyBindings: Awaited<ReturnType<typeof o
   await expect(keyBindings.opener).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(keyBindings.settings).toBeHidden();
+  // Poll for both: the 300 ms debounce can fire between the two rebinds on a slow runner, and that
+  // earlier write already holds the first one.
   await expect.poll(() => stored(page)).toContain('"toolbelt.select.slot2": "Q"');
-  expect(await stored(page)).toContain('"input.moveForward": "I"');
+  await expect.poll(() => stored(page)).toContain('"input.moveForward": "I"');
 }
 
 // One flow per test, each from a fresh page (and so fresh localStorage): as a single test this ran

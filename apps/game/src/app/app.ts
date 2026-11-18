@@ -25,7 +25,8 @@ import {
 import { CommandPalette } from '@controls/feature-palette';
 import { LoadGameDialog, SaveGameDialog, SaveGames, SaveThumbnails } from '@controls/feature-saves';
 import { KeybindingService, Session, type SimCrash, SimControls, ToolBelt } from '@controls/feature-session';
-import { SettingsDialog, SettingsStore } from '@controls/feature-settings';
+import { SettingsStore } from '@controls/feature-settings';
+import { SettingsDialog } from '@controls/feature-settings/dialog';
 import { ActiveTool, parseWorkspaceLayout, serialiseWorkspaceLayout, Workspace } from '@controls/feature-workspace';
 import { Button } from '@controls/ui';
 import { PLATFORM } from './platform.token';
@@ -110,7 +111,10 @@ import { SimEventToasts } from './sim-event-toasts';
     />
     <ctl-save-game-dialog [open]="shell.dialog() === 'save'" (openChange)="dialogOpenChange($event)" />
     <ctl-load-game-dialog [open]="shell.dialog() === 'load'" (openChange)="dialogOpenChange($event)" />
-    <ctl-settings-dialog [open]="shell.dialog() === 'settings'" (openChange)="dialogOpenChange($event)" />
+    <!-- Lazy (D19): loaded when first opened (fetched early when idle); then it stays, like the other dialogs. -->
+    @defer (when shell.dialog() === 'settings'; prefetch on idle) {
+      <ctl-settings-dialog [open]="shell.dialog() === 'settings'" (openChange)="dialogOpenChange($event)" />
+    }
     <ctl-about-dialog
       [open]="shell.dialog() === 'about'"
       (openChange)="dialogOpenChange($event)"

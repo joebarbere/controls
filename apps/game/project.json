@@ -14,6 +14,7 @@
       "options": {
         "outputPath": "dist/apps/game",
         "browser": "apps/game/src/main.ts",
+        "polyfills": ["apps/game/src/zod-config.ts"],
         "tsConfig": "apps/game/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
         "assets": [

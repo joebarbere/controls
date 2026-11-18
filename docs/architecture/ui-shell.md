@@ -11,8 +11,8 @@ flowchart LR
 
     GAME["apps/game<br/>App: assembles features,<br/>injects PLATFORM"]:::done
     SHELL["feature-shell<br/>MainMenu · AboutDialog · Hud<br/>Notifications · ShellState"]:::done
-    WS["feature-workspace<br/>Workspace · Viewport<br/>WorkspaceLayout"]:::done
-    SET["feature-settings<br/>SettingsDialog · SettingsForm<br/>SettingsStore · SETTINGS_SERVICE"]:::done
+    WS["feature-workspace<br/>Workspace · Viewport (lazy)<br/>WorkspaceLayout"]:::done
+    SET["feature-settings<br/>SettingsStore · SETTINGS_SERVICE<br/>/dialog: SettingsDialog · SettingsForm (lazy)"]:::done
     UI["ui (type:ui)<br/>tokens · ctlButton · ctl-dialog<br/>ctlFocusTrap · ctl-splitter · ctl-toast-stack"]:::done
     PAPI["platform-api<br/>Platform (settings, canQuit, quit)<br/>SettingsService"]:::done
     REND["renderer"]:::done
@@ -121,6 +121,26 @@ flowchart TB
 - **`console.toggle`** (backtick) is applied by the workspace too: it expands the bottom panel and focuses its `[data-autofocus]` element, or collapses it and restores focus when focus is already inside. See [dev console](console.md).
 - **`view.netlistInspector`** (F2.6, `when: console.available`, unlogged UI chrome, no default key) shows the netlist inspector in the side panel the same way: it expands the panel if collapsed and focuses the tree, or, with focus already inside, closes it (the projected `[ctlInspector]` content comes back) and restores focus. See [the netlist inspector](#the-netlist-inspector-f26).
 - **Reset layout** runs the `view.resetLayout` view command through `Session.exec`. The workspace applies it when the command reports back (`Session.onCommand`), so any surface that runs the command resets the layout. It is logged and never changes the world hash.
+
+### Lazy chunks and the initial bundle (P4 D19)
+
+The first frame is the main menu over the workspace's chrome; the 3D backdrop arrives a moment later. Everything not needed for that frame is a lazy chunk, so the initial bundle stays under the 2.00 MB budget warning (1.17 MB after D19, from 2.53 MB at v0.4.0):
+
+```mermaid
+flowchart LR
+    classDef lazy fill:#fff4d6,stroke:#b8860b,stroke-dasharray: 4 3;
+    MAIN["initial: main + shared chunk<br/>App · shell · menu · workspace chrome · palette · console host<br/>session · commands · world-model · sim-core · catalogue · zod"]
+    VP["viewport (on immediate)<br/>ctl-viewport · renderer · three.js · three-mesh-bvh<br/>termination / strip / label / fish-tape prompts · wire readout · overlay legend"]:::lazy
+    NI["netlist-inspector (on first open)"]:::lazy
+    SD["dialog: settings (when opened; prefetch on idle)<br/>SettingsForm · Key bindings dialog and editor"]:::lazy
+    CE["console-editor (import())<br/>CodeMirror 6"]:::lazy
+    WK["worker<br/>sim engine"]:::lazy
+    MAIN --> VP & NI & SD & CE & WK
+```
+
+- `ctl-viewport` is an `@defer (on immediate)` block in `Workspace`, with an empty `viewport-placeholder` while it loads. The workspace queries it by template ref (`viewChild<Viewport>('viewport')`), so `viewState()`, `captureThumbnail()` and the terminal highlight are simply absent until it has rendered, as they already were until the renderer started.
+- `focusViewport()` and `view.netlistInspector` wait for their lazy block to render before moving focus (`afterLoaded`); the viewport's focus is skipped if the player has moved focus meanwhile.
+- The settings dialog comes from the `@controls/feature-settings/dialog` entry, not the package index, so the app's `@defer` can split it. New P4 panels follow the same rule ([UI caveats](../caveats/ui.md)).
 
 ## The netlist inspector (F2.6)
 
