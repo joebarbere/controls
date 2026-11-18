@@ -209,14 +209,24 @@ describe('the load centre kinds (P4 PR 14a)', () => {
       keys: 44,
     });
     expect(MODEL_KINDS['enclosure.loadCentre'].requires).toBe('enclosure');
-    expect(summary('bond.jumper')).toStrictEqual({ terminals: ['body'], families: [], rules: {}, keys: 0 });
+    expect(summary('bond.jumper')).toStrictEqual({
+      terminals: ['body'],
+      families: [],
+      rules: { body: { access: 'none' } },
+      keys: 0,
+    });
     expect(summary('bond.groundBar')).toStrictEqual({
       terminals: ['bar'],
       families: [{ prefix: 'g', min: 1, max: 32, rule: { access: 'land', role: 'egc' } }],
       rules: {},
       keys: 0,
     });
-    expect(summary('feed.mainLugs')).toStrictEqual({ terminals: ['l1', 'l2'], families: [], rules: {}, keys: 0 });
+    expect(summary('feed.mainLugs')).toStrictEqual({
+      terminals: ['l1', 'l2'],
+      families: [],
+      rules: { l1: { access: 'land' }, l2: { access: 'land' } },
+      keys: 0,
+    });
   });
 
   it('accept valid entries, the jumper’s two contacts on one terminal included', () => {
@@ -249,6 +259,12 @@ describe('the load centre kinds (P4 PR 14a)', () => {
       'bond.groundBar\'s g1 has the role "egc"',
     );
     expect(messages([groundBar([clip('bar')])]).join()).toContain('g1 … gn with n from 1 to 32');
+    // The jumper's body is never reached; main lugs land the feeder.
+    const clipped = { ...jumper(), terminals: [terminalDoc(clip('body'))] };
+    expect(messages([clipped]).join()).toContain('bond.jumper\'s body must be "none"');
+    const lugs = mainLugs();
+    const clipLugs = { ...lugs, terminals: [terminalDoc(clip('l1')), terminalDoc(clip('l2'))] };
+    expect(messages([clipLugs]).join()).toContain('feed.mainLugs\'s l1 must be "land"');
   });
 
   it('terminalIds: the entry’s ids (families included), sorted by code unit and frozen, one array per entry', () => {

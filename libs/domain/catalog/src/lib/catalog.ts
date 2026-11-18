@@ -598,7 +598,7 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
 }
 
 /** Whether `id` is `prefix` followed by a 1-based index (`n12` of `n`; never `neutral`). */
-function familyMember(prefix: string, id: string): boolean {
+export function familyMember(prefix: string, id: string): boolean {
   return id.startsWith(prefix) && /^[1-9][0-9]*$/.test(id.slice(prefix.length));
 }
 

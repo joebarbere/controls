@@ -1,5 +1,6 @@
 import { DEVICE_STATE_KEY_PATTERN, DeviceStateValue } from '@controls/save-format';
 import fc from 'fast-check';
+import { familyMember } from './catalog';
 import {
   bagSchemas,
   checkBags,
@@ -195,6 +196,13 @@ describe('MODEL_KINDS', () => {
       }
       if (kind.requires === 'enclosure') {
         expect(kind.keys['openEntries']?.owner, kind.kind).toBe('commanded');
+      }
+      // Terminal rules name fixed terminals only, and no fixed terminal is a member of the kind's own
+      // families (so an entry's terminals split one way: `neutral` is never read as `n` + an index).
+      for (const id of Object.keys(kind.terminalRules ?? {}))
+        expect(kind.terminals, `${kind.kind}.${id}`).toContain(id);
+      for (const family of kind.terminalFamilies ?? []) {
+        for (const id of kind.terminals) expect(familyMember(family.prefix, id), `${kind.kind}.${id}`).toBe(false);
       }
     }
   });
