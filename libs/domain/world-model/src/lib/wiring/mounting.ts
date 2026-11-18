@@ -141,9 +141,10 @@ export function busStabAt(mount: EnclosureMount, along: number): number | null {
  * `busStabIndex(host, mount, positionMm, fit)`: the stab index (from 0) of the bus mount `mount` of
  * `host` that a device mounted by `fit` sits on with its origin at `positionMm` (world integer mm), or
  * `null` when the position isn't on the mount's plane (normal 0), isn't on the device's cross line
- * (cross = `fit.crossMm`) or isn't exactly a stab position, or the mount has no bus. The one function
- * `checkMount`, snapping, the ghost, the compiler (P4 PR 9) and the inspector use, so they agree on
- * every breaker's space and leg ({@link busStabLeg}).
+ * (cross = `fit.crossMm`) or isn't exactly a stab position, or the mount has no bus. The compiler
+ * (P4 PR 9) and the inspector call it; `checkMount` applies the same rule through `busStabAt`, and
+ * snapping finds the nearest stab that the exact lookup then confirms, so all of them agree on every
+ * breaker's space and leg ({@link busStabLeg}).
  */
 export function busStabIndex(
   host: Pick<Entity, 'transform'>,
