@@ -513,6 +513,7 @@ describe('every registered command', () => {
       .map(([id, f]) => `${id}:${f.id}`);
     expect(ids).toEqual([
       'device.operate:id',
+      'device.press:id',
       'enclosure.openEntry:id',
       'entity.delete:id',
       'entity.label:id',
@@ -520,6 +521,10 @@ describe('every registered command', () => {
       'entity.rotate:id',
       'lead.connect:a.entity',
       'lead.connect:b.entity',
+      'panel.directory:id',
+      'plug.insert:appliance',
+      'plug.insert:receptacle',
+      'plug.remove:appliance',
       'raceway.cut:id',
       'wire.land:at.entity',
       'wiring.pull:conduit',

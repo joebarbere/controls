@@ -126,6 +126,17 @@ export function entityStreamKey(id: number): string {
   return `entity:${id}`;
 }
 
+/**
+ * The stream key for one purpose of an entity's own randomness (world v4, ADR 0019 "PRNG stream keys"):
+ * `entity:<id>:<purpose>` (`pickupL2`, `opening`, `gfciPickup`, `gfciMechanism`, `duty`, `afci`). Each
+ * value is the first output of its own stream, drawn once per bank build, so a kind gaining a draw
+ * later moves nothing else. No P4 command draws from it; the engine does (P4 PR 9 on). The purpose
+ * strings are frozen with v4 at v0.5.0 (golden keys and first outputs in `prng.spec.ts`).
+ */
+export function entityPurposeStreamKey(id: number, purpose: string): string {
+  return `${entityStreamKey(id)}:${purpose}`;
+}
+
 /*
  * World v3 stream keys (ADR 0015, "PRNG stream keys"). Their prefixes differ from `command:` and
  * `entity:`, so keys never collide across kinds. Frozen with schemaVersion 3 at v0.4.0 (golden strings

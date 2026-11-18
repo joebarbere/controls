@@ -10,3 +10,4 @@ export * from './enclosure-commands';
 export * from './raceway-commands';
 export * from './auto-length';
 export * from './framing';
+export * from './plug-commands';

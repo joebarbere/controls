@@ -174,13 +174,19 @@
       [id]="domId(field)"
       [value]="text(field)"
       [attr.inputmode]="field.kind === 'number' ? inputMode(field) : null"
-      [attr.list]="field.kind === 'number' && field.ref === 'entity' && entities().length > 0 ? prefix + '-entities' : null"
+      [attr.list]="listOf(field)"
       [attr.aria-required]="isRequiredText(field)"
       [attr.aria-invalid]="errorsOf(field).length > 0"
       [attr.aria-describedby]="describedBy(field)"
       (input)="onText(field, $event)"
     />
-    @if (hintOf(field); as hint) {
+    @if (suggestionsOf(field); as offered) { @if (offered.length > 0) {
+    <datalist [id]="domId(field, '-options')">
+      @for (option of offered; track option.value) {
+      <option [value]="option.value">{{ option.label }}</option>
+      }
+    </datalist>
+    } } @if (hintOf(field); as hint) {
     <p class="hint" [id]="domId(field, '-hint')">{{ hint }}</p>
     }
     <ng-container *ngTemplateOutlet="fieldErrors; context: { $implicit: field }" />

@@ -18,7 +18,10 @@
  *    position snaps to DIN module slots along a rail (`dinSlotStartMm`, as on the workshop's rails; a
  *    device narrower than `NARROW_RAIL_DEVICE`, a terminal block, to multiples of its own width, at
  *    its declared `crossMm`) and
- *    to the 5 mm backplate grid on an area mount; a yoke takes the device exactly. The orientation is
+ *    to the 5 mm backplate grid on an area mount; a single mount (a yoke, an E26 socket) takes the device
+ *    exactly at its anchor (catalogue v3 `alongMm`, `crossMm`), and a bus (`busStab`) at the nearest stab
+ *    its contacts all fit (`busStabIndex`). Mounts are the host's `offeredMounts` (an enclosure's, or a
+ *    lampholder's `hostMounts`). The orientation is
  *    the mount's frame composed with the host's (`orientationForAxes`), so `checkMount` accepts it.
  * 2. **A fixture** (the workshop's backplate, rails, stud wall and bench top), as `placeOnTargets`
  *    does for props. A catalogue device takes its body's width and height as its footprint, and snaps
@@ -26,7 +29,7 @@
  *
  * Then the same checks the commands make, so a valid ghost always commits: the mount rules
  * (`checkMount`: `mount-full`, `off-mount`, …), whether the entity being moved can move at all
- * (`occupied`, `wired`), and overlap with **every** other body (`overlappingEntity` in the `all`
+ * (`plugged`, `occupied`, `wired`), and overlap with **every** other body (`overlappingEntity` in the `all`
  * scope, stricter than the commands' `mounting` scope: the mouse never stacks two props).
  *
  * Moving keeps the orientation and the mount (`entity.move` changes the position only): a mounted
@@ -37,9 +40,11 @@ import {
   BUILTIN_CATALOG,
   type Catalog,
   deviceBodySizeMm,
+  type DeviceMount,
   deviceMountWidthMm,
   type EnclosureMount,
   mountType,
+  offeredMounts,
 } from '@controls/catalog';
 import { entityHold, findEntity } from '../entity-commands';
 import { builtinProp, propFootprint } from '../props';
@@ -89,7 +94,8 @@ export interface MountTarget {
 export const mountTargetId = (entity: EntityId, mount: string): string => `entity-${entity}:${mount}`;
 
 /**
- * Every enclosure mount in a world, in entity id order then catalogue order: what devices snap to
+ * Every offered mount in a world (an enclosure's, or from catalogue v3 a device's `hostMounts`), in
+ * entity id order then catalogue order: what devices snap to
  * besides the fixtures. Hosts that aren't at quarter-turns offer none (their mounts can't be placed
  * exactly; the commands refuse them as `not-axis-aligned`).
  */
@@ -99,7 +105,9 @@ export function worldMountTargets(
 ): MountTarget[] {
   const targets: MountTarget[] = [];
   for (const host of (world as Pick<World, 'entities'>).entities) {
-    for (const mount of catalog.device(host.ref)?.enclosure?.mounts ?? []) {
+    const device = catalog.device(host.ref);
+    // Catalogue v3: an enclosure's mounts, or a non-enclosure's `hostMounts` (a lampholder's socket).
+    for (const mount of device ? offeredMounts(device) : []) {
       const origin = entityPointMm(host.transform, mount.positionMm);
       const axes = mountFrame(host, mount);
       if (origin === null || axes === null) continue;
@@ -120,6 +128,7 @@ export function worldMountTargets(
 /** Why a placement in a world can't be committed: a snap failure, or the refusal the command would give. */
 export type WorldPlacementFailure =
   | PlacementFailure
+  | 'plugged'
   | 'occupied'
   | 'wired'
   | 'overlaps'
@@ -181,16 +190,30 @@ function snapOnMount(
   height: number,
   along: number,
   cross: number,
-  crossMm: number,
+  fit: DeviceMount,
 ): { along: number; cross: number } | null {
   const extent = target.mount.extentMm;
+  const { crossMm } = fit;
   switch (target.occupancy) {
-    case 'single':
-      return along >= 0 && along <= width && cross >= 0 && cross <= height ? { along: 0, cross: 0 } : null;
+    case 'single': {
+      // The device's anchor on the mount (catalogue v3 `alongMm`, `crossMm`; 0 and 0 on catalogue 2).
+      const u = along - fit.alongMm;
+      const v = cross - crossMm;
+      return u >= 0 && u <= width && v >= 0 && v <= height ? { along: fit.alongMm, cross: crossMm } : null;
+    }
     case 'linear': {
       if (along < 0 || along > extent || cross < crossMm || cross > crossMm + height) return null;
       const free = extent - width;
       if (free < 0) return null;
+      const bus = target.mount.bus;
+      if (bus !== null) {
+        // A bus (catalogue v3): the nearest stab whose contacts all land on the bus (`busStabIndex`).
+        const reach = fit.contacts.reduce((most, c) => Math.max(most, c.positionOffset), 0);
+        const last = Math.min(bus.stabs - 1 - reach, Math.floor(free / bus.pitchMm));
+        if (last < 0) return null;
+        const k = clamp(Math.round((along - width / 2) / bus.pitchMm), 0, last);
+        return { along: k * bus.pitchMm, cross: crossMm };
+      }
       // A terminal block packs at its own width; a modular device takes DIN module slots.
       const narrow = width < NARROW_RAIL_DEVICE.valueMm;
       const pitch = narrow ? width : SNAP_STEPS.dinModulePitchMm;
@@ -243,7 +266,7 @@ function bestMount(
     const d = { x: cursor.x - target.origin.x, y: cursor.y - target.origin.y, z: cursor.z - target.origin.z };
     const depth = Math.abs(dot(d, target.axes.z));
     if (depth > MOUNT_CAPTURE_DEPTH.valueMm) continue;
-    const at = snapOnMount(target, width, height, dot(d, target.axes.x), dot(d, target.axes.y), fit.crossMm);
+    const at = snapOnMount(target, width, height, dot(d, target.axes.x), dot(d, target.axes.y), fit);
     if (at !== null) candidates.push({ target, depth, ...at });
   }
   candidates.sort(

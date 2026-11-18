@@ -110,6 +110,18 @@ World v3 adds the wiring commands (P3 PR 8, [ADR 0015](../decisions/0015-world-d
 | `enclosure.openEntry` | `id`, `entry`, `tool`                                                           | sets the entry's bit in the enclosure's `openEntries`                                                       |
 | `entity.label`        | `id`, `text` (or `null`), `tool`                                                | sets the device's label                                                                                     |
 
+World v4 adds the residential commands (P4 PR 8, [ADR 0019](../decisions/0019-world-document-v4.md#commands)). Each is undoable, restores what it changed on undo, takes no tool, never reads sim-owned state and draws nothing. Argument schemas are frozen in `json-schema/command-args/`; their `x-controls-options` hints only feed the palette's suggestion lists.
+
+| Id                | Args (console order)                                                   | Apply                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `plug.insert`     | `appliance`, `receptacle`, `outlet`                                    | sets the appliance's `pluggedInto` (`checkPlugInsert`: mating, reach, occupancy, no cycle)             |
+| `plug.remove`     | `appliance`                                                            | clears it (`not-plugged`, `not-an-appliance`)                                                          |
+| `wire.mark`       | `id`, `end` (`a` or `b`), `colour` (a colour id, never `bare`; `null`) | sets one end's re-identification tape (`marking`); a lead is `not-a-wire`                              |
+| `panel.directory` | `id`, `space` (from 1, no maximum), `text` (or `null`)                 | sets the load centre's `directory<space>` text key (`not-a-panel`, `unknown-space` above its `spaces`) |
+| `device.press`    | `id`, `control` (a momentary control)                                  | adds 1 to the control's `counter` key (`not-momentary` for any other control type)                     |
+
+`entity.delete` of a receptacle unplugs everything in it in the same change, and an appliance's plug goes with it; undo plugs them back. `entityHold` and `moveBlocker` return `plugged` for a plugged entity (`occupied` for a receptacle holding one), and the placement ghost refuses picking it up (`WorldPlacementFailure` `plugged`). `device.operate` refuses a momentary control (`momentary`), and its operate key flips a toggle or a two-option selector. `lead.connect` refuses a terminal whose `access` is `none` (`inaccessible`); a landing refuses conductors beyond a method's `multiConductor` cap (`multi-conductor-out-of-range`). A bus mount's stab is found by `busStabIndex` (exact lookup of `k × pitchMm`) and its leg by `busStabLeg`; `checkMount`, the ghost and (from PR 9) the compiler share them.
+
 ```mermaid
 flowchart LR
   args["logged args"] --> tool["checkTool (capability, capacity)"]

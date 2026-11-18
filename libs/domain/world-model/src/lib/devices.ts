@@ -168,6 +168,9 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   // otherwise load a 1e9 V setpoint (F2.4 save-format review). Keys `checkBags` refused are skipped.
   const device = catalog.device(entity.ref) as DeviceDefinition;
   for (const control of device.controls) {
+    // A momentary control's counter is pressed, never set: its key's schema (a non-negative safe
+    // integer, checked by `checkBags`) is the whole rule (world v4, P4 PR 8; PR 7 refused every count).
+    if (control.type === 'momentary') continue;
     const value = entity.state[control.id];
     if (value === undefined || !kind.keys[control.id]?.schema.safeParse(value).success) continue;
     const check = checkControlValue(control, kind, value);

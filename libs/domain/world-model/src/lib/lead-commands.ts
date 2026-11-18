@@ -69,8 +69,9 @@ export function joins(connection: Connection, a: TerminalRef, b: TerminalRef): b
  * id is the world's `nextConnectionId`, which then increments; undo removes it and restores the
  * counter. Refused: a `ref` that isn't a lead in the catalogue (`not-a-lead`), an entity that doesn't
  * exist (`not-found`), a prop (`no-terminals`) or a device without that terminal or one the catalogue
- * doesn't know (`unknown-terminal`), the same terminal twice (`same-terminal`), and a lead between two
- * terminals already joined by one (`duplicate-lead`).
+ * doesn't know (`unknown-terminal`), a terminal whose catalogue v3 `access` is `none` (`inaccessible`,
+ * world v4), the same terminal twice (`same-terminal`), and a lead between two terminals already
+ * joined by one (`duplicate-lead`).
  */
 export function leadConnectCommand(catalog: Catalog = BUILTIN_CATALOG) {
   return defineCommand<LeadConnectArgs, World>({
@@ -89,8 +90,14 @@ export function leadConnectCommand(catalog: Catalog = BUILTIN_CATALOG) {
         if (!entity) return fail('not-found', `No entity with id ${end.entity}`);
         const problem = terminalProblem(entity, end.terminal, catalog);
         if (problem === 'prop') return fail('no-terminals', `Entity ${end.entity} is a prop: it has no terminals`);
-        if (problem !== null || !catalog.device(entity.ref)) {
+        const device = catalog.device(entity.ref);
+        if (problem !== null || !device) {
           return fail('unknown-terminal', `Entity ${end.entity} has no terminal "${end.terminal}"`);
+        }
+        // Catalogue v3 (world v4, ADR 0019): a terminal nothing can reach (a plug pin inside its cord
+        // cap) takes no clip. Only catalogue-3 entries declare `none`, so no older log is affected.
+        if (device.terminals.find((t) => t.id === end.terminal)?.access === 'none') {
+          return fail('inaccessible', `Terminal "${end.terminal}" of entity ${end.entity} can't be reached by a clip`);
         }
       }
       if (sameTerminal(a, b)) return fail('same-terminal', 'A lead joins two different terminals');

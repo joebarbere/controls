@@ -21,18 +21,21 @@ import { KeybindingService, Session } from '@controls/feature-session';
 import { SettingsStore } from '@controls/feature-settings';
 import { MAX_PALETTE_RECENTS } from '@controls/save-format';
 import { Button, Dialog } from '@controls/ui';
-import type { World } from '@controls/world-model';
+import { BUILTIN_CATALOG } from '@controls/catalog';
+import { argOptionChoices, type World } from '@controls/world-model';
 import {
   type ArgErrors,
   type ArgForm,
+  type ArgField,
   type ArgFormContext,
   argsFromValues,
   type ArgValues,
   buildArgForm,
   initialValues,
+  siblingValues,
   validateArgs,
 } from './arg-form';
-import { type EntityChoice, PaletteArgForm } from './palette-arg-form';
+import { type EntityChoice, type FieldSuggestions, PaletteArgForm } from './palette-arg-form';
 import { type PaletteItem, paletteItems } from './palette-items';
 
 type Command = AnyCommandDef<World>;
@@ -127,6 +130,16 @@ export class CommandPalette {
   protected readonly entities = computed<EntityChoice[]>(() =>
     this.session.world().entities.map((e) => ({ id: e.id, label: e.ref.id })),
   );
+
+  /**
+   * Suggestions for fields with an `x-controls-options` hint, from the world and the built-in catalogue
+   * (`argOptionChoices`): an outlet of the receptacle typed beside it, a tape colour, a panel space, a
+   * button. Form-only (ADR 0019): the command still refuses a value outside them.
+   */
+  protected readonly suggestions: FieldSuggestions = (field: ArgField, values) =>
+    (field.kind === 'string' || field.kind === 'number') && field.options !== null
+      ? argOptionChoices(this.session.world(), field.options, siblingValues(field, values), BUILTIN_CATALOG)
+      : [];
 
   protected readonly errors = computed<ArgErrors>(() => {
     const view = this.view();

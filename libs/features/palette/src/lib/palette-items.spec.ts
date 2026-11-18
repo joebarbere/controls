@@ -16,7 +16,8 @@ describe('paletteItems', () => {
       'cable.label',
       'cable.reroute',
       'cable.strip',
-      'device.operate',
+      'device.operate', // Device, by title: Operate a device, Press a device button
+      'device.press',
       'enclosure.openEntry',
       'entity.delete',
       'entity.label',
@@ -25,15 +26,19 @@ describe('paletteItems', () => {
       'entity.rotate',
       'lead.connect', // Lead, by title: Connect a test lead, Disconnect a test lead
       'lead.disconnect',
+      'panel.directory', // Panel: Write the panel directory
+      'plug.insert', // Plug, by title: Plug in an appliance, Unplug an appliance
+      'plug.remove',
       'raceway.cut', // Raceway: Cut raceway to length
       'toolbelt.select',
       'view.focus', // View, by title: Focus a work target, Reset layout, Switch walk or work mode
       'view.resetLayout',
       'view.mode',
-      'wire.add', // Wire, by title: Add, Delete, Label a wire, Land a wire end, Pull, Reroute, Unland
+      'wire.add', // Wire, by title: Add, Delete, Label a wire, Land a wire end, Mark, Pull, Reroute, Unland
       'wire.delete',
       'wire.label',
       'wire.land',
+      'wire.mark',
       'wire.pull',
       'wire.reroute',
       'wire.unland',

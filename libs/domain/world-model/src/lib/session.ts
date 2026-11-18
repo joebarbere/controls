@@ -16,6 +16,7 @@ import { entityCommands } from './entity-commands';
 import { leadCommands } from './lead-commands';
 import { cableCommands } from './wiring/cable-commands';
 import { enclosureCommands } from './wiring/enclosure-commands';
+import { plugCommands } from './wiring/plug-commands';
 import { racewayCommands } from './wiring/raceway-commands';
 import { wireCommands } from './wiring/wire-commands';
 import { worldHash } from './hash';
@@ -28,7 +29,9 @@ export interface WorldRegistryOptions {
 
 /**
  * A registry holding every command a replay log can contain: the world commands (`entity.*`,
- * `lead.*`, `device.operate`, and from world v3 `wire.*`, `cable.*`, `enclosure.openEntry`, and F3.5 part 2's `raceway.cut`), `edit.undo` / `edit.redo`, the declared view commands (including the
+ * `lead.*`, `device.operate`, from world v3 `wire.*`, `cable.*`, `enclosure.openEntry` and F3.5 part 2's
+ * `raceway.cut`, and from world v4 `plug.*`, `wire.mark`, `panel.directory` and `device.press`),
+ * `edit.undo` / `edit.redo`, the declared view commands (including the
  * viewport's `view.mode` / `view.focus`) and the sim time commands (`sim.setSpeed`, `sim.resume`,
  * `sim.step`, F2.3a).
  * Headless replay, the sim worker's mirror bus and the UI all start from this, so they agree on every
@@ -43,6 +46,7 @@ export function createWorldRegistry(options: WorldRegistryOptions = {}): Command
     .registerAll(cableCommands(catalog))
     .registerAll(enclosureCommands(catalog))
     .registerAll(racewayCommands(catalog))
+    .registerAll(plugCommands(catalog))
     .registerAll(deviceCommands(catalog))
     .registerAll(editCommands<World>())
     .registerAll(viewCommands<World>())
