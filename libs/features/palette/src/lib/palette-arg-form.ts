@@ -48,6 +48,17 @@ export interface EntityChoice {
 
 const NO_CONTEXT: ArgFormContext = { selectedEntityId: null };
 
+/** One suggested value for a field with a suggestion hint (`x-controls-options`), and its label. */
+export interface SuggestedValue {
+  readonly value: string;
+  readonly label: string;
+}
+
+/** What a field with a suggestion hint offers, given the form's values (the palette reads the world). */
+export type FieldSuggestions = (field: ArgField, values: ArgValues) => readonly SuggestedValue[];
+
+const NO_SUGGESTIONS: FieldSuggestions = () => [];
+
 /**
  * Renders a command's generated argument form (see `buildArgForm`). Presentational: it edits
  * `values` and reports `runCommand` / `goBack`; the palette validates with the command's schema and
@@ -80,6 +91,11 @@ export class PaletteArgForm {
   readonly entities = input<readonly EntityChoice[]>([]);
   /** The selection, for reference hints and for prefilling items the player adds to a list. */
   readonly context = input<ArgFormContext>(NO_CONTEXT);
+  /**
+   * Suggestions for fields with an `x-controls-options` hint (world v4: an outlet, a tape colour, a
+   * panel space, a button), offered as a datalist. Form-only: the command still checks what it gets.
+   */
+  readonly suggestions = input<FieldSuggestions>(NO_SUGGESTIONS);
   /** Emitted when the player runs the form (Enter or the Run button). */
   readonly runCommand = output<void>();
   /** Emitted on Escape or the Back button. */
@@ -165,6 +181,20 @@ export class PaletteArgForm {
   /** A text field must be filled in: required, and blank doesn't mean `null`. */
   protected isRequiredText(field: ArgField): boolean {
     return field.required && !('nullable' in field && field.nullable);
+  }
+
+  /** The suggestions a text or number field offers (none without a hint). */
+  protected suggestionsOf(field: ArgField): readonly SuggestedValue[] {
+    if ((field.kind !== 'string' && field.kind !== 'number') || field.options === null) return [];
+    return this.suggestions()(field, this.values());
+  }
+
+  /** The datalist a text field uses: its own suggestions, else the world's entities for an entity id. */
+  protected listOf(field: ArgField): string | null {
+    if (this.suggestionsOf(field).length > 0) return this.domId(field, '-options');
+    return field.kind === 'number' && field.ref === 'entity' && this.entities().length > 0
+      ? `${this.prefix}-entities`
+      : null;
   }
 
   protected inputMode(field: NumberField): string {

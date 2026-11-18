@@ -77,7 +77,9 @@ export interface BeltChoice {
  * enclosures, the breaker, the supplies, …), then (F3.2 part 3) every conductor sold as building wire
  * (a spool: a conductor no cable entry lists, so not one of NM-B's inner conductors), then every
  * catalogue tool; each group sorted by id, the newest version of each id. Cable spools (F3.2 part 4,
- * `cable.add`) follow the conductor spools, sorted by id; test leads stay `lead.connect`'s.
+ * `cable.add`) follow the conductor spools, sorted by id; test leads stay `lead.connect`'s. A superseded
+ * device or conductor entry (catalogue v3 `supersededBy`, ADR 0020) is never offered: saves that name it
+ * keep loading it, but nothing new is built from it.
  */
 export function beltChoices(catalog: Catalog): BeltChoice[] {
   const props = BUILTIN_PROPS.map((p) => ({
@@ -88,7 +90,11 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
   const newestDevice = new Map<string, DeviceDefinition>();
   for (const d of catalog.devices) {
     // Sorted by id, then version: the last of an id is its newest.
-    if (d.sizeMm !== null && beltSlotKind(catalog, { id: d.id, version: d.version }) === 'placeable') {
+    if (
+      d.supersededBy === null &&
+      d.sizeMm !== null &&
+      beltSlotKind(catalog, { id: d.id, version: d.version }) === 'placeable'
+    ) {
       newestDevice.set(d.id, d);
     }
   }
@@ -101,6 +107,7 @@ export function beltChoices(catalog: Catalog): BeltChoice[] {
   const newestSpool = new Map<string, DeviceDefinition>();
   for (const d of catalog.devices) {
     if (
+      d.supersededBy === null &&
       d.conductor &&
       !inCables.has(d.id) &&
       catalog.kindOf({ id: d.id, version: d.version })?.requires === 'conductor'

@@ -3,6 +3,7 @@ import {
   type BodyState,
   type Catalog,
   deviceBodySizeMm,
+  type DeviceMount,
   deviceMountWidthMm,
   type EnclosureMount,
   mountType,
@@ -21,10 +22,12 @@ import type { CatalogRef, Entity, EntityId, MountedOn, OrientationMdeg, Position
  * Where a mounted device sits (the `off-mount` integer check, decided here for F3.5): its origin (the
  * corner its body spans +x, +y, +z from) lies on the mount, offset from the mount's `positionMm` by
  * `along` in the axis direction and `cross` in the +y direction, with nothing along `facing`:
- * - `single` (a device yoke): exactly at the mount's position (along = cross = 0);
+ * - `single` (a device yoke): exactly at the device's anchor on the mount (along = its fit's `alongMm`,
+ *   cross = its `crossMm`; both 0 on every catalogue-2 entry, catalogue v3 R4);
  * - `linear` (a DIN rail): cross = the device's declared `crossMm` (0 for a DIN 43880 modular device; a
  *   terminal block declares the offset that centres it on the rail, F3.5 part 2) and
- *   0 ≤ along ≤ extentMm − widthMm (the device's declared width);
+ *   0 ≤ along ≤ extentMm − widthMm (the device's declared width); on a bus mount (`busStab`, P4) along
+ *   is exactly a stab position and every contact's stab is on the bus (`busStabIndex`);
  * - `area` (a backplate): 0 ≤ along ≤ extentMm − widthMm and 0 ≤ cross ≤ extentMm − heightMm (a square
  *   of side `extentMm` until a backplate declares its second extent, F3.5).
  * Room (`mount-full`): a `single` mount holds one device; on a `linear` mount the devices' spans
@@ -114,11 +117,68 @@ function footprint(
   const { along, cross: across } = offset;
   const fits =
     occupancy === 'single'
-      ? along === 0 && across === 0
+      ? along === fit.alongMm && across === fit.crossMm
       : occupancy === 'linear'
-        ? across === fit.crossMm && along >= 0 && along + width <= mount.extentMm
+        ? across === fit.crossMm && along >= 0 && along + width <= mount.extentMm && onStabs(mount, fit, along)
         : along >= 0 && along + width <= mount.extentMm && across >= 0 && across + height <= mount.extentMm;
   return fits ? { along, cross: across, width, height } : null;
+}
+
+/**
+ * The stab index whose position along a bus mount is exactly `along` (integer mm from the mount's
+ * origin), or `null`: stab k sits at `round(k × pitchMm)` (the pitch is an integer, so exactly
+ * `k × pitchMm`), found by **exact lookup**, never by division (ADR 0019 "What the netlist compiler
+ * reads" 2; ADR 0020 deviation 5). `null` for a mount without a bus pattern.
+ */
+export function busStabAt(mount: EnclosureMount, along: number): number | null {
+  const bus = mount.bus;
+  if (bus === null) return null;
+  for (let k = 0; k < bus.stabs; k++) if (k * bus.pitchMm === along) return k;
+  return null;
+}
+
+/**
+ * `busStabIndex(host, mount, positionMm, fit)`: the stab index (from 0) of the bus mount `mount` of
+ * `host` that a device mounted by `fit` sits on with its origin at `positionMm` (world integer mm), or
+ * `null` when the position isn't on the mount's plane (normal 0), isn't on the device's cross line
+ * (cross = `fit.crossMm`) or isn't exactly a stab position, or the mount has no bus. The compiler
+ * (P4 PR 9) and the inspector call it; `checkMount` applies the same rule through `busStabAt`, and
+ * snapping finds the nearest stab that the exact lookup then confirms, so all of them agree on every
+ * breaker's space and leg ({@link busStabLeg}).
+ */
+export function busStabIndex(
+  host: Pick<Entity, 'transform'>,
+  mount: EnclosureMount,
+  positionMm: PositionMm,
+  fit: Pick<DeviceMount, 'crossMm'>,
+): number | null {
+  const offset = mountOffset(host, mount, positionMm);
+  if (offset === null || offset.normal !== 0 || offset.cross !== fit.crossMm) return null;
+  return busStabAt(mount, offset.along);
+}
+
+/**
+ * The host terminal (a bus bar, `busL1` or `busL2`) stab `index` of a bus mount reaches: `legs[k mod 2]`,
+ * each column alternating legs by row, so with both columns starting on the same leg spaces 1 and 2
+ * are on L1 and 3 and 4 on L2 (ADR 0019 deviation 6). `null` off the bus or for a mount without one.
+ * A multi-pole device's contact reaches the stab `index + positionOffset`.
+ */
+export function busStabLeg(mount: EnclosureMount, index: number): string | null {
+  const bus = mount.bus;
+  if (bus === null || !Number.isInteger(index) || index < 0 || index >= bus.stabs) return null;
+  return bus.legs[index % 2];
+}
+
+/**
+ * On a bus mount (`busStab`, catalogue v3), a device's origin is on a stab and each of its contacts'
+ * stabs (`positionOffset` whole positions along) is on the bus too, so a two-pole breaker always reaches
+ * both legs. Every other linear mount is continuous. A rule only P4 entries can meet.
+ */
+function onStabs(mount: EnclosureMount, fit: DeviceMount, along: number): boolean {
+  if (mount.bus === null) return true;
+  const index = busStabAt(mount, along);
+  if (index === null) return false;
+  return fit.contacts.every((c) => index + c.positionOffset < (mount.bus?.stabs ?? 0));
 }
 
 const overlap = (a0: number, a1: number, b0: number, b1: number): boolean => a0 < b1 && b0 < a1;

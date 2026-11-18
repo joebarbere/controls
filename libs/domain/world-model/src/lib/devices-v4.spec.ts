@@ -1,14 +1,6 @@
-import {
-  BUILTIN_CATALOG,
-  type Catalog,
-  catalogOrThrow,
-  MAX_PANEL_SPACES,
-  MODEL_KINDS,
-  type ModelKindDef,
-  textKey,
-} from '@controls/catalog';
-import { createWorld, Int, World } from '@controls/save-format';
-import * as z from 'zod';
+import { MAX_PANEL_SPACES } from '@controls/catalog';
+import { createWorld, World } from '@controls/save-format';
+import { RESIDENTIAL, RESIDENTIAL_TEST_CATALOG, RESIDENTIAL_TEST_KINDS } from '../testing';
 import { checkWorldReferences, directoryKeyProblems } from './devices';
 import { createWorldBus, createWorldRegistry } from './session';
 import type { Connection, Entity } from './types';
@@ -16,197 +8,17 @@ import { checkMount } from './wiring/mounting';
 import { checkPlugInsert, plugReach } from './wiring/plug';
 
 /*
- * World v4's load checks (P4 PR 7, ADR 0019; ADR 0020's PR 7 list) on a TEST-ONLY catalogue: duplex
- * 5-15R and single 5-20R receptacles, appliances with 5-15P, 5-20P and 1-15P plugs, a lampholder
- * offering an E26 socket through `hostMounts` and a bulb that fits it, and a four-space load centre
- * whose kind has `directory1` … `directory42`. Nothing here is a real product; every number is
- * `game-design: test`. The real entries arrive with P4's content PRs.
+ * World v4's load checks (P4 PR 7, ADR 0019; ADR 0020's PR 7 list) on the TEST-ONLY residential
+ * catalogue (`RESIDENTIAL_TEST_CATALOG`: receptacles, plugged appliances, a lampholder and bulb, a
+ * four-space load centre). Nothing there is a real product; every number is `game-design: test`.
  */
 
-const openEntries = {
-  owner: 'commanded',
-  type: 'number',
-  schema: Int.min(0).max(0xffffffff),
-  initial: 0,
-  values: null,
-  description: 'test',
-} as const;
-
-const KINDS: Readonly<Record<string, ModelKindDef>> = {
-  ...MODEL_KINDS,
-  'test.device': {
-    kind: 'test.device',
-    placement: 'entity',
-    terminals: ['a', 'b', 'ground'],
-    params: z.strictObject({}),
-    keys: {},
-    description: 'test',
-  },
-  'test.loadCentre': {
-    kind: 'test.loadCentre',
-    placement: 'entity',
-    requires: 'enclosure',
-    terminals: ['busL1', 'busL2'],
-    params: z.strictObject({}),
-    keys: {
-      openEntries,
-      ...Object.fromEntries(Array.from({ length: MAX_PANEL_SPACES }, (_, i) => [`directory${i + 1}`, textKey('t')])),
-    },
-    description: 'test',
-  },
-};
-
+const KINDS = RESIDENTIAL_TEST_KINDS;
+const CATALOG = RESIDENTIAL_TEST_CATALOG;
 const at = (x: number, y = 0, z = 0) => ({ x, y, z });
-const source = (covers: string[]) => [{ id: 'test', kind: 'game-design', citation: 'game-design: test', covers }];
-const terminal = (id: string) => ({
-  id,
-  label: id,
-  positionMm: at(0),
-  methods: [],
-  role: null,
-  side: null,
-  access: 'clip',
-});
-const pins = (blades: string[]) => blades.map((pin, i) => ({ pin, terminal: ['a', 'b', 'ground'][i] }));
-const HOT_NEUTRAL_GROUND = ['hot', 'neutral', 'ground'];
-
-function device(id: string, overrides: Record<string, unknown> = {}, covers: string[] = []): Record<string, unknown> {
-  return {
-    id,
-    version: 1,
-    title: 'Test device',
-    brand: 'Testbrand',
-    modelName: 'D-1',
-    category: 'load',
-    sizeMm: { widthMm: 20, heightMm: 20, depthMm: 20 },
-    terminals: ['a', 'b', 'ground'].map(terminal),
-    mounts: [],
-    enclosure: null,
-    hostMounts: [],
-    outlets: [],
-    plug: null,
-    supersededBy: null,
-    conductor: null,
-    model: { kind: 'test.device', params: {} },
-    controls: [],
-    sources: source(['sizeMm', 'terminals', ...covers]),
-    extensions: {},
-    ...overrides,
-  };
-}
-
-const outlet = (id: string, config: string, positionMm = at(0), blades = HOT_NEUTRAL_GROUND) => ({
-  id,
-  config,
-  positionMm,
-  contactOhm: 0.002,
-  pins: pins(blades),
-});
-const outletCovers = (ids: string[]) =>
-  ids.flatMap((id) => ['config', 'positionMm', 'pins', 'contactOhm'].map((f) => `outlets.${id}.${f}`));
-const plug = (config: string, blades = HOT_NEUTRAL_GROUND) => ({
-  config,
-  cordAwg: 16,
-  cordLengthMm: 1000,
-  cordExitMm: at(0),
-  pins: pins(blades),
-});
-const plugCovers = ['config', 'cordAwg', 'cordLengthMm', 'cordExitMm', 'pins'].map((f) => `plug.${f}`);
-
-const column = (id: string, x: number) => ({
-  id,
-  type: 'busStab',
-  positionMm: at(x),
-  axis: '-y',
-  facing: '+z',
-  extentMm: 50,
-  contacts: [],
-  bus: { pitchMm: 25, stabs: 2, legs: ['busL1', 'busL2'] },
-});
-
-const CATALOG: Catalog = catalogOrThrow(
-  BUILTIN_CATALOG.version,
-  {
-    devices: [
-      ...BUILTIN_CATALOG.devices,
-      device(
-        'receptacle.test-duplex-5-15r',
-        { outlets: [outlet('top', '5-15R'), outlet('bottom', '5-15R', at(0, -40))] },
-        outletCovers(['top', 'bottom']),
-      ),
-      device('receptacle.test-5-20r', { outlets: [outlet('face', '5-20R')] }, outletCovers(['face'])),
-      device('appliance.test-kettle', { plug: plug('5-15P') }, plugCovers),
-      device('appliance.test-heater-20', { plug: plug('5-20P') }, plugCovers),
-      device('appliance.test-lamp', { plug: plug('1-15P', ['hot', 'neutral']) }, plugCovers),
-      device('receptacle.test-strip', { outlets: [outlet('socket-1', '5-15R')], plug: plug('5-15P') }, [
-        ...outletCovers(['socket-1']),
-        ...plugCovers,
-      ]),
-      device(
-        'lampholder.test',
-        {
-          hostMounts: [
-            {
-              id: 'socket',
-              type: 'e26',
-              positionMm: at(0),
-              axis: '+x',
-              facing: '+z',
-              extentMm: 0,
-              contacts: [
-                { id: 'shell', terminal: 'a' },
-                { id: 'centre', terminal: 'b' },
-              ],
-              bus: null,
-            },
-          ],
-        },
-        ['mounts.socket'],
-      ),
-      device('bulb.test', { mounts: [{ type: 'e26', widthMm: 20, crossMm: 0, alongMm: 0, contacts: [] }] }, [
-        'fits.e26',
-      ]),
-      device(
-        'panel.test-load-centre',
-        {
-          category: 'enclosure',
-          terminals: ['busL1', 'busL2'].map(terminal),
-          enclosure: {
-            mounts: [column('left', 0), column('right', 40)],
-            entries: [],
-            interiorVolumeMm3: 1000000,
-            markedVolumeMm3: null,
-            material: 'steel',
-            spaces: [
-              { mount: 'left', index: 0 },
-              { mount: 'right', index: 0 },
-              { mount: 'left', index: 1 },
-              { mount: 'right', index: 1 },
-            ],
-          },
-          model: { kind: 'test.loadCentre', params: {} },
-        },
-        ['mounts', 'interiorVolumeMm3', 'material', 'spaces'],
-      ),
-    ],
-    tools: BUILTIN_CATALOG.tools,
-    cables: BUILTIN_CATALOG.cables,
-    accessories: BUILTIN_CATALOG.accessories,
-    tables: BUILTIN_CATALOG.tables,
-  },
-  KINDS,
-);
-
 const ref = (id: string) => ({ id, version: 1 });
-const DUPLEX = ref('receptacle.test-duplex-5-15r');
-const R20 = ref('receptacle.test-5-20r');
-const KETTLE = ref('appliance.test-kettle');
-const HEATER = ref('appliance.test-heater-20');
-const LAMP = ref('appliance.test-lamp');
-const STRIP = ref('receptacle.test-strip');
-const HOLDER = ref('lampholder.test');
-const BULB = ref('bulb.test');
-const PANEL = ref('panel.test-load-centre');
+const { duplex: DUPLEX, r20: R20, kettle: KETTLE, heater: HEATER, lamp: LAMP, strip: STRIP } = RESIDENTIAL;
+const { holder: HOLDER, bulb: BULB, panel: PANEL } = RESIDENTIAL;
 const Z = { yaw: 0, pitch: 0, roll: 0 };
 
 const entity = (id: number, entityRef: Entity['ref'], x = 0, overrides: Partial<Entity> = {}): Entity => ({
@@ -413,11 +225,11 @@ describe('mountedOn resolves through offeredMounts (a host need not be an enclos
   });
 });
 
-describe('plug occupancy in the P3 entity commands (PR 7’s interim guards)', () => {
+describe('plug occupancy in the P3 entity commands', () => {
   const registry = createWorldRegistry({ catalog: CATALOG });
   const start = () => world([entity(1, DUPLEX), plugged(2, KETTLE, 600, 1)]);
 
-  it('a plugged appliance can’t move or turn; a receptacle holding a plug can’t move, turn or go', () => {
+  it('a plugged appliance can’t move or turn; a receptacle holding a plug can’t move or turn', () => {
     const bus = createWorldBus(start(), registry);
     expect(bus.exec('entity.move', { id: 2, positionMm: at(700) })).toMatchObject({
       ok: false,
@@ -427,10 +239,14 @@ describe('plug occupancy in the P3 entity commands (PR 7’s interim guards)', (
       ok: false,
       error: { code: 'plugged' },
     });
-    for (const command of ['entity.move', 'entity.delete'] as const) {
-      const args = command === 'entity.move' ? { id: 1, positionMm: at(10) } : { id: 1 };
-      expect(bus.exec(command, args)).toMatchObject({ ok: false, error: { code: 'occupied' } });
-    }
+    expect(bus.exec('entity.move', { id: 1, positionMm: at(10) })).toMatchObject({
+      ok: false,
+      error: { code: 'occupied' },
+    });
+    expect(bus.exec('entity.rotate', { id: 1, deltaMdeg: { yaw: 90_000, pitch: 0, roll: 0 } })).toMatchObject({
+      ok: false,
+      error: { code: 'occupied' },
+    });
   });
 
   it('deleting a plugged appliance takes its plug with it; undo restores the relation exactly', () => {

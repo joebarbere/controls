@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Panel"
+    },
+    "space": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "title": "Space",
+      "description": "A panel space, from 1",
+      "x-controls-options": {
+        "from": "directorySpaces",
+        "entity": "id"
+      }
+    },
+    "text": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LabelText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Text",
+      "description": "What the space feeds; blank clears it"
+    }
+  },
+  "required": [
+    "id",
+    "space",
+    "text"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "LabelText": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[\\x21-\\x7e](?:[\\x20-\\x7e]{0,30}[\\x21-\\x7e])?$",
+      "description": "Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space."
+    }
+  },
+  "title": "Arguments of panel.directory"
+}

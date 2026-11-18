@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "appliance": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Appliance"
+    },
+    "receptacle": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Receptacle"
+    },
+    "outlet": {
+      "description": "An outlet id of the receptacle's catalogue entry (top, bottom)",
+      "title": "Outlet",
+      "x-controls-options": {
+        "from": "outlets",
+        "entity": "receptacle"
+      },
+      "$ref": "#/$defs/OutletId"
+    }
+  },
+  "required": [
+    "appliance",
+    "receptacle",
+    "outlet"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "OutletId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A receptacle outlet id within one catalogue entry (TerminalId grammar)."
+    }
+  },
+  "title": "Arguments of plug.insert"
+}

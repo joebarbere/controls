@@ -96,7 +96,7 @@ function dependsOn(world: Pick<World, 'entities'>, from: EntityId, to: EntityId)
  * Checks plugging `appliance`'s cord into `outlet` of `receptacle` (ADR 0019 `plug.insert`), in this
  * order: the appliance exists (`not-found`) and its catalogue entry has a plug (`not-an-appliance`);
  * it isn't plugged already (`already-plugged`; skipped with `existing`, the load check of a stored
- * plug); the receptacle exists (`not-found`), isn't the appliance and doesn't hang from it through
+ * plug) nor mounted (`mounted`) or in an entry (`in-entry`; defensive, PR 8); the receptacle exists (`not-found`), isn't the appliance and doesn't hang from it through
  * mounts, entries or plugs (`plug-cycle`), and its entry has outlets (`not-a-receptacle`) including
  * that one (`unknown-outlet`); no other plug is in the outlet (`outlet-occupied`); `NEMA_CONFIGS` says
  * the plug mates the outlet (`wrong-configuration`); both are at quarter-turns (`not-axis-aligned`);
@@ -115,6 +115,10 @@ export function checkPlugInsert(
   if (!options.existing && plugged.pluggedInto !== null) {
     return fail('already-plugged', `Entity ${appliance} is already plugged in: unplug it first`);
   }
+  // Defensive (P4 PR 8): a plug is never with another relation (schema invariant 9), and the catalogue
+  // refuses an entry that both fits a mount and has a plug, so no world reaches these today.
+  if (plugged.mountedOn !== null) return fail('mounted', `Entity ${appliance} is mounted: it can't be plugged in`);
+  if (plugged.inEntry !== null) return fail('in-entry', `Entity ${appliance} is in an entry: it can't be plugged in`);
   const host = findEntity(world, receptacle);
   if (!host) return fail('not-found', `No entity with id ${receptacle}`);
   if (dependsOn(world, receptacle, appliance)) {

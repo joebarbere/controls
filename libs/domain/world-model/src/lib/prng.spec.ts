@@ -4,6 +4,8 @@ import {
   commandStreamKey,
   connectionStreamKey,
   deriveStream,
+  ENTITY_PURPOSES,
+  entityPurposeStreamKey,
   entityStreamKey,
   hashStreamKey,
   mix32,
@@ -182,5 +184,45 @@ describe('deriveStream', () => {
     expect(cableStreamKey(4)).toBe('cable:4');
     expect(terminationStreamKey(9)).toBe('termination:9');
     expect(`${terminationStreamKey(9)}:clamp`).toBe('termination:9:clamp');
+    // World v4 (ADR 0019), frozen with schemaVersion 4 at v0.5.0.
+    expect(entityPurposeStreamKey(5, 'gfciPickup')).toBe('entity:5:gfciPickup');
+  });
+
+  it('pins the world v4 purpose streams: keys and first outputs (ADR 0019 "PRNG stream keys")', () => {
+    // Each draw is the first nextFloat() of its own stream. Changing one moves every saved device's
+    // behaviour: a determinism change (SIM_ENGINE_VERSION at least).
+    const purposes = ENTITY_PURPOSES;
+    const first = purposes.map((p) => [
+      entityPurposeStreamKey(7, p),
+      deriveStream(42, entityPurposeStreamKey(7, p)).nextFloat(),
+    ]);
+    expect(first).toMatchInlineSnapshot(`
+      [
+        [
+          "entity:7:pickupL2",
+          0.8448468695860356,
+        ],
+        [
+          "entity:7:opening",
+          0.576301240362227,
+        ],
+        [
+          "entity:7:gfciPickup",
+          0.8981163508724421,
+        ],
+        [
+          "entity:7:gfciMechanism",
+          0.8744181657675654,
+        ],
+        [
+          "entity:7:duty",
+          0.5749619961716235,
+        ],
+        [
+          "entity:7:afci",
+          0.23396191326901317,
+        ],
+      ]
+    `);
   });
 });

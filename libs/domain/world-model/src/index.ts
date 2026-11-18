@@ -16,3 +16,4 @@ export * from './lib/routing';
 export * from './lib/termination';
 export * from './lib/wiring';
 export * from './lib/tools';
+export * from './lib/arg-options';

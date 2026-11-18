@@ -51,3 +51,40 @@ export const SELECTION_KEYS: Readonly<Record<ArgRefKind, string>> = {
   connection: SELECTION_CONNECTION_ID_KEY,
   cable: SELECTION_CABLE_ID_KEY,
 };
+
+/**
+ * JSON Schema keyword (set with `.meta()`) offering a form field a list of suggested values drawn from
+ * the world and the catalogue (world v4, ADR 0019 "Palette hints"). **Form-only:** it never changes
+ * what a command accepts, so the command's own `run` still refuses a value outside the list.
+ */
+export const ARG_OPTIONS_KEYWORD = 'x-controls-options';
+
+/** Where a field's suggested values come from (ADR 0019). */
+export type ArgOptionsSource = 'outlets' | 'colours' | 'directorySpaces' | 'controls';
+
+/** Every {@link ArgOptionsSource}, in declaration order. */
+export const ARG_OPTIONS_SOURCES: readonly ArgOptionsSource[] = ['outlets', 'colours', 'directorySpaces', 'controls'];
+
+/**
+ * A field's suggestion hint (`x-controls-options`):
+ * - `outlets`: the outlet ids of the entity named by the sibling field `entity` (a receptacle);
+ * - `colours`: the colour-table ids, less `except`;
+ * - `directorySpaces`: the panel spaces (1 … n) of the entity named by the sibling field `entity`
+ *   (default `id`);
+ * - `controls`: the controls of the entity named by the sibling field `entity` (default `id`), only
+ *   those of control type `type` when given.
+ */
+export interface ArgOptionsHint {
+  readonly from: ArgOptionsSource;
+  /** The sibling argument key holding the entity id the options belong to. */
+  readonly entity?: string;
+  /** Values never offered (`bare` is not a tape colour). */
+  readonly except?: readonly string[];
+  /** A control type (`momentary`) for `controls`. */
+  readonly type?: string;
+}
+
+/** `.meta()` for a field whose form offers suggestions from `hint` (see {@link ARG_OPTIONS_KEYWORD}). */
+export function argOptionsMeta(hint: ArgOptionsHint): Readonly<Record<typeof ARG_OPTIONS_KEYWORD, ArgOptionsHint>> {
+  return { [ARG_OPTIONS_KEYWORD]: hint };
+}

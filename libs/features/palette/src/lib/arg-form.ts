@@ -1,11 +1,19 @@
-import { ARG_REF_KEYWORD, ARG_REF_KINDS, type ArgRefKind } from '@controls/commands';
+import {
+  ARG_OPTIONS_KEYWORD,
+  ARG_OPTIONS_SOURCES,
+  ARG_REF_KEYWORD,
+  ARG_REF_KINDS,
+  type ArgOptionsHint,
+  type ArgRefKind,
+} from '@controls/commands';
 import * as z from 'zod';
 
 /*
  * Palette argument forms, generated from a command's Zod `args` (plan F1.3). The schema goes through
  * `z.toJSONSchema` (input side, so defaulted and optional keys are not required) and the resulting
  * JSON Schema is turned into a small field model. `.meta()` hints add labels (`title`), help text
- * (`description`) and reference kinds (`x-controls-ref`, see `@controls/commands` arg hints).
+ * (`description`), reference kinds (`x-controls-ref`, see `@controls/commands` arg hints) and, from
+ * world v4, suggestion lists (`x-controls-options`: form-only, they never change what is accepted).
  *
  * The form only shapes and types what the player typed; validation is the command's own schema
  * (`validateArgs`), the same one `exec`, the console and scripts use. Shapes the form can't express
@@ -41,6 +49,8 @@ export interface StringField extends FieldBase {
   readonly maxLength: number | null;
   /** Accepts `null`: a blank field is `null` when the key has no default (else it is left out). */
   readonly nullable: boolean;
+  /** Where the form's suggested values come from (`x-controls-options`), or `null` for none. */
+  readonly options: ArgOptionsHint | null;
 }
 
 export interface NumberField extends FieldBase {
@@ -54,6 +64,8 @@ export interface NumberField extends FieldBase {
   readonly ref: ArgRefKind | null;
   /** Accepts `null`: a blank field is `null` when the key has no default (else it is left out). */
   readonly nullable: boolean;
+  /** Where the form's suggested values come from (`x-controls-options`), or `null` for none. */
+  readonly options: ArgOptionsHint | null;
 }
 
 export interface BooleanField extends FieldBase {
@@ -220,7 +232,24 @@ function objectFields(schema: JsonSchema, defs: JsonSchema, path: string, refs: 
 }
 
 /** Keywords describing a field (not its type), copied from a nullable wrapper onto its scalar member. */
-const OUTER_KEYWORDS = ['title', 'description', 'default', ARG_REF_KEYWORD];
+const OUTER_KEYWORDS = ['title', 'description', 'default', ARG_REF_KEYWORD, ARG_OPTIONS_KEYWORD];
+
+/** The `x-controls-options` hint of a schema node, checked, or `null` when it has none. */
+function optionsHint(schema: JsonSchema, id: string): ArgOptionsHint | null {
+  const hint = schema[ARG_OPTIONS_KEYWORD];
+  if (hint === undefined) return null;
+  const strings = (v: unknown) => Array.isArray(v) && v.every((s) => typeof s === 'string');
+  if (
+    !isObject(hint) ||
+    !(ARG_OPTIONS_SOURCES as readonly unknown[]).includes(hint['from']) ||
+    (hint['entity'] !== undefined && typeof hint['entity'] !== 'string') ||
+    (hint['type'] !== undefined && typeof hint['type'] !== 'string') ||
+    (hint['except'] !== undefined && !strings(hint['except']))
+  ) {
+    throw new Unsupported(id, `unknown ${ARG_OPTIONS_KEYWORD} ${JSON.stringify(hint)}`);
+  }
+  return hint as unknown as ArgOptionsHint;
+}
 
 function field(
   key: string,
@@ -242,6 +271,7 @@ function field(
   };
   const ref = schema[ARG_REF_KEYWORD];
   if (ref !== undefined && !isRefKind(ref)) throw new Unsupported(id, `unknown ${ARG_REF_KEYWORD} ${String(ref)}`);
+  const options = optionsHint(schema, id);
 
   const union = unionMembers(schema, id);
   if (union !== null) {
@@ -277,6 +307,7 @@ function field(
         minLength: numberOrNull(schema['minLength']),
         maxLength: numberOrNull(schema['maxLength']),
         nullable,
+        options,
       };
     case 'integer':
     case 'number':
@@ -290,6 +321,7 @@ function field(
         exclusiveMaximum: numberOrNull(schema['exclusiveMaximum']),
         ref: isRefKind(ref) ? ref : null,
         nullable,
+        options,
       };
     case 'boolean':
       // An optional boolean without a default has three states (unset, true, false): offer a choice.
@@ -499,12 +531,22 @@ export function itemCount(f: ListField, values: ArgValues): number {
   return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }
 
-/** Writes `f`'s initial values (from `value`, else defaults, else the selection for references) into `out`. */
-function fill(f: ArgField, value: unknown, context: ArgFormContext, out: Record<string, ArgValue>): void {
+/**
+ * Writes `f`'s initial values (from `value`, else defaults, else the selection for references) into
+ * `out`. Only the first reference field of each kind takes the selection (ADR 0019 "Palette hints":
+ * `plug.insert`'s appliance, not also its receptacle); `taken` holds the kinds already offered.
+ */
+function fill(
+  f: ArgField,
+  value: unknown,
+  context: ArgFormContext,
+  out: Record<string, ArgValue>,
+  taken: Set<ArgRefKind> = new Set(),
+): void {
   switch (f.kind) {
     case 'object':
       if (isOptionalObject(f)) out[f.id] = false;
-      for (const child of f.fields) fill(child, childValue(child, value), context, out);
+      for (const child of f.fields) fill(child, childValue(child, value), context, out, taken);
       return;
     case 'boolean':
       out[f.id] = value === true;
@@ -522,19 +564,21 @@ function fill(f: ArgField, value: unknown, context: ArgFormContext, out: Record<
             ? f.options.findIndex((o) => o.kind === 'object')
             : f.options.findIndex((o) => o.kind === 'value' && o.value === value);
       out[f.id] = index < 0 ? '' : String(index);
-      if (f.object) for (const child of f.object.fields) fill(child, childValue(child, value), context, out);
+      if (f.object) for (const child of f.object.fields) fill(child, childValue(child, value), context, out, taken);
       return;
     }
     case 'list': {
       const items = Array.isArray(value) ? value : [];
       const count = Array.isArray(value) ? items.length : f.minItems;
       out[f.id] = count;
-      for (let i = 0; i < count; i++) fill(listItem(f, i), items[i], context, out);
+      for (let i = 0; i < count; i++) fill(listItem(f, i), items[i], context, out, taken);
       return;
     }
     case 'number': {
       // A nullable reference isn't prefilled: blank means null there, and the selection would change that.
-      const pick = f.ref !== null && !f.nullable ? selected(context, f.ref) : null;
+      const offered = f.ref !== null && !f.nullable && !taken.has(f.ref);
+      const pick = offered && f.ref !== null ? selected(context, f.ref) : null;
+      if (f.ref !== null && !f.nullable) taken.add(f.ref);
       out[f.id] = typeof value === 'number' ? String(value) : pick !== null ? String(pick) : '';
       return;
     }
@@ -556,7 +600,8 @@ function childValue(child: ArgField, parent: unknown): unknown {
 /** Initial values: schema defaults (also from a parent object's default), else the selection for references. */
 export function initialValues(form: ArgForm, context: ArgFormContext): Record<string, ArgValue> {
   const values: Record<string, ArgValue> = {};
-  for (const f of form.fields) fill(f, f.defaultValue, context, values);
+  const taken = new Set<ArgRefKind>();
+  for (const f of form.fields) fill(f, f.defaultValue, context, values, taken);
   return values;
 }
 
@@ -746,6 +791,20 @@ export function addListItem(list: ListField, values: ArgValues, context: ArgForm
   const count = itemCount(list, values);
   const out: Record<string, ArgValue> = { ...values, [list.id]: count + 1 };
   fill(listItem(list, count), list.item.defaultValue, context, out);
+  return out;
+}
+
+/**
+ * The sibling arguments of `field` as the player has typed them (text, by key): what a suggestion
+ * list (`x-controls-options`) reads its entity from, such as `plug.insert`'s `receptacle` for `outlet`.
+ */
+export function siblingValues(field: ArgField, values: ArgValues): Record<string, ArgValue> {
+  const dot = field.id.lastIndexOf('.');
+  const prefix = dot < 0 ? '' : field.id.slice(0, dot + 1);
+  const out: Record<string, ArgValue> = {};
+  for (const [id, value] of Object.entries(values)) {
+    if (id.startsWith(prefix) && !id.slice(prefix.length).includes('.')) out[id.slice(prefix.length)] = value;
+  }
   return out;
 }
 

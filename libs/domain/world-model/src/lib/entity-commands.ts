@@ -49,11 +49,12 @@ import type { Connection, Entity, EntityId, OrientationMdeg, World } from './typ
  * its entry end exactly there, room in the entry). A connector in an entry can't move or turn
  * (`in-entry`), and holds its enclosure (`occupied`).
  *
- * World v4 (ADR 0019, P4 PR 7's interim guards): `entity.place` makes an unplugged entity
- * (`pluggedInto: null`); a plugged entity can't move or turn (`plugged`), and a receptacle holding a
- * plug is `occupied` (no move, turn or delete). Deleting a plugged appliance takes its plug with it
- * (the relation is the appliance's own). PR 8's `plug.*` commands and `entity.delete` unplugging a
- * receptacle's plugs relax the delete refusal; refusals aren't logged, so relaxing changes no log.
+ * World v4 (ADR 0019 "Occupancy"): `entity.place` makes an unplugged entity (`pluggedInto: null`;
+ * plugging is always `plug.insert`); a plugged entity can't move or turn (`plugged`), and a receptacle
+ * holding a plug is `occupied` for move and turn. Deleting a receptacle unplugs everything in it, and
+ * deleting a plugged appliance takes its plug with it, in the same change; undo restores every relation
+ * exactly (P4 PR 8 relaxed PR 7's interim `occupied` delete refusal; refusals aren't logged, so
+ * relaxing it changes no log).
  *
  * F3.5: `entity.place`, `entity.move` and `entity.rotate` refuse a body that would overlap another
  * entity's when either is an enclosure or a mounted device (`overlaps`, the `mounting` scope of
@@ -146,12 +147,18 @@ export function isLead(connection: Connection): boolean {
 /**
  * Whether entity `id` is occupied (ADR 0015): a device is mounted on it, a connector or a cable end is
  * in one of its entries, a route waypoint names it, or (world v4, ADR 0019) a cord is plugged into one
- * of its outlets. An occupied entity can't move, turn or be deleted (until PR 8's `entity.delete`
- * unplugs what a receptacle holds).
+ * of its outlets. An occupied entity can't move or turn; it can't be deleted either, unless only plugs
+ * hold it (`entity.delete` unplugs what a receptacle holds; `plugs: false` leaves plugs out).
  */
-export function entityOccupied(world: Pick<World, 'entities' | 'cables' | 'connections'>, id: EntityId): boolean {
+export function entityOccupied(
+  world: Pick<World, 'entities' | 'cables' | 'connections'>,
+  id: EntityId,
+  { plugs = true }: { readonly plugs?: boolean } = {},
+): boolean {
   if (
-    world.entities.some((e) => e.mountedOn?.entity === id || e.inEntry?.entity === id || e.pluggedInto?.entity === id)
+    world.entities.some(
+      (e) => e.mountedOn?.entity === id || e.inEntry?.entity === id || (plugs && e.pluggedInto?.entity === id),
+    )
   ) {
     return true;
   }
@@ -167,22 +174,42 @@ export function entityWired(world: Pick<World, 'connections'>, id: EntityId): bo
 }
 
 /**
- * Why entity `id` can't move or turn, or `null`: `occupied` (see {@link entityOccupied}) or `wired`
- * (see {@link entityWired}).
+ * What stops entity `id` being picked up to move (world v4, ADR 0019), or `null`: its own cord is
+ * plugged in (`plugged`: unplug it first), or it is occupied (see {@link entityOccupied}: a receptacle
+ * holding a plug, a host with a device mounted on it, …). The UI refuses at pick-up with it.
+ */
+export function moveBlocker(
+  world: Pick<World, 'entities' | 'cables' | 'connections'>,
+  id: EntityId,
+): 'plugged' | 'occupied' | null {
+  if ((findEntity(world, id)?.pluggedInto ?? null) !== null) return 'plugged';
+  if (entityOccupied(world, id)) return 'occupied';
+  return null;
+}
+
+/**
+ * Why entity `id` can't move or turn, or `null`: `plugged` or `occupied` (see {@link moveBlocker}), or
+ * `wired` (see {@link entityWired}).
  */
 export function entityHold(
   world: Pick<World, 'entities' | 'cables' | 'connections'>,
   id: EntityId,
-): 'occupied' | 'wired' | null {
-  if (entityOccupied(world, id)) return 'occupied';
+): 'plugged' | 'occupied' | 'wired' | null {
+  const blocker = moveBlocker(world, id);
+  if (blocker !== null) return blocker;
   if (entityWired(world, id)) return 'wired';
   return null;
 }
 
-function holdFailure(hold: 'occupied' | 'wired', id: EntityId) {
-  return hold === 'occupied'
-    ? fail('occupied', `Entity ${id} holds a mounted device, a connector, a cable end, a route or a plug`)
-    : fail('wired', `Entity ${id} has a conductor landed on it: unland it first`);
+function holdFailure(hold: 'plugged' | 'occupied' | 'wired', id: EntityId) {
+  switch (hold) {
+    case 'plugged':
+      return fail('plugged', `Entity ${id} is plugged in: unplug it first`);
+    case 'occupied':
+      return fail('occupied', `Entity ${id} holds a mounted device, a connector, a cable end, a route or a plug`);
+    case 'wired':
+      return fail('wired', `Entity ${id} has a conductor landed on it: unland it first`);
+  }
 }
 
 /** A copy of `connections` with each of `restored` (absent ids) put back at its sorted position. */
@@ -391,9 +418,11 @@ export const ENTITY_DELETE_SELECTION_BINDING = 'entity.delete.selection';
  * `entity.delete`: removes an entity and every test lead with an end on it (plan F2.1: deleting
  * never leaves a lead in the world to be silently compiled), and unlands every conductor end on it
  * (ADR 0015: a free rest waypoint where the terminal was, for a single conductor), in the same change.
- * An occupied entity can't go (`occupied`). `nextEntityId` is untouched, so the id is never handed out
- * again while undo can bring the entity back; undo reinserts it, its leads and its conductors with the
- * same ids and data, terminations included. Delete (or Backspace) in the viewport deletes the selected
+ * World v4: a receptacle's plugs come out with it (each plugged entity's `pluggedInto` becomes `null`),
+ * and an appliance's own plug goes with it. Otherwise an occupied entity can't go (`occupied`).
+ * `nextEntityId` is untouched, so the id is never handed out again while undo can bring the entity
+ * back; undo reinserts it, its leads and its conductors with the same ids and data, terminations
+ * included, and plugs back in what it unplugged. Delete (or Backspace) in the viewport deletes the selected
  * entity: the binding takes `id` from the `selection.entityId` context key, so the log holds the
  * concrete id.
  */
@@ -419,7 +448,21 @@ export function entityDeleteCommand(catalog: Catalog = BUILTIN_CATALOG) {
     run: ({ state }, { id }) => {
       const entity = findEntity(state, id);
       if (!entity) return notFound(id);
-      if (entityOccupied(state, id)) return holdFailure('occupied', id);
+      // A receptacle holding plugs isn't held by them: deleting it unplugs each (world v4, ADR 0019).
+      if (entityOccupied(state, id, { plugs: false })) return holdFailure('occupied', id);
+      const unplugged = state.entities.filter((e) => e.pluggedInto?.entity === id);
+      const unpluggedIds = new Set(unplugged.map((e) => e.id));
+      const unplug = (entities: readonly Entity[]) =>
+        unplugged.length === 0
+          ? [...entities]
+          : entities.map((e) => (unpluggedIds.has(e.id) ? { ...e, pluggedInto: null } : e));
+      const replug = (entities: readonly Entity[]) =>
+        unplugged.length === 0
+          ? [...entities]
+          : entities.map((e) => {
+              const was = unplugged.find((u) => u.id === e.id);
+              return was ? { ...e, pluggedInto: was.pluggedInto } : e;
+            });
       const leads = state.connections.filter((c) => isLead(c) && touchesEntity(c, id));
       const wired = state.connections.filter((c) => !isLead(c) && touchesEntity(c, id));
       const unlanded = new Map<number, Connection>();
@@ -438,14 +481,14 @@ export function entityDeleteCommand(catalog: Catalog = BUILTIN_CATALOG) {
       return succeed({
         apply: (w) => ({
           ...w,
-          entities: withoutEntity(w.entities, id),
+          entities: unplug(withoutEntity(w.entities, id)),
           connections: untouched
             ? w.connections
             : w.connections.filter((c) => !leadIds.has(c.id)).map((c) => unlanded.get(c.id) ?? c),
         }),
         invert: (w) => ({
           ...w,
-          entities: insertSorted(w.entities, entity),
+          entities: insertSorted(replug(w.entities), entity),
           connections: untouched
             ? w.connections
             : insertAllSorted(

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "connection",
+      "title": "Wire"
+    },
+    "end": {
+      "type": "string",
+      "enum": [
+        "a",
+        "b"
+      ],
+      "title": "End"
+    },
+    "colour": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ColourId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tape colour",
+      "description": "A colour-table id (never bare); blank removes the tape",
+      "x-controls-options": {
+        "from": "colours",
+        "except": [
+          "bare"
+        ]
+      }
+    }
+  },
+  "required": [
+    "id",
+    "end",
+    "colour"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ColourId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A row of the catalogue colour table: lower camelCase, at most 32."
+    }
+  },
+  "title": "Arguments of wire.mark"
+}

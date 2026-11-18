@@ -8,6 +8,7 @@ import {
   WireDeleteArgs,
   WireLabelArgs,
   WireLandArgs,
+  WireMarkArgs,
   WirePullArgs,
   WireRerouteArgs,
   WireUnlandArgs,
@@ -344,6 +345,36 @@ export function wireLabelCommand(catalog: Catalog = BUILTIN_CATALOG) {
   });
 }
 
+/** The colour-table id of bare copper: a conductor colour, never a tape colour (world v4, ADR 0019). */
+const BARE_COLOUR = 'bare';
+
+/**
+ * `wire.mark {id, end, colour}` (world v4, ADR 0019; Art. 200.7 by number): re-identification tape on
+ * one end of a conductor, landed or free; `null` removes it. The tape belongs to the conductor end: it
+ * survives `wire.unland` and `wire.land`, and goes with the connection on delete and its undo. Refused:
+ * `not-found`, a test lead (`not-a-wire`: a lead carries no marking), and a colour that isn't in the
+ * colour table or is `bare` (`unavailable-colour`). Setting the tape it already has succeeds and is
+ * logged (intent, as `device.operate`). Which colour is correct is the inspector's, never this check's.
+ */
+export function wireMarkCommand(catalog: Catalog = BUILTIN_CATALOG) {
+  return defineCommand<WireMarkArgs, World>({
+    id: 'wire.mark',
+    title: 'Mark a wire end with tape',
+    category: 'Wire',
+    args: WireMarkArgs,
+    undoable: true,
+    run: ({ state }, { id, end, colour }) => {
+      const wire = findWire(state, id);
+      if (isFailure(wire)) return wire;
+      if (colour === BARE_COLOUR) return fail('unavailable-colour', 'Bare is not a tape colour');
+      if (colour !== null && !catalog.colour(colour)) {
+        return fail('unavailable-colour', `"${colour}" is not in the colour table`);
+      }
+      return swap(wire, { ...wire, marking: { ...wire.marking, [end]: colour } });
+    },
+  });
+}
+
 /**
  * `wire.pull {route, lengthMm, conductors, tool}`: pulls 1–16 conductors through conduit with a tool
  * that can `pull` (the fish tape minigame logs it on success only, D10). The route must go through
@@ -407,5 +438,6 @@ export function wireCommands(catalog: Catalog = BUILTIN_CATALOG): AnyCommandDef<
     wireUnlandCommand(catalog),
     wireLabelCommand(catalog),
     wirePullCommand(catalog),
+    wireMarkCommand(catalog),
   ];
 }

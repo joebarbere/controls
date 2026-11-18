@@ -515,6 +515,14 @@ export function checkLanding(
   if (landedHere.length >= spec.maxConductors) {
     return fail('terminal-full', `Terminal "${at.terminal}" already holds ${spec.maxConductors} by ${spec.method}`);
   }
+  // Catalogue v3 (ADR 0020, P4 PR 8): with two or more conductors under one method, each must lie in
+  // the method's `multiConductor` range and, if `equalSize`, all be one size (a two-conductor cap such
+  // as `tb.quennick-st4@2`). Fails closed like the twist-on check below; `null` is no limit beyond the
+  // method's own range (every catalogue-2 method), so no older log is affected.
+  if (spec.multiConductor !== null && landedHere.length > 0) {
+    const refused = multiConductorProblem(catalog, spec.multiConductor, landedHere, conductor.awg);
+    if (refused) return refused;
+  }
   // A twist-on splice: the conductors it would hold against its rated combination (ADR 0018 §4.4).
   // Fails closed: a landed conductor whose entry this catalogue can't size refuses the landing, never
   // a guessed size. Kept before checkSteps: the refusal order is replay-visible.
@@ -553,6 +561,35 @@ export function checkLanding(
     end: { entity: at.entity, terminal: at.terminal, termination },
     point: { positionMm: point, entity: at.entity },
   });
+}
+
+/**
+ * `multi-conductor-out-of-range` when the conductors a method would hold together (`landed` plus a new
+ * one of size `awg`) break its `multiConductor` limit: a size outside its `awgRange`, or (with
+ * `equalSize`) two sizes. A landed conductor whose entry this catalogue can't size refuses (fails closed).
+ */
+function multiConductorProblem(
+  catalog: Catalog,
+  limit: NonNullable<TerminalMethodSpec['multiConductor']>,
+  landed: readonly Connection[],
+  awg: number,
+): CommandFailure | null {
+  const awgs: number[] = [];
+  for (const c of landed) {
+    const size = catalog.device(c.ref)?.conductor?.awg;
+    if (size === undefined) {
+      return fail('multi-conductor-out-of-range', `Connection ${c.id} on the terminal has no conductor size here`);
+    }
+    awgs.push(size);
+  }
+  awgs.push(awg);
+  if (!awgs.every((size) => awgInRange(size, limit.awgRange))) {
+    return fail('multi-conductor-out-of-range', 'Two or more conductors here must each be in the rated size range');
+  }
+  if (limit.equalSize && awgs.some((size) => size !== awgs[0])) {
+    return fail('multi-conductor-out-of-range', 'Two or more conductors here must all be the same size');
+  }
+  return null;
 }
 
 /**

@@ -7,3 +7,5 @@ export * from './wired-world';
 export * from './wiring-bench';
 export * from './routing-panel';
 export * from './cable-run';
+export * from './residential-catalog';
+export * from './residential-bench';

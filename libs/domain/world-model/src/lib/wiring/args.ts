@@ -1,6 +1,7 @@
-import { cableRefMeta, connectionRefMeta, entityRefMeta } from '@controls/commands';
+import { argOptionsMeta, cableRefMeta, connectionRefMeta, entityRefMeta } from '@controls/commands';
 import {
   CatalogRef,
+  ColourId,
   ConductorColourV3,
   DieId,
   EntryId,
@@ -11,6 +12,7 @@ import {
   MAX_CABLE_TAIL_MM,
   MAX_CONDUCTOR_LENGTH_MM,
   MAX_ROUTE_WAYPOINTS,
+  OutletId,
   TerminalId,
   TerminationMethodId,
   WaypointV3,
@@ -199,3 +201,47 @@ export const EntityLabelArgs = z.strictObject({
   tool: ToolRefArg.meta({ title: 'Label maker' }),
 });
 export type EntityLabelArgs = z.infer<typeof EntityLabelArgs>;
+
+/*
+ * World v4 (ADR 0019, "Commands"; P4 PR 8). Frozen like the v3 shapes. `x-controls-options` hints
+ * (`argOptionsMeta`) are form-only: they never change what a command accepts.
+ */
+
+export const PlugInsertArgs = z.strictObject({
+  appliance: EntityIdArg.meta({ ...entityRefMeta, title: 'Appliance' }),
+  receptacle: EntityIdArg.meta({ ...entityRefMeta, title: 'Receptacle' }),
+  outlet: OutletId.meta({
+    title: 'Outlet',
+    description: "An outlet id of the receptacle's catalogue entry (top, bottom)",
+    ...argOptionsMeta({ from: 'outlets', entity: 'receptacle' }),
+  }),
+});
+export type PlugInsertArgs = z.infer<typeof PlugInsertArgs>;
+
+export const PlugRemoveArgs = z.strictObject({
+  appliance: EntityIdArg.meta({ ...entityRefMeta, title: 'Appliance' }),
+});
+export type PlugRemoveArgs = z.infer<typeof PlugRemoveArgs>;
+
+export const WireMarkArgs = z.strictObject({
+  id: ConnectionIdArg,
+  end: EndName,
+  colour: ColourId.nullable().meta({
+    title: 'Tape colour',
+    description: 'A colour-table id (never bare); blank removes the tape',
+    ...argOptionsMeta({ from: 'colours', except: ['bare'] }),
+  }),
+});
+export type WireMarkArgs = z.infer<typeof WireMarkArgs>;
+
+export const PanelDirectoryArgs = z.strictObject({
+  id: EntityIdArg.meta({ ...entityRefMeta, title: 'Panel' }),
+  /** A panel space from 1; no maximum here (the entry's `spaces` bounds it: `unknown-space`). */
+  space: Int.min(1).meta({
+    title: 'Space',
+    description: 'A panel space, from 1',
+    ...argOptionsMeta({ from: 'directorySpaces', entity: 'id' }),
+  }),
+  text: LabelText.nullable().meta({ title: 'Text', description: 'What the space feeds; blank clears it' }),
+});
+export type PanelDirectoryArgs = z.infer<typeof PanelDirectoryArgs>;

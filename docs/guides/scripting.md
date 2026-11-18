@@ -293,6 +293,34 @@ Either way the log holds the explicit waypoints, so a replay never routes; a con
 
 **Cables in a stud wall (F3.2 part 4).** `apps/sim-cli/scenarios/nm-cable-run.ts` is the worked example: a box on the workshop stud wall feeds a DIN panel with 14/2 NM-B, its staples snapped with `snapWaypoint(world, catalog, cursor, { kinds: ['staple'] })` (as the routing gesture snaps them), its length from `routeDefaultLengthMm(points, undefined, tailsMm)` through the entry points (`checkCableEnd`), then `cable.strip` at both ends and one `wire.land` per conductor. A framing run (any `staple` or `bore` waypoint) is supported within 304.8 mm of each box and every 1371.6 mm, or `cable.add` refuses `staple-spacing`; a cable conductor lands only within the stripped length of where the jacket ends (`cableJacketEnd`), so strip enough first (`tail-too-short`). `apps/sim-cli/src/nm-cable-run.spec.ts` pins its hash.
 
+## Plugs, tape, the panel directory and buttons (P4)
+
+From world v4 ([ADR 0019](../decisions/0019-world-document-v4.md#commands)) a script or a console file can plug an appliance into a receptacle outlet, tape a conductor end, write a load centre's directory and press a button. None takes a tool. In console order:
+
+```text
+plug.insert 2 1 top
+plug.remove 2
+wire.mark 1 b red
+wire.mark 1 b null
+panel.directory 4 3 "KITCHEN COUNTER"
+panel.directory 4 3 null
+device.press 6 test
+```
+
+- `plug.insert <appliance> <receptacle> <outlet>` refuses a plug that doesn't mate (`wrong-configuration`: a 5-20P won't enter a 5-15R), a cord that doesn't reach in a straight line (`out-of-reach`), an outlet already in use (`outlet-occupied`), an appliance already plugged in (`already-plugged`: `plug.remove` first) and a strip plugged into itself through others (`plug-cycle`). A plugged appliance can't move (`plugged`); deleting the receptacle unplugs it.
+- `wire.mark <id> <a|b> <colour|null>` tapes either end of a conductor (never a test lead, never `bare`); `null` removes the tape.
+- `panel.directory <id> <space> "<text>"|null`: a bare `null` clears the line; a quoted `"null"` is the text null. Spaces count from 1 up to the panel's own `spaces` (`unknown-space`).
+- `device.press <id> <control>` presses a momentary control (a GFCI's `test` or `reset`); `device.operate` refuses one (`momentary`), and `device.press` refuses any other control (`not-momentary`).
+
+```ts
+game.execOrThrow('plug.insert', { appliance: 2, receptacle: 1, outlet: 'top' });
+game.execOrThrow('wire.mark', { id: 1, end: 'b', colour: 'red' });
+game.execOrThrow('panel.directory', { id: 4, space: 3, text: 'KITCHEN COUNTER' });
+game.execOrThrow('device.press', { id: 6, control: 'test' });
+```
+
+The palette offers the same commands with suggestion lists (the receptacle's outlets, tape colours, the panel's spaces, the device's buttons). Until P4's content PRs add real receptacles, appliances, load centres and GFCIs, the worked example runs over the TEST-ONLY residential catalogue (`RESIDENTIAL_TEST_CATALOG` in `@controls/world-model/testing`): `libs/domain/scripting-api/src/lib/world-v4.spec.ts` (a console file and a TypeScript script reaching one pinned hash, which the palette spec reaches again).
+
 ## Time and probes (F2.3a)
 
 The engine follows every command, so a script can let time pass and measure the circuit it built. A worked example (`apps/sim-cli/scenarios/sim-step.console` is the console-file version):

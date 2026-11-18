@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "x-controls-ref": "entity",
+      "title": "Device"
+    },
+    "control": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-zA-Z0-9]*$",
+      "title": "Button",
+      "description": "The momentary control to press (a GFCI has test and reset)",
+      "x-controls-options": {
+        "from": "controls",
+        "entity": "id",
+        "type": "momentary"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "control"
+  ],
+  "additionalProperties": false,
+  "title": "Arguments of device.press"
+}
