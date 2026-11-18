@@ -15,11 +15,15 @@ function switchEntry(overrides: Record<string, unknown> = {}): Record<string, un
     category: 'switch',
     sizeMm: { widthMm: 10, heightMm: 10, depthMm: 10 },
     terminals: [
-      { id: 'a', label: '1', positionMm: { x: 0, y: 0, z: 0 }, methods: [] },
-      { id: 'b', label: '2', positionMm: { x: 5, y: 0, z: 0 }, methods: [] },
+      { id: 'a', label: '1', positionMm: { x: 0, y: 0, z: 0 }, methods: [], role: null, side: null, access: 'clip' },
+      { id: 'b', label: '2', positionMm: { x: 5, y: 0, z: 0 }, methods: [], role: null, side: null, access: 'clip' },
     ],
     mounts: [],
     enclosure: null,
+    hostMounts: [],
+    outlets: [],
+    plug: null,
+    supersededBy: null,
     conductor: null,
     model: { kind: 'switch.spst', params: {} },
     controls: [{ id: 'closed', label: 'Closed', type: 'toggle' }],
@@ -54,6 +58,10 @@ function leadEntry(overrides: Record<string, unknown> = {}): Record<string, unkn
     terminals: [],
     mounts: [],
     enclosure: null,
+    hostMounts: [],
+    outlets: [],
+    plug: null,
+    supersededBy: null,
     conductor: null,
     model: {
       kind: 'lead',
@@ -132,8 +140,8 @@ function supplyEntry(controls: unknown[]): Record<string, unknown> {
     id: 'supply.test-bench',
     category: 'source',
     terminals: [
-      { id: 'neg', label: '-', positionMm: { x: 0, y: 0, z: 0 }, methods: [] },
-      { id: 'pos', label: '+', positionMm: { x: 1, y: 0, z: 0 }, methods: [] },
+      { id: 'neg', label: '-', positionMm: { x: 0, y: 0, z: 0 }, methods: [], role: null, side: null, access: 'clip' },
+      { id: 'pos', label: '+', positionMm: { x: 1, y: 0, z: 0 }, methods: [], role: null, side: null, access: 'clip' },
     ],
     model: { kind: 'supply.test', params: {} },
     controls,
@@ -195,10 +203,30 @@ describe('parseCatalog', () => {
 
   it('needs exactly the kind’s terminals, unique', () => {
     const one = messages([
-      switchEntry({ terminals: [{ id: 'a', label: '1', positionMm: { x: 0, y: 0, z: 0 }, methods: [] }] }),
+      switchEntry({
+        terminals: [
+          {
+            id: 'a',
+            label: '1',
+            positionMm: { x: 0, y: 0, z: 0 },
+            methods: [],
+            role: null,
+            side: null,
+            access: 'clip',
+          },
+        ],
+      }),
     ]);
     expect(one.join()).toContain('needs exactly the terminals [a, b]');
-    const twice = { id: 'a', label: '1', positionMm: { x: 0, y: 0, z: 0 }, methods: [] };
+    const twice = {
+      id: 'a',
+      label: '1',
+      positionMm: { x: 0, y: 0, z: 0 },
+      methods: [],
+      role: null,
+      side: null,
+      access: 'clip',
+    };
     expect(messages([switchEntry({ terminals: [twice, twice] })]).join()).toContain('Terminal ids must be unique');
   });
 

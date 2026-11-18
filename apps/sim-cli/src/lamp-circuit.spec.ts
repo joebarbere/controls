@@ -19,10 +19,10 @@ import { JOURNEYMAN_WORKSHOP_ARGS, workshopWorldAt } from './testing/workshop';
  * lamp. `scenarios/lamp-circuit.ts` builds it as the mouse and the keyboard would (placements,
  * staples and the bore snapped, free conductors auto-routed), `scenarios/lamp-circuit.console` spells it
  * out; both log exactly the same entries and reach these hashes. Its save is the frozen fixture
- * `fixtures/v3/ctrl/lamp-circuit-engine-7-catalog-2.ctrl`, rebuilt by `sources.spec.ts`:
+ * `fixtures/v3/ctrl/lamp-circuit-engine-7-catalog-3.ctrl`, rebuilt by `sources.spec.ts`:
  *
  *   pnpm sim run apps/sim-cli/scenarios/lamp-circuit.console --world content/levels/workshop.json \
- *     --difficulty journeyman --save libs/domain/save-format/fixtures/v3/ctrl/lamp-circuit-engine-7-catalog-2.ctrl
+ *     --difficulty journeyman --save libs/domain/save-format/fixtures/v3/ctrl/lamp-circuit-engine-7-catalog-3.ctrl
  *
  * **The cross-runtime hook (PR B, `apps/game-e2e/src/wiring-acceptance.spec.ts` and `apps/desktop-e2e`):**
  * a New sandbox on the workshop at Journeyman with seed 0 that logs these entries (the console lines, or

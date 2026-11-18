@@ -242,12 +242,24 @@ const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
 
 const size = { widthMm: 10, heightMm: 10, depthMm: 10 };
 /** A clip-only test terminal (catalogue v2: no termination methods). */
-const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 }, methods: [] });
+const terminal = (id: string, x: number) => ({
+  id,
+  label: id,
+  positionMm: { x, y: 0, z: 0 },
+  methods: [],
+  role: null,
+  side: null,
+  access: 'clip',
+});
 const base = {
   brand: 'Testbrand',
   modelName: 'T-2',
   mounts: [],
   enclosure: null,
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   conductor: null,
   controls: [],
   extensions: {},

@@ -8,19 +8,26 @@ import * as z from 'zod';
  *
  * A path is dotted segments. A cover covers the path itself and everything below it (`jacket` covers
  * `jacket.widthMm`); a `*` segment matches any one segment (`terminals.*.methods.screw` covers both
- * terminals' screw specs). One exception: the bare path `terminals` is the terminal **layout**
- * (positions and labels) and covers nothing below it, so a game-design layout source never silently
- * covers a termination spec.
+ * terminals' screw specs). Two exceptions: the bare path `terminals` is the terminal **layout**
+ * (positions, labels, and from catalogue v3 each terminal's `role`, `side` and `access`) and covers
+ * nothing below it, so a game-design layout source never silently covers a termination spec; and
+ * likewise `fits.<type>` (a fit's width, anchor and contact layout) never covers its contacts'
+ * resistances (catalogue v3).
  *
- * The paths an entry needs (`requiredSourcePaths` in `catalog.ts`):
+ * The paths an entry needs (`requiredDevicePaths` in `catalog.ts`):
  *
- * - devices: `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`drives` too),
- *   `fits.<mountType>` (what the device mounts on), `mounts.<id>`, `entries.<id>` and
- *   `interiorVolumeMm3` (an enclosure), `conductor.<field>` (a conductor product);
+ * - devices: `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`drives`
+ *   and `multiConductor` too), `fits.<mountType>` (what the device mounts on) and
+ *   `fits.<mountType>.contacts.<id>.contactOhm`, `mounts.<id>` (an enclosure's or a `hostMounts` mount, its
+ *   host contacts and bus pattern included), `entries.<id>`, `interiorVolumeMm3`, `markedVolumeMm3`,
+ *   `material` and `spaces` (an enclosure), `outlets.<id>.<field>` and `plug.<field>` (receptacles and
+ *   appliances), `conductor.<field>` (a conductor product);
  * - cables: `conductors.<index>`, `jacket.<field>`;
  * - tools: `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`, `punches`, `pull.lengthMm`, `pull.maxBendDeg`;
  * - accessories: `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`;
- * - tables: `rows.<key>.<field>` for each sourced field.
+ * - tables: `rows.<key>.<field>` for each sourced field;
+ * - rule sets (catalogue v3): `rules.<id>.article` (the article and our paraphrase of it) and
+ *   `rules.<id>.check.params.<name>`.
  */
 
 const SEGMENT = '(?:[A-Za-z0-9][A-Za-z0-9_-]*)';
@@ -50,6 +57,9 @@ export function coversPath(cover: string, path: string): boolean {
   if (cover === 'terminals') return path === 'terminals';
   const c = cover.split('.');
   const p = path.split('.');
+  // `fits.<type>` is a fit's layout (width, anchor, which contacts): like `terminals`, it never covers a
+  // contact's resistance below it (catalogue v3), so a game-design layout source can't silently cover one.
+  if (c.length === 2 && c[0] === 'fits') return p.length === 2 && p[0] === 'fits' && (c[1] === '*' || c[1] === p[1]);
   if (c.length > p.length) return false;
   return c.every((segment, i) => segment === '*' || segment === p[i]);
 }

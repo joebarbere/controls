@@ -15,7 +15,7 @@ import { workshopWorld } from './testing/workshop';
  * written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/fused-conductor.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/fused-conductor-engine-7-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/fused-conductor-engine-7-catalog-3.ctrl
  *
  * carries `fused: true` with `ok` ends through the container, the migration and the load check, and
  * loads open. The fixture-rebuild check in `sources.spec.ts` rebuilds it from the scenario.

@@ -5,7 +5,9 @@ import {
   type ConductorSpec,
   type DeviceControl,
   DeviceDefinition,
+  type EnclosureMount,
   type EnclosureSpec,
+  type PinTerminal,
   type TerminalMethodSpec,
 } from './device';
 import { type ConductorPhysics, conductorPhysics } from './conductor';
@@ -25,10 +27,12 @@ import {
   entryType,
   FAMILY_PREFIXES,
   mountType,
+  nemaConfig,
   type ToolStep,
   terminationMethod,
 } from './registries';
 import { racewayEntryProblems } from './raceway';
+import { requiredRulePaths, RuleSetDocument } from './rules';
 import { checkCoverage } from './sources';
 import { type ColourRow, TableDocument, type TableRef, tableKind } from './tables';
 
@@ -76,6 +80,10 @@ export interface Catalog {
   readonly colourIds: readonly string[];
   /** A colour of the newest colour table, or `undefined`. */
   colour(id: string): ColourRow | undefined;
+  /** Every inspector rule-set version (catalogue v3), sorted by name, then version. */
+  readonly ruleSets: readonly RuleSetDocument[];
+  /** A rule-set version, or `undefined`. */
+  ruleSet(name: string, version: number): RuleSetDocument | undefined;
 }
 
 /** What a catalogue is built from: each family's documents (untrusted JSON, already `JSON.parse`d). */
@@ -85,10 +93,12 @@ export interface CatalogInput {
   readonly tools?: readonly unknown[];
   readonly accessories?: readonly unknown[];
   readonly tables?: readonly unknown[];
+  /** Inspector rule sets (`content/rules/`, catalogue v3). */
+  readonly rules?: readonly unknown[];
 }
 
 /** The keys a {@link CatalogInput} may have; any other is refused. */
-export const CATALOG_INPUT_KEYS = ['devices', 'cables', 'tools', 'accessories', 'tables'] as const;
+export const CATALOG_INPUT_KEYS = ['devices', 'cables', 'tools', 'accessories', 'tables', 'rules'] as const;
 
 export type CatalogResult =
   | { readonly ok: true; readonly catalog: Catalog }
@@ -208,6 +218,8 @@ export function parseCatalog(
       return true;
     },
   );
+  const ruleSets = parseRuleSets(sourcesOf.rules ?? [], issues);
+  checkSupersededBy(devices, deviceByKey, issues);
   // The thermal time-constant check reads resolved rows and parsed params: only on an otherwise valid catalogue.
   if (issues.length === 0) checkThermalTimeConstants(devices, kindByKey, resolveRow, issues);
   if (issues.length > 0) return { ok: false, issues: issues.slice(0, MAX_ISSUES) };
@@ -217,6 +229,7 @@ export function parseCatalog(
   const cableByKey = index(cables);
   const toolByKey = index(tools);
   const accessoryByKey = index(accessories);
+  const ruleSetByKey = new Map(ruleSets.map((set) => [refKey(set.ruleSet, set.version), set]));
   const colourIds = [...colours.keys()].sort();
   const catalog: Catalog = {
     version,
@@ -242,8 +255,83 @@ export function parseCatalog(
     tableRow: resolveRow,
     colourIds,
     colour: (id) => colours.get(id),
+    ruleSets,
+    ruleSet: (name, v) => ruleSetByKey.get(refKey(name, v)),
   };
   return { ok: true, catalog: Object.freeze(catalog) };
+}
+
+/**
+ * Inspector rule sets (catalogue v3, ADR 0020): the schema, a unique `(ruleSet, version)`, unique rule
+ * ids, full source coverage, and rule ids append-only across a rule set's versions.
+ */
+function parseRuleSets(documents: readonly unknown[], issues: ValidationIssue[]): RuleSetDocument[] {
+  const ruleSets: RuleSetDocument[] = [];
+  const seen = new Set<string>();
+  documents.forEach((document, index) => {
+    const at = `rules[${index}]`;
+    const parsed = RuleSetDocument.safeParse(document);
+    if (!parsed.success) {
+      for (const issue of summariseIssues(parsed.error.issues)) {
+        issues.push({ path: issue.path === '(root)' ? at : `${at}.${issue.path}`, message: issue.message });
+      }
+      return;
+    }
+    const set = parsed.data;
+    const add: Add = (path, message) => issues.push({ path: `${at} ${set.ruleSet}@${set.version}: ${path}`, message });
+    const key = refKey(set.ruleSet, set.version);
+    if (seen.has(key)) add('ruleSet', 'Duplicate rule set (same name and version)');
+    seen.add(key);
+    const ids = set.rules.map((r) => r.id);
+    if (new Set(ids).size !== ids.length) add('rules', 'Rule ids must be unique within a rule set');
+    for (const issue of checkCoverage(set.sources, requiredRulePaths(set))) add(issue.path, issue.message);
+    ruleSets.push(set);
+  });
+  ruleSets.sort((a, b) => (a.ruleSet < b.ruleSet ? -1 : a.ruleSet > b.ruleSet ? 1 : a.version - b.version));
+  // Rule ids are append-only across a rule set's versions (ADR 0020), like colour ids.
+  for (let i = 1; i < ruleSets.length; i++) {
+    const [before, after] = [ruleSets[i - 1], ruleSets[i]];
+    if (before.ruleSet !== after.ruleSet) continue;
+    const kept = new Set(after.rules.map((r) => r.id));
+    const missing = before.rules.map((r) => r.id).filter((id) => !kept.has(id));
+    if (missing.length > 0) {
+      issues.push({
+        path: `rules ${after.ruleSet}@${after.version}: rules`,
+        message: `Rule ids are append-only: missing ${missing.sort().join(', ')} of version ${before.version}`,
+      });
+    }
+  }
+  return ruleSets;
+}
+
+/**
+ * `supersededBy` (catalogue v3, ADR 0019 C12) names another device entry of this catalogue, and
+ * following it never comes back to where it started.
+ */
+function checkSupersededBy(
+  devices: readonly DeviceDefinition[],
+  deviceByKey: ReadonlyMap<string, DeviceDefinition>,
+  issues: ValidationIssue[],
+): void {
+  for (const device of devices) {
+    const next = device.supersededBy;
+    if (next === null) continue;
+    const at = `${device.id}@${device.version}: supersededBy`;
+    if (!deviceByKey.has(refKey(next.id, next.version))) {
+      issues.push({ path: at, message: `${next.id}@${next.version} isn't a device entry of this catalogue` });
+      continue;
+    }
+    const visited = new Set([refKey(device.id, device.version)]);
+    for (let ref: DeviceDefinition['supersededBy'] = next; ref !== null;) {
+      const key = refKey(ref.id, ref.version);
+      if (visited.has(key)) {
+        issues.push({ path: at, message: 'supersededBy loops back to an entry it replaces' });
+        break;
+      }
+      visited.add(key);
+      ref = deviceByKey.get(key)?.supersededBy ?? null;
+    }
+  }
 }
 
 function isDocumentArray(input: readonly unknown[] | CatalogInput): input is readonly unknown[] {
@@ -355,6 +443,8 @@ function checkDevice(device: DeviceDefinition, kind: ModelKindDef, context: Cont
   checkMounts(device, kind, add);
   for (const [path, message] of racewayEntryProblems(device)) add(path, message);
   checkEnclosure(device, kind, add);
+  checkHostMounts(device, kind, add);
+  checkOutletsAndPlug(device, kind, add);
   checkConductor(device, kind, context, add);
   checkControls(device.controls, kind, add);
   for (const issue of checkCoverage(device.sources, requiredDevicePaths(device))) add(issue.path, issue.message);
@@ -376,9 +466,32 @@ function checkNamespace(device: DeviceDefinition, add: Add): void {
 function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {
   const ids = device.terminals.map((t) => t.id);
   if (new Set(ids).size !== ids.length) add('terminals', 'Terminal ids must be unique');
-  const sorted = [...ids].sort();
+  const families = kind.terminalFamilies ?? [];
+  const numbered = new Set<string>();
+  for (const family of families) {
+    // An entry numbers a family's terminals 1 … n, with no gap, for one n in [min, max] (catalogue v3).
+    let n = 0;
+    while (ids.includes(`${family.prefix}${n + 1}`)) n++;
+    for (let i = 1; i <= n; i++) numbered.add(`${family.prefix}${i}`);
+    if (n < family.min || n > family.max) {
+      add(
+        'terminals',
+        `Model kind ${kind.kind} numbers ${family.prefix}1 … ${family.prefix}n with n from ${family.min} to ${family.max}`,
+      );
+    }
+  }
+  const sorted = ids.filter((id) => !numbered.has(id)).sort();
   if (sorted.join('\n') !== [...kind.terminals].join('\n')) {
-    add('terminals', `Model kind ${kind.kind} needs exactly the terminals [${kind.terminals.join(', ')}]`);
+    const also = families.map((f) => `, ${f.prefix}1 … ${f.prefix}n`).join('');
+    add('terminals', `Model kind ${kind.kind} needs exactly the terminals [${kind.terminals.join(', ')}${also}]`);
+  }
+  for (const terminal of device.terminals) {
+    if ((terminal.access === 'land') !== terminal.methods.length > 0) {
+      add(
+        `terminals.${terminal.id}.access`,
+        'A terminal is "land" exactly when it has termination methods ("clip" or "none" without them)',
+      );
+    }
   }
   if (kind.placement === 'connection') {
     if (device.sizeMm !== null) add('sizeMm', 'A connection kind has no body: sizeMm must be null');
@@ -417,6 +530,13 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
           path,
           `A ${spec.method} method holds the conductor by ${method.clampTypes.join(' or ')}, not ${spec.clampType}`,
         );
+      }
+      const cap = spec.multiConductor;
+      if (cap !== null) {
+        if (spec.maxConductors < 2) add(path, 'A multiConductor cap needs maxConductors of at least 2');
+        if (!awgInRange(cap.awgRange.smallest, spec.awgRange) || !awgInRange(cap.awgRange.largest, spec.awgRange)) {
+          add(path, "multiConductor.awgRange must lie inside the method's awgRange");
+        }
       }
       const combination = spec.combination;
       if ((combination !== null) !== (spec.method === 'twistOn')) {
@@ -479,11 +599,67 @@ function checkMounts(device: DeviceDefinition, kind: ModelKindDef, add: Add): vo
   const types = device.mounts.map((m) => m.type);
   if (new Set(types).size !== types.length) add('mounts', 'Each mount type is declared once');
   for (const type of types) if (!mountType(type)) add(`mounts.${type}`, 'Unknown mount type');
+  const terminals = new Set(device.terminals.map((t) => t.id));
   for (const fit of device.mounts) {
-    if (fit.crossMm !== 0 && mountType(fit.type)?.occupancy !== 'linear') {
-      add(`mounts.${fit.type}`, 'crossMm places a device across a linear mount only: it must be 0 here');
+    const type = mountType(fit.type);
+    if (type === undefined) continue;
+    // Catalogue v3: a single mount takes an anchor (alongMm, crossMm); a linear one a cross offset only.
+    if (fit.crossMm !== 0 && type.occupancy === 'area') {
+      add(`mounts.${fit.type}`, 'crossMm places a device on a linear or single mount only: it must be 0 here');
+    }
+    if (fit.alongMm !== 0 && type.occupancy !== 'single') {
+      add(`mounts.${fit.type}`, "alongMm anchors a device on a single mount only: on this mount it is the player's");
+    }
+    const ids = fit.contacts.map((c) => c.id);
+    if (new Set(ids).size !== ids.length) add(`fits.${fit.type}.contacts`, 'Contact ids must be unique within a fit');
+    for (const contact of fit.contacts) {
+      const at = `fits.${fit.type}.contacts.${contact.id}`;
+      if (!terminals.has(contact.terminal)) add(at, `No terminal "${contact.terminal}" on this entry`);
+      if (!type.hostContacts.includes(contact.host)) {
+        add(
+          at,
+          `A ${fit.type} mount offers the host contacts [${type.hostContacts.join(', ')}], not "${contact.host}"`,
+        );
+      }
+      if (contact.positionOffset !== 0 && !type.bus)
+        add(at, 'positionOffset steps along a bus only: it must be 0 here');
     }
   }
+}
+
+/**
+ * The mounts a device offers (catalogue v3): an enclosure's `enclosure.mounts`, or a non-enclosure
+ * device's `hostMounts` (a lampholder's `e26`). What `checkMount`, snapping and the compiler read.
+ */
+export function offeredMounts(device: DeviceDefinition): readonly EnclosureMount[] {
+  return device.enclosure?.mounts ?? device.hostMounts;
+}
+
+/** One host mount's contacts and bus pattern (catalogue v3), for an enclosure's mounts or `hostMounts`. */
+function checkHostMount(mount: EnclosureMount, terminals: ReadonlySet<string>, add: Add): void {
+  const at = `mounts.${mount.id}`;
+  const type = mountType(mount.type);
+  if (type === undefined) {
+    add(at, `Unknown mount type "${mount.type}"`);
+    return;
+  }
+  const ids = mount.contacts.map((c) => c.id);
+  if (new Set(ids).size !== ids.length) add(at, 'Each host contact is offered once');
+  for (const contact of mount.contacts) {
+    if (!type.hostContacts.includes(contact.id)) {
+      add(at, `A ${mount.type} mount offers the host contacts [${type.hostContacts.join(', ')}], not "${contact.id}"`);
+    }
+    if (!terminals.has(contact.terminal)) add(at, `No terminal "${contact.terminal}" on this entry`);
+  }
+  if (type.bus !== (mount.bus !== null)) {
+    add(at, type.bus ? `A ${mount.type} mount needs its bus pattern` : 'Only a bus mount has a bus pattern');
+  }
+  const bus = mount.bus;
+  if (bus === null) return;
+  if (mount.contacts.length > 0) add(at, "A bus mount's stabs reach their legs through its bus pattern, not contacts");
+  for (const leg of bus.legs) if (!terminals.has(leg)) add(`${at}.bus`, `No terminal "${leg}" on this entry`);
+  if (bus.legs[0] === bus.legs[1]) add(`${at}.bus`, 'A bus alternates between two different legs');
+  if ((bus.stabs - 1) * bus.pitchMm > mount.extentMm) add(`${at}.bus`, "The last stab lies beyond the mount's extent");
 }
 
 function checkEnclosure(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {
@@ -505,11 +681,87 @@ function checkEnclosure(device: DeviceDefinition, kind: ModelKindDef, add: Add):
   ];
   if (new Set(ids).size !== ids.length)
     add('enclosure', 'Terminal, mount and entry ids must be unique within the entry');
-  for (const mount of enclosure.mounts) {
-    if (!mountType(mount.type)) add(`mounts.${mount.id}`, `Unknown mount type "${mount.type}"`);
-  }
+  const terminals = new Set(device.terminals.map((t) => t.id));
+  for (const mount of enclosure.mounts) checkHostMount(mount, terminals, add);
   for (const entry of enclosure.entries) {
     if (!entryType(entry.type)) add(`entries.${entry.id}`, `Unknown entry type "${entry.type}"`);
+  }
+  // Panel spaces (catalogue v3): each a stab of one of this enclosure's bus mounts, each once.
+  const seen = new Set<string>();
+  enclosure.spaces.forEach((space, i) => {
+    const at = `spaces[${i}]`;
+    const bus = enclosure.mounts.find((m) => m.id === space.mount)?.bus ?? null;
+    if (bus === null) add(at, `"${space.mount}" isn't a bus mount of this enclosure`);
+    else if (space.index >= bus.stabs) add(at, `Mount ${space.mount} has ${bus.stabs} stabs (indices from 0)`);
+    const key = `${space.mount}#${space.index}`;
+    if (seen.has(key)) add(at, 'Each stab is one space');
+    seen.add(key);
+  });
+  if (enclosure.markedVolumeMm3 !== null && enclosure.interiorVolumeMm3 === null) {
+    add('enclosure.markedVolumeMm3', 'A marked volume goes with an interior volume (a box, not a backplate)');
+  }
+}
+
+/**
+ * A non-enclosure device's offered mounts (catalogue v3, `hostMounts`): only where there is no
+ * enclosure block, never on a connection, with ids unique among the entry's terminals.
+ */
+function checkHostMounts(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {
+  if (device.hostMounts.length === 0) return;
+  if (device.enclosure !== null)
+    add('hostMounts', 'An enclosure offers its mounts in enclosure.mounts: hostMounts must be []');
+  if (kind.placement === 'connection') add('hostMounts', 'A connection offers no mounts');
+  const ids = [...device.terminals.map((t) => t.id), ...device.hostMounts.map((m) => m.id)];
+  if (new Set(ids).size !== ids.length) add('hostMounts', 'Terminal and mount ids must be unique within the entry');
+  const terminals = new Set(device.terminals.map((t) => t.id));
+  for (const mount of device.hostMounts) checkHostMount(mount, terminals, add);
+}
+
+/**
+ * Receptacle outlets and an appliance plug (catalogue v3, ADR 0019 C6): configurations of the right
+ * form, every pin of the configuration mapped once to a methodless terminal; no connection has either,
+ * and an entry with a plug fits no mount (a relaxable rule, ADR 0019).
+ */
+function checkOutletsAndPlug(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {
+  if (kind.placement === 'connection' && (device.outlets.length > 0 || device.plug !== null)) {
+    add('outlets', 'A connection has no outlets and no plug');
+  }
+  const ids = device.outlets.map((o) => o.id);
+  if (new Set(ids).size !== ids.length) add('outlets', 'Outlet ids must be unique within the entry');
+  for (const outlet of device.outlets) {
+    checkPins(`outlets.${outlet.id}`, outlet.config, 'receptacle', outlet.pins, device, add);
+  }
+  const plug = device.plug;
+  if (plug === null) return;
+  checkPins('plug', plug.config, 'plug', plug.pins, device, add);
+  if (gaugeRow(plug.cordAwg) === undefined) add('plug.cordAwg', `No gauge ${plug.cordAwg} in the gauge table`);
+  if (device.mounts.length > 0) add('plug', 'An entry with a plug fits no mount (ADR 0019)');
+}
+
+function checkPins(
+  at: string,
+  config: string,
+  form: 'plug' | 'receptacle',
+  pins: readonly PinTerminal[],
+  device: DeviceDefinition,
+  add: Add,
+): void {
+  const def = nemaConfig(config);
+  if (def === undefined || def.form !== form) {
+    add(`${at}.config`, `"${config}" isn't a ${form} configuration of NEMA_CONFIGS`);
+    return;
+  }
+  const named = pins.map((p) => p.pin);
+  if ([...named].sort().join() !== [...def.pins].sort().join()) {
+    add(`${at}.pins`, `A ${config} has the pins [${def.pins.join(', ')}], each mapped once`);
+  }
+  const terminals = pins.map((p) => p.terminal);
+  if (new Set(terminals).size !== terminals.length) add(`${at}.pins`, 'Each pin is its own terminal');
+  for (const { pin, terminal } of pins) {
+    const found = device.terminals.find((t) => t.id === terminal);
+    if (found === undefined) add(`${at}.pins`, `Pin ${pin}: no terminal "${terminal}" on this entry`);
+    else if (found.methods.length > 0)
+      add(`${at}.pins`, `Pin ${pin}: a blade or slot terminal has no termination methods`);
   }
 }
 
@@ -593,14 +845,14 @@ function checkControls(controls: readonly DeviceControl[], kind: ModelKindDef, a
       add(path, `A control drives a commanded state key of ${kind.kind}; "${control.id}" isn't one`);
       return;
     }
-    const expected = { toggle: 'boolean', setpoint: 'number', selector: 'enum' }[control.type];
+    const expected = { toggle: 'boolean', setpoint: 'number', selector: 'enum', momentary: 'counter' }[control.type];
     if (key.type !== expected) add(path, `A ${control.type} control needs a ${expected} key`);
     if (control.type === 'selector' && !control.options.every((o) => key.values?.includes(o))) {
       add(path, 'Selector options must be values of the key');
     }
     // A new device starts at its key's initial value, so that value must be one the control allows
-    // (a 0–5 V supply can't start at a kind's 12 V): F2.4 save-format review.
-    if (key.type === expected && !checkControlValue(control, kind, key.initial).ok) {
+    // (a 0–5 V supply can't start at a kind's 12 V): F2.4 save-format review. A button sets no value.
+    if (control.type !== 'momentary' && key.type === expected && !checkControlValue(control, kind, key.initial).ok) {
       add(path, `The key's initial value (${String(key.initial)}) is outside this control's range`);
     }
   });
@@ -614,11 +866,25 @@ export function requiredDevicePaths(device: DeviceDefinition): string[] {
   for (const terminal of device.terminals) {
     for (const spec of terminal.methods) required.push(...methodPaths(terminal.id, spec));
   }
-  for (const mount of device.mounts) required.push(`fits.${mount.type}`);
+  for (const mount of device.mounts) {
+    // `fits.<type>` covers the fit's layout only, never its contacts' resistances (sources.ts).
+    required.push(`fits.${mount.type}`);
+    for (const contact of mount.contacts) required.push(`fits.${mount.type}.contacts.${contact.id}.contactOhm`);
+  }
+  for (const mount of device.hostMounts) required.push(`mounts.${mount.id}`);
   if (device.enclosure !== null) {
     for (const mount of device.enclosure.mounts) required.push(`mounts.${mount.id}`);
     for (const entry of device.enclosure.entries) required.push(`entries.${entry.id}`);
     if (device.enclosure.interiorVolumeMm3 !== null) required.push('interiorVolumeMm3');
+    if (device.enclosure.markedVolumeMm3 !== null) required.push('markedVolumeMm3');
+    required.push('material');
+    if (device.enclosure.spaces.length > 0) required.push('spaces');
+  }
+  for (const outlet of device.outlets) {
+    for (const field of ['config', 'positionMm', 'pins', 'contactOhm']) required.push(`outlets.${outlet.id}.${field}`);
+  }
+  if (device.plug !== null) {
+    for (const field of ['config', 'cordAwg', 'cordLengthMm', 'cordExitMm', 'pins']) required.push(`plug.${field}`);
   }
   const conductor = device.conductor;
   if (conductor !== null) {
@@ -642,6 +908,7 @@ function methodPaths(terminal: string, spec: TerminalMethodSpec): string[] {
   if (spec.torqueNm !== null) fields.push('torqueNm');
   if (spec.drives.length > 0) fields.push('drives');
   if (spec.combination !== null) fields.push('combination');
+  if (spec.multiConductor !== null) fields.push('multiConductor');
   return fields.map((field) => `${base}.${field}`);
 }
 
@@ -765,6 +1032,9 @@ export function checkControlValue(
         return { ok: false, message: `${control.label} takes one of: ${control.options.join(', ')}` };
       }
       break;
+    case 'momentary':
+      // A button is pressed, never set (catalogue v3, D7): device.operate refuses it (`momentary` from world v4).
+      return { ok: false, message: `${control.id} is a button: press it with device.press` };
   }
   return key.schema.safeParse(value).success
     ? { ok: true }

@@ -24,7 +24,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 32,
         "z": 98
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "pos",
@@ -34,11 +37,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 32,
         "z": 98
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "battery",
@@ -107,7 +117,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "studFlange",
       "widthMm": 51,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -122,7 +134,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 0
+        "extentMm": 0,
+        "contacts": [],
+        "bus": null
       }
     ],
     "entries": [
@@ -192,8 +206,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 209808
+    "interiorVolumeMm3": 209808,
+    "markedVolumeMm3": null,
+    "material": "steel",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -244,6 +265,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "fits.studFlange"
       ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a sheet-steel device box, the class its box-class source names (sheet-steel outlet boxes listed to UL 514A, cited by number), so metal the inspector expects to be bonded. It has no chassis terminal, so nothing bonds to it in the game; P4 supersedes it with a metal-box entry that has one (ADR 0020).",
+      "covers": [
+        "material"
+      ]
     }
   ],
   "extensions": {}
@@ -265,7 +294,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -280,7 +311,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 0
+        "extentMm": 0,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "yoke-2",
@@ -292,7 +325,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 0
+        "extentMm": 0,
+        "contacts": [],
+        "bus": null
       }
     ],
     "entries": [
@@ -349,8 +384,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "axis": "+y"
       }
     ],
-    "interiorVolumeMm3": 602688
+    "interiorVolumeMm3": 602688,
+    "markedVolumeMm3": null,
+    "material": "nonmetallic",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -401,6 +443,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "fits.studFlange"
       ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a nonmetallic (PVC) device box, the class its box-class source names (nonmetallic outlet boxes listed to UL 514C, cited by number): no metal to bond.",
+      "covers": [
+        "material"
+      ]
     }
   ],
   "extensions": {}
@@ -422,7 +472,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -481,8 +533,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "axis": "-x"
       }
     ],
-    "interiorVolumeMm3": 390864
+    "interiorVolumeMm3": 390864,
+    "markedVolumeMm3": null,
+    "material": "nonmetallic",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -524,6 +583,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "covers": [
         "fits.studFlange"
       ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a nonmetallic (PVC) ceiling box, the class its box-class source names (nonmetallic outlet boxes listed to UL 514C, cited by number): no metal to bond.",
+      "covers": [
+        "material"
+      ]
     }
   ],
   "extensions": {}
@@ -545,7 +612,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -669,8 +738,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 364952
+    "interiorVolumeMm3": 364952,
+    "markedVolumeMm3": null,
+    "material": "steel",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -716,6 +792,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "citation": "game-design: fixed to the side of a stud by a bracket (common practice); it takes its full width along the stud.",
       "covers": [
         "fits.studFlange"
+      ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a sheet-steel junction box, the class its box-class source names (sheet-steel outlet boxes listed to UL 514A, cited by number), so metal the inspector expects to be bonded. It has no chassis terminal, so nothing bonds to it in the game; P4 supersedes it with a metal-box entry that has one (ADR 0020).",
+      "covers": [
+        "material"
       ]
     }
   ],
@@ -776,9 +860,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "load",
@@ -822,19 +910,29 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 40,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "breaker.thermalMagnetic",
@@ -981,6 +1079,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": -3,
     "stranding": "stranded",
@@ -1055,6 +1157,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 4,
     "stranding": "stranded",
@@ -1129,6 +1235,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 10,
     "stranding": "solid",
@@ -1205,6 +1315,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 12,
     "stranding": "solid",
@@ -1281,6 +1395,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 14,
     "stranding": "solid",
@@ -1357,6 +1475,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 10,
     "stranding": "solid",
@@ -1447,6 +1569,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 12,
     "stranding": "solid",
@@ -1537,6 +1663,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 14,
     "stranding": "solid",
@@ -1627,6 +1757,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 6,
     "stranding": "stranded",
@@ -1717,6 +1851,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 8,
     "stranding": "stranded",
@@ -1807,6 +1945,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 10,
     "stranding": "stranded",
@@ -1916,6 +2058,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 12,
     "stranding": "stranded",
@@ -2025,6 +2171,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 14,
     "stranding": "stranded",
@@ -2134,6 +2284,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 16,
     "stranding": "stranded",
@@ -2243,6 +2397,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 18,
     "stranding": "stranded",
@@ -2359,6 +2517,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 0,
     "stranding": "stranded",
@@ -2474,6 +2636,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 10,
     "stranding": "solid",
@@ -2589,6 +2755,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 10,
     "stranding": "stranded",
@@ -2704,6 +2874,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 12,
     "stranding": "solid",
@@ -2819,6 +2993,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 12,
     "stranding": "stranded",
@@ -2934,6 +3112,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 14,
     "stranding": "solid",
@@ -3049,6 +3231,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 14,
     "stranding": "stranded",
@@ -3164,6 +3350,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": -1,
     "stranding": "stranded",
@@ -3279,6 +3469,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 2,
     "stranding": "stranded",
@@ -3394,6 +3588,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": -2,
     "stranding": "stranded",
@@ -3509,6 +3707,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": -3,
     "stranding": "stranded",
@@ -3624,6 +3826,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 4,
     "stranding": "stranded",
@@ -3739,6 +3945,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 6,
     "stranding": "stranded",
@@ -3854,6 +4064,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 8,
     "stranding": "stranded",
@@ -3973,6 +4187,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitConnector",
@@ -4022,6 +4240,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitConnector",
@@ -4071,6 +4293,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitConnector",
@@ -4122,10 +4348,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "backplate",
       "widthMm": 2000,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.duct",
@@ -4200,10 +4432,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "backplate",
       "widthMm": 2000,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.duct",
@@ -4278,10 +4516,16 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "type": "backplate",
       "widthMm": 2000,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.duct",
@@ -4354,6 +4598,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitElbow",
@@ -4412,6 +4660,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitElbow",
@@ -4470,6 +4722,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitElbow",
@@ -4528,6 +4784,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduit",
@@ -4586,6 +4846,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduit",
@@ -4644,6 +4908,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduit",
@@ -4708,7 +4976,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 15,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -4718,11 +4989,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 15,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "fuse",
@@ -4831,9 +5109,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -4877,13 +5159,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "heater",
@@ -4986,7 +5276,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -4996,11 +5289,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "heater",
@@ -5087,9 +5387,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -5133,13 +5437,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "lamp.incandescent",
@@ -5284,7 +5596,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -5294,11 +5609,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "lamp.incandescent",
@@ -5367,6 +5689,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "lead",
@@ -5495,7 +5821,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 330
+        "extentMm": 330,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "rail-2",
@@ -5507,7 +5835,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 330
+        "extentMm": 330,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "plate",
@@ -5519,7 +5849,9 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 350
+        "extentMm": 350,
+        "contacts": [],
+        "bus": null
       }
     ],
     "entries": [
@@ -5589,8 +5921,15 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "axis": "-y"
       }
     ],
-    "interiorVolumeMm3": 38890368
+    "interiorVolumeMm3": 38890368,
+    "markedVolumeMm3": null,
+    "material": "steel",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.panel",
@@ -5651,6 +5990,14 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "entries.drill-top-1",
         "entries.drill-top-2"
       ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a sheet-steel wall-mount enclosure, the class its enclosure-class source names (1.5 mm body steel; UL 50/50E and NEMA 250, cited by number), so metal the inspector expects to be bonded.",
+      "covers": [
+        "material"
+      ]
     }
   ],
   "extensions": {}
@@ -5676,7 +6023,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 20,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -5686,11 +6036,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 20,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "resistor",
@@ -5785,13 +6142,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
               "min": 4161820,
               "max": 16543850
             }
-          }
+          },
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "splice.twistOn",
@@ -5909,13 +6274,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
               "min": 1646094,
               "max": 9926310
             }
-          }
+          },
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "splice.twistOn",
@@ -6033,13 +6406,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
               "min": 651068,
               "max": 4161820
             }
-          }
+          },
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "splice.twistOn",
@@ -6115,7 +6496,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 0,
         "z": 35
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "pos",
@@ -6125,11 +6509,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 0,
         "z": 35
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "supply.bench",
@@ -6243,9 +6634,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "pos",
@@ -6290,19 +6685,29 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 40,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "supply.dinPsu",
@@ -6449,7 +6854,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 20,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -6459,11 +6867,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 20,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "switch.spst",
@@ -6545,9 +6960,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -6592,19 +7011,29 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 6,
-      "crossMm": 21
+      "crossMm": 21,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "terminalBlock.ground",
@@ -6735,9 +7164,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.02,
           "hotSpotHeatCapacityJPerK": 0.35,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -6779,19 +7212,29 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.02,
           "hotSpotHeatCapacityJPerK": 0.35,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 5,
-      "crossMm": 17
+      "crossMm": 17,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "terminalBlock.feedThrough",
@@ -6916,9 +7359,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -6963,19 +7410,32 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 6,
-      "crossMm": 21
+      "crossMm": 21,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": {
+    "id": "tb.quennick-st4",
+    "version": 2
+  },
   "conductor": null,
   "model": {
     "kind": "terminalBlock.feedThrough",
@@ -7054,6 +7514,233 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "tb.quennick-st4",
+  "version": 2,
+  "title": "Screw-clamp feed-through terminal block, 4 mm² class, grey",
+  "brand": "Quennick",
+  "modelName": "QST 4",
+  "category": "terminalBlock",
+  "sizeMm": {
+    "widthMm": 6,
+    "heightMm": 48,
+    "depthMm": 47
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "1",
+      "positionMm": {
+        "x": 3,
+        "y": 40,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 48,
+            "z": 30
+          },
+          "exitAxis": "+y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null,
+          "multiConductor": {
+            "awgRange": {
+              "smallest": 22,
+              "largest": 16
+            },
+            "equalSize": true
+          }
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "b",
+      "label": "2",
+      "positionMm": {
+        "x": 3,
+        "y": 8,
+        "z": 30
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 2,
+          "awgRange": {
+            "smallest": 22,
+            "largest": 10
+          },
+          "stranding": [
+            "solid",
+            "stranded",
+            "strandedFerrule"
+          ],
+          "stripLengthMm": {
+            "nominal": 9,
+            "tolerance": 1
+          },
+          "torqueNm": 0.6,
+          "drives": [
+            "slotted",
+            "pozidriv"
+          ],
+          "alRated": false,
+          "entryMm": {
+            "x": 3,
+            "y": 0,
+            "z": 30
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 8,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 0.5,
+          "combination": null,
+          "multiConductor": {
+            "awgRange": {
+              "smallest": 22,
+              "largest": 16
+            },
+            "equalSize": true
+          }
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "din35",
+      "widthMm": 6,
+      "crossMm": 21,
+      "alongMm": 0,
+      "contacts": []
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "terminalBlock.feedThrough",
+    "params": {}
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "tb-4mm2-class",
+      "kind": "real-world",
+      "citation": "real-world (product class): screw-clamp feed-through DIN-rail terminal blocks of the 4 mm² class are 6.2 mm wide, about 47.7 mm long and 47.5 mm high on a 35 × 7.5 rail (a maker’s published datasheet, read 2026-11-12). Drawn 6 × 48 × 47 mm: the width rounded down to whole mm (so 10 blocks take 60 mm, not 62). Grey, the usual colour for line conductors.",
+      "covers": [
+        "sizeMm"
+      ]
+    },
+    {
+      "id": "tb-layout",
+      "kind": "game-design",
+      "citation": "game-design: two clamps, one at the top (1) and one at the bottom (2), 30 mm off the rail; conductors enter the top and bottom faces. Not taken from a product drawing.",
+      "covers": [
+        "terminals",
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "tb-din",
+      "kind": "game-design",
+      "citation": "game-design: clips onto a 35 mm top-hat rail (IEC 60715, cited by number), 6 mm along it, centred on the rail: its origin sits 45 − 24 = 21 mm above the mount origin (DIN 43880’s 90 mm modular-device line, ADR 0015 note 7), so its 48 mm body spans the rail centreline ± 24 mm.",
+      "covers": [
+        "fits.din35"
+      ]
+    },
+    {
+      "id": "tb-screw-class",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 4 mm² screw feed-through class takes 26–10 AWG copper (of which 22–10 is used here; UL/CSA 30 A, 600 V), solid or stranded, stranded in a ferrule up to 4 mm², with a 9 mm strip and an M3 clamp screw tightened to 0.6–0.8 N·m (a maker’s datasheet, read 2026-11-12). The marked 0.6 N·m is the fictional block’s, at the low end of that range; NFPA 70-2023 Art. 110.14(D) (cited by number) requires the marked value. No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.torqueNm",
+        "terminals.*.methods.screw.alRated"
+      ]
+    },
+    {
+      "id": "tb-screw-rules",
+      "kind": "game-design",
+      "citation": "game-design: the ±1 mm strip tolerance, the 8 mm cage depth (inside the 9 mm strip), the rising-cage (box) clamp type and the 1-rated / 2-fit rule (two conductors share the clamp force). Version 2 caps the second conductor at the class's published two-conductor rule (tb-screw-two-conductor).",
+      "covers": [
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm",
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors"
+      ]
+    },
+    {
+      "id": "tb-screw-two-conductor",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 4 mm² screw feed-through class takes two conductors under one clamp only of equal size and only up to 1.5 mm² (a maker’s datasheet, read 2026-11-12, the same page as tb-screw-class). In AWG designations: 16 AWG is 1.31 mm² and 15 AWG 1.65 mm² (the AWG definition, NBS Handbook 100), so the largest size at or under 1.5 mm² is 16 AWG; the smallest stays the method’s 22 AWG. Catalogue v3’s multiConductor cap (ADR 0020), the carried P3 item; version 1 keeps its two-of-any-size rule for saves that hold it.",
+      "covers": [
+        "terminals.*.methods.screw.multiConductor"
+      ]
+    },
+    {
+      "id": "tb-screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: unverified. Terminal-block clamp screws commonly take a slotted blade, many with a Pozidriv combination head (common practice, not read from one datasheet); the drive type is a name and its size is not modelled.",
+      "covers": [
+        "terminals.*.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "tb-screw-contact",
+      "kind": "game-design",
+      "citation": "game-design: each screw clamp takes the branch-circuit screw class’s contact resistance, 0.3 mΩ at the marked torque with copper at 20 °C (NBS Building Science Series 103, 1977, measured 0.2 to 0.5 mΩ on good branch-circuit screw terminals; ADR 0018 §4.1), and its calibrated 0.026 W/K heat path (§3.3). A terminal-block voltage-drop acceptance (at most 3.2 mV per block, two clamps, at a DC test current of 0.1 × the rated section’s current) gives at most 1.0 mΩ per block at 4 mm² (3.2 A); the model’s two clamps at 0.3 mΩ (0.6 mΩ, plus the ideal bridge) sit inside it. Read on a maker’s terminal-block test page (read 2026-11-12), which attributes the test to IEC 60947-7-1, IEC 61984 and UL 1059 (cited by number only; the standards themselves unverified). The cage’s heat capacity, 0.5 J/K, is a physics estimate: about 1.3 g of brass and steel × about 380 J/(kg·K).",
+      "covers": [
+        "terminals.*.methods.screw.contactOhm",
+        "terminals.*.methods.screw.heatPathWPerK",
+        "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "utility.larkmoor-208y120-150kva",
   "version": 1,
   "title": "208Y/120 V three-phase utility service, 150 kVA transformer",
@@ -7074,7 +7761,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "l2",
@@ -7084,7 +7774,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "l3",
@@ -7094,7 +7787,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "n",
@@ -7104,11 +7800,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "utility.threePhase",
@@ -7172,7 +7875,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "l2",
@@ -7182,7 +7888,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "l3",
@@ -7192,7 +7901,10 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "n",
@@ -7202,11 +7914,18 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
         "y": 250,
         "z": 200
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "utility.threePhase",
@@ -7304,9 +8023,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "l2",
@@ -7350,9 +8073,13 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "n",
@@ -7396,13 +8123,21 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "utility.splitPhase",

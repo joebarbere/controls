@@ -15,7 +15,9 @@
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -74,8 +76,15 @@
         "axis": "-x"
       }
     ],
-    "interiorVolumeMm3": 390864
+    "interiorVolumeMm3": 390864,
+    "markedVolumeMm3": null,
+    "material": "nonmetallic",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -106,6 +115,12 @@
       "kind": "game-design",
       "citation": "game-design: nailed to the side of a joist or stud through its bracket (studFlange, common practice); it takes its full width along the framing member.",
       "covers": ["fits.studFlange"]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a nonmetallic (PVC) ceiling box, the class its box-class source names (nonmetallic outlet boxes listed to UL 514C, cited by number): no metal to bond.",
+      "covers": ["material"]
     }
   ],
   "extensions": {}

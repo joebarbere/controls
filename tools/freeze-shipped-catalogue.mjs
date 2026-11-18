@@ -8,7 +8,7 @@
 // Run it in the release commit, after version-keeper has rolled CHANGELOG.md's [Unreleased] into the
 // dated `## [x.y.z] - YYYY-MM-DD` section (from then on shipped.spec.ts requires the file) and before the
 // tag, so the list is the catalogue at the tag. The list is every `content/` family (devices, tables,
-// tools, cables, accessories), each family's `*.json` files in name order (as the built-in mirrors are),
+// tools, cables, accessories, and from catalogue 3 rules), each family's `*.json` files in name order (as the built-in mirrors are),
 // and the `CATALOG_VERSION` of libs/domain/catalog/src/lib/builtin.ts. It refuses a version with no dated
 // CHANGELOG section and a version that already has a list: a shipped list is never regenerated.
 // Formatted with the repo's Prettier config, so `prettier --check` in `pnpm verify` passes.
@@ -21,7 +21,7 @@ import { normaliseVersion } from './release-notes.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const SHIPPED_DIR = join(ROOT, 'libs/domain/catalog/fixtures/shipped');
 /** The `content/` directories a frozen list holds, in the list's key order. */
-export const FAMILIES = ['devices', 'tables', 'tools', 'cables', 'accessories'];
+export const FAMILIES = ['devices', 'tables', 'tools', 'cables', 'accessories', 'rules'];
 
 /** `CATALOG_VERSION` from builtin.ts's source. */
 export function catalogVersionOf(builtinSource) {

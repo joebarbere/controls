@@ -1,4 +1,5 @@
 import type { RegionId } from '@controls/save-format';
+import type { RuleSetRef } from './rules';
 
 /*
  * Region profiles (plan §4.10, F2.2 part 2): the electrical facts of a region's supply that the
@@ -122,6 +123,58 @@ export function matchesColourRule(rule: ConductorColourRule, colour: { base: str
   );
 }
 
+/** One point of a sourced limit curve: at `x` (in `xUnit`), at most `y` (in `yUnit`). */
+export interface CurvePoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** A sourced limit curve (catalogue v3): points in ascending `x`, read between them by the model that uses it. */
+export interface RegionCurve {
+  readonly xUnit: string;
+  readonly yUnit: string;
+  readonly points: readonly CurvePoint[];
+  readonly kind: 'real-world' | 'game-design';
+  readonly source: string;
+}
+
+/**
+ * The ground-fault protection class a region's GFCI devices meet (catalogue v3, D7): the band its
+ * pickup must sit in and the inverse-time limit its trip must beat. A GFCI entry's own drawn band
+ * (pickup, mechanism time) sits inside these; the limit is an upper limit only.
+ */
+export interface GfciClassLimits {
+  /** The class name (`A`: the US personnel-protection class). */
+  readonly className: string;
+  /** Below this residual current it must not trip (A). */
+  readonly pickupMinA: RegionValue;
+  /** At and above this residual current it must trip (A). */
+  readonly pickupMaxA: RegionValue;
+  /**
+   * The longest it may take to trip at a residual current (x in A, y in s), tabulated at the pre-audit's
+   * points; D7's model reads it as a rate (1/t), interpolated linearly in rate.
+   */
+  readonly tripTimeLimit: RegionCurve;
+}
+
+/**
+ * The arc-fault protection a region's AFCI devices meet (catalogue v3, D8): series arcing at or above
+ * `minArcCurrentA` is cleared within `maxTripAtMinS`, and at `ratedMultiple` × the device's rating
+ * within `maxTripAtRatedMultipleS`; nothing is required below `minArcCurrentA`.
+ */
+export interface AfciLimits {
+  readonly minArcCurrentA: RegionValue;
+  readonly maxTripAtMinS: RegionValue;
+  readonly ratedMultiple: RegionValue;
+  readonly maxTripAtRatedMultipleS: RegionValue;
+}
+
+/** A region's protective-device limits (catalogue v3). */
+export interface RegionProtection {
+  readonly gfci: GfciClassLimits;
+  readonly afci: AfciLimits;
+}
+
 /** One region's electrical profile. */
 export interface RegionProfile {
   readonly id: RegionId;
@@ -138,6 +191,10 @@ export interface RegionProfile {
   readonly voltageRanges: VoltageRanges;
   /** Conductor identification rules over colour ids (catalogue v2): code and convention, labelled. */
   readonly conductorColours: RegionConductorColours;
+  /** GFCI and AFCI limits (catalogue v3, D7, D8). */
+  readonly protection: RegionProtection;
+  /** The inspector rule set the region checks against (catalogue v3, D13): must resolve in the catalogue. */
+  readonly inspectorRules: RuleSetRef;
 }
 
 /** `range` at `nominalV`: the band in volts, `[min, max]`. */
@@ -181,6 +238,38 @@ const fraction = (volts120: number, what: string): RegionValue => ({
   unit: '1',
   kind: 'real-world',
   source: `${what}: ${volts120} V on a 120 V base, as a fraction of nominal. ${C84_1_RANGES}.`,
+});
+
+/**
+ * UL 943's Class A limits (catalogue v3, D7), cited by number and paraphrased, never quoted. The
+ * inverse-time limit is the published power law t = (20 mA / I)^1.43 s for residual currents from 6 to
+ * 264 mA (a GFCI maker's public FAQ and an industry research report on appliance leakage, both read
+ * 2026-11-17; maker not named in content), tabulated here offline at the P4 pre-audit's points, so no
+ * fractional power runs in the game (D6); `catalog-v3.spec.ts` recomputes every point within 0.15 %.
+ */
+const UL_943_CLASS_A =
+  'UL 943 (cited by number, paraphrased): a US Class A ground-fault circuit interrupter for personnel protection trips when the residual (ground-fault) current reaches 6 mA and does not trip below 4 mA; above that its trip time is limited by an inverse-time curve published in makers’ application notes and FAQs as t = (20 mA / I)^1.43 seconds for 6 to 264 mA (read 2026-11-17). Faster is allowed: the curve is an upper limit only. Vetted by the P4 source pre-audit (electrical-realism-reviewer, 2026-11-17)';
+
+/** The Class A trip-time limit at the pre-audit's points (mA → s), from t = (20 / I)^1.43 computed offline. */
+const GFCI_LIMIT_POINTS_MA_S: readonly (readonly [number, number])[] = [
+  [6, 5.594],
+  [10, 2.695],
+  [20, 1.0],
+  [30, 0.56],
+  [50, 0.2697],
+  [100, 0.1001],
+  [150, 0.0561],
+  [264, 0.025],
+];
+
+const UL_1699 =
+  'UL 1699 (cited by number, paraphrased): a combination-type arc-fault circuit interrupter must clear series arcing (the carbonized-path clearing-time test) within 1 s at a 5 A arc current and in less than 0.2 s at 1.5 times its rating (the 22.5 or 30 A test level of a 15 or 20 A device); nothing is required below 5 A. From the P4 source pre-audit (electrical-realism-reviewer, 2026-11-17), corroborated by public descriptions of the test levels (5 A; 10 A; 15 or 20 A; 22.5 or 30 A) and the 1 s limit at 5 A (patent filings and an inspectors’ association article, read 2026-11-17). The standard’s table itself is not reproduced';
+
+const regionValue = (value: number, unit: string, source: string): RegionValue => ({
+  value,
+  unit,
+  kind: 'real-world',
+  source,
 });
 
 /** The NEC region: the United States' 60 Hz supply and its usual low-voltage systems. */
@@ -299,6 +388,27 @@ export const NEC_REGION: RegionProfile = Object.freeze<RegionProfile>({
       source: `${NFPA_70}, Art. 110.15 (cited by number, paraphrased): on a four-wire delta system with one phase leg at the higher voltage to ground, that leg is durably marked orange or by another effective means. No P3 source builds such a system.`,
     },
   },
+  protection: {
+    gfci: {
+      className: 'A',
+      pickupMinA: regionValue(0.004, 'A', `${UL_943_CLASS_A}: the 4 mA no-trip limit.`),
+      pickupMaxA: regionValue(0.006, 'A', `${UL_943_CLASS_A}: the 6 mA must-trip limit.`),
+      tripTimeLimit: {
+        xUnit: 'A',
+        yUnit: 's',
+        points: GFCI_LIMIT_POINTS_MA_S.map(([mA, s]) => ({ x: mA / 1000, y: s })),
+        kind: 'real-world',
+        source: `${UL_943_CLASS_A}: the limit at 6, 10, 20, 30, 50, 100, 150 and 264 mA, rounded to four significant figures (the pre-audit's values; each within 0.15 % of the curve).`,
+      },
+    },
+    afci: {
+      minArcCurrentA: regionValue(5, 'A', `${UL_1699}: the 5 A arc current below which nothing is required.`),
+      maxTripAtMinS: regionValue(1, 's', `${UL_1699}: 1 s at 5 A.`),
+      ratedMultiple: regionValue(1.5, '1', `${UL_1699}: the 1.5 × rating test level.`),
+      maxTripAtRatedMultipleS: regionValue(0.2, 's', `${UL_1699}: under 0.2 s at 1.5 × rating.`),
+    },
+  },
+  inspectorRules: { ruleSet: 'nec', version: 1 },
 });
 
 /** Every region's profile, by `RegionId`. */

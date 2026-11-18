@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "ruleSet": {
+      "$ref": "#/$defs/RuleSetName"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "edition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "rules": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/RuleId"
+          },
+          "article": {
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^\\d{2,3}(?:\\.\\d{1,3}(?:\\([A-Za-z0-9]{1,4}\\)){0,3})?$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "paraphrase": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "violation",
+              "warning",
+              "report"
+            ]
+          },
+          "check": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                  },
+                  "params": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 32,
+                      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "params"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "article",
+          "title",
+          "paraphrase",
+          "severity",
+          "check"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "sources": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "real-world",
+              "game-design"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "covers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_-]*)(?:\\.(?:(?:[A-Za-z0-9][A-Za-z0-9_-]*)|\\*))*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "citation",
+          "covers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "required": [
+    "ruleSet",
+    "version",
+    "title",
+    "edition",
+    "rules",
+    "sources",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "title": "Controls inspector rule set, catalogue format v3",
+  "description": "One file in content/rules/ (ADR 0020). Zod in @controls/catalog is authoritative; this JSON Schema omits source coverage, the append-only rule ids and each check kind’s parameters (validated by @controls/inspector).",
+  "$defs": {
+    "RuleSetName": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "An inspector rule set name: lower camelCase."
+    },
+    "RuleId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "An inspector rule id: lower camelCase, append-only within its rule set."
+    },
+    "Extensions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Forward-compatibility bag: opaque JSON that every version must round-trip untouched."
+    },
+    "JsonValue": {
+      "description": "Any JSON value: finite numbers only, well-formed strings; loaders also refuse \"__proto__\" keys.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          }
+        }
+      ]
+    }
+  }
+}

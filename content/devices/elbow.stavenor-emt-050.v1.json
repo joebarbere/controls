@@ -13,6 +13,10 @@
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.conduitElbow",

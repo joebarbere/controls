@@ -339,6 +339,42 @@
                       "type": "null"
                     }
                   ]
+                },
+                "multiConductor": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "awgRange": {
+                          "type": "object",
+                          "properties": {
+                            "smallest": {
+                              "$ref": "#/$defs/Awg"
+                            },
+                            "largest": {
+                              "$ref": "#/$defs/Awg"
+                            }
+                          },
+                          "required": [
+                            "smallest",
+                            "largest"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "equalSize": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "awgRange",
+                        "equalSize"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -358,17 +394,62 @@
                 "contactOhm",
                 "heatPathWPerK",
                 "hotSpotHeatCapacityJPerK",
-                "combination"
+                "combination",
+                "multiConductor"
               ],
               "additionalProperties": false
             }
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ungrounded",
+                  "grounded",
+                  "egc",
+                  "traveller",
+                  "common",
+                  "line",
+                  "load"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "line",
+                  "load"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "land",
+              "clip",
+              "none"
+            ]
           }
         },
         "required": [
           "id",
           "label",
           "positionMm",
-          "methods"
+          "methods",
+          "role",
+          "side",
+          "access"
         ],
         "additionalProperties": false
       }
@@ -392,12 +473,54 @@
             "type": "integer",
             "minimum": -1000,
             "maximum": 1000
+          },
+          "alongMm": {
+            "type": "integer",
+            "minimum": -1000,
+            "maximum": 1000
+          },
+          "contacts": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/ContactId"
+                },
+                "terminal": {
+                  "$ref": "#/$defs/TerminalId"
+                },
+                "host": {
+                  "$ref": "#/$defs/ContactId"
+                },
+                "positionOffset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "contactOhm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "terminal",
+                "host",
+                "positionOffset",
+                "contactOhm"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
           "type",
           "widthMm",
-          "crossMm"
+          "crossMm",
+          "alongMm",
+          "contacts"
         ],
         "additionalProperties": false
       }
@@ -472,6 +595,68 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "contacts": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/$defs/ContactId"
+                        },
+                        "terminal": {
+                          "$ref": "#/$defs/TerminalId"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "terminal"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "bus": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "pitchMm": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 200
+                          },
+                          "stabs": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 42
+                          },
+                          "legs": {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "$ref": "#/$defs/TerminalId"
+                              },
+                              {
+                                "$ref": "#/$defs/TerminalId"
+                              }
+                            ],
+                            "items": false,
+                            "minItems": 2,
+                            "maxItems": 2
+                          }
+                        },
+                        "required": [
+                          "pitchMm",
+                          "stabs",
+                          "legs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -480,7 +665,9 @@
                   "positionMm",
                   "axis",
                   "facing",
-                  "extentMm"
+                  "extentMm",
+                  "contacts",
+                  "bus"
                 ],
                 "additionalProperties": false
               }
@@ -585,14 +772,362 @@
                   "type": "null"
                 }
               ]
+            },
+            "markedVolumeMm3": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "material": {
+              "type": "string",
+              "enum": [
+                "steel",
+                "nonmetallic"
+              ]
+            },
+            "spaces": {
+              "maxItems": 42,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "mount": {
+                    "$ref": "#/$defs/MountId"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 41
+                  }
+                },
+                "required": [
+                  "mount",
+                  "index"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [
             "mounts",
             "entries",
-            "interiorVolumeMm3"
+            "interiorVolumeMm3",
+            "markedVolumeMm3",
+            "material",
+            "spaces"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hostMounts": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/MountId"
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "positionMm": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "+x",
+              "-x",
+              "+y",
+              "-y",
+              "+z",
+              "-z"
+            ]
+          },
+          "facing": {
+            "type": "string",
+            "enum": [
+              "+x",
+              "-x",
+              "+y",
+              "-y",
+              "+z",
+              "-z"
+            ]
+          },
+          "extentMm": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "contacts": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/ContactId"
+                },
+                "terminal": {
+                  "$ref": "#/$defs/TerminalId"
+                }
+              },
+              "required": [
+                "id",
+                "terminal"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "bus": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "pitchMm": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200
+                  },
+                  "stabs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 42
+                  },
+                  "legs": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "$ref": "#/$defs/TerminalId"
+                      },
+                      {
+                        "$ref": "#/$defs/TerminalId"
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "required": [
+                  "pitchMm",
+                  "stabs",
+                  "legs"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "positionMm",
+          "axis",
+          "facing",
+          "extentMm",
+          "contacts",
+          "bus"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "outlets": {
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/OutletId"
+          },
+          "config": {
+            "$ref": "#/$defs/NemaConfigId"
+          },
+          "positionMm": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false
+          },
+          "contactOhm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "pins": {
+            "minItems": 1,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pin": {
+                  "$ref": "#/$defs/PinId"
+                },
+                "terminal": {
+                  "$ref": "#/$defs/TerminalId"
+                }
+              },
+              "required": [
+                "pin",
+                "terminal"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "config",
+          "positionMm",
+          "contactOhm",
+          "pins"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "plug": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "config": {
+              "$ref": "#/$defs/NemaConfigId"
+            },
+            "cordAwg": {
+              "$ref": "#/$defs/Awg"
+            },
+            "cordLengthMm": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 15000
+            },
+            "cordExitMm": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "z": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "additionalProperties": false
+            },
+            "pins": {
+              "minItems": 1,
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "pin": {
+                    "$ref": "#/$defs/PinId"
+                  },
+                  "terminal": {
+                    "$ref": "#/$defs/TerminalId"
+                  }
+                },
+                "required": [
+                  "pin",
+                  "terminal"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "config",
+            "cordAwg",
+            "cordLengthMm",
+            "cordExitMm",
+            "pins"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supersededBy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CatalogRef"
         },
         {
           "type": "null"
@@ -833,6 +1368,31 @@
               "options"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-zA-Z0-9]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "type": {
+                "type": "string",
+                "const": "momentary"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "type"
+            ],
+            "additionalProperties": false
           }
         ]
       }
@@ -894,6 +1454,10 @@
     "terminals",
     "mounts",
     "enclosure",
+    "hostMounts",
+    "outlets",
+    "plug",
+    "supersededBy",
     "conductor",
     "model",
     "controls",
@@ -901,8 +1465,8 @@
     "extensions"
   ],
   "additionalProperties": false,
-  "title": "Controls device catalogue entry, catalogue format v2",
-  "description": "One file in content/devices/ (ADR 0013, ADR 0016). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls), the registries (methods, mount and entry types), the tables, and source coverage.",
+  "title": "Controls device catalogue entry, catalogue format v3",
+  "description": "One file in content/devices/ (ADR 0013, ADR 0016, ADR 0020). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls), the registries (methods, mount, entry and host-contact types, NEMA configurations), the tables, and source coverage.",
   "$defs": {
     "TerminalId": {
       "type": "string",
@@ -922,6 +1486,12 @@
       "maximum": 40,
       "description": "An AWG size as an integer designation: 4/0 = -3, 3/0 = -2, 2/0 = -1, 1/0 = 0, then 1 to 40."
     },
+    "ContactId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A mount contact id: lower camelCase, at most 32 characters."
+    },
     "MountId": {
       "type": "string",
       "maxLength": 32,
@@ -933,6 +1503,45 @@
       "maxLength": 32,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
       "description": "An enclosure entry id within one catalogue entry."
+    },
+    "OutletId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "A receptacle outlet id within one catalogue entry (TerminalId grammar)."
+    },
+    "NemaConfigId": {
+      "type": "string",
+      "maxLength": 16,
+      "pattern": "^L?\\d{1,2}-\\d{2,3}[PR]$",
+      "description": "A NEMA wiring-device configuration: a row of NEMA_CONFIGS."
+    },
+    "PinId": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[a-z][a-zA-Z0-9]{0,31}$",
+      "description": "A blade or slot of a NEMA configuration: lower camelCase."
+    },
+    "CatalogRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "A catalogue entry by reference: id plus integer version."
     },
     "TableRef": {
       "type": "object",

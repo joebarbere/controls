@@ -203,14 +203,16 @@ describe('beltChoices', () => {
   it('offers the built-in props, the placeable catalogue devices (F3.5), the conductor spools (F3.2 part 3), the cable spools (F3.2 part 4), then each catalogue tool once, every choice a slot can hold', () => {
     const choices = beltChoices(BUILTIN_CATALOG);
     const inCables = new Set(BUILTIN_CATALOG.cables.flatMap((c) => c.conductors.map((k) => k.conductor.id)));
+    // Each device once, at its newest version (sorted by id, then version: the last of an id wins).
+    const newest = <T extends { id: string }>(docs: readonly T[]) => [...new Map(docs.map((d) => [d.id, d])).values()];
     expect(choices.map((c) => `${c.group}:${c.ref.id}@${c.ref.version}`)).toStrictEqual([
       'Props:prop.bench@1',
       'Props:prop.box@1',
       'Props:prop.crate@1',
       'Props:prop.spool@1',
-      ...BUILTIN_CATALOG.devices
-        .filter((d) => d.model.kind !== 'lead' && d.model.kind !== 'conductor')
-        .map((d) => `Devices:${d.id}@1`),
+      ...newest(BUILTIN_CATALOG.devices.filter((d) => d.model.kind !== 'lead' && d.model.kind !== 'conductor')).map(
+        (d) => `Devices:${d.id}@${d.version}`,
+      ),
       ...BUILTIN_CATALOG.devices
         .filter((d) => d.model.kind === 'conductor' && !inCables.has(d.id))
         .map((d) => `Spools:${d.id}@1`),
@@ -228,6 +230,10 @@ describe('beltChoices', () => {
       ]),
     );
     expect(ids.some((id) => id.startsWith('lead.') || id.startsWith('conductor.sorrelby-'))).toBe(false);
+    // Catalogue v3: the 4 mm² block is offered at version 2, the entry that supersedes version 1.
+    expect(choices.filter((c) => c.ref.id === 'tb.quennick-st4').map((c) => c.ref)).toStrictEqual([
+      { id: 'tb.quennick-st4', version: 2 },
+    ]);
     const kinds = { Tools: 'tool', Spools: 'spool', Props: 'placeable', Devices: 'placeable' } as const;
     for (const c of choices) {
       expect(beltSlotKind(BUILTIN_CATALOG, c.ref)).toBe(kinds[c.group]);

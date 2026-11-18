@@ -13,7 +13,7 @@ import { workshopWorld } from './testing/workshop';
  * are pinned here; `fixtures/v3/ctrl/protection-engine-<N>-catalog-<C>.ctrl` is its save, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/protection.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/protection-engine-7-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/protection-engine-7-catalog-3.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). The fixture-rebuild check in
  * `sources.spec.ts` rebuilds it from the scenario.

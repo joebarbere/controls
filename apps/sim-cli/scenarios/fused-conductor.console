@@ -6,7 +6,7 @@
 # and 4, D = 1, `ok`), and it stays open: `fused` is sticky, only a new conductor conducts.
 # `apps/sim-cli/src/fused-conductor.spec.ts` loads the save written from this file.
 #   pnpm sim run apps/sim-cli/scenarios/fused-conductor.console --world content/levels/workshop.json
-#   (with --save libs/domain/save-format/fixtures/v3/ctrl/fused-conductor-engine-7-catalog-2.ctrl)
+#   (with --save libs/domain/save-format/fixtures/v3/ctrl/fused-conductor-engine-7-catalog-3.ctrl)
 entity.place --ref.id utility.larkmoor-split-phase-25kva --ref.version 1 --positionMm.x 0 --positionMm.y 0 --positionMm.z 0
 wire.add --ref.id conductor.tallowmere-thhn-14-solid --ref.version 1 --a.entity 1 --a.terminal l1 --a.termination.method screw --a.termination.strip.tool.id tool.veltmark-ws-1018 --a.termination.strip.tool.version 1 --a.termination.strip.hole sol14 --a.termination.strip.lengthMm 13 --a.termination.accessory null --a.termination.clamp.tool.id tool.calderyn-ts-15 --a.termination.clamp.tool.version 1 --a.termination.clamp.torqueNm 4 --b.entity 1 --b.terminal n --b.termination.method screw --b.termination.strip.tool.id tool.veltmark-ws-1018 --b.termination.strip.tool.version 1 --b.termination.strip.hole sol14 --b.termination.strip.lengthMm 13 --b.termination.accessory null --b.termination.clamp.tool.id tool.calderyn-ts-15 --b.termination.clamp.tool.version 1 --b.termination.clamp.torqueNm 4 --route [{"kind":"free","positionMm":{"x":100,"y":900,"z":200},"entity":null,"fixture":null,"tool":null}] --lengthMm 1500 --colour.base black --colour.stripe null --tool.id tool.veltmark-dc-8 --tool.version 1
 sim.step 60000

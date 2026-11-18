@@ -47,9 +47,13 @@
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "b",
@@ -87,19 +91,29 @@
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 0.5,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [
     {
       "type": "din35",
       "widthMm": 6,
-      "crossMm": 21
+      "crossMm": 21,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "terminalBlock.ground",

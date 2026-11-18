@@ -136,11 +136,15 @@ describe('device.operate', () => {
       category: 'source',
       sizeMm: { widthMm: 10, heightMm: 10, depthMm: 10 },
       terminals: [
-        { id: 'neg', label: '-', positionMm: origin, methods: [] },
-        { id: 'pos', label: '+', positionMm: origin, methods: [] },
+        { id: 'neg', label: '-', positionMm: origin, methods: [], role: null, side: null, access: 'clip' },
+        { id: 'pos', label: '+', positionMm: origin, methods: [], role: null, side: null, access: 'clip' },
       ],
       mounts: [],
       enclosure: null,
+      hostMounts: [],
+      outlets: [],
+      plug: null,
+      supersededBy: null,
       conductor: null,
       model: { kind: 'supply.test', params: {} },
       controls: [

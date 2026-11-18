@@ -4,6 +4,7 @@ import { BUILTIN_CATALOG, CATALOG_VERSION } from './builtin';
 import { leadResistanceOhm } from './lead';
 import { LeadParams, modelKind } from './model-kinds';
 import { parseCatalog } from './catalog';
+import { mountType } from './registries';
 
 /*
  * `content/devices/*.json` is the catalogue's source of truth (plan P2 decision D4). Domain code can't
@@ -33,12 +34,13 @@ const splices = BUILTIN_CATALOG.devices.filter((d) => d.model.kind === 'splice.t
 const size = (widthMm: number, heightMm: number, depthMm: number) => ({ widthMm, heightMm, depthMm });
 
 describe('the built-in catalogue (content/devices, content/tables, content/tools)', () => {
-  it('is catalogue version 2 and every file is a valid entry or table', () => {
-    expect(CATALOG_VERSION).toBe(2);
+  it('is catalogue version 3 and every file is a valid entry, table or rule set', () => {
+    expect(CATALOG_VERSION).toBe(3);
     const result = parseCatalog(CATALOG_VERSION, {
       devices: devices.documents,
       tools: tools.documents,
       tables: tables.documents,
+      rules: read('rules').documents,
     });
     expect(result.ok ? 'ok' : result.issues).toBe('ok');
     expect(BUILTIN_CATALOG.version).toBe(CATALOG_VERSION);
@@ -58,8 +60,82 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
     ]);
   });
 
-  it('every P2 entry is still version 1: catalogue v2 only gave them data (ADR 0015)', () => {
-    expect(BUILTIN_CATALOG.devices.every((d) => d.version === 1)).toBe(true);
+  it('every entry is version 1 but the 4 mm² block’s cap (catalogue v2 and v3 only gave them data, ADR 0015, ADR 0020)', () => {
+    expect(BUILTIN_CATALOG.devices.filter((d) => d.version !== 1).map((d) => `${d.id}@${d.version}`)).toStrictEqual([
+      'tb.quennick-st4@2',
+    ]);
+  });
+
+  it('catalogue v3 gave every shipped entry its new fields at their "nothing" values (ADR 0020)', () => {
+    for (const d of BUILTIN_CATALOG.devices) {
+      expect([d.id, d.hostMounts, d.outlets, d.plug]).toStrictEqual([d.id, [], [], null]);
+      for (const t of d.terminals) {
+        expect([d.id, t.id, t.role, t.side, t.access]).toStrictEqual([
+          d.id,
+          t.id,
+          null,
+          null,
+          t.methods.length > 0 ? 'land' : 'clip',
+        ]);
+      }
+      for (const m of d.mounts) expect([d.id, m.alongMm, m.contacts]).toStrictEqual([d.id, 0, []]);
+      // Until the commands PR teaches checkMount the single-mount anchor (ADR 0020), no entry declares one.
+      for (const m of d.mounts.filter((f) => mountType(f.type)?.occupancy === 'single')) {
+        expect([d.id, m.crossMm]).toStrictEqual([d.id, 0]);
+      }
+      for (const m of d.enclosure?.mounts ?? []) expect([d.id, m.contacts, m.bus]).toStrictEqual([d.id, [], null]);
+      expect([d.id, d.enclosure?.markedVolumeMm3 ?? null, d.enclosure?.spaces ?? []]).toStrictEqual([d.id, null, []]);
+    }
+    // Only the 4 mm² block's version 2 caps two conductors; version 1 is superseded by it.
+    const capped = BUILTIN_CATALOG.devices.flatMap((d) =>
+      d.terminals.flatMap((t) =>
+        t.methods.filter((m) => m.multiConductor !== null).map(() => `${d.id}@${d.version}:${t.id}`),
+      ),
+    );
+    expect(capped).toStrictEqual(['tb.quennick-st4@2:a', 'tb.quennick-st4@2:b']);
+    expect(
+      BUILTIN_CATALOG.devices
+        .filter((d) => d.supersededBy !== null)
+        .map((d) => [`${d.id}@${d.version}`, d.supersededBy]),
+    ).toStrictEqual([['tb.quennick-st4@1', { id: 'tb.quennick-st4', version: 2 }]]);
+  });
+
+  it('every enclosure states its material: the steel boxes and the panel steel, the PVC boxes nonmetallic', () => {
+    expect(BUILTIN_CATALOG.devices.flatMap((d) => (d.enclosure ? [[d.id, d.enclosure.material]] : []))).toStrictEqual([
+      ['box.tinmoor-1g-steel', 'steel'],
+      ['box.tinmoor-2g-nm', 'nonmetallic'],
+      ['box.tinmoor-4rd-nm-ceiling', 'nonmetallic'],
+      ['box.tinmoor-4sq-steel', 'steel'],
+      ['panel.pellmoor-din-400x500', 'steel'],
+    ]);
+  });
+
+  it('tb.quennick-st4@2 caps two conductors at 16 AWG, equal sizes: the largest AWG size at or under the class’s 1.5 mm²', () => {
+    const v1 = BUILTIN_CATALOG.device({ id: 'tb.quennick-st4', version: 1 });
+    const v2 = BUILTIN_CATALOG.device({ id: 'tb.quennick-st4', version: 2 });
+    if (v1 === undefined || v2 === undefined) throw new Error('missing');
+    // Version 2 is version 1 plus the cap: every other value is the same.
+    const strip = (d: typeof v1) => ({
+      ...d,
+      version: 0,
+      supersededBy: null,
+      sources: [],
+      terminals: d.terminals.map((t) => ({ ...t, methods: t.methods.map((m) => ({ ...m, multiConductor: null })) })),
+    });
+    expect(strip(v2)).toStrictEqual(strip(v1));
+    for (const t of v2.terminals) {
+      expect(t.methods[0].multiConductor).toStrictEqual({ awgRange: { smallest: 22, largest: 16 }, equalSize: true });
+    }
+    // Hand calculation (the AWG definition, d = 0.127 mm × 92^((36 − n) / 39), A = π d² / 4):
+    // 16 AWG: d = 1.29085 mm, A = 1.30870 mm² ≤ 1.5 mm²; 15 AWG: d = 1.44953 mm, A = 1.65023 mm² > 1.5 mm².
+    const area = (n: number) => {
+      const d = 0.127 * Math.pow(92, (36 - n) / 39);
+      return (Math.PI * d * d) / 4;
+    };
+    expect(area(16)).toBeCloseTo(1.3087, 4);
+    expect(area(15)).toBeCloseTo(1.65023, 4);
+    expect(area(16)).toBeLessThanOrEqual(1.5);
+    expect(area(15)).toBeGreaterThan(1.5);
   });
 
   it('termination methods only where a conductor really lands; clip-only elsewhere', () => {
@@ -84,6 +160,8 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       'tb.quennick-pe4:b:screw',
       'tb.quennick-sc25:a:springCage',
       'tb.quennick-sc25:b:springCage',
+      'tb.quennick-st4:a:screw',
+      'tb.quennick-st4:b:screw',
       'tb.quennick-st4:a:screw',
       'tb.quennick-st4:b:screw',
       'utility.larkmoor-split-phase-25kva:l1:screw',
@@ -111,19 +189,20 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
 
   it('the breaker, the DIN supply and the terminal blocks fit a DIN rail; the boxes a stud flange; ducts a backplate; nothing else declares a mount', () => {
     expect(BUILTIN_CATALOG.devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
-      ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 51, crossMm: 0 }]],
-      ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 102, crossMm: 0 }]],
-      ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 102, crossMm: 0 }]],
-      ['box.tinmoor-4sq-steel', [{ type: 'studFlange', widthMm: 102, crossMm: 0 }]],
-      ['breaker.saltmere-1p-15a', [{ type: 'din35', widthMm: 40, crossMm: 0 }]],
-      ['duct.lattisby-25x40', [{ type: 'backplate', widthMm: 2000, crossMm: 0 }]],
-      ['duct.lattisby-40x60', [{ type: 'backplate', widthMm: 2000, crossMm: 0 }]],
-      ['duct.lattisby-60x80', [{ type: 'backplate', widthMm: 2000, crossMm: 0 }]],
-      ['supply.railwick-din-24v-5a', [{ type: 'din35', widthMm: 40, crossMm: 0 }]],
+      ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 51, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 102, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 102, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['box.tinmoor-4sq-steel', [{ type: 'studFlange', widthMm: 102, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['breaker.saltmere-1p-15a', [{ type: 'din35', widthMm: 40, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['duct.lattisby-25x40', [{ type: 'backplate', widthMm: 2000, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['duct.lattisby-40x60', [{ type: 'backplate', widthMm: 2000, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['duct.lattisby-60x80', [{ type: 'backplate', widthMm: 2000, crossMm: 0, alongMm: 0, contacts: [] }]],
+      ['supply.railwick-din-24v-5a', [{ type: 'din35', widthMm: 40, crossMm: 0, alongMm: 0, contacts: [] }]],
       // Centred on the rail: 45 − ⌊height / 2⌋ above the mount origin (48 mm and 56 mm tall).
-      ['tb.quennick-pe4', [{ type: 'din35', widthMm: 6, crossMm: 21 }]],
-      ['tb.quennick-sc25', [{ type: 'din35', widthMm: 5, crossMm: 17 }]],
-      ['tb.quennick-st4', [{ type: 'din35', widthMm: 6, crossMm: 21 }]],
+      ['tb.quennick-pe4', [{ type: 'din35', widthMm: 6, crossMm: 21, alongMm: 0, contacts: [] }]],
+      ['tb.quennick-sc25', [{ type: 'din35', widthMm: 5, crossMm: 17, alongMm: 0, contacts: [] }]],
+      ['tb.quennick-st4', [{ type: 'din35', widthMm: 6, crossMm: 21, alongMm: 0, contacts: [] }]],
+      ['tb.quennick-st4', [{ type: 'din35', widthMm: 6, crossMm: 21, alongMm: 0, contacts: [] }]],
     ]);
     for (const d of terminalBlocks) {
       const size = d.sizeMm as NonNullable<typeof d.sizeMm>;
@@ -242,10 +321,12 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
       ['tb.quennick-pe4', size(6, 48, 47)],
       ['tb.quennick-sc25', size(5, 56, 36)],
       ['tb.quennick-st4', size(6, 48, 47)],
+      ['tb.quennick-st4', size(6, 48, 47)],
     ]);
     expect(terminalBlocks.map((d) => [d.id, d.brand, d.category, d.model.kind])).toStrictEqual([
       ['tb.quennick-pe4', 'Quennick', 'terminalBlock', 'terminalBlock.ground'],
       ['tb.quennick-sc25', 'Quennick', 'terminalBlock', 'terminalBlock.feedThrough'],
+      ['tb.quennick-st4', 'Quennick', 'terminalBlock', 'terminalBlock.feedThrough'],
       ['tb.quennick-st4', 'Quennick', 'terminalBlock', 'terminalBlock.feedThrough'],
     ]);
     for (const d of terminalBlocks) {

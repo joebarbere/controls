@@ -5,7 +5,7 @@
 # their steady state). The same commands as bad-termination.ts; apps/sim-cli/src/bad-termination.spec.ts
 # pins BAD_TERMINATION_HASH and BAD_TERMINATION_SNAPSHOT_HASH and derives every expectation from the
 # built circuit's current. Its save is the frozen fixture
-# libs/domain/save-format/fixtures/v3/ctrl/bad-termination-engine-7-catalog-2.ctrl (--save).
+# libs/domain/save-format/fixtures/v3/ctrl/bad-termination-engine-7-catalog-3.ctrl (--save).
 #   pnpm sim run apps/sim-cli/scenarios/bad-termination.console --world content/levels/workshop.json --difficulty journeyman
 # 1. The split-phase stand-in supply (D12; P4's service and load centre replace it), headless, to the
 #    left of the panel.

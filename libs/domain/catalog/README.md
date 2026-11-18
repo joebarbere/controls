@@ -1,17 +1,18 @@
 # catalog (`@controls/catalog`)
 
-Framework-free domain library (`type:domain`): the catalogue (plan P2 decision D4, ADR 0013; catalogue format v2, P3 D3, ADR 0016). Authoring: [guide](../../../docs/guides/authoring-content.md).
+Framework-free domain library (`type:domain`): the catalogue (plan P2 decision D4, ADR 0013; catalogue format v2, P3 D3, ADR 0016; catalogue format v3, P4 D2, ADR 0020). Authoring: [guide](../../../docs/guides/authoring-content.md).
 
-- `DeviceDefinition` (catalogue format v2): one file per device in `content/devices/<id>.v<version>.json`, with per-method termination specs on terminals, mount declarations, enclosure data and conductor data. `CableDefinition`, `ToolDefinition`, `AccessoryDefinition`: the other families of the one id namespace (`cable.*`, `tool.*`, `ferrule.*`/`lug.*`).
+- `DeviceDefinition` (catalogue format v3): one file per device in `content/devices/<id>.v<version>.json`, with per-method termination specs on terminals (and their role, side and access), mount declarations with their contacts, enclosure data (mounts, entries, volumes, material, panel spaces), host mounts, outlets, a plug, `supersededBy` and conductor data. `offeredMounts(device)` reads an enclosure's or a device's offered mounts. `CableDefinition`, `ToolDefinition`, `AccessoryDefinition`: the other families of the one id namespace (`cable.*`, `tool.*`, `ferrule.*`/`lug.*`).
 - Tables (`TableDocument`, `TABLE_KINDS`, `TableRef`): `content/tables/<table>.v<version>.json` (materials, insulation, colours), pinned by `{ table, version, key }`.
+- Rule sets (`RuleSetDocument`, catalogue v3): `content/rules/<ruleSet>.v<version>.json`, the inspector's rules (an article by number, our paraphrase, a severity, a check), append-only rule ids.
 - `AWG_GAUGES` and `Awg`/`AwgRange`: the one gauge table, integer designations (4/0 = −3), computed from the AWG formula.
-- Registries: `TERMINATION_METHODS`, `MOUNT_TYPES`, `ENTRY_TYPES`, tool steps and kinds.
-- `MODEL_KINDS`: each model kind's parameters, terminals and state keys (owner, schema, initial value). The state keys are save format; the lead's are `CONNECTION_SIM_KEYS` (world v3).
-- `parseCatalog` / `catalogOrThrow`: validate every family and table (kinds, parameters, terminals and methods, registries, pinned rows, colours, controls, source coverage) and build a `Catalog` that resolves `CatalogRef`s and table rows.
-- `BUILTIN_CATALOG` and `CATALOG_VERSION` (2, provisional until v0.4.0): `content/devices` and `content/tables`, mirrored into `src/lib/builtin-*.generated.ts` (regenerate with `pnpm nx test catalog -u`).
+- Registries: `TERMINATION_METHODS`, `MOUNT_TYPES` (with host contacts and the bus flag), `ENTRY_TYPES`, `DRIVE_TYPES`, `NEMA_CONFIGS` (`nemaMates`), `AREA_USES`, tool steps and kinds, terminal roles.
+- `MODEL_KINDS`: each model kind's parameters, terminals (and terminal families) and state keys (owner, type, schema, initial value; `textKey`, `counterKey`). The state keys are save format; the lead's are `CONNECTION_SIM_KEYS` (world v3).
+- `parseCatalog` / `catalogOrThrow`: validate every family, table and rule set (kinds, parameters, terminals and methods, registries, contacts and bus patterns, outlets and plugs, pinned rows, colours, controls, source coverage) and build a `Catalog` that resolves `CatalogRef`s, table rows and rule sets.
+- `BUILTIN_CATALOG` and `CATALOG_VERSION` (3, provisional until v0.5.0): every `content/` family, mirrored into `src/lib/builtin-*.generated.ts` (regenerate with `pnpm nx test catalog -u`).
 - `leadResistanceOhm`: a test lead's resistance from resistivity, length and area, with a temperature coefficient.
 - `conductorPhysics` and `conductorResistanceOhm` (F3.1): a conductor entry's resolved SI data (gauge row, pinned material and insulation rows, lay factor) and its resistance R = ρ₀ · k_lay · L / A · (1 + α (T − T₀)), clamped at the material's linear-α limit.
-- `RegionProfile` and `REGION_PROFILES` (F2.2 part 2): each region's supply frequency and nominal system voltages, sourced (NEC: 60 Hz, 120/240 V, 208Y/120 V, 480Y/277 V), and from catalogue 2 its conductor colour rules (`conductorColours`, `matchesColourRule`).
-- JSON Schema exports in `json-schema/` (`<family>.v2`, `table.v2`, `table-row.<table>`, `device-state.<kind>`, `connection-state.<kind>`), staleness-checked.
+- `RegionProfile` and `REGION_PROFILES` (F2.2 part 2): each region's supply frequency and nominal system voltages, sourced (NEC: 60 Hz, 120/240 V, 208Y/120 V, 480Y/277 V), from catalogue 2 its conductor colour rules (`conductorColours`, `matchesColourRule`), and from catalogue 3 its GFCI and AFCI limits (`protection`) and inspector rule set (`inspectorRules`).
+- JSON Schema exports in `json-schema/` (`device.v3`, `rule-set.v3`, `cable.v2`, `tool.v2`, `accessory.v2`, `table.v2`, `table-row.<table>`, `device-state.<kind>`, `connection-state.<kind>`), staleness-checked.
 
 Must not depend on Angular, the DOM, Electron, Node built-ins or any non-`type:domain` lib, and must stay deterministic ([workspace caveats](../../../docs/caveats/workspace.md)). Gotchas: [content caveats](../../../docs/caveats/content.md), [save-format caveats](../../../docs/caveats/save-format.md#the-device-catalogue-p2-kickoff-catalogue-v1). Tests: `pnpm nx test catalog` (90 % coverage gate).

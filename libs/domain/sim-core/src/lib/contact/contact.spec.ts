@@ -53,6 +53,7 @@ const base = {
   heatPathWPerK: 0.026,
   hotSpotHeatCapacityJPerK: 1.1,
   combination: null,
+  multiConductor: null,
 };
 /** TEST-ONLY method specs, parsed so they are valid catalogue data. */
 const spec = (fields: Record<string, unknown>) =>
@@ -324,8 +325,8 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
       .flatMap((d) => d.terminals.flatMap((t) => t.methods))
       .filter((m) => m.method === 'screw');
     // The breaker (2), the DIN supply (2), the stand-in service (3), D12's heater (2) and lamp (2), and
-    // F3.5 part 2's screw and ground terminal blocks (2 each).
-    expect(methods.length).toBe(15);
+    // F3.5 part 2's screw and ground terminal blocks (2 each), and the screw block's catalogue-3 version 2 (2).
+    expect(methods.length).toBe(17);
     for (const m of methods) {
       expect(m.contactOhm).toBe(3e-4);
       expect(m.heatPathWPerK).toBe(0.026);

@@ -15,3 +15,4 @@ export * from './lib/builtin';
 export * from './lib/json-schema';
 export * from './lib/region';
 export * from './lib/raceway';
+export * from './lib/rules';

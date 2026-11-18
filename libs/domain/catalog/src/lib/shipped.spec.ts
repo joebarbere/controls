@@ -5,6 +5,7 @@ import { BUILTIN_CATALOG, CATALOG_VERSION } from './builtin';
 import { BUILTIN_ACCESSORY_DOCUMENTS } from './builtin-accessories.generated';
 import { BUILTIN_CABLE_DOCUMENTS } from './builtin-cables.generated';
 import { BUILTIN_DEVICE_DOCUMENTS } from './builtin-devices.generated';
+import { BUILTIN_RULE_DOCUMENTS } from './builtin-rules.generated';
 import { BUILTIN_TABLE_DOCUMENTS } from './builtin-tables.generated';
 import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
 import type { Catalog } from './catalog';
@@ -21,8 +22,17 @@ import type { Catalog } from './catalog';
  *   lacked** are dropped before comparing (ADR 0018 §8, masked by the release's `catalogVersion`, never
  *   globally): a catalogue-1 release (0.3.0) lacked v2's `mounts`, `enclosure`, `conductor` and
  *   `terminals[].methods`, and its `lead` entries lacked the six thermal params F3.6 part 1 and the two
- *   failure params F3.6 part 2 added at entry version 1. A catalogue-2 or later release masks no field,
- *   so 0.4.0's own method specs, drives and §8 fields are locked;
+ *   failure params F3.6 part 2 added at entry version 1. A catalogue-1 or catalogue-2 release (0.4.0)
+ *   lacked catalogue v3's fields (ADR 0020). Of those, only the inspector's data and metadata are free
+ *   (terminal `role` and `side`, an enclosure's `markedVolumeMm3` and `material`, `supersededBy`); the
+ *   rest must hold their neutral values on a shipped entry (every `multiConductor` null, `access`
+ *   following the methods, `alongMm` 0, no fit or host-mount contacts, no bus, no spaces, no host mounts,
+ *   outlets or plug), because they change what an old save simulates or accepts. Every other field of
+ *   0.4.0's entries (method specs, drives, the §8 fields) stays locked, and a catalogue-3 or later
+ *   release masks no field;
+ * - rule sets (catalogue 3 onwards, `content/rules/`) keep every rule's id, article, severity and check;
+ *   their prose (`title`, a rule's `title` and `paraphrase`) may be corrected, and a changed rule is a
+ *   new rule-set version;
  * - prose may be corrected in place (`title`, a source's `citation`): only people read it, and it is in
  *   no hash; every shipped source keeps its id, kind and covers, and sources may be added;
  * - a shipped table version keeps every row and value (prose masked the same way); colour ids are
@@ -59,6 +69,15 @@ interface Shipped {
   cables?: Doc[];
   /** Accessories: ferrules and lugs (catalogue 2 onwards). */
   accessories?: Doc[];
+  /** Inspector rule sets (catalogue 3 onwards). */
+  rules?: RuleSetDoc[];
+}
+interface RuleSetDoc {
+  ruleSet: string;
+  version: number;
+  title: string;
+  rules: Record<string, unknown>[];
+  sources: Source[];
 }
 
 /** The families a catalogue-2 or later frozen list carries besides devices and tables; catalogue 1 had none. */
@@ -121,18 +140,71 @@ const V2_LEAD_PARAMS = [
 const without = (record: Record<string, unknown>, keys: readonly string[]) =>
   Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
 
+/*
+ * Catalogue format v3's fields (ADR 0020), for a release that lacked them (catalogue 1 or 2). Two
+ * groups (save-format-guardian's review):
+ *
+ * - **free**: inspector-only data and prose-like metadata a shipped entry may gain with any value
+ *   (`role`, `side`, `markedVolumeMm3`, `material`, `supersededBy`): dropped before comparing;
+ * - **neutral**: fields that change what an old save simulates or accepts. A shipped entry may gain them
+ *   only at their "nothing" value (`multiConductor: null`, `access` following its methods, `alongMm: 0`,
+ *   no contacts, no bus, no spaces, no host mounts, outlets or plug): dropped when neutral, and kept
+ *   (so the comparison fails) otherwise.
+ */
+const V3_FREE_DEVICE_FIELDS = ['supersededBy'];
+const V3_FREE_TERMINAL_FIELDS = ['role', 'side'];
+const V3_FREE_ENCLOSURE_FIELDS = ['markedVolumeMm3', 'material'];
+const V3_NEUTRAL_DEVICE: Readonly<Record<string, unknown>> = { hostMounts: [], outlets: [], plug: null };
+const V3_NEUTRAL_METHOD: Readonly<Record<string, unknown>> = { multiConductor: null };
+const V3_NEUTRAL_FIT: Readonly<Record<string, unknown>> = { alongMm: 0, contacts: [] };
+const V3_NEUTRAL_ENCLOSURE: Readonly<Record<string, unknown>> = { spaces: [] };
+const V3_NEUTRAL_HOST_MOUNT: Readonly<Record<string, unknown>> = { contacts: [], bus: null };
+
+type Rec = Record<string, unknown>;
+
+/** `record` without the keys of `neutral` whose value is exactly the neutral one. */
+const withoutNeutral = (record: Rec, neutral: Readonly<Record<string, unknown>>): Rec =>
+  Object.fromEntries(
+    Object.entries(record).filter(
+      ([key, value]) => !(Object.hasOwn(neutral, key) && isDeepStrictEqual(value, neutral[key])),
+    ),
+  );
+
+/** A terminal as a release of catalogue format `catalogVersion` shipped it. */
+function terminalValues(terminal: Rec, catalogVersion: number): Rec {
+  if (catalogVersion >= 3) return terminal;
+  const methods = (terminal['methods'] as Rec[] | undefined) ?? [];
+  // `access` is neutral when it follows the methods (`land` with methods, `clip` without; never `none`).
+  const t = withoutNeutral(without(terminal, V3_FREE_TERMINAL_FIELDS), {
+    access: methods.length > 0 ? 'land' : 'clip',
+  });
+  if (catalogVersion < 2) return without(t, ['methods']);
+  return { ...t, methods: methods.map((m) => withoutNeutral(m, V3_NEUTRAL_METHOD)) };
+}
+
 /**
  * The comparable values of a device entry, as a release of catalogue format `catalogVersion` shipped
  * it: prose and sources removed, and only the fields that format lacked.
  */
 function deviceValues(doc: Record<string, unknown>, catalogVersion: number): Record<string, unknown> {
   const v1 = catalogVersion < 2;
+  const v2 = catalogVersion < 3;
   const lead = (doc['model'] as { kind?: unknown } | undefined)?.kind === 'lead';
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(doc)) {
     if (key === 'title' || key === 'sources' || (v1 && V2_DEVICE_FIELDS.includes(key))) continue;
-    if (v1 && key === 'terminals') {
-      out[key] = (value as Record<string, unknown>[]).map((terminal) => without(terminal, ['methods']));
+    if (v2 && V3_FREE_DEVICE_FIELDS.includes(key)) continue;
+    if (v2 && Object.hasOwn(V3_NEUTRAL_DEVICE, key) && isDeepStrictEqual(value, V3_NEUTRAL_DEVICE[key])) continue;
+    if (key === 'terminals') {
+      out[key] = (value as Rec[]).map((terminal) => terminalValues(terminal, catalogVersion));
+    } else if (v2 && key === 'mounts') {
+      out[key] = (value as Rec[]).map((fit) => withoutNeutral(fit, V3_NEUTRAL_FIT));
+    } else if (v2 && key === 'enclosure' && value !== null) {
+      const enclosure = value as Rec;
+      out[key] = {
+        ...withoutNeutral(without(enclosure, V3_FREE_ENCLOSURE_FIELDS), V3_NEUTRAL_ENCLOSURE),
+        mounts: (enclosure['mounts'] as Rec[]).map((mount) => withoutNeutral(mount, V3_NEUTRAL_HOST_MOUNT)),
+      };
     } else if (v1 && lead && key === 'model') {
       const model = value as Record<string, unknown>;
       out[key] = { ...model, params: without(model['params'] as Record<string, unknown>, V2_LEAD_PARAMS) };
@@ -156,7 +228,10 @@ const rowValues = (rows: Record<string, Record<string, unknown>>) =>
 const sourceKey = ({ id, kind, covers }: Source) => ({ id, kind, covers });
 
 /** What the checks read from a catalogue (the built-in one, or a stand-in in the self-tests). */
-type Lookup = Pick<Catalog, 'device' | 'tool' | 'cable' | 'accessory' | 'table' | 'colourIds'>;
+type Lookup = Pick<Catalog, 'device' | 'tool' | 'cable' | 'accessory' | 'table' | 'colourIds' | 'ruleSet'>;
+
+/** A rule's comparable values: its prose (`title`, `paraphrase`) masked. */
+const ruleValues = (rules: readonly Rec[]) => rules.map((rule) => without(rule, ['title', 'paraphrase']));
 
 /** Every shipped source keeps its id, kind and covers (its citation is prose); new sources may join. */
 function sourceProblems(now: readonly Source[], shipped: readonly Source[], name: string): string[] {
@@ -185,18 +260,29 @@ function entryProblems(
   ];
 }
 
-/** The family rules: catalogue 2 on carries every family (possibly empty), catalogue 1 holds none. */
+/**
+ * The family rules: catalogue 2 on carries every family (possibly empty), catalogue 1 holds none; and
+ * catalogue 3 on carries its rule sets, which no earlier catalogue had.
+ */
 function shapeProblems(release: Shipped): string[] {
-  return V2_FAMILIES.flatMap((family) => {
-    const list = release[family];
-    if (release.catalogVersion >= 2 && !Array.isArray(list)) {
-      return [`${release.release}: a catalogue-${release.catalogVersion} list needs "${family}" (an array)`];
-    }
-    if (release.catalogVersion < 2 && list !== undefined && list.length > 0) {
-      return [`${release.release}: catalogue 1 had no ${family}, but the list holds some`];
-    }
-    return [];
-  });
+  const rules =
+    release.catalogVersion >= 3 && !Array.isArray(release.rules)
+      ? [`${release.release}: a catalogue-${release.catalogVersion} list needs "rules" (an array)`]
+      : release.catalogVersion < 3 && (release.rules ?? []).length > 0
+        ? [`${release.release}: catalogue ${release.catalogVersion} had no rule sets, but the list holds some`]
+        : [];
+  return rules.concat(
+    V2_FAMILIES.flatMap((family) => {
+      const list = release[family];
+      if (release.catalogVersion >= 2 && !Array.isArray(list)) {
+        return [`${release.release}: a catalogue-${release.catalogVersion} list needs "${family}" (an array)`];
+      }
+      if (release.catalogVersion < 2 && list !== undefined && list.length > 0) {
+        return [`${release.release}: catalogue 1 had no ${family}, but the list holds some`];
+      }
+      return [];
+    }),
+  );
 }
 
 const familyLookup: Record<V2Family, (catalog: Lookup, doc: Doc) => unknown> = {
@@ -238,6 +324,26 @@ function releaseProblems(release: Shipped, catalog: Lookup): string[] {
       }
     }
   }
+  for (const shipped of release.rules ?? []) {
+    const name = `${release.release} ${shipped.ruleSet}@${shipped.version}`;
+    const current = catalog.ruleSet(shipped.ruleSet, shipped.version);
+    if (current === undefined) {
+      problems.push(`${name}: no longer resolves`);
+      continue;
+    }
+    if (!isDeepStrictEqual(ruleValues(current.rules as unknown as Rec[]), ruleValues(shipped.rules))) {
+      problems.push(`${name}: rules changed`);
+    }
+    if (
+      !isDeepStrictEqual(
+        without(current as unknown as Rec, ['title', 'rules', 'sources']),
+        without(shipped as unknown as Rec, ['title', 'rules', 'sources']),
+      )
+    ) {
+      problems.push(`${name}: values changed`);
+    }
+    problems.push(...sourceProblems(current.sources as Source[], shipped.sources, name));
+  }
   return problems;
 }
 
@@ -254,6 +360,7 @@ const freezeNow = (release: string): Shipped => ({
   tools: structuredClone(BUILTIN_TOOL_DOCUMENTS) as unknown as Doc[],
   cables: structuredClone(BUILTIN_CABLE_DOCUMENTS) as unknown as Doc[],
   accessories: structuredClone(BUILTIN_ACCESSORY_DOCUMENTS) as unknown as Doc[],
+  rules: structuredClone(BUILTIN_RULE_DOCUMENTS) as unknown as RuleSetDoc[],
 });
 
 describe('shipped catalogue documents', () => {
@@ -352,7 +459,77 @@ describe('shipped catalogue documents', () => {
       expect(same({ ...structuredClone(shipped), version: shipped.version + 1 }, shipped, 1)).toBe(false);
     });
 
-    it('a catalogue-2 release masks no field: a changed method, §8 or drives field fails', () => {
+    describe('catalogue v3 fields against a catalogue-2 release (ADR 0020)', () => {
+      type Terminal = { methods: Rec[] } & Rec;
+      const v040 = releases.find((r) => r.release === '0.4.0') as Shipped;
+      const shippedOf = (id: string) => v040.devices.find((d) => d.id === id && d.version === 1) as Doc;
+      const current = (id: string) =>
+        structuredClone(BUILTIN_CATALOG.device({ id, version: 1 })) as unknown as Doc & {
+          terminals: Terminal[];
+          mounts: Rec[];
+          enclosure: (Rec & { mounts: Rec[] }) | null;
+        };
+      const ST4 = 'tb.quennick-st4';
+      const BOX = 'box.tinmoor-1g-steel';
+      const PANEL = 'panel.pellmoor-din-400x500';
+
+      it('the current entries, with their neutral v3 values, equal what 0.4.0 shipped', () => {
+        for (const id of [ST4, BOX, PANEL]) expect(same(current(id), shippedOf(id), 2), id).toBe(true);
+        // A catalogue-3 release compares every field, so the v3 fields themselves count.
+        expect(same(current(ST4), shippedOf(ST4), 3)).toBe(false);
+      });
+
+      it('free fields (role, side, markedVolumeMm3, material, supersededBy) may take any value', () => {
+        const roled = current(ST4);
+        roled.terminals[0]['role'] = 'ungrounded';
+        roled.terminals[1]['side'] = 'line';
+        roled['supersededBy'] = { id: ST4, version: 9 };
+        expect(same(roled, shippedOf(ST4), 2)).toBe(true);
+        const box = current(BOX);
+        if (box.enclosure === null) throw new Error('not an enclosure');
+        box.enclosure['material'] = 'nonmetallic';
+        box.enclosure['markedVolumeMm3'] = 200000;
+        expect(same(box, shippedOf(BOX), 2)).toBe(true);
+      });
+
+      it('neutral fields fail at any other value: a two-conductor cap, access none, an anchor, contacts, a bus, spaces, host mounts, outlets, a plug', () => {
+        const changes: [string, (d: ReturnType<typeof current>) => void][] = [
+          [
+            ST4,
+            (d) =>
+              (d.terminals[0].methods[0]['multiConductor'] = {
+                awgRange: { smallest: 22, largest: 16 },
+                equalSize: true,
+              }),
+          ],
+          [ST4, (d) => (d.terminals[0]['access'] = 'none')],
+          [ST4, (d) => (d.terminals[0]['access'] = 'clip')],
+          [ST4, (d) => (d.mounts[0]['alongMm'] = 3)],
+          [
+            ST4,
+            (d) =>
+              (d.mounts[0]['contacts'] = [{ id: 'x', terminal: 'a', host: 'stab', positionOffset: 0, contactOhm: 1 }]),
+          ],
+          [ST4, (d) => (d['hostMounts'] = [{ id: 'm' }])],
+          [ST4, (d) => (d['outlets'] = [{ id: 'top' }])],
+          [ST4, (d) => (d['plug'] = { config: '5-15P' })],
+          [PANEL, (d) => ((d.enclosure as Rec)['spaces'] = [{ mount: 'rail-1', index: 0 }])],
+          [PANEL, (d) => ((d.enclosure?.mounts[0] as Rec)['bus'] = { pitchMm: 25, stabs: 1, legs: ['a', 'b'] })],
+          [PANEL, (d) => ((d.enclosure?.mounts[0] as Rec)['contacts'] = [{ id: 'chassis', terminal: 'x' }])],
+        ];
+        changes.forEach(([id, change], i) => {
+          const d = current(id);
+          change(d);
+          expect(same(d, shippedOf(id), 2), `change ${i}`).toBe(false);
+        });
+        // A catalogue-2 value next to them stays locked.
+        const torqued = current(ST4);
+        torqued.terminals[0].methods[0]['torqueNm'] = 0.8;
+        expect(same(torqued, shippedOf(ST4), 2)).toBe(false);
+      });
+    });
+
+    it('a catalogue-2 release masks no catalogue-2 field: a changed method, §8 or drives field fails', () => {
       const breaker = BUILTIN_CATALOG.device({ id: 'breaker.saltmere-1p-15a', version: 1 }) as unknown as Doc;
       const shipped = structuredClone(breaker) as Doc & { terminals: { methods: Record<string, unknown>[] }[] };
       expect(same(shipped, shipped, 2)).toBe(true);
@@ -394,6 +571,7 @@ describe('shipped catalogue documents', () => {
         accessory: (ref) => (family === 'accessories' ? find(ref) : BUILTIN_CATALOG.accessory(ref)),
         table: (name, version) => BUILTIN_CATALOG.table(name, version),
         colourIds: BUILTIN_CATALOG.colourIds,
+        ruleSet: (name, version) => BUILTIN_CATALOG.ruleSet(name, version),
       };
     };
     const frozen = freezeNow('9.9.9');
@@ -464,6 +642,66 @@ describe('shipped catalogue documents', () => {
           `9.9.9: catalogue 1 had no ${family}, but the list holds some`,
         ]);
       });
+    });
+  });
+
+  describe('rule sets are frozen too (self-tests)', () => {
+    const frozen = freezeNow('9.9.9');
+    const shipped = frozen.rules as RuleSetDoc[];
+    const withRules = (docs: readonly RuleSetDoc[]): Lookup => ({
+      device: (ref) => BUILTIN_CATALOG.device(ref),
+      tool: (ref) => BUILTIN_CATALOG.tool(ref),
+      cable: (ref) => BUILTIN_CATALOG.cable(ref),
+      accessory: (ref) => BUILTIN_CATALOG.accessory(ref),
+      table: (name, version) => BUILTIN_CATALOG.table(name, version),
+      colourIds: BUILTIN_CATALOG.colourIds,
+      ruleSet: (name, version) =>
+        docs.find((d) => d.ruleSet === name && d.version === version) as ReturnType<Catalog['ruleSet']>,
+    });
+    const changeRule = (change: (rule: Rec) => void) =>
+      shipped.map((set, i) => {
+        if (i > 0) return set;
+        const copy = structuredClone(set);
+        change(copy.rules[0]);
+        return copy;
+      });
+
+    it('the frozen current catalogue passes', () => {
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(releaseProblems(frozen, BUILTIN_CATALOG)).toStrictEqual([]);
+    });
+
+    it("correcting a rule's prose passes; a changed article, severity or check fails", () => {
+      const prose = changeRule((rule) => {
+        rule['title'] = 'Retitled';
+        rule['paraphrase'] = 'Reworded in our own words.';
+      });
+      expect(releaseProblems(frozen, withRules(prose))).toStrictEqual([]);
+      for (const [field, value] of [
+        ['article', '240.4(E)'],
+        ['severity', 'warning'],
+        ['check', { kind: 'other', params: {} }],
+      ] as const) {
+        const changed = changeRule((rule) => (rule[field] = value));
+        expect(releaseProblems(frozen, withRules(changed)), field).toStrictEqual([
+          `9.9.9 ${shipped[0].ruleSet}@${shipped[0].version}: rules changed`,
+        ]);
+      }
+    });
+
+    it('a removed rule set fails; a catalogue-3 list needs rules and a catalogue-2 list holds none', () => {
+      expect(releaseProblems(frozen, withRules([]))).toStrictEqual(
+        shipped.map((s) => `9.9.9 ${s.ruleSet}@${s.version}: no longer resolves`),
+      );
+      expect(releaseProblems({ ...frozen, rules: undefined }, BUILTIN_CATALOG)).toStrictEqual([
+        `9.9.9: a catalogue-${CATALOG_VERSION} list needs "rules" (an array)`,
+      ]);
+      expect(
+        releaseProblems(
+          { ...frozen, catalogVersion: 2, devices: [], tables: [], tools: [], cables: [], accessories: [] },
+          BUILTIN_CATALOG,
+        ),
+      ).toStrictEqual(['9.9.9: catalogue 2 had no rule sets, but the list holds some']);
     });
   });
 
