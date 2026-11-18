@@ -91,7 +91,7 @@ export const ToolKind = z.enum([
 export type ToolKind = z.infer<typeof ToolKind>;
 
 /** Screw drive (head) types (ADR 0016 amendment, F3.4 part 1): what a driver's tip fits and a screw's head takes. */
-export const DRIVE_TYPE_IDS = ['slotted', 'phillips', 'pozidriv', 'square', 'hex'] as const;
+export const DRIVE_TYPE_IDS = ['slotted', 'phillips', 'pozidriv', 'square', 'hex', 'hexSocket'] as const;
 export const DriveType = z.enum(DRIVE_TYPE_IDS);
 export type DriveType = z.infer<typeof DriveType>;
 
@@ -139,6 +139,13 @@ export const DRIVE_TYPES: Readonly<Record<DriveType, DriveTypeDef>> = Object.fre
     kind: 'real-world',
     source:
       'Hex-washer-head screws are driven by a nut driver of the head’s size (common practice); sizes are names here (game-design).',
+  },
+  hexSocket: {
+    id: 'hexSocket',
+    description: 'A hexagon socket (an Allen head), driven by a hex key or hex bit: large lugs’ set screws.',
+    kind: 'real-world',
+    source:
+      'Hexagon-socket screws are driven by a hex key (ISO 2936, cited by number) or a hex bit; large mechanical lugs, such as a meter base’s service lugs, commonly take one (common practice, P4 PR 14). Sizes are names here (game-design). Catalogue 3 (P4): not in any catalogue-2 entry.',
   },
 } satisfies Record<DriveType, DriveTypeDef>);
 

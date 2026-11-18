@@ -203,7 +203,8 @@
                       "phillips",
                       "pozidriv",
                       "square",
-                      "hex"
+                      "hex",
+                      "hexSocket"
                     ]
                   }
                 },

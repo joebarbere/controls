@@ -34,7 +34,7 @@
             "tolerance": 3
           },
           "torqueNm": 31,
-          "drives": ["slotted"],
+          "drives": ["hexSocket"],
           "alRated": true,
           "entryMm": {
             "x": 90,
@@ -78,7 +78,7 @@
             "tolerance": 3
           },
           "torqueNm": 31,
-          "drives": ["slotted"],
+          "drives": ["hexSocket"],
           "alRated": true,
           "entryMm": {
             "x": 140,
@@ -122,7 +122,7 @@
             "tolerance": 3
           },
           "torqueNm": 31,
-          "drives": ["slotted"],
+          "drives": ["hexSocket"],
           "alRated": true,
           "entryMm": {
             "x": 190,
@@ -213,7 +213,7 @@
     {
       "id": "drop-length",
       "kind": "game-design",
-      "citation": "game-design: a 30 m span from the pole to the house's meter base (a typical overhead drop span; utilities set the limits in their service guides, not read). The drop's reactance is left out (ADR 0021, a labelled abstraction) and the drop has no thermal node in P4.",
+      "citation": "game-design: a 30 m span from the pole to the house's meter base (a typical overhead drop span; utilities set the limits in their service guides, not read). The drop's reactance is left out (ADR 0021, a labelled abstraction): about 0.1 Ω/km of triplex reactance, left out, would lower the meter-base fault currents by a few per cent (about 1.6 % L–N, 3.7 % L–L). The drop has no thermal node in P4.",
       "covers": ["model.params.dropLengthMm"]
     },
     {
@@ -262,7 +262,7 @@
     {
       "id": "meter-base-lug-torque",
       "kind": "game-design",
-      "citation": "game-design: the fictional meter base's marked lug torque, 31 N·m (about 275 lb·in), of the order makers mark on socket-head lugs of this size class (seen only in search summaries; not read); the meter-socket catalogue read says the interior label's torque governs, and NFPA 70-2023 Art. 110.14(D) requires the marked value (both cited by number). No UL 486A-B torque table is used. No catalogue tool reaches 31 N·m yet (the torque screwdrivers stop at 5 N·m).",
+      "citation": "game-design: the fictional meter base's marked lug torque, 31 N·m (about 275 lb·in), of the order makers mark on socket-head lugs of this size class (seen only in search summaries; not read); the meter-socket catalogue read says the interior label's torque governs, and NFPA 70-2023 Art. 110.14(D) requires the marked value (both cited by number). No UL 486A-B torque table is used. The 5–70 N·m click torque wrench (tool.calderyn-tw-70) reaches it.",
       "covers": [
         "terminals.l1.methods.screw.torqueNm",
         "terminals.l2.methods.screw.torqueNm",
@@ -272,7 +272,7 @@
     {
       "id": "meter-base-lug-rules",
       "kind": "game-design",
-      "citation": "game-design: a 25 ± 3 mm strip and a 22 mm barrel grip for a 2 AWG–4/0 box lug, and a slotted drive. Real meter-socket lugs of this size commonly take a hex key (a socket-head screw), which the drive registry doesn't have yet; this entry's drive may change until catalogue 3 ships.",
+      "citation": "game-design: a 25 ± 3 mm strip and a 22 mm barrel grip for a 2 AWG–4/0 box lug, and a hexagon-socket set screw (hexSocket): meter-socket lugs of this size commonly take a hex key (common practice); the drive size isn't modelled.",
       "covers": [
         "terminals.l1.methods.screw.stripLengthMm",
         "terminals.l2.methods.screw.stripLengthMm",

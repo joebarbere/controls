@@ -28,10 +28,11 @@ const caps = (t: ToolDefinition) => t.capabilities.map((c) => `${c.step}:${c.max
 const d = (n: number) => 0.127 * 92 ** ((36 - n) / 39);
 
 describe('the built-in hand tools (F3.4 part 1)', () => {
-  it('are the nine P3 part 1 tools and the ten part 2 tools at version 1, in the tool family', () => {
+  it('are the nine P3 part 1 tools, the ten part 2 tools and P4’s torque wrench at version 1, in the tool family', () => {
     expect(BUILTIN_CATALOG.tools.map((t) => [t.id, t.version, t.kind])).toStrictEqual([
       ['tool.calderyn-ts-03', 1, 'torqueDriver'],
       ['tool.calderyn-ts-15', 1, 'torqueDriver'],
+      ['tool.calderyn-tw-70', 1, 'torqueDriver'],
       ['tool.corriden-hs-14', 1, 'holeSaw'],
       ['tool.corriden-hs-18', 1, 'holeSaw'],
       ['tool.corriden-hs-22', 1, 'holeSaw'],
@@ -130,17 +131,24 @@ describe('the built-in hand tools (F3.4 part 1)', () => {
     expect(inside(marked('breaker.saltmere-1p-15a', 'load'), high)).toBe(true);
     expect(inside(marked('supply.railwick-din-24v-5a', 'pos'), low)).toBe(true);
     expect(inside(marked('supply.railwick-din-24v-5a', 'pos'), high)).toBe(false);
-    // Every marked torque in the catalogue is reachable by one of them, except the service's meter-base
-    // lugs (31 N·m, P4 F4.2 part 2): no catalogue tool reaches a service lug's torque yet. That gap is
-    // named here so a new one can't slip in beside it.
-    const awaitingTorqueTool = (id: string) => id === 'service.larkmoor-sp25-overhead';
-    const torques = BUILTIN_CATALOG.devices
-      .filter((dev) => !awaitingTorqueTool(dev.id))
-      .flatMap((dev) =>
-        dev.terminals.flatMap((t) => t.methods.flatMap((m) => (m.torqueNm === null ? [] : [m.torqueNm]))),
-      );
-    for (const nm of torques) expect(inside(nm, low) || inside(nm, high)).toBe(true);
+    // Every marked torque in the catalogue is reachable by a torque tool whose drives fit the screw: the
+    // two screwdrivers for terminal screws, and (P4 F4.2 part 2) the 5–70 N·m click wrench with hex bits
+    // for the service's 31 N·m hexagon-socket meter-base lugs.
+    const wrench = tool('tool.calderyn-tw-70').torque;
+    expect(wrench).toStrictEqual({ minNm: 5, maxNm: 70, accuracyFraction: 0.04 });
+    expect(inside(marked('service.larkmoor-sp25-overhead', 'l1'), wrench)).toBe(true);
     expect(inside(marked('service.larkmoor-sp25-overhead', 'l1'), high)).toBe(false);
+    const torqueTools = BUILTIN_CATALOG.tools.filter((t) => t.torque !== null);
+    for (const dev of BUILTIN_CATALOG.devices) {
+      for (const t of dev.terminals) {
+        for (const m of t.methods.filter((x) => x.torqueNm !== null)) {
+          const reach = torqueTools.filter(
+            (tl) => inside(m.torqueNm as number, tl.torque) && drivesFit(tl.drives, m.drives),
+          );
+          expect(reach.length, `${dev.id}:${t.id}`).toBeGreaterThan(0);
+        }
+      }
+    }
   });
 
   it('cap the diagonal cutters at 8 AWG solid copper (3.26 mm); 6 AWG (4.11 mm) is beyond them', () => {
@@ -156,6 +164,7 @@ describe('the built-in hand tools (F3.4 part 1)', () => {
     ).toStrictEqual([
       ['tool.calderyn-ts-03', 'slotted+phillips+pozidriv+square'],
       ['tool.calderyn-ts-15', 'slotted+phillips+pozidriv+square'],
+      ['tool.calderyn-tw-70', 'hexSocket'],
       ['tool.veltmark-nd-516', 'hex'],
       ['tool.veltmark-sd-2', 'slotted+phillips'],
     ]);
@@ -168,8 +177,10 @@ describe('the built-in hand tools (F3.4 part 1)', () => {
     expect(screws.length).toBeGreaterThan(0);
     const plain = tool('tool.veltmark-sd-2');
     const nut = tool('tool.veltmark-nd-516');
+    const hexKey = tool('tool.calderyn-tw-70');
     for (const drives of screws) {
-      expect(drivesFit(plain.drives, drives)).toBe(true);
+      // A terminal screw takes a blade; a large lug's hexagon-socket set screw (the meter base, P4) a hex bit.
+      expect(drivesFit(drives.includes('hexSocket') ? hexKey.drives : plain.drives, drives)).toBe(true);
       expect(drivesFit(nut.drives, drives)).toBe(false); // a nut driver never turns a terminal screw
     }
     // Entries opened by driving need a blade: the screwdriver can, the nut driver can't.

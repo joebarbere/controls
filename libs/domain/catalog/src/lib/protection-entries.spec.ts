@@ -1,3 +1,4 @@
+import { realMakerIn } from '../testing/real-makers';
 import { BUILTIN_CATALOG } from './builtin';
 import type { DeviceDefinition } from './device';
 
@@ -23,9 +24,8 @@ const screw = (d: DeviceDefinition, terminal: string) => {
   return t.methods[0];
 };
 
-/** Real makers' and standards bodies' names that must never appear in a content source string. */
-const FORBIDDEN =
-  /square ?d|schneider|eaton|cutler|siemens|general electric|\bge\b|murray|milbank|southwire|hager|http|www\./i;
+/** No URL in a P4 content source string (makers and URLs go in ADR reference notes). */
+const URL = /http|www\./i;
 
 describe('the P4 plug-on breaker entries', () => {
   it('plug onto a bus column: 25 mm per pole, one stab contact per pole, the second one stab on', () => {
@@ -102,6 +102,8 @@ describe('the P4 service entry', () => {
         ratedConductors: 1,
         maxConductors: 1,
         clampType: 'boxLug',
+        drives: ['hexSocket'],
+        torqueNm: 31,
       });
     }
     expect(service.terminals.find((t) => t.id === 'x0')).toMatchObject({ methods: [], access: 'none' });
@@ -119,9 +121,10 @@ describe('the P4 F4.2 part 2 entries’ sources', () => {
   it('name no real maker and carry no URL, and every game-design source says so', () => {
     const conductor = BUILTIN_CATALOG.device({ id: 'conductor.quorvale-xhhw2-al-2-compact', version: 1 });
     for (const d of [...breakers, service, conductor as DeviceDefinition]) {
-      expect([d.brand, d.modelName].join(' ')).not.toMatch(FORBIDDEN);
+      expect(realMakerIn([d.brand, d.modelName].join(' '))).toBeNull();
       for (const s of d.sources) {
-        expect(`${d.id} ${s.id}: ${s.citation}`).not.toMatch(FORBIDDEN);
+        expect([d.id, s.id, realMakerIn(s.citation)]).toStrictEqual([d.id, s.id, null]);
+        expect(`${d.id} ${s.id}: ${s.citation}`).not.toMatch(URL);
         if (s.kind === 'game-design') expect(s.citation, `${d.id} ${s.id}`).toMatch(/game-design/);
       }
     }

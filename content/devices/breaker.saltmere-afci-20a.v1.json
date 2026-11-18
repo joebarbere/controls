@@ -260,7 +260,7 @@
     {
       "id": "terminations",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG).",
+      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG). For the AFCI: the read catalogue is the August 1998 edition, whose arc-fault breakers are a first generation from before UL 1699 (1999, cited by number) and the combination type; this combination AFCI is assumed to keep their terminal class (14–8 AWG, one conductor, a white pigtail), not verified against a later edition.",
       "covers": [
         "terminals.load.methods.screw.awgRange",
         "terminals.loadNeutral.methods.screw.awgRange",

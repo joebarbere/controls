@@ -346,14 +346,19 @@
     {
       "id": "gfci-sensing",
       "kind": "real-world",
-      "citation": "real-world and game-design (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band); the test resistor 15 kΩ, game-design: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "citation": "real-world (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band).",
       "covers": [
         "model.params.residualPickupMinA",
         "model.params.residualPickupMaxA",
         "model.params.mechanismTimeMinMs",
-        "model.params.mechanismTimeMaxMs",
-        "model.params.testResistanceOhm"
+        "model.params.mechanismTimeMaxMs"
       ]
+    },
+    {
+      "id": "gfci-test-resistor",
+      "kind": "game-design",
+      "citation": "game-design: the test resistor, 15 kΩ: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "covers": ["model.params.testResistanceOhm"]
     }
   ],
   "extensions": {}

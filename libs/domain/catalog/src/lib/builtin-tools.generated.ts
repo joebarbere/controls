@@ -126,6 +126,64 @@ export const BUILTIN_TOOL_DOCUMENTS: readonly unknown[] = [
   "extensions": {}
 },
 {
+  "id": "tool.calderyn-tw-70",
+  "version": 1,
+  "title": "Click torque wrench with hex bits, 5–70 N·m",
+  "brand": "Calderyn",
+  "modelName": "TW-70",
+  "kind": "torqueDriver",
+  "capabilities": [
+    {
+      "step": "drive",
+      "maxAwg": null
+    },
+    {
+      "step": "torque",
+      "maxAwg": null
+    }
+  ],
+  "holes": [],
+  "dies": [],
+  "torque": {
+    "minNm": 5,
+    "maxNm": 70,
+    "accuracyFraction": 0.04
+  },
+  "boreDiameterMm": null,
+  "drives": [
+    "hexSocket"
+  ],
+  "punches": [],
+  "pull": null,
+  "sources": [
+    {
+      "id": "torque-wrench-capabilities",
+      "kind": "game-design",
+      "citation": "game-design: a click-type torque wrench with a hex bit socket drives a lug's set screw and clicks at its setting, so it has drive and torque, with no conductor size limit (the torqueDriver kind: what matters is drive and torque, not the handle). The torque a lug needs comes from the device's own marking (NFPA 70-2023 Art. 110.14(D), cited by number), never from a torque table.",
+      "covers": [
+        "capabilities"
+      ]
+    },
+    {
+      "id": "torque-wrench-range",
+      "kind": "game-design",
+      "citation": "game-design: a 3/8 in square-drive click wrench set from 5 to 70 N·m, so one tool reaches both the 5 N·m breaker box lugs and the 31 N·m meter-base lugs (common 3/8 in click wrenches span roughly 5–60 to 20–100 N·m; common practice, not read from one product). Its ±4 % accuracy is game-design: a figure makers commonly state for click wrenches to ISO 6789-1 (cited by number); the standard's deviation table wasn't read and search summaries of it disagree (±3 % to ±6 %).",
+      "covers": [
+        "torque"
+      ]
+    },
+    {
+      "id": "torque-wrench-bits",
+      "kind": "game-design",
+      "citation": "game-design: the kit's hex bit sockets fit hexagon-socket (Allen) lug screws (hex keys, ISO 2936, cited by number); bit sizes are names.",
+      "covers": [
+        "drives"
+      ]
+    }
+  ],
+  "extensions": {}
+},
+{
   "id": "tool.corriden-hs-14",
   "version": 1,
   "title": "Bi-metal hole saw, 7/8 in (for 1/2 in conduit)",

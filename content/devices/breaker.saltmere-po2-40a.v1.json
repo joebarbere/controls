@@ -163,7 +163,7 @@
       "thermalTimeConstantS": 60,
       "ultimateTripRatio": 1.25,
       "magneticPickupMinA": 300,
-      "magneticPickupMaxA": 1000,
+      "magneticPickupMaxA": 950,
       "openingTimeMinMs": 8,
       "openingTimeMaxMs": 20,
       "contactResistanceOhm": 0.0024
@@ -186,7 +186,7 @@
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": ["model.params.magneticPickupMinA", "model.params.magneticPickupMaxA"]
     },
     {

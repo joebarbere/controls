@@ -1364,7 +1364,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "terminations",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG).",
+      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG). For the AFCI: the read catalogue is the August 1998 edition, whose arc-fault breakers are a first generation from before UL 1699 (1999, cited by number) and the combination type; this combination AFCI is assumed to keep their terminal class (14–8 AWG, one conductor, a white pigtail), not verified against a later edition.",
       "covers": [
         "terminals.load.methods.screw.awgRange",
         "terminals.loadNeutral.methods.screw.awgRange",
@@ -1741,7 +1741,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "terminations",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG).",
+      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG). For the AFCI: the read catalogue is the August 1998 edition, whose arc-fault breakers are a first generation from before UL 1699 (1999, cited by number) and the combination type; this combination AFCI is assumed to keep their terminal class (14–8 AWG, one conductor, a white pigtail), not verified against a later edition.",
       "covers": [
         "terminals.load.methods.screw.awgRange",
         "terminals.loadNeutral.methods.screw.awgRange",
@@ -2204,12 +2204,19 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "gfci-sensing",
       "kind": "real-world",
-      "citation": "real-world and game-design (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band); the test resistor 15 kΩ, game-design: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "citation": "real-world (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band).",
       "covers": [
         "model.params.residualPickupMinA",
         "model.params.residualPickupMaxA",
         "model.params.mechanismTimeMinMs",
-        "model.params.mechanismTimeMaxMs",
+        "model.params.mechanismTimeMaxMs"
+      ]
+    },
+    {
+      "id": "gfci-test-resistor",
+      "kind": "game-design",
+      "citation": "game-design: the test resistor, 15 kΩ: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "covers": [
         "model.params.testResistanceOhm"
       ]
     }
@@ -2598,12 +2605,19 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "gfci-sensing",
       "kind": "real-world",
-      "citation": "real-world and game-design (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band); the test resistor 15 kΩ, game-design: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "citation": "real-world (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band).",
       "covers": [
         "model.params.residualPickupMinA",
         "model.params.residualPickupMaxA",
         "model.params.mechanismTimeMinMs",
-        "model.params.mechanismTimeMaxMs",
+        "model.params.mechanismTimeMaxMs"
+      ]
+    },
+    {
+      "id": "gfci-test-resistor",
+      "kind": "game-design",
+      "citation": "game-design: the test resistor, 15 kΩ: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "covers": [
         "model.params.testResistanceOhm"
       ]
     }
@@ -3214,7 +3228,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -3421,7 +3435,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "thermalTimeConstantS": 60,
       "ultimateTripRatio": 1.25,
       "magneticPickupMinA": 300,
-      "magneticPickupMaxA": 1000,
+      "magneticPickupMaxA": 950,
       "openingTimeMinMs": 8,
       "openingTimeMaxMs": 20,
       "contactResistanceOhm": 0.0024
@@ -3448,7 +3462,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -3648,7 +3662,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "thermalTimeConstantS": 60,
       "ultimateTripRatio": 1.25,
       "magneticPickupMinA": 350,
-      "magneticPickupMaxA": 950,
+      "magneticPickupMaxA": 930,
       "openingTimeMinMs": 8,
       "openingTimeMaxMs": 20,
       "contactResistanceOhm": 0.0017
@@ -3675,7 +3689,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -4615,7 +4629,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -4907,7 +4921,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "thermalTimeConstantS": 60,
       "ultimateTripRatio": 1.25,
       "magneticPickupMinA": 300,
-      "magneticPickupMaxA": 1000,
+      "magneticPickupMaxA": 950,
       "openingTimeMinMs": 8,
       "openingTimeMaxMs": 20,
       "contactResistanceOhm": 0.0024
@@ -4934,7 +4948,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -5219,7 +5233,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
       "thermalTimeConstantS": 60,
       "ultimateTripRatio": 1.25,
       "magneticPickupMinA": 350,
-      "magneticPickupMaxA": 950,
+      "magneticPickupMaxA": 930,
       "openingTimeMinMs": 8,
       "openingTimeMaxMs": 20,
       "contactResistanceOhm": 0.0017
@@ -5246,7 +5260,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "plug-on-pickup",
       "kind": "real-world",
-      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A), and the maximum-clearing curve reaches its instantaneous floor near 32 × (30 A, about 975 A), 25 × (40 A, about 1000 A) and 19 × (50 A, about 940 A). Taken as absolute bands, rounded: 300–950 A (30 A), 300–1000 A (40 A), 350–950 A (50 A). The pickup is drawn per pole inside the band; between it and the band's top the bimetal decides.",
+      "citation": "real-world (read for this entry, 2026-11-18; the same 30–40 A and 50–70 A trip-curve sheets as the thermal source): the instantaneous region's lower edge sits near 10 × for 30 A (300 A), near 7.4 × for 40 A (about 296 A) and near 7 × for 50 A (350 A). Each rating's maximum-clearing curve reads about 0.56, 0.34 and 0.22 s at 15, 20 and 25 × (30 A), 0.56 and 0.31 s at 15 and 20 × (40 A, instantaneous from 25 ×) and 0.63 s at 15 × (50 A, instantaneous from about 18.7 ×). The band's top is where the P2 bimetal law (the thermal element) meets that curve, so no pickup is drawn above a current the curve clears faster than the law would: about 969 A (30 A), 953 A (40 A) and 935 A (50 A), rounded down to 950, 950 and 930 A. Bands: 300–950 A (30 A), 300–950 A (40 A), 350–930 A (50 A). The 15 and 20 A entries' 240–400 A band comes from a different maker's curve (the P4 pre-audit's reading), so the plug-on family's bands are a labelled composite of two makers' published curves.",
       "covers": [
         "model.params.magneticPickupMinA",
         "model.params.magneticPickupMaxA"
@@ -10484,7 +10498,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           },
           "torqueNm": 31,
           "drives": [
-            "slotted"
+            "hexSocket"
           ],
           "alRated": true,
           "entryMm": {
@@ -10532,7 +10546,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           },
           "torqueNm": 31,
           "drives": [
-            "slotted"
+            "hexSocket"
           ],
           "alRated": true,
           "entryMm": {
@@ -10580,7 +10594,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
           },
           "torqueNm": 31,
           "drives": [
-            "slotted"
+            "hexSocket"
           ],
           "alRated": true,
           "entryMm": {
@@ -10681,7 +10695,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "drop-length",
       "kind": "game-design",
-      "citation": "game-design: a 30 m span from the pole to the house's meter base (a typical overhead drop span; utilities set the limits in their service guides, not read). The drop's reactance is left out (ADR 0021, a labelled abstraction) and the drop has no thermal node in P4.",
+      "citation": "game-design: a 30 m span from the pole to the house's meter base (a typical overhead drop span; utilities set the limits in their service guides, not read). The drop's reactance is left out (ADR 0021, a labelled abstraction): about 0.1 Ω/km of triplex reactance, left out, would lower the meter-base fault currents by a few per cent (about 1.6 % L–N, 3.7 % L–L). The drop has no thermal node in P4.",
       "covers": [
         "model.params.dropLengthMm"
       ]
@@ -10734,7 +10748,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "meter-base-lug-torque",
       "kind": "game-design",
-      "citation": "game-design: the fictional meter base's marked lug torque, 31 N·m (about 275 lb·in), of the order makers mark on socket-head lugs of this size class (seen only in search summaries; not read); the meter-socket catalogue read says the interior label's torque governs, and NFPA 70-2023 Art. 110.14(D) requires the marked value (both cited by number). No UL 486A-B torque table is used. No catalogue tool reaches 31 N·m yet (the torque screwdrivers stop at 5 N·m).",
+      "citation": "game-design: the fictional meter base's marked lug torque, 31 N·m (about 275 lb·in), of the order makers mark on socket-head lugs of this size class (seen only in search summaries; not read); the meter-socket catalogue read says the interior label's torque governs, and NFPA 70-2023 Art. 110.14(D) requires the marked value (both cited by number). No UL 486A-B torque table is used. The 5–70 N·m click torque wrench (tool.calderyn-tw-70) reaches it.",
       "covers": [
         "terminals.l1.methods.screw.torqueNm",
         "terminals.l2.methods.screw.torqueNm",
@@ -10744,7 +10758,7 @@ export const BUILTIN_DEVICE_DOCUMENTS: readonly unknown[] = [
     {
       "id": "meter-base-lug-rules",
       "kind": "game-design",
-      "citation": "game-design: a 25 ± 3 mm strip and a 22 mm barrel grip for a 2 AWG–4/0 box lug, and a slotted drive. Real meter-socket lugs of this size commonly take a hex key (a socket-head screw), which the drive registry doesn't have yet; this entry's drive may change until catalogue 3 ships.",
+      "citation": "game-design: a 25 ± 3 mm strip and a 22 mm barrel grip for a 2 AWG–4/0 box lug, and a hexagon-socket set screw (hexSocket): meter-socket lugs of this size commonly take a hex key (common practice); the drive size isn't modelled.",
       "covers": [
         "terminals.l1.methods.screw.stripLengthMm",
         "terminals.l2.methods.screw.stripLengthMm",

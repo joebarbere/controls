@@ -62,8 +62,24 @@ const PICKUP_BANDS: Record<number, [number, number]> = {
   15: [240, 400],
   20: [240, 400],
   30: [300, 950],
-  40: [300, 1000],
-  50: [350, 950],
+  40: [300, 950],
+  50: [350, 930],
+};
+
+/**
+ * The read maximum-clearing times (s) of the 30–40 A and 50–70 A sheets at 15, 20 and 25 × (rounded up
+ * a little from the log-axis readings, 300 dpi): each rating's own curve. `instantaneous` where the curve
+ * has already fallen to its one-cycle floor (40 A from about 25 ×, 50 A from about 18.7 ×), where only
+ * the magnetic element may clear: the multiple must be above the band's top.
+ *
+ * The bimetal law against them: 15 × 0.4181 s, 20 × 0.2348 s, 25 × 0.1502 s (−60 ln(1 − (1.25 / m)²)).
+ * Where the law meets each curve sets the band's top: about 32.3 × (969 A) for 30 A, 23.8 × (953 A) for
+ * 40 A and 18.7 × (935 A) for 50 A, rounded down to 950, 950 and 930 A.
+ */
+const MAX_CLEARING_S: Record<number, Record<number, number | 'instantaneous'>> = {
+  30: { 15: 0.56, 20: 0.34, 25: 0.22 },
+  40: { 15: 0.56, 20: 0.31, 25: 'instantaneous' },
+  50: { 15: 0.63, 20: 'instantaneous', 25: 'instantaneous' },
 };
 
 /** The bolted fault that lands inside the rating's magnetic window (see the header). */
@@ -210,6 +226,62 @@ describe('the shipped plug-on breaker entries (P4 F4.2 part 2)', () => {
         expect(ticks * dt, `${k}×`).toBeGreaterThan(lo);
         expect(ticks * dt, `${k}×`).toBeLessThan(hi);
       }
+    },
+  );
+
+  it('30–50 A: the bimetal law stays under each rating’s read maximum-clearing curve at 15, 20 and 25 × wherever it can act', () => {
+    for (const d of ENTRIES.filter((x) => params(x).ratedCurrentA >= 30)) {
+      const p = params(d);
+      for (const [m, bound] of Object.entries(MAX_CLEARING_S[p.ratedCurrentA])) {
+        const amps = Number(m) * p.ratedCurrentA;
+        if (bound === 'instantaneous') {
+          // Every drawn pickup is below this current, so the magnetic element always clears it.
+          expect(amps, `${d.id} ${m}×`).toBeGreaterThan(p.magneticPickupMaxA);
+        } else {
+          expect(thermalTripS(p, amps), `${d.id} ${m}×`).toBeLessThan(bound);
+        }
+      }
+      // At the band's top the law is still under the curve where the curve is read (30 A: 31.7 ×,
+      // 0.0933 s, against the curve's ~0.10 s at 32 ×).
+      if (p.ratedCurrentA === 30) expect(thermalTripS(p, p.magneticPickupMaxA)).toBeLessThan(0.1);
+    }
+  });
+
+  it.each(ENTRIES.map((d) => [d.id, d] as const))(
+    '%s at its band’s edges: 0.98 × the bottom never trips magnetically; between a drawn pickup and the top always does',
+    (_, d) => {
+      const p = params(d);
+      const model =
+        d.model.kind === 'breaker.plugOn2p'
+          ? PLUG_ON_2P_MODEL
+          : d.model.kind === 'breaker.gfci1p'
+            ? GFCI_BREAKER_MODEL
+            : d.model.kind === 'breaker.afci1p'
+              ? AFCI_BREAKER_MODEL
+              : PLUG_ON_1P_MODEL;
+      const pole = d.model.kind === 'breaker.plugOn2p' ? 'pole1' : 'pole';
+      const sensing = d.model.kind === 'breaker.gfci1p' || d.model.kind === 'breaker.afci1p';
+      const parts = d.model.kind === 'breaker.plugOn2p' ? ['pole1', 'pole2'] : sensing ? ['neutral', 'pole'] : ['pole'];
+      const rig = (seed: number, amps: number) => {
+        const r = bankRig(model, d.model.params as Record<string, number>, parts, {
+          seed,
+          state: sensing ? { on: true, test: 0 } : { on: true },
+        }).amps(pole, amps);
+        return sensing ? r.amps('neutral', -amps) : r;
+      };
+      // Below the band: nothing within 100 ticks (the bimetal needs far longer: ≥ 0.38 s, 15 A at 0.98 × 240 A).
+      const below = rig(11, 0.98 * p.magneticPickupMinA);
+      expect(below.runToTrip(100)).toBe(-1);
+      expect(below.bank.bag(0)['magneticSinceTick']).toBeNull();
+      // A seed whose drawn pickup lies inside the band, and a current halfway from it to the top.
+      const seed = [1, 2, 3, 5, 7, 11, 13].find((s) => {
+        const pickup = pickupOf(p, s, 2);
+        return pickup > p.magneticPickupMinA && pickup < p.magneticPickupMaxA - 10;
+      }) as number;
+      const pickup = pickupOf(p, seed, 2);
+      const inside = rig(seed, (pickup + p.magneticPickupMaxA) / 2);
+      expect(inside.runToTrip(100)).toBe(openingOf(p, seed, 2));
+      expect(inside.events.at(-1)?.cause).toBe('magnetic');
     },
   );
 
