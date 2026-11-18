@@ -9,7 +9,11 @@ RG5 5 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 18e0 120
 RI0 e0 m0 12e-1
-LI0 m0 4 12e-7
+LI0 m0 n0 12e-7
+H0 n0 h0 VS6 39e-4
+ED0 h0 4 d0 0 -22e-5
+F0 0 d0 VS6 1
+LD0 d0 0 1
 VS1 3 s1 0
 R1 s1 1 68e3
 VS2 2 s2 0
@@ -23,7 +27,11 @@ R5 s5 5 15e3
 VS6 1 s6 0
 V6 e6 s6 DC 0 AC 18e-1 -120
 RI6 e6 m6 10e-3
-LI6 m6 4 56e-5
+LI6 m6 n6 56e-5
+H6 n6 h6 VS0 39e-4
+ED6 h6 4 d6 0 -22e-5
+F6 0 d6 VS0 1
+LD6 d6 0 1
 .control
 set numdgt=17
 ac lin 1 60 60

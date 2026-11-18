@@ -1,5 +1,5 @@
 import { type DeviceOutputSchema, SIM_PROTOCOL_VERSION, type TopologyDescriptor } from '@controls/sim-protocol';
-import type { Netlist } from '../netlist/types';
+import type { ElementRef, Netlist } from '../netlist/types';
 
 /** One device record in the snapshot's device section, as the engine laid it out. */
 export interface DescriptorRecord {
@@ -45,10 +45,7 @@ export function buildTopologyDescriptor(
       members: node.members.map((m) => ({ entity: m.entity, terminal: m.terminal })),
     })),
     branches: netlist.branches.map((branch) => ({
-      element:
-        branch.element.kind === 'entity'
-          ? { kind: 'entity', entity: branch.element.entity, part: branch.element.part }
-          : { kind: 'connection', connection: branch.element.connection },
+      element: descriptorElement(branch.element),
       a: branch.a,
       b: branch.b,
       island: branch.island,
@@ -69,6 +66,13 @@ export function buildTopologyDescriptor(
     connectionSchemas,
   };
   return deepFreeze(descriptor);
+}
+
+/** A branch's element as the descriptor carries it (protocol 8 adds the `contact` kind, ADR 0019). */
+function descriptorElement(element: ElementRef): TopologyDescriptor['branches'][number]['element'] {
+  if (element.kind === 'entity') return { kind: 'entity', entity: element.entity, part: element.part };
+  if (element.kind === 'connection') return { kind: 'connection', connection: element.connection };
+  return { kind: 'contact', entity: element.entity, relation: element.relation, contact: element.contact };
 }
 
 function deepFreeze<T>(value: T): T {

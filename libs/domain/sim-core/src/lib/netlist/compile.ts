@@ -1,7 +1,14 @@
-import { type Catalog, type DeviceDefinition, MAX_TERMINAL_METHODS, type TerminalMethodSpec } from '@controls/catalog';
+import {
+  type Catalog,
+  type DeviceDefinition,
+  MAX_TERMINAL_METHODS,
+  offeredMounts,
+  type TerminalMethodSpec,
+} from '@controls/catalog';
 import { isBuiltinPropRef, type World } from '@controls/save-format';
-import { sha256, sha256Finish, sha256Prefix, toHex } from '@controls/world-model';
+import { busStabIndex, busStabLeg, sha256, sha256Finish, sha256Prefix, toHex } from '@controls/world-model';
 import { TopologyWriter } from './encode';
+import { RELATION_CODES } from './hash';
 import {
   BUILTIN_NETLIST_MODELS,
   CLIP_END,
@@ -12,20 +19,24 @@ import {
   type NetlistModels,
   ownModel,
 } from './models';
-import type {
-  AbsentConnectionReason,
-  ElementKind,
-  ElementRef,
-  IslandKind,
-  Netlist,
-  NetlistBranch,
-  NetlistDevice,
-  NetlistDiagnostic,
-  NetlistIsland,
-  NetlistNode,
-  SourceDomain,
-  StateBag,
-  TerminalRef,
+import {
+  type AbsentConnectionReason,
+  CONTACT_MODEL,
+  type ContactRelation,
+  EARTH_ENTITY,
+  EARTH_TERMINAL,
+  type ElementKind,
+  type ElementRef,
+  type IslandKind,
+  type Netlist,
+  type NetlistBranch,
+  type NetlistDevice,
+  type NetlistDiagnostic,
+  type NetlistIsland,
+  type NetlistNode,
+  type SourceDomain,
+  type StateBag,
+  type TerminalRef,
 } from './types';
 import { UnionFind } from './union-find';
 
@@ -44,6 +55,12 @@ import { UnionFind } from './union-find';
  *    is computed once with its fragment (`DeviceParts.localNode`) and a compile only offsets it.
  * 3. Branches: entity elements (entity id, then part), then each netlisted connection by id, exactly
  *    one branch each (ADR 0011 §7). A connection with an end on an absent entity is absent itself.
+ *    Then (engine 8, ADR 0019 "What the netlist compiler reads") the relation contacts, by entity id,
+ *    relation code and contact id: each contact a device's fit makes with its host's mount
+ *    (`mountedOn`; on a bus through `busStabIndex` and `busStabLeg`), each pin of an appliance's plug in
+ *    an outlet (`pluggedInto`) and each link a model declares to remote earth, one resistor branch each,
+ *    never an ideal join. Remote earth is the implicit one-terminal fragment at entity 0, terminal
+ *    `earth`, present only when an earth link compiles; it sorts first, so it is then node 0.
  * 4. Islands: connected components over the branches, numbered by their smallest node, classified by
  *    the sources they hold.
  *
@@ -76,6 +93,12 @@ export interface CompileOptions {
 export interface NetlistCompilerOptions {
   /** The netlist models (default {@link BUILTIN_NETLIST_MODELS}); tests pass synthetic kinds. */
   readonly models?: NetlistModels;
+  /**
+   * `wiring` compiles the wiring view (engine 8, `wiringGraph`): each model's `wiring` topology (a
+   * switch closed, a protective device intact) with no sim state, and every landed connection present
+   * whatever its ends' sim state. Default `electrical`, what the solvers read.
+   */
+  readonly view?: 'electrical' | 'wiring';
 }
 
 /** How each {@link NetlistCompiler.compile} call was answered. For tests and diagnostics only. */
@@ -98,6 +121,13 @@ interface ElementFragment {
   readonly values: Readonly<Record<string, number>>;
 }
 
+/** A link to remote earth (engine 8): its contact id, its terminal (an index into `terminals`) and values. */
+interface EarthFragment {
+  readonly contact: string;
+  readonly terminal: number;
+  readonly values: Readonly<Record<string, number>>;
+}
+
 interface DeviceFragment {
   readonly kind: string;
   /** Terminal ids, sorted by code units. */
@@ -106,6 +136,8 @@ interface DeviceFragment {
   readonly joins: readonly (readonly number[])[];
   /** Sorted by part. */
   readonly elements: readonly ElementFragment[];
+  /** Links to remote earth, sorted by contact id (engine 8); empty for most kinds. */
+  readonly earth: readonly EarthFragment[];
 }
 
 /**
@@ -142,6 +174,11 @@ interface EntityCacheEntry {
   readonly refVersion: number;
   readonly state: StateBag;
   readonly model: DeviceNetlistModel | undefined;
+  /**
+   * The catalogue entry, whenever the catalogue knows the ref (netlisted or not): the relation contacts
+   * read its fits, offered mounts, outlets and plug (engine 8). `null` for a prop or an unknown ref.
+   */
+  readonly device: DeviceDefinition | null;
   readonly simKey: string;
   readonly result: EntityResult;
   /** A netlisted entity's termination methods per fragment terminal (sorted terminal ids); empty otherwise. */
@@ -225,6 +262,59 @@ interface ConnectionCacheEntry {
 type Entity = World['entities'][number];
 type Connection = World['connections'][number];
 
+/** A contact's host terminal is remote earth (plant terminal {@link EARTH_PLANT_TERMINAL}). */
+const HOST_EARTH = -3;
+/** Plant terminal 0 is reserved for remote earth: entity 0 sorts first (ADR 0019). */
+const EARTH_PLANT_TERMINAL = 0;
+
+type ContactRef = Extract<ElementRef, { kind: 'contact' }>;
+
+/**
+ * One relation contact of an entity (engine 8), resolved against the catalogue and the relation's
+ * host: the dependent device's terminal and the host's (fragment indices; `-1` when the terminal isn't
+ * netlisted, {@link HOST_EARTH} for remote earth). `ref` and `values` are shared by every netlist that
+ * holds the contact. `placed` is its place in a compile's contact list, made the first time it compiles.
+ */
+interface ContactSpec {
+  readonly ref: ContactRef;
+  readonly code: number;
+  readonly own: number;
+  readonly host: number;
+  readonly values: Readonly<Record<string, number>>;
+  placed: PlacedContact | null;
+}
+
+/**
+ * An entity's resolved contacts, cached while the inputs they were resolved from are the same objects:
+ * the entity (its relations and transform), its cache entry (its fragment), and its relation's host
+ * entity and entry (its mounts or outlets, its transform for a bus stab). Specs in branch order:
+ * mount, then plug, then earth, each by contact id.
+ */
+interface ContactCacheEntry {
+  readonly entity: Entity;
+  readonly own: EntityCacheEntry;
+  readonly hostEntity: Entity | null;
+  readonly host: EntityCacheEntry | null;
+  readonly specs: readonly ContactSpec[];
+  epoch: number;
+}
+
+/** A compiled contact branch: its spec and its ends as plant-wide terminal indices, rewritten per compile. */
+interface PlacedContact {
+  readonly spec: ContactSpec;
+  a: number;
+  b: number;
+}
+
+/** Remote earth's fragment: one terminal, `earth`, nothing else (engine 8, D5). */
+const EARTH_FRAGMENT: DeviceFragment = Object.freeze({
+  kind: 'earth',
+  terminals: Object.freeze([EARTH_TERMINAL]),
+  joins: Object.freeze([]),
+  elements: Object.freeze([]),
+  earth: Object.freeze([]),
+});
+
 /**
  * A netlisted entity and where its terminals start in the plant-wide terminal numbering. One per cache
  * entry, rewritten by each compile that places it (lists of them live only for one compile).
@@ -289,6 +379,14 @@ export class NetlistCompiler {
   private previous: Netlist | null = null;
   /** Buffers `assemble` reuses between structural recompiles. */
   private readonly scratch = new AssembleScratch();
+  /** Whether this compiler compiles the wiring view (`NetlistCompilerOptions.view`). */
+  private readonly wiring: boolean;
+  /** Each entity's resolved relation contacts (engine 8), by entity id. */
+  private readonly contactCache = new Map<number, ContactCacheEntry>();
+  /** This compile's contact branches, in canonical order (rewritten by each compile). */
+  private readonly placedContacts: PlacedContact[] = [];
+  /** The last full compile's contact diagnostics (the open-toggle path repeats them). */
+  private lastContactDiagnostics: readonly NetlistDiagnostic[] = [];
   /** This compile's netlisted devices and connections, in canonical order (rewritten by each compile). */
   private readonly placedDevices: PlacedDevice[] = [];
   private readonly placedConnections: PlacedConnection[] = [];
@@ -330,6 +428,7 @@ export class NetlistCompiler {
     options: NetlistCompilerOptions = {},
   ) {
     this.models = options.models ?? BUILTIN_NETLIST_MODELS;
+    this.wiring = options.view === 'wiring';
   }
 
   /**
@@ -337,7 +436,7 @@ export class NetlistCompiler {
    * `compileNetlist(world, catalog, options)` exactly, whatever was compiled before.
    */
   compile(world: World, options: CompileOptions = {}): Netlist {
-    if (this.previous !== null && world === this.lastWorld) {
+    if (this.previous !== null && world === this.lastWorld && !this.wiring) {
       const toggled = this.toggleOnly(options);
       if (toggled !== null) return toggled;
     }
@@ -369,7 +468,8 @@ export class NetlistCompiler {
     // array's length to 0 drops its backing store, so refilling it by `push` reallocated it as it grew.
     const devices = this.placedDevices;
     let deviceCount = 0;
-    let terminalCount = 0;
+    // Plant terminal 0 is remote earth's, whether or not this world has an earth node (engine 8).
+    let terminalCount = EARTH_PLANT_TERMINAL + 1;
     const entities = byId(world.entities);
     const entityHints = this.entityHints;
     const entityHintCount = hinted ? entityHints.length : 0;
@@ -389,7 +489,7 @@ export class NetlistCompiler {
         devices[deviceCount++] = placed;
         terminalCount += entry.terminals;
         deviceBranchCount += entry.elements;
-        if (entry.model !== undefined && entry.model.simTopologyKeys.length > 0) {
+        if (!this.wiring && entry.model !== undefined && entry.model.simTopologyKeys.length > 0) {
           this.simEntities.push(entity);
           this.simEntries.push(entry);
         }
@@ -451,7 +551,7 @@ export class NetlistCompiler {
         b = plantTerminal(cached.bEntry, cached.bTerminal);
         if (a === ABSENT_END || b === ABSENT_END) reason = 'absent-end';
         else if (a < 0 || b < 0) reason = 'unknown-terminal';
-        else if (openEnd(result.model, options.connectionSim?.(connection.id) ?? connection.sim)) {
+        else if (!this.wiring && openEnd(result.model, options.connectionSim?.(connection.id) ?? connection.sim)) {
           // An end that is open (intermittent, burned open, a fused lead) or a fused conductor takes the
           // branch out (ADR 0015, ADR 0018 implementation notes).
           reason = 'intermittent-open';
@@ -478,21 +578,60 @@ export class NetlistCompiler {
       }
     }
     connections.length = connectionCount;
+
+    // 3. Relation contacts (engine 8, ADR 0019): per entity in id order, its mount contacts, its plug's
+    // pins, then its earth links, each by contact id. An entity with none (every P3 world's entities,
+    // and a device on a contact-less mount such as a DIN rail) adds nothing to the list.
+    const contacts = this.placedContacts;
+    let contactCount = 0;
+    let earthUsed = false;
+    const contactDiagnostics: NetlistDiagnostic[] = [];
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      const own = entityHints[i];
+      if (entity.mountedOn === null && entity.pluggedInto === null && !hasEarth(own)) continue;
+      const hostId = entity.mountedOn?.entity ?? entity.pluggedInto?.entity;
+      const host = hostId === undefined ? null : this.currentEntry(hostId, epoch);
+      const specs = this.contactSpecs(entity, own, host, hostId, entities, epoch);
+      for (let k = 0; k < specs.length; k++) {
+        const spec = specs[k];
+        const a = plantTerminal(own, spec.own);
+        const b = spec.host === HOST_EARTH ? EARTH_PLANT_TERMINAL : plantTerminal(host, spec.host);
+        record('k');
+        record(entity.id);
+        record(spec.code);
+        record(spec.ref.contact);
+        if (a < 0 || b < 0) {
+          record('absent');
+          const { relation, contact } = spec.ref;
+          contactDiagnostics.push({ code: 'absent-contact', entity: entity.id, relation, contact });
+          continue;
+        }
+        record(a);
+        record(b);
+        if (b === EARTH_PLANT_TERMINAL) earthUsed = true;
+        contacts[contactCount++] = placeContact(spec, a, b);
+      }
+    }
+    contacts.length = contactCount;
+
     if (structure.length !== length) {
       structure.length = length;
       same = false;
     }
     prune(this.entityCache, entities.length, epoch);
     prune(this.connectionCache, sortedConnections.length, epoch);
+    prune(this.contactCache, entities.length, epoch);
     this.hintsValid = true;
 
     this.slotCount = slotCount;
     this.deviceBranchCount = deviceBranchCount;
     this.lastEntityDiagnostics = entityDiagnostics;
+    this.lastContactDiagnostics = contactDiagnostics;
 
     // Same structure as last time: the partition, islands, devices, hash and diagnostics are unchanged.
     if (same) {
-      const netlist = withValues(previous as Netlist, devices, connections);
+      const netlist = withValues(previous as Netlist, devices, connections, contacts);
       if (netlist === previous) this.stats.unchanged++;
       else this.stats.valuesOnly++;
       this.previous = netlist;
@@ -501,11 +640,51 @@ export class NetlistCompiler {
     }
 
     this.stats.structural++;
-    const diagnostics = [...entityDiagnostics, ...connectionDiagnostics];
-    const netlist = assemble(devices, terminalCount, connections, diagnostics, this.scratch);
+    const diagnostics = [...entityDiagnostics, ...connectionDiagnostics, ...contactDiagnostics];
+    const netlist = assemble(devices, terminalCount, connections, contacts, earthUsed, diagnostics, this.scratch);
     this.previous = netlist;
     this.lastWorld = world;
     return netlist;
+  }
+
+  /**
+   * `entity`'s relation contacts (engine 8, ADR 0019 "What the netlist compiler reads" 1, 2, 4 and 6),
+   * from the cache while the entity, its entry, its host and the host's entry are the objects they were
+   * resolved from. `host` is the entry of the entity its relation names (`hostId`), `entities` this
+   * compile's sorted entity list (the host's transform is read from it, for a bus stab).
+   */
+  private contactSpecs(
+    entity: Entity,
+    own: EntityCacheEntry,
+    host: EntityCacheEntry | null,
+    hostId: number | undefined,
+    entities: readonly Entity[],
+    epoch: number,
+  ): readonly ContactSpec[] {
+    const hostEntity = hostId === undefined ? null : findById(entities, hostId);
+    const cached = this.contactCache.get(entity.id);
+    if (
+      cached !== undefined &&
+      cached.entity === entity &&
+      cached.own === own &&
+      cached.hostEntity === hostEntity &&
+      cached.host === host
+    ) {
+      cached.epoch = epoch;
+      return cached.specs;
+    }
+    const specs: ContactSpec[] = [];
+    if (entity.mountedOn !== null && hostEntity !== null && host !== null) {
+      mountContacts(entity, own, hostEntity, host, specs);
+    }
+    if (entity.pluggedInto !== null && host !== null) plugContacts(entity, own, host, specs);
+    if (own.result.netlisted) {
+      for (const link of own.result.parts.fragment.earth) {
+        specs.push(contactSpec(entity.id, 'earth', link.contact, link.terminal, HOST_EARTH, link.values));
+      }
+    }
+    this.contactCache.set(entity.id, { entity, own, hostEntity, host, specs, epoch });
+    return specs;
   }
 
   /**
@@ -553,6 +732,7 @@ export class NetlistCompiler {
     const connections = this.placedConnections;
     let connectionCount = 0;
     const diagnostics: NetlistDiagnostic[] = [...this.lastEntityDiagnostics];
+    const contactDiagnostics = this.lastContactDiagnostics;
     for (let s = 0; s < this.slotCount; s++) {
       const entry = this.slotEntry[s];
       const id = entry.connection.id;
@@ -567,8 +747,16 @@ export class NetlistCompiler {
       }
     }
     connections.length = connectionCount;
+    for (let i = 0; i < contactDiagnostics.length; i++) diagnostics.push(contactDiagnostics[i]);
     this.stats.structural++;
-    const netlist = reassemble(previous, this.deviceBranchCount, connections, diagnostics, this.scratch);
+    const netlist = reassemble(
+      previous,
+      this.deviceBranchCount,
+      connections,
+      this.placedContacts,
+      diagnostics,
+      this.scratch,
+    );
     this.previous = netlist;
     return netlist;
   }
@@ -591,6 +779,7 @@ export class NetlistCompiler {
       const model = cached.model;
       if (
         model === undefined ||
+        this.wiring ||
         model.simTopologyKeys.length === 0 ||
         simKeyOf(model, simTopologyView(model, options.sim?.(entity.id) ?? entity.sim)) === cached.simKey
       ) {
@@ -612,9 +801,13 @@ export class NetlistCompiler {
       epoch,
       base: 0,
     };
-    const absent = (diagnostic: NetlistDiagnostic | null): EntityCacheEntry => ({
+    const absent = (
+      diagnostic: NetlistDiagnostic | null,
+      device: DeviceDefinition | null = null,
+    ): EntityCacheEntry => ({
       ...base,
       model: undefined,
+      device,
       simKey: '',
       placed: null,
       terminals: 0,
@@ -626,18 +819,21 @@ export class NetlistCompiler {
     if (isBuiltinPropRef(entity.ref)) return absent(null);
     const kind = this.catalog.kindOf(entity.ref);
     if (!kind) return absent({ code: 'unknown-device', entity: entity.id });
-    const model = ownModel(this.models.devices, kind.kind);
-    if (!model || kind.placement !== 'entity') return absent({ code: 'no-model', entity: entity.id, kind: kind.kind });
     // The catalogue resolves every ref its `kindOf` resolves.
     const device = this.catalog.device(entity.ref) as NonNullable<ReturnType<Catalog['device']>>;
-    const sim = simTopologyView(model, options.sim?.(entity.id) ?? entity.sim);
+    const model = ownModel(this.models.devices, kind.kind);
+    if (!model || kind.placement !== 'entity') {
+      return absent({ code: 'no-model', entity: entity.id, kind: kind.kind }, device);
+    }
+    const sim = this.wiring ? NO_SIM : simTopologyView(model, options.sim?.(entity.id) ?? entity.sim);
     const terminals = device.terminals.map((t) => t.id).sort();
-    const fragment = buildFragment(model, terminals, device.model.params, entity.state, sim);
+    const fragment = buildFragment(model, terminals, device.model.params, entity.state, sim, this.wiring);
     const parts = deviceParts(entity.id, fragment);
     return {
       ...base,
       model,
-      simKey: simKeyOf(model, sim),
+      device,
+      simKey: this.wiring ? '' : simKeyOf(model, sim),
       placed: { parts, base: 0 },
       terminals: fragment.terminals.length,
       elements: fragment.elements.length,
@@ -783,6 +979,126 @@ export class NetlistCompiler {
   }
 }
 
+/** Whether a netlisted entry's fragment links to remote earth. */
+const hasEarth = (entry: EntityCacheEntry): boolean =>
+  entry.result.netlisted && entry.result.parts.fragment.earth.length > 0;
+
+/** The entity with id `id` in `entities` (sorted by id), by bisection, or null. */
+function findById(entities: readonly Entity[], id: number): Entity | null {
+  let lo = 0;
+  let hi = entities.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const at = entities[mid].id;
+    if (at === id) return entities[mid];
+    if (at < id) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return null;
+}
+
+const byContactId = <T extends { readonly id: string }>(items: readonly T[]): readonly T[] =>
+  items.length < 2 ? items : [...items].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+
+function contactSpec(
+  entity: number,
+  relation: ContactRelation,
+  contact: string,
+  own: number,
+  host: number,
+  values: Readonly<Record<string, number>>,
+): ContactSpec {
+  return {
+    ref: Object.freeze({ kind: 'contact', entity, relation, contact }),
+    code: RELATION_CODES[relation],
+    own,
+    host,
+    values,
+    placed: null,
+  };
+}
+
+/**
+ * A mounted device's contacts with its host (ADR 0019 1–2, ADR 0020): one per contact of the device's
+ * fit for the host mount's type whose host contact the mount offers. A bus mount reaches its legs
+ * through its stab pattern: the device's stab is `busStabIndex` (world-model's, the one function every
+ * reader calls) plus the contact's `positionOffset`, and its leg is `busStabLeg`; a bus contact with no
+ * stab (a position the load check would refuse) is kept with host `-1`, so it is absent and diagnosed.
+ * A mount that offers none of the fit's host contacts, or a fit with none, adds nothing.
+ */
+function mountContacts(
+  entity: Entity,
+  own: EntityCacheEntry,
+  hostEntity: Entity,
+  host: EntityCacheEntry,
+  out: ContactSpec[],
+): void {
+  const mountedOn = entity.mountedOn;
+  if (mountedOn === null || own.device === null || host.device === null) return;
+  const mount = offeredMounts(host.device).find((m) => m.id === mountedOn.mount);
+  if (mount === undefined) return;
+  const fit = own.device.mounts.find((f) => f.type === mount.type);
+  if (fit === undefined || fit.contacts.length === 0) return;
+  const stab = mount.bus === null ? null : busStabIndex(hostEntity, mount, entity.transform.positionMm, fit);
+  for (const contact of byContactId(fit.contacts)) {
+    let terminal: string | null;
+    if (mount.bus !== null) {
+      if (contact.host !== 'stab') continue;
+      terminal = stab === null ? null : busStabLeg(mount, stab + contact.positionOffset);
+    } else {
+      const offered = mount.contacts.find((c) => c.id === contact.host);
+      if (offered === undefined) continue;
+      terminal = offered.terminal;
+    }
+    out.push(
+      contactSpec(
+        entity.id,
+        'mount',
+        contact.id,
+        terminalOf(own, contact.terminal),
+        terminal === null ? -1 : terminalOf(host, terminal),
+        Object.freeze({ resistanceOhm: contact.contactOhm }),
+      ),
+    );
+  }
+}
+
+/**
+ * An appliance's plug contacts (ADR 0019 4): one per pin of its plug, by pin id, from the appliance's
+ * pin terminal to the outlet's slot terminal for that pin, each the outlet's `contactOhm`. A pin the
+ * outlet has no slot for (never, for a configuration that mates) is absent and diagnosed.
+ */
+function plugContacts(entity: Entity, own: EntityCacheEntry, host: EntityCacheEntry, out: ContactSpec[]): void {
+  const plugged = entity.pluggedInto;
+  if (plugged === null || own.device === null || own.device.plug === null || host.device === null) return;
+  const outlet = host.device.outlets.find((o) => o.id === plugged.outlet);
+  if (outlet === undefined) return;
+  const values = Object.freeze({ resistanceOhm: outlet.contactOhm });
+  const pins = [...own.device.plug.pins].sort((x, y) => (x.pin < y.pin ? -1 : x.pin > y.pin ? 1 : 0));
+  for (const pin of pins) {
+    const slot = outlet.pins.find((p) => p.pin === pin.pin);
+    out.push(
+      contactSpec(
+        entity.id,
+        'plug',
+        pin.pin,
+        terminalOf(own, pin.terminal),
+        slot === undefined ? -1 : terminalOf(host, slot.terminal),
+        values,
+      ),
+    );
+  }
+}
+
+/** `spec`'s {@link PlacedContact}, rewritten for this compile. */
+function placeContact(spec: ContactSpec, a: number, b: number): PlacedContact {
+  const placed = spec.placed;
+  if (placed === null) return (spec.placed = { spec, a, b });
+  placed.a = a;
+  placed.b = b;
+  return placed;
+}
+
 /** `cached`'s {@link PlacedConnection}, rewritten for this compile. */
 function placeConnection(
   cached: ConnectionCacheEntry,
@@ -912,8 +1228,10 @@ function buildFragment(
   params: Readonly<Record<string, number>>,
   state: StateBag,
   sim: StateBag,
+  wiring = false,
 ): DeviceFragment {
-  const topology = model.topology({ params, state, sim });
+  const input = { params, state, sim };
+  const topology = wiring && model.wiring !== undefined ? model.wiring(input) : model.topology(input);
   const index = (terminal: string): number => {
     const i = terminals.indexOf(terminal);
     if (i < 0) throw new Error(`Netlist model ${model.kind} names terminal "${terminal}", which the device lacks`);
@@ -935,17 +1253,29 @@ function buildFragment(
         values: sortedValues(element.values),
       };
     });
-  return { kind: model.kind, terminals, joins, elements };
+  const earth = [...(topology.earth ?? [])]
+    .sort((x, y) => (x.contact < y.contact ? -1 : x.contact > y.contact ? 1 : 0))
+    .map((link, i, sorted): EarthFragment => {
+      if (!PART_PATTERN.test(link.contact) || (i > 0 && sorted[i - 1].contact === link.contact)) {
+        throw new Error(`Netlist model ${model.kind} has an invalid or repeated earth contact "${link.contact}"`);
+      }
+      return { contact: link.contact, terminal: index(link.terminal), values: sortedValues(link.values) };
+    });
+  return { kind: model.kind, terminals, joins, elements, earth: earth.length === 0 ? NO_EARTH : earth };
 }
+
+const NO_EARTH: readonly EarthFragment[] = Object.freeze([]);
 
 /** A fragment's structure without its values. */
 function fragmentKey(fragment: DeviceFragment): string {
-  return [
+  const key = [
     fragment.kind,
     fragment.terminals.join(','),
     fragment.joins.map((group) => group.join(',')).join(';'),
     fragment.elements.map((e) => `${e.part}:${e.kind}:${e.source ?? '-'}:${e.a}:${e.b}`).join(';'),
-  ].join('|');
+  ];
+  if (fragment.earth.length > 0) key.push(fragment.earth.map((e) => `${e.contact}:${e.terminal}`).join(';'));
+  return key.join('|');
 }
 
 /** The union-find `deviceParts` partitions one device's terminals with (reset for each device). */
@@ -1001,6 +1331,7 @@ function withValues(
   previous: Netlist,
   devices: readonly PlacedDevice[],
   connections: readonly PlacedConnection[],
+  contacts: readonly PlacedContact[],
 ): Netlist {
   let branches: NetlistBranch[] | null = null;
   let i = 0;
@@ -1014,6 +1345,7 @@ function withValues(
   };
   for (const { parts } of devices) for (const element of parts.fragment.elements) visit(element.values);
   for (const connection of connections) visit(connection.result.values);
+  for (const contact of contacts) visit(contact.spec.values);
   return branches === null ? previous : { ...previous, branches };
 }
 
@@ -1133,26 +1465,53 @@ function islandRecords(
   return islands;
 }
 
+/** A contact's branch (engine 8): a `contact`-model resistor of its spec's `resistanceOhm`, dependent → host. */
+function contactBranch(index: number, spec: ContactSpec, a: number, b: number, island: number): NetlistBranch {
+  return {
+    index,
+    element: spec.ref,
+    kind: 'resistor',
+    model: CONTACT_MODEL,
+    source: null,
+    a,
+    b,
+    island,
+    values: spec.values,
+  };
+}
+
+/** Remote earth's parts: its node's member list is shared by every netlist that holds it. */
+const EARTH_PARTS: DeviceParts = deviceParts(EARTH_ENTITY, EARTH_FRAGMENT);
+
 function assemble(
   devices: readonly PlacedDevice[],
   terminalCount: number,
   connections: readonly PlacedConnection[],
+  contacts: readonly PlacedContact[],
+  earthUsed: boolean,
   diagnostics: NetlistDiagnostic[],
   scratch: AssembleScratch,
 ): Netlist {
   // Nodes: each device's own nodes in turn. Only a device's ideal joins merge terminals, so this
   // numbers plant nodes as their smallest member is reached in canonical terminal order, and each
-  // node's members are the device's shared list (`DeviceParts.localNode`).
+  // node's members are the device's shared list (`DeviceParts.localNode`). Remote earth, when an earth
+  // link reaches it, is entity 0's one terminal: plant terminal 0 and node 0 (engine 8).
   const nodeOfTerminal = (scratch.nodeOfTerminal = atLeast(scratch.nodeOfTerminal, terminalCount));
-  let nodeCount = 0;
-  let branchCount = connections.length;
+  let nodeCount = earthUsed ? 1 : 0;
+  let deviceBranchCount = 0;
   for (let d = 0; d < devices.length; d++) {
     const parts = devices[d].parts;
     nodeCount += parts.nodeMembers.length;
-    branchCount += parts.fragment.elements.length;
+    deviceBranchCount += parts.fragment.elements.length;
   }
+  const branchCount = deviceBranchCount + connections.length + contacts.length;
   const members = new Array<readonly TerminalRef[]>(nodeCount);
   let nodeBase = 0;
+  if (earthUsed) {
+    nodeOfTerminal[EARTH_PLANT_TERMINAL] = 0;
+    members[0] = EARTH_PARTS.nodeMembers[0];
+    nodeBase = 1;
+  }
   for (let d = 0; d < devices.length; d++) {
     const { parts, base } = devices[d];
     const local = parts.localNode;
@@ -1177,6 +1536,10 @@ function assemble(
   for (let j = 0; j < connections.length; j++) {
     endA[index] = nodeOfTerminal[connections[j].a];
     endB[index++] = nodeOfTerminal[connections[j].b];
+  }
+  for (let j = 0; j < contacts.length; j++) {
+    endA[index] = nodeOfTerminal[contacts[j].a];
+    endB[index++] = nodeOfTerminal[contacts[j].b];
   }
 
   // Islands: connected components of the nodes over the branches, numbered by their smallest node.
@@ -1222,8 +1585,13 @@ function assemble(
     };
     index++;
   }
+  for (let j = 0; j < contacts.length; j++) {
+    const a = endA[index];
+    branches[index] = contactBranch(index, contacts[j].spec, a, endB[index], islandOfNode[a]);
+    index++;
+  }
 
-  const islands = islandRecords(islandNodes, islandBranches, branches, branchCount - connections.length, diagnostics);
+  const islands = islandRecords(islandNodes, islandBranches, branches, deviceBranchCount, diagnostics);
   const deviceList = new Array<NetlistDevice>(devices.length);
   for (let d = 0; d < devices.length; d++) deviceList[d] = devices[d].parts.device;
   scratch.nodesState = null;
@@ -1249,11 +1617,13 @@ function reassemble(
   previous: Netlist,
   deviceBranchCount: number,
   connections: readonly PlacedConnection[],
+  contacts: readonly PlacedContact[],
   diagnostics: NetlistDiagnostic[],
   scratch: AssembleScratch,
 ): Netlist {
   const nodeCount = previous.nodes.length;
-  const branchCount = deviceBranchCount + connections.length;
+  const contactBase = deviceBranchCount + connections.length;
+  const branchCount = contactBase + contacts.length;
   const endA = (scratch.endA = atLeast(scratch.endA, branchCount));
   const endB = (scratch.endB = atLeast(scratch.endB, branchCount));
   const before = previous.branches;
@@ -1265,6 +1635,12 @@ function reassemble(
   for (let j = 0; j < connections.length; j++) {
     endA[deviceBranchCount + j] = nodeOfTerminal[connections[j].a];
     endB[deviceBranchCount + j] = nodeOfTerminal[connections[j].b];
+  }
+  // Contacts (engine 8) keep their ends: a toggle changes only which connections are open.
+  const previousContactBase = before.length - contacts.length;
+  for (let j = 0; j < contacts.length; j++) {
+    endA[contactBase + j] = before[previousContactBase + j].a;
+    endB[contactBase + j] = before[previousContactBase + j].b;
   }
 
   // Islands, exactly as `assemble` builds them.
@@ -1289,7 +1665,7 @@ function reassemble(
     const island = islandOfNode[endA[i]];
     // The previous branch of the same connection, if it had one (both lists ascend by connection id).
     let old: NetlistBranch | null = null;
-    while (p < before.length) {
+    while (p < previousContactBase) {
       const element = before[p].element;
       const at = element.kind === 'connection' ? element.connection : -1;
       if (at > id) break;
@@ -1313,6 +1689,13 @@ function reassemble(
             island,
             values: result.values,
           };
+  }
+  for (let j = 0; j < contacts.length; j++) {
+    const i = contactBase + j;
+    const old = before[previousContactBase + j];
+    const island = islandOfNode[endA[i]];
+    branches[i] =
+      old.index === i && old.island === island ? old : contactBranch(i, contacts[j].spec, endA[i], endB[i], island);
   }
 
   const islands = islandRecords(islandNodes, islandBranches, branches, deviceBranchCount, diagnostics);

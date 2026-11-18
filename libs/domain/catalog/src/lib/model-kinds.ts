@@ -197,6 +197,44 @@ export const AcSourceParams = z.strictObject({
 });
 export type AcSourceParams = z.infer<typeof AcSourceParams>;
 
+/**
+ * The service's parameters (engine 8, D4, ADR 0021): the pole transformer as a split-phase source
+ * (`AcSourceParams`, the T-equivalent), the service drop from the pole to the meter base's load-side
+ * lugs, its resistance derived from resistivity × length ÷ area with a temperature coefficient (never
+ * a table; taken at the game's ambient, no thermal node in P4), and the utility's neutral grounding to
+ * remote earth at the pole (D5). The drop's reactance is left out (a labelled abstraction, ADR 0021).
+ */
+export const ServiceSplitPhaseParams = z.strictObject({
+  ...AcSourceParams.shape,
+  /** The drop's length (integer mm), pole to meter base: each of its three conductors. */
+  dropLengthMm: Int.min(1).max(100_000),
+  /** Each line conductor's cross-section (m²). */
+  dropLineAreaM2: positive,
+  /** The neutral (messenger) conductor's cross-section (m²). */
+  dropNeutralAreaM2: positive,
+  /** The drop conductors' resistivity at `dropReferenceTemperatureK` (Ω·m). */
+  dropResistivityOhmM: positive,
+  /** Their resistance temperature coefficient α (1/K). */
+  dropTemperatureCoefficientPerK: FiniteNumber.min(0),
+  /** The temperature the resistivity is given at (K). */
+  dropReferenceTemperatureK: positive,
+  /** The transformer neutral's grounding resistance to remote earth at the pole (Ω). */
+  utilityGroundingOhm: positive,
+});
+export type ServiceSplitPhaseParams = z.infer<typeof ServiceSplitPhaseParams>;
+
+/**
+ * A ground rod's parameters (engine 8, D5): its resistance to remote earth, computed offline from its
+ * length, diameter and a stated soil resistivity (Dwight's single-rod formula with the radius, IEEE
+ * Std 142 cited by number; the catalogue entry's source shows the calculation). Sim code never
+ * evaluates the logarithm (D6).
+ */
+export const GroundRodParams = z.strictObject({
+  /** R (Ω): the rod's resistance to remote earth at the entry's stated soil. */
+  earthResistanceOhm: positive,
+});
+export type GroundRodParams = z.infer<typeof GroundRodParams>;
+
 /** SPST switch parameters: none in P2 (a closed switch is an ideal merge, F2.1). Ratings arrive with P4. */
 export const SwitchSpstParams = z.strictObject({});
 export type SwitchSpstParams = z.infer<typeof SwitchSpstParams>;
@@ -664,8 +702,9 @@ export const CONDUCTOR_SIM_KEYS: Readonly<Record<string, StateKeyDef>> = Object.
  * (split-phase and three-phase, headless in P2) and portable generator stub, and F2.5's resistor and
  * heater, and part 2's fuse and thermal-magnetic breaker. P3: F3.1's conductor, whose sim keys are the
  * lead's ten connection keys plus `fused` (`CONDUCTOR_SIM_KEYS`), F3.5's enclosure kinds (`enclosure.box`, `enclosure.panel`), F3.3's
- * twist-on splice, and F3.5 part 2's raceways (`raceway.*`) and terminal blocks (`terminalBlock.*`);
- * adding a kind needs no `schemaVersion` bump.
+ * twist-on splice, and F3.5 part 2's raceways (`raceway.*`) and terminal blocks (`terminalBlock.*`).
+ * P4 engine 8 part 1: the utility service (`service.splitPhase`) and the ground rod
+ * (`electrode.groundRod`), both stateless. Adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -724,6 +763,15 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     keys: CONDUCTOR_SIM_KEYS,
     description:
       'A building-wire conductor (F3.1): cut to a length, landed on terminals with wire.add, one resistance from its material, size, length and temperature plus each end’s contact.',
+  },
+  'electrode.groundRod': {
+    kind: 'electrode.groundRod',
+    placement: 'entity',
+    terminals: ['clamp'],
+    params: GroundRodParams,
+    keys: {},
+    description:
+      'A driven ground rod (engine 8): its acorn clamp is the only terminal, and the rod reaches remote earth through its earth resistance. No state.',
   },
   'enclosure.box': {
     kind: 'enclosure.box',
@@ -873,6 +921,15 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     params: ResistorParams,
     keys: {},
     description: 'A fixed resistor with a power rating; its record says when it is over-rated (no damage model in P2).',
+  },
+  'service.splitPhase': {
+    kind: 'service.splitPhase',
+    placement: 'entity',
+    terminals: ['l1', 'l2', 'n', 'x0'],
+    params: ServiceSplitPhaseParams,
+    keys: {},
+    description:
+      "A utility service (engine 8): the pole transformer's 120/240 V split-phase winding (its T-equivalent), the service drop to the meter base's load-side lugs (l1, l2, n) and the transformer neutral (x0, unreachable at the pole) grounded to remote earth. No state.",
   },
   'splice.twistOn': {
     kind: 'splice.twistOn',

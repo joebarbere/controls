@@ -21,6 +21,12 @@ import { type OracleCircuit, type OracleElement, ORACLE_FREQUENCY_HZ, valueText 
  * - **Voltage sources** are `V<k>` (the EMF, + at the internal node `e<k>`) in series with `RI<k>` (the
  *   internal resistance) to `b`, or, with a series inductance (AC, F2.4), `RI<k>` to `m<k>` and `LI<k>`
  *   on to `b`.
+ * - **A coupled source** (AC, engine 8: the T-equivalent's block) continues its chain through
+ *   `H<k>`, a current-controlled voltage source of R_m times its partner's sense current (`VS<p>`), to
+ *   `h<k>`, then `ED<k>`, a voltage-controlled source of L_m times `v(d<k>)`, to `b`: `F<k>` drives the
+ *   partner's current into `LD<k>`, 1 H from `d<k>` to ground, so `v(d<k>)` is jω I_p. The chain's drop
+ *   is then (R_m + jωL_m) I_p, of either sign, whatever the two sources' own inductances (a `K`
+ *   coupling would need |L_m| ≤ √(L_a L_b)). `d<k>` and the chain's internal nodes take no gmin shunt.
  * - `noopac`: the AC analysis skips the DC operating point, which would be singular for a loop of
  *   inductors and is meaningless for a phasor circuit.
  * - **Printing:** `numdgt=17` prints 17 significant digits, enough to round-trip every double, so the
@@ -53,15 +59,28 @@ function elementLines(ac: boolean, k: number, element: OracleElement): string[] 
       // dc: the EMF; ac: no DC value, the phasor as magnitude (RMS) and angle (degrees).
       const spec = ac ? `DC 0 AC ${emf} ${element.angleDeg}` : `DC ${emf}`;
       const r = valueText(element.internalResistanceOhm);
-      if (element.seriesInductanceH === undefined)
-        return [sense, `V${k} ${e} ${s} ${spec}`, `RI${k} ${e} ${element.b} ${r}`];
-      // A series inductance (F2.4) after the internal resistance, through a second internal node.
-      const m = `m${k}`;
+      const coupling = element.coupling;
+      // The node the source's own impedance ends at: `b`, or the coupled chain's first node.
+      const end = coupling === undefined ? `${element.b}` : `n${k}`;
+      const own =
+        element.seriesInductanceH === undefined
+          ? [sense, `V${k} ${e} ${s} ${spec}`, `RI${k} ${e} ${end} ${r}`]
+          : // A series inductance (F2.4) after the internal resistance, through a second internal node.
+            [
+              sense,
+              `V${k} ${e} ${s} ${spec}`,
+              `RI${k} ${e} m${k} ${r}`,
+              `LI${k} m${k} ${end} ${valueText(element.seriesInductanceH)}`,
+            ];
+      if (coupling === undefined) return own;
+      // Engine 8: the mutual impedance's drop (R_m + jωL_m) I_p, in series after the source's own.
+      const partner = `VS${coupling.partner}`;
       return [
-        sense,
-        `V${k} ${e} ${s} ${spec}`,
-        `RI${k} ${e} ${m} ${r}`,
-        `LI${k} ${m} ${element.b} ${valueText(element.seriesInductanceH)}`,
+        ...own,
+        `H${k} n${k} h${k} ${partner} ${valueText(coupling.mutualResistanceOhm)}`,
+        `ED${k} h${k} ${element.b} d${k} 0 ${valueText(coupling.mutualInductanceH)}`,
+        `F${k} 0 d${k} ${partner} 1`,
+        `LD${k} d${k} 0 1`,
       ];
     }
     case 'isource':

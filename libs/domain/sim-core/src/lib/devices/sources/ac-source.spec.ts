@@ -6,7 +6,8 @@ import {
   boltedFaultCurrentA,
   GENERATOR_STUB_NAMEPLATE,
   ratedImpedance,
-  splitPhaseWinding,
+  splitPhaseLineToNeutralFaultA,
+  splitPhaseTEquivalent,
   threePhaseLineToLineV,
   threePhaseWinding,
   UTILITY_SPLIT_PHASE_MODEL,
@@ -21,7 +22,12 @@ import { deriveStream } from '@controls/world-model';
  * Hand calculations (Z_base = V_LL² / S, |Z| = %Z · Z_base, R = |Z| / √(1 + (X/R)²), X = R · X/R):
  *
  * - split-phase 25 kVA, 2 %, X/R 2, 240 V: Z_base = 2.304 Ω, |Z| = 46.08 mΩ (the full winding),
- *   R = 20.6076 mΩ, X = 41.2152 mΩ; each half 10.3038 + j20.6076 mΩ. Bolted L1–L2: 240 / 0.04608 = 5208.3 A;
+ *   R = 20.6076 mΩ, X = 41.2152 mΩ; each line's T arm Z_full / 2 = 10.3038 + j20.6076 mΩ. Bolted
+ *   L1–L2: 240 / 0.04608 = 5208.3 A. Engine 8's T-equivalent (D4): the half winding
+ *   Z_LN = 1.5 R / 4 + j 1.2 X / 4 = 7.72785 + j12.36456 mΩ, |Z_LN| = 14.58088 mΩ, so a bolted L1–N fault
+ *   draws 120 / 0.01458088 = 8229.96 A (1.5802 × the L1–L2 fault); the neutral arm
+ *   Z_n = Z_LN − Z_full / 2 = −2.57595 − j8.24304 mΩ (the pre-audit's −2.576 − j8.243 mΩ), which the
+ *   coupled block holds as the mutual impedance;
  * - 208Y/120, 150 kVA, 4 %, X/R 3: V_LL = 120 √3 = 207.846 V, Z_base = 0.288 Ω, |Z| = 11.52 mΩ per
  *   phase. Bolted three-phase: 120 / 0.01152 = 10 416.7 A;
  * - 480Y/277, 1000 kVA, 5.75 %, X/R 6: V_LL = 277 √3 = 479.778 V, Z_base = 0.230187 Ω,
@@ -58,18 +64,30 @@ function rms(host: SourceHost, a: [number, string], b: [number, string]): number
 }
 
 describe('AC source impedance from kVA and %Z (hand calculations)', () => {
-  it('the split-phase service: 46.08 mΩ full winding at X/R 2, half to each line', () => {
+  it('the split-phase service: 46.08 mΩ full winding at X/R 2, the T-equivalent arms (engine 8)', () => {
     const p = params(UTILITY_SPLIT);
     expect(p).toStrictEqual({ ratedKva: 25, percentImpedance: 2, xOverR: 2, lineToNeutralV: 120 });
     const z = ratedImpedance(p, 240);
     expect(z.z).toBeCloseTo(0.04608, 12);
     expect(z.r).toBeCloseTo(0.0206076, 7);
     expect(z.x).toBeCloseTo(0.0412152, 7);
-    const half = splitPhaseWinding(p, 60);
-    expect(half.ohms).toBeCloseTo(z.r / 2, 15);
-    expect(half.henries * 2 * Math.PI * 60).toBeCloseTo(z.x / 2, 15);
-    expect(half.magnitudeOhm).toBeCloseTo(0.02304, 12);
+    const t = splitPhaseTEquivalent(p, 60);
+    const omega = 2 * Math.PI * 60;
+    expect(t.line.ohms).toBeCloseTo(z.r / 2, 15);
+    expect(t.line.henries * omega).toBeCloseTo(z.x / 2, 15);
+    expect(t.line.magnitudeOhm).toBeCloseTo(0.02304, 12);
+    // Z_LN = 0.375 R + j0.3 X; Z_n = Z_LN − Z_full / 2 (the pre-audit's 10.30 + j20.61 and −2.576 − j8.243 mΩ).
+    expect(t.lineToNeutral.ohms).toBeCloseTo(0.375 * z.r, 15);
+    expect(t.lineToNeutral.henries * omega).toBeCloseTo(0.3 * z.x, 15);
+    expect(t.lineToNeutral.magnitudeOhm).toBeCloseTo(0.01458088, 8);
+    expect(t.neutral.ohms * 1000).toBeCloseTo(-2.576, 3);
+    expect(t.neutral.henries * omega * 1000).toBeCloseTo(-8.243, 3);
+    // The block's real part [[R_LN, R_n], [R_n, R_LN]] is positive definite: eigenvalues R_h and R_h + 2 R_n.
+    expect(t.lineToNeutral.ohms - t.neutral.ohms).toBeCloseTo(t.line.ohms, 15);
+    expect(t.lineToNeutral.ohms + t.neutral.ohms).toBeGreaterThan(0);
     expect(boltedFaultCurrentA(p, 1)).toBeCloseTo(5208.333, 3);
+    expect(splitPhaseLineToNeutralFaultA(p, 60)).toBeCloseTo(8230.0, 0);
+    expect(splitPhaseLineToNeutralFaultA(p, 60) / boltedFaultCurrentA(p, 1)).toBeCloseTo(1.58, 3);
   });
 
   it('three-phase services: per-phase impedance on the √3 V_LN base, never the 208 or 480 name', () => {
@@ -94,7 +112,7 @@ describe('AC source impedance from kVA and %Z (hand calculations)', () => {
 });
 
 describe('the region frequency reaches the bank (SimDevice.frequencyHz)', () => {
-  it('at 50 Hz a winding gets L = X / (2π · 50), so ωL is the rated X / 2 again', () => {
+  it('at 50 Hz a winding gets L = X_LN / (2π · 50), so ωL is the rated 0.3 X again, coupled to its partner', () => {
     const p = params(UTILITY_SPLIT);
     const { x } = ratedImpedance(p, 240);
     const bank = UTILITY_SPLIT_PHASE_MODEL.bank([
@@ -122,9 +140,13 @@ describe('the region frequency reaches the bank (SimDevice.frequencyHz)', () => 
     });
     expect(bank.acValue?.(0, branch(0, 'l1'), values)).toBe(true);
     expect(bank.acValue?.(0, branch(1, 'l2'), values)).toBe(true);
-    for (const b of [0, 1]) expect(values.seriesHenries[b] * 2 * Math.PI * 50).toBeCloseTo(x / 2, 15);
-    expect(values.seriesHenries[0]).toBeCloseTo(splitPhaseWinding(p, 60).henries * (60 / 50), 15);
+    for (const b of [0, 1]) expect(values.seriesHenries[b] * 2 * Math.PI * 50).toBeCloseTo(0.3 * x, 15);
+    expect(values.seriesHenries[0]).toBeCloseTo(splitPhaseTEquivalent(p, 60).lineToNeutral.henries * (60 / 50), 15);
     expect([values.emfRe[1], values.emfIm[1]]).toStrictEqual([-120, 0]); // L2 at 180°
+    // The T-equivalent's neutral arm, eliminated into a symmetric coupled pair.
+    expect([values.partner[0], values.partner[1]]).toStrictEqual([1, 0]);
+    expect(values.mutualOhms[0]).toBe(values.mutualOhms[1]);
+    expect(values.mutualHenries[0] * 2 * Math.PI * 50).toBeCloseTo(-0.2 * x, 15);
   });
 });
 
@@ -154,6 +176,25 @@ describe('the split-phase service in the engine', () => {
     expect(Math.abs(mag(...i) / expected - 1)).toBeLessThan(1e-5); // the busbar's 17 nΩ is all that differs
     // The current lags: the fault current's angle is the impedance's, X/R = 2 (tan φ = 2).
     expect(-i[1] / i[0]).toBeCloseTo(2, 4);
+  });
+
+  it('a bolted L1–N fault draws V_LN / |Z_LN| within 0.5 % (8230 A, 1.58 × the L1–L2 fault)', () => {
+    // The P4 obligation (simulation caveats): the T-equivalent's line-to-neutral fault, by complex
+    // phasors: 120 / |7.72785 + j12.36456 mΩ| = 8230.0 A against 5208.3 A line to line, ratio 1.580.
+    for (const line of ['l1', 'l2']) {
+      const host = new SourceHost();
+      host.place(UTILITY_SPLIT);
+      host.exec('lead.connect', { ref: BUSBAR, a: { entity: 1, terminal: line }, b: { entity: 1, terminal: 'n' } });
+      const i = mag(...current(host, connection(1)));
+      expect(Math.abs(i / 8230.0 - 1)).toBeLessThan(0.005);
+      expect(Math.abs(i / splitPhaseLineToNeutralFaultA(params(UTILITY_SPLIT), 60) - 1)).toBeLessThan(1e-5);
+      // The other winding carries only what the shared neutral arm couples into nothing: no current.
+      const other = mag(...current(host, winding(1, line === 'l1' ? 'l2' : 'l1')));
+      expect(other).toBeLessThan(1e-6);
+      // The fault current lags by the angle of Z_LN: X/R = 1.2 X / 1.5 R = 1.6.
+      const [re, im] = current(host, connection(1));
+      expect(Math.abs(-im / re - 1.6)).toBeLessThan(1e-4);
+    }
   });
 
   it('an unbalanced load: the neutral carries the phasor sum of the line currents', () => {

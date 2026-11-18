@@ -43,7 +43,12 @@ import { buildSymbolic, endsChecksum, find, grow, type StampProgram } from './sh
  * **Singular is still structural.** With M = [[Y, B], [−Bᵀ, Z]] (Z the sources' series R + jωL),
  * Re(xᴴ M x) = Vᴴ Re(Y) V + Iᴴ R I (the incidence terms cancel to an imaginary part, and an inductor's
  * or capacitor's admittance and a source's jωL are purely imaginary, so they add nothing real). A
- * source with series L must have R > 0 (`ac-values.ts`), so "zero-ohm" still means zero impedance. Re(Y) holds gmin on every node, so the real part is
+ * source with series L must have R > 0 (`ac-values.ts`), so "zero-ohm" still means zero impedance.
+ * Coupled sources (engine 8, the split-phase T-equivalent's eliminated neutral, ADR 0021) make Z a
+ * symmetric block [[R_a + jX_a, R_m + jX_m], [R_m + jX_m, R_b + jX_b]]; Iᴴ Z I is then Iᴴ R I + j Iᴴ X I
+ * with R and X real symmetric, so its real part is Iᴴ R I, which is positive for I ≠ 0 because the
+ * block's real part is required positive definite (`checkCoupling`). A coupled pair has R > 0, so it is
+ * never part of a loop of ideal sources, and the argument below is unchanged. Re(Y) holds gmin on every node, so the real part is
  * positive unless V = 0 and current flows only in zero-ohm sources; M x = 0 then needs a current
  * circulating through those sources: a loop of ideal sources. So M is singular exactly when the
  * island's zero-ohm sources close a loop, as in DC, and the same union-find decides it before any
@@ -90,12 +95,16 @@ const VALUE_Z = 3;
 const VALUE_Y = 4;
 /** −y. */
 const VALUE_MINUS_Y = 5;
+/** A coupled source's mutual impedance R_m + jωL_m towards its partner: `mutualOhms[b]` and `zmIm[b]`. */
+const VALUE_ZM = 6;
 // The only right-hand-side step: a source row's EMF phasor.
 const RHS_SET_EMF = 0;
 
 /** The cache signature's per-branch class: every passive stamp has one pattern; a source another. */
 const CLASS_PASSIVE = 1;
 const CLASS_SOURCE = 2;
+/** A source coupled to a partner (engine 8): its row has one more entry, so another pattern. */
+const CLASS_SOURCE_COUPLED = 3;
 
 /** The solution record's island fields, for `ac` islands (no allocation). */
 function setRecord(result: DcIslandResult, reference: number, unknowns: number): void {
@@ -126,6 +135,8 @@ export class AcSolver {
   /** Each branch's admittance at this solve's ω (passive branches of the current island). */
   private yRe = new Float64Array(0);
   private yIm = new Float64Array(0);
+  /** Each coupled source's mutual reactance ωL_m at this solve's ω. */
+  private zmIm = new Float64Array(0);
   /** The interleaved right-hand side, then solution. */
   private rhs = new Float64Array(0);
   private a: Float64Array = new Float64Array(0);
@@ -145,6 +156,8 @@ export class AcSolver {
   private omegaHz = Number.NaN;
   /** The series resistances `stamp` is stamping, read by `add` through a branch index. */
   private stampOhms: Float64Array = new Float64Array(0);
+  /** The mutual resistances `stamp` is stamping (coupled sources), likewise. */
+  private stampMutualOhms: Float64Array = new Float64Array(0);
   /** The sparse matrix's values (interleaved), aligned with the current pattern. */
   private sparseValues = new Float64Array(0);
   private signature = new Uint8Array(0);
@@ -190,6 +203,7 @@ export class AcSolver {
       this.signature = new Uint8Array(netlist.branches.length);
       this.yRe = new Float64Array(netlist.branches.length);
       this.yIm = new Float64Array(netlist.branches.length);
+      this.zmIm = new Float64Array(netlist.branches.length);
     }
     for (let ii = 0; ii < netlist.islands.length; ii++) {
       const island = netlist.islands[ii];
@@ -220,6 +234,10 @@ export class AcSolver {
         // A source's series reactance ωL at this solve's ω (+0 for a purely resistive source).
         this.yRe[index] = 0;
         this.yIm[index] = omega * values.seriesHenries[index];
+        if (values.partner[index] >= 0) {
+          checkCoupling(netlist, values, index);
+          this.zmIm[index] = omega * values.mutualHenries[index];
+        }
       } else {
         if (stamp === AC_STAMP_VSOURCE) throw new Error(`AcSolver: resistor branch ${index} stamped as a vsource`);
         branchUnknown[index] = -1;
@@ -333,7 +351,13 @@ export class AcSolver {
     const signature = this.signature;
     const count = island.branches.length;
     for (let i = 0; i < count; i++) {
-      signature[i] = values.stamps[island.branches[i]] === AC_STAMP_VSOURCE ? CLASS_SOURCE : CLASS_PASSIVE;
+      const index = island.branches[i];
+      signature[i] =
+        values.stamps[index] !== AC_STAMP_VSOURCE
+          ? CLASS_PASSIVE
+          : values.partner[index] >= 0
+            ? CLASS_SOURCE_COUPLED
+            : CLASS_SOURCE;
     }
     const ends = endsChecksum(netlist, island);
     const cached = this.cache.find(netlist.topologyHash, island.index, signature, count);
@@ -398,6 +422,9 @@ export class AcSolver {
       else if (code === VALUE_Z) {
         out[s] += values.ohms[branches[c]];
         out[s + 1] += yIm[branches[c]];
+      } else if (code === VALUE_ZM) {
+        out[s] += values.mutualOhms[branches[c]];
+        out[s + 1] += this.zmIm[branches[c]];
       } else if (code === VALUE_Y) {
         out[s] += yRe[branches[c]];
         out[s + 1] += yIm[branches[c]];
@@ -432,6 +459,9 @@ export class AcSolver {
       else if (code === VALUE_Z) {
         a[at] += this.stampOhms[branch];
         a[at + 1] += this.yIm[branch];
+      } else if (code === VALUE_ZM) {
+        a[at] += this.stampMutualOhms[branch];
+        a[at + 1] += this.zmIm[branch];
       } else if (code === VALUE_Y) {
         a[at] += this.yRe[branch];
         a[at + 1] += this.yIm[branch];
@@ -479,6 +509,7 @@ export class AcSolver {
     const nodeUnknown = this.nodeUnknown;
     const branchUnknown = this.branchUnknown;
     this.stampOhms = values.ohms;
+    this.stampMutualOhms = values.mutualOhms;
     for (let ni = 0; ni < island.nodes.length; ni++) {
       const node = island.nodes[ni];
       const i = nodeUnknown[node];
@@ -500,6 +531,9 @@ export class AcSolver {
           if (ia >= 0) this.add(k, ia, VALUE_MINUS_ONE, index);
         }
         this.add(k, k, VALUE_Z, index);
+        // A coupled source (engine 8): its row also carries Z_m times its partner's current.
+        const partner = values.partner[index];
+        if (partner >= 0) this.add(k, branchUnknown[partner], VALUE_ZM, index);
         this.rhsEmf(k, values, index);
       } else if (branch.a !== branch.b) {
         if (ia >= 0) this.add(ia, ia, VALUE_Y, index);
@@ -544,6 +578,37 @@ export class AcSolver {
       solution.branches[2 * index] = 0;
       solution.branches[2 * index + 1] = 0;
     }
+  }
+}
+
+/**
+ * Checks a coupled source's pairing (a programming error in a device model if it fails, so it throws):
+ * its partner is a `vsource` of the same island coupled back to it with the same mutual impedance, and
+ * the pair's real block [[R_a, R_m], [R_m, R_b]] is positive definite. Cold: once per coupled source per
+ * solve, a few comparisons.
+ */
+function checkCoupling(netlist: Netlist, values: AcBranchValues, index: number): void {
+  const partner = values.partner[index];
+  const branch = netlist.branches[index];
+  const other = partner < netlist.branches.length ? netlist.branches[partner] : undefined;
+  const ra = values.ohms[index];
+  const rb = values.ohms[partner];
+  const rm = values.mutualOhms[index];
+  if (
+    other === undefined ||
+    other.kind !== 'vsource' ||
+    other.island !== branch.island ||
+    values.stamps[partner] !== AC_STAMP_VSOURCE ||
+    values.partner[partner] !== index ||
+    !Object.is(values.mutualOhms[partner], rm) ||
+    !Object.is(values.mutualHenries[partner], values.mutualHenries[index])
+  ) {
+    throw new Error(`AcSolver: vsource branch ${index}'s coupling to branch ${partner} isn't a symmetric pair`);
+  }
+  if (!(ra > 0 && rb > 0 && ra * rb > rm * rm)) {
+    throw new Error(
+      `AcSolver: coupled sources ${index} and ${partner} need a positive definite resistance block (R ${ra}, ${rb}; R_m ${rm})`,
+    );
   }
 }
 

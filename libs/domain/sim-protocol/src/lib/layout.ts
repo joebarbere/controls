@@ -11,7 +11,7 @@
  * The protocol version (ADR 0011 §12). Any change to the layout, the island encoding, the nominal
  * bands, a device output schema, the message union or the descriptor bumps it, even an additive one.
  */
-export const SIM_PROTOCOL_VERSION = 7; // 2: `error.reason` (F2.3b review); 3: F2.4's device records registered; 4: F2.5's (nothing hashed changed); 5: F2.6's nominal bands (island band bytes are hashed); 6: F3.6 part 1, the `state` export carries every connection's sim bag; 7: F3.6 part 3, connection records, the descriptor's connections and the connection events (ADR 0011 amendment)
+export const SIM_PROTOCOL_VERSION = 8; // 2: `error.reason` (F2.3b review); 3: F2.4's device records registered; 4: F2.5's (nothing hashed changed); 5: F2.6's nominal bands (island band bytes are hashed); 6: F3.6 part 1, the `state` export carries every connection's sim bag; 7: F3.6 part 3, connection records, the descriptor's connections and the connection events (ADR 0011 amendment); 8 (P4, provisional until v0.5.0, ADR 0019): engine 8 part 1 adds the descriptor's `contact` element refs, remote earth (entity 0, `earth`) as a node member and contact `branch` watch targets; protocol 8's records and events follow in PR 11, re-pinned in place
 
 /** The buffer header's magic: the bytes `CSIM` read as a little-endian `u32` (F2.3b writes it). */
 export const SNAPSHOT_MAGIC = 0x4d495343;

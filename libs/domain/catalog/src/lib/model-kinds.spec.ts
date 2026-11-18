@@ -14,11 +14,12 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds and F3.3’s twist-on splice, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice and engine 8’s service and ground rod, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.thermalMagnetic',
       'conductor',
+      'electrode.groundRod',
       'enclosure.box',
       'enclosure.panel',
       'fuse',
@@ -31,6 +32,7 @@ describe('MODEL_KINDS', () => {
       'raceway.conduitElbow',
       'raceway.duct',
       'resistor',
+      'service.splitPhase',
       'splice.twistOn',
       'supply.bench',
       'supply.dinPsu',
@@ -63,6 +65,9 @@ describe('MODEL_KINDS', () => {
       'enclosure.panel': { openEntries: 'commanded number 0' },
       fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
+      // Engine 8 (P4 PR 9): the service and the ground rod hold no state.
+      'electrode.groundRod': {},
+      'service.splitPhase': {},
       heater: {},
       // F3.1: the conductor kind shares the lead's ten connection sim keys (ADR 0015, ADR 0016), plus the
       // sticky `fused` (an eleventh, added while world v3 is provisional: a melted conductor stays open).

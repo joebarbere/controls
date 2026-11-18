@@ -19,10 +19,10 @@ import { JOURNEYMAN_WORKSHOP_ARGS, workshopWorldAt } from './testing/workshop';
  * lamp. `scenarios/lamp-circuit.ts` builds it as the mouse and the keyboard would (placements,
  * staples and the bore snapped, free conductors auto-routed), `scenarios/lamp-circuit.console` spells it
  * out; both log exactly the same entries and reach these hashes. Its save is the frozen fixture
- * `fixtures/v4/ctrl/lamp-circuit-engine-7-catalog-3.ctrl`, rebuilt by `sources.spec.ts`:
+ * `fixtures/v4/ctrl/lamp-circuit-engine-8-catalog-3.ctrl`, rebuilt by `sources.spec.ts`:
  *
  *   pnpm sim run apps/sim-cli/scenarios/lamp-circuit.console --world content/levels/workshop.json \
- *     --difficulty journeyman --save libs/domain/save-format/fixtures/v4/ctrl/lamp-circuit-engine-7-catalog-3.ctrl
+ *     --difficulty journeyman --save libs/domain/save-format/fixtures/v4/ctrl/lamp-circuit-engine-8-catalog-3.ctrl
  *
  * **The cross-runtime hook (PR B, `apps/game-e2e/src/wiring-acceptance.spec.ts` and `apps/desktop-e2e`):**
  * a New sandbox on the workshop at Journeyman with seed 0 that logs these entries (the console lines, or
@@ -218,13 +218,14 @@ describe('the lamp circuit (P3 phase acceptance, D12)', () => {
     // L ∝ V^3.4 (Fink and Beaty); the model is within 4 % of it near rated voltage.
     expect(relative(lit['lightOutputRel'] as number, Math.pow(v / 120, 3.4))).toBeLessThan(0.04);
     expect(lit['lightOutputRel']).toBeGreaterThan(0.99);
-    // The source by hand: the half winding's r = 10.304 mΩ, x = 20.608 mΩ (25 kVA, 2 %, X/R 2, half of
-    // 0.02 × 240² / 25 000 = 46.08 mΩ). The lamp is resistive, so its current phasor lies along its
-    // voltage; the terminal voltage is 120 V − I (r + jx).
+    // The source by hand (engine 8's T-equivalent, ADR 0021): a lone line-to-neutral load sees the half
+    // winding's own Z_LN, r = 0.375 R = 7.7279 mΩ and x = 0.3 X = 12.3646 mΩ of the full winding's
+    // R + jX = 20.6076 + j41.2152 mΩ (25 kVA, 2 %, X/R 2: 0.02 × 240² / 25 000 = 46.08 mΩ). The lamp is
+    // resistive, so its current phasor lies along its voltage; the terminal voltage is 120 V − I (r + jx).
     const unit = { re: across.re / v, im: across.im / v };
     const i = { re: amps * unit.re, im: amps * unit.im };
-    const r = 0.010304;
-    const x = 0.020608;
+    const r = 0.0077279;
+    const x = 0.0123646;
     const terminal = { re: 120 - (i.re * r - i.im * x), im: -(i.re * x + i.im * r) };
     const handTerminal = Math.hypot(terminal.re, terminal.im);
     const supply = game.probe(`${ids.supply}:l1`, `${ids.supply}:n`);

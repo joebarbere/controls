@@ -1,7 +1,7 @@
 import { ReplayEntry, ReplayLog, World } from '@controls/save-format';
 import * as z from 'zod';
 import { isSharedArrayBuffer } from './buffer';
-import { type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
+import { ElementRefSchema, type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
 import { SIM_EVENT_KINDS, type SimEvent } from './events';
 import { SimStateExport } from './materialise';
 
@@ -39,10 +39,8 @@ export type SimStart = z.infer<typeof SimStart>;
 export const WatchTarget = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('branch'),
-    element: z.discriminatedUnion('kind', [
-      z.strictObject({ kind: z.literal('entity'), entity: z.int().min(1), part: z.string().min(1).max(32) }),
-      z.strictObject({ kind: z.literal('connection'), connection: z.int().min(1) }),
-    ]),
+    /** A branch's element (protocol 8: a relation contact too, ADR 0019). */
+    element: ElementRefSchema,
   }),
   z.strictObject({ kind: z.literal('device'), entity: z.int().min(1), field: z.string().min(1).max(64) }),
 ]);

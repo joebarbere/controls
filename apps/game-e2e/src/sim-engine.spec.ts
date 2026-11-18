@@ -116,8 +116,8 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
  * F2.4 part 2: the split-phase service's series-inductance phasors across runtimes.
  * `apps/sim-cli/scenarios/mains.console` must reach the hashes `apps/sim-cli/src/mains.spec.ts` pins.
  */
-const MAINS_HASH = '24ffa339c39037e6952df563dd7b39a1195fd9541198ab6f86799bdf1ada8853';
-const MAINS_SNAPSHOT_HASH = '898649e509950d88f3194754ead58a4601773295b7e634575120ae77b9483e68';
+const MAINS_HASH = '1763d6545ea691f46973df1c6ee478a6a33ab6ed844e1c1a1cdc629cea0a321f';
+const MAINS_SNAPSHOT_HASH = '13164c91359bed71f185387929162d6db3b8bd9d84fd78278c11fbc198185a9b';
 
 test('the mains scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
   await page.goto('/?e2e=1&renderer=webgl2');

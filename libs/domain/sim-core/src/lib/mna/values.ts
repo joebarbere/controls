@@ -1,3 +1,4 @@
+import { describeElement } from '../netlist/hash';
 import { ownModel } from '../netlist/models';
 import type { Netlist, NetlistBranch } from '../netlist/types';
 
@@ -165,6 +166,8 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  *
  * - `lead`: its `resistanceOhm` (resistivity × length ÷ area, F2.1);
  * - `conductor` (F3.1): its static `resistanceOhm`, R_cond at T₀ plus both ends' contact resistance;
+ * - `contact` (engine 8): a relation contact's `resistanceOhm` (a mount contact's, a plug pin's, an
+ *   earth link's), from the catalogue entry; no thermal node (ADR 0021);
  * - `battery`: its full-charge open-circuit EMF (`openCircuitVoltageFullV`) behind `internalResistanceOhm`:
  *   a new battery (state of charge 1, its kind's initial value) for callers that run no engine model.
  *   The engine's battery model (F2.4) always sets the EMF from the live state of charge instead. The
@@ -178,6 +181,7 @@ export type DcDefaultValue = (branch: NetlistBranch, values: DcBranchValues) => 
  */
 export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Object.freeze({
   conductor: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
+  contact: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   lead: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   resistor: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
   heater: (branch, values) => values.resistorFrom(branch.index, branch.values, 'resistanceOhm'),
@@ -194,6 +198,7 @@ export const DC_DEFAULT_VALUES: Readonly<Record<string, DcDefaultValue>> = Objec
  */
 export const RESISTOR_DEFAULT_MODELS: ReadonlySet<string> = new Set([
   'conductor',
+  'contact',
   'lead',
   'resistor',
   'heater',
@@ -223,10 +228,7 @@ export function dcBranchValues(netlist: Netlist, hook?: DcValueHook, out?: DcBra
       }
       const fallback = ownModel(DC_DEFAULT_VALUES, branch.model);
       if (fallback === undefined) {
-        const what =
-          branch.element.kind === 'entity'
-            ? `entity ${branch.element.entity} ${branch.element.part}`
-            : `connection ${branch.element.connection}`;
+        const what = describeElement(branch.element);
         throw new Error(`no DC value for branch ${index} (${branch.model}, ${what}): its device model must supply one`);
       }
       fallback(branch, values);

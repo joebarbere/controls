@@ -19,7 +19,7 @@ import { compileNetlist } from './compile';
 import { computeTopologyHash, elementKey, TOPOLOGY_ENCODING_HEADER, topologyBytes } from './hash';
 import type { NetlistBranch, NetlistNode } from './types';
 import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
-import { ENGINE_TEST_CATALOG, GENERATOR } from '../../testing/engine';
+import { ENGINE_TEST_CATALOG, GENERATOR, ROD, SERVICE } from '../../testing/engine';
 import { MODEL_KINDS } from '@controls/catalog';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
@@ -68,6 +68,8 @@ const MODEL_KIND_TOPOLOGY = {
   racewayConduitConnector: 'bda31295bc822ee80a3c930f17c1c5e39077aab4957ab864102b90d1ca2f2d44',
   terminalBlockFeedThrough: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
   terminalBlockGround: '4d3eebc10ede9b149d9e60ef2b58c876f63abf731e8bc050599ade2ce1d75ec6',
+  serviceSplitPhase: '67bb50ca6f36ca6d398ed554f073d60e482fce65af6c9a5e289189f07e9ef872',
+  electrodeGroundRod: '0ee4b43a535e223ef7651250bd17b7cbff249c758bf45703b9cf0d8ec719576a',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -98,6 +100,8 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   racewayConduitConnector: 'raceway.conduitConnector',
   terminalBlockFeedThrough: 'terminalBlock.feedThrough',
   terminalBlockGround: 'terminalBlock.ground',
+  serviceSplitPhase: 'service.splitPhase',
+  electrodeGroundRod: 'electrode.groundRod',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -223,6 +227,10 @@ describe('topologyHash', () => {
       utilityThreePhase: one(UTILITY_208),
       // The generator stub has no built-in entry (not placeable): pinned through the test catalogue's.
       generatorPortable: one(GENERATOR, undefined, ENGINE_TEST_CATALOG),
+      // Engine 8 (P4 PR 9): the service (with its earth link, so the earth node) and a lone ground rod,
+      // through the test catalogue's entries until the content PRs ship real ones.
+      serviceSplitPhase: one(SERVICE, undefined, ENGINE_TEST_CATALOG),
+      electrodeGroundRod: one(ROD, undefined, ENGINE_TEST_CATALOG),
       resistor: one(RESISTOR_10R),
       heater: one(HEATER),
       fuse: one(FUSE_1A),
@@ -312,5 +320,6 @@ describe('topologyHash', () => {
   it('names elements by entity and part, or by connection', () => {
     expect(elementKey({ kind: 'entity', entity: 12, part: 'cell' })).toBe('e12.cell');
     expect(elementKey({ kind: 'connection', connection: 7 })).toBe('c7');
+    expect(elementKey({ kind: 'contact', entity: 5, relation: 'mount', contact: 'line1' })).toBe('e5:mount.line1');
   });
 });

@@ -122,13 +122,21 @@ export function acBranchRounding(circuit: AcCircuit, solution: DcSolution, branc
   return z > 0 ? (16 * EPS * (volts + cabs(emf(circuit.values, branch)))) / z : 0;
 }
 
-/** |Va| + |Vb| + |Z I| + |E|: a source row's terms. */
+/** A coupled source's mutual impedance R_m + jωL_m towards its partner (engine 8), or null. */
+export function mutualImpedance({ values, frequencyHz }: AcCircuit, branch: number): Phasor | null {
+  if (values.partner[branch] < 0) return null;
+  return [values.mutualOhms[branch], angularFrequency(frequencyHz) * values.mutualHenries[branch]];
+}
+
+/** |Va| + |Vb| + |Z I| + |Z_m I_p| + |E|: a source row's terms. */
 function sourceRowTerm(circuit: AcCircuit, solution: DcSolution, index: number): number {
   const { a, b } = circuit.netlist.branches[index];
+  const zm = mutualImpedance(circuit, index);
   return (
     cabs(phasorV(solution, a)) +
     cabs(phasorV(solution, b)) +
     cabs(sourceImpedance(circuit, index)) * cabs(phasorI(solution, index)) +
+    (zm === null ? 0 : cabs(zm) * cabs(phasorI(solution, circuit.values.partner[index]))) +
     cabs(emf(circuit.values, index))
   );
 }
@@ -210,7 +218,7 @@ function sourceRowBound(circuit: AcCircuit, solution: DcSolution, index: number,
 const sources = ({ netlist }: AcCircuit, island: NetlistIsland) =>
   island.branches.filter((index) => netlist.branches[index].kind === 'vsource');
 
-/** The source rows Vb − Va + Z I = E: the worst |residual| ÷ its bound (≤ 1 holds). */
+/** The source rows Vb − Va + Z I (+ Z_m I_p, coupled) = E: the worst |residual| ÷ its bound (≤ 1 holds). */
 export function acSourceRows(circuit: AcCircuit, solution: DcSolution, island: NetlistIsland): number {
   const { netlist, values } = circuit;
   const rows = sources(circuit, island);
@@ -221,6 +229,8 @@ export function acSourceRows(circuit: AcCircuit, solution: DcSolution, island: N
     const acc = new ComplexAccumulator();
     if (a !== b) acc.addScaledDifference([1, 0], phasorV(solution, b), phasorV(solution, a));
     acc.addProduct(sourceImpedance(circuit, index), phasorI(solution, index));
+    const zm = mutualImpedance(circuit, index);
+    if (zm !== null) acc.addProduct(zm, phasorI(solution, values.partner[index]));
     const e = emf(values, index);
     acc.add([-e[0], -e[1]]);
     worst = Math.max(worst, cabs(acc.value) / sourceRowBound(circuit, solution, index, largest));
@@ -315,6 +325,15 @@ export function acPower(
         real.scale += apparent + loss;
         reactive.delivered += s[1];
         reactive.scale += apparent;
+        // A coupled source (engine 8): its share of the mutual block, conj(I) Z_m I_p.
+        const zm = mutualImpedance(circuit, index);
+        if (zm !== null) {
+          const m = cmul(conj(i), cmul(zm, phasorI(solution, values.partner[index])));
+          real.absorbed += m[0];
+          real.scale += Math.abs(m[0]);
+          reactive.absorbed += m[1];
+          reactive.scale += Math.abs(m[1]);
+        }
         break;
       }
     }

@@ -47,6 +47,12 @@ const PINNED: Readonly<Record<number, string>> = {
   // (`terminationOverheat`, `insulationDamaged`; `SimEvent.connection` and `end`). The contract data
   // gained the connection-output module and the connection event kinds with it (new data, new version).
   7: 'c2150b34e70503360ba6073983dc37c0dd988de12ff9624982b2b41d8fc8b884',
+  // 8 (P4, **provisional until v0.5.0**, ADR 0019 "Protocol 8"): engine 8 part 1's descriptor (a
+  // `contact` element ref, remote earth as entity 0 / `earth`) and the watch target's contact ref. The
+  // rest of protocol 8 (the new kinds' records, the connection degradation fields, the events) lands in
+  // P4 PR 11, which **replaces this pin in place** (a provisional version's rule, ADR 0019 "Versions");
+  // from v0.5.0 the pin is frozen like every other.
+  8: '5eb42d62d86c5544a9c94ebfb105c469d3de031de639c52dff4bf3ea1a2d6b15',
 };
 
 /** The contract's data, as canonical JSON (sorted keys). Functions and Zod internals are left out. */

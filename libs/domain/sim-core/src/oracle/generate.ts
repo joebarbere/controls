@@ -6,6 +6,7 @@ import {
   type OracleElementKind,
   type OracleValue,
   PHASOR_ANGLES,
+  valueNumber,
 } from './circuit';
 
 /*
@@ -287,7 +288,9 @@ export function generateOracleCircuit(domain: OracleDomain, seed: number, index:
   shuffle(rng, elements);
   // AC: about half the sources get a series inductance (F2.4's source reactance), drawn from a stream
   // of their own, so the circuit stream is untouched and each existing circuit only gains `LI` lines.
-  const withL = domain === 'ac' ? sourceInductances(seed, index, elements) : elements;
+  // Then (engine 8) about half the circuits with two or more sources couple their first two, again
+  // from a stream of their own, so other circuits' decks are unchanged.
+  const withL = domain === 'ac' ? coupledSources(seed, index, sourceInductances(seed, index, elements)) : elements;
   return {
     name: oracleCircuitName(domain, index),
     domain,
@@ -301,6 +304,38 @@ export function generateOracleCircuit(domain: OracleDomain, seed: number, index:
 /** The stream key of an AC circuit's source inductances: its circuit key plus `:source-l`. */
 export function sourceInductanceStreamKey(index: number): string {
   return `${oracleStreamKey('ac', index)}:source-l`;
+}
+
+/** The stream key of an AC circuit's source coupling (engine 8): its circuit key plus `:coupled`. */
+export function couplingStreamKey(index: number): string {
+  return `${oracleStreamKey('ac', index)}:coupled`;
+}
+
+/**
+ * Couples the first two voltage sources of `elements` (in element order) in about half the circuits
+ * that have two (engine 8, ADR 0021: the split-phase T-equivalent's coupled block): a mutual resistance
+ * of either sign one decade below the smaller internal resistance's (`m × 10^(e − 1)`, E12 m, so its
+ * magnitude is below both and the real block is positive definite) and a mutual inductance of either
+ * sign in the source-inductance range. From a stream of its own, so the other draws are unchanged.
+ */
+function coupledSources(seed: number, index: number, elements: readonly OracleElement[]): OracleElement[] {
+  const sources = elements.flatMap((element, k) => (element.kind === 'vsource' ? [k] : []));
+  if (sources.length < 2) return [...elements];
+  const rng = deriveStream(seed, couplingStreamKey(index));
+  if (rng.nextInt(0, 1) === 0) return [...elements];
+  const [p, q] = sources;
+  const a = elements[p] as Extract<OracleElement, { kind: 'vsource' }>;
+  const b = elements[q] as Extract<OracleElement, { kind: 'vsource' }>;
+  const smaller = valueNumber(a.internalResistanceOhm) <= valueNumber(b.internalResistanceOhm) ? a : b;
+  const sign = () => (rng.nextInt(0, 1) === 0 ? 1 : -1);
+  const r = drawValue(rng, { minExponent: 0, maxExponent: 0 });
+  const mutualResistanceOhm = { mantissa: sign() * r.mantissa, exponent: smaller.internalResistanceOhm.exponent - 1 };
+  const l = drawValue(rng, ORACLE_RANGES.sourceInductanceH);
+  const mutualInductanceH = { mantissa: sign() * l.mantissa, exponent: l.exponent };
+  const out = [...elements];
+  out[p] = { ...a, coupling: { partner: q, mutualResistanceOhm, mutualInductanceH } };
+  out[q] = { ...b, coupling: { partner: p, mutualResistanceOhm, mutualInductanceH } };
+  return out;
 }
 
 /** Gives about half the voltage sources of `elements`, in order, a series inductance from their own stream. */

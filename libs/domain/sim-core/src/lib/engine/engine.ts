@@ -35,6 +35,8 @@ import { AcSolver } from '../mna/ac';
 import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue } from '../mna/ac-values';
 import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue, RESISTOR_DEFAULT_MODELS } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
+import { elementKey as netlistElementKey } from '../netlist/hash';
+import { EARTH_ENTITY } from '../netlist/types';
 import { BUILTIN_NETLIST_MODELS, type NetlistModels, ownModel } from '../netlist/models';
 import type {
   ElementRef,
@@ -279,9 +281,8 @@ const KIND_CODES: Readonly<Record<IslandKind, number>> = {
 };
 
 const terminalKey = (ref: TerminalRef): string => `${ref.entity}:${ref.terminal}`;
-/** An element as `netlist.dump` names it: `e3.filament`, `c2`. */
-const elementKey = (ref: ElementRef): string =>
-  ref.kind === 'entity' ? `e${ref.entity}.${ref.part}` : `c${ref.connection}`;
+/** An element as `netlist.dump` names it: `e3.filament`, `c2`, `e5:mount.line1` (`hash.ts`'s `elementKey`). */
+const elementKey = (ref: ElementRef): string => netlistElementKey(ref);
 
 /** The headless sim engine. Start it with {@link SimEngine.start}. */
 export class SimEngine {
@@ -1340,6 +1341,8 @@ export class SimEngine {
     this.islandEntities = netlist.islands.map((island) => {
       const members = new Set<number>();
       for (const node of island.nodes) for (const member of netlist.nodes[node].members) members.add(member.entity);
+      // Remote earth (entity 0, engine 8) is a node, never an entity of the world.
+      members.delete(EARTH_ENTITY);
       return Object.freeze([...members].sort((x, y) => x - y));
     });
     this.nodeIslands = Int32Array.from(netlist.nodes, (node) => node.island);

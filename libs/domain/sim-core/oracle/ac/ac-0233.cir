@@ -22,10 +22,18 @@ VS5 4 s5 0
 L5 s5 2 12e-3
 VS6 0 s6 0
 V6 e6 s6 DC 0 AC 82e-1 180
-RI6 e6 6 47e-3
+RI6 e6 n6 47e-3
+H6 n6 h6 VS7 39e-4
+ED6 h6 6 d6 0 -27e-7
+F6 0 d6 VS7 1
+LD6 d6 0 1
 VS7 3 s7 0
 V7 e7 s7 DC 0 AC 56e0 -120
-RI7 e7 1 10e-3
+RI7 e7 n7 10e-3
+H7 n7 h7 VS6 39e-4
+ED7 h7 1 d7 0 -27e-7
+F7 0 d7 VS6 1
+LD7 d7 0 1
 VS8 4 s8 0
 C8 s8 5 68e-4
 VS9 1 s9 0

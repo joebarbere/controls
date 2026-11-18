@@ -22,13 +22,13 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v4/ctrl/sources-engine-7-catalog-3.ctrl` is its save (world v4,
+ * Node's V8 and Chromium's). `fixtures/v4/ctrl/sources-engine-8-catalog-3.ctrl` is its save (world v4,
  * engine 7, catalogue 3; its world v3 twin under `fixtures/v3/ctrl` is the catalogue v3 PR's, kept; the
  * `-engine-7-catalog-2` save is 0.4.0's, and the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
  * `-engine-4`, `-engine-5` and `-engine-6` are earlier engines' or catalogues', `engine-changed` too), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v4/ctrl/sources-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/sources-engine-8-catalog-3.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
@@ -235,26 +235,23 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
       .filter((f) => f.endsWith('-catalog-3.ctrl'))
       .map((f) => [f]),
   )(
-    'the world v3 %s (never shipped) migrates to its world v4 twin and loads as continued while its engine is current (ADR 0019, ADR 0020)',
+    'the world v3 %s (engine 7, never shipped) migrates to a world v4 save of the same log and loads as engine-changed (ADR 0019, ADR 0021)',
     (name) => {
       // Written by the catalogue v3 PR (P4 PR 6) before world v4: kept, never regenerated, like the
-      // engine-6 catalogue-2 saves. Migrating its world and its log gives exactly what this build writes
-      // from the same scenario (the v3 → v4 step commutes with replay), so it verifies as `continued`
-      // under engine 7; from engine 8 (PR 9) it loads as `engine-changed`, a regression test that such a
-      // save is never refused.
-      const [v3, v4] = [ctrlFixtureDir(3), CTRL_FIXTURE_DIR].map((dir) => {
-        const read = readCtrl(new Uint8Array(readFileSync(join(dir, name))));
-        if (!read.ok) throw new Error(read.error.message);
-        return read.value;
-      });
-      expect([v3.fromVersion, v4.fromVersion]).toStrictEqual([3, 4]);
-      expect({ world: v3.world, replayLog: v3.replayLog }).toStrictEqual({ world: v4.world, replayLog: v4.replayLog });
+      // engine-6 catalogue-2 saves. It loaded `continued` under engine 7; since engine 8 (PR 9) it loads
+      // as `engine-changed`, a regression test that such a save is never refused. Its log's entries are
+      // the ones this build's engine-8 fixture of the same scenario holds (no command reads sim state);
+      // its world, and a rebased log's initial world, carry engine 7's sim state.
+      const v3 = readCtrl(new Uint8Array(readFileSync(join(ctrlFixtureDir(3), name))));
+      const scenario = name.replace(ENGINE_FIXTURE_PATTERN, '');
+      const v4 = readCtrl(new Uint8Array(readFileSync(currentFixture(scenario))));
+      if (!v3.ok || !v4.ok) throw new Error('unreadable fixture');
+      expect([v3.value.fromVersion, v4.value.fromVersion]).toStrictEqual([3, 4]);
+      expect(v3.value.replayLog?.entries).toStrictEqual(v4.value.replayLog?.entries);
       const loaded = loadGame(new Uint8Array(readFileSync(join(ctrlFixtureDir(3), name))));
       if (!loaded.ok) throw new Error(loaded.error.message);
       expect([loaded.manifest.simEngineVersion, loaded.manifest.catalogVersion]).toStrictEqual([7, 3]);
-      expect(loaded.replay).toStrictEqual(
-        SIM_ENGINE_VERSION === 7 ? { status: 'continued' } : expect.objectContaining({ reason: 'engine-changed' }),
-      );
+      expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
     },
   );
 

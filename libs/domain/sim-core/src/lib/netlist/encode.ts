@@ -1,4 +1,4 @@
-import { ELEMENT_KIND_CODES, SOURCE_CODES, TOPOLOGY_ENCODING_HEADER } from './hash';
+import { ELEMENT_KIND_CODES, RELATION_CODES, SOURCE_CODES, TOPOLOGY_ENCODING_HEADER } from './hash';
 import type { NetlistBranch, NetlistNode } from './types';
 
 /*
@@ -14,8 +14,8 @@ import type { NetlistBranch, NetlistNode } from './types';
  * arrays), which a load pays.
  */
 
-/** The most bytes one member or one branch can take: two strings of at most 255 code units and some varints. */
-const MAX_ITEM_BYTES = 2 * 256 + 4 * 8 + 3;
+/** The most bytes one member or one branch can take: two strings of at most 255 code units, some varints and bytes. */
+const MAX_ITEM_BYTES = 2 * 256 + 4 * 8 + 4;
 
 /**
  * The codes of the kinds every netlist holds, read once: a keyed load from the code tables by a string
@@ -80,9 +80,15 @@ export class TopologyWriter {
         this.buffer[this.length++] = 0;
         this.varint(element.entity);
         this.ascii(element.part);
-      } else {
+      } else if (element.kind === 'connection') {
         this.buffer[this.length++] = 1;
         this.varint(element.connection);
+      } else {
+        // A relation contact (engine 8): tag 2, the dependent entity, the relation code, the contact id.
+        this.buffer[this.length++] = 2;
+        this.varint(element.entity);
+        this.buffer[this.length++] = RELATION_CODES[element.relation];
+        this.ascii(element.contact);
       }
       const kind = branch.kind;
       this.buffer[this.length++] =

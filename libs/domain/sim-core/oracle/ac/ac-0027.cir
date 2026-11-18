@@ -12,7 +12,11 @@ RG8 8 0 1000000000000
 VS0 0 s0 0
 V0 e0 s0 DC 0 AC 82e1 0
 RI0 e0 m0 47e-3
-LI0 m0 2 68e-5
+LI0 m0 n0 68e-5
+H0 n0 h0 VS6 -10e-4
+ED0 h0 2 d0 0 -12e-7
+F0 0 d0 VS6 1
+LD0 d0 0 1
 VS1 1 s1 0
 C1 s1 6 18e-6
 VS2 5 s2 0
@@ -25,7 +29,11 @@ VS5 0 s5 0
 R5 s5 5 15e3
 VS6 1 s6 0
 V6 e6 s6 DC 0 AC 82e1 0
-RI6 e6 8 39e-3
+RI6 e6 n6 39e-3
+H6 n6 h6 VS0 -10e-4
+ED6 h6 8 d6 0 -12e-7
+F6 0 d6 VS0 1
+LD6 d6 0 1
 VS7 8 s7 0
 L7 s7 6 12e-3
 VS8 0 s8 0

@@ -69,6 +69,18 @@ export interface OracleVoltageSource {
    * resistive source.
    */
   readonly seriesInductanceH?: OracleValue;
+  /**
+   * AC only (engine 8, ADR 0021): a coupled pair's mutual impedance towards its partner source, so
+   * `V(b) − V(a) = emf − I · (r + jωL) − I_p · (R_m + jωL_m)`, `I_p` the partner's current: the
+   * split-phase T-equivalent's eliminated neutral arm. Both sources of a pair carry it with the same
+   * values. `mutualResistanceOhm` may be negative (its magnitude below both sources' r, so the real
+   * block is positive definite) and `mutualInductanceH` either sign. Absent for an uncoupled source.
+   */
+  readonly coupling?: {
+    readonly partner: number;
+    readonly mutualResistanceOhm: OracleValue;
+    readonly mutualInductanceH: OracleValue;
+  };
 }
 
 /** An ideal current source pushing `currentA` from `a` to `b` through itself (DC only). */

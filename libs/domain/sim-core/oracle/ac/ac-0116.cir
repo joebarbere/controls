@@ -15,11 +15,19 @@ R1 s1 1 10e1
 VS2 0 s2 0
 V2 e2 s2 DC 0 AC 10e-1 -120
 RI2 e2 m2 15e-2
-LI2 m2 6 18e-6
+LI2 m2 n2 18e-6
+H2 n2 h2 VS3 10e-3
+ED2 h2 6 d2 0 -18e-5
+F2 0 d2 VS3 1
+LD2 d2 0 1
 VS3 2 s3 0
 V3 e3 s3 DC 0 AC 56e-1 180
 RI3 e3 m3 33e-1
-LI3 m3 0 10e-6
+LI3 m3 n3 10e-6
+H3 n3 h3 VS2 10e-3
+ED3 h3 0 d3 0 -18e-5
+F3 0 d3 VS2 1
+LD3 d3 0 1
 VS4 4 s4 0
 L4 s4 5 18e-5
 VS5 3 s5 0

@@ -77,11 +77,39 @@ export const RHEOSTAT = { id: 'load.test-rheostat', version: 1 };
 export const GENERATOR = { id: 'generator.test-portable', version: 1 };
 /** A near-zero lead (1 mm of 1000 mm² copper, no contact resistance): a bolted connection for fault goldens. */
 export const BUSBAR = { id: 'lead.test-busbar', version: 1 };
+/** Engine 8's service on a test entry (`SERVICE_PARAMS`; the real entry is P4 PR 14's). */
+export const SERVICE = { id: 'service.test-25kva', version: 1 };
+/** Engine 8's ground rod on a test entry (`ROD_OHM`; the real entry is P4 PR 15's). */
+export const ROD = { id: 'electrode.test-rod', version: 1 };
+
+/**
+ * The test service (`service.splitPhase`, engine 8): 25 kVA, 2 %, X/R 2, 120/240 V (the utility
+ * stand-in's transformer); a 30 m drop of 33.62 mm² aluminium lines and a 21.15 mm² neutral (the 2 AWG
+ * and 4 AWG areas from the AWG geometry, NBS Handbook 100), aluminium at 2.8264e-8 Ω·m and α 0.00403 /K
+ * at 20 °C (61 % IACS, the published figure for 1350 conductor alloy); utility grounding 5 Ω (the
+ * plan's vetted game-design value inside 1–25 Ω). Test data, not a product.
+ */
+export const SERVICE_PARAMS = {
+  ratedKva: 25,
+  percentImpedance: 2,
+  xOverR: 2,
+  lineToNeutralV: 120,
+  dropLengthMm: 30_000,
+  dropLineAreaM2: 3.362e-5,
+  dropNeutralAreaM2: 2.115e-5,
+  dropResistivityOhmM: 2.8264e-8,
+  dropTemperatureCoefficientPerK: 0.00403,
+  dropReferenceTemperatureK: 293.15,
+  utilityGroundingOhm: 5,
+} as const;
+
+/** The test rod's earth resistance (Ω): the pre-audit's 8 ft × 5/8 in rod at 100 Ω·m (`service.spec.ts`). */
+export const ROD_OHM = 39.9;
 
 const key = (def: Omit<StateKeyDef, 'values'>): StateKeyDef => ({ ...def, values: null });
 const twoTerminals = ['a', 'b'];
 
-const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
+export const ENGINE_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
   ...TEST_MODEL_KINDS,
   'test.thermalLoad': {
     kind: 'test.thermalLoad',
@@ -304,7 +332,7 @@ const nameplate = Object.fromEntries(
   Object.entries(GENERATOR_STUB_NAMEPLATE).map(([name, constant]) => [name, constant.value]),
 );
 
-const ENGINE_DOCUMENTS: readonly unknown[] = [
+export const ENGINE_DOCUMENTS: readonly unknown[] = [
   {
     ...entry(GENERATOR, 'Test portable generator (stub)', 'generator.portable', nameplate, ['l1', 'l2', 'n']),
     category: 'source',
@@ -338,6 +366,11 @@ const ENGINE_DOCUMENTS: readonly unknown[] = [
       ...Object.keys(TEST_LEAD_THERMAL),
     ]).map((s) => ({ ...s, covers: s.covers.filter((c) => c !== 'sizeMm' && c !== 'terminals') })),
   },
+  {
+    ...entry(SERVICE, 'Test 25 kVA service', 'service.splitPhase', { ...SERVICE_PARAMS }, ['l1', 'l2', 'n', 'x0']),
+    category: 'source',
+  },
+  entry(ROD, 'Test ground rod', 'electrode.groundRod', { earthResistanceOhm: ROD_OHM }, ['clamp']),
   entry(THERMAL_LOAD, 'Test thermal load', 'test.thermalLoad', THERMAL_PARAMS),
   entry(I2T_FUSE, 'Test I²t fuse', 'test.i2tFuse', { resistanceOhm: 0.01, meltA2s: 4 }),
   entry(FLIP, 'Test flip load', 'test.flip', { lowOhm: 0.1, highOhm: 100, thresholdA: 1 }),
