@@ -125,6 +125,12 @@ function webHarness(): SaveIoHarness & { opfs: FakeOpfs; downloads: { fileName: 
     nextSaveAs: () => undefined, // a download has no picker
     lastSavedAs: async () => downloads.at(-1),
     failNextCommit: () => (opfs.failNextClose = true),
+    plantManual: async (name, bytes) => {
+      const saves = await root.getDirectoryHandle('saves', { create: true });
+      const writable = await (await saves.getFileHandle(`${name}.ctrl`, { create: true })).createWritable();
+      await writable.write(bytes);
+      await writable.close();
+    },
     dispose: async () => undefined,
   };
 }

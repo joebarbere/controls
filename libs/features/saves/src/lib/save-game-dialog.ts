@@ -97,12 +97,29 @@ export class SaveGameDialog {
   private readonly confirmed = linkedSignal<boolean, string | null>({ source: this.open, computation: () => null });
   private readonly trimmed = computed(() => this.name().trim());
   protected readonly error = computed(() => (this.submitted() ? saveNameError(this.trimmed()) : null));
-  /** Another save already has this name, ignoring case (`saveNameKey`: the platforms keep one save per key). */
-  private readonly clashing = computed(() => {
-    const name = saveNameKey(this.trimmed());
+  /**
+   * The exact save the typed name would write (`saveNameKey`: the platforms keep one save per key, but
+   * an older build on a case-sensitive file system may have left several, "Shop" and "shop"). The
+   * dialog resolves it and submits that exact name, so the store never has to choose among them:
+   * the typed spelling if a save has it; else this game's own save if it is listed under the key;
+   * else the first other listed save under the key (asked about first); else the typed name, or this
+   * game's own name if the key is its own (a save that has since gone is written again).
+   */
+  private readonly target = computed((): { readonly name: string; readonly existing: boolean } => {
+    const typed = this.trimmed();
+    const key = saveNameKey(typed);
     const own = this.saves.saveName();
-    if (own !== null && saveNameKey(own) === name) return null;
-    return this.saves.saves().find((e) => e.kind === 'manual' && saveNameKey(e.name) === name) ?? null;
+    const listed = this.saves.saves().filter((e) => e.kind === 'manual' && saveNameKey(e.name) === key);
+    if (listed.some((e) => e.name === typed)) return { name: typed, existing: true };
+    if (own !== null && listed.some((e) => e.name === own)) return { name: own, existing: true };
+    if (listed[0] !== undefined) return { name: listed[0].name, existing: true };
+    if (own !== null && saveNameKey(own) === key) return { name: own, existing: true };
+    return { name: typed, existing: false };
+  });
+  /** The target is another save than this game's own: ask before replacing it. */
+  private readonly clashing = computed(() => {
+    const target = this.target();
+    return target.existing && target.name !== this.saves.saveName() ? target : null;
   });
   private readonly clashes = computed(() => this.clashing() !== null);
   protected readonly replacing = computed(() => this.clashes() && this.confirmed() === this.trimmed());
@@ -130,11 +147,10 @@ export class SaveGameDialog {
       this.confirmed.set(name); // ask first; the next Save or Enter replaces it
       return;
     }
-    // Overwrite this game's own save, or one the player agreed to replace; otherwise main refuses an existing name.
-    this.pending.set({
-      name,
-      overwrite: this.clashes() || saveNameKey(name) === saveNameKey(this.saves.saveName() ?? ''),
-    });
+    // The exact name resolved above, overwriting this game's own save or one the player agreed to
+    // replace; a new name is written without `overwrite`, so a save that appeared meanwhile is `exists`.
+    const target = this.target();
+    this.pending.set({ name: target.name, overwrite: target.existing });
     this.open.set(false);
   }
 

@@ -442,6 +442,28 @@ describe('deleting saves and reading thumbnails (P4 Saves)', () => {
     expect(io.names()).toEqual(['Keep']);
   });
 
+  it('a stale handle deletes nothing: the pointer stays, unless a fresh listing shows the save has gone', async () => {
+    const { io, saves, session, storedPointer, toasts } = setup();
+    await saves.ready;
+    session.newSandbox({ seed: 3 });
+    session.exec('entity.place', place(5));
+    await saves.saveNamed('Shop', false);
+    const [entry] = saves.saves();
+    io.failNext('delete', 'unknown-handle'); // evicted from main's table, the file still there
+    expect(await saves.delete(entry as SaveEntry)).toBe(false);
+    expect(io.names()).toEqual(['Shop']);
+    expect(await storedPointer()).toEqual({ kind: 'manual', name: 'Shop' });
+    expect(toasts()).toContain(
+      'error: Couldn’t delete “Shop”. The list was out of date, so nothing was deleted. Try again.',
+    );
+    expect(toasts().some((t) => t.startsWith('success: Deleted'))).toBe(false);
+    // Gone for real (deleted outside the game) and the handle refused: that is a delete.
+    io.remove('Shop');
+    io.failNext('delete', 'unknown-handle');
+    expect(await saves.delete(entry as SaveEntry)).toBe(true);
+    expect(await storedPointer()).toBeNull();
+  });
+
   it('clears the Continue pointer to a deleted save, and the game it held is autosaved back in', async () => {
     const { io, saves, session, storedPointer } = setup();
     await saves.ready;

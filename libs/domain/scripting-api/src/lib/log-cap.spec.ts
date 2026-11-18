@@ -1,10 +1,12 @@
-import { ctrlJson, readCtrl, type ReplayLog, type World } from '@controls/save-format';
+import { ctrlJson, readCtrl, type ReplayLog, utf8ByteLength, type World } from '@controls/save-format';
 import { ENGINE_BENCH, ENGINE_TEST_CATALOG, engineTestOptions } from '@controls/sim-core/testing';
 import { createWorldRegistry } from '@controls/world-model';
 import fc from 'fast-check';
 import {
   CHECKPOINT_TICKS,
   createGame,
+  createSaveManifest,
+  entryBytes,
   type Game,
   loadGame,
   LOG_CHECKPOINT_BYTES,
@@ -63,6 +65,11 @@ function flip(game: Game, times: number): void {
   }
 }
 
+/** UTF-8 bytes of the entries `game` would save after its latest checkpoint (what the trigger counts). */
+function carried(game: Game): number {
+  return savedLog(game.save()).entries.reduce((sum, e) => sum + utf8ByteLength(JSON.stringify(e)), 0);
+}
+
 /** The size of `replay.log` if `game` were saved with no log cap fallback: its log at the save's own world. */
 const atSaveBytes = (game: Game) =>
   utf8Length(ctrlJson(rebasedAtSave(game.materialisedWorld() as World, game.replayLog())));
@@ -90,6 +97,31 @@ describe('a checkpoint once the log since the latest one passes checkpointLogByt
     const loaded = load(bytes, 2_000);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
     expect(loaded.game.hash()).toBe(game.hash());
+  });
+
+  it('counts the entries a loaded game carries: they are in its next save until a checkpoint', () => {
+    const trigger = 2_000;
+    const game = bench(trigger);
+    const entrySize = utf8ByteLength(JSON.stringify(game.execOrThrow('entity.place', crate)));
+    while (carried(game) + entrySize < trigger) game.execOrThrow('entity.place', crate);
+    const saved = game.save();
+    const base = savedLog(saved).initialWorld.tick; // under the trigger: no checkpoint since
+    const loaded = load(saved, trigger).game;
+    expect(loaded.entries().length).toBe(savedLog(saved).entries.length);
+    // One more entry passes the trigger only if the carried ones count.
+    loaded.execOrThrow('entity.place', crate);
+    loaded.advance(3);
+    const log = savedLog(loaded.save());
+    expect(log.initialWorld.tick).toBe(loaded.tick());
+    expect(log.initialWorld.tick).toBeGreaterThan(base);
+    expect(log.entries).toStrictEqual([]);
+  });
+
+  it('counts UTF-8 bytes, not UTF-16 code units', () => {
+    // No command takes non-ASCII text today (labels are `LabelText`), so the entry is built by hand.
+    const entry = { seq: 0, tick: 0, id: 'future.note', args: { text: '€'.repeat(100) } };
+    expect(entryBytes(entry)).toBe(JSON.stringify(entry).length + 200); // 3 bytes per €, not 1 unit
+    expect(entryBytes(entry)).toBe(new TextEncoder().encode(JSON.stringify(entry)).length);
   });
 
   it('is not taken below the threshold: the default keeps today’s saves byte for byte', () => {
@@ -153,6 +185,24 @@ describe('a log over the cap is rebased onto the save’s own world', () => {
     const loaded = load(capped);
     expect(loaded.replay).toStrictEqual({ status: 'continued' });
     expect(loaded.game.hash()).toBe(game.hash());
+  });
+
+  it('also when it is the whole container that is over its total, not replay.log alone', () => {
+    const game = stillSession();
+    const world = game.materialisedWorld() as World;
+    const size = (value: unknown) => utf8ByteLength(ctrlJson(value));
+    // Room for the manifest, the world and the log rebased at the save, not for the whole log.
+    const total = size(createSaveManifest()) + size(world) + atSaveBytes(game);
+    expect(size(createSaveManifest()) + size(world) + size(game.replayLog())).toBeGreaterThan(total);
+    const bytes = game.save({ limits: { maxTotalBytes: total } }); // replay.log's own cap untouched
+    const log = savedLog(bytes);
+    expect(log.entries).toStrictEqual([]);
+    expect(log.initialWorld.tick).toBe(game.tick());
+    const loaded = load(bytes);
+    expect(loaded.replay).toStrictEqual({ status: 'continued' });
+    expect(loaded.game.hash()).toBe(game.hash());
+    // One byte less and even the rebased save doesn't fit: that is thrown, never written.
+    expect(() => game.save({ limits: { maxTotalBytes: total - 1 } })).toThrow(/larger than/);
   });
 
   it('still throws when the world itself is over its cap', () => {

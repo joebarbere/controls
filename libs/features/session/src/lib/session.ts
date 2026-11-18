@@ -15,7 +15,7 @@ import {
   simHostCommands,
 } from '@controls/commands';
 import { createWorld, type ReplayEntry, type ReplayLog } from '@controls/save-format';
-import { createGame, type Game, type SaveGameOptions, writeSave } from '@controls/scripting-api';
+import { createGame, type Game, LOG_CHECKPOINT_BYTES, type SaveGameOptions, writeSave } from '@controls/scripting-api';
 import { type PrepareLoadResult, type PreparedLoad, prepareLoad } from './load';
 import { SimHost } from './sim-host';
 import {
@@ -80,6 +80,16 @@ export const SANDBOX_LEVEL = new InjectionToken<unknown>('controls.sandboxLevel'
   factory: () => null,
 });
 
+/**
+ * The session's log-size checkpoint trigger (P4 Saves, `Game`'s `checkpointLogBytes`): bytes of
+ * entries since the latest checkpoint before the next tick takes one. `LOG_CHECKPOINT_BYTES` (4 MiB)
+ * in the game; specs lower it to reach the trigger without logging megabytes.
+ */
+export const CHECKPOINT_LOG_BYTES = new InjectionToken<number>('controls.checkpointLogBytes', {
+  providedIn: 'root',
+  factory: () => LOG_CHECKPOINT_BYTES.value,
+});
+
 /** Window property for the E2E test hook (`?e2e=1` only). */
 const TEST_HOOK = '__controlsSession';
 
@@ -131,6 +141,7 @@ export class Session {
   };
   /** The sandbox level (validated), or an empty world without one. */
   readonly level: World = sandboxLevel(inject(SANDBOX_LEVEL));
+  private readonly checkpointLogBytes = inject(CHECKPOINT_LOG_BYTES);
 
   /**
    * The current commanded world, after the last command. Read-only: change it with {@link exec}. Its
@@ -174,7 +185,9 @@ export class Session {
    */
   newSandbox(options: NewGameOptions): void {
     const world = newGameWorld(this.level, options);
-    this.attach(createGame({ world, registry: this.registry, time: this.sim.time }));
+    this.attach(
+      createGame({ world, registry: this.registry, time: this.sim.time, checkpointLogBytes: this.checkpointLogBytes }),
+    );
     this.sim.startWorld(world, 0); // one worker per game, started paused (ADR 0011 §10)
     this.setBaseline(this.sim.hashAt().then((r) => r.hash));
     this.activeState.set(true);
@@ -186,7 +199,9 @@ export class Session {
    * as owned by the session.
    */
   start(world: World): void {
-    this.attach(createGame({ world, registry: this.registry, time: this.sim.time }));
+    this.attach(
+      createGame({ world, registry: this.registry, time: this.sim.time, checkpointLogBytes: this.checkpointLogBytes }),
+    );
     this.sim.stop();
     this.setBaseline(Promise.resolve(worldHash(world)));
   }
@@ -196,7 +211,7 @@ export class Session {
    * the parse and device check, then the log's verification in the worker. Adopt the result to load it.
    */
   prepareLoad(bytes: Uint8Array): Promise<PrepareLoadResult> {
-    return prepareLoad(bytes, { registry: this.registry, host: this.sim });
+    return prepareLoad(bytes, { registry: this.registry, host: this.sim, checkpointLogBytes: this.checkpointLogBytes });
   }
 
   /**

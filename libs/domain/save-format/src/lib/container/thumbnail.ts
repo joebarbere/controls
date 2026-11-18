@@ -8,9 +8,11 @@ import { extractZipEntry } from './zip';
  * Electron main reads through a file descriptor; the web harness through `File.slice()`.
  *
  * This is a display path, not a load: anything it doesn't like is `null` (no thumbnail), never an
- * error, and a save it shows a thumbnail for may still fail to load. The same strict subset of ZIP
- * as `readZipDirectory` (no ZIP64, no encryption, stored or DEFLATE, one disk), the same caps and
- * the same CRC-32 check; the PNG signature is checked, the image isn't decoded.
+ * error, and a save it shows a thumbnail for may still fail to load. For the one entry it reads, the
+ * same checks as `readZipDirectory` (no ZIP64, version needed ≤ 2.0, only the allowed flags, stored
+ * or DEFLATE, one disk, a local header whose method and name bytes match the central directory), the
+ * same caps and the same CRC-32 check; the PNG signature is checked, the image isn't decoded. Not
+ * checked, because they are never read: the other entries' headers, names and overlaps.
  */
 
 /** Byte ranges of a file, read on demand. `read` resolves at most `length` bytes (fewer at the end). */
@@ -30,8 +32,10 @@ const LOCAL_SIZE = 30;
 const MAX_COMMENT = 0xffff;
 const METHOD_STORED = 0;
 const METHOD_DEFLATE = 8;
-/** Encryption (bits 0, 6) and masked headers (bit 13): never in a save. */
-const REFUSED_FLAGS = 1 | (1 << 6) | (1 << 13);
+/** General-purpose flag bits accepted, as `readZipDirectory`: 1–2 (DEFLATE options), 3 (data descriptor), 11 (UTF-8). */
+const ALLOWED_FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 11);
+/** "Version needed to extract" above 2.0 means ZIP64, AES, LZMA, … (as `readZipDirectory`). */
+const MAX_VERSION_NEEDED = 20;
 /**
  * The largest central directory read: `CTRL_LIMITS.maxEntries` headers with the longest name a
  * reader accepts (128 bytes) and generous room for extra fields and comments. A save written by the
@@ -43,9 +47,9 @@ const view = (bytes: Uint8Array) => new DataView(bytes.buffer, bytes.byteOffset,
 
 /**
  * The PNG bytes of a `.ctrl`'s `thumbnail.png`, or `null` when there is none or the archive is
- * malformed, too large or not a `.ctrl`. Reads at most three ranges: the tail (up to 64 KiB +
- * 22 bytes), the central directory (at most {@link MAX_THUMBNAIL_CENTRAL_DIRECTORY_BYTES}) and the
- * entry (its 30-byte local header, then at most `CTRL_LIMITS.maxThumbnailBytes`). Rejects only when
+ * malformed, too large or not a `.ctrl`. Reads four ranges: the tail (up to 64 KiB + 22 bytes), the
+ * central directory (at most {@link MAX_THUMBNAIL_CENTRAL_DIRECTORY_BYTES}), the entry's local header
+ * with its name (43 bytes), then its data (at most `CTRL_LIMITS.maxThumbnailBytes`). Rejects only when
  * `source.read` does (an I/O error).
  */
 export async function readCtrlThumbnail(source: RandomAccessBytes): Promise<Uint8Array | null> {
@@ -97,6 +101,7 @@ export async function readCtrlThumbnail(source: RandomAccessBytes): Promise<Uint
     const name = central.subarray(at + CENTRAL_SIZE, at + CENTRAL_SIZE + nameLength);
     if (sameAscii(name, wanted)) {
       return readEntry(exact, {
+        versionNeeded: c.getUint16(at + 6, true) & 0xff,
         flags: c.getUint16(at + 8, true),
         method: c.getUint16(at + 10, true),
         crc: c.getUint32(at + 16, true),
@@ -114,6 +119,7 @@ export async function readCtrlThumbnail(source: RandomAccessBytes): Promise<Uint
 }
 
 interface CentralRecord {
+  readonly versionNeeded: number;
   readonly flags: number;
   readonly method: number;
   readonly crc: number;
@@ -130,19 +136,22 @@ async function readEntry(
   r: CentralRecord,
 ): Promise<Uint8Array | null> {
   const limit = CTRL_LIMITS.maxThumbnailBytes;
-  if (r.flags & REFUSED_FLAGS || r.diskStart !== 0) return null;
+  // `readZipDirectory`'s per-entry checks: no unknown flags (encryption among them), version ≤ 2.0, one disk.
+  if (r.flags & ~ALLOWED_FLAGS || r.versionNeeded > MAX_VERSION_NEEDED || r.diskStart !== 0) return null;
   if (r.method !== METHOD_STORED && r.method !== METHOD_DEFLATE) return null;
   if (r.uncompressedSize > limit || r.compressedSize > limit) return null;
   if (r.method === METHOD_STORED && r.compressedSize !== r.uncompressedSize) return null;
-  if (r.localStart + LOCAL_SIZE > r.centralStart) return null;
+  if (r.localStart + LOCAL_SIZE + r.nameLength > r.centralStart) return null;
 
-  const local = await exact(r.localStart, LOCAL_SIZE);
+  // The local header and its name, which must agree with the central directory byte for byte.
+  const local = await exact(r.localStart, LOCAL_SIZE + r.nameLength);
   if (local === null) return null;
   const l = view(local);
   if (
     l.getUint32(0, true) !== SIG_LOCAL ||
     l.getUint16(8, true) !== r.method ||
-    l.getUint16(26, true) !== r.nameLength
+    l.getUint16(26, true) !== r.nameLength ||
+    !sameAscii(local.subarray(LOCAL_SIZE), CTRL_ENTRY.thumbnail)
   ) {
     return null;
   }

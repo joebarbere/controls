@@ -236,7 +236,15 @@ test.describe.serial('desktop saves', () => {
             () => 'accepted',
             (error: Error) => error.message,
           );
-        return { target, written, writeOnly, opened, read, readOnly };
+        // Files outside the save directory are never deleted, whichever dialog handed out the handle.
+        const refusal = (handle: string | undefined) =>
+          bridge.deleteSave({ handle }).then(
+            () => 'accepted',
+            (error: Error) => error.message,
+          );
+        const deleteOpened = await refusal(opened?.handle);
+        const deleteTarget = await refusal(target?.handle);
+        return { target, written, writeOnly, opened, read, readOnly, deleteOpened, deleteTarget };
       });
       expect(result.target?.name).toBe('export.ctrl');
       expect(result.written).toMatchObject({ name: 'export.ctrl', kind: 'external', sizeBytes: 3 });
@@ -246,7 +254,10 @@ test.describe.serial('desktop saves', () => {
       expect(result.opened).toMatchObject({ name: 'shared.ctrl', kind: 'external' });
       expect(result.read).toEqual([9, 8, 7]);
       expect(result.readOnly).toContain('save:write refused (read-only).');
+      expect(result.deleteOpened).toContain('save:delete refused (read-only).');
+      expect(result.deleteTarget).toContain('save:delete refused (read-only).');
       expect([...readFileSync(openPath)]).toEqual([9, 8, 7]);
+      expect([...readFileSync(`${exportPath}.ctrl`)]).toEqual([4, 5, 6]);
       expect(JSON.stringify(result)).not.toContain(outside);
     } finally {
       rmSync(outside, { recursive: true, force: true });

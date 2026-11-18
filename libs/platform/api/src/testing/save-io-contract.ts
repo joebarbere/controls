@@ -26,6 +26,11 @@ export interface SaveIoHarness {
   lastSavedAs(): Promise<{ readonly fileName: string; readonly bytes: Uint8Array } | undefined>;
   /** Makes the next write fail after its data is written and before it is committed (renamed / closed). */
   failNextCommit(): void;
+  /**
+   * Puts `<name>.ctrl` in the save directory behind the store's back (as an older build, or another
+   * program, could have). Used for spellings the store itself refuses to create side by side.
+   */
+  plantManual(name: string, bytes: Uint8Array): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -174,6 +179,24 @@ export function describeSaveIoContract(
         expect(again).toMatchObject({ handle: first.handle, name: 'Shop', kind: 'manual', sizeBytes: 2 });
         expect((await h.files.list()).map((e) => e.name)).toEqual(['Shop']);
         await expect(h.files.read(first.handle)).resolves.toEqual(bytes(3, 3));
+      });
+
+      // An older build on a case-sensitive file system (Linux, OPFS) could create both spellings. Callers
+      // name the exact save they mean (the Save game dialog resolves it), so an exact name always wins.
+      it('with "Shop" and "shop" both on disk, writes the exact name given, else the first by code units', async () => {
+        await h.plantManual('Shop', bytes(1));
+        await h.plantManual('shop', bytes(2));
+        if ((await h.files.list()).length !== 2) return; // a case-insensitive file system holds one file
+        expect(await codeOf(h.files.write(manual('SHOP'), bytes(9)))).toBe('exists');
+        expect((await h.files.write(manual('shop', true), bytes(3))).name).toBe('shop');
+        expect((await h.files.write(manual('Shop', true), bytes(4))).name).toBe('Shop');
+        expect((await h.files.write(manual('SHOP', true), bytes(5, 5))).name).toBe('Shop'); // "S" < "s"
+        const listed = await h.files.list();
+        expect(listed.map((e) => e.name).sort()).toEqual(['Shop', 'shop']);
+        const contents = Object.fromEntries(
+          await Promise.all(listed.map(async (e) => [e.name, [...(await h.files.read(e.handle))]] as const)),
+        );
+        expect(contents).toEqual({ Shop: [5, 5], shop: [3] });
       });
     });
 

@@ -90,6 +90,14 @@ describe('readCtrlThumbnail', () => {
       [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, localName: 'x.png1234' }],
       {},
     ],
+    // Same length, other bytes: only a byte-for-byte name comparison catches it.
+    [
+      'a same-length local name that disagrees',
+      [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, localName: 'thumbnail.pnG' }],
+      {},
+    ],
+    ['an unknown general-purpose flag', [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, method: 0, flags: 1 << 5 }], {}],
+    ['a version needed above 2.0', [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, method: 0, versionNeeded: 45 }], {}],
     ['a local offset past the directory', [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, localOffset: 1 << 30 }], {}],
     ['a ZIP64 locator', [{ name: CTRL_ENTRY.thumbnail, data: TINY_PNG, method: 0 }], { zip64Locator: true }],
     [

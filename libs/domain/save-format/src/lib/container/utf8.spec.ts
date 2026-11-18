@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { safeStringArb } from '../../testing/arbitraries';
-import { utf8Decode, utf8Encode, Utf8Error } from './utf8';
+import { utf8ByteLength, utf8Decode, utf8Encode, Utf8Error } from './utf8';
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 
@@ -64,5 +64,25 @@ describe('utf8Decode', () => {
       }),
       { numRuns: 2000 },
     );
+  });
+});
+
+describe('utf8ByteLength', () => {
+  it('is the length utf8Encode gives, for any well-formed string', () => {
+    fc.assert(
+      fc.property(fc.string({ unit: 'grapheme' }), (s) => {
+        expect(utf8ByteLength(s)).toBe(utf8Encode(s).length);
+      }),
+    );
+    fc.assert(
+      fc.property(safeStringArb, (s) => {
+        expect(utf8ByteLength(s)).toBe(Buffer.byteLength(s, 'utf8'));
+      }),
+    );
+  });
+
+  it('counts 1, 2, 3 and 4 byte sequences, and an unpaired surrogate as U+FFFD', () => {
+    expect([utf8ByteLength('a'), utf8ByteLength('é'), utf8ByteLength('€'), utf8ByteLength('😀')]).toEqual([1, 2, 3, 4]);
+    expect([utf8ByteLength('\uD800'), utf8ByteLength('\uDC00x'), utf8ByteLength('')]).toEqual([3, 4, 0]);
   });
 });

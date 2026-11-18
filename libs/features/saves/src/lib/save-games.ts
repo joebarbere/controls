@@ -27,6 +27,13 @@ export const REPLAY_RESTARTED_MESSAGE =
 /** `Game.save` refused to write the game (over a `CTRL_LIMITS` cap even without a thumbnail). */
 const TOO_LARGE_TO_SAVE = 'The game is too large to save.';
 
+/** A delete through a handle the platform no longer knows, of a save that is still listed. */
+const STALE_LIST = 'The list was out of date, so nothing was deleted. Try again.';
+
+/** The same save-directory entry, by kind and name or slot (handles may differ between listings). */
+const sameSave = (a: SaveEntry, b: SaveEntry) =>
+  a.kind === b.kind && (a.kind === 'autosave' ? a.slot === b.slot : a.name === b.name);
+
 /** Saving while the sim has crashed is refused (ADR 0011 §9.5, R1): restart it first. */
 export const RESTART_FIRST = 'Restart simulation first.';
 
@@ -378,7 +385,9 @@ export class SaveGames {
 
   /**
    * Deletes a manual save or an autosave slot from the save directory (the Load list's Delete, after
-   * the player confirmed). A save that had already gone counts as deleted. If Continue pointed at it,
+   * the player confirmed). A save that had already gone (`not-found`) counts as deleted; a refused
+   * handle (`unknown-handle`) counts only if a fresh listing no longer has the save, else nothing
+   * changes and the player is asked to try again (the list now has fresh handles). If Continue pointed at it,
    * the pointer is cleared; if it held the game running now, that game counts as not held, so the
    * next autosave copies it back in and Continue can still resume it (ADR 0009). Lists again either
    * way. Resolves `true` if the save is gone. Never rejects.
@@ -388,7 +397,15 @@ export class SaveGames {
       await this.files.delete(entry.handle);
     } catch (error) {
       const code = saveIoCodeOf(error);
-      if (code !== 'not-found' && code !== 'unknown-handle') {
+      if (code === 'unknown-handle') {
+        // The handle is stale (evicted, or from before a reload), which says nothing about the file:
+        // list again, and call it gone only if the listing agrees.
+        await this.refresh();
+        if (this.entries().some((e) => sameSave(e, entry))) {
+          this.error(`Couldn’t delete ${quoted(entry.name)}. ${STALE_LIST}`);
+          return false;
+        }
+      } else if (code !== 'not-found') {
         this.error(`Couldn’t delete ${quoted(entry.name)}. ${saveIoReason(error, 'delete')}`);
         await this.refresh();
         return false;

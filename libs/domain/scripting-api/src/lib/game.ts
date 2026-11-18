@@ -26,6 +26,7 @@ import {
   type ReplayEntry,
   type ReplayLog,
   TerminalId,
+  utf8ByteLength,
   type ValidationIssue,
   World as WorldSchema,
   writeCtrl,
@@ -127,7 +128,7 @@ interface CommonOptions {
    */
   readonly time?: TimeHost;
   /**
-   * The size, in bytes of compact JSON, of the entries logged since the latest checkpoint at which
+   * The size, in UTF-8 bytes of compact JSON, of the entries logged since the latest checkpoint at which
    * the game takes an extra one, at the next tick time reaches (default {@link LOG_CHECKPOINT_BYTES}).
    * Lower it in tests to reach the `replay.log` cap without logging megabytes.
    */
@@ -418,6 +419,15 @@ function parseProbeEnd(text: string, end: 'a' | 'b'): { entity: number; terminal
   return { entity, terminal: match[2] };
 }
 
+/**
+ * The UTF-8 size of a replay entry's compact JSON: what the log-size checkpoint trigger counts.
+ * Today's command arguments are ASCII (`LabelText`), so this equals the UTF-16 length, but a later
+ * free-text argument must not undercount.
+ */
+export function entryBytes(entry: ReplayEntry): number {
+  return utf8ByteLength(JSON.stringify(entry));
+}
+
 /** `options.checkpointLogBytes` if it is a positive safe integer, else {@link LOG_CHECKPOINT_BYTES}. */
 function checkpointLogBytesOf(options: CommonOptions): number {
   const value = options.checkpointLogBytes;
@@ -475,12 +485,14 @@ function wrap(
     | { readonly count: number; readonly world: null; readonly pending: Promise<World> }
     | null = null;
   /**
-   * The log-size trigger (P4 Saves): compact-JSON bytes of the entries logged since the latest
+   * The log-size trigger (P4 Saves): UTF-8 bytes of the entries' compact JSON logged since the latest
    * checkpoint, and whether they have passed `checkpointLogBytes`, so the next tick time reaches
-   * takes a checkpoint even off the {@link CHECKPOINT_TICKS} grid. A pure function of the commands.
+   * takes a checkpoint even off the {@link CHECKPOINT_TICKS} grid. It starts from the entries the bus
+   * carries (a loaded game continues its saved log, with no checkpoint yet), so it stays a pure
+   * function of the log.
    */
-  let tailBytes = 0;
-  let checkpointDue = false;
+  let tailBytes = bus.entries.reduce((sum, entry) => sum + entryBytes(entry), 0);
+  let checkpointDue = tailBytes >= checkpointLogBytes;
   const step = (tick: number) => {
     engine?.advanceTo(tick);
     time?.advanceTo(tick);
@@ -554,7 +566,7 @@ function wrap(
       if (result.ok && result.logged) {
         engine?.applied(result.entry, bus.state);
         time?.applied(result.entry, bus.state);
-        tailBytes += JSON.stringify(result.entry).length;
+        tailBytes += entryBytes(result.entry);
         if (tailBytes >= checkpointLogBytes) checkpointDue = true;
         // `sim.step` is carried out by the time host, right after it is logged (ADR 0011 §3, §11).
         if (result.entry.id === SIM_STEP_COMMAND) moveTo(bus.currentTick() + (result.entry.args['ticks'] as number));
@@ -959,7 +971,7 @@ export const CHECKPOINT_TICKS: SourcedConstant = {
 
 /**
  * The log-size checkpoint trigger (P4 Saves): once the entries logged since the latest checkpoint
- * pass this many bytes of compact JSON, the game takes a checkpoint at the next tick time reaches,
+ * pass this many UTF-8 bytes of compact JSON (counted from the entries a loaded game carries too), the game takes a checkpoint at the next tick time reaches,
  * as if it were on the {@link CHECKPOINT_TICKS} grid. Not save format; like `CHECKPOINT_TICKS`, it
  * decides only where a long session's saved log starts.
  */

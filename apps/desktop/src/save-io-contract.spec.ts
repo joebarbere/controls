@@ -93,6 +93,10 @@ async function electronHarness(): Promise<SaveIoHarness> {
         ? undefined
         : { fileName: basename(savedAsPath), bytes: new Uint8Array(readFileSync(savedAsPath)) },
     failNextCommit: () => (failCommit = true),
+    plantManual: async (name, bytes) => {
+      mkdirSync(join(dir, 'saves'), { recursive: true });
+      writeFileSync(join(dir, 'saves', `${name}.ctrl`), bytes);
+    },
     dispose: async () => rmSync(dir, { recursive: true, force: true }),
   };
 }

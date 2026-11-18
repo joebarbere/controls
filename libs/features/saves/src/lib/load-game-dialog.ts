@@ -11,6 +11,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { KEY_PLATFORM } from '@controls/feature-session';
 import type { SaveEntry } from '@controls/platform-api';
 import { Button, Dialog } from '@controls/ui';
 import { SaveGames } from './save-games';
@@ -42,7 +43,7 @@ const thumbnailKey = (entry: SaveEntry) => `${entry.handle}:${entry.modifiedMs}`
  * palette), so the shell can move focus on. Open file… opens the picker inside the click (browsers
  * need the gesture) and keeps the dialog open if the player cancels it.
  *
- * **Delete** (or the Delete key on a save) turns that row into a confirmation, focused on Keep:
+ * **Delete** (or the Delete key on a save; on macOS also Backspace or Cmd+Backspace) turns that row into a confirmation, focused on Keep:
  * Delete removes the save, Keep or Escape goes back to the row's Delete button (Escape there never
  * closes the dialog). After a delete, focus moves to the save that took its place, else the one
  * before, else Open file…, so it never falls to the page.
@@ -232,6 +233,7 @@ export class LoadGameDialog {
   protected readonly saves = inject(SaveGames);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly keyPlatform = inject(KEY_PLATFORM);
   private readonly dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   private pending: SaveEntry | null = null;
 
@@ -332,7 +334,11 @@ export class LoadGameDialog {
     const items = this.entryButtons();
     const current = items.indexOf(event.target as HTMLButtonElement);
     if (current < 0) return;
-    if (event.key === 'Delete') {
+    // Delete everywhere; on macOS, whose keyboards label Backspace "delete", Backspace and Cmd+Backspace too.
+    const deleteKey =
+      event.key === 'Delete' ||
+      (this.keyPlatform === 'mac' && event.key === 'Backspace' && !event.altKey && !event.ctrlKey);
+    if (deleteKey) {
       const rows = Array.from(this.host.nativeElement.querySelectorAll('.row'));
       const entry = this.saves.saves()[rows.indexOf((event.target as HTMLElement).closest('.row') as Element)];
       if (entry) {

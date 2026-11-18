@@ -147,9 +147,13 @@ export class MemorySaveIo {
     switch (target.kind) {
       case 'manual': {
         // Names are unique ignoring case, as on both platforms: an overwrite keeps the existing spelling.
-        const existing = [...this.stored.values()].find(
-          (s) => s.entry.kind === 'manual' && saveNameKey(s.entry.name) === saveNameKey(target.name),
-        );
+        // An exact match first, as on both platforms (two spellings may exist from an older build).
+        const manual = [...this.stored.values()].filter((s) => s.entry.kind === 'manual');
+        const existing =
+          manual.find((s) => s.entry.name === target.name) ??
+          manual
+            .filter((s) => saveNameKey(s.entry.name) === saveNameKey(target.name))
+            .sort((x, y) => (x.entry.name < y.entry.name ? -1 : 1))[0];
         if (existing && !target.overwrite) throw new SaveIoError('exists');
         if (existing) this.stored.delete(existing.entry.handle);
         const name = existing?.entry.name ?? target.name;

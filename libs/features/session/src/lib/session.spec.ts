@@ -4,7 +4,7 @@ import { createWorld, CURRENT_SCHEMA_VERSION, readCtrl } from '@controls/save-fo
 import { createGame, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { FakeSimWorker } from '../testing/fake-sim-worker';
-import { SANDBOX_LEVEL, Session } from './session';
+import { CHECKPOINT_LOG_BYTES, SANDBOX_LEVEL, Session } from './session';
 import { SIM_TRANSPORT, SIM_WORKER_FACTORY } from './sim-host';
 
 const crate = { id: 'prop.crate', version: 1 };
@@ -270,6 +270,33 @@ describe('Session', () => {
     if (!read.ok || read.value.replayLog === null) throw new Error('no replay log');
     expect(read.value.replayLog).toMatchObject({ firstSeq: 7, endTick: 25_000, initialWorld: { tick: 20_000 } });
     expect(read.value.replayLog.entries).toEqual([]);
+
+    const result = await session.prepareLoad(saved.bytes);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.prepared.replay).toEqual({ status: 'continued' });
+    session.adopt(result.prepared);
+    expect(await session.hashAt()).toBe(game.hash());
+  });
+
+  it('a log-size checkpoint is taken off the 10 000-tick grid from the worker’s answer: the headless bytes, loaded continued (P4 Saves)', async () => {
+    const trigger = 1_500;
+    const { session } = withWorker([{ provide: CHECKPOINT_LOG_BYTES, useValue: trigger }]);
+    session.newSandbox({ seed: 0 });
+    const game = createGame({ seed: 0, checkpointLogBytes: trigger });
+    const run = (id: string, args: object) => {
+      expect(session.exec(id, args).ok).toBe(true);
+      game.execOrThrow(id, args);
+    };
+    for (let i = 0; i < 15; i++) run('entity.place', { ...place, positionMm: { x: 10 * i, y: 0, z: -20 } }); // > 1.5 KB
+    run('sim.step', { ticks: 7 }); // passes the trigger: the checkpoint is the worker's state at tick 7
+    run('entity.place', place);
+    run('sim.step', { ticks: 5 });
+    const saved = await session.saver().save();
+    expect(saved.bytes).toStrictEqual(game.save());
+    const read = readCtrl(saved.bytes);
+    if (!read.ok || read.value.replayLog === null) throw new Error('no replay log');
+    expect(read.value.replayLog).toMatchObject({ firstSeq: 16, endTick: 12, initialWorld: { tick: 7 } });
+    expect(read.value.replayLog.entries.map((e) => e.id)).toEqual(['entity.place', 'sim.step']);
 
     const result = await session.prepareLoad(saved.bytes);
     if (!result.ok) throw new Error(result.error.message);

@@ -141,9 +141,14 @@ const SIM_FAILED: SimFailedError = {
 /** Checks `bytes` as a save and starts its sim worker, without touching the session. Never throws. */
 export async function prepareLoad(
   bytes: Uint8Array,
-  options: { readonly registry: CommandRegistry<World>; readonly host: SimHost },
+  options: {
+    readonly registry: CommandRegistry<World>;
+    readonly host: SimHost;
+    /** The loaded game's log-size checkpoint trigger (`CHECKPOINT_LOG_BYTES`); default `LOG_CHECKPOINT_BYTES`. */
+    readonly checkpointLogBytes?: number;
+  },
 ): Promise<PrepareLoadResult> {
-  const { registry, host } = options;
+  const { registry, host, checkpointLogBytes } = options;
   const read = readCtrl(bytes);
   if (!read.ok) return { ok: false, error: read.error };
   const contents = read.value;
@@ -179,7 +184,7 @@ export async function prepareLoad(
     replay = plan.replay;
   } else {
     // The commanded state on the main thread (no engine), then the sim check in a worker.
-    const resumed = resumeLogGame(plan.log, { registry, time: host.time });
+    const resumed = resumeLogGame(plan.log, { registry, time: host.time, checkpointLogBytes });
     if (!resumed.ok) {
       replay = verifyFailure(plan.compatibility, { kind: 'replay-failed', message: resumed.error.message });
     } else {
@@ -236,6 +241,6 @@ export async function prepareLoad(
       },
     };
   }
-  const game = createGame({ world: start, registry, time: host.time, firstSeq });
+  const game = createGame({ world: start, registry, time: host.time, firstSeq, checkpointLogBytes });
   return done(game, replay, fresh.candidate, fresh.hash);
 }
