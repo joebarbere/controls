@@ -4,7 +4,7 @@ import { awgName } from './gauge';
 
 /*
  * F3.1 part 1's conductor entries (content/devices/conductor.*): THHN/THWN-2 copper 14 AWG to 4/0,
- * MTW 18 to 10 AWG and two aluminium XHHW-2 sizes, under fictional brands. The values are product
+ * MTW 18 to 10 AWG and three aluminium XHHW-2 sizes (2 AWG from P4 F4.2 part 2), under fictional brands. The values are product
  * data from public specification sheets without ampacity columns (sources in each entry); every
  * derived value (area, resistance, ampacity) is computed, never stored.
  */
@@ -18,13 +18,14 @@ const summary = (d: (typeof conductors)[number]) => {
 };
 
 describe('the F3.1 conductor entries', () => {
-  it('are THHN/THWN-2 14 AWG–4/0 (solid where made), MTW 18–10 AWG and aluminium XHHW-2 4 AWG and 4/0', () => {
+  it('are THHN/THWN-2 14 AWG–4/0 (solid where made), MTW 18–10 AWG and aluminium XHHW-2 2 AWG, 4 AWG and 4/0', () => {
     expect(
       conductors.map((d) => {
         const c = summary(d);
         return `${c.insulation?.key} ${c.material.key} ${awgName(c.awg)} ${c.stranding}/${c.strandCount}`;
       }),
     ).toStrictEqual([
+      'xhhw2 aluminiumAa8000 2 stranded/6',
       'xhhw2 aluminiumAa8000 4/0 stranded/19',
       'xhhw2 aluminiumAa8000 4 stranded/7',
       'mtw copperAnnealed 10 stranded/19',
@@ -110,6 +111,26 @@ describe('the F3.1 conductor entries', () => {
     expect(perKm('conductor.quorvale-xhhw2-al-4-0-compact')).toBeCloseTo(0.26888, 4);
     expect(Math.abs(perKm('conductor.quorvale-xhhw2-al-4-compact') / 1.39 - 1)).toBeLessThan(0.03);
     expect(Math.abs(perKm('conductor.quorvale-xhhw2-al-4-0-compact') / 0.274 - 1)).toBeLessThan(0.03);
+  });
+
+  it('2 AWG aluminium (P4 F4.2 part 2): the derived resistance is within 0.5 % of its maker’s published figure', () => {
+    // Area from the AWG definition: d = 0.127 mm × 92^((36 − 2) / 39) = 6.54371 mm, A = π d² / 4 =
+    // 33.6308 mm². R′(20 °C) = 2.8264e-8 Ω·m × 1.02 / 33.6308e-6 m² = 0.857228 Ω/km.
+    // Cross-check (never stored): the 2 AWG XHHW-2 sheet the entry cites gives 0.266 Ω per 1000 ft at
+    // 25 °C, i.e. 0.266 / (1 + 0.00403 × 5) / 0.3048 = 0.855466 Ω/km at 20 °C; derived is +0.21 %.
+    const entry = BUILTIN_CATALOG.device({ id: 'conductor.quorvale-xhhw2-al-2-compact', version: 1 });
+    const physics = entry && conductorPhysics(BUILTIN_CATALOG, entry);
+    if (!physics) throw new Error('missing 2 AWG aluminium');
+    const d = 0.127 * Math.pow(92, 34 / 39);
+    expect(d).toBeCloseTo(6.54371, 4);
+    expect((Math.PI * d * d) / 4).toBeCloseTo(33.6308, 3);
+    const perKm = conductorResistanceOhm(physics, 1_000_000, 293.15);
+    expect(perKm).toBeCloseTo(0.857228, 5);
+    const published = 0.266 / (1 + 0.00403 * 5) / 0.3048;
+    expect(published).toBeCloseTo(0.855466, 5);
+    expect(Math.abs(perKm / published - 1)).toBeLessThan(0.005);
+    // The construction the sheet gives: 6 strands under a 45 mil (1.14 mm) XLPE wall, black only.
+    expect(entry.conductor).toMatchObject({ awg: 2, strandCount: 6, insulationThicknessMm: 1.14 });
   });
 
   it('every entry lists colours from the colour table; XHHW-2 is black only', () => {

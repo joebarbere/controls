@@ -24,7 +24,18 @@ const tables = read('tables');
 /** The P2 entries (catalogue 1's, version 1 in catalogue 2); F3.1's conductors are checked in conductors.spec.ts. */
 const tools = read('tools');
 const PART_2_KINDS = /^(raceway|terminalBlock)\./;
-const p2Devices = BUILTIN_CATALOG.devices.filter(
+/** P4 F4.2 part 2's service and plug-on breaker entries (by kind); `protection-entries.spec.ts` checks them. */
+const P4_PROTECTION_KINDS: readonly string[] = [
+  'breaker.afci1p',
+  'breaker.gfci1p',
+  'breaker.plugOn1p',
+  'breaker.plugOn2p',
+  'service.splitPhase',
+];
+const isP4Protection = (d: (typeof BUILTIN_CATALOG.devices)[number]) => P4_PROTECTION_KINDS.includes(d.model.kind);
+/** The entries catalogue 2 shipped (0.4.0) and their catalogue 3 versions, before P4's devices. */
+const preP4Devices = BUILTIN_CATALOG.devices.filter((d) => !isP4Protection(d));
+const p2Devices = preP4Devices.filter(
   (d) => d.model.kind !== 'conductor' && d.model.kind !== 'splice.twistOn' && !PART_2_KINDS.test(d.model.kind),
 );
 const raceways = BUILTIN_CATALOG.devices.filter((d) => d.model.kind.startsWith('raceway.'));
@@ -67,7 +78,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
   });
 
   it('catalogue v3 gave every shipped entry its new fields at their "nothing" values (ADR 0020)', () => {
-    for (const d of BUILTIN_CATALOG.devices) {
+    for (const d of preP4Devices) {
       expect([d.id, d.hostMounts, d.outlets, d.plug]).toStrictEqual([d.id, [], [], null]);
       for (const t of d.terminals) {
         expect([d.id, t.id, t.role, t.side, t.access]).toStrictEqual([
@@ -139,7 +150,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
   });
 
   it('termination methods only where a conductor really lands; clip-only elsewhere', () => {
-    const landed = BUILTIN_CATALOG.devices.flatMap((d) =>
+    const landed = preP4Devices.flatMap((d) =>
       d.terminals
         .filter((t) => t.methods.length > 0)
         .map((t) => `${d.id}:${t.id}:${t.methods.map((m) => m.method).join(',')}`),
@@ -188,7 +199,7 @@ describe('the built-in catalogue (content/devices, content/tables, content/tools
   });
 
   it('the breaker, the DIN supply and the terminal blocks fit a DIN rail; the boxes a stud flange; ducts a backplate; nothing else declares a mount', () => {
-    expect(BUILTIN_CATALOG.devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
+    expect(preP4Devices.filter((d) => d.mounts.length > 0).map((d) => [d.id, d.mounts])).toStrictEqual([
       ['box.tinmoor-1g-steel', [{ type: 'studFlange', widthMm: 51, crossMm: 0, alongMm: 0, contacts: [] }]],
       ['box.tinmoor-2g-nm', [{ type: 'studFlange', widthMm: 102, crossMm: 0, alongMm: 0, contacts: [] }]],
       ['box.tinmoor-4rd-nm-ceiling', [{ type: 'studFlange', widthMm: 102, crossMm: 0, alongMm: 0, contacts: [] }]],

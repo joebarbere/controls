@@ -130,11 +130,17 @@ describe('the built-in hand tools (F3.4 part 1)', () => {
     expect(inside(marked('breaker.saltmere-1p-15a', 'load'), high)).toBe(true);
     expect(inside(marked('supply.railwick-din-24v-5a', 'pos'), low)).toBe(true);
     expect(inside(marked('supply.railwick-din-24v-5a', 'pos'), high)).toBe(false);
-    // Every marked torque in the catalogue is reachable by one of them.
-    const torques = BUILTIN_CATALOG.devices.flatMap((dev) =>
-      dev.terminals.flatMap((t) => t.methods.flatMap((m) => (m.torqueNm === null ? [] : [m.torqueNm]))),
-    );
+    // Every marked torque in the catalogue is reachable by one of them, except the service's meter-base
+    // lugs (31 N·m, P4 F4.2 part 2): no catalogue tool reaches a service lug's torque yet. That gap is
+    // named here so a new one can't slip in beside it.
+    const awaitingTorqueTool = (id: string) => id === 'service.larkmoor-sp25-overhead';
+    const torques = BUILTIN_CATALOG.devices
+      .filter((dev) => !awaitingTorqueTool(dev.id))
+      .flatMap((dev) =>
+        dev.terminals.flatMap((t) => t.methods.flatMap((m) => (m.torqueNm === null ? [] : [m.torqueNm]))),
+      );
     for (const nm of torques) expect(inside(nm, low) || inside(nm, high)).toBe(true);
+    expect(inside(marked('service.larkmoor-sp25-overhead', 'l1'), high)).toBe(false);
   });
 
   it('cap the diagonal cutters at 8 AWG solid copper (3.26 mm); 6 AWG (4.11 mm) is beyond them', () => {

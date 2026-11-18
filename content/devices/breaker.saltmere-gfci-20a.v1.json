@@ -1,0 +1,360 @@
+{
+  "id": "breaker.saltmere-gfci-20a",
+  "version": 1,
+  "title": "20 A single-pole plug-on GFCI circuit breaker (Class A)",
+  "brand": "Saltmere",
+  "modelName": "SLM-GF20",
+  "category": "protection",
+  "sizeMm": {
+    "widthMm": 25,
+    "heightMm": 100,
+    "depthMm": 70
+  },
+  "terminals": [
+    {
+      "id": "line",
+      "label": "LINE",
+      "positionMm": {
+        "x": 12,
+        "y": 5,
+        "z": 10
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
+    },
+    {
+      "id": "load",
+      "label": "LOAD",
+      "positionMm": {
+        "x": 17,
+        "y": 93,
+        "z": 55
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 8
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "drives": ["slotted", "square"],
+          "alRated": true,
+          "entryMm": {
+            "x": 17,
+            "y": 100,
+            "z": 55
+          },
+          "exitAxis": "+y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "loadNeutral",
+      "label": "LOAD NEUT",
+      "positionMm": {
+        "x": 8,
+        "y": 93,
+        "z": 55
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 8
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "drives": ["slotted", "square"],
+          "alRated": true,
+          "entryMm": {
+            "x": 8,
+            "y": 100,
+            "z": 55
+          },
+          "exitAxis": "+y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "pigtail",
+      "label": "PIGTAIL",
+      "positionMm": {
+        "x": 12,
+        "y": 97,
+        "z": 25
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 8
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": 4,
+          "drives": ["slotted", "square"],
+          "alRated": true,
+          "entryMm": {
+            "x": 12,
+            "y": 100,
+            "z": 25
+          },
+          "exitAxis": "+y",
+          "clampType": "pressurePlate",
+          "clampDepthMm": 10,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "busStab",
+      "widthMm": 25,
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": [
+        {
+          "id": "line1",
+          "terminal": "line",
+          "host": "stab",
+          "positionOffset": 0,
+          "contactOhm": 0.0001
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "breaker.gfci1p",
+    "params": {
+      "ratedCurrentA": 20,
+      "thermalTimeConstantS": 60,
+      "ultimateTripRatio": 1.25,
+      "magneticPickupMinA": 240,
+      "magneticPickupMaxA": 400,
+      "openingTimeMinMs": 8,
+      "openingTimeMaxMs": 20,
+      "contactResistanceOhm": 0.005,
+      "residualPickupMinA": 0.004,
+      "residualPickupMaxA": 0.006,
+      "mechanismTimeMinMs": 3,
+      "mechanismTimeMaxMs": 14,
+      "testResistanceOhm": 15000
+    }
+  },
+  "controls": [
+    {
+      "id": "on",
+      "label": "Handle on",
+      "type": "toggle"
+    },
+    {
+      "id": "test",
+      "label": "Test",
+      "type": "momentary"
+    }
+  ],
+  "sources": [
+    {
+      "id": "plug-on-thermal",
+      "kind": "real-world",
+      "citation": "real-world (the P4 pre-audit's reading, ADR 0021 part 2; that maker's curve not re-read for this entry): the P2 bimetal law with a 60 s time constant and an ultimate trip of 1.25 × the rating trips at 116.84 s (135 %), 29.72 s (200 %), 3.872 s (500 %) and 0.9449 s (10 ×), inside the bands read from a maker's published 15–20 A residential time-current curve (135 %: 30 s to 1 h; 200 %: 10 s to 2 min; 500 %: 1 to 15 s; 10 ×: 0.45 to 1.1 s); UL 489's 1 h ceiling at 135 % and 2 min at 200 % (up to 30 A), cited by number. It never trips at 1.25 × (ultimate trip strictly below 1.35).",
+      "covers": ["model.params.ratedCurrentA", "model.params.thermalTimeConstantS", "model.params.ultimateTripRatio"]
+    },
+    {
+      "id": "plug-on-pickup",
+      "kind": "real-world",
+      "citation": "real-world (the P4 pre-audit's reading, ADR 0021 part 2; not re-read for this entry): an absolute instantaneous pickup band of 240–400 A read from a maker's published 15–20 A residential time-current curve, never a multiple of the rating (no IEC 60898 curve letters on a plug-on breaker). For the reviewer: a second maker's 15–25 A sheet, read for this entry (2026-11-18), puts the instantaneous region's lower edge near 225–230 A and its maximum-clearing floor near 840–860 A; the vetted, narrower band is kept, and the bolted-short scenario's 1.1 × margin is set against its 400 A top.",
+      "covers": ["model.params.magneticPickupMinA", "model.params.magneticPickupMaxA"]
+    },
+    {
+      "id": "plug-on-opening",
+      "kind": "real-world",
+      "citation": "real-world (top) and game-design (bottom), the P4 pre-audit (ADR 0021 part 2): above its pickup the breaker opens after a time drawn inside 8–20 ms, the top read from a maker's 15–20 A curve's maximum clearing time; the 8 ms bottom is game-design.",
+      "covers": ["model.params.openingTimeMinMs", "model.params.openingTimeMaxMs"]
+    },
+    {
+      "id": "pole-resistance",
+      "kind": "game-design",
+      "citation": "game-design: inside published loss figures: a closed pole of 5 mΩ plus its 0.1 mΩ stab jaw dissipates 2.04 W at its 20 A rating. Anchors: one maker's data bulletin on breaker operating temperatures (read 2026-11-18) puts a 20 A residential combination AFCI's resistive loss near 2.2 W (about 5.5 mΩ); a DIN-rail miniature breaker maker's catalogue page (read through a page fetch, its columns matched by position) gives about 2.5, 2.8, 3.8, 4.0 and 4.5 W per pole at 16, 20, 32, 40 and 50 A, measured from the voltage drop at the rating; the P4 pre-audit vetted 5–10 mΩ for 15 and 20 A poles. The pole's resistance is fixed (no thermal node).",
+      "covers": ["model.params.contactResistanceOhm"]
+    },
+    {
+      "id": "stab-contact",
+      "kind": "game-design",
+      "citation": "game-design: the breaker's spring jaw on its bus stab, 0.1 mΩ, kept small so the pole and jaw together stay at the pole-loss anchors (a maker's watts-loss figure covers the whole pole, jaw included; no separate jaw figure is published). ADR 0019 D3: one resistor per contact.",
+      "covers": ["fits.busStab.contacts.line1.contactOhm"]
+    },
+    {
+      "id": "bus-fit",
+      "kind": "game-design",
+      "citation": "game-design: the breaker plugs onto a load centre's bus column, one stab per pole (ADR 0019): its origin on its first stab, a second pole one stab further along (positionOffset 1, the other leg), 25 mm along the column so it fills its one space on the 25 mm game-design pitch (the product pitch is one inch per space, 25.4 mm).",
+      "covers": ["fits.busStab"]
+    },
+    {
+      "id": "layout",
+      "kind": "game-design",
+      "citation": "game-design: about the size of a one-inch-wide plug-on branch breaker (25 × 100 × 70 mm; common practice, not read from a product drawing): the stab jaw at the bus end (clip-reachable with a probe, never a wire terminal) and the wire terminals at the far end, entered from the +y face.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.load.methods.screw.entryMm",
+        "terminals.loadNeutral.methods.screw.entryMm",
+        "terminals.pigtail.methods.screw.entryMm",
+        "terminals.load.methods.screw.exitAxis",
+        "terminals.loadNeutral.methods.screw.exitAxis",
+        "terminals.pigtail.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "terminations",
+      "kind": "real-world",
+      "citation": "real-world (read for this entry, 2026-11-18): one maker's published plug-on breaker catalogue, its terminations page: 10–30 A breakers have pressure-plate wire terminals; 15 and 20 A take two copper conductors of 14–10 AWG (aluminium 12–8 AWG singly); 30 A one conductor, copper 14–8 AWG (aluminium 12–8); the GFCI and AFCI 15–20 A one conductor, copper 14–8 AWG (aluminium 12–8); 35–70 A box lugs, one conductor of 8–2 AWG copper or aluminium (75 °C conductors). Paraphrased, no table copied. Modelled: one conductor of 14–8 AWG, copper or aluminium (CU/AL; aluminium building wire starts at 12 AWG).",
+      "covers": [
+        "terminals.load.methods.screw.awgRange",
+        "terminals.loadNeutral.methods.screw.awgRange",
+        "terminals.load.methods.screw.alRated",
+        "terminals.loadNeutral.methods.screw.alRated",
+        "terminals.load.methods.screw.ratedConductors",
+        "terminals.loadNeutral.methods.screw.ratedConductors"
+      ]
+    },
+    {
+      "id": "terminal-torque",
+      "kind": "real-world",
+      "citation": "real-world (product class, the shipped breaker.saltmere-1p-15a's vetted source, not re-read): branch breakers' pressure-plate wire terminals carry a marked tightening torque of about 4.0 N·m (35 lb·in) for 14 to 10 AWG. The torque is the fictional breaker's marking; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": [
+        "terminals.load.methods.screw.torqueNm",
+        "terminals.loadNeutral.methods.screw.torqueNm",
+        "terminals.pigtail.methods.screw.torqueNm"
+      ]
+    },
+    {
+      "id": "terminal-rules",
+      "kind": "game-design",
+      "citation": "game-design: the strip length (13 ± 2 mm) and clamp depth (10 mm, inside it), the pressure-plate (saddle) clamp, solid or stranded where the class takes both (stranded only on the 8–2 AWG lug), the conductor count it is rated for and how many fit, and the slotted-and-square combination head (common practice on North American branch-breaker screws; the drive size isn't modelled). Not one product.",
+      "covers": [
+        "terminals.load.methods.screw.stripLengthMm",
+        "terminals.loadNeutral.methods.screw.stripLengthMm",
+        "terminals.pigtail.methods.screw.stripLengthMm",
+        "terminals.load.methods.screw.clampDepthMm",
+        "terminals.loadNeutral.methods.screw.clampDepthMm",
+        "terminals.pigtail.methods.screw.clampDepthMm",
+        "terminals.load.methods.screw.clampType",
+        "terminals.loadNeutral.methods.screw.clampType",
+        "terminals.pigtail.methods.screw.clampType",
+        "terminals.load.methods.screw.stranding",
+        "terminals.loadNeutral.methods.screw.stranding",
+        "terminals.pigtail.methods.screw.stranding",
+        "terminals.load.methods.screw.maxConductors",
+        "terminals.loadNeutral.methods.screw.maxConductors",
+        "terminals.load.methods.screw.drives",
+        "terminals.loadNeutral.methods.screw.drives",
+        "terminals.pigtail.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "terminal-contact",
+      "kind": "real-world",
+      "citation": "real-world (the shipped screw-terminal class, ADR 0018 §4.1): NBS Building Science Series 103 (1977; read in the P3 source pre-audit) measured good branch-circuit screw-terminal connections at 0.2 to 0.5 mΩ; the class value 0.3 mΩ is R₀ at the marked torque, copper, 20 °C.",
+      "covers": [
+        "terminals.load.methods.screw.contactOhm",
+        "terminals.loadNeutral.methods.screw.contactOhm",
+        "terminals.pigtail.methods.screw.contactOhm"
+      ]
+    },
+    {
+      "id": "terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, the shipped branch-breaker screw class): a 0.026 W/K heat path into the device and a 1.1 J/K clamp (about 3 g of brass × 380 J/(kg·K)).",
+      "covers": [
+        "terminals.load.methods.screw.heatPathWPerK",
+        "terminals.loadNeutral.methods.screw.heatPathWPerK",
+        "terminals.pigtail.methods.screw.heatPathWPerK",
+        "terminals.load.methods.screw.hotSpotHeatCapacityJPerK",
+        "terminals.loadNeutral.methods.screw.hotSpotHeatCapacityJPerK",
+        "terminals.pigtail.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "pigtail-terminal",
+      "kind": "game-design",
+      "citation": "game-design: a GFCI or AFCI breaker's factory white pigtail is permanently attached and lands on the load centre's neutral bar. Here its breaker end is a terminal that takes the short white conductor standing in for the pigtail (ADR 0019's review note), as the load neutral's terminal class (14–8 AWG, pressure plate); the sensing neutral itself is the kind's (ADR 0021 §10).",
+      "covers": [
+        "terminals.pigtail.methods.screw.awgRange",
+        "terminals.pigtail.methods.screw.alRated",
+        "terminals.pigtail.methods.screw.ratedConductors",
+        "terminals.pigtail.methods.screw.maxConductors"
+      ]
+    },
+    {
+      "id": "gfci-sensing",
+      "kind": "real-world",
+      "citation": "real-world and game-design (the P4 pre-audit and ADR 0021 part 2): a residual pickup drawn inside 4–6 mA, the UL 943 Class A trip range (cited by number; the region profile holds the inverse-time limit); a mechanism time drawn inside 3–14 ms (detection, the half-cycle wait and the solenoid; the pre-audit's band); the test resistor 15 kΩ, game-design: 8.0 mA at 120 V and 6.8 mA at 85 % voltage, inside a UL 943 test circuit of at most about 9 mA (by number, ADR 0021's reference notes), and about the 14.6–16.6 kΩ that electricians report measuring across GFCI test circuits (forum reports seen through search summaries, not read in full).",
+      "covers": [
+        "model.params.residualPickupMinA",
+        "model.params.residualPickupMaxA",
+        "model.params.mechanismTimeMinMs",
+        "model.params.mechanismTimeMaxMs",
+        "model.params.testResistanceOhm"
+      ]
+    }
+  ],
+  "extensions": {}
+}

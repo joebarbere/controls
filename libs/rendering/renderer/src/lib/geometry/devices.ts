@@ -96,6 +96,19 @@ export const WIRE_NUT_KIND = 'splice.twistOn';
 /** The utility service model kinds (the stand-in supply), drawn as a service cabinet. */
 export const UTILITY_KINDS = ['utility.splitPhase', 'utility.threePhase'] as const;
 
+/**
+ * The P4 F4.2 part 2 kinds that ship entries before their own recipes: the plug-on, GFCI and AFCI
+ * breakers and the service's meter base, drawn by one plain recipe ({@link plainProtectionParts}) until
+ * `renderer-engineer`'s panel PR (F4.2 part 3) draws handles, a meter and the bus.
+ */
+export const PROTECTION_PLACEHOLDER_KINDS = [
+  'breaker.plugOn1p',
+  'breaker.plugOn2p',
+  'breaker.gfci1p',
+  'breaker.afci1p',
+  'service.splitPhase',
+] as const;
+
 /** Which recipe draws a model kind (given its body size: a cut part's length). Kinds without one are drawn as unknown objects. */
 const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm) => Part[]>> = {
   battery: batteryParts,
@@ -118,6 +131,7 @@ const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm)
   [WIRE_NUT_KIND]: wireNutParts,
   'utility.splitPhase': utilityParts,
   'utility.threePhase': utilityParts,
+  ...Object.fromEntries(PROTECTION_PLACEHOLDER_KINDS.map((kind) => [kind, plainProtectionParts])),
 };
 
 interface Part {
@@ -205,7 +219,20 @@ const UTILITY_LOOK: Look = {
   opening: hole, // each lug's conductor bore
 };
 
+/** The placeholder look of the P4 protection kinds and the meter base (renderer-local, game-design; no maker's trade dress). */
+const PROTECTION_PLACEHOLDER_LOOK: Look = {
+  body: plastic(0x2b2d30), // a black moulded breaker case, a grey meter base
+  panel: unused,
+  label: plastic(0xf0f0f0),
+  positive: unused,
+  negative: unused,
+  accent: metal(0xc9ccd0), // plated terminal screws and lugs
+  bulb: unused,
+  opening: unused,
+};
+
 const LOOKS: Readonly<Record<string, Look>> = {
+  ...Object.fromEntries(PROTECTION_PLACEHOLDER_KINDS.map((kind) => [kind, PROTECTION_PLACEHOLDER_LOOK])),
   battery: {
     body: plastic(0x2b2d30), // black ABS case
     panel: plastic(0x3a3d42), // lid
@@ -1051,6 +1078,24 @@ function utilityParts(def: DeviceDefinition): Part[] {
     parts.push({ slot: 'accent', geometry: boxBetween(p.x - 9, p.y - 9, d - 1, p.x + 9, p.y + 11, d + proud) });
     parts.push({ slot: 'opening', geometry: cylinderZ(p.x, p.y, 3.5, d + proud, d + proud + 0.3) });
     parts.push({ slot: 'accent', geometry: cylinderY(p.x, d + proud / 2 - 1, 3.5, p.y + 11, p.y + 14) });
+  }
+  return parts;
+}
+
+/**
+ * A plug-on breaker's or the meter base's plain body (F4.2 part 2, until the panel PR's recipes): its
+ * catalogue box, a label plate on its front (z = depth) and a screw head at every terminal a conductor
+ * lands on. Stab jaws and the unreachable transformer neutral (no methods) draw nothing.
+ */
+function plainProtectionParts(def: DeviceDefinition): Part[] {
+  const { widthMm: w, heightMm: h, depthMm: d } = def.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+  const parts: Part[] = [
+    { slot: 'body', geometry: boxBetween(0, 0, 0, w, h, d) },
+    { slot: 'label', geometry: boxBetween(w * 0.2, h * 0.4, d, w * 0.8, h * 0.5, d + 0.5) },
+  ];
+  for (const t of def.terminals.filter((x) => x.methods.length > 0)) {
+    const p = t.positionMm;
+    parts.push({ slot: 'accent', geometry: sphere(p.x, p.y, p.z, 3) });
   }
   return parts;
 }

@@ -144,7 +144,7 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Emberlyn       | Cartridge fuse                                                               |
 | Ferrovane      | Sealed lead-acid battery                                                     |
 | Hearthvale     | Heater elements                                                              |
-| Larkmoor Power | Utility services (one brand for the utility)                                 |
+| Larkmoor Power | Utility services and the overhead service (one brand for the utility)        |
 | Lattisby       | Slotted wire duct                                                            |
 | Lumivane       | Incandescent lamps                                                           |
 | Orrinwood      | Power resistor                                                               |
@@ -154,7 +154,7 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Quillfern      | Test leads                                                                   |
 | Quorvale       | Aluminium building wire (XHHW-2)                                             |
 | Railwick       | DIN-rail power supply                                                        |
-| Saltmere       | Circuit breaker                                                              |
+| Saltmere       | Circuit breakers (the DIN breaker; plug-on, GFCI and AFCI breakers)          |
 | Sorrelby       | NM-B cable and its conductors                                                |
 | Stavenor       | EMT conduit, elbows and connectors                                           |
 | Tallowmere     | Copper building wire (THHN/THWN-2) and MTW                                   |

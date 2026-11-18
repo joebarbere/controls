@@ -1,0 +1,309 @@
+{
+  "id": "service.larkmoor-sp25-overhead",
+  "version": 1,
+  "title": "120/240 V overhead service, 25 kVA pole transformer, drop and meter base",
+  "brand": "Larkmoor Power",
+  "modelName": "LP-SP25-OH",
+  "category": "source",
+  "sizeMm": {
+    "widthMm": 280,
+    "heightMm": 370,
+    "depthMm": 120
+  },
+  "terminals": [
+    {
+      "id": "l1",
+      "label": "L1",
+      "positionMm": {
+        "x": 90,
+        "y": 90,
+        "z": 60
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 2,
+            "largest": -3
+          },
+          "stranding": ["stranded"],
+          "stripLengthMm": {
+            "nominal": 25,
+            "tolerance": 3
+          },
+          "torqueNm": 31,
+          "drives": ["slotted"],
+          "alRated": true,
+          "entryMm": {
+            "x": 90,
+            "y": 80,
+            "z": 60
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 22,
+          "contactOhm": 5e-5,
+          "heatPathWPerK": 0.2,
+          "hotSpotHeatCapacityJPerK": 22,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "n",
+      "label": "N",
+      "positionMm": {
+        "x": 140,
+        "y": 90,
+        "z": 60
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 2,
+            "largest": -3
+          },
+          "stranding": ["stranded"],
+          "stripLengthMm": {
+            "nominal": 25,
+            "tolerance": 3
+          },
+          "torqueNm": 31,
+          "drives": ["slotted"],
+          "alRated": true,
+          "entryMm": {
+            "x": 140,
+            "y": 80,
+            "z": 60
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 22,
+          "contactOhm": 5e-5,
+          "heatPathWPerK": 0.2,
+          "hotSpotHeatCapacityJPerK": 22,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "l2",
+      "label": "L2",
+      "positionMm": {
+        "x": 190,
+        "y": 90,
+        "z": 60
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 2,
+            "largest": -3
+          },
+          "stranding": ["stranded"],
+          "stripLengthMm": {
+            "nominal": 25,
+            "tolerance": 3
+          },
+          "torqueNm": 31,
+          "drives": ["slotted"],
+          "alRated": true,
+          "entryMm": {
+            "x": 190,
+            "y": 80,
+            "z": 60
+          },
+          "exitAxis": "-y",
+          "clampType": "boxLug",
+          "clampDepthMm": 22,
+          "contactOhm": 5e-5,
+          "heatPathWPerK": 0.2,
+          "hotSpotHeatCapacityJPerK": 22,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "x0",
+      "label": "X0",
+      "positionMm": {
+        "x": 140,
+        "y": 360,
+        "z": 60
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "none"
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "service.splitPhase",
+    "params": {
+      "ratedKva": 25,
+      "percentImpedance": 2,
+      "xOverR": 2,
+      "lineToNeutralV": 120,
+      "dropLengthMm": 30000,
+      "dropLineAreaM2": 3.3631e-5,
+      "dropNeutralAreaM2": 2.1151e-5,
+      "dropResistivityOhmM": 2.8264e-8,
+      "dropTemperatureCoefficientPerK": 0.00403,
+      "dropReferenceTemperatureK": 293.15,
+      "utilityGroundingOhm": 5
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "pole-transformer-class",
+      "kind": "real-world",
+      "citation": "real-world (the shipped utility stand-in's source, vetted in P2 and again in the P4 pre-audit, ADR 0021; not re-read for this entry): a single-phase pole-mounted distribution transformer serving one to a few homes is commonly 25 kVA, with an impedance of about 1.5–3 % and an X/R of about 1–3 (published manufacturers' data and utility service guides, paraphrased). 2 % and X/R 2 are taken: the full winding's impedance is 0.02 × 240² / 25 000 = 46.08 mΩ. Its line-to-neutral source is the half-winding T-equivalent (Kersting's centre-tapped approximation, ADR 0021 §1): about 8.23 kA line-to-neutral and 5.21 kA line-to-line at the transformer terminals with an infinite primary (an upper bound).",
+      "covers": ["model.params.ratedKva", "model.params.percentImpedance", "model.params.xOverR"]
+    },
+    {
+      "id": "split-phase-nominal",
+      "kind": "real-world",
+      "citation": "120 V from each line to the neutral (the secondary's centre tap), the 120/240 V single-phase three-wire nominal system of ANSI C84.1-2020 (cited by number; the region profile's split-phase system).",
+      "covers": ["model.params.lineToNeutralV"]
+    },
+    {
+      "id": "drop-construction",
+      "kind": "real-world",
+      "citation": "real-world and game-design: an overhead triplex service drop of two insulated 2 AWG aluminium line conductors and a bare neutral messenger, here one size smaller (4 AWG). Triplex drops are made with compressed 1350-H19 aluminium line conductors and a messenger of 6201 alloy, ACSR or aluminium, either full-size or reduced (makers' product listings, seen through search summaries, not read in full); the reduced neutral is a game-design choice among them. The areas are the AWG definition's (NBS Handbook 100's geometry, read in the P3 pre-audit): d = 0.127 mm × 92^((36 − n)/39), so 2 AWG is 6.5437 mm and 33.631 mm², 4 AWG 5.1894 mm and 21.151 mm². The messenger is taken at the line conductors' 1350 resistivity: a labelled abstraction (a 6201 messenger, about 52.5 % IACS, is about 16 % more resistive than 1350; a 4 AWG neutral at 1350 sits between a 2 AWG and a 4 AWG 6201 messenger).",
+      "covers": ["model.params.dropLineAreaM2", "model.params.dropNeutralAreaM2"]
+    },
+    {
+      "id": "drop-resistivity",
+      "kind": "real-world",
+      "citation": "NBS Handbook 109, Aluminum Wire Tables (1972; read in full by electrical-realism-reviewer, the pinned materials row aluminiumAa8000): aluminium at 61.0 % IACS has a resistivity of 2.8264 × 10⁻⁸ Ω·m and a temperature coefficient of 0.00403 per kelvin at 20 °C (293.15 K). 1350-H19 conductor aluminium is specified at a minimum 61.0 % IACS (ASTM B230, cited by number, paywalled, not read). The drop's resistance is derived, ρL/A × (1 + α ΔT), never tabulated: 25.212 mΩ per line and 40.089 mΩ for the neutral over 30 m at 20 °C.",
+      "covers": [
+        "model.params.dropResistivityOhmM",
+        "model.params.dropTemperatureCoefficientPerK",
+        "model.params.dropReferenceTemperatureK"
+      ]
+    },
+    {
+      "id": "drop-length",
+      "kind": "game-design",
+      "citation": "game-design: a 30 m span from the pole to the house's meter base (a typical overhead drop span; utilities set the limits in their service guides, not read). The drop's reactance is left out (ADR 0021, a labelled abstraction) and the drop has no thermal node in P4.",
+      "covers": ["model.params.dropLengthMm"]
+    },
+    {
+      "id": "utility-grounding",
+      "kind": "game-design",
+      "citation": "game-design inside a sourced range (the P4 pre-audit, ADR 0021's reference notes): the transformer neutral's grounding to remote earth at the pole, 5 Ω, inside the 1–25 Ω of a multigrounded utility neutral and a single made electrode's 25 Ω ceiling (IEEE C2, the National Electrical Safety Code, Rule 096, cited by number).",
+      "covers": ["model.params.utilityGroundingOhm"]
+    },
+    {
+      "id": "meter-base-layout",
+      "kind": "game-design",
+      "citation": "game-design: drawn as the meter base the drop lands in, 280 × 370 × 120 mm, about the 11 × 14.5 in face of a 200 A-class single-phase ringless overhead meter socket (a meter-socket maker's catalogue, read 2026-11-18; its depth's fraction illegible in the text, about 4½–5 in). The load-side lugs l1, n and l2 sit side by side low in the can and take the service-entrance conductors downwards (−y). x0, the transformer neutral at the pole, is shown at the top and is unreachable (access none, a service.splitPhase rule): nothing lands or clips on it.",
+      "covers": [
+        "sizeMm",
+        "terminals",
+        "terminals.l1.methods.screw.entryMm",
+        "terminals.l2.methods.screw.entryMm",
+        "terminals.n.methods.screw.entryMm",
+        "terminals.l1.methods.screw.exitAxis",
+        "terminals.l2.methods.screw.exitAxis",
+        "terminals.n.methods.screw.exitAxis"
+      ]
+    },
+    {
+      "id": "meter-base-lugs",
+      "kind": "real-world",
+      "citation": "real-world (read 2026-11-18) and game-design: a meter-socket maker's catalogue lists the line and load connectors of its single-phase ringless sockets as copper-or-aluminium (CU/AL) lugs for #6–2/0 AWG on the 125 A class and #6 AWG–350 kcmil on the 200 A class, tin-plated extruded aluminium, one conductor each. The game narrows them to 2 AWG–4/0 (P4 plan F4.2 part 2), inside the 200 A class, so both the 2 AWG and the 4/0 aluminium service-entrance conductors land; stranded only (service-entrance sizes are stranded); one conductor per lug.",
+      "covers": [
+        "terminals.l1.methods.screw.awgRange",
+        "terminals.l2.methods.screw.awgRange",
+        "terminals.n.methods.screw.awgRange",
+        "terminals.l1.methods.screw.alRated",
+        "terminals.l2.methods.screw.alRated",
+        "terminals.n.methods.screw.alRated",
+        "terminals.l1.methods.screw.stranding",
+        "terminals.l2.methods.screw.stranding",
+        "terminals.n.methods.screw.stranding",
+        "terminals.l1.methods.screw.ratedConductors",
+        "terminals.l2.methods.screw.ratedConductors",
+        "terminals.n.methods.screw.ratedConductors",
+        "terminals.l1.methods.screw.maxConductors",
+        "terminals.l2.methods.screw.maxConductors",
+        "terminals.n.methods.screw.maxConductors"
+      ]
+    },
+    {
+      "id": "meter-base-lug-torque",
+      "kind": "game-design",
+      "citation": "game-design: the fictional meter base's marked lug torque, 31 N·m (about 275 lb·in), of the order makers mark on socket-head lugs of this size class (seen only in search summaries; not read); the meter-socket catalogue read says the interior label's torque governs, and NFPA 70-2023 Art. 110.14(D) requires the marked value (both cited by number). No UL 486A-B torque table is used. No catalogue tool reaches 31 N·m yet (the torque screwdrivers stop at 5 N·m).",
+      "covers": [
+        "terminals.l1.methods.screw.torqueNm",
+        "terminals.l2.methods.screw.torqueNm",
+        "terminals.n.methods.screw.torqueNm"
+      ]
+    },
+    {
+      "id": "meter-base-lug-rules",
+      "kind": "game-design",
+      "citation": "game-design: a 25 ± 3 mm strip and a 22 mm barrel grip for a 2 AWG–4/0 box lug, and a slotted drive. Real meter-socket lugs of this size commonly take a hex key (a socket-head screw), which the drive registry doesn't have yet; this entry's drive may change until catalogue 3 ships.",
+      "covers": [
+        "terminals.l1.methods.screw.stripLengthMm",
+        "terminals.l2.methods.screw.stripLengthMm",
+        "terminals.n.methods.screw.stripLengthMm",
+        "terminals.l1.methods.screw.clampDepthMm",
+        "terminals.l2.methods.screw.clampDepthMm",
+        "terminals.n.methods.screw.clampDepthMm",
+        "terminals.l1.methods.screw.clampType",
+        "terminals.l2.methods.screw.clampType",
+        "terminals.n.methods.screw.clampType",
+        "terminals.l1.methods.screw.drives",
+        "terminals.l2.methods.screw.drives",
+        "terminals.n.methods.screw.drives"
+      ]
+    },
+    {
+      "id": "meter-base-lug-contact",
+      "kind": "game-design",
+      "citation": "game-design: a 2 AWG–4/0 lug's contact resistance at the marked torque, copper at 20 °C, 0.05 mΩ, a sixth of the 14–10 AWG screw class's 0.3 mΩ (NBS BSS 103) for its much larger clamped area (at 100 A it drops 5 mV, 0.5 W); a 0.2 W/K heat path (the screw class's scaled for a large lug and its conductor, not calibrated) and a 22 J/K lug, a physics estimate: about 25 g of tin-plated aluminium × 897 J/(kg·K).",
+      "covers": [
+        "terminals.l1.methods.screw.contactOhm",
+        "terminals.l2.methods.screw.contactOhm",
+        "terminals.n.methods.screw.contactOhm",
+        "terminals.l1.methods.screw.heatPathWPerK",
+        "terminals.l2.methods.screw.heatPathWPerK",
+        "terminals.n.methods.screw.heatPathWPerK",
+        "terminals.l1.methods.screw.hotSpotHeatCapacityJPerK",
+        "terminals.l2.methods.screw.hotSpotHeatCapacityJPerK",
+        "terminals.n.methods.screw.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+}

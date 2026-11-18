@@ -322,6 +322,7 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
 
   it('the built-in screw terminals carry ADR 0018 §8 screw-class values', () => {
     const methods = BUILTIN_CATALOG.devices
+      .filter((d) => !P4_PROTECTION_KINDS.includes(d.model.kind))
       .flatMap((d) => d.terminals.flatMap((t) => t.methods))
       .filter((m) => m.method === 'screw');
     // The breaker (2), the DIN supply (2), the stand-in service (3), D12's heater (2) and lamp (2), and
@@ -336,5 +337,40 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
       expect(m.clampDepthMm).toBeLessThanOrEqual(m.stripLengthMm.nominal - m.stripLengthMm.tolerance);
     }
     expect(methods.filter((m) => m.clampType === 'bindingScrew')).toHaveLength(2);
+  });
+});
+
+/** P4 F4.2 part 2's service and plug-on breaker kinds, whose screw terminals are checked on their own below. */
+const P4_PROTECTION_KINDS: readonly string[] = [
+  'breaker.afci1p',
+  'breaker.gfci1p',
+  'breaker.plugOn1p',
+  'breaker.plugOn2p',
+  'service.splitPhase',
+];
+
+describe('the P4 F4.2 part 2 screw terminals (the service and the plug-on breakers)', () => {
+  it('pressure plates carry the screw class; the 8–2 AWG and meter-base box lugs their own game-design classes', () => {
+    const methods = BUILTIN_CATALOG.devices
+      .filter((d) => P4_PROTECTION_KINDS.includes(d.model.kind))
+      .flatMap((d) => d.terminals.flatMap((t) => t.methods.map((m) => ({ id: d.id, m }))));
+    // 15–30 A one-pole (1 each × 3) and two-pole (2 × 3); 40 and 50 A (1 × 2, 2 × 2); GFCI and AFCI
+    // (3 each × 4); the meter base (3): 3 + 6 + 2 + 4 + 12 + 3 = 30.
+    expect(methods).toHaveLength(30);
+    for (const { id, m } of methods) {
+      expect(m.method).toBe('screw');
+      expect(m.combination).toBeNull();
+      expect(m.clampDepthMm).toBeLessThanOrEqual(m.stripLengthMm.nominal - m.stripLengthMm.tolerance);
+      const meterBase = id.startsWith('service.');
+      const lug = m.clampType === 'boxLug';
+      expect([id, m.clampType, m.contactOhm, m.heatPathWPerK, m.hotSpotHeatCapacityJPerK]).toStrictEqual(
+        meterBase
+          ? [id, 'boxLug', 5e-5, 0.2, 22]
+          : lug
+            ? [id, 'boxLug', 1e-4, 0.06, 3]
+            : [id, 'pressurePlate', 3e-4, 0.026, 1.1],
+      );
+    }
+    expect(methods.filter(({ m }) => m.clampType === 'boxLug')).toHaveLength(9);
   });
 });
