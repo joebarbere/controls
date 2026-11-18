@@ -25,7 +25,8 @@ import { buildWiredPlant, WIRED_LOOPS, WIRED_SMOKE_LOOPS } from './wired-plant';
  *   0018 §3.4) on 1,000 catalogue devices and 2,000 landed conductors (plus their loops' 600 leads),
  *   the solve excluded: `prepare` starts an engine on the plant at a cadence tick, which solves there
  *   (untimed), so the timed `advanceTo(t + 1)` is that tick's discrete, continuous (the devices' and
- *   the bank's) and protection layers only. Gated at spec §4.5's 0.3 ms per tick, and on allocation.
+ *   the bank's) and protection layers only. Gated at spec §4.5's 0.3 ms per tick on the reference
+ *   machine (calibrated, as the re-solves are), and on allocation.
  * - `plant-resolve-topology-change-wired`: `plant-resolve-topology-change` (spec §4.5's 2 ms re-solve
  *   after a topology change on the 2,000-node plant, calibrated) with the connection bank in the loop,
  *   as the engine runs it: after the recompile the bank is synced to the new netlist (branch indices,
@@ -161,25 +162,36 @@ function connectionDigest(engine: SimEngine): string {
   return `${members}:${conductors}:${ends}`;
 }
 
-export const TICK_WIRED_CASE: BenchCase = {
-  name: 'tick-wired-plant',
-  warmup: 20,
-  runs: 101,
-  budgetMs: 0.3,
-  prepare: () => {
-    tickEngine = startWired();
-  },
-  run: () => {
-    const engine = tickEngine as SimEngine;
-    engine.advanceTo(WIRED_START + 1);
-    // lastSolveTick stays at the start's solve (no cadence solve timed) and no continuous re-solve ran.
-    return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.stats.continuousSolves}:${engine.netlist.branches.length}`;
-  },
-  // A digest of what the bank's step wrote, untimed: an idle bank can't pass.
-  checksum: () => connectionDigest(tickEngine as SimEngine),
-  // Smoke: the same probe on the smoke plant (a tenth of the loops), so a CI smoke run stays cheap.
-  invariant: (smoke) => wiredAllocationInvariant(smoke),
-};
+/**
+ * `tick-wired-plant`: one cadence tick's layers on the wired plant (the file comment), held to spec
+ * §4.5's per-tick budget **on the reference machine**, scaled to this one by the calibration loop
+ * timed beside each run (bench.ts, F2.2 part 3b), as the re-solve cases are. Its raw-ms gate failed
+ * CI's Windows runner at 0.302 ms (#153) where the same code had taken 0.145–0.248 ms on other Windows
+ * runs: the runners differ about 2× in speed, which a raw gate reads as a regression. Gated on
+ * allocation too.
+ */
+export function tickWiredCase(budgetMs: number, calibration: BenchCalibration): BenchCase {
+  return {
+    name: 'tick-wired-plant',
+    warmup: 20,
+    runs: 101,
+    budgetMs,
+    calibration,
+    prepare: () => {
+      tickEngine = startWired();
+    },
+    run: () => {
+      const engine = tickEngine as SimEngine;
+      engine.advanceTo(WIRED_START + 1);
+      // lastSolveTick stays at the start's solve (no cadence solve timed) and no continuous re-solve ran.
+      return `${engine.tick}:${engine.lastSolveTick}:${engine.stats.cadenceSolves}:${engine.stats.continuousSolves}:${engine.netlist.branches.length}`;
+    },
+    // A digest of what the bank's step wrote, untimed: an idle bank can't pass.
+    checksum: () => connectionDigest(tickEngine as SimEngine),
+    // Smoke: the same probe on the smoke plant (a tenth of the loops), so a CI smoke run stays cheap.
+    invariant: (smoke) => wiredAllocationInvariant(smoke),
+  };
+}
 
 /** What the wired re-solve keeps between runs: a compiler, a solver (its factorisation cache), a bank, value storage. */
 interface WiredResolver {

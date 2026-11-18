@@ -233,6 +233,8 @@ Owners `electron-platform-engineer` + `angular-ui-engineer`; `sim-engine-enginee
 | `inspect-house`, `inspect-wired-plant`                                                 | reported (`budgetMs: null`); a UI worker if over one frame           |
 | House frame time (SwiftShader recorded; real GPU by the user)                          | recorded, not gated (P3 practice)                                    |
 
+`tick-wired-plant` is calibrated since the #153 Windows flake (its own reference, `CALIBRATION_REFERENCE_TICK_MS`), so its 0.3 ms is spec §4.5's budget on the reference machine, as strict there as the raw gate was. Calibrate `tick-house` and `tick-protected-plant` the same way when they land ([simulation caveats](../docs/caveats/simulation.md)).
+
 ## ADRs to write in P4
 
 | ADR  | Topic                                                                                                                                                          | Written in            |

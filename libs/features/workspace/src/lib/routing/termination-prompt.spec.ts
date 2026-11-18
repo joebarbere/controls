@@ -97,6 +97,15 @@ const OUTCOME_WORDS = /nick|quality|achiev|contact/i;
 const value = (name: string | RegExp) => (screen.getByLabelText(name) as HTMLInputElement | HTMLSelectElement).value;
 
 describe('TerminationPromptDialog (F3.3 part 2)', () => {
+  // The first session, world and render in the file are several times colder than later ones (about
+  // 0.7 s against 0.06 s locally under parallel load: Angular's first template pass, V8 warming up).
+  // Paid here, once, so the first test is timed like the rest (ui caveats).
+  beforeAll(async () => {
+    await render('apprentice');
+    document.body.innerHTML = '';
+    TestBed.resetTestingModule();
+  });
+
   afterEach(() => {
     document.body.innerHTML = '';
     TestBed.resetTestingModule();

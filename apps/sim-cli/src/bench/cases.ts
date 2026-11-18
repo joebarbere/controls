@@ -17,9 +17,14 @@ import { materialiseWorld } from '@controls/sim-protocol';
 import { cableAddBench, type CableAddBench } from './cable-add';
 import { bakeChecksum, bakeRoutes, buildRouteBakePanel, ROUTE_BAKE_SMOKE_ROWS } from './route-bake';
 import type { BakedWorld } from '@controls/world-model';
-import { intermittentToggleCase, resolveWiredCase, TICK_WIRED_CASE } from './wired';
+import { intermittentToggleCase, resolveWiredCase, tickWiredCase } from './wired';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
-import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
+import {
+  CALIBRATION_REFERENCE_MS,
+  CALIBRATION_REFERENCE_TICK_MS,
+  CALIBRATION_WARMUP_RUNS,
+  runCalibration,
+} from './calibration';
 import { buildPlant, type Plant } from './plant';
 import {
   bytesPerRead,
@@ -38,11 +43,16 @@ import {
  * The netlist cases have no budget of their own. Compiling is only a part of §4.5's re-solve after a
  * topology change (2 ms for a 2,000-node plant, compile and solve together), so its budget belongs to
  * the re-solve case, which is gated against it as scaled by the calibration loop (F2.2 part 3b, see
- * calibration.ts). The per-tick case (F2.3a) is gated.
+ * calibration.ts). The per-tick cases are gated at spec §4.5's 0.3 ms: `tick-wired-plant` (F3.6
+ * part 1) calibrated, so on the reference machine; `tick-device-mix` (F2.3a, a sixth of the budget on
+ * every CI runner) in raw ms.
  */
 
 /** Spec §4.5: a 2,000-node re-solve after a topology change, on the reference machine. */
 const RESOLVE_BUDGET_MS = 2;
+
+/** Spec §4.5: one tick's layers (no solve), on the reference machine when the case is calibrated. */
+const TICK_BUDGET_MS = 0.3;
 
 /** The re-solve gate's calibration (calibration.ts): its budget is scaled by this loop's speed here. */
 const CALIBRATION: BenchCalibration = {
@@ -51,6 +61,9 @@ const CALIBRATION: BenchCalibration = {
   warmup: CALIBRATION_WARMUP_RUNS,
   run: runCalibration,
 };
+
+/** `tick-wired-plant`'s calibration: the same loop, against its median beside that case on the reference machine. */
+const TICK_CALIBRATION: BenchCalibration = { ...CALIBRATION, referenceMs: CALIBRATION_REFERENCE_TICK_MS.value };
 
 let plant: { readonly plant: Plant; readonly closed: World; readonly open: World } | null = null;
 
@@ -397,7 +410,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
     name: 'tick-device-mix',
     warmup: 20,
     runs: 101,
-    budgetMs: 0.3,
+    budgetMs: TICK_BUDGET_MS,
     prepare: () => {
       tickEngine = SimEngine.start(tickMixWorld());
     },
@@ -427,7 +440,7 @@ export const BENCH_CASES: readonly BenchCase[] = [
       return `${engine.stats.cadenceSolves % 100}:${engine.netlist.topologyHash}`;
     },
   },
-  TICK_WIRED_CASE,
+  tickWiredCase(TICK_BUDGET_MS, TICK_CALIBRATION),
   resolveWiredCase(plantWorlds, RESOLVE_BUDGET_MS, CALIBRATION),
   intermittentToggleCase(RESOLVE_BUDGET_MS, CALIBRATION),
   SNAPSHOT_READ_CASE,
@@ -458,13 +471,13 @@ function bagDigest(engine: SimEngine): string {
 export const PENDING_BENCH_CASES: readonly PendingBenchCase[] = [
   {
     name: 'tick-house',
-    budgetMs: 0.3,
+    budgetMs: TICK_BUDGET_MS,
     enabledBy: 'F4.6 part 2',
     note: 'Spec §4.5 per cadence tick on the acceptance house (content/levels/house.json, every circuit loaded), median, with a 0 B/tick allocation gate like tick-wired-plant.',
   },
   {
     name: 'tick-protected-plant',
-    budgetMs: 0.3,
+    budgetMs: TICK_BUDGET_MS,
     enabledBy: 'F4.2 part 1',
     note: 'Spec §4.5 per tick on the wired plant with plug-on breakers, 100 GFCIs and 50 AFCIs (the protection layer runs every tick), median, allocation-gated.',
   },

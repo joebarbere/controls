@@ -59,6 +59,24 @@ export const CALIBRATION_REFERENCE_MS: SourcedConstant = {
 };
 
 /**
+ * The calibration's median on the reference machine **beside `tick-wired-plant`**: that case's
+ * reference (its gate is spec §4.5's 0.3 ms per tick on the reference machine). The same loop runs
+ * about 1.37× slower beside the tick case than beside a re-solve, in the same process (the tick's
+ * `prepare` starts a fresh 1,000-device engine before every pair; a full or minor collection in
+ * `prepare` changed nothing), so {@link CALIBRATION_REFERENCE_MS} there would put the tick in
+ * reference ms about 8 % below its real time on the reference machine and loosen the gate. With its
+ * own reference, a tick's gated value on the reference machine is its raw time: the gate is as strict
+ * there as the raw 0.3 ms gate it replaced (#153). Re-measure it with the main reference.
+ */
+export const CALIBRATION_REFERENCE_TICK_MS: SourcedConstant = {
+  value: 0.76,
+  unit: 'ms',
+  kind: 'numerical',
+  source:
+    'numerical: measured on the reference machine, an AMD Ryzen 5 5600X (6 cores, 12 threads) with 62 GiB, Fedora 45 (Linux 7.3), Node 24.12.0, on 2026-11-18, quiet (load average 0.8–1.6): the median over 15 runs of `node dist/apps/sim-cli/main.mjs bench` of the calibration loop’s median beside `tick-wired-plant` (101 timed pairs each), 0.764 ms (range 0.753–0.811), rounded down to 0.76 so the gate leans strict. In the same runs the loop beside `plant-resolve-topology-change` was 0.557 ms (0.545–0.626) and the tick’s raw median 0.172 ms (0.1717–0.1731), so the tick’s gated value there is its raw time within 1 %.',
+};
+
+/**
  * Untimed runs of the calibration before each case it calibrates (`BenchCalibration.warmup`).
  * Numerical: with only a case's 10 warm-up pairs, the first calibrated case's calibration median
  * moved 0.58–0.83 ms between processes on the reference machine (V8 was still re-optimising it, so
