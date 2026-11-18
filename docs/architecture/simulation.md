@@ -927,7 +927,7 @@ flowchart LR
 - **What the banks read for it.** `SimDevice` gains `contacts` (a device's relation contact branches: the service's `grounding`, a rod's `electrode`) and `terminalNode(terminal)` (resolved at bank build, so the GFCI's line-side voltage is read across an open pole). The ground rod has a bank only to write its record. The AFCI's `arcingDownstream` reuses its protection layer's lazy downstream marks.
 - **Pending schemas** (`PENDING_DEVICE_OUTPUT_SCHEMAS`): the LED lamp and fixture and the dimmer, agreed now and registered with their models in P4 PR 12 without moving the fingerprint.
 - **Connection records** gain each end's degradation factor D inside the f64 block (120 bytes); a module-load check keeps the layout the readout's fast path (every f64, then every u8).
-- **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (emitted by P4 PR 12 and F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
+- **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (`lampBurnout` emitted by the lamp since P4 PR 12; `overvoltage` by F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
 - **Allocation.** Every record writer, the lamp's included, writes into the view without returning a double from a helper (`writeAmps`, `writeVolts`) and is gated at under 1 B a call (`allocation-loads.spec.ts`).
 
 ## Lighting models and the phasor outer loop (P4 PR 12)

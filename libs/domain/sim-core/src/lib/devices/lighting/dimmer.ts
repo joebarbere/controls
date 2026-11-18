@@ -1,5 +1,7 @@
 import type { DimmerParams } from '@controls/catalog';
+import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
+import { branchReading, enumField, f64Field, READING_SOLVED, READING_UNSOLVED, statusField } from '../readings';
 import { type DcSolution, ISLAND_FLAG_SINGULAR } from '../../mna/dc';
 import { angularFrequency } from '../../mna/phasor';
 import { LAMP_RESOLVE_MIN_A } from '../loads/lamp';
@@ -99,10 +101,34 @@ export function usable(solution: DcSolution | null, island: number): solution is
   return result !== undefined && result.solved && (result.flags & ISLAND_FLAG_SINGULAR) === 0;
 }
 
+/**
+ * The dimmer's record (protocol 8, ADR 0011's amendment; registered by P4 PR 12):
+ *
+ * - `levelRms` (own): the RMS fraction of the line the load sees, `DIMMER_RMS_CURVE` at its level while
+ *   on, 0 while off;
+ * - `loadVoltageV` (solved): the voltage across the circuit's resistance, |V_d| / c, the load's RMS
+ *   voltage for a stiff source (the model's X = c · R_th; the dimmer has no neutral to measure from);
+ * - `currentA` (solved): |I| through it;
+ * - `state` (own): `off` or `on`.
+ *
+ * Off, it has no element and carries exactly nothing: a reading (`solved`, as a blown fuse). On a DC
+ * island (its triac latched) the record is `unsolved`: the phase-cut fields mean nothing there.
+ */
+export const DIMMER_OUTPUT: DeviceOutputSchema = Object.freeze({
+  kind: 'dimmer.wall',
+  recordBytes: 32,
+  fields: Object.freeze([
+    f64Field('levelRms', 0, null),
+    f64Field('loadVoltageV', 8, 'V'),
+    f64Field('currentA', 16, 'A'),
+    enumField('state', 24, ['off', 'on']),
+    statusField(25),
+  ]),
+});
+
 export const DIMMER_MODEL: SimDeviceModel = {
   kind: 'dimmer.wall',
-  // Its protocol 8 record (`levelRms`, the load voltage) is P4 PR 11's (ADR 0019 "Protocol 8").
-  output: null,
+  output: DIMMER_OUTPUT,
   bank(devices: readonly SimDevice[]): SimDeviceBank {
     const n = devices.length;
     const ratedV = Float64Array.from(devices, (d) => (d.params as DimmerParams).ratedVoltageV);
@@ -113,6 +139,15 @@ export const DIMMER_MODEL: SimDeviceModel = {
       n,
     ).fill(null);
     const ratio = new Float64Array(n);
+    const fraction = new Float64Array(n);
+    // Its element's branch, or −1 while off (no element).
+    const branch = Int32Array.from(devices, (d) => (d.branches.length > 0 ? d.branches[0] : -1));
+    /** The level's curve fraction and reactance ratio, read again only when the values object changed. */
+    const refresh = (i: number, values: Readonly<Record<string, number>>): void => {
+      if (values === valuesSeen[i]) return;
+      valuesSeen[i] = values;
+      levelInto(values['level'], fraction, ratio, i);
+    };
     // Scratch for one engine solve's passes (never read across solves): the reactance stamped and its
     // inductance slot, the fit's previous point (X, 1 / |I|²), whether there is one, whether the solve
     // started cold, how many fits moved it, and whether it is frozen for the rest of the solve.
@@ -137,10 +172,7 @@ export const DIMMER_MODEL: SimDeviceModel = {
       // Stage 0: the dimmer fits the circuit with every LED driver's admittance frozen (ADR 0021 L2).
       acStage: 0,
       acIterate: (i, b, iterate, values, pass) => {
-        if (b.values !== valuesSeen[i]) {
-          valuesSeen[i] = b.values;
-          ratioInto(b.values['level'], ratio, i);
-        }
+        refresh(i, b.values);
         if (pass === 0) {
           havePoint[i] = 0;
           fits[i] = 0;
@@ -220,14 +252,42 @@ export const DIMMER_MODEL: SimDeviceModel = {
         values.inductorAt(b.index, henries, i);
         return true;
       },
+      writeRecord: (i, view, offset, ctx) => {
+        const b = branch[i];
+        if (b < 0) {
+          // Off: open, exactly nothing through it; a reading whatever its terminals' islands.
+          view.setUint8(offset + 25, READING_SOLVED);
+          return;
+        }
+        const element = ctx.netlist.branches[b];
+        view.setUint8(offset + 24, 1);
+        if (ctx.netlist.islands[element.island].kind !== 'ac') {
+          view.setUint8(offset + 25, READING_UNSOLVED);
+          return;
+        }
+        refresh(i, element.values);
+        view.setFloat64(offset, fraction[i], true);
+        const status = branchReading(ctx, b);
+        if (status === READING_SOLVED) {
+          const nodes = ctx.solution.nodes;
+          const re = ctx.solution.branches[2 * b];
+          const im = ctx.solution.branches[2 * b + 1];
+          const vr = nodes[2 * element.a] - nodes[2 * element.b];
+          const vi = nodes[2 * element.a + 1] - nodes[2 * element.b + 1];
+          view.setFloat64(offset + 8, Math.sqrt(vr * vr + vi * vi) / ratio[i] + 0, true);
+          view.setFloat64(offset + 16, Math.sqrt(re * re + im * im) + 0, true);
+        }
+        view.setUint8(offset + 25, status);
+      },
     };
   },
 };
 
-/** `out[i]` = c for `level` (`dimmerReactanceRatio`), computed in place: no double crosses the call. */
-function ratioInto(level: number, out: Float64Array, i: number): void {
+/** `fraction[i]`, `ratio[i]` = k, c for `level` (as `dimmerRmsFraction`, `dimmerReactanceRatio`), in place. */
+function levelInto(level: number, fraction: Float64Array, ratio: Float64Array, i: number): void {
   const x = Math.min(1, Math.max(0, level)) * DIMMER_RMS_CURVE.levels;
   const k = Math.min(DIMMER_RMS_CURVE.levels - 1, Math.floor(x));
   const f = CURVE[k] + (CURVE[k + 1] - CURVE[k]) * (x - k);
-  out[i] = Math.sqrt(1 / (f * f) - 1);
+  fraction[i] = f;
+  ratio[i] = Math.sqrt(1 / (f * f) - 1);
 }

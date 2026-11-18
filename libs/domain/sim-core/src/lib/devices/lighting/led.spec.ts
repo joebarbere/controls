@@ -74,6 +74,29 @@ describe('the constant-power LED driver (D11)', () => {
     expect(rel(power(host, bulb).p, 9)).toBeLessThan(2e-3);
   });
 
+  it('its protocol 8 record: running (power, volts, amps from the solution, light 1) and stopped (light 0)', () => {
+    const on = lamp(AC_SOURCE);
+    on.host.advance(30);
+    const record = on.host.record(on.bulb);
+    const { p, q } = power(on.host, on.bulb);
+    const probe = on.host.engine.probe(end(on.bulb, 'a'), end(on.bulb, 'b'));
+    const volts = probe.kind === 'ac' ? probe.rmsVolts : Number.NaN;
+    expect(record['status']).toBe('solved');
+    expect(record['driverState']).toBe('running');
+    expect(record['lightOutputRel']).toBe(1);
+    expect(rel(record['powerW'] as number, p)).toBeLessThan(1e-12);
+    expect(rel(record['voltageV'] as number, volts)).toBeLessThan(1e-12);
+    // |I| = |S| / |V| = √(P² + Q²) / |V|.
+    expect(rel(record['currentA'] as number, Math.sqrt(p * p + q * q) / volts)).toBeLessThan(1e-9);
+    const off = lamp(acSourceAt(80));
+    off.host.advance(30);
+    const stopped = off.host.record(off.bulb);
+    expect(stopped['driverState']).toBe('off');
+    expect(stopped['lightOutputRel']).toBe(0);
+    expect(stopped['powerW'] as number).toBeLessThan(1e-3);
+    expect(stopped['status']).toBe('solved');
+  });
+
   it.each([[80], [89]])('below its dropout (%s V) a new driver never runs and draws nothing', (volts) => {
     const { host, bulb } = lamp(acSourceAt(volts as (typeof AC_SOURCE_VOLTS)[number]));
     host.advance(100);

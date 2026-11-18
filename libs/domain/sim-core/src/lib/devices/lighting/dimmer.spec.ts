@@ -139,6 +139,29 @@ describe('the dimmer on a bench circuit (F4.1 part 1 golden)', () => {
     expect(rel(rms(host, dimmed), handVolts)).toBeLessThan(1e-3);
   });
 
+  it('its protocol 8 record: levelRms is the curve at its level, loadVoltageV |V_d| / c, currentA |I|; off, state off', () => {
+    const { host, dimmer, dimmed } = bench();
+    for (const level of [0.25, 0.5, 0.75]) {
+      host.operate(dimmer, 'level', level).advance(25);
+      const record = host.record(dimmer);
+      expect(record['state']).toBe('on');
+      expect(record['status']).toBe('solved');
+      expect(record['levelRms']).toBe(dimmerRmsFraction(level));
+      // The resistor's 100 Ω of the circuit's 100.1 Ω (the source's 0.1 Ω): R_th · |I| against V_R.
+      expect(rel(record['loadVoltageV'] as number, (rms(host, dimmed) * 100.1) / 100)).toBeLessThan(2e-3);
+      const { iRe, iIm } = dimmerPhasors(host, dimmer);
+      expect(rel(record['currentA'] as number, Math.sqrt(iRe * iRe + iIm * iIm))).toBeLessThan(1e-12);
+    }
+    host.operate(dimmer, 'on', false);
+    expect(host.record(dimmer)).toStrictEqual({
+      levelRms: 0,
+      loadVoltageV: 0,
+      currentA: 0,
+      state: 'off',
+      status: 'solved',
+    });
+  });
+
   it('dissipates exactly nothing: an inductor stamp, and P = Re(V · conj(I)) at rounding level', () => {
     const { host, dimmer } = bench();
     host.operate(dimmer, 'level', 0.5).advance(25);

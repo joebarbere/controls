@@ -87,6 +87,11 @@ describe('lamp burnout (ADR 0019 `burnedOut`)', () => {
     // Inrush then a few time constants (τ = 30 ms): well inside the first second.
     expect(burned).toBeGreaterThan(10);
     expect(burned).toBeLessThan(500);
+    // Protocol 8's event, once, stamped with the step's end (the state it describes): the burnout tick.
+    const burnouts = host.events.filter((e) => e.kind === 'lampBurnout');
+    expect(burnouts).toHaveLength(1);
+    expect(burnouts[0]).toMatchObject({ tick: burned, entity: bulb });
+    expect(burnouts[0].detail['filamentTempK']).toBe(host.sim(bulb)['filamentTempK']);
     // The topology moved at once (recompiled and re-solved within the step): no filament, no current.
     expect(filament(host, bulb)).toBe(false);
     expect(host.engine.netlist.topologyHash).not.toBe(hash);
@@ -94,6 +99,7 @@ describe('lamp burnout (ADR 0019 `burnedOut`)', () => {
     const record = host.record(bulb);
     expect(record['powerW']).toBe(0);
     expect(record['currentA']).toBe(0);
+    expect(record['burnedOut']).toBe('yes');
     // The whole 200 V now stands across the open filament (a reading: both screws on the source's island).
     expect(record['status']).toBe('solved');
     expect(Math.abs((record['voltageV'] as number) / 200 - 1)).toBeLessThan(1e-6);

@@ -369,21 +369,20 @@ describe('device output schemas and nominal bands', () => {
       'breaker.plugOn1p',
       'breaker.plugOn2p',
       'breaker.thermalMagnetic',
+      'dimmer.wall',
       'electrode.groundRod',
       'fuse',
       'heater',
       'lamp.incandescent',
+      'light.led',
+      'light.ledFixture',
       'resistor',
       'service.splitPhase',
       'supply.bench',
       'supply.dinPsu',
     ]);
-    // Protocol 8's pending schemas (P4 PR 12's lighting): never registered and pending at once.
-    expect(Object.keys(PENDING_DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual([
-      'dimmer.wall',
-      'light.led',
-      'light.ledFixture',
-    ]);
+    // Protocol 8's pending schemas: P4 PR 12 registered the lighting ones, so none is pending.
+    expect(Object.keys(PENDING_DEVICE_OUTPUT_SCHEMAS)).toStrictEqual([]);
     for (const kind of Object.keys(PENDING_DEVICE_OUTPUT_SCHEMAS))
       expect(DEVICE_OUTPUT_SCHEMAS).not.toHaveProperty(kind);
     for (const [kind, schema] of Object.entries({ ...DEVICE_OUTPUT_SCHEMAS, ...PENDING_DEVICE_OUTPUT_SCHEMAS })) {

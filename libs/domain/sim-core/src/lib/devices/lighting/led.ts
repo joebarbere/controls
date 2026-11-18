@@ -1,5 +1,7 @@
 import type { LedDriverParams } from '@controls/catalog';
+import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
+import { branchReading, enumField, f64Field, READING_SOLVED, statusField } from '../readings';
 import type { AcBranchValues } from '../../mna/ac-values';
 import { angularFrequency } from '../../mna/phasor';
 import { LED_DRIVER_OFF_OHM, LED_RESOLVE_RELTOL } from './constants';
@@ -53,11 +55,30 @@ import { usable } from './dimmer';
 
 export const LED_MODEL_KINDS = ['light.led', 'light.ledFixture'] as const;
 
+/**
+ * The LED lamp's and fixture's record (protocol 8, ADR 0011's amendment; registered by P4 PR 12): the
+ * power, voltage and current at the driver's terminals (solved; RMS magnitudes on AC), its light output
+ * relative to rated (own: 1 while running, 0 stopped) and `driverState` (own, the committed `running`).
+ */
+function ledOutput(kind: string): DeviceOutputSchema {
+  return Object.freeze({
+    kind,
+    recordBytes: 40,
+    fields: Object.freeze([
+      f64Field('powerW', 0, 'W'),
+      f64Field('voltageV', 8, 'V'),
+      f64Field('currentA', 16, 'A'),
+      f64Field('lightOutputRel', 24, null),
+      enumField('driverState', 32, ['off', 'running']),
+      statusField(33),
+    ]),
+  });
+}
+
 function ledModel(kind: (typeof LED_MODEL_KINDS)[number]): SimDeviceModel {
   return {
     kind,
-    // Its protocol 8 record (`powerW`, `voltageV`, `lightOutputRel`, the driver state) is P4 PR 11's.
-    output: null,
+    output: ledOutput(kind),
     bank(devices: readonly SimDevice[]): SimDeviceBank {
       const n = devices.length;
       const omega = angularFrequency(devices[0].frequencyHz);
@@ -185,6 +206,31 @@ function ledModel(kind: (typeof LED_MODEL_KINDS)[number]): SimDeviceModel {
           conductance[i] = solvedG;
           susceptance[i] = solvedB;
           return false;
+        },
+        writeRecord: (i, view, offset, ctx) => {
+          const g = conductanceBranch[i];
+          const status = branchReading(ctx, g);
+          if (status === READING_SOLVED) {
+            const element = ctx.netlist.branches[g];
+            const nodes = ctx.solution.nodes;
+            const branches = ctx.solution.branches;
+            const sb = susceptanceBranch[i];
+            const ir = branches[2 * g] + branches[2 * sb];
+            const ii = branches[2 * g + 1] + branches[2 * sb + 1];
+            const vr = nodes[2 * element.a] - nodes[2 * element.b];
+            const vi = nodes[2 * element.a + 1] - nodes[2 * element.b + 1];
+            view.setFloat64(offset, vr * ir + vi * ii + 0, true);
+            if (ctx.netlist.islands[element.island].kind === 'ac') {
+              view.setFloat64(offset + 8, Math.sqrt(vr * vr + vi * vi) + 0, true);
+              view.setFloat64(offset + 16, Math.sqrt(ir * ir + ii * ii) + 0, true);
+            } else {
+              view.setFloat64(offset + 8, vr + 0, true);
+              view.setFloat64(offset + 16, ir + 0, true);
+            }
+          }
+          view.setFloat64(offset + 24, running[i], true);
+          view.setUint8(offset + 32, running[i]);
+          view.setUint8(offset + 33, status);
         },
         afterSolve: (ctx) => {
           for (let i = 0; i < n; i++) {

@@ -16,6 +16,13 @@ import {
   THERMAL_LOAD,
   UTILITY_SPLIT,
   wiredLoopWorld,
+  AC_SOURCE,
+  A19_60W,
+  acSourceAt,
+  DIMMER,
+  LAMPHOLDER,
+  LED_A19,
+  RESISTOR_100,
 } from '@controls/sim-core/testing';
 import {
   LIVENESS_PUBLISH_MS,
@@ -25,6 +32,7 @@ import {
   PUBLISH_SEQ_INDEX,
   readDiagnostics,
   SIM_PROTOCOL_VERSION,
+  type SimEvent,
   WORK_SLICE_MS,
 } from '@controls/sim-protocol';
 import { createWorldRegistry } from '@controls/world-model';
@@ -252,6 +260,50 @@ describe('following the host', () => {
     h.drain();
     expect(events.length).toBeGreaterThan(0);
     expect(h.of('events').flatMap((m) => m.events)).toEqual(events);
+  });
+
+  it('a lamp burns out at the same step in the worker as headless: lampBurnout, the records and bytes, both transports (P4 PR 12)', () => {
+    // A 60 W A19 bulb in a lampholder on the 200 V test source, with a dimmer at 0.5 and an LED A19 on a
+    // 120 V one beside it (and the dimmer into a 100 Ω resistor), so the dimmer's and the driver's
+    // records are in the bytes compared.
+    const at = (x: number) => ({ x, y: 0, z: 0 });
+    const commands: [string, object][] = [
+      ['entity.place', { ref: acSourceAt(200), positionMm: origin }],
+      ['entity.place', { ref: LAMPHOLDER, positionMm: at(5000) }],
+      ['entity.place', { ref: A19_60W, positionMm: at(5000), mountedOn: { entity: 2, mount: 'socket' } }],
+      ['lead.connect', { ref: BUSBAR, a: end(1, 'l'), b: end(2, 'hot') }],
+      ['lead.connect', { ref: BUSBAR, a: end(2, 'neutral'), b: end(1, 'n') }],
+      ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+      ['entity.place', { ref: DIMMER, positionMm: origin }],
+      ['entity.place', { ref: LAMPHOLDER, positionMm: at(6000) }],
+      ['entity.place', { ref: LED_A19, positionMm: at(6000), mountedOn: { entity: 6, mount: 'socket' } }],
+      ['lead.connect', { ref: BUSBAR, a: end(4, 'l'), b: end(5, 'line') }],
+      ['entity.place', { ref: RESISTOR_100, positionMm: origin }],
+      ['lead.connect', { ref: BUSBAR, a: end(5, 'load'), b: end(8, 'a') }],
+      ['lead.connect', { ref: BUSBAR, a: end(8, 'b'), b: end(4, 'n') }],
+      ['lead.connect', { ref: BUSBAR, a: end(4, 'l'), b: end(6, 'hot') }],
+      ['lead.connect', { ref: BUSBAR, a: end(6, 'neutral'), b: end(4, 'n') }],
+      ['device.operate', { id: 5, control: 'on', value: true }],
+      ['device.operate', { id: 5, control: 'level', value: 0.5 }],
+    ];
+    for (const transport of ['sab', 'message'] as const) {
+      const game = reference();
+      const events: SimEvent[] = [];
+      game.on('sim', (event) => events.push(event));
+      for (const [id, args] of commands) game.execOrThrow(id, args);
+      const h = harness();
+      h.init({ kind: 'world', world: createWorld({ seed: 11 }), firstSeq: 0 }, transport);
+      for (const entry of game.entries()) h.send({ type: 'command', entry });
+      game.advance(600);
+      h.send({ type: 'advance', tick: 600 });
+      h.drain();
+      const sent = h.of('events').flatMap((m) => m.events);
+      expect(sent).toEqual(events);
+      const burnout = sent.filter((e) => e.kind === 'lampBurnout');
+      expect(burnout).toHaveLength(1);
+      expect(burnout[0]).toMatchObject({ entity: 3 });
+      expect(h.view()?.hashedBytes()).toEqual(game.snapshot());
+    }
   });
 
   it('forwards connection events (protocol 7) and publishes connection records as headless does, both transports', () => {
