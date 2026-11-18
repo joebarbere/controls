@@ -930,6 +930,35 @@ flowchart LR
 - **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (emitted by P4 PR 12 and F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
 - **Allocation.** Every record writer, the lamp's included, writes into the view without returning a double from a helper (`writeAmps`, `writeVolts`) and is gated at under 1 B a call (`allocation-loads.spec.ts`).
 
+## The load centre, its bars and its feed (P4 PR 14a)
+
+[ADR 0019](../decisions/0019-world-document-v4.md)'s [P4 PR 14 amendment](../decisions/0019-world-document-v4.md#amendment-p4-pr-14-2026-11-18-the-load-centre-its-bars-and-its-feed): four new kinds, all stateless in the sim, compiled from what is mounted on a load centre. No version moved.
+
+```mermaid
+flowchart LR
+    subgraph lc["enclosure.loadCentre (one entity)"]
+      B1(("busL1"))
+      B2(("busL2"))
+      NB(("neutral = n1 … nk<br/>(one ideal join group)"))
+      CH(("chassis"))
+    end
+    SVC["service l1, l2"] -->|"wires"| MAIN["main: breaker.plugOn2p<br/>(or feed.mainLugs)"]
+    MAIN -->|"mainFeed contacts load1 → l1, load2 → l2<br/>(ordinary mount contacts)"| B1 & B2
+    B1 -->|"busStab contact (stab, leg)"| BRK["branch breakers"]
+    BRK -->|"wires"| LOAD["loads"] -->|"wires"| NB
+    SVCN["service n"] -->|"wire"| NB
+    NB -->|"mbj contact 'neutral'"| J["bond.jumper body"]
+    J -->|"mbj contact 'chassis'"| CH
+    GB["bond.groundBar: bar = g1 … gk<br/>(one ideal join group)"] -->|"groundBarKit contact 'chassis'"| CH
+```
+
+- **Netlist models** (`netlist/models.ts`): `enclosure.loadCentre` joins `neutral` and every `n<k>` ideally and holds no element; `bond.groundBar` joins `bar` and every `g<k>`; `bond.jumper` and `feed.mainLugs` hold nothing. Bus bars and the can are lone terminals, joined only by what is mounted: a main breaker or main lugs on `mainFeed` (two ordinary mount contacts), breakers on the stabs, the jumper's two contacts on its one `body` terminal, the ground bar kit's one contact. No bar has a resistance (a labelled abstraction: every path crosses a sourced contact or a termination). Nothing on `mainFeed` leaves the bus unfed, with no diagnostic.
+- **Family terminals** reach the models through `DeviceTopologyInput.terminals`: the entry's ids, sorted and frozen once per entry by the catalogue (`Catalog.terminalIds`), which the compiler now reads instead of sorting each entry's terminals itself. The bar models build their join group once per entry (a `WeakMap` on that array), so a compile allocates nothing for them.
+- **Catalogue rules**: `ModelKindDef.terminalRules` and `TerminalFamily.rule` pin each bar terminal's `access` and `role` (`parseCatalog`).
+- **Goldens** (`devices/load-centre.spec.ts`, on world-model's TEST-ONLY entries and the 25 kVA test service): bus currents are the feed contacts' (the stabs' sum by KCL), the neutral bar's current is the neutral conductor's (19.7458 A, 1.20639 A and 18.5394 A by the 2 × 2 mesh hand calculation); a main-lug subpanel keeps its neutral and can apart (9.93087 A); a branch faulted onto the ground bar returns 1313.99 A through the jumper and opens magnetically, or without the jumper 2.66996 A through the rod and nothing trips (the can at 106.532 V).
+- **Bench**: `load-centre-plant-compile` and `load-centre-plant-handle-resolve` (21 panels, 1,953 nodes, 525 contacts; reported).
+- **Records** wait for protocol 8 (PR 11); the amendment lists the guardian's plan (the feed-contact bus currents, `mbjCurrentA`, `touchVoltageV`, no `gecCurrentA`).
+
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.

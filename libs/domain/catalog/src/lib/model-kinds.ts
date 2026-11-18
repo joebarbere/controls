@@ -1,5 +1,7 @@
 import { type DeviceStateValue, FiniteNumber, Int, LabelText } from '@controls/save-format';
 import * as z from 'zod';
+import { MAX_PANEL_SPACES } from './device';
+import type { TerminalAccess, TerminalRole } from './registries';
 
 /*
  * Device model kinds (plan P2 decision D4, ADR 0011 §1, ADR 0013). A catalogue entry names its kind
@@ -36,15 +38,29 @@ export const TEXT_STATE_SCHEMA: z.ZodType<DeviceStateValue> = LabelText.nullable
 export const COUNTER_STATE_SCHEMA: z.ZodType<DeviceStateValue> = Int.min(0).max(Number.MAX_SAFE_INTEGER);
 
 /**
- * A family of terminals a kind's entries number for themselves (catalogue v3, ADR 0019 C3): a neutral
- * bar's `n1` … `n30`. An entry of the kind has `prefix` + 1 … `prefix` + n for one n in `[min, max]`,
- * besides the kind's fixed `terminals`.
+ * A family of terminals a kind's entries number for themselves (catalogue v3, ADR 0019 C3): a load
+ * centre's neutral bar, `n1` … `n<k>` with k from 1 to 64 (ADR 0019's P4 PR 14 amendment). An entry of
+ * the kind has `prefix` + 1 … `prefix` + n for one n in `[min, max]`, besides the kind's fixed
+ * `terminals`. Bar terminal ids are save format per entry version from v0.5.0: renumbering is a new
+ * entry version, and a family's `max` only grows.
  */
 export interface TerminalFamily {
   /** The id prefix (a terminal id's grammar), followed by the 1-based index. */
   readonly prefix: string;
   readonly min: number;
   readonly max: number;
+  /** What every terminal of the family must declare (load-checked by `parseCatalog`); absent: nothing. */
+  readonly rule?: TerminalRule;
+}
+
+/**
+ * What a kind requires of one of its terminals in every entry (ADR 0019's P4 PR 14 amendment): its
+ * `access` and, where given, its `role` (`null` included). Checked by `parseCatalog`.
+ */
+export interface TerminalRule {
+  readonly access: TerminalAccess;
+  /** The terminal's required `role`; absent: any. */
+  readonly role?: TerminalRole | null;
 }
 
 /** One key of a device state bag. */
@@ -102,6 +118,8 @@ export interface ModelKindDef {
   readonly sealedTerminals?: readonly string[];
   /** Terminal families each entry numbers for itself (catalogue v3); absent: none, the terminals are exactly `terminals`. */
   readonly terminalFamilies?: readonly TerminalFamily[];
+  /** What each named fixed terminal must declare in every entry (see {@link TerminalRule}); absent: nothing. */
+  readonly terminalRules?: Readonly<Record<string, TerminalRule>>;
   /** Validates `model.params` of a catalogue entry (a strict object of numbers). */
   readonly params: z.ZodType<Readonly<Record<string, number>>>;
   /** Every state key, by name. Names are unique across both bags. */
@@ -691,6 +709,36 @@ const COVER_ON_KEY: StateKeyDef = {
     'Whether the cover is clipped onto the duct (device.operate). A new duct starts open: duct is fitted before it is wired and covered after.',
 };
 
+/**
+ * The load centre's dead-front cover (`enclosure.loadCentre`, the entry's `coverOn` toggle; ADR 0019's
+ * P4 PR 14 amendment). It starts `false`: a dead front is fitted after the panel is wired, as the duct's
+ * cover is. Nothing in P4 reads it; P5's shock model will.
+ */
+const DEAD_FRONT_KEY: StateKeyDef = {
+  owner: 'commanded',
+  type: 'boolean',
+  schema: z.boolean(),
+  initial: false,
+  values: null,
+  description:
+    "Whether the dead-front cover is fitted (device.operate). A new load centre starts without it: the dead front goes on after the panel is wired, as a duct's cover does.",
+};
+
+/**
+ * The load centre's panel directory (ADR 0019 deviation 5): one commanded `text` key per space,
+ * `directory1` … `directory42`, set by `panel.directory` and never by a control. Keys above the entry's
+ * `spaces` stay `null` (the load check).
+ */
+const DIRECTORY_KEYS: Readonly<Record<string, StateKeyDef>> = Object.fromEntries(
+  Array.from({ length: MAX_PANEL_SPACES }, (_, i) => [
+    `directory${i + 1}`,
+    textKey(`The panel directory's entry for space ${i + 1} (panel.directory), or null. Never a control.`),
+  ]),
+);
+
+/** A bus bar or the can: reached only through mounted devices and clips, never landed on. */
+const CLIP_ONLY: TerminalRule = { access: 'clip' };
+
 /** A conduit fitting kind: no terminals and no state. */
 function conduitFitting(
   kind: string,
@@ -865,7 +913,9 @@ const TEST_BUTTON_KEY: StateKeyDef = counterKey(
  * P4 engine 8 part 1: the utility service (`service.splitPhase`) and the ground rod
  * (`electrode.groundRod`), both stateless. P4 PR 10 (breakers v2, ADR 0021 part 2): the plug-on breakers
  * (`breaker.plugOn1p`, `breaker.plugOn2p`), the GFCI breaker (`breaker.gfci1p`) and the combination AFCI
- * breaker (`breaker.afci1p`), with ADR 0019's keys. Adding a kind needs no `schemaVersion` bump.
+ * breaker (`breaker.afci1p`), with ADR 0019's keys. P4 PR 14a (ADR 0019's P4 PR 14 amendment): the load
+ * centre (`enclosure.loadCentre`), the main bonding jumper (`bond.jumper`), the ground bar kit
+ * (`bond.groundBar`) and main lugs (`feed.mainLugs`). Adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -883,6 +933,25 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
       ),
     },
     description: 'A battery: an EMF that falls with the state of charge, behind an internal resistance.',
+  },
+  'bond.groundBar': {
+    kind: 'bond.groundBar',
+    placement: 'entity',
+    terminals: ['bar'],
+    terminalFamilies: [{ prefix: 'g', min: 1, max: 32, rule: { access: 'land', role: 'egc' } }],
+    params: z.strictObject({}),
+    keys: {},
+    description:
+      "An accessory equipment grounding bar (P4): its terminals g1 … gn, each landing equipment grounding conductors, joined ideally to the bar, which bonds to a load centre's can through its groundBarKit mount contact. No state.",
+  },
+  'bond.jumper': {
+    kind: 'bond.jumper',
+    placement: 'entity',
+    terminals: ['body'],
+    params: z.strictObject({}),
+    keys: {},
+    description:
+      "A main bonding jumper (P4: a green screw or a strap): one body whose mbj mount contacts reach a load centre's neutral bar and its can, so mounting it bonds them. No state.",
   },
   'breaker.thermalMagnetic': {
     kind: 'breaker.thermalMagnetic',
@@ -994,6 +1063,23 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     description:
       'An outlet or junction box (F3.5): device yokes, cable entries and an interior volume for box fill (P4); no electrical model.',
   },
+  'enclosure.loadCentre': {
+    kind: 'enclosure.loadCentre',
+    placement: 'entity',
+    requires: 'enclosure',
+    terminals: ['busL1', 'busL2', 'chassis', 'neutral'],
+    terminalFamilies: [{ prefix: 'n', min: 1, max: 64, rule: { access: 'land', role: 'grounded' } }],
+    terminalRules: {
+      busL1: CLIP_ONLY,
+      busL2: CLIP_ONLY,
+      chassis: CLIP_ONLY,
+      neutral: { access: 'land', role: 'grounded' },
+    },
+    params: EnclosureParams,
+    keys: { coverOn: DEAD_FRONT_KEY, openEntries: OPEN_ENTRIES_KEY, ...DIRECTORY_KEYS },
+    description:
+      'A residential load centre (P4): two bus bars (busL1, busL2) reached by plug-on breakers on its busStab spaces and fed by whatever sits on its mainFeed mount (a main breaker or main lugs), its can (chassis) and its isolated neutral bar (neutral and n1 … nk, joined ideally), bonded to the can only by a main bonding jumper on its mbj mount; a dead-front cover and a panel directory.',
+  },
   'enclosure.panel': {
     kind: 'enclosure.panel',
     placement: 'entity',
@@ -1003,6 +1089,15 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     keys: { openEntries: OPEN_ENTRIES_KEY },
     description:
       'A control-panel enclosure (F3.5): a backplate and DIN rails to mount devices on, and cable entries; no electrical model.',
+  },
+  'feed.mainLugs': {
+    kind: 'feed.mainLugs',
+    placement: 'entity',
+    terminals: ['l1', 'l2'],
+    params: z.strictObject({}),
+    keys: {},
+    description:
+      "A load centre's main lugs (P4): the feeder lands on l1 and l2, which reach the bus bars through the mainFeed mount's contacts (a main-lug panel). No element and no state.",
   },
   fuse: {
     kind: 'fuse',

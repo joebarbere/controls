@@ -521,17 +521,22 @@ describe('catalogue format v3 (ADR 0020) on test fixtures', () => {
       expect(counter.schema.safeParse(1.5).success).toBe(false);
     });
 
-    it("a load centre's commanded bag (on, coverOn, openEntries, directory1 … directory42) fits MAX_DEVICE_STATE_KEYS", () => {
-      // World v4 (ADR 0019 deviation 5): one commanded text key per panel space. 45 keys ≤ 64.
-      const keys: ModelKindDef['keys'] = {
-        on: MODEL_KINDS['switch.spst'].keys['closed'],
-        coverOn: MODEL_KINDS['switch.spst'].keys['closed'],
-        openEntries,
-        ...Object.fromEntries(Array.from({ length: MAX_PANEL_SPACES }, (_, i) => [`directory${i + 1}`, textKey('t')])),
-      };
-      const kind: ModelKindDef = { ...MODEL_KINDS['switch.spst'], kind: 'enclosure.test', keys };
+    it("a load centre's commanded bag (coverOn, openEntries, directory1 … directory42) fits MAX_DEVICE_STATE_KEYS", () => {
+      // World v4 (ADR 0019 deviation 5): one commanded text key per panel space; ADR 0019's P4 PR 14
+      // amendment: no `on` key, so 44 keys ≤ 64.
+      const kind = MODEL_KINDS['enclosure.loadCentre'];
+      const keys = kind.keys;
+      expect(keys['on']).toBeUndefined();
       const { state, sim } = initialBags(kind);
-      expect(Object.keys(state)).toHaveLength(3 + MAX_PANEL_SPACES);
+      expect(Object.keys(state)).toHaveLength(2 + MAX_PANEL_SPACES);
+      expect(Object.keys(state)).toHaveLength(44);
+      expect(sim).toStrictEqual({});
+      expect([state['coverOn'], state['openEntries'], state['directory1'], state['directory42']]).toStrictEqual([
+        false,
+        0,
+        null,
+        null,
+      ]);
       expect(Object.keys(state).length).toBeLessThanOrEqual(MAX_DEVICE_STATE_KEYS);
       expect(DeviceStateBagV4.safeParse(state).success).toBe(true);
       const filled = { ...state, directory1: 'KITCHEN SA 1', directory42: 'SPARE' };

@@ -312,14 +312,19 @@ describe('WorldV4', () => {
     }
   });
 
-  it("a load centre's commanded bag (on, coverOn, openEntries and directory1 … directory42) fits a bag", () => {
-    const bag: Record<string, unknown> = { on: false, coverOn: true, openEntries: 0 };
+  it("a load centre's commanded bag (coverOn, openEntries and directory1 … directory42; no on key) fits a bag", () => {
+    // ADR 0019's P4 PR 14 amendment: 44 commanded keys (the kind has no `on`; "45" was an error).
+    const bag: Record<string, unknown> = { coverOn: false, openEntries: 0 };
     for (let n = 1; n <= 42; n++) bag[`directory${n}`] = n % 2 === 0 ? null : 'KITCHEN 20A GFCI';
-    expect(Object.keys(bag)).toHaveLength(45);
+    expect(Object.keys(bag)).toHaveLength(44);
     expect(Object.keys(bag).length).toBeLessThanOrEqual(MAX_DEVICE_STATE_KEYS);
     expect(DeviceStateBagV4.safeParse(bag).success).toBe(true);
-    const full = { ...bag, ...Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`extra${i}`, 0])) };
-    expect(DeviceStateBagV4.safeParse(full).success).toBe(false);
+    const extra = (n: number) => ({
+      ...bag,
+      ...Object.fromEntries(Array.from({ length: n }, (_, i) => [`extra${i}`, 0])),
+    });
+    expect(DeviceStateBagV4.safeParse(extra(MAX_DEVICE_STATE_KEYS - 44)).success).toBe(true);
+    expect(DeviceStateBagV4.safeParse(extra(MAX_DEVICE_STATE_KEYS - 43)).success).toBe(false);
   });
 
   it('3: a landed end names an entity that exists; two landed ends are different terminals', () => {

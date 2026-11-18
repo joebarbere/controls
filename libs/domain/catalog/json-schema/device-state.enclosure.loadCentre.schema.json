@@ -1,0 +1,506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "object",
+      "properties": {
+        "coverOn": {
+          "type": "boolean"
+        },
+        "directory1": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory10": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory11": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory12": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory13": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory14": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory15": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory16": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory17": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory18": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory19": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory2": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory20": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory21": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory22": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory23": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory24": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory25": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory26": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory27": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory28": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory29": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory3": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory30": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory31": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory32": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory33": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory34": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory35": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory36": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory37": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory38": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory39": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory4": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory40": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory41": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory42": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory5": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory6": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory7": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory8": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directory9": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openEntries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "coverOn",
+        "directory1",
+        "directory10",
+        "directory11",
+        "directory12",
+        "directory13",
+        "directory14",
+        "directory15",
+        "directory16",
+        "directory17",
+        "directory18",
+        "directory19",
+        "directory2",
+        "directory20",
+        "directory21",
+        "directory22",
+        "directory23",
+        "directory24",
+        "directory25",
+        "directory26",
+        "directory27",
+        "directory28",
+        "directory29",
+        "directory3",
+        "directory30",
+        "directory31",
+        "directory32",
+        "directory33",
+        "directory34",
+        "directory35",
+        "directory36",
+        "directory37",
+        "directory38",
+        "directory39",
+        "directory4",
+        "directory40",
+        "directory41",
+        "directory42",
+        "directory5",
+        "directory6",
+        "directory7",
+        "directory8",
+        "directory9",
+        "openEntries"
+      ],
+      "additionalProperties": false
+    },
+    "sim": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "state",
+    "sim"
+  ],
+  "additionalProperties": false,
+  "title": "Device state of model kind enclosure.loadCentre",
+  "description": "EntityV2.state (commanded) and EntityV2.sim (sim-owned) of a enclosure.loadCentre device (ADR 0011, ADR 0013). Every key is present; null means absent.",
+  "$defs": {
+    "LabelText": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[\\x21-\\x7e](?:[\\x20-\\x7e]{0,30}[\\x21-\\x7e])?$",
+      "description": "Printable ASCII (0x20-0x7E), 1 to 32 characters, no leading or trailing space."
+    }
+  }
+}

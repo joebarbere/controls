@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 4,
+  "seed": 20261118,
+  "tick": 0,
+  "nextEntityId": 13,
+  "nextConnectionId": 1,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "areas": [],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "panel.test-lc-20",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "coverOn": true,
+        "directory1": "KITCHEN SA 1",
+        "directory10": "LIVING RM",
+        "directory11": "HALL + STAIRS",
+        "directory12": "LAUNDRY",
+        "directory13": "DRYER",
+        "directory14": "DRYER",
+        "directory15": "GARAGE GFCI",
+        "directory16": "OUTDOOR GFCI",
+        "directory17": "FURNACE",
+        "directory18": "BASEMENT LTS",
+        "directory19": "SPARE",
+        "directory2": "KITCHEN SA 2",
+        "directory20": "SPARE",
+        "directory21": null,
+        "directory22": null,
+        "directory23": null,
+        "directory24": null,
+        "directory25": null,
+        "directory26": null,
+        "directory27": null,
+        "directory28": null,
+        "directory29": null,
+        "directory3": "RANGE",
+        "directory30": null,
+        "directory31": null,
+        "directory32": null,
+        "directory33": null,
+        "directory34": null,
+        "directory35": null,
+        "directory36": null,
+        "directory37": null,
+        "directory38": null,
+        "directory39": null,
+        "directory4": "RANGE",
+        "directory40": null,
+        "directory41": null,
+        "directory42": null,
+        "directory5": "DISHWASHER",
+        "directory6": "DISPOSAL",
+        "directory7": "BATH GFCI",
+        "directory8": "BED 1 AFCI",
+        "directory9": "BED 2 AFCI",
+        "openEntries": 1
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "breaker.test-lc-main-2p-100a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 300,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermalL1": 0,
+        "thermalL2": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "main"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 100,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "right"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 75,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 6,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 75,
+          "y": 100,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": false
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "right"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 7,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 100,
+          "y": 100,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "right"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 8,
+      "ref": {
+        "id": "breaker.test-lc-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 125,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": false
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 9,
+      "ref": {
+        "id": "breaker.test-lc-2p-30a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 25,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermalL1": 0,
+        "thermalL2": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 10,
+      "ref": {
+        "id": "breaker.test-lc-2p-30a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 150,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermalL1": 0,
+        "thermalL2": 0,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 11,
+      "ref": {
+        "id": "bond.test-lc-mbj-screw",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 400,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": {
+        "entity": 1,
+        "mount": "mbj"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 12,
+      "ref": {
+        "id": "bond.test-lc-ground-bar-10",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 450,
+          "y": 0,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {},
+      "mountedOn": {
+        "entity": 1,
+        "mount": "groundBar"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    }
+  ],
+  "connections": [],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

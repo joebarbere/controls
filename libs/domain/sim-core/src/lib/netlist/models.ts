@@ -81,6 +81,12 @@ export interface DeviceTopology {
 export interface DeviceTopologyInput {
   /** The catalogue entry's `model.params`, already validated against the kind's schema. */
   readonly params: Readonly<Record<string, number>>;
+  /**
+   * The entry's terminal ids, sorted and frozen, one array per entry (`Catalog.terminalIds`): the kind's
+   * fixed terminals plus its families' members (a neutral bar's `n1` … `n<k>`, ADR 0019's P4 PR 14
+   * amendment). A model may key a per-entry cache on this array's identity.
+   */
+  readonly terminals: readonly string[];
   /** The entity's commanded state bag. */
   readonly state: StateBag;
   /** The engine's sim-owned state for this entity (only `simTopologyKeys` may be read). */
@@ -95,7 +101,7 @@ export interface DeviceNetlistModel {
    * incremental compiler recompiles a device when one of them changes. Empty for the P2 bench kinds.
    */
   readonly simTopologyKeys: readonly string[];
-  /** Pure. Terminal ids must be the kind's; parts unique. */
+  /** Pure. Terminal ids must be the entry's (`input.terminals`); parts unique. */
   topology(input: DeviceTopologyInput): DeviceTopology;
   /**
    * The wiring view's topology (engine 8, `wiringGraph`), for kinds whose topology switches: a switch
@@ -260,6 +266,70 @@ const enclosurePanel: DeviceNetlistModel = {
 };
 
 /**
+ * The terminals a family numbers in `terminals` (`prefix` then a 1-based index: `n12` of `n`, never
+ * `neutral`), in the order given.
+ */
+function familyMembers(terminals: readonly string[], prefix: string): string[] {
+  return terminals.filter((t) => t.startsWith(prefix) && /^[1-9][0-9]*$/.test(t.slice(prefix.length)));
+}
+
+/**
+ * A device whose topology is one ideal join group, `[head, prefix1 … prefixN]`, over its entry's
+ * terminals (a bar and its numbered terminals), and no element. Built once per entry: the compiler hands
+ * every entity of one entry the same frozen terminal array, so the cache keys on it and a compile
+ * allocates nothing for it.
+ */
+function barModel(kind: string, head: string, prefix: string): DeviceNetlistModel {
+  const cache = new WeakMap<readonly string[], DeviceTopology>();
+  return {
+    kind,
+    simTopologyKeys: [],
+    topology: ({ terminals }) => {
+      let topology = cache.get(terminals);
+      if (topology === undefined) {
+        const group = [head, ...familyMembers(terminals, prefix)];
+        topology = Object.freeze({
+          joins: group.length < 2 ? NO_JOINS : Object.freeze([Object.freeze(group)]),
+          elements: [],
+        });
+        cache.set(terminals, topology);
+      }
+      return topology;
+    },
+  };
+}
+
+/**
+ * A load centre (P4 PR 14a, ADR 0019's P4 PR 14 amendment): its neutral bar, `neutral` and `n1` …
+ * `n<k>`, is one ideal join group, and nothing else. `busL1`, `busL2` and `chassis` are lone terminals,
+ * joined only through what is mounted (a main breaker or main lugs on `mainFeed`, breakers on the
+ * stabs, a main bonding jumper on `mbj`, a ground bar kit on `groundBarKit`); with nothing on
+ * `mainFeed` the bus is unfed and nothing is reported. **No bus-bar or neutral-bar resistance** (a
+ * labelled abstraction): every path through a bar already crosses a sourced contact or termination (a
+ * stab, the feed contact, a conductor's landed end); the bar's own resistance is left out.
+ */
+const enclosureLoadCentre = barModel('enclosure.loadCentre', 'neutral', 'n');
+
+/**
+ * A ground bar kit (`bond.groundBar`): `bar` and every `g<k>` joined ideally (no bar resistance, the
+ * load centre's abstraction). It reaches the can through its `groundBarKit` mount contact.
+ */
+const bondGroundBar = barModel('bond.groundBar', 'bar', 'g');
+
+/**
+ * A main bonding jumper (`bond.jumper`): one terminal, `body`, and no element. Its two `mbj` fit
+ * contacts both land on `body` (one to the host's neutral bar, one to its can), so the bond is the two
+ * contact resistances in series through the body's node.
+ */
+const bondJumper: DeviceNetlistModel = { kind: 'bond.jumper', simTopologyKeys: [], topology: () => NO_TOPOLOGY };
+
+/**
+ * Main lugs (`feed.mainLugs`): `l1` and `l2`, no element. The feeder lands on them and the `mainFeed`
+ * mount's contacts carry each to its bus bar (ADR 0021 §4's ordinary mount contacts).
+ */
+const feedMainLugs: DeviceNetlistModel = { kind: 'feed.mainLugs', simTopologyKeys: [], topology: () => NO_TOPOLOGY };
+
+/**
  * A raceway part (F3.5 part 2: wire duct, an EMT stick, elbow or connector): no terminals and no
  * elements. Metal raceway isn't bonded to anything until P4's grounding.
  */
@@ -365,6 +435,8 @@ function endContact(device: DeviceDefinition, end: ConnectionEndInput, conductor
 /** The device netlist models, by model kind. A test checks every placed kind in `MODEL_KINDS` has one. */
 export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>> = Object.freeze({
   battery,
+  'bond.groundBar': bondGroundBar,
+  'bond.jumper': bondJumper,
   'breaker.afci1p': afci1pNetlistModel,
   'breaker.gfci1p': gfci1pNetlistModel,
   'breaker.plugOn1p': plugOn1pNetlistModel,
@@ -372,7 +444,9 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'breaker.thermalMagnetic': breakerNetlistModel,
   'electrode.groundRod': groundRodNetlistModel,
   'enclosure.box': enclosureBox,
+  'enclosure.loadCentre': enclosureLoadCentre,
   'enclosure.panel': enclosurePanel,
+  'feed.mainLugs': feedMainLugs,
   fuse: fuseNetlistModel,
   'generator.portable': generatorPortableNetlistModel,
   heater: heaterNetlistModel,
