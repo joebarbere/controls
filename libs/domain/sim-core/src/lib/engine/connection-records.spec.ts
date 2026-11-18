@@ -97,6 +97,73 @@ function terminalVolts(h: SourceHost, id: number): number {
   return Math.abs(reading.volts);
 }
 
+/** Which connection is opened: a conductor end by burning it open, or a lead by fusing it. */
+const OPENINGS = [
+  { connection: 2, end: 'a', termination: 1 },
+  { connection: 2, end: 'b', termination: 2 },
+  { connection: 3, end: 'a', termination: 3 },
+  { connection: 4, end: 'b', termination: 6 },
+  { connection: 1, end: null, termination: 0 },
+  { connection: 5, end: null, termination: 0 },
+] as const;
+const openingsArb = fc.subarray([...OPENINGS], { minLength: 1 });
+const stepsArb = fc.integer({ min: 0, max: 30 });
+
+/**
+ * Opens `open`, advances `steps` × 10 ticks and checks every open record's gaps: one with a reading
+ * holds the probe's |V| across it (so never 0 V where its two sides differ), one without is written 0.
+ * Returns how many of each it checked.
+ */
+function checkOpenGaps(open: readonly (typeof OPENINGS)[number][], steps: number): { gaps: number; silent: number } {
+  const counts = { gaps: 0, silent: 0 };
+  const conductorSim: Record<number, Record<string, number>> = {};
+  const leadSim: Record<number, Record<string, string>> = {};
+  for (const o of open) {
+    if (o.end === null) leadSim[o.connection] = { endAState: 'intermittentOpen', endBState: 'intermittentOpen' };
+    else {
+      const prefix = o.end === 'a' ? 'endA' : 'endB';
+      conductorSim[o.connection] = {
+        ...conductorSim[o.connection],
+        [`${prefix}Degradation`]: 10_000,
+        [`${prefix}TerminationId`]: o.termination,
+      };
+    }
+  }
+  const h = host({ leadSim, conductorSim }).advance(steps * 10);
+  const world = h.bus.state;
+  for (const connection of world.connections) {
+    const r = h.engine.connectionRecord(connection.id);
+    if (r?.values['status'] !== 'open' || !connection.a || !connection.b) continue;
+    const readings = num(r, 'readings');
+    const fused = r.values['conductorState'] === 'open';
+    const sides = fused
+      ? [{ field: 'conductorDropV', bit: CONNECTION_READING_CONDUCTOR_DROP, x: connection.a, y: connection.b }]
+      : (['A', 'B'] as const)
+          .filter((s) => r.values[`end${s}State`] === 'intermittentOpen')
+          .map((s) => ({
+            field: `end${s}DropV`,
+            bit: s === 'A' ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP,
+            x: s === 'A' ? connection.a : connection.b,
+            y: s === 'A' ? connection.b : connection.a, // the floating conductor's closed end
+          }));
+    for (const { field, bit, x, y } of sides) {
+      const reading = h.engine.probe(x as never, y as never);
+      const otherOpen = !fused && r.values[field === 'endADropV' ? 'endBState' : 'endAState'] === 'intermittentOpen';
+      if ((readings & bit) === 0) {
+        expect(num(r, field)).toBe(0); // no reading: written 0, never to be shown
+        counts.silent++;
+        continue;
+      }
+      expect(otherOpen).toBe(false); // a gap with no closed side has no reading
+      if (reading.kind !== 'dc') throw new Error(`a DC reading, got ${reading.kind}`);
+      expect(num(r, field)).toBe(Math.abs(reading.volts));
+      if (Math.abs(reading.volts) > 0) expect(num(r, field)).toBeGreaterThan(0);
+      counts.gaps++;
+    }
+  }
+  return counts;
+}
+
 describe('connection records (protocol 7)', () => {
   it('golden: resistances, currents and drops at the start solve, by hand', () => {
     const h = host();
@@ -239,67 +306,27 @@ describe('connection records (protocol 7)', () => {
   });
 
   it('property: an open record never reports a 0 V gap where the gap’s two sides differ', () => {
-    /** Which connection is opened: a conductor end by burning it open, or a lead by fusing it. */
-    const OPENINGS = [
-      { connection: 2, end: 'a', termination: 1 },
-      { connection: 2, end: 'b', termination: 2 },
-      { connection: 3, end: 'a', termination: 3 },
-      { connection: 4, end: 'b', termination: 6 },
-      { connection: 1, end: null, termination: 0 },
-      { connection: 5, end: null, termination: 0 },
-    ] as const;
-    let gaps = 0;
     fc.assert(
-      fc.property(fc.subarray([...OPENINGS], { minLength: 1 }), fc.integer({ min: 0, max: 30 }), (open, steps) => {
-        const conductorSim: Record<number, Record<string, number>> = {};
-        const leadSim: Record<number, Record<string, string>> = {};
-        for (const o of open) {
-          if (o.end === null) leadSim[o.connection] = { endAState: 'intermittentOpen', endBState: 'intermittentOpen' };
-          else {
-            const prefix = o.end === 'a' ? 'endA' : 'endB';
-            conductorSim[o.connection] = {
-              ...conductorSim[o.connection],
-              [`${prefix}Degradation`]: 10_000,
-              [`${prefix}TerminationId`]: o.termination,
-            };
-          }
-        }
-        const h = host({ leadSim, conductorSim }).advance(steps * 10);
-        const world = h.bus.state;
-        for (const connection of world.connections) {
-          const r = h.engine.connectionRecord(connection.id);
-          if (r?.values['status'] !== 'open' || !connection.a || !connection.b) continue;
-          const readings = num(r, 'readings');
-          const fused = r.values['conductorState'] === 'open';
-          const sides = fused
-            ? [{ field: 'conductorDropV', bit: CONNECTION_READING_CONDUCTOR_DROP, x: connection.a, y: connection.b }]
-            : (['A', 'B'] as const)
-                .filter((s) => r.values[`end${s}State`] === 'intermittentOpen')
-                .map((s) => ({
-                  field: `end${s}DropV`,
-                  bit: s === 'A' ? CONNECTION_READING_END_A_DROP : CONNECTION_READING_END_B_DROP,
-                  x: s === 'A' ? connection.a : connection.b,
-                  y: s === 'A' ? connection.b : connection.a, // the floating conductor's closed end
-                }));
-          for (const { field, bit, x, y } of sides) {
-            const reading = h.engine.probe(x as never, y as never);
-            const otherOpen =
-              !fused && r.values[field === 'endADropV' ? 'endBState' : 'endAState'] === 'intermittentOpen';
-            if ((readings & bit) === 0) {
-              expect(num(r, field)).toBe(0); // no reading: written 0, never to be shown
-              continue;
-            }
-            expect(otherOpen).toBe(false); // a gap with no closed side has no reading
-            if (reading.kind !== 'dc') throw new Error(`a DC reading, got ${reading.kind}`);
-            expect(num(r, field)).toBe(Math.abs(reading.volts));
-            if (Math.abs(reading.volts) > 0) expect(num(r, field)).toBeGreaterThan(0);
-            gaps++;
-          }
-        }
+      fc.property(openingsArb, stepsArb, (open, steps) => {
+        checkOpenGaps(open, steps);
       }),
       { numRuns: 40 },
     );
-    expect(gaps).toBeGreaterThan(20); // generator health: gaps were really checked
+  });
+
+  it('the openings reach gaps with a reading and gaps without one (generator health, fixed seed)', () => {
+    const counts = { gaps: 0, silent: 0 };
+    for (const [open, steps] of fc.sample(fc.tuple(openingsArb, stepsArb), { seed: 20261118, numRuns: 40 })) {
+      const checked = checkOpenGaps(open, steps);
+      counts.gaps += checked.gaps;
+      counts.silent += checked.silent;
+    }
+    // Measured on this seed, of 40 draws: 38 gaps with a reading and 82 without. Not asserted
+    // after the unseeded property: there the reading count varies (14–47 over 20,000 seeds, as 40 draws
+    // of 0–2 gaps each, by the opened set alone) and its old floor of 20 failed about 1 run in 50
+    // (simulation caveats, "A generator-health assertion").
+    expect(counts.gaps).toBeGreaterThan(25);
+    expect(counts.silent).toBeGreaterThan(55);
   });
 
   it('bad termination: the end drop is I × R_contact within 0.5 % and more than 10× the good end, under load', () => {
