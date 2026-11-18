@@ -1,10 +1,13 @@
 import { Session } from 'node:inspector';
 
 /*
- * Where a failing allocation gate's bytes come from (the simulation caveats: "Find a site with the
- * sampling heap profiler, never by guessing"). Run only after a gate has failed, so it costs nothing on
- * a passing bench; it doesn't decide the gate, it explains it. A Windows-only `tick-wired-plant`
- * failure (exactly 320 B per tick) took a day to place without it.
+ * What the measured work allocates, by V8's sampling heap profiler (the simulation caveats: "Find a
+ * site with the sampling heap profiler, never by guessing", and "Measuring allocation in a spec").
+ * `sampledBytes` is how the snapshot-read gates measure a read: only allocations under the work's
+ * frame count, so nothing else in the process (the profiler's own messages, a test runner's, the
+ * heap's growth from a compile) reaches the gate. `allocationSites` explains a failing gate; it runs
+ * only after a gate has failed. A Windows-only `tick-wired-plant` failure (exactly 320 B per tick) took
+ * a day to place without it.
  */
 
 interface ProfileNode {
@@ -25,11 +28,10 @@ function sampledWork(work: () => void): void {
 const SAMPLING_INTERVAL = 64;
 
 /**
- * The top `top` allocation sites (caller > function:line in the bundle, bytes per unit) while `work`
- * runs `units` units (ticks, reads), by V8's sampling heap profiler with collected objects kept, so a
- * scavenge mid-window loses nothing. Formatted for a gate's failure message: `"none sampled"` if empty.
+ * The bytes allocated under `work`, by site (caller > function:line in the bundle), by V8's sampling
+ * heap profiler with collected objects kept, so a scavenge mid-window loses nothing.
  */
-export function allocationSites(work: () => void, units: number, top = 5): string {
+function sampledSites(work: () => void): Map<string, number> {
   const session = new Session();
   session.connect();
   let head: ProfileNode | null = null;
@@ -64,7 +66,22 @@ export function allocationSites(work: () => void, units: number, top = 5): strin
     for (const child of node.children) walk(child, counted, name);
   };
   walk(head, false, '(root)');
-  const ranked = [...sites].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, top);
+  return sites;
+}
+
+/** The bytes allocated under `work` (sampled: an unbiased estimate, exactly 0 if it allocates nothing). */
+export function sampledBytes(work: () => void): number {
+  let bytes = 0;
+  for (const site of sampledSites(work).values()) bytes += site;
+  return bytes;
+}
+
+/**
+ * The top `top` allocation sites (caller > function:line in the bundle, bytes per unit) while `work`
+ * runs `units` units (ticks, reads). Formatted for a gate's failure message: `"none sampled"` if empty.
+ */
+export function allocationSites(work: () => void, units: number, top = 5): string {
+  const ranked = [...sampledSites(work)].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, top);
   if (ranked.length === 0) return 'none sampled';
   return ranked.map(([site, bytes]) => `${(bytes / units).toFixed(1)} B ${site}`).join('; ');
 }

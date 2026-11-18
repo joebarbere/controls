@@ -27,7 +27,7 @@ describe('the snapshot read rig', () => {
   });
 
   it('a read allocates nothing (a small measurement; the full one is the bench case)', () => {
-    expect(bytesPerRead(snapshotReadRig(), 1_000, 2)).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
+    expect(bytesPerRead(snapshotReadRig(), 1_000)).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
   });
 
   it('with the netlist readout (F2.6): reads every node and branch, still allocating nothing', () => {
@@ -43,7 +43,7 @@ describe('the snapshot read rig', () => {
     let records = 0;
     for (let i = 0; i < READ_PLANT.connections; i++) records += 300 + (i % 5) + 1;
     expect(rig.sum()).toBeCloseTo(plain.sum() + READ_PLANT.branches * Math.hypot(0.25, 0.25) + records, 6);
-    expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000, 2)).toBeLessThan(
+    expect(bytesPerRead(snapshotReadRig(READ_PLANT, { netlist: true }), 1_000)).toBeLessThan(
       READ_ALLOCATION_GATE_BYTES,
     );
   });
@@ -53,7 +53,7 @@ describe('the snapshot read rig', () => {
       expect(READ_SMOKE_PLANT[key] * 10).toBe(READ_PLANT[key]);
     }
     for (const netlist of [false, true]) {
-      expect(bytesPerRead(snapshotReadRig(READ_SMOKE_PLANT, { netlist }), 1_000, 2)).toBeLessThan(
+      expect(bytesPerRead(snapshotReadRig(READ_SMOKE_PLANT, { netlist }), 1_000)).toBeLessThan(
         READ_ALLOCATION_GATE_BYTES,
       );
     }
@@ -70,6 +70,24 @@ describe('the snapshot read rig', () => {
       },
       sum: () => rig.sum(),
     };
-    expect(bytesPerRead(leaky, 1_000, 2)).toBeGreaterThan(32 * READ_ALLOCATION_GATE_BYTES);
+    expect(bytesPerRead(leaky, 1_000)).toBeGreaterThan(32 * READ_ALLOCATION_GATE_BYTES);
+  });
+
+  it('a one-off burst in one window is not a per-read allocation (the median ignores it)', () => {
+    // As when the read briefly runs unoptimised: bursts of up to 37 kB in about 1 window in 100, which
+    // the old smallest-window slopes read as 1.024 and 3.024 B a read on CI (#144, #152).
+    const rig = snapshotReadRig(READ_SMOKE_PLANT);
+    const kept: number[][] = [];
+    let reads = 0;
+    const bursty = {
+      announce: () => rig.announce(),
+      read: () => {
+        rig.read();
+        if (++reads === 20_000 + 2_500) kept[0] = new Array(5_000).fill(0.5); // 40 kB, in the third window
+      },
+      sum: () => rig.sum(),
+    };
+    expect(bytesPerRead(bursty, 1_000)).toBeLessThan(READ_ALLOCATION_GATE_BYTES);
+    expect(kept[0]).toHaveLength(5_000); // it ran, inside the measured windows
   });
 });
