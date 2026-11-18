@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -8,6 +9,7 @@ import {
   inject,
   type Signal,
   signal,
+  untracked,
 } from '@angular/core';
 import { SimHost, type SimTrace } from '@controls/feature-session';
 import { type DescriptorTerminalRef, PANEL_SAMPLE_HZ } from '@controls/sim-protocol';
@@ -43,6 +45,11 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
  *   expands or goes to the first child, Left collapses or goes to the parent. The focused row is the
  *   selection; a selected node's terminals are {@link highlighted} (the workspace passes them to the
  *   renderer: view state only).
+ * - **Focus survives a re-render:** the hint ("No sim snapshot yet.", "The netlist is empty.") and the
+ *   tab-stop row carry `data-autofocus` (the workspace focuses it on `view.netlistInspector`). When a
+ *   render removes the focused element (the first snapshot replaces the hint, a new generation drops
+ *   the focused row, a reset brings the hint back), focus moves to the new `[data-autofocus]` element
+ *   instead of falling to `<body>`, unless it has gone somewhere else meanwhile.
  * - **Trace** (ADR 0011 §4): T on a branch row, or the Trace button for the selected branch, starts a
  *   live trace of its current, sampled by the worker at every electrical solve (the lamp's inrush is
  *   in it), drawn below the tree; again stops it. One trace at a time; view state, never logged.
@@ -51,7 +58,11 @@ export const REDUCED_MOTION_TRACE_HZ = 1;
   selector: 'ctl-netlist-inspector',
   imports: [Button, TracePlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { 'data-testid': 'netlist-inspector' },
+  host: {
+    'data-testid': 'netlist-inspector',
+    '(focusin)': 'focusEntered($event)',
+    '(focusout)': 'focusLeft($event)',
+  },
   template: `
     <h3 id="ctl-netlist-title" class="title">Netlist</h3>
     @if (values(); as v) {
@@ -259,8 +270,46 @@ export class NetlistInspector {
     return traced !== null && (branch === null || branch.key === traced.key);
   });
 
+  /** The element inside the inspector that has the player's focus, kept until focus leaves it for good. */
+  private focused: Element | null = null;
+
   constructor() {
     this.destroyRef.onDestroy(() => this.traced()?.trace.stop());
+    // After a render that changed the rows (or swapped them for the hint), hand focus over if that
+    // render removed the element holding it: the browser would leave it on <body>.
+    afterRenderEffect(() => {
+      this.visible();
+      untracked(() => this.restoreLostFocus());
+    });
+  }
+
+  protected focusEntered(event: FocusEvent): void {
+    this.focused = event.target as Element;
+  }
+
+  protected focusLeft(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && this.host.nativeElement.contains(next)) return; // focusin follows
+    if (next !== null) {
+      this.focused = null; // moved out of the inspector
+      return;
+    }
+    // Focus went to nothing: a blur (a click on empty space, the window losing focus), or a render
+    // removing the element. Tell them apart after the render, when a removed element is disconnected.
+    const left = event.target as Element;
+    queueMicrotask(() => {
+      if (this.focused === left && left.isConnected) this.focused = null;
+    });
+  }
+
+  private restoreLostFocus(): void {
+    const lost = this.focused;
+    if (lost === null || lost.isConnected) return;
+    this.focused = null;
+    const doc = this.host.nativeElement.ownerDocument;
+    const active = doc.activeElement;
+    if (active !== null && active !== doc.body) return; // focus is somewhere else now: leave it there
+    this.host.nativeElement.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }
 
   /** Starts a trace of `item`'s current (a branch row), or stops the current trace if it is that one (or none). */

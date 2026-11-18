@@ -169,6 +169,36 @@ describe('NetlistInspector', () => {
     expect(inspector.highlighted()).toEqual([{ entity: 4, terminal: 'l1' }]);
   });
 
+  it('hands focus to the new tab stop when a render removes the focused hint or row', async () => {
+    const { panel, publish } = await setup();
+    const hint = within(panel).getByText('No sim snapshot yet.');
+    hint.focus(); // what the workspace does on view.netlistInspector before the first snapshot
+    await publish(lit()); // the tree replaces the hint
+    expect(hint.isConnected).toBe(false);
+    const island = row(panel, 'Island 0 · DC');
+    expect(document.activeElement).toBe(island);
+    expect(island.getAttribute('aria-selected')).toBe('true');
+
+    await publish(null); // a reset: the hint replaces the rows
+    expect(document.activeElement).toBe(within(panel).getByText('No sim snapshot yet.'));
+  });
+
+  it("doesn't take focus back once it has left the inspector", async () => {
+    const { panel, publish } = await setup();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    within(panel).getByText('No sim snapshot yet.').focus();
+    outside.focus(); // the player moved on before the snapshot arrived
+    await publish(lit());
+    expect(document.activeElement).toBe(outside);
+
+    row(panel, 'Island 0 · DC').focus();
+    (document.activeElement as HTMLElement).blur(); // focus to nothing, the row still there
+    await Promise.resolve();
+    await publish(null);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("traces a branch's current from the keyboard (T) and the button, drawing peak and latest; T again stops", async () => {
     const { host, fixture, panel, publish, user } = await setup();
     await publish(lit());

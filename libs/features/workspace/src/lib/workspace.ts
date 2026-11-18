@@ -246,9 +246,13 @@ export class Workspace {
     this.netlistOpen.set(true);
     if (this.layout().inspector.collapsed) this.update('inspector', { ...this.layout().inspector, collapsed: false });
     // Once it has rendered: the inspector is a lazy `@defer` block, so the first time that is after its
-    // chunk loads (D19). Closed again before then, nothing is focused.
+    // chunk loads (D19). Closed again before then, or focus moved on meanwhile (the player tabbed
+    // away), nothing is focused: a late chunk never takes focus back.
+    const doc = panel.ownerDocument;
+    const before = doc.activeElement;
     this.afterLoaded(this.netlist, () => {
-      if (this.netlistOpen()) focusPanel();
+      const now = doc.activeElement;
+      if (this.netlistOpen() && (now === before || now === null || now === doc.body)) focusPanel();
     });
   }
 

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, output, signal, viewChild } from '@angular/core';
-import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
+import { DeferBlockBehavior, type DeferBlockFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { screen, within } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { Session } from '@controls/feature-session';
@@ -204,6 +204,36 @@ describe('Workspace lazy viewport (P4 D19)', () => {
     await viewport.render(DeferBlockState.Complete);
     await fixture.whenStable();
     expect(document.activeElement).toBe(menu);
+  });
+
+  it('focuses the netlist inspector once its chunk has loaded, unless the player has moved focus meanwhile', async () => {
+    const { fixture } = await setupUnloaded();
+    const session = TestBed.inject(Session);
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    const reset = screen.getByRole('button', { name: 'Reset layout' });
+    const netlistBlock = async () => (await fixture.getDeferBlocks()).at(-1) as DeferBlockFixture;
+
+    menu.focus();
+    session.exec('view.netlistInspector');
+    await fixture.whenStable();
+    reset.focus(); // tabbed on while the inspector loaded
+    await (await netlistBlock()).render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    expect(screen.getByText('No sim snapshot yet.')).toBeTruthy();
+    expect(document.activeElement).toBe(reset); // a late chunk doesn't take focus back
+
+    session.exec('view.netlistInspector'); // focus isn't in it: focus it (already shown)
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(screen.getByText('No sim snapshot yet.'));
+    session.exec('view.netlistInspector'); // close
+    await fixture.whenStable();
+
+    menu.focus();
+    session.exec('view.netlistInspector'); // opened again: the chunk is loaded now, focus follows
+    await fixture.whenStable();
+    await (await netlistBlock()).render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(screen.getByText('No sim snapshot yet.'));
   });
 });
 
