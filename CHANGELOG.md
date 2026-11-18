@@ -105,6 +105,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - **The netlist inspector keeps keyboard focus when the netlist arrives** (F2.6; [UI caveats](docs/caveats/ui.md)). Opened before the sim had published the circuit (right after a `sim.step`, or on a slow machine), the inspector focused its "The netlist is empty." hint, and the tree that replaced it a moment later dropped focus to the page, so the arrow keys did nothing. Focus now moves to the tree's first row, and back to the hint if the sim resets. The inspector also no longer takes focus back when its lazy chunk finishes loading after you have moved focus elsewhere. This was the intermittent `netlist-inspector.spec.ts` failure on CI.
+- **A rare flake in the sim-core phasor property tests** (tests only; [simulation caveats](docs/caveats/simulation.md)). The F2.4 sparse property "with series inductance behind the sources" failed about once in 2,500 runs (seen on macOS CI, but not platform-specific) when every source of a small generated circuit drew ideal and so got no series inductance. The solver was not at fault: cold, warm and thrashed solves stayed bit-identical. The test generator now keeps each island's root source non-ideal under `sourceInductance`, and the counterexample is pinned. Solved values, `topologyHash`, the pinned solve hashes and `SIM_ENGINE_VERSION` are unchanged.
 
 ### Security
 
