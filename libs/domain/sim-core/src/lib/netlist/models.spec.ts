@@ -44,7 +44,7 @@ describe('netlist models', () => {
     const params = { contactResistanceOhm: 0.005, testResistanceOhm: 15_000 };
     const parts = (kind: string, on: boolean, sim: Record<string, boolean>) =>
       DEVICE_NETLIST_MODELS[kind]
-        .topology({ params, state: { on }, sim })
+        .topology({ params, terminals: MODEL_KINDS[kind].terminals, state: { on }, sim })
         .elements.map((e) => `${e.part} ${e.a}→${e.b}`);
     expect(parts('breaker.plugOn1p', true, { tripped: false })).toStrictEqual(['pole line→load']);
     expect(parts('breaker.plugOn1p', true, { tripped: true })).toStrictEqual([]);
@@ -66,7 +66,9 @@ describe('netlist models', () => {
     for (const kind of ['breaker.plugOn1p', 'breaker.plugOn2p', 'breaker.gfci1p', 'breaker.afci1p']) {
       const model = DEVICE_NETLIST_MODELS[kind];
       expect(model.wiringPath, kind).toBe(true);
-      const wiring = model.wiring?.({ params, state: { on: false }, sim: {} }).elements.map((e) => e.part);
+      const wiring = model
+        .wiring?.({ params, terminals: MODEL_KINDS[kind].terminals, state: { on: false }, sim: {} })
+        .elements.map((e) => e.part);
       // Never the test resistor: it would join the load-side hot to the neutral in `wiringGraph`.
       expect(wiring, kind).toStrictEqual(
         kind === 'breaker.plugOn2p' ? ['pole1', 'pole2'] : kind === 'breaker.plugOn1p' ? ['pole'] : ['neutral', 'pole'],
@@ -76,13 +78,19 @@ describe('netlist models', () => {
 
   it('the fuse is a link until it blows; the breaker a pole while its handle is on and it has not tripped', () => {
     const fuse = (blown: boolean) =>
-      DEVICE_NETLIST_MODELS['fuse'].topology({ params: { resistanceOhm: 0.1 }, state: {}, sim: { blown } });
+      DEVICE_NETLIST_MODELS['fuse'].topology({
+        params: { resistanceOhm: 0.1 },
+        terminals: ['a', 'b'],
+        state: {},
+        sim: { blown },
+      });
     expect(fuse(false).elements.map((e) => [e.part, e.kind, e.a, e.b, e.values])).toStrictEqual([
       ['link', 'resistor', 'a', 'b', { resistanceOhm: 0.1 }],
     ]);
     expect(fuse(true)).toStrictEqual({ joins: [], elements: [] });
     const breaker = (on: boolean, tripped: boolean) =>
       DEVICE_NETLIST_MODELS['breaker.thermalMagnetic'].topology({
+        terminals: ['line', 'load'],
         params: { contactResistanceOhm: 0.004 },
         state: { on },
         sim: { tripped },
@@ -94,7 +102,12 @@ describe('netlist models', () => {
 
   it('the SPST switch joins its terminals only when closed', () => {
     const topology = (closed: unknown) =>
-      DEVICE_NETLIST_MODELS['switch.spst'].topology({ params: {}, state: { closed: closed as boolean }, sim: {} });
+      DEVICE_NETLIST_MODELS['switch.spst'].topology({
+        params: {},
+        terminals: ['a', 'b'],
+        state: { closed: closed as boolean },
+        sim: {},
+      });
     expect(topology(true)).toStrictEqual({ joins: [['a', 'b']], elements: [] });
     expect(topology(false)).toStrictEqual({ joins: [], elements: [] });
     expect(topology(null)).toStrictEqual({ joins: [], elements: [] });

@@ -18,6 +18,7 @@ import { cableAddBench, type CableAddBench } from './cable-add';
 import { bakeChecksum, bakeRoutes, buildRouteBakePanel, ROUTE_BAKE_SMOKE_ROWS } from './route-bake';
 import type { BakedWorld } from '@controls/world-model';
 import { intermittentToggleCase, resolveWiredCase, tickWiredCase } from './wired';
+import { LOAD_CENTRE_COMPILE_CASE, LOAD_CENTRE_HANDLE_CASE } from './load-centre';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import {
   CALIBRATION_REFERENCE_MS,
@@ -447,6 +448,9 @@ export const BENCH_CASES: readonly BenchCase[] = [
   OVERLAY_READ_CASE,
   CABLE_ADD_CASE,
   ROUTE_BAKE_CASE,
+  // P4 PR 14a: the load centre's contacts and bar joins at the 2,000-node plant's scale (reported).
+  LOAD_CENTRE_COMPILE_CASE,
+  LOAD_CENTRE_HANDLE_CASE,
 ];
 
 let plantEngine: SimEngine | null = null;
