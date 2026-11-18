@@ -18,6 +18,7 @@ import { cableAddBench, type CableAddBench } from './cable-add';
 import { bakeChecksum, bakeRoutes, buildRouteBakePanel, ROUTE_BAKE_SMOKE_ROWS } from './route-bake';
 import type { BakedWorld } from '@controls/world-model';
 import { intermittentToggleCase, resolveWiredCase, TICK_WIRED_CASE } from './wired';
+import { lightingCases } from './lighting';
 import type { BenchCalibration, BenchCase, PendingBenchCase } from './bench';
 import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
 import { buildPlant, type Plant } from './plant';
@@ -434,6 +435,8 @@ export const BENCH_CASES: readonly BenchCase[] = [
   OVERLAY_READ_CASE,
   CABLE_ADD_CASE,
   ROUTE_BAKE_CASE,
+  // P4 PR 12 (review E3): the phasor outer loop on a lighting plant.
+  ...lightingCases(RESOLVE_BUDGET_MS, CALIBRATION),
 ];
 
 let plantEngine: SimEngine | null = null;

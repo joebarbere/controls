@@ -24,6 +24,9 @@ import { SERVICE_SPLIT_PHASE_MODEL } from '../devices/sources/service';
 import { residentialTestOptions, ROD, SERVICE } from '../../testing/residential';
 import { BREAKER_MODEL } from '../devices/protection/breaker';
 import { FUSE_MODEL } from '../devices/protection/fuse';
+import { AC_SOURCE } from '../../testing/bench';
+import { A19_60W, DIMMER, LAMPHOLDER, LED_A19 } from '../../testing/lighting';
+import { DIMMER_MODEL, LIGHT_LED_MODEL } from '../devices/lighting';
 
 /*
  * Per-tick allocation gates for F2.5's devices: a lit lamp, a fuse and a closed breaker (plan F2.5;
@@ -51,6 +54,8 @@ const LAMP_GATE = 1;
 const FUSE_GATE = 1;
 const BREAKER_GATE = 1;
 const MIXED_GATE = 1;
+/** P4 PR 12: the dimmer and the LED driver (the review's E2 measured 1.76 B/step before the slots). */
+const LIGHTING_GATE = 1;
 const WINDOW_STEPS = 10_000;
 const WINDOWS = 8;
 /** V8 samples an allocation every this many bytes on average, and scales each sample to an unbiased estimate. */
@@ -522,6 +527,62 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
     const rodCtx = ctx(1);
     const lampCtx = ctx(1);
     const view = new DataView(new ArrayBuffer(128));
+    // P4 PR 12: the dimmer (its branch carries its level), the LED driver (two branches) and a
+    // burned-out lamp (no branch; its terminals' nodes looked up once).
+    const lightingCtx = ctx(2) as unknown as { netlist: { branches: { values?: object }[] } };
+    lightingCtx.netlist.branches[0].values = { level: 0.5 };
+    const dimmer = DIMMER_MODEL.bank([
+      {
+        entity: 3,
+        params: { ratedVoltageV: 120, ratedPowerW: 600 },
+        bag: {},
+        state: { on: true, level: 0.5 },
+        branches: [0],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(3)),
+        ...deviceExtras(11, 3, ['phaseControl']),
+      },
+    ]);
+    const led = LIGHT_LED_MODEL.bank([
+      {
+        entity: 4,
+        params: ENGINE_TEST_CATALOG.device(LED_A19)?.model.params as Record<string, number>,
+        bag: { running: true, overvoltageSinceTick: null },
+        state: {},
+        branches: [0, 1],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(4)),
+        ...deviceExtras(11, 4, ['conductance', 'susceptance']),
+      },
+    ]);
+    const burnedCtx = {
+      ...(ctx(1) as unknown as Record<string, unknown>),
+      netlist: {
+        branches: [],
+        islands: [{ kind: 'ac' }],
+        nodes: [
+          { island: 0, members: [{ entity: 5, terminal: 'a' }] },
+          { island: 0, members: [{ entity: 5, terminal: 'b' }] },
+        ],
+      },
+    } as unknown as LayerContext;
+    const burned = LAMP_MODEL.bank([
+      {
+        entity: 5,
+        params: ENGINE_TEST_CATALOG.device(LAMP)?.model.params as Record<string, number>,
+        bag: { filamentTempK: 1200, burnedOut: true, overvoltageSinceTick: null },
+        state: {},
+        branches: [],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(5)),
+        ...deviceExtras(11, 5, []),
+      },
+    ]);
+    writers.push(
+      ['dimmer', () => dimmer.writeRecord?.(0, view, 0, lightingCtx as unknown as LayerContext)],
+      ['led', () => led.writeRecord?.(0, view, 0, lightingCtx as unknown as LayerContext)],
+      ['lampBurnedOut', () => burned.writeRecord?.(0, view, 0, burnedCtx)],
+    );
     writers.push(
       ['service', () => service.writeRecord?.(0, view, 0, serviceCtx)],
       ['groundRod', () => rod.writeRecord?.(0, view, 0, rodCtx)],
@@ -563,5 +624,30 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
     };
     expect(layerBytesPerCall(bursty).perCall).toBeLessThan(1);
     expect(calls).toBeGreaterThan(once); // the burst ran inside the measured windows
+  });
+
+  // P4 PR 12 (review E2): a dimmer at 0.5 into a 60 W bulb and an LED A19 bulb on the 120 V test source,
+  // so every cadence solve runs the phasor outer loop (the dimmer's probe and fit, the driver's check).
+  it('a dimmer into a lamp and an LED driver (the phasor outer loop every solve) stay under 1 byte per step', () => {
+    const at = (x: number) => ({ x, y: 0, z: 0 });
+    const measured = allocatedPerStep(BATTERY, 'pos', 'neg', null, {
+      commands: [
+        ['entity.place', { ref: AC_SOURCE, positionMm: origin }],
+        ['entity.place', { ref: DIMMER, positionMm: origin }],
+        ['entity.place', { ref: LAMPHOLDER, positionMm: at(5000) }],
+        ['entity.place', { ref: A19_60W, positionMm: at(5000), mountedOn: { entity: 3, mount: 'socket' } }],
+        ['entity.place', { ref: LAMPHOLDER, positionMm: at(6000) }],
+        ['entity.place', { ref: LED_A19, positionMm: at(6000), mountedOn: { entity: 5, mount: 'socket' } }],
+        ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(2, 'line') }],
+        ['lead.connect', { ref: LEAD, a: end(2, 'load'), b: end(3, 'hot') }],
+        ['lead.connect', { ref: LEAD, a: end(3, 'neutral'), b: end(1, 'n') }],
+        ['lead.connect', { ref: LEAD, a: end(1, 'l'), b: end(5, 'hot') }],
+        ['lead.connect', { ref: LEAD, a: end(5, 'neutral'), b: end(1, 'n') }],
+        ['device.operate', { id: 2, control: 'on', value: true }],
+        ['device.operate', { id: 2, control: 'level', value: 0.5 }],
+      ],
+    });
+    log('dimmer-led', measured);
+    expect(measured.perStep, measured.report).toBeLessThan(LIGHTING_GATE);
   });
 });

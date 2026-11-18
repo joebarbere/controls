@@ -141,6 +141,14 @@ export class AcBranchValues {
     this.henries[branch] = henries;
   }
 
+  /** `inductor(branch, henries[i])`, reading by slot (a per-solve hook: no double crosses the call). */
+  inductorAt(branch: number, henries: Float64Array, i: number): void {
+    const l = henries[i];
+    if (!(l > 0 && l < Infinity)) notPositive('henries', branch, l);
+    this.stamps[branch] = AC_STAMP_INDUCTOR;
+    this.henries[branch] = l;
+  }
+
   capacitor(branch: number, farads: number): void {
     if (!(farads > 0 && farads < Infinity)) notPositive('farads', branch, farads);
     this.stamps[branch] = AC_STAMP_CAPACITOR;

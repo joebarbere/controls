@@ -28,6 +28,16 @@ import {
   plugOn1pNetlistModel,
   plugOn2pNetlistModel,
 } from '../devices/protection/netlist-models';
+import {
+  dimmerWallNetlistModel,
+  lampholderE26NetlistModel,
+  lampholderE26PullChainNetlistModel,
+  lightLedFixtureNetlistModel,
+  lightLedNetlistModel,
+  switchWall1pNetlistModel,
+  switchWall3wayNetlistModel,
+  switchWall4wayNetlistModel,
+} from '../devices/lighting/netlist-models';
 import type { ElementKind, SourceDomain, StateBag } from './types';
 
 /*
@@ -194,14 +204,19 @@ const battery: DeviceNetlistModel = {
   },
 };
 
+const LAMP_BURNED_OUT: DeviceTopology = { joins: NO_JOINS, elements: [] };
+
 /**
  * An incandescent lamp: its filament, a resistance between `a` and `b` whose value the lamp's engine
- * model gives from the filament temperature (F2.5's R(T)); it has no default value.
+ * model gives from the filament temperature (F2.5's R(T)); it has no default value. A burned-out lamp
+ * (the sticky sim key `burnedOut`, engine 8, ADR 0019) has no element: its filament is open for good.
+ * In the wiring view the filament is there (no sim state): a burned-out bulb is still wired.
  */
 const lampIncandescent: DeviceNetlistModel = {
   kind: 'lamp.incandescent',
-  simTopologyKeys: [],
-  topology: ({ params }) => {
+  simTopologyKeys: ['burnedOut'],
+  topology: ({ params, sim }) => {
+    if (sim['burnedOut'] === true) return LAMP_BURNED_OUT;
     const p = params as LampIncandescentParams;
     return {
       joins: NO_JOINS,
@@ -370,6 +385,7 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'breaker.plugOn1p': plugOn1pNetlistModel,
   'breaker.plugOn2p': plugOn2pNetlistModel,
   'breaker.thermalMagnetic': breakerNetlistModel,
+  'dimmer.wall': dimmerWallNetlistModel,
   'electrode.groundRod': groundRodNetlistModel,
   'enclosure.box': enclosureBox,
   'enclosure.panel': enclosurePanel,
@@ -377,6 +393,10 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'generator.portable': generatorPortableNetlistModel,
   heater: heaterNetlistModel,
   'lamp.incandescent': lampIncandescent,
+  'lampholder.e26': lampholderE26NetlistModel,
+  'lampholder.e26PullChain': lampholderE26PullChainNetlistModel,
+  'light.led': lightLedNetlistModel,
+  'light.ledFixture': lightLedFixtureNetlistModel,
   'raceway.conduit': raceway('raceway.conduit'),
   'raceway.conduitConnector': raceway('raceway.conduitConnector'),
   'raceway.conduitElbow': raceway('raceway.conduitElbow'),
@@ -387,6 +407,9 @@ export const DEVICE_NETLIST_MODELS: Readonly<Record<string, DeviceNetlistModel>>
   'supply.bench': benchSupplyNetlistModel,
   'supply.dinPsu': dinPsuNetlistModel,
   'switch.spst': switchSpst,
+  'switch.wall1p': switchWall1pNetlistModel,
+  'switch.wall3way': switchWall3wayNetlistModel,
+  'switch.wall4way': switchWall4wayNetlistModel,
   'terminalBlock.feedThrough': terminalBlock('terminalBlock.feedThrough'),
   'terminalBlock.ground': terminalBlock('terminalBlock.ground'),
   'utility.splitPhase': utilitySplitPhaseNetlistModel,

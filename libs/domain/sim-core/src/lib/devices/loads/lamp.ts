@@ -2,15 +2,24 @@ import type { LampIncandescentParams } from '@controls/catalog';
 import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import { AMBIENT_TEMPERATURE_K, type SourcedConstant } from '../../constants';
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
-import { branchReading, enumField, f64Field, READING_SOLVED, statusField } from '../readings';
+import type { Netlist } from '../../netlist/types';
+import {
+  branchReading,
+  enumField,
+  f64Field,
+  READING_SOLVED,
+  READING_UNSOLVED,
+  readingStatusCode,
+  statusField,
+} from '../readings';
 import { tungstenResistivity, tungstenResistivityInto } from './tungsten';
 
 /*
  * The incandescent lamp (plan F2.5): a tungsten filament whose resistance follows its temperature,
- * heated by I²R and cooled by radiation and by conduction along the filament into its two lead-ins. The
- * filament temperature is the only sim-owned value engine 7 models (`filamentTempK` in the `sim` bag),
- * so a save or a topology change carries it exactly; world v4's `burnedOut` and `overvoltageSinceTick`
- * (ADR 0019) are carried through as saved until engine 8 models them.
+ * heated by I²R and cooled by radiation and by conduction along the filament into its two lead-ins. Its
+ * sim-owned values are the filament temperature (`filamentTempK`) and, from engine 8 (P4 F4.1 part 1),
+ * the sticky `burnedOut` (ADR 0019), so a save or a topology change carries them exactly; world v4's
+ * `overvoltageSinceTick` is carried through as saved until F4.4 sets it.
  *
  * **R(T).** The filament's resistance is its rated (hot) resistance scaled by tungsten's resistivity
  * (`tungsten.ts`, Jones and Langmuir's measurements):
@@ -71,8 +80,16 @@ import { tungstenResistivity, tungstenResistivityInto } from './tungsten';
  * (both rise with temperature in tungsten); conduction lumped into one linear conductance (really heat
  * flowing along the filament into its two cooler lead-ins, so the ends cool first);
  * with both, the model's light follows the published L ∝ V^3.4 within 3 % from 75 % to 115 % of rated
- * volts. No gas fill (a vacuum lamp), no burnout, evaporation or end of life (the temperature is
+ * volts. No gas fill (a vacuum lamp), no evaporation or gradual end of life (the temperature is
  * clamped at the resistivity table's 3600 K, 100 K below tungsten's melting point).
+ *
+ * **Burnout** (engine 8, P4 F4.1 part 1). The protection layer opens the filament for good the step its
+ * temperature reaches `LAMP_BURNOUT_K`: `burnedOut` is set, never cleared, and the netlist model drops
+ * the filament (a topology key), so the engine recompiles and re-solves within the step. A burned-out
+ * filament carries nothing and cools to ambient. Overvoltage alone gets it there (a 2700 K-rated
+ * filament reaches 3200 K at 1.541 × its rated voltage, `lamp-burnout.spec.ts`), so a lost neutral
+ * burns out the lamp on the high leg (F4.4) while ANSI C84.1's Range B never does. The same step emits
+ * protocol 8's `lampBurnout` event (`{ filamentTempK }`) and the record's `burnedOut` reads `yes`.
  */
 
 /**
@@ -89,6 +106,18 @@ export const LAMP_MAX_TEMP_K: SourcedConstant = {
   kind: 'game-design',
   source:
     "game-design: the top of the tungsten resistivity table (Jones and Langmuir's 3600 K), about 100 K below tungsten's melting point (3695 K). P2 has no burnout model, so a grossly over-voltaged filament is clamped here rather than extrapolated.",
+};
+
+/**
+ * The filament temperature at which a lamp burns out (K): the sticky `burnedOut` (ADR 0019), at most
+ * `LAMP_FILAMENT_MAX_K` (the model's clamp, so it is always reachable).
+ */
+export const LAMP_BURNOUT_K: SourcedConstant = {
+  value: 3200,
+  unit: 'K',
+  kind: 'game-design',
+  source:
+    "game-design: a compression of incandescent end of life. Life falls steeply with overvoltage (the published rule of thumb puts it near V^-12 to V^-16 about the rating: D. G. Fink and H. W. Beaty, Standard Handbook for Electrical Engineers, lighting section, paraphrased), so a lamp held at 1.5–2 times its rated voltage lasts from hours down to minutes as its tungsten evaporates; the game opens the filament at once when it reaches 3200 K, about 500 K below tungsten's melting point (3695 K). The model's 2700 K-rated filaments reach it at 1.541 times rated voltage, never inside ANSI C84.1 Range B (1.06 times: about 2760 K), cited by number.",
 };
 
 /**
@@ -199,10 +228,15 @@ export const LAMP_MODEL: SimDeviceModel = {
     // resistance, across a call (a double crossing a call V8 doesn't inline is boxed; see `ohmsAt`).
     const rho = new Float64Array(n);
     const ohms = new Float64Array(n);
-    // World v4's two lamp keys (ADR 0019): engine 7 models neither, so each lamp's saved values are
-    // carried through its bag unchanged (engine 8 sets them). A hand-built bag without them starts at
-    // the kind's initial values, as `filamentTempK` does.
+    // World v4's two lamp keys (ADR 0019): `burnedOut` (sticky, set by the protection layer, engine 8)
+    // and `overvoltageSinceTick` (carried through as saved until F4.4). A hand-built bag without them
+    // starts at the kind's initial values, as `filamentTempK` does.
     const burnedOut = new Uint8Array(n);
+    const burnoutK = LAMP_BURNOUT_K.value;
+    const entity = new Int32Array(n);
+    // A burned-out lamp's terminal nodes, for its record's voltage (−2: not looked up in this netlist).
+    const nodeA = new Int32Array(n).fill(-2);
+    const nodeB = new Int32Array(n).fill(-2);
     const overvoltageSinceTick: (number | null)[] = new Array<number | null>(n).fill(null);
     devices.forEach((d, i) => {
       burnedOut[i] = d.bag['burnedOut'] === true ? 1 : 0;
@@ -216,7 +250,9 @@ export const LAMP_MODEL: SimDeviceModel = {
       // table's extension reaches 0 Ω near 65.6 K), and the filament never goes below ambient or past
       // the table's top, so a bag from anywhere starts where the model can step it.
       temp[i] = typeof t === 'number' ? Math.min(maxK, Math.max(ambient, t)) : ambient;
-      branch[i] = d.branches[0];
+      // A burned-out lamp has no filament element (its netlist model), so no branch.
+      branch[i] = d.branches.length > 0 ? d.branches[0] : -1;
+      entity[i] = d.entity;
       ratedOhm[i] = (p.ratedVoltageV * p.ratedVoltageV) / p.ratedPowerW;
       const tr = p.filamentRatedTempK;
       rhoRated[i] = tungstenResistivity(tr);
@@ -269,7 +305,40 @@ export const LAMP_MODEL: SimDeviceModel = {
         lightRel[i] = x * x * eighth;
       } else lightRel[i] = 0;
     };
+    /**
+     * A burned-out lamp's record: no power, no current, no resistance (its filament is open), its own
+     * temperature, light and `burnedOut` (1), and the voltage across its open filament when both
+     * terminals are on one readable island (status `solved`), else `unsolved`.
+     */
+    const writeBurnedOut = (i: number, view: DataView, offset: number, ctx: LayerContext): void => {
+      if (nodeA[i] === -2) {
+        nodeA[i] = terminalNode(ctx.netlist, entity[i], 'a');
+        nodeB[i] = terminalNode(ctx.netlist, entity[i], 'b');
+      }
+      const a = nodeA[i];
+      const b = nodeB[i];
+      let status = READING_UNSOLVED;
+      if (a >= 0 && b >= 0) {
+        const island = ctx.netlist.nodes[a].island;
+        if (ctx.netlist.nodes[b].island === island) status = readingStatusCode(ctx.islandStatus(island));
+      }
+      if (status === READING_SOLVED) {
+        const nodes = ctx.solution.nodes;
+        const vr = nodes[2 * a] - nodes[2 * b];
+        const vi = nodes[2 * a + 1] - nodes[2 * b + 1];
+        if (ctx.netlist.islands[ctx.netlist.nodes[a].island].kind === 'ac') {
+          view.setFloat64(offset + 16, Math.sqrt(vr * vr + vi * vi) + 0, true);
+        } else view.setFloat64(offset + 16, vr + 0, true);
+      }
+      view.setFloat64(offset + 32, temp[i], true);
+      lightInto(i);
+      view.setFloat64(offset + 40, lightRel[i], true);
+      view.setUint8(offset + 48, 1);
+      view.setUint8(offset + 49, status);
+    };
     return {
+      // The compiler's structure code reads `burnedOut` (its sim topology key) without building a bag.
+      simValue: (i, key) => (key === 'burnedOut' ? burnedOut[i] === 1 : undefined),
       bag: (i) => ({
         burnedOut: burnedOut[i] === 1,
         filamentTempK: temp[i],
@@ -294,6 +363,14 @@ export const LAMP_MODEL: SimDeviceModel = {
         const elements = ctx.netlist.branches;
         for (let i = 0; i < n; i++) {
           const b = branch[i];
+          if (burnedOut[i] === 1) {
+            // Burned out: an open filament carries exactly nothing (a reading whatever its island), so it cools.
+            const t = temp[i];
+            const t4 = t * t * t * t;
+            const loss = radiation[i] * (t4 - ambient4) + conduction[i] * (t - ambient);
+            temp[i] = Math.min(maxK, Math.max(ambient, t - (dt * loss) / heatCapacity[i])) + 0;
+            continue;
+          }
           const element = elements[b];
           // Only a reading moves the filament: on an unsolved or unsettled island it is frozen.
           if (!ctx.islandReadable(element.island)) continue;
@@ -323,7 +400,24 @@ export const LAMP_MODEL: SimDeviceModel = {
         }
         return resolve;
       },
+      // Burnout (engine 8): after the continuous layer, so the temperature this step reached decides.
+      protection: (ctx) => {
+        let changed = false;
+        for (let i = 0; i < n; i++) {
+          if (burnedOut[i] === 0 && temp[i] >= burnoutK) {
+            burnedOut[i] = 1;
+            changed = true;
+            // Protocol 8's event, on the step that set the key (so a save and load lists it the same).
+            ctx.emit('lampBurnout', entity[i], { filamentTempK: temp[i] });
+          }
+        }
+        return changed;
+      },
       writeRecord: (i, view, offset, ctx) => {
+        if (burnedOut[i] === 1) {
+          writeBurnedOut(i, view, offset, ctx);
+          return;
+        }
         const b = branch[i];
         const status = branchReading(ctx, b);
         ohmsAt(i);
@@ -338,3 +432,15 @@ export const LAMP_MODEL: SimDeviceModel = {
     };
   },
 };
+
+/** The node holding `entity`'s terminal `terminal` in `netlist`, or −1 (a linear scan; allocation-free). */
+function terminalNode(netlist: Netlist, entity: number, terminal: string): number {
+  const nodes = netlist.nodes;
+  for (let k = 0; k < nodes.length; k++) {
+    const members = nodes[k].members;
+    for (let m = 0; m < members.length; m++) {
+      if (members[m].entity === entity && members[m].terminal === terminal) return k;
+    }
+  }
+  return -1;
+}

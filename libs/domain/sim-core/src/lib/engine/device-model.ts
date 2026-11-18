@@ -175,6 +175,36 @@ export interface SimDeviceBank {
    */
   iterate?(index: number, branch: NetlistBranch, iterate: DcSolution | null, values: DcBranchValues): void;
   /**
+   * The phasor outer loop's hook for `branch` (engine 8, P4 D10 and D11: a dimmer's series reactance,
+   * an LED driver's admittance): a value that depends on the solution it is solved in. Called instead
+   * of `acValue`, with `pass`:
+   *
+   * - `pass` 0, before the first phasor solve of an engine solve: `iterate` is the warm start (the
+   *   last solution of this netlist, or `null` after a structural change). Set the branch's value; the
+   *   return value is ignored;
+   * - `pass` k ≥ 1, after the k-th phasor solve: `iterate` is that solution (the branch's island is
+   *   solved and not singular). Return `true` after setting a new value that needs another solve, or
+   *   `false` to accept the solution (leaving the value it was solved with).
+   *
+   * The engine re-solves the AC islands while any hook returns `true`, up to `OUTER_LOOP_MAX_ITERATIONS`
+   * solves, and flags an island still moving then `nonConverged` (never hidden). Pure in its inputs: a
+   * bank may keep scratch between the passes of one engine solve, never across solves (a loaded engine
+   * starts the next solve from the same warm start and must reach the same values).
+   */
+  /**
+   * The stage of this bank's `acIterate` hooks (0 if absent): the engine settles stage 0's hooks with
+   * every later stage's values frozen, then stage 1's with stage 0's frozen, and so on. The dimmer is
+   * stage 0 (it fits the circuit as it stands); the LED drivers stage 1 (they settle behind it).
+   */
+  readonly acStage?: number;
+  acIterate?(
+    index: number,
+    branch: NetlistBranch,
+    iterate: DcSolution | null,
+    values: AcBranchValues,
+    pass: number,
+  ): boolean;
+  /**
    * Called after every electrical solve (cadence, command, layer or start), with `ctx.solution` the
    * new solution at `ctx.tick` and `values` exactly the DC values it was solved with (the outer loop's
    * last stamps). It commits sim state the solve decided, such as a supply's CV/CC mode, into the

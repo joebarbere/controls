@@ -1,4 +1,5 @@
 export * from './lib/model-kinds';
+export * from './lib/model-kinds-lighting';
 export * from './lib/device';
 export * from './lib/families';
 export * from './lib/gauge';

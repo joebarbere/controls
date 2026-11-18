@@ -202,6 +202,25 @@ describe('catalogue format v3 (ADR 0020) on test fixtures', () => {
       ]);
     });
 
+    it("the pull-chain lampholder's centre terminal must be access none, with any other access refused (P4 PR 12)", () => {
+      expect(MODEL_KINDS['lampholder.e26PullChain'].sealedTerminals).toStrictEqual(['centre']);
+      const params = { ratedPowerW: 660, ratedVoltageV: 250 };
+      const holder = (centre: string) =>
+        device({
+          id: 'lampholder.test',
+          terminals: [terminal('centre', { access: centre }), terminal('ground'), terminal('hot'), terminal('neutral')],
+          model: { kind: 'lampholder.e26PullChain', params },
+          controls: [{ id: 'closed', label: 'Pull chain', type: 'toggle' }],
+          sources: source(['sizeMm', 'terminals', ...Object.keys(params).map((k) => `model.params.${k}`)]),
+        });
+      ok([holder('none')]);
+      for (const access of ['clip', 'land']) {
+        expect(messages([holder(access)]).join()).toContain(
+          'terminals.centre.access: Model kind lampholder.e26PullChain\'s centre is out of reach: its access must be "none"',
+        );
+      }
+    });
+
     it('take a role and a side, read by the inspector only (any combination loads)', () => {
       const roled = device({
         terminals: [

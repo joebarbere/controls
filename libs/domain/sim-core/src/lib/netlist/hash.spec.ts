@@ -20,6 +20,17 @@ import { computeTopologyHash, elementKey, TOPOLOGY_ENCODING_HEADER, topologyByte
 import type { NetlistBranch, NetlistNode } from './types';
 import { BENCH_SUPPLY, DIN_PSU, UTILITY_208, UTILITY_SPLIT } from '../../testing/sources';
 import { ENGINE_TEST_CATALOG, GENERATOR, ROD, SERVICE } from '../../testing/engine';
+import {
+  A19_60W,
+  DIMMER,
+  LAMPHOLDER,
+  LED_A19,
+  LED_FIXTURE,
+  PULL_CHAIN,
+  SWITCH_1P,
+  SWITCH_3WAY,
+  SWITCH_4WAY,
+} from '../../testing/lighting';
 import { MODEL_KINDS } from '@controls/catalog';
 import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
@@ -78,6 +89,21 @@ const MODEL_KIND_TOPOLOGY = {
   gfci1pOn: '5d73d2eb00a7dd458f914f5762a1f21d0e1ec7578439254f1e63adadf8b3649b',
   gfci1pTestHeld: 'd3a3ca6c3e89faf7efcfab2eb021f29598bfbe957d21d64effea190b7b9977d8',
   afci1pOn: '5be6e63cd04b8997eda7695e7d85c25862396180d54d027aca6ee29a5db77bd6',
+  switchWall1pOpen: '12821eea6ff9e1ab4d9ff01131628d18726b2e0e5d1287de673a71d15d3df3d1',
+  switchWall1pClosed: 'a18c85c07aadd347f67f23e9eb22babea61bc08c66098df762ae5b0ba02f7b87',
+  switchWall3wayT1: 'c66d576abc1cc74178912d62ef8222a362c506733aff8dcfd9fa0c0500efabac',
+  switchWall3wayT2: '422c9e20d9497fbf420f176945f7e0c2131a3316c917e43a9403d184737c3d63',
+  switchWall4wayStraight: '3d65da953190aa4624630a912d5fd60c8b3069f46d6e02332aa7f4fc52347c90',
+  switchWall4wayCrossed: '860315a92b98331b608f9331e01bbaf8573386e656113856d805c4b34bc80762',
+  dimmerWallOff: '569f7fc9a25a4739680dba80d34b8dee0d205fe394c521a17df57175f1c9d955',
+  dimmerWallOn: '030e82951db22be891063fee084bce633b1d4010040d00f23a0861bf28828f58',
+  lampholderE26: '1179deb027b56bb218eca8f835da48f9c11ec6dadf036806f0e3b01cdb2679dc',
+  lampholderE26PullChainOpen: '9363c584d14bae17ce71cf021a5cb7051881318dcd4d328ee5aa41231dc58fea',
+  lampholderE26PullChainClosed: '15a0bce4042ac7256e6745b1e8689a1ed3363cc7b748ea5de73c0cbd010c3526',
+  lampholderE26WithBulb: '40041dfd53a55ecad165fd3ccb447a8b0fce8a1d83a4500506034a1112afd21d',
+  lampBurnedOut: '28a34da6aa54c8b6dedf47e7b760884c6e225e8e934c69c6b8b4af9d0d72c99c',
+  lightLed: 'a0cbb2e42989346a5b396b49e26fc35de9a6720ae02e0bb3876d8e3b4846146c',
+  lightLedFixture: 'a6e9498abdeaceb1eafa8b814c695997e4540e70dba37f9c17b8b5ca14e2345a',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -117,6 +143,21 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   gfci1pOn: 'breaker.gfci1p',
   gfci1pTestHeld: 'breaker.gfci1p',
   afci1pOn: 'breaker.afci1p',
+  switchWall1pOpen: 'switch.wall1p',
+  switchWall1pClosed: 'switch.wall1p',
+  switchWall3wayT1: 'switch.wall3way',
+  switchWall3wayT2: 'switch.wall3way',
+  switchWall4wayStraight: 'switch.wall4way',
+  switchWall4wayCrossed: 'switch.wall4way',
+  dimmerWallOff: 'dimmer.wall',
+  dimmerWallOn: 'dimmer.wall',
+  lampholderE26: 'lampholder.e26',
+  lampholderE26WithBulb: 'lampholder.e26',
+  lampholderE26PullChainOpen: 'lampholder.e26PullChain',
+  lampholderE26PullChainClosed: 'lampholder.e26PullChain',
+  lampBurnedOut: 'lamp.incandescent',
+  lightLed: 'light.led',
+  lightLedFixture: 'light.ledFixture',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -233,6 +274,21 @@ describe('topologyHash', () => {
       const patched = { ...world, entities: world.entities.map((e) => ({ ...e, sim: { ...e.sim, ...sim } })) };
       return compileNetlist(patched, ENGINE_TEST_CATALOG).topologyHash;
     };
+    const operated = (ref: typeof LEAD, control: string, value: boolean | string) => {
+      const bus = benchBus(ENGINE_TEST_CATALOG);
+      run(bus, 'entity.place', { ref, positionMm: origin });
+      run(bus, 'device.operate', { id: 1, control, value });
+      return compileNetlist(bus.state, ENGINE_TEST_CATALOG).topologyHash;
+    };
+    // A lampholder (1) with a 60 W A19 bulb (2) screwed in; `burnedOut` set in the bulb's own bag.
+    const socketed = (burnedOut: boolean) => {
+      const bus = benchBus(ENGINE_TEST_CATALOG);
+      run(bus, 'entity.place', { ref: LAMPHOLDER, positionMm: origin });
+      run(bus, 'entity.place', { ref: A19_60W, positionMm: origin, mountedOn: { entity: 1, mount: 'socket' } });
+      const world = bus.state;
+      const entities = world.entities.map((e) => (e.id === 2 ? { ...e, sim: { ...e.sim, burnedOut } } : e));
+      return compileNetlist({ ...world, entities }, ENGINE_TEST_CATALOG).topologyHash;
+    };
     const lead = () => {
       const bus = benchBus();
       for (const ref of [LAMP, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
@@ -264,6 +320,25 @@ describe('topologyHash', () => {
       gfci1pOn: handleOn(GFCI_20),
       gfci1pTestHeld: handleOn(GFCI_20, { testHeldSinceTick: 0 }),
       afci1pOn: handleOn(AFCI_15),
+      // P4 F4.1 part 1: the lighting kinds through the test catalogue's entries (the content entries
+      // follow on this branch): each position of each switch, the dimmer off and on (its level is a
+      // value, never in the hash), a lone lampholder and one holding a 60 W bulb (two e26 contacts),
+      // that bulb burned out (no filament element), and the LED lamp and fixture (two elements each).
+      switchWall1pOpen: operated(SWITCH_1P, 'closed', false),
+      switchWall1pClosed: operated(SWITCH_1P, 'closed', true),
+      switchWall3wayT1: operated(SWITCH_3WAY, 'position', 't1'),
+      switchWall3wayT2: operated(SWITCH_3WAY, 'position', 't2'),
+      switchWall4wayStraight: operated(SWITCH_4WAY, 'position', 'straight'),
+      switchWall4wayCrossed: operated(SWITCH_4WAY, 'position', 'crossed'),
+      dimmerWallOff: operated(DIMMER, 'on', false),
+      dimmerWallOn: operated(DIMMER, 'on', true),
+      lampholderE26: one(LAMPHOLDER, undefined, ENGINE_TEST_CATALOG),
+      lampholderE26WithBulb: socketed(false),
+      lampholderE26PullChainOpen: operated(PULL_CHAIN, 'closed', false),
+      lampholderE26PullChainClosed: operated(PULL_CHAIN, 'closed', true),
+      lampBurnedOut: socketed(true),
+      lightLed: one(LED_A19, undefined, ENGINE_TEST_CATALOG),
+      lightLedFixture: one(LED_FIXTURE, undefined, ENGINE_TEST_CATALOG),
       resistor: one(RESISTOR_10R),
       heater: one(HEATER),
       fuse: one(FUSE_1A),
