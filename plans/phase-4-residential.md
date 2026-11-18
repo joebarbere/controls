@@ -269,7 +269,7 @@ ADR 0014 (`dmath`) stays reserved and deferred: the GFCI curve, dimmer curve and
 | The contract churns across save, sim, renderer, UI and content     | Agent-team ADR 0019 before any v4 code; one `schemaVersion` 4; command schemas frozen at the commands PR; protocol 8 by ADR 0011 amendment only.          |
 | The negative neutral branch destabilises the AC solver             | Allowed only inside a source network, passivity checked as a whole, oracle-tested against ngspice, a dense-against-sparse property on islands holding it. |
 | Constant-power loads and lost-neutral series loads don't converge  | Driver dropout below a sourced voltage, the 1 % rule, an iteration cap with `nonConverged` reported; a property over random lost-neutral pairs.           |
-| NEC table leakage (box fill, conduit fill, small-conductor limits) | Q1 to the user; manufacturer-published sources; paraphrased rules with article numbers; the realism reviewer's hard fail.                                 |
+| NEC table leakage (box fill, conduit fill, small-conductor limits) | Q1 decided (fill reported, not judged); manufacturer-published sources; paraphrased rules with article numbers; the realism reviewer's hard fail.         |
 | The inspector disagrees with the simulator about connectivity      | `wiringGraph` shares the compiler's joins; a property ties them together.                                                                                 |
 | Scope: many device kinds and recipes                               | The "Not in P4" fence; device kinds share models (one GFCI logic, one breaker bank); recipes from a parametric face-plate family.                         |
 | The house scenarios are long and brittle                           | Shared TS builders, generated `.console` twins with staleness tests, Trainee `'auto'` terminations except the 3-way (D17).                                |
@@ -379,8 +379,8 @@ PRs 2–4 and 25 run in parallel with the contract track; after PR 9 the physics
 
 Defaults are recorded; work proceeds on them.
 
-1. **Q1 Fill allowances.** Box fill needs a per-conductor volume allowance by gauge, and conduit fill a fill percentage by conductor count. Both are NFPA 70 table values, and the pre-audit holds that storing them is reproducing the table even when cited through a maker's fill chart (charter §3). _Default (changed after the pre-audit):_ the inspector **reports** the conductor count, the marked volume and a derived conductor volume, with no code pass/fail; this narrows spec F4.5's "box fill". If you want a pass/fail, amend charter §3 explicitly first.
-2. **Q2 Code edition.** _Default (the pre-audit agrees):_ keep citing NFPA 70-2023 by number; it is the most widely enforced edition through 2026, the shipped content cites it, and 2026's renumbering isn't verified. Revisit at P13.
+1. **Q1 Fill allowances.** _Decided 2026-11-17: the default (reported, not judged)._ Box fill needs a per-conductor volume allowance by gauge, and conduit fill a fill percentage by conductor count. Both are NFPA 70 table values, and the pre-audit holds that storing them is reproducing the table even when cited through a maker's fill chart (charter §3). _Default (changed after the pre-audit):_ the inspector **reports** the conductor count, the marked volume and a derived conductor volume, with no code pass/fail; this narrows spec F4.5's "box fill". If you want a pass/fail, amend charter §3 explicitly first.
+2. **Q2 Code edition.** _Decided 2026-11-17: the default (NFPA 70-2023)._ _Default (the pre-audit agrees):_ keep citing NFPA 70-2023 by number; it is the most widely enforced edition through 2026, the shipped content cites it, and 2026's renumbering isn't verified. Revisit at P13.
 
 ## Close-out
 

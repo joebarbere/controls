@@ -141,7 +141,7 @@ Why this is enough for F3.2: routing reads it only to **propose** (where a pulle
 - F3.2 part 2 (the wire renderer) draws `bakeWorldRoutes`' polylines as instanced segments and coils; part 3 binds the pickers and gestures to `autoRoute` and `snapWaypoint`; part 4 bakes cable tails and staples and may tighten the tail-reach rule.
 - `wire.pull` (F3.4 part 2) decides whether to store connector occupancy, using §8's rules.
 - A routing change moves the routing goldens, the `--route auto` console spec's hash and the bench checksum, never a replay.
-- The ADR 0010 manual routing protocol runs after F3.2 part 3; its results amend this ADR.
+- The ADR 0010 manual routing protocol runs after F3.2 part 3; its results amend this ADR. _Deferred to playtesting by the user, 2026-11-17: no human run in P3 or P4; ADR 0017's routing defaults stand until player testing measures them._
 
 ## Alternatives considered
 
