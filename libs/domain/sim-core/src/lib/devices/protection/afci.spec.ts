@@ -292,6 +292,24 @@ describe('the AFCI breaker in a circuit (arcing ends from ADR 0018)', () => {
     expect(madeOhm('downstream')).toBe(madeOhm('upstream'));
   });
 
+  it('protocol 8: its record reads arcingDownstream exactly while a downstream end arcs, never upstream; arcExposure is its bag’s', () => {
+    for (const where of ['downstream', 'upstream'] as const) {
+      const h = host(where, 0.4, 3);
+      let arcedSeen = 0;
+      for (let k = 0; k < 40 && h.events.every((e) => e.kind !== 'tripped'); k++) {
+        h.advance(100);
+        const conductor = h.engine.exportState().connections.find((c) => c.state['fused'] !== undefined);
+        const arcing = conductor?.state['endAState'] === 'arcing';
+        const r = h.record(2);
+        expect(r['arcExposure']).toBe(h.sim(2)['arcExposure']);
+        if (r['state'] !== 'on') continue;
+        if (arcing) arcedSeen++;
+        expect(r['arcingDownstream'], `${where} bucket ${k}`).toBe(arcing && where === 'downstream' ? 'yes' : 'no');
+      }
+      expect(arcedSeen, where).toBeGreaterThan(0);
+    }
+  });
+
   it('trips (arcFault) on an arcing end downstream carrying ≥ 5 A, for every seed tried', () => {
     for (const seed of [1, 2, 3, 4]) {
       const h = host('downstream', 0.4, seed);

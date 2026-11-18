@@ -5,6 +5,7 @@ import {
   BENCH_SUPPLY_MODEL,
   DIN_PSU_MODEL,
   GENERATOR_PORTABLE_MODEL,
+  GROUND_ROD_MODEL,
   SERVICE_SPLIT_PHASE_MODEL,
   UTILITY_SPLIT_PHASE_MODEL,
   UTILITY_THREE_PHASE_MODEL,
@@ -30,7 +31,7 @@ export * from './sources';
  * (split-phase and three-phase) and the portable generator stub. F2.5: the incandescent lamp (its
  * filament's R(T) and temperature), the resistor and the heater; part 2's fuse and thermal-magnetic breaker. Engine 8:
  * the service (`service.splitPhase`, the T-equivalent and its drop); breakers v2 (the plug-on, GFCI and AFCI
- * breakers, `plug-on.ts`). A kind without an engine model keeps
+ * breakers, `plug-on.ts`); the ground rod (its protocol 8 record only). A kind without an engine model keeps
  * its bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
@@ -40,6 +41,7 @@ export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = O
   'breaker.plugOn1p': PLUG_ON_1P_MODEL,
   'breaker.plugOn2p': PLUG_ON_2P_MODEL,
   'breaker.thermalMagnetic': BREAKER_MODEL,
+  'electrode.groundRod': GROUND_ROD_MODEL,
   fuse: FUSE_MODEL,
   'generator.portable': GENERATOR_PORTABLE_MODEL,
   heater: HEATER_MODEL,

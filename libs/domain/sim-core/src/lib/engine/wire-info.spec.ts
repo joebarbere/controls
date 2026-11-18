@@ -34,7 +34,9 @@ describe('wire.info', () => {
       'current 0 A',
     ]);
     expect(lines[4]).toMatch(/^conductor R 0\.0124\d* Ω at 293\.15 K, drop 0 V$/);
-    expect(lines[5]).toMatch(/^end a ok, contact [0-9.e-]+ Ω at 293\.15 K, drop 0 V, conductor side \d+\.\d+ V$/);
+    expect(lines[5]).toMatch(
+      /^end a ok, contact [0-9.e-]+ Ω at 293\.15 K, drop 0 V, conductor side \d+\.\d+ V, degradation 1$/,
+    );
     expect(lines.slice(6)).toStrictEqual(['end b none', 'insulation intact', '']);
   });
 
@@ -43,7 +45,7 @@ describe('wire.info', () => {
     const lines = formatWireInfo(h.engine, h.bus.state, 2).split('\n');
     expect(lines[2]).toBe('status solved');
     expect(lines[3]).toMatch(/^current \d+\.\d+ A$/);
-    expect(lines[5]).toMatch(/^end a ok, contact .* Ω at 293\.15 K, drop .* V, conductor side .* V$/);
+    expect(lines[5]).toMatch(/^end a ok, contact .* Ω at 293\.15 K, drop .* V, conductor side .* V, degradation 1$/);
     const lead = formatWireInfo(h.engine, h.bus.state, 1).split('\n');
     expect(lead[1]).toBe('lead 1 lead.quillfern-test-1m@1 length 1000 mm');
     expect(lead[4]).toMatch(/^conductor R 0\.0409\d* Ω at 293\.15 K, drop .* V$/);
@@ -65,9 +67,11 @@ describe('wire.info', () => {
     const lines = formatWireInfo(h.engine, h.bus.state, 2).split('\n');
     expect(lines[2]).toBe('status open (not netlisted)');
     expect(lines[3]).toBe('current 0 A');
-    expect(lines[5]).toMatch(/^end a intermittentOpen, open at 293\.15 K, gap 1\d\.\d+ V, conductor side 0 V$/);
+    expect(lines[5]).toMatch(
+      /^end a intermittentOpen, open at 293\.15 K, gap 1\d\.\d+ V, conductor side 0 V, degradation 10000$/,
+    );
     expect(lines[5]).not.toContain('Ω');
-    expect(lines[6]).toMatch(/^end b ok, contact .* Ω at 293\.15 K, drop 0 V, conductor side 0 V$/);
+    expect(lines[6]).toMatch(/^end b ok, contact .* Ω at 293\.15 K, drop 0 V, conductor side 0 V, degradation 1$/);
   });
 
   it('a gap with no closed side has no reading; a fused lead prints its body open with the gap', () => {
@@ -75,8 +79,12 @@ describe('wire.info', () => {
       3: { endADegradation: 10_000, endATerminationId: 3, endBDegradation: 10_000, endBTerminationId: 4 },
     });
     const three = formatWireInfo(both.engine, both.bus.state, 3).split('\n');
-    expect(three[5]).toBe('end a intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading');
-    expect(three[6]).toBe('end b intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading');
+    expect(three[5]).toBe(
+      'end a intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading, degradation 10000',
+    );
+    expect(three[6]).toBe(
+      'end b intermittentOpen, open at 293.15 K, gap no reading, conductor side no reading, degradation 10000',
+    );
     const fused = opened({ 1: { endAState: 'intermittentOpen', endBState: 'intermittentOpen' } });
     const lead = formatWireInfo(fused.engine, fused.bus.state, 1).split('\n');
     expect(lead[4]).toMatch(/^conductor open \(fused\) at 293\.15 K, gap 1\d\.\d+ V$/);

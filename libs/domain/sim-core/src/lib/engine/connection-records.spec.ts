@@ -320,7 +320,11 @@ describe('connection records (protocol 7)', () => {
     expect(snapshot.connectionCount).toBe(7);
     expect(snapshot.connections.byteLength).toBe(7 * CONNECTION_RECORD_BYTES);
     expect(descriptor.connections.map((c) => [c.connection, c.kind, c.recordOffset])).toStrictEqual(
-      [1, 2, 3, 4, 5, 6, 7].map((id, i) => [id, [1, 5, 6].includes(id) ? 'lead' : 'conductor', i * 104]),
+      [1, 2, 3, 4, 5, 6, 7].map((id, i) => [
+        id,
+        [1, 5, 6].includes(id) ? 'lead' : 'conductor',
+        i * CONNECTION_RECORD_BYTES,
+      ]),
     );
     expect(descriptor.connections[6].branch).toBe(-1);
     expect(descriptor.connectionSchemas).toStrictEqual(CONNECTION_OUTPUT_SCHEMAS);

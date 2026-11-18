@@ -897,6 +897,39 @@ flowchart LR
 - **Protocol 8** (descriptor part): `ElementRef` gains `contact`, a node member may be entity 0 only as `earth`, a trace may watch a contact; the netlist panel names contacts `e<entity>:<relation>.<contact>` and the earth node "remote earth".
 - **The oracle corpus** gains coupled source pairs (about half the AC circuits with two sources), decked as an `H` (R_m times the partner's sense current) and an `ED` over an `F`-driven 1 H inductor (L_m times jω I_p).
 
+## Protocol 8 records and events (P4 PR 11)
+
+[ADR 0011's protocol 8 amendment](../decisions/0011-sim-worker-contract.md#amendment-protocol-8-residential-records-and-events-p4) completes protocol 8 (provisional until v0.5.0; sign-off by `renderer-engineer` and `angular-ui-engineer` pending): records for the engine 8 kinds, the connection records' degradation factors and typed events. The engine computes nothing new (`SIM_ENGINE_VERSION` stays 8); only snapshot bytes moved.
+
+```mermaid
+flowchart LR
+    subgraph banks["engine banks (state at tick T) + the solution"]
+      PO["plug-on bank<br/>1p, 2p, GFCI, AFCI"]
+      SV["service bank"]
+      RD["ground-rod bank<br/>(record only)"]
+      LP["lamp bank"]
+      CB["connection bank"]
+    end
+    PO -->|writeRecord| DEV["slot device section<br/>state, tripCause, per-pole I,<br/>residualMa, readings, …"]
+    SV -->|writeRecord| DEV
+    RD -->|"writeRecord<br/>(SimDevice.contacts)"| DEV
+    LP -->|"+ burnedOut"| DEV
+    CB -->|"+ endA/BDegradation<br/>(120 B)"| CONN["slot connection section"]
+    DEV --> DEVICE["game.device, DescriptorIndex.field<br/>(panel UI, audio: PRs 18, 23)"]
+    CONN --> READOUT["NetlistReadout"] --> PANEL["netlist panel: degraded N×"]
+    READOUT --> WIRE["wire readout: degraded at end a"]
+    CONN --> INFO["wire.info: degradation"]
+    PO -->|"tripped {cause}"| EV["SimEventSchema<br/>(detail parsed per kind)"]
+    EV --> ON["game.on('sim'), simEventDetail"]
+```
+
+- **Device records** (`DEVICE_OUTPUT_SCHEMAS`): the plug-on 1-pole and 2-pole breakers (per-pole current, thermal fraction and drawn pickup, the drawn opening time, `state` [`off`, `on`, `tripped`] and `tripCause`), the GFCI breaker (plus the neutral current, `residualMa`, `pickupMa`, `residualIntegral`, `testHeld`, the line-side and load-side voltages), the AFCI breaker (plus `arcExposure` and `arcingDownstream`), the service (each drop conductor's current, the utility grounding's, the meter base's voltages) and the ground rod (its current into the soil and `touchVoltageV`, its potential rise against remote earth). The lamp gains `burnedOut`. `state`, `tripCause` and the draw-relevant own state are always written; the GFCI's and AFCI's electrical fields are readings only with their bit in `readings`.
+- **What the banks read for it.** `SimDevice` gains `contacts` (a device's relation contact branches: the service's `grounding`, a rod's `electrode`) and `terminalNode(terminal)` (resolved at bank build, so the GFCI's line-side voltage is read across an open pole). The ground rod has a bank only to write its record. The AFCI's `arcingDownstream` reuses its protection layer's lazy downstream marks.
+- **Pending schemas** (`PENDING_DEVICE_OUTPUT_SCHEMAS`): the LED lamp and fixture and the dimmer, agreed now and registered with their models in P4 PR 12 without moving the fingerprint.
+- **Connection records** gain each end's degradation factor D inside the f64 block (120 bytes); a module-load check keeps the layout the readout's fast path (every f64, then every u8).
+- **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (emitted by P4 PR 12 and F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
+- **Allocation.** Every record writer, the lamp's included, writes into the view without returning a double from a helper (`writeAmps`, `writeVolts`) and is gated at under 1 B a call (`allocation-loads.spec.ts`).
+
 ## Not yet
 
 - **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.

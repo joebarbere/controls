@@ -45,9 +45,9 @@ export function benchDescriptor(generation = 1): TopologyDescriptor {
     // Protocol 7: the three leads' records, and a wire (c9) that isn't netlisted.
     connections: [
       { connection: 1, kind: 'lead', recordOffset: 0, branch: 2 },
-      { connection: 2, kind: 'lead', recordOffset: 104, branch: 3 },
-      { connection: 3, kind: 'lead', recordOffset: 208, branch: 4 },
-      { connection: 9, kind: 'conductor', recordOffset: 312, branch: -1 },
+      { connection: 2, kind: 'lead', recordOffset: CONNECTION_RECORD_BYTES, branch: 3 },
+      { connection: 3, kind: 'lead', recordOffset: 2 * CONNECTION_RECORD_BYTES, branch: 4 },
+      { connection: 9, kind: 'conductor', recordOffset: 3 * CONNECTION_RECORD_BYTES, branch: -1 },
     ],
     connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'], conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
   };

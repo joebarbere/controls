@@ -5,7 +5,16 @@ import type { EntityPurpose, Sfc32 } from '@controls/world-model';
 import type { AcBranchValues } from '../mna/ac-values';
 import type { DcSolution } from '../mna/dc';
 import type { DcBranchValues } from '../mna/values';
-import type { Netlist, NetlistBranch, StateBag } from '../netlist/types';
+import type { ContactRelation, Netlist, NetlistBranch, StateBag } from '../netlist/types';
+
+/** One relation contact branch whose dependent entity is a device (engine 8, protocol 8's records). */
+export interface SimDeviceContact {
+  /** Its branch in this topology. */
+  readonly branch: number;
+  readonly relation: ContactRelation;
+  /** The contact's id (a fit contact, a plug pin, an earth link: the service's `grounding`, a rod's `electrode`). */
+  readonly contact: string;
+}
 
 /*
  * The device-model interface of the engine loop (plan F2.3a): how a model kind's sim-owned state and
@@ -45,6 +54,18 @@ export interface SimDevice {
   readonly branches: readonly number[];
   /** The part of each of `branches`, in the same order (engine 8: a model whose parts come and go). */
   readonly parts: readonly string[];
+  /**
+   * Its relation contacts in this topology (engine 8, protocol 8: a service's utility grounding, a
+   * rod's electrode link), in branch order. Their currents are in the solution like any branch's.
+   */
+  readonly contacts: readonly SimDeviceContact[];
+  /**
+   * The node of its terminal `terminal` in this topology, or −1 when the terminal isn't in the netlist
+   * (protocol 8's records read a voltage across an open pole: a GFCI's line side). Valid for the bank's
+   * life: node indices move only at a structural change, which rebuilds every bank. Not per tick (it
+   * looks a string key up).
+   */
+  terminalNode(terminal: string): number;
   /** The region's supply frequency (Hz): the AC islands' analysis frequency (F2.4's source reactance). */
   readonly frequencyHz: number;
   /** The region's GFCI and AFCI limits (engine 8, ADR 0021 part 2). */

@@ -13,7 +13,7 @@ import { startSandbox } from './support/sandbox';
  * Since F2.5 the D6 golden with a lit lamp is `bench-lamp.spec.ts` (`bench-lamp.console`, both transports).
  */
 const SIM_STEP_HASH = 'fd82e0a5f0c9f21dd482fab80b84959dd9641316f89a01baf912afd55c711c98';
-const SIM_STEP_SNAPSHOT_HASH = '155c2cd26fb761cff74036f668e10124738b16fb374c274bd90e23f4730cf57f';
+const SIM_STEP_SNAPSHOT_HASH = 'aea05b1f30c2af080a54a18f25a5e227e2a106986398d4789c88f5f9882c6c55';
 
 type Hooks = {
   __controlsSession?: {
@@ -88,7 +88,7 @@ for (const { transport, query } of [
  * ticks and the coulomb counting, byte for byte.
  */
 const SOURCES_HASH = '9175709aa70b9a7226eba34560a3a86cf035e0c728b5e83fccde3e3f24a11b16';
-const SOURCES_SNAPSHOT_HASH = '6201347b0baf66c7f21de96cf7c0f6247a0557b5b9540719d21bde3560e9425e';
+const SOURCES_SNAPSHOT_HASH = '128ac07ab110628bfee62617da3788a93d7880ed002691eccb0c26dd23a65c84';
 
 test('the sources scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
   await page.goto('/?e2e=1&renderer=webgl2');
@@ -117,7 +117,7 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
  * `apps/sim-cli/scenarios/mains.console` must reach the hashes `apps/sim-cli/src/mains.spec.ts` pins.
  */
 const MAINS_HASH = '1763d6545ea691f46973df1c6ee478a6a33ab6ed844e1c1a1cdc629cea0a321f';
-const MAINS_SNAPSHOT_HASH = '13164c91359bed71f185387929162d6db3b8bd9d84fd78278c11fbc198185a9b';
+const MAINS_SNAPSHOT_HASH = '19fb43a799dabed79641319cd082a0184ac12d43c5afd469cca1a141c093be92';
 
 test('the mains scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
   await page.goto('/?e2e=1&renderer=webgl2');

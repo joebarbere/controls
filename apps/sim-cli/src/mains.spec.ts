@@ -12,7 +12,7 @@ import { workshopWorld } from './testing/workshop';
  * either lead fuses (an 18 AWG lead carrying kiloamps reaches copper's melting point within tens of ms).
  */
 export const MAINS_HASH = '1763d6545ea691f46973df1c6ee478a6a33ab6ed844e1c1a1cdc629cea0a321f';
-export const MAINS_SNAPSHOT_HASH = '13164c91359bed71f185387929162d6db3b8bd9d84fd78278c11fbc198185a9b';
+export const MAINS_SNAPSHOT_HASH = '19fb43a799dabed79641319cd082a0184ac12d43c5afd469cca1a141c093be92';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');
 

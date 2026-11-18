@@ -1,5 +1,6 @@
 import { type GfciBreakerParams, type PlugOnBreakerParams, TRIP_CAUSES } from '@controls/catalog';
 import type { DeviceStateValue } from '@controls/save-format';
+import type { DeviceOutputField, DeviceOutputSchema } from '@controls/sim-protocol';
 import { INTERMITTENT_MIN_DWELL_TICKS, intermittentBucket } from '../../contact/regimes';
 import type {
   CommandedContext,
@@ -9,6 +10,15 @@ import type {
   SimDeviceModel,
 } from '../../engine/device-model';
 import type { Netlist } from '../../netlist/types';
+import {
+  enumField,
+  f64Field,
+  READING_SOLVED,
+  READING_UNSOLVED,
+  readingStatusCode,
+  statusField,
+  writeVolts,
+} from '../readings';
 import { afciDetectionBuckets, afciDraw, type AfciLimitValues, afciLimitValues, markDownstream } from './afci';
 import { AFCI_QUIET_RESET_TICKS, GFCI_TEST_HOLD_TICKS, TRIP_ELECTRONICS_MIN_V } from './constants';
 import { drawTicksInBand, GfciSensor, gfciRateTable } from './gfci';
@@ -53,7 +63,15 @@ import { drawTicksInBand, GfciSensor, gfciRateTable } from './gfci';
  * **Abstractions** (for `electrical-realism-reviewer`): one time constant per bimetal (no case mass);
  * no ambient compensation; the pickup is the same on AC and DC; a pole's contact resistance is
  * constant; no let-through I²t or interrupting rating; the GFCI and AFCI's neutral is never switched.
- * No records yet: the protocol 8 records are P4 PR 11's.
+ *
+ * **Records** (protocol 8, P4 PR 11; ADR 0011's protocol 8 amendment): per-pole currents (|I|, RMS on
+ * AC), thermal fractions (θ / k_u², 1 trips) and drawn pickups, the drawn opening time, `state`
+ * (`off`, `on`, `tripped`: read this, never the handle's `on`, to show a trip) and `tripCause`,
+ * always written; the GFCI adds its neutral current, `residualMa`, `pickupMa`, `residualIntegral`,
+ * `testHeld` and the line-side and load-side voltages, the AFCI its neutral current, the voltages,
+ * `arcExposure` and `arcingDownstream`. An open pole carries exactly 0 A, a reading whatever its
+ * island (the DIN breaker's rule). The GFCI's and AFCI's electrical fields are readings only with their
+ * `readings` bit (`DEVICE_READING_*`): a voltage needs both terminals on one solved island.
  */
 
 const CAUSE_NONE = 0;
@@ -86,8 +104,112 @@ interface Variant {
 
 const POLE_PARTS: Readonly<Record<1 | 2, readonly string[]>> = { 1: ['pole'], 2: ['pole1', 'pole2'] };
 
+// --- protocol 8 records (ADR 0011's protocol 8 amendment; `sim-protocol`'s copies must equal these) --
+
+/** A breaker's `state` by code (the DIN breaker's: the handle and the trip). */
+const BREAKER_STATES = ['off', 'on', 'tripped'] as const;
+const STATE_OFF = 0;
+const STATE_ON = 1;
+const STATE_TRIPPED = 2;
+/** `tripCause` by code: `none`, then `TRIP_CAUSES` (so a cause's code is the bank's `cause` code). */
+const TRIP_CAUSE_FIELD_VALUES: readonly string[] = ['none', ...TRIP_CAUSES];
+const NO_YES = ['no', 'yes'] as const;
+/** `readings` bits (`sim-protocol`'s `DEVICE_READING_*`, pinned equal by `outputs.spec.ts`). */
+export const PLUG_ON_READING_CURRENT = 1;
+export const PLUG_ON_READING_NEUTRAL_CURRENT = 2;
+export const PLUG_ON_READING_RESIDUAL = 4;
+export const PLUG_ON_READING_LINE_VOLTAGE = 8;
+export const PLUG_ON_READING_LOAD_VOLTAGE = 16;
+
+const bitsField = (name: string, offset: number): DeviceOutputField => ({
+  name,
+  type: 'u8',
+  offset,
+  unit: null,
+  values: null,
+});
+
+const PLUG_ON_1P_OUTPUT: DeviceOutputSchema = {
+  kind: 'breaker.plugOn1p',
+  recordBytes: 40,
+  fields: [
+    f64Field('currentA', 0, 'A'),
+    f64Field('thermalFraction', 8, null),
+    f64Field('magneticPickupA', 16, 'A'),
+    f64Field('openingMs', 24, 'ms'),
+    enumField('state', 32, BREAKER_STATES),
+    enumField('tripCause', 33, TRIP_CAUSE_FIELD_VALUES),
+    statusField(34),
+  ],
+};
+
+const PLUG_ON_2P_OUTPUT: DeviceOutputSchema = {
+  kind: 'breaker.plugOn2p',
+  recordBytes: 64,
+  fields: [
+    f64Field('pole1CurrentA', 0, 'A'),
+    f64Field('pole2CurrentA', 8, 'A'),
+    f64Field('pole1ThermalFraction', 16, null),
+    f64Field('pole2ThermalFraction', 24, null),
+    f64Field('pole1MagneticPickupA', 32, 'A'),
+    f64Field('pole2MagneticPickupA', 40, 'A'),
+    f64Field('openingMs', 48, 'ms'),
+    enumField('state', 56, BREAKER_STATES),
+    enumField('tripCause', 57, TRIP_CAUSE_FIELD_VALUES),
+    statusField(58),
+  ],
+};
+
+const GFCI_1P_OUTPUT: DeviceOutputSchema = {
+  kind: 'breaker.gfci1p',
+  recordBytes: 88,
+  fields: [
+    f64Field('currentA', 0, 'A'),
+    f64Field('neutralCurrentA', 8, 'A'),
+    f64Field('residualMa', 16, 'mA'),
+    f64Field('lineVoltageV', 24, 'V'),
+    f64Field('loadVoltageV', 32, 'V'),
+    f64Field('thermalFraction', 40, null),
+    f64Field('magneticPickupA', 48, 'A'),
+    f64Field('openingMs', 56, 'ms'),
+    f64Field('pickupMa', 64, 'mA'),
+    f64Field('residualIntegral', 72, null),
+    enumField('state', 80, BREAKER_STATES),
+    enumField('tripCause', 81, TRIP_CAUSE_FIELD_VALUES),
+    enumField('testHeld', 82, NO_YES),
+    bitsField('readings', 83),
+    statusField(84),
+  ],
+};
+
+const AFCI_1P_OUTPUT: DeviceOutputSchema = {
+  kind: 'breaker.afci1p',
+  recordBytes: 72,
+  fields: [
+    f64Field('currentA', 0, 'A'),
+    f64Field('neutralCurrentA', 8, 'A'),
+    f64Field('lineVoltageV', 16, 'V'),
+    f64Field('loadVoltageV', 24, 'V'),
+    f64Field('thermalFraction', 32, null),
+    f64Field('magneticPickupA', 40, 'A'),
+    f64Field('openingMs', 48, 'ms'),
+    f64Field('arcExposure', 56, null),
+    enumField('state', 64, BREAKER_STATES),
+    enumField('tripCause', 65, TRIP_CAUSE_FIELD_VALUES),
+    enumField('arcingDownstream', 66, NO_YES),
+    bitsField('readings', 67),
+    statusField(68),
+  ],
+};
+
+function outputOf(variant: Variant): DeviceOutputSchema {
+  if (variant.gfci) return GFCI_1P_OUTPUT;
+  if (variant.afci) return AFCI_1P_OUTPUT;
+  return variant.poles === 2 ? PLUG_ON_2P_OUTPUT : PLUG_ON_1P_OUTPUT;
+}
+
 function plugOnModel(variant: Variant): SimDeviceModel {
-  return { kind: variant.kind, output: null, bank: (devices) => plugOnBank(variant, devices) };
+  return { kind: variant.kind, output: outputOf(variant), bank: (devices) => plugOnBank(variant, devices) };
 }
 
 function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceBank {
@@ -119,6 +241,11 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
   // The AFCI's downstream set, per device: lazily, for the netlist it was marked on.
   const downNetlist: (Netlist | null)[] = new Array<Netlist | null>(n).fill(null);
   const downMarks: Uint8Array[] = [];
+  // The GFCI's and AFCI's terminal nodes in this topology (−1: not netlisted), for their records' voltages.
+  const lineNode = new Int32Array(n).fill(-1);
+  const pigtailNode = new Int32Array(n).fill(-1);
+  const loadNode = new Int32Array(n).fill(-1);
+  const loadNeutralNode = new Int32Array(n).fill(-1);
 
   devices.forEach((d, i) => {
     const p = d.params as PlugOnBreakerParams;
@@ -153,6 +280,12 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
       else if (part === 'neutral') neutral[i] = d.branches[k];
     });
     testSeen[i] = num(d.state['test'], 0);
+    if (variant.gfci || variant.afci) {
+      lineNode[i] = d.terminalNode('line');
+      pigtailNode[i] = d.terminalNode('pigtail');
+      loadNode[i] = d.terminalNode('load');
+      loadNeutralNode[i] = d.terminalNode('loadNeutral');
+    }
     if (sensor !== null) {
       const g = d.params as GfciBreakerParams;
       sensor.init(
@@ -207,6 +340,175 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
   };
 
   /**
+   * Device `i`'s (a closed AFCI's) downstream marks on `netlist`: the nodes reached from its `load` and
+   * `loadNeutral` without crossing its own poles, marked once per netlist object (lazily: only while
+   * some end is arcing).
+   */
+  const downstreamOf = (i: number, netlist: Netlist): Uint8Array => {
+    if (downNetlist[i] !== netlist) {
+      if (downMarks[i].length !== netlist.nodes.length) downMarks[i] = new Uint8Array(netlist.nodes.length);
+      const h = netlist.branches[hot[2 * i]];
+      const nb = netlist.branches[neutral[i]];
+      markDownstream(netlist, [h.b, nb.b], [h.index, nb.index], downMarks[i]);
+      downNetlist[i] = netlist;
+    }
+    return downMarks[i];
+  };
+
+  // --- the record (protocol 8) ---
+
+  /**
+   * Whether a netlisted end is arcing downstream of AFCI `i` now (its record's `arcingDownstream`): any
+   * current, any island (an end's state is the connection bank's own, decided for its bucket). `false`
+   * while open: with its poles open there is no load side to judge.
+   */
+  const arcingDownstream = (i: number, ctx: LayerContext): boolean => {
+    if (hot[2 * i] < 0 || neutral[i] < 0) return false;
+    const count = ctx.arcingCount();
+    if (count === 0) return false;
+    const netlist = ctx.netlist;
+    const marks = downstreamOf(i, netlist);
+    for (let k = 0; k < count; k++) {
+      const branch = netlist.branches[ctx.arcingBranch(k)];
+      if (marks[branch.a] !== 0 || marks[branch.b] !== 0) return true;
+    }
+    return false;
+  };
+
+  /** The record status of island `island` in the context's solution. */
+  const islandCode = (ctx: LayerContext, island: number): number => readingStatusCode(ctx.islandStatus(island));
+
+  /**
+   * Writes |V(a) − V(b)| (RMS on AC) at `at` and returns `true` when both nodes are on one solved
+   * island; else writes nothing and returns `false` (no reading). Never returns the double: a call V8
+   * doesn't inline would box it.
+   */
+  const writeVoltsOf = (ctx: LayerContext, a: number, b: number, view: DataView, at: number): boolean => {
+    if (a < 0 || b < 0) return false;
+    const nodes = ctx.netlist.nodes;
+    const island = nodes[a].island;
+    if (nodes[b].island !== island || islandCode(ctx, island) !== READING_SOLVED) return false;
+    writeVolts(ctx.solution.nodes, a, b, view, at);
+    return true;
+  };
+
+  /** Device `i`'s `state` code: tripped, else the handle. */
+  const stateCode = (i: number): number =>
+    tripped[i] === 1 ? STATE_TRIPPED : handleOn[i] === 1 ? STATE_ON : STATE_OFF;
+
+  /** Device `i`'s pole `p`: writes its |I| at `at` and returns its status (an open pole: 0 A, `solved`). */
+  const writePole = (i: number, p: number, view: DataView, at: number, ctx: LayerContext): number => {
+    const b = hot[2 * i + p];
+    if (b < 0) return READING_SOLVED;
+    const status = islandCode(ctx, ctx.netlist.branches[b].island);
+    if (status === READING_SOLVED) view.setFloat64(at, Math.sqrt(amps2(ctx, b)) + 0, true);
+    return status;
+  };
+
+  /**
+   * A GFCI's or AFCI's sensed fields: `currentA` (at 0), `neutralCurrentA` (8), the GFCI's `residualMa`
+   * (16), and the line- and load-side voltages at `voltsAt` and `voltsAt + 8`; returns the `readings`
+   * bits. An open pole carries exactly 0 A (a reading), and none of the residual.
+   */
+  const writeSensed = (i: number, view: DataView, offset: number, ctx: LayerContext, voltsAt: number): number => {
+    const s = ctx.solution.branches;
+    let bits = 0;
+    const h = hot[2 * i];
+    let hotRe = 0;
+    let hotIm = 0;
+    let hotRead = true;
+    if (h < 0) bits |= PLUG_ON_READING_CURRENT;
+    else if (islandCode(ctx, ctx.netlist.branches[h].island) === READING_SOLVED) {
+      hotRe = s[2 * h];
+      hotIm = s[2 * h + 1];
+      view.setFloat64(offset, Math.sqrt(hotRe * hotRe + hotIm * hotIm) + 0, true);
+      bits |= PLUG_ON_READING_CURRENT;
+    } else hotRead = false;
+    const nb = neutral[i];
+    if (nb >= 0 && islandCode(ctx, ctx.netlist.branches[nb].island) === READING_SOLVED) {
+      view.setFloat64(offset + 8, Math.sqrt(amps2(ctx, nb)) + 0, true);
+      bits |= PLUG_ON_READING_NEUTRAL_CURRENT;
+      if (sensor !== null && hotRead) {
+        // What the sensor sees: |I_pole + I_neutral|, in mA.
+        const re = hotRe + s[2 * nb];
+        const im = hotIm + s[2 * nb + 1];
+        view.setFloat64(offset + 16, 1000 * Math.sqrt(re * re + im * im) + 0, true);
+        bits |= PLUG_ON_READING_RESIDUAL;
+      }
+    }
+    if (writeVoltsOf(ctx, lineNode[i], pigtailNode[i], view, offset + voltsAt)) bits |= PLUG_ON_READING_LINE_VOLTAGE;
+    if (writeVoltsOf(ctx, loadNode[i], loadNeutralNode[i], view, offset + voltsAt + 8)) {
+      bits |= PLUG_ON_READING_LOAD_VOLTAGE;
+    }
+    return bits;
+  };
+
+  /** A GFCI's or AFCI's status: its pole's island while closed, its line terminal's while open. */
+  const sensedStatus = (i: number, ctx: LayerContext): number => {
+    const h = hot[2 * i];
+    if (h >= 0) return islandCode(ctx, ctx.netlist.branches[h].island);
+    const line = lineNode[i];
+    return line < 0 ? READING_UNSOLVED : islandCode(ctx, ctx.netlist.nodes[line].island);
+  };
+
+  /**
+   * Device `i`'s record (its variant's schema) at `offset`; the bytes arrive zeroed. Everything follows
+   * from the bank's state and the solution (ADR 0011 §5.5). Allocates nothing, except an AFCI's
+   * downstream marks the first time an end arcs on a new netlist.
+   */
+  const writeRecord = (i: number, view: DataView, offset: number, ctx: LayerContext): void => {
+    const k = 2 * i;
+    if (sensor !== null) {
+      const bits = writeSensed(i, view, offset, ctx, 24);
+      view.setFloat64(offset + 40, thermal[k] / tripAt[i], true);
+      view.setFloat64(offset + 48, pickupA[k], true);
+      view.setFloat64(offset + 56, openingTicks[i], true);
+      view.setFloat64(offset + 64, 1000 * sensor.pickupA[i], true);
+      view.setFloat64(offset + 72, sensor.integral[i], true);
+      view.setUint8(offset + 80, stateCode(i));
+      view.setUint8(offset + 81, cause[i]);
+      view.setUint8(offset + 82, sensor.testHeld[i] >= 0 ? 1 : 0);
+      view.setUint8(offset + 83, bits);
+      view.setUint8(offset + 84, sensedStatus(i, ctx));
+      return;
+    }
+    if (variant.afci) {
+      const bits = writeSensed(i, view, offset, ctx, 16);
+      view.setFloat64(offset + 32, thermal[k] / tripAt[i], true);
+      view.setFloat64(offset + 40, pickupA[k], true);
+      view.setFloat64(offset + 48, openingTicks[i], true);
+      view.setFloat64(offset + 56, exposure[i], true);
+      view.setUint8(offset + 64, stateCode(i));
+      view.setUint8(offset + 65, cause[i]);
+      view.setUint8(offset + 66, arcingDownstream(i, ctx) ? 1 : 0);
+      view.setUint8(offset + 67, bits);
+      view.setUint8(offset + 68, sensedStatus(i, ctx));
+      return;
+    }
+    if (poles === 1) {
+      const status = writePole(i, 0, view, offset, ctx);
+      view.setFloat64(offset + 8, thermal[k] / tripAt[i], true);
+      view.setFloat64(offset + 16, pickupA[k], true);
+      view.setFloat64(offset + 24, openingTicks[i], true);
+      view.setUint8(offset + 32, stateCode(i));
+      view.setUint8(offset + 33, cause[i]);
+      view.setUint8(offset + 34, status);
+      return;
+    }
+    // Two poles: `solved` only when both are, else the first pole's status that isn't.
+    const s1 = writePole(i, 0, view, offset, ctx);
+    const s2 = writePole(i, 1, view, offset + 8, ctx);
+    view.setFloat64(offset + 16, thermal[k] / tripAt[i], true);
+    view.setFloat64(offset + 24, thermal[k + 1] / tripAt[i], true);
+    view.setFloat64(offset + 32, pickupA[k], true);
+    view.setFloat64(offset + 40, pickupA[k + 1], true);
+    view.setFloat64(offset + 48, openingTicks[i], true);
+    view.setUint8(offset + 56, stateCode(i));
+    view.setUint8(offset + 57, cause[i]);
+    view.setUint8(offset + 58, s1 !== READING_SOLVED ? s1 : s2);
+  };
+
+  /**
    * Device `i` (an AFCI) at a bucket boundary: counts the bucket that just ended if an end downstream of
    * it arced at 5 A or more, and returns whether it trips (D8). Allocates only when some end is arcing
    * and the netlist changed since its downstream set was marked.
@@ -218,14 +520,7 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
       const count = ctx.arcingCount();
       if (count > 0) {
         const netlist = ctx.netlist;
-        if (downNetlist[i] !== netlist) {
-          if (downMarks[i].length !== netlist.nodes.length) downMarks[i] = new Uint8Array(netlist.nodes.length);
-          const h = netlist.branches[hot[2 * i]];
-          const nb = netlist.branches[neutral[i]];
-          markDownstream(netlist, [h.b, nb.b], [h.index, nb.index], downMarks[i]);
-          downNetlist[i] = netlist;
-        }
-        const marks = downMarks[i];
+        const marks = downstreamOf(i, netlist);
         for (let k = 0; k < count; k++) {
           const b = ctx.arcingBranch(k);
           const branch = netlist.branches[b];
@@ -296,6 +591,7 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
         trip(i, CAUSE_TEST, ctx.emit);
       }
     },
+    writeRecord,
     protection: (ctx) => {
       let changed = false;
       const dt = ctx.dtS;

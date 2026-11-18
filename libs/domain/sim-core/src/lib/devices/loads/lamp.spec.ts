@@ -146,6 +146,15 @@ describe('the lamp model (golden)', () => {
     expect(RATED_OHM / COLD_OHM).toBeCloseTo(14.785, 3);
   });
 
+  it('protocol 8: the record carries `burnedOut` (own state, always written) and keeps `status` last', () => {
+    expect(LAMP_OUTPUT.fields.map((f) => f.name).slice(-2)).toStrictEqual(['burnedOut', 'status']);
+    const host = benchLampHost();
+    expect(host.record(3)).toMatchObject({ burnedOut: 'no', status: 'solved' });
+    // A saved burned-out lamp (engine 8 carries the key through until F4.1 part 1 sets it) reads `yes`.
+    const loaded = host.withSim(3, { ...host.materialised().entities.find((e) => e.id === 3)?.sim, burnedOut: true });
+    expect(loaded.record(3)['burnedOut']).toBe('yes');
+  });
+
   it('a saved filament outside the model range is clamped into it at the bank build (never a negative R)', () => {
     const host = benchLampHost();
     const cold = host.withSim(3, { filamentTempK: 200 });

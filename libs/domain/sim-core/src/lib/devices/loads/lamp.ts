@@ -1,8 +1,8 @@
 import type { LampIncandescentParams } from '@controls/catalog';
 import type { DeviceOutputSchema } from '@controls/sim-protocol';
 import { AMBIENT_TEMPERATURE_K, type SourcedConstant } from '../../constants';
-import type { SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
-import { branchReading, f64Field, READING_SOLVED, statusField } from '../readings';
+import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../../engine/device-model';
+import { branchReading, enumField, f64Field, READING_SOLVED, statusField } from '../readings';
 import { tungstenResistivity, tungstenResistivityInto } from './tungsten';
 
 /*
@@ -161,6 +161,7 @@ export function pow17over8(x: number): number {
  * always written: its resistance, its temperature and its light output relative to rated. **A reader
  * shows an unsolved, singular or unsettled lamp as unknown, never as a dark lamp drawing 0 W** (plan
  * F2.5's validity rule): `lightOutputRel` is the filament's, frozen while its island isn't a reading.
+ * Protocol 8 adds `burnedOut` (the sticky key, ADR 0019), own state, always written; `status` stays last.
  */
 export const LAMP_OUTPUT: DeviceOutputSchema = Object.freeze({
   kind: 'lamp.incandescent',
@@ -172,7 +173,8 @@ export const LAMP_OUTPUT: DeviceOutputSchema = Object.freeze({
     f64Field('resistanceOhm', 24, 'Ω'),
     f64Field('filamentTempK', 32, 'K'),
     f64Field('lightOutputRel', 40, null),
-    statusField(48),
+    enumField('burnedOut', 48, ['no', 'yes']),
+    statusField(49),
   ]),
 });
 
@@ -237,9 +239,35 @@ export const LAMP_MODEL: SimDeviceModel = {
       tungstenResistivityInto(temp, i, rho, i);
       ohms[i] = (ratedOhm[i] * rho[i]) / rhoRated[i];
     };
-    const light = (i: number): number => {
+    /** The solved fields (power, current, voltage; RMS magnitudes on AC) of lamp `i` on branch `b`. */
+    const writeSolved = (i: number, b: number, view: DataView, offset: number, ctx: LayerContext): void => {
+      const element = ctx.netlist.branches[b];
+      const nodes = ctx.solution.nodes;
+      const re = ctx.solution.branches[2 * b];
+      const im = ctx.solution.branches[2 * b + 1];
+      const i2 = re * re + im * im;
+      const vr = nodes[2 * element.a] - nodes[2 * element.b];
+      const vi = nodes[2 * element.a + 1] - nodes[2 * element.b + 1];
+      view.setFloat64(offset, i2 * ohms[i] + 0, true);
+      if (ctx.netlist.islands[element.island].kind === 'ac') {
+        view.setFloat64(offset + 8, Math.sqrt(i2) + 0, true);
+        view.setFloat64(offset + 16, Math.sqrt(vr * vr + vi * vi) + 0, true);
+      } else {
+        view.setFloat64(offset + 8, re + 0, true);
+        view.setFloat64(offset + 16, vr + 0, true);
+      }
+    };
+    // The light output relative to rated, written into a slot (`pow17over8` written out, bit for bit):
+    // a double returned across a call V8 doesn't inline is boxed, and the record is written at every
+    // publish (protocol 8's record-writer allocation gate, `allocation-loads.spec.ts`).
+    const lightRel = new Float64Array(n);
+    const lightInto = (i: number): void => {
       const t = temp[i];
-      return pow17over8((t * t * t * t - ambient4) / ratedSpan4[i]);
+      const x = (t * t * t * t - ambient4) / ratedSpan4[i];
+      if (x > 0) {
+        const eighth = Math.sqrt(Math.sqrt(Math.sqrt(x)));
+        lightRel[i] = x * x * eighth;
+      } else lightRel[i] = 0;
     };
     return {
       bag: (i) => ({
@@ -299,24 +327,13 @@ export const LAMP_MODEL: SimDeviceModel = {
         const b = branch[i];
         const status = branchReading(ctx, b);
         ohmsAt(i);
-        const r = ohms[i];
-        if (status === READING_SOLVED) {
-          const element = ctx.netlist.branches[b];
-          const nodes = ctx.solution.nodes;
-          const re = ctx.solution.branches[2 * b];
-          const im = ctx.solution.branches[2 * b + 1];
-          const i2 = re * re + im * im;
-          const vr = nodes[2 * element.a] - nodes[2 * element.b];
-          const vi = nodes[2 * element.a + 1] - nodes[2 * element.b + 1];
-          const ac = ctx.netlist.islands[element.island].kind === 'ac';
-          view.setFloat64(offset, i2 * r + 0, true);
-          view.setFloat64(offset + 8, (ac ? Math.sqrt(i2) : re) + 0, true);
-          view.setFloat64(offset + 16, (ac ? Math.sqrt(vr * vr + vi * vi) : vr) + 0, true);
-        }
-        view.setFloat64(offset + 24, r, true);
+        if (status === READING_SOLVED) writeSolved(i, b, view, offset, ctx);
+        view.setFloat64(offset + 24, ohms[i], true);
         view.setFloat64(offset + 32, temp[i], true);
-        view.setFloat64(offset + 40, light(i), true);
-        view.setUint8(offset + 48, status);
+        lightInto(i);
+        view.setFloat64(offset + 40, lightRel[i], true);
+        view.setUint8(offset + 48, burnedOut[i]);
+        view.setUint8(offset + 49, status);
       },
     };
   },

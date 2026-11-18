@@ -84,8 +84,8 @@ export const CONNECTION_READING_ALL = 63;
 export const CONNECTION_AMBIENT_K = 293.15;
 export const CONNECTION_OVERHEAT_RISE_K = 100;
 
-/** A connection record's size in bytes (12 × f64 + 6 × u8, padded to 8). */
-export const CONNECTION_RECORD_BYTES = 104;
+/** A connection record's size in bytes (14 × f64 + 6 × u8, padded to 8; protocol 7's was 104). */
+export const CONNECTION_RECORD_BYTES = 120;
 
 /** A connection record's field offsets (the writer's and the tests' names for {@link CONNECTION_OUTPUT_FIELDS}). */
 export const CONNECTION_RECORD_OFFSETS = Object.freeze({
@@ -101,12 +101,15 @@ export const CONNECTION_RECORD_OFFSETS = Object.freeze({
   conductorTempK: 72,
   endATempK: 80,
   endBTempK: 88,
-  endAState: 96,
-  endBState: 97,
-  insulationDamaged: 98,
-  status: 99,
-  readings: 100,
-  conductorState: 101,
+  // Protocol 8 (ADR 0019 "Protocol 8", the carried P3 readout item): inside the f64 block, after `endBTempK`.
+  endADegradation: 96,
+  endBDegradation: 104,
+  endAState: 112,
+  endBState: 113,
+  insulationDamaged: 114,
+  status: 115,
+  readings: 116,
+  conductorState: 117,
 });
 
 const f64 = (name: keyof typeof CONNECTION_RECORD_OFFSETS, unit: string | null): DeviceOutputField =>
@@ -126,8 +129,9 @@ const u8Enum = (name: keyof typeof CONNECTION_RECORD_OFFSETS, values: readonly s
  * - own state: `conductorResistanceOhm` (at its temperature; a lead's includes its two clip contacts),
  *   `endAContactOhm`, `endBContactOhm` (each end's value by its regime: ohmic, glowing or arcing at the
  *   solved current; the closed contact's ohmic value while the connection isn't netlisted),
- *   `conductorTempK`, `endATempK`, `endBTempK`, `endAState`, `endBState`, `insulationDamaged`,
- *   `conductorState`;
+ *   `conductorTempK`, `endATempK`, `endBTempK`, `endADegradation`, `endBDegradation` (protocol 8: each
+ *   end's degradation factor D ≥ 1, R_deg = R_made · D, ADR 0018 §5; it never falls, so a cooled end
+ *   that degraded still shows it), `endAState`, `endBState`, `insulationDamaged`, `conductorState`;
  * - `status`: the branch's island status, or `open`; `readings`: the bit field above.
  */
 export const CONNECTION_OUTPUT_FIELDS: readonly DeviceOutputField[] = Object.freeze([
@@ -143,6 +147,8 @@ export const CONNECTION_OUTPUT_FIELDS: readonly DeviceOutputField[] = Object.fre
   f64('conductorTempK', 'K'),
   f64('endATempK', 'K'),
   f64('endBTempK', 'K'),
+  f64('endADegradation', null),
+  f64('endBDegradation', null),
   u8Enum('endAState', CONNECTION_RECORD_END_STATES),
   u8Enum('endBState', CONNECTION_RECORD_END_STATES),
   u8Enum('insulationDamaged', Object.freeze(['no', 'yes'])),
@@ -155,6 +161,30 @@ export const CONNECTION_OUTPUT_FIELDS: readonly DeviceOutputField[] = Object.fre
 export const CONNECTION_F64_COUNT = CONNECTION_OUTPUT_FIELDS.filter((f) => f.type === 'f64').length;
 export const CONNECTION_U8_OFFSET = CONNECTION_RECORD_OFFSETS.endAState;
 export const CONNECTION_U8_COUNT = CONNECTION_OUTPUT_FIELDS.length - CONNECTION_F64_COUNT;
+
+/**
+ * The problems with a connection layout for the readers' fast path (empty when it fits, protocol 8's
+ * module-load check, ADR 0019 R7): every f64 field first, contiguous from byte 0 in field order, then
+ * every u8 field contiguous from `CONNECTION_U8_OFFSET` in field order, inside `CONNECTION_RECORD_BYTES`.
+ */
+export function connectionLayoutProblems(fields: readonly DeviceOutputField[], recordBytes: number): string[] {
+  const problems: string[] = [];
+  const f64s = fields.filter((f) => f.type === 'f64').length;
+  fields.forEach((field, i) => {
+    const expected = i < f64s ? 8 * i : 8 * f64s + (i - f64s);
+    const type = i < f64s ? 'f64' : 'u8';
+    if (field.type !== type) problems.push(`${field.name}: expected ${type} (every f64, then every u8)`);
+    if (field.offset !== expected) problems.push(`${field.name}: at ${field.offset}, expected ${expected}`);
+  });
+  if (8 * f64s + (fields.length - f64s) > recordBytes) problems.push('the fields run past the record');
+  if (recordBytes % 8 !== 0) problems.push('the record is not a multiple of 8 bytes');
+  return problems;
+}
+
+const layoutProblems = connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, CONNECTION_RECORD_BYTES);
+if (layoutProblems.length > 0) {
+  throw new Error(`The connection record layout is not the fast path's: ${layoutProblems.join('; ')}`);
+}
 
 const schemaOf = (kind: string): DeviceOutputSchema =>
   Object.freeze({ kind, recordBytes: CONNECTION_RECORD_BYTES, fields: CONNECTION_OUTPUT_FIELDS });

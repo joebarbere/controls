@@ -1,6 +1,6 @@
 import { type LeadParams, leadResistanceOhm, type ServiceSplitPhaseParams } from '@controls/catalog';
 import { AMBIENT_TEMPERATURE_K } from '../../constants';
-import { BUSBAR } from '../../../testing/engine';
+import { BUSBAR, RHEOSTAT } from '../../../testing/engine';
 import {
   BOND_OHM,
   MBJ,
@@ -195,6 +195,74 @@ describe('remote earth (D5): the earth path', () => {
     h.advance(50);
     expect(loaded.materialised()).toStrictEqual(h.materialised());
     expect(loaded.engine.snapshotHash()).toBe(h.engine.snapshotHash());
+  });
+});
+
+describe('the service’s and the ground rod’s records (protocol 8)', () => {
+  /*
+   * Hand calculations (as above):
+   * - loads of 12 Ω (L1–N) and 24 Ω (L2–N) at the meter base: about 10 A and 5 A; the drop neutral
+   *   carries their phasor sum, which on opposite legs is the difference, |I₁ − I₂| ≈ 5 A (the MWBC
+   *   teaching point, F4.4); the meter base reads about 120 V per leg and 240 V across;
+   * - the earth path: the far rod's `currentA` is the fault current I = 2.70412 A and its `touchVoltageV`
+   *   is I × R_rod = 2.70412 × 39.9 = 107.89 V (its potential rise against remote earth); the service's
+   *   `groundingCurrentA` is the share returning by the utility's 5 Ω, `neutralCurrentA` the share
+   *   returning through the service rod, the GEC, the bond and the drop neutral; the two add up to I.
+   */
+  it('reads each line’s current, the drop neutral’s, and the meter base’s voltages', () => {
+    const h = host();
+    const service = place(h, SERVICE);
+    const a = place(h, RHEOSTAT);
+    const b = place(h, RHEOSTAT);
+    busbar(h, service, 'l1', a, 'a');
+    busbar(h, a, 'b', service, 'n');
+    busbar(h, service, 'l2', b, 'a');
+    busbar(h, b, 'b', service, 'n');
+    h.operate(a, 'ohms', 12).operate(b, 'ohms', 24).advance(20);
+    const r = h.record(service);
+    near(r['l1CurrentA'] as number, 10, 0.01);
+    near(r['l2CurrentA'] as number, 5, 0.01);
+    near(r['neutralCurrentA'] as number, 5, 0.01);
+    near(r['l1NeutralV'] as number, 120, 0.01);
+    near(r['l2NeutralV'] as number, 120, 0.01);
+    near(r['lineToLineV'] as number, 240, 0.01);
+    // No earth path: the utility's grounding carries only gmin-level current.
+    expect(r['groundingCurrentA'] as number).toBeLessThan(1e-6);
+    expect(r['status']).toBe('solved');
+    // Each current is the solved branch's |I|.
+    near(
+      r['l1CurrentA'] as number,
+      abs(current(h, (x) => x.element.kind === 'entity' && x.element.part === 'l1')),
+      1e-12,
+    );
+  });
+
+  it('a fault into a separate rod: the rod reads I and I × R_rod; the service splits the return', () => {
+    const h = host();
+    const service = place(h, SERVICE);
+    const panel = place(h, PANEL, { x: 0, y: 0, z: 0 });
+    place(h, MBJ, { x: 200, y: 0, z: 0 }, { entity: panel, mount: 'mbj' });
+    const rod = place(h, ROD, { x: 0, y: 0, z: 2000 });
+    const other = place(h, ROD, { x: 0, y: 0, z: 3000 });
+    busbar(h, service, 'n', panel, 'neutral');
+    busbar(h, panel, 'chassis', rod, 'clamp'); // the GEC
+    busbar(h, service, 'l1', other, 'clamp'); // the fault into the far rod
+    const far = h.record(other);
+    near(far['currentA'] as number, 2.70412, 0.005);
+    near(far['currentA'] as number, abs(current(h, contact(other, 'electrode'))), 1e-12);
+    near(far['touchVoltageV'] as number, (far['currentA'] as number) * ROD_OHM, 1e-9);
+    near(far['touchVoltageV'] as number, 2.70412 * 39.9, 0.005);
+    expect(far['status']).toBe('solved');
+    const s = h.record(service);
+    near(s['groundingCurrentA'] as number, abs(current(h, contact(service, 'grounding'))), 1e-12);
+    near((s['groundingCurrentA'] as number) + (h.record(rod)['currentA'] as number), far['currentA'] as number, 1e-6);
+    near(s['neutralCurrentA'] as number, h.record(rod)['currentA'] as number, 1e-3);
+  });
+
+  it('a rod on no circuit reads 0 A and 0 V, solved (its island is the link alone)', () => {
+    const h = host();
+    const rod = place(h, ROD);
+    expect(h.record(rod)).toMatchObject({ currentA: 0, touchVoltageV: 0, status: 'solved' });
   });
 });
 

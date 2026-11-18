@@ -3,14 +3,14 @@ conductor 1 conductor.tallowmere-thhn-14-solid@1 length 157 mm
 status solved
 current 12.8428 A
 conductor R 0.00135945 Ω at 304.619 K, drop 0.0174592 V
-end a ok, contact 0.0249045 Ω at 409.347 K, drop 0.319843 V, conductor side 119.293 V
-end b ok, contact 0.00031321 Ω at 297.841 K, drop 0.00402249 V, conductor side 119.275 V
+end a ok, contact 0.0249045 Ω at 409.347 K, drop 0.319843 V, conductor side 119.293 V, degradation 1
+end b ok, contact 0.00031321 Ω at 297.841 K, drop 0.00402249 V, conductor side 119.275 V, degradation 1
 insulation damaged
 wire.info 2 tick 600000
 conductor 2 conductor.sorrelby-nm-14-solid@1 length 2303 mm
 status solved
 current 12.8428 A
 conductor R 0.0199416 Ω at 304.619 K, drop 0.256105 V
-end a ok, contact 0.00030549 Ω at 297.806 K, drop 0.00392334 V, conductor side 119.267 V
-end b ok, contact 0.000519742 Ω at 303.197 K, drop 0.00667493 V, conductor side 119.011 V
+end a ok, contact 0.00030549 Ω at 297.806 K, drop 0.00392334 V, conductor side 119.267 V, degradation 1
+end b ok, contact 0.000519742 Ω at 303.197 K, drop 0.00667493 V, conductor side 119.011 V, degradation 1
 insulation intact

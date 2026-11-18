@@ -227,7 +227,9 @@ export function formatTemperature(kelvin: number): string {
  * Connection `c`'s record in `reading` (an index into the descriptor's `connections`) as one detail
  * line, comma-separated so it reads aloud cleanly: the conductor's drop (or `open` when not
  * netlisted, `fused` for a fused lead) and temperature, then each end that has a termination node:
- * its drop (a gap's voltage for an open end), its hot-spot temperature and its state when not `ok`. An
+ * its drop (a gap's voltage for an open end), its hot-spot temperature, its state when not `ok` and
+ * (protocol 8) its degradation factor when above 1 (`degraded 3.2×`: its contact that many times its
+ * as-made value, for good, however cool the end is now). An
  * electrical value whose `readings` bit is clear is {@link NO_READING}, never 0 V; an end whose state
  * is `none` (a lead's clip, a free end) is left out, never shown as 0 K. Unknown status or state codes
  * fall back to `unsolved` and `none` (they can't come from this protocol: the version is checked).
@@ -253,6 +255,9 @@ export function connectionDetail(reading: NetlistReading, c: number): string {
     else if (status !== 'open') end.push(volts(`end${side}DropV`, bit));
     parts.push(end.join(' '), formatTemperature(v(`end${side}TempK`)));
     if (state !== 'ok' && state !== 'intermittentOpen') parts.push(state);
+    // Protocol 8: an end that has degraded (D above 1 at three significant figures) says by how much.
+    const degradation = Number(v(`end${side}Degradation`).toPrecision(3));
+    if (degradation > 1) parts.push(`degraded ${degradation}×`);
   }
   if (v('insulationDamaged') === 1) parts.push('insulation damaged');
   return parts.join(', ');

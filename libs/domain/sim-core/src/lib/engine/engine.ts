@@ -66,6 +66,7 @@ import {
   type LayerContext,
   type SimIslandStatus,
   type SimDevice,
+  type SimDeviceContact,
   type SimDeviceBank,
   type SimDeviceModel,
 } from './device-model';
@@ -1325,7 +1326,16 @@ export class SimEngine {
     const devices = new Map<number, DeviceSlot>();
     const branchesOf = new Map<number, number[]>();
     const partsOf = new Map<number, string[]>();
+    const contactsOf = new Map<number, SimDeviceContact[]>();
     for (const branch of netlist.branches) {
+      if (branch.element.kind === 'contact') {
+        // A device's relation contacts (engine 8): what its protocol 8 record reads (a rod's earth link).
+        const { entity, relation, contact } = branch.element;
+        let contacts = contactsOf.get(entity);
+        if (contacts === undefined) contactsOf.set(entity, (contacts = []));
+        contacts.push({ branch: branch.index, relation, contact });
+        continue;
+      }
       if (branch.element.kind !== 'entity') continue;
       let list = branchesOf.get(branch.element.entity);
       let parts = partsOf.get(branch.element.entity);
@@ -1335,6 +1345,11 @@ export class SimEngine {
       parts.push(branch.element.part);
     }
     const regionProtection = this.region.protection;
+    // Terminal → node, before the banks are built (a bank may resolve its terminals' nodes at build).
+    this.nodeOf.clear();
+    for (const node of netlist.nodes)
+      for (const member of node.members) this.nodeOf.set(terminalKey(member), node.index);
+    const nodeOf = this.nodeOf;
     for (const device of netlist.devices) {
       const entity = entities.get(device.entity) as World['entities'][number];
       const bag = live.get(device.entity) ?? this.tombstones.get(device.entity) ?? entity.sim;
@@ -1356,6 +1371,8 @@ export class SimEngine {
         state: entity.state,
         branches: branchesOf.get(id) ?? [],
         parts: partsOf.get(id) ?? [],
+        contacts: contactsOf.get(id) ?? [],
+        terminalNode: (terminal) => nodeOf.get(`${id}:${terminal}`) ?? -1,
         frequencyHz: this.frequencyHz,
         protection: regionProtection,
         stream: () => deriveStream(seed, entityStreamKey(id)),
@@ -1428,9 +1445,6 @@ export class SimEngine {
       return Object.freeze([...members].sort((x, y) => x - y));
     });
     this.nodeIslands = Int32Array.from(netlist.nodes, (node) => node.island);
-    this.nodeOf.clear();
-    for (const node of netlist.nodes)
-      for (const member of node.members) this.nodeOf.set(terminalKey(member), node.index);
 
     const records: {
       bank: SimDeviceBank;

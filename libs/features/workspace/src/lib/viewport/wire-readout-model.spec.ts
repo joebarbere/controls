@@ -250,6 +250,21 @@ describe('the wire readout: review cases (F3.6 part 3)', () => {
     );
   });
 
+  it('protocol 8: a cooled end that degraded still reads degraded, with its factor; hot, it reads degrading', () => {
+    // The carried P3 item: before protocol 8 a degraded end read `normal` once it cooled below the onset.
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 3.217 }).state).toBe(
+      'degraded at end a (contact 3.22 times as made)',
+    );
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 1 }).state).toBe('normal');
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 1.004 }).state).toBe('normal'); // 1.00 at 3 s.f.
+    expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K + 5, endADegradation: 3.217 }).state).toBe(
+      'degrading at end a (above the oxidation onset)',
+    );
+    expect(readout({ ...LOOSE, endATempK: READOUT_OVERHEAT_K + 1, endADegradation: 2 }).state).toBe(
+      'degraded at end a (contact 2 times as made), overheating at end a',
+    );
+  });
+
   it('allocates its reading once per descriptor, and reads nothing with no target', () => {
     const create = vi.spyOn(NetlistReadout.prototype, 'createReading');
     const first = benchDescriptor(1);

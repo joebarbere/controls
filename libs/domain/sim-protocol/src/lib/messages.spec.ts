@@ -1,5 +1,30 @@
 import { createReplayLog, createWorld } from '@controls/save-format';
-import { CONNECTION_OUTPUT_SCHEMAS } from './connection-output';
+import {
+  CONNECTION_OUTPUT_FIELDS,
+  CONNECTION_OUTPUT_SCHEMAS,
+  CONNECTION_RECORD_BYTES,
+  CONNECTION_RECORD_OFFSETS,
+  CONNECTION_U8_OFFSET,
+  connectionLayoutProblems,
+} from './connection-output';
+import {
+  BREAKER_STATE_VALUES,
+  DEVICE_READING_CURRENT,
+  DEVICE_READING_LINE_VOLTAGE,
+  DEVICE_READING_LOAD_VOLTAGE,
+  DEVICE_READING_NEUTRAL_CURRENT,
+  DEVICE_READING_RESIDUAL,
+  RECORD_TRIP_CAUSE_VALUES,
+  TRIP_CAUSE_VALUES,
+} from './device-output';
+import {
+  CONNECTION_EVENT_KINDS,
+  DEVICE_EVENT_KINDS,
+  ISLAND_EVENT_KINDS,
+  SIM_EVENT_KINDS,
+  type SimEvent,
+  simEventDetail,
+} from './events';
 import { DescriptorIndex, type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
 import {
   ISLAND_FLAG_NON_CONVERGED,
@@ -10,7 +35,7 @@ import {
   SIM_PROTOCOL_VERSION,
 } from './layout';
 import { islandStatus } from './island-status';
-import { HostToWorker, parseHostMessage, parseWorkerMessage, SimStart, WorkerToHost } from './messages';
+import { HostToWorker, parseHostMessage, parseWorkerMessage, SimEventSchema, SimStart, WorkerToHost } from './messages';
 import { createSnapshotBuffer } from './buffer';
 
 /*
@@ -37,7 +62,7 @@ const descriptor: TopologyDescriptor = {
   ],
   connections: [
     { connection: 2, kind: 'lead', recordOffset: 0, branch: 0 },
-    { connection: 5, kind: 'conductor', recordOffset: 104, branch: -1 },
+    { connection: 5, kind: 'conductor', recordOffset: 120, branch: -1 },
   ],
   connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'], conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
   schemas: {
@@ -215,10 +240,10 @@ describe('the topology descriptor', () => {
 
   it('looks connection record fields up by connection and kind (protocol 7)', () => {
     const index = DescriptorIndex.of(descriptor);
-    expect(index.connection(5)).toStrictEqual({ connection: 5, kind: 'conductor', recordOffset: 104, branch: -1 });
+    expect(index.connection(5)).toStrictEqual({ connection: 5, kind: 'conductor', recordOffset: 120, branch: -1 });
     expect(index.connection(3)).toBeUndefined();
-    expect(index.connectionField(5, 'endADropV')).toMatchObject({ offset: 104 + 16, type: 'f64' });
-    expect(index.connectionField(2, 'status', 'lead')).toMatchObject({ offset: 99, type: 'u8' });
+    expect(index.connectionField(5, 'endADropV')).toMatchObject({ offset: 120 + 16, type: 'f64' });
+    expect(index.connectionField(2, 'status', 'lead')).toMatchObject({ offset: 115, type: 'u8' });
     expect(index.connectionField(2, 'status', 'conductor')).toBeNull(); // joined by (id, kind)
     expect(index.connectionField(2, 'nope')).toBeNull();
     expect(index.connectionField(9, 'currentA')).toBeNull();
@@ -238,5 +263,98 @@ describe('islandStatus', () => {
     expect(islandStatus(ISLAND_KIND_MIXED, 0, 0)).toBe('mixed');
     expect(islandStatus(ISLAND_KIND_MIXED, ISLAND_FLAG_SINGULAR, 1)).toBe('mixed');
     expect(islandStatus(ISLAND_KIND_DC, ISLAND_FLAG_SINGULAR, 0)).toBe('unmodelled');
+  });
+});
+
+describe('protocol 8: typed event details, the connection layout and the trip causes', () => {
+  const event = (kind: string, detail: object, over: object = {}) => ({
+    type: 'events',
+    events: [{ tick: 3, kind, entity: 4, entities: [], connection: null, end: null, detail, ...over }],
+  });
+
+  it("parses each kind's detail exactly: a cause outside the enum, a missing or extra key is invalid", () => {
+    for (const cause of TRIP_CAUSE_VALUES) expect(parseWorkerMessage(event('tripped', { cause }))).not.toBeNull();
+    for (const good of [
+      event('hiccup', { phase: 'retry' }),
+      event('lampBurnout', { filamentTempK: 3200.5 }),
+      event('overvoltage', { voltageV: 196.2 }),
+      event('insulationDamaged', { temperatureK: 403.2 }, { entity: null, connection: 2, end: 'a' }),
+      event('singular', {}, { entity: null, entities: [1, 2] }),
+    ]) {
+      expect(parseWorkerMessage(good), JSON.stringify(good)).not.toBeNull();
+    }
+    for (const bad of [
+      event('tripped', { cause: 'overload' }), // not a cause
+      event('tripped', {}), // the cause is required
+      event('tripped', { cause: 'thermal', poles: 2 }), // no extra keys
+      event('blown', { cause: 'thermal' }), // a fuse's event has no detail
+      event('hiccup', { phase: 'on' }),
+      event('lampBurnout', { filamentTempK: '3200' }),
+      event('lampBurnout', { filamentTempK: Number.POSITIVE_INFINITY }),
+      event('overvoltage', {}),
+      event('terminationOverheat', { temperatureK: 393 }, { entity: null, connection: 2, end: 'c' }),
+    ]) {
+      expect(parseWorkerMessage(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it('types a detail by kind through simEventDetail', () => {
+    const parsed = parseWorkerMessage(event('tripped', { cause: 'groundFault' }));
+    expect(parsed?.type).toBe('events');
+    const [trip] = (parsed as { events: SimEvent[] }).events;
+    expect(simEventDetail(trip, 'tripped')?.cause).toBe('groundFault');
+    expect(simEventDetail(trip, 'lampBurnout')).toBeNull();
+    // Every kind has a detail schema, in kind order.
+    expect(SimEventSchema.options.map((o) => o.shape.kind.value)).toStrictEqual([...SIM_EVENT_KINDS]);
+    expect(SIM_EVENT_KINDS).toContain('lampBurnout');
+    expect(SIM_EVENT_KINDS).toContain('overvoltage');
+    expect(DEVICE_EVENT_KINDS).toStrictEqual(
+      SIM_EVENT_KINDS.filter((k) => !ISLAND_EVENT_KINDS.includes(k) && !CONNECTION_EVENT_KINDS.includes(k)),
+    );
+  });
+
+  it('records a trip cause by code: none, then the causes', () => {
+    expect([...RECORD_TRIP_CAUSE_VALUES]).toStrictEqual([
+      'none',
+      'thermal',
+      'magnetic',
+      'groundFault',
+      'arcFault',
+      'test',
+    ]);
+    expect(BREAKER_STATE_VALUES).toStrictEqual(['off', 'on', 'tripped']);
+  });
+
+  it('lays the connection record out as every f64, then every u8 (the fast path), and checks it', () => {
+    expect(CONNECTION_RECORD_BYTES).toBe(120);
+    expect(CONNECTION_RECORD_OFFSETS.endADegradation).toBe(96);
+    expect(CONNECTION_RECORD_OFFSETS.endBDegradation).toBe(104);
+    expect(CONNECTION_U8_OFFSET).toBe(112);
+    expect(connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, CONNECTION_RECORD_BYTES)).toStrictEqual([]);
+    // A u8 among the f64s, a gap, or a record too short or misaligned each fail.
+    const swapped = [
+      CONNECTION_OUTPUT_FIELDS[14],
+      ...CONNECTION_OUTPUT_FIELDS.slice(0, 14),
+      ...CONNECTION_OUTPUT_FIELDS.slice(15),
+    ];
+    expect(connectionLayoutProblems(swapped, CONNECTION_RECORD_BYTES).length).toBeGreaterThan(0);
+    const gap = CONNECTION_OUTPUT_FIELDS.map((f, i) => (i === 3 ? { ...f, offset: f.offset + 8 } : f));
+    expect(connectionLayoutProblems(gap, CONNECTION_RECORD_BYTES)).toContain('endBDropV: at 32, expected 24');
+    expect(connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, 112)).toStrictEqual(['the fields run past the record']);
+    expect(connectionLayoutProblems(CONNECTION_OUTPUT_FIELDS, 124)).toStrictEqual([
+      'the record is not a multiple of 8 bytes',
+    ]);
+  });
+
+  it('keeps the device readings bits disjoint', () => {
+    const bits = [
+      DEVICE_READING_CURRENT,
+      DEVICE_READING_NEUTRAL_CURRENT,
+      DEVICE_READING_RESIDUAL,
+      DEVICE_READING_LINE_VOLTAGE,
+      DEVICE_READING_LOAD_VOLTAGE,
+    ];
+    expect(bits.reduce((a, b) => a | b, 0)).toBe(31);
+    expect(new Set(bits).size).toBe(bits.length);
   });
 });

@@ -61,3 +61,22 @@ export function statusField(offset: number): DeviceOutputField {
 export function f64Field(name: string, offset: number, unit: string | null): DeviceOutputField {
   return { name, type: 'f64', offset, unit, values: null };
 }
+
+/*
+ * Record writers' helpers (protocol 8): each writes into the record rather than returning a double, so
+ * a call V8 doesn't inline boxes nothing.
+ */
+
+/** Writes |I| of branch `b` (RMS on AC) from `branches` (a solution's) at `at`. */
+export function writeAmps(branches: Float64Array, b: number, view: DataView, at: number): void {
+  const re = branches[2 * b];
+  const im = branches[2 * b + 1];
+  view.setFloat64(at, Math.sqrt(re * re + im * im) + 0, true);
+}
+
+/** Writes |V(a) − V(b)| (RMS on AC) from `nodes` (a solution's) at `at`. */
+export function writeVolts(nodes: Float64Array, a: number, b: number, view: DataView, at: number): void {
+  const re = nodes[2 * a] - nodes[2 * b];
+  const im = nodes[2 * a + 1] - nodes[2 * b + 1];
+  view.setFloat64(at, Math.sqrt(re * re + im * im) + 0, true);
+}

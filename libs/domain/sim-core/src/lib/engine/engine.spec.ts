@@ -224,6 +224,7 @@ describe('SimEngine: electrical results', () => {
       'breaker.plugOn1p',
       'breaker.plugOn2p',
       'breaker.thermalMagnetic',
+      'electrode.groundRod',
       'fuse',
       'generator.portable',
       'heater',

@@ -91,8 +91,20 @@ const I_COND_T = V['conductorTempK'];
 const I_COND_STATE = V['conductorState'];
 const I_INSULATION = V['insulationDamaged'];
 const END = [
-  { state: V['endAState'], drop: V['endADropV'], temp: V['endATempK'], bit: CONNECTION_READING_END_A_DROP },
-  { state: V['endBState'], drop: V['endBDropV'], temp: V['endBTempK'], bit: CONNECTION_READING_END_B_DROP },
+  {
+    state: V['endAState'],
+    drop: V['endADropV'],
+    temp: V['endATempK'],
+    degradation: V['endADegradation'],
+    bit: CONNECTION_READING_END_A_DROP,
+  },
+  {
+    state: V['endBState'],
+    drop: V['endBDropV'],
+    temp: V['endBTempK'],
+    degradation: V['endBDegradation'],
+    bit: CONNECTION_READING_END_B_DROP,
+  },
 ] as const;
 const END_NONE = CONNECTION_RECORD_END_STATES.indexOf('none');
 const END_INTERMITTENT_CLOSED = CONNECTION_RECORD_END_STATES.indexOf('intermittentClosed');
@@ -105,8 +117,11 @@ const STATUS_SOLVED = CONNECTION_RECORD_STATUS_VALUES.indexOf('solved');
 const KEY_CABLE = -2;
 const KEY_NO_RECORD = -1;
 const KEY_RECORD = 1;
-/** Kind, status, readings, two end states, conductor state, insulation, current and three drops (3 s.f.), three temperatures in K and °C. */
-const KEY_LENGTH = 17;
+/**
+ * Kind, status, readings, two end states, conductor state, insulation, current and three drops (3 s.f.),
+ * three temperatures in K and °C, and (protocol 8) each end's degradation factor (3 s.f.).
+ */
+const KEY_LENGTH = 19;
 /** The conductor's and the two ends' temperature fields. */
 const TEMPS = [I_COND_T, END[0].temp, END[1].temp] as const;
 
@@ -265,6 +280,8 @@ export class WireReadoutSampler {
       k[11 + 2 * i] = Math.round(t);
       k[12 + 2 * i] = Math.round(t - 273.15);
     }
+    k[17] = sigFig3(v[at + END[0].degradation]);
+    k[18] = sigFig3(v[at + END[1].degradation]);
   }
 
   private keyShown(): boolean {
@@ -309,7 +326,7 @@ function recordView(reading: NetlistReading, c: number): Pick<WireReadoutView, '
       temperature: formatTemperature(v(I_COND_T)),
     },
   ];
-  const ends: { name: 'a' | 'b'; state: number; tempK: number }[] = [];
+  const ends: EndView[] = [];
   END.forEach((end, side) => {
     const key = side === 0 ? 'end-a' : 'end-b';
     const name = side === 0 ? 'End a' : 'End b';
@@ -318,7 +335,7 @@ function recordView(reading: NetlistReading, c: number): Pick<WireReadoutView, '
       parts.push({ key, name, terminated: false, drop: '', temperature: '' });
       return;
     }
-    ends.push({ name: side === 0 ? 'a' : 'b', state, tempK: v(end.temp) });
+    ends.push({ name: side === 0 ? 'a' : 'b', state, tempK: v(end.temp), degradation: v(end.degradation) });
     parts.push({
       key,
       name,
@@ -334,6 +351,14 @@ function recordView(reading: NetlistReading, c: number): Pick<WireReadoutView, '
 /** The conductor body: closed, fused (`CONNECTION_CONDUCTOR_OPEN`), or open by an unknown code. */
 type BodyState = 'closed' | 'fused' | 'open';
 
+/** A terminated end, as the state text reads it (protocol 8 adds its degradation factor D). */
+interface EndView {
+  readonly name: 'a' | 'b';
+  readonly state: number;
+  readonly tempK: number;
+  readonly degradation: number;
+}
+
 /** `ends a and b`, `end a`. */
 const endsText = (names: readonly string[]) =>
   names.length === 1 ? `end ${names[0]}` : `ends ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -341,21 +366,21 @@ const endsText = (names: readonly string[]) =>
 /**
  * The connection's state in words, worst first: fused; intermittent (open now, or closed now);
  * arcing; open (not in a circuit); degrading (a hot spot above the oxidation onset, where contact
- * resistance grows); overheating (at or above the engine's `terminationOverheat` point); else normal
- * (or, unsolved, not solved). `insulation damaged` is added to any of them.
+ * resistance grows); degraded (protocol 8: an end whose degradation factor D shows above 1 at three
+ * significant figures, below the onset: its contact is D times its as-made value, for good, however cool
+ * it is now); overheating (at or above the engine's `terminationOverheat` point); else normal (or,
+ * unsolved, not solved). `insulation damaged` is added to any of them.
  */
-function stateText(
-  status: number,
-  body: BodyState,
-  ends: readonly { name: 'a' | 'b'; state: number; tempK: number }[],
-  insulationDamaged: boolean,
-): string {
-  const at = (pred: (e: { state: number; tempK: number }) => boolean) => ends.filter(pred).map((e) => e.name);
+function stateText(status: number, body: BodyState, ends: readonly EndView[], insulationDamaged: boolean): string {
+  const at = (pred: (e: EndView) => boolean) => ends.filter(pred).map((e) => e.name);
   const states: string[] = [];
   const openEnds = at((e) => e.state === END_INTERMITTENT_OPEN);
   const closedEnds = at((e) => e.state === END_INTERMITTENT_CLOSED);
   const arcing = at((e) => e.state === END_ARCING);
   const degrading = at((e) => e.state !== END_INTERMITTENT_OPEN && e.tempK > CONNECTION_OXIDATION_ONSET_K);
+  const degraded = ends.filter(
+    (e) => e.state !== END_INTERMITTENT_OPEN && e.tempK <= CONNECTION_OXIDATION_ONSET_K && sigFig3(e.degradation) > 1,
+  );
   const hot = at(
     (e) =>
       e.state !== END_INTERMITTENT_OPEN && e.tempK >= READOUT_OVERHEAT_K && e.tempK <= CONNECTION_OXIDATION_ONSET_K,
@@ -367,6 +392,7 @@ function stateText(
   if (arcing.length > 0) states.push(`arcing at ${endsText(arcing)}`);
   if (status === STATUS_OPEN && body === 'closed' && openEnds.length === 0) states.push('open: not in a circuit');
   if (degrading.length > 0) states.push(`degrading at ${endsText(degrading)} (above the oxidation onset)`);
+  for (const e of degraded) states.push(`degraded at end ${e.name} (contact ${sigFig3(e.degradation)} times as made)`);
   if (hot.length > 0) states.push(`overheating at ${endsText(hot)}`);
   if (states.length === 0) {
     // Every end is `ok` or has no termination here (any other end state was named above).
