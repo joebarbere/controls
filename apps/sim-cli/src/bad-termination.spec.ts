@@ -33,11 +33,11 @@ import { workshopWorldAt } from './testing/workshop';
  * lamp circuit (`lamp-circuit.console`, at Journeyman) with the breaker's load screw (wire 1, end a)
  * landed at 20 % of its marked 4 N·m, plus the D12 120 V 1500 W heater on the junction box's splices, for
  * 600 s with the breaker on. Its hashes are pinned here, and
- * `fixtures/v3/ctrl/bad-termination-engine-7-catalog-2.ctrl` is its save (replaced in place by the
+ * `fixtures/v3/ctrl/bad-termination-engine-7-catalog-3.ctrl` is its save (replaced in place by the
  * acceptance PR: world v3 and engine 7 are provisional until v0.4.0), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/bad-termination.console --world content/levels/workshop.json \
- *     --difficulty journeyman --save libs/domain/save-format/fixtures/v3/ctrl/bad-termination-engine-7-catalog-2.ctrl
+ *     --difficulty journeyman --save libs/domain/save-format/fixtures/v3/ctrl/bad-termination-engine-7-catalog-3.ctrl
  *
  * **Every expectation is derived from the built circuit's current** (ADR 0018 §7): the conductor's
  * steady state T_c is the §3.5 fixed point at that current, the hot spot's the two-node closed form

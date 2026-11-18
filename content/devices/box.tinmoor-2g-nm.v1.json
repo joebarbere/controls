@@ -15,7 +15,9 @@
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -30,7 +32,9 @@
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 0
+        "extentMm": 0,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "yoke-2",
@@ -42,7 +46,9 @@
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 0
+        "extentMm": 0,
+        "contacts": [],
+        "bus": null
       }
     ],
     "entries": [
@@ -99,8 +105,15 @@
         "axis": "+y"
       }
     ],
-    "interiorVolumeMm3": 602688
+    "interiorVolumeMm3": 602688,
+    "markedVolumeMm3": null,
+    "material": "nonmetallic",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -137,6 +150,12 @@
       "kind": "game-design",
       "citation": "game-design: a new-work box nailed to the side of a stud through its flange (common practice); it takes its full width along the stud.",
       "covers": ["fits.studFlange"]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a nonmetallic (PVC) device box, the class its box-class source names (nonmetallic outlet boxes listed to UL 514C, cited by number): no metal to bond.",
+      "covers": ["material"]
     }
   ],
   "extensions": {}

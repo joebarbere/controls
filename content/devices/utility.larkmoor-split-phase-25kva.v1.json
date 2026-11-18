@@ -47,9 +47,13 @@
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "l2",
@@ -87,9 +91,13 @@
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     },
     {
       "id": "n",
@@ -127,13 +135,21 @@
           "contactOhm": 0.0003,
           "heatPathWPerK": 0.026,
           "hotSpotHeatCapacityJPerK": 1.1,
-          "combination": null
+          "combination": null,
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "utility.splitPhase",

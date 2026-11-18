@@ -17,7 +17,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * connector at an entry and an enclosure with an open entry, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/raceway-panel.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/raceway-panel-engine-7-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/raceway-panel-engine-7-catalog-3.ctrl
  *
  * and rebuilt from the scenario by `sources.spec.ts`'s fixture-rebuild check.
  */

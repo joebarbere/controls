@@ -1,7 +1,7 @@
 # F3.2 part 4: a box-to-panel NM-B run on the workshop stud wall, as console lines. Both this file
 # and the script nm-cable-run.ts must end at NM_CABLE_RUN_HASH (apps/sim-cli/src/nm-cable-run.spec.ts).
 #   pnpm sim run apps/sim-cli/scenarios/nm-cable-run.console --world content/levels/workshop.json
-# Its save is the frozen fixture fixtures/v3/ctrl/nm-cable-run-engine-7-catalog-2.ctrl (--save).
+# Its save is the frozen fixture fixtures/v3/ctrl/nm-cable-run-engine-7-catalog-3.ctrl (--save).
 #
 # Positions are what placeInWorld and snapWaypoint (@controls/world-model) give for the script's
 # cursor points; the cut length is routeDefaultLengthMm through the entry points and the staples.

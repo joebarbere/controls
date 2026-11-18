@@ -15,10 +15,16 @@
     {
       "type": "backplate",
       "widthMm": 2000,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "raceway.duct",

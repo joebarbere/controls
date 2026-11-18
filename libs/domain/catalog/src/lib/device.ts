@@ -1,6 +1,7 @@
 import {
   BUILTIN_PROP_PREFIX,
   CatalogId,
+  CatalogRef,
   DeviceStateKey,
   Extensions,
   FiniteNumber,
@@ -17,8 +18,16 @@ import {
   ClampType,
   ColourId,
   ConductorStranding,
+  ContactId,
+  EnclosureMaterial,
   EntryId,
   MountId,
+  NemaConfigId,
+  OutletId,
+  PinId,
+  TerminalAccess,
+  TerminalRole,
+  TerminalSide,
   TerminalStranding,
   TerminationMethodId,
   TradeSize,
@@ -27,7 +36,7 @@ import { CatalogSource } from './sources';
 import { TableRef } from './tables';
 
 /*
- * The device entry format, catalogue format v2 (P3, ADR 0016; v1 was ADR 0013's). One device definition
+ * The device entry format, catalogue format v3 (P4, ADR 0020; v2 was ADR 0016's, v1 ADR 0013's). One device definition
  * per file in `content/devices/` (`<id>.v<version>.json`). Saves reference an entry by `{ id, version }`
  * and never inline it (ADR 0004), so a content fix reaches old saves. Every number in an entry has a
  * `source` (realism charter, plan §3), and brands are fictional.
@@ -35,6 +44,14 @@ import { TableRef } from './tables';
  * Catalogue v2 adds, with no field optional (absent is `null` or `[]`): per-method termination specs
  * on terminals, the mounts a device fits, enclosure data (mounts, entries, interior volume) and
  * conductor product data (gauge, stranding, pinned material and insulation rows, colours).
+ *
+ * Catalogue v3 adds, again with no field optional: terminal `role`, `side` and `access`; a per-method
+ * `multiConductor` cap; mount contacts on both sides of a mount (a device's `mounts[].contacts`, a
+ * host's `EnclosureMount.contacts` and `bus` pattern) and a mount anchor (`alongMm`); `hostMounts` for
+ * a device that offers a mount without being an enclosure (a lampholder's `e26`); enclosure
+ * `markedVolumeMm3`, `material` and bus `spaces`; receptacle `outlets` and an appliance `plug` over
+ * `NEMA_CONFIGS`; `supersededBy`; and the `momentary` control type. The fields the inspector reads
+ * (`role`, `side`, `multiConductor`, `markedVolumeMm3`, `material`) are never read by the simulator.
  *
  * This schema validates one entry's shape; `parseCatalog` adds the rules that need the model kind
  * (parameters, terminals, controls), the registries, the tables, and source coverage.
@@ -73,6 +90,18 @@ export const TwistOnCombination = z
   .refine((c) => c.minConductors <= c.maxConductors, { message: 'minConductors must not exceed maxConductors' })
   .refine((c) => c.totalAreaUm2.min <= c.totalAreaUm2.max, { message: 'totalAreaUm2.min must not exceed its max' });
 export type TwistOnCombination = z.infer<typeof TwistOnCombination>;
+
+/**
+ * A termination method's multi-conductor cap (catalogue v3, the carried P3 item): a 4 mm² screw cage
+ * takes two conductors only of equal size and only up to about 16 AWG. Integer AWG designations.
+ */
+export const MultiConductor = z.strictObject({
+  /** The sizes each conductor must lie in when two or more are landed (inside the method's `awgRange`). */
+  awgRange: AwgRange,
+  /** Whether every conductor landed together must be the same size. */
+  equalSize: z.boolean(),
+});
+export type MultiConductor = z.infer<typeof MultiConductor>;
 
 /**
  * How conductors may be landed on a terminal by one method (ADR 0015). A terminal lists its methods
@@ -121,6 +150,12 @@ export const TerminalMethodSpec = z
     hotSpotHeatCapacityJPerK: FiniteNumber.positive(),
     /** A twist-on splice's rated combinations (§4.4): non-null exactly for `twistOn`. */
     combination: TwistOnCombination.nullable(),
+    /**
+     * The sizes this method takes when more than one conductor is landed (catalogue v3, ADR 0020): each
+     * of them inside `awgRange` and, if `equalSize`, all the same size. `null`: no limit beyond the
+     * method's own range (every catalogue-2 spec). Non-null only when `maxConductors` is at least 2.
+     */
+    multiConductor: MultiConductor.nullable(),
   })
   .refine((m) => m.maxConductors >= m.ratedConductors, { message: 'maxConductors must be at least ratedConductors' })
   .refine((m) => new Set(m.stranding).size === m.stranding.length, { message: 'stranding values must be unique' })
@@ -145,8 +180,34 @@ export const DeviceTerminal = z.strictObject({
   positionMm: PointMm,
   /** How conductors land on it, in save-format order; empty for a clip-only terminal (`wrong-method`). */
   methods: z.array(TerminalMethodSpec).max(MAX_TERMINAL_METHODS),
+  /** What the terminal is for (catalogue v3): the inspector's, never the simulator's; `null` for none. */
+  role: TerminalRole.nullable(),
+  /** A GFCI device's line or load side (catalogue v3); `null` on every other terminal. */
+  side: TerminalSide.nullable(),
+  /** What can reach it (catalogue v3): `land` exactly when it has methods; `clip` or `none` otherwise. */
+  access: TerminalAccess,
 });
 export type DeviceTerminal = z.infer<typeof DeviceTerminal>;
+
+/**
+ * One contact a mounted device makes with its host (catalogue v3, ADR 0019 "What the netlist compiler
+ * reads" 1): the compiler joins the device's `terminal` to the host terminal the host mount maps
+ * `host` to (for a bus, the leg of the stab `positionOffset` positions along from the device's own)
+ * through one resistor of `contactOhm`, never an ideal join.
+ */
+export const MountContact = z.strictObject({
+  /** Unique within the fit; carried by the contact branch's `ElementRef` and hashed (`topologyHash`). */
+  id: ContactId,
+  /** The device's own terminal it joins. */
+  terminal: TerminalId,
+  /** The host contact it touches: one of its mount type's `hostContacts`. */
+  host: ContactId,
+  /** Whole stab positions along a bus from the device's own (line 1 → 0, line 2 → 1); 0 on any other mount. */
+  positionOffset: Int.min(0).max(3),
+  /** R (Ω): the contact's resistance, sourced at `fits.<type>.contacts.<id>.contactOhm`. */
+  contactOhm: FiniteNumber.positive(),
+});
+export type MountContact = z.infer<typeof MountContact>;
 
 /** A mount type a device fits, and the width it takes along such a mount (D11). */
 export const DeviceMount = z.strictObject({
@@ -159,11 +220,41 @@ export const DeviceMount = z.strictObject({
    * origin; F3.5 part 2, an ADR 0016 amendment). A DIN rail's mount origin is where a DIN 43880
    * modular device's bottom edge goes (45 mm below the rail centreline), so a modular device declares
    * 0; a shorter one centred on the rail, such as a terminal block, declares 45 - floor(height / 2).
-   * Must be 0 for the other occupancies (load-checked).
+   * Catalogue v3: may also be non-zero on a `single` mount (the anchor, with `alongMm`); must be 0 on an
+   * `area` mount (load-checked).
    */
   crossMm: Int.min(-1000).max(1000),
+  /**
+   * The mount anchor along the mount's axis (catalogue v3, ADR 0019 R4; integer mm): where the device's
+   * origin sits from a `single` mount's origin, so different devices on one kind of mount (bulbs on an
+   * E26 socket) share its axis. 0 on `linear` and `area` mounts, where the device's place along the
+   * mount is the player's (load-checked), and on every catalogue-2 entry.
+   */
+  alongMm: Int.min(-1000).max(1000),
+  /** The contacts the device makes with its host when mounted (catalogue v3); `[]` for none (every catalogue-2 fit). */
+  contacts: z.array(MountContact).max(8),
 });
 export type DeviceMount = z.infer<typeof DeviceMount>;
+
+/**
+ * A bus mount's stab pattern (catalogue v3, ADR 0019 "What the netlist compiler reads" 2): stab k
+ * (from 0) sits at `k × pitchMm` along the mount from its origin, looked up exactly (`busStabIndex`,
+ * never by division), and reaches the host terminal `legs[k mod 2]`: each column alternates legs by
+ * row. A column whose stabs count the other way lists its legs the other way round.
+ */
+export const BusPattern = z.strictObject({
+  /** The stab pitch along the mount (integer mm). */
+  pitchMm: Int.min(1).max(200),
+  /** How many stabs the column has; the last sits within the mount's `extentMm`. */
+  stabs: Int.min(1).max(42),
+  /** The host terminals even and odd stabs reach (the two bus bars), in that order. */
+  legs: z.tuple([TerminalId, TerminalId]),
+});
+export type BusPattern = z.infer<typeof BusPattern>;
+
+/** A host contact a mount offers, and the host terminal it reaches (catalogue v3). */
+export const HostContact = z.strictObject({ id: ContactId, terminal: TerminalId });
+export type HostContact = z.infer<typeof HostContact>;
 
 /**
  * A mount an enclosure offers (D11). Its frame is the mounted device's: the device's +x lies along
@@ -182,6 +273,14 @@ export const EnclosureMount = z
     facing: Axis,
     /** Usable length along `axis` from `positionMm` (integer mm); 0 for a single-device mount. */
     extentMm: Int.min(0),
+    /**
+     * The host contacts this mount offers, each mapped to one of the host's terminals (catalogue v3):
+     * ids from its mount type's `hostContacts`, each once. `[]` offers none: a device's contacts on it
+     * then add nothing (a yoke on a nonmetallic box). A bus mount maps its `stab` through `bus` instead.
+     */
+    contacts: z.array(HostContact).max(8),
+    /** The bus pattern of a `busStab` mount (catalogue v3), `null` on every other mount. */
+    bus: BusPattern.nullable(),
   })
   .refine((m) => m.axis[1] !== m.facing[1], { message: 'axis and facing must be perpendicular' });
 export type EnclosureMount = z.infer<typeof EnclosureMount>;
@@ -207,13 +306,32 @@ export type EnclosureEntry = z.infer<typeof EnclosureEntry>;
 /** Most entries an enclosure entry may have: its open entries are a 32-bit set (ADR 0015). */
 export const MAX_ENCLOSURE_ENTRIES = 32;
 
+/** Most panel spaces a load centre may have (catalogue v3; ADR 0019's `directory1` … `directory42`). */
+export const MAX_PANEL_SPACES = 42;
+
+/** A panel space (catalogue v3): a stab `index` of one of the enclosure's bus mounts. */
+export const PanelSpace = z.strictObject({ mount: MountId, index: Int.min(0).max(41) });
+export type PanelSpace = z.infer<typeof PanelSpace>;
+
 /** What an enclosure offers (D11): mounts, cable entries and interior volume. */
 export const EnclosureSpec = z.strictObject({
   mounts: z.array(EnclosureMount).max(64),
   /** In save-format order: bit i of the `openEntries` key is entry i. */
   entries: z.array(EnclosureEntry).max(MAX_ENCLOSURE_ENTRIES),
-  /** Interior volume (mm³) for P4's box fill (stored, not checked in P3), or `null` (a backplate). */
+  /** Interior volume (mm³) of the drawn box (its geometry, never a marked volume), or `null` (a backplate). */
   interiorVolumeMm3: Int.min(1).nullable(),
+  /**
+   * The volume the maker marks on the box (mm³; catalogue v3), what the inspector's box-fill report
+   * shows (UL 514A and 514C by number); `null` where no marking is stated (every catalogue-2 box).
+   */
+  markedVolumeMm3: Int.min(1).nullable(),
+  /** What it is made of (catalogue v3): the inspector expects a metal enclosure to be bonded. */
+  material: EnclosureMaterial,
+  /**
+   * A load centre's panel spaces in order (catalogue v3): space n (from 1) is `spaces[n - 1]`. `[]` for
+   * every other enclosure. Save format once shipped (the directory keys and `panel.directory` count them).
+   */
+  spaces: z.array(PanelSpace).max(MAX_PANEL_SPACES),
 });
 export type EnclosureSpec = z.infer<typeof EnclosureSpec>;
 
@@ -258,6 +376,50 @@ export const ConductorSpec = z
   });
 export type ConductorSpec = z.infer<typeof ConductorSpec>;
 
+/** One blade or slot of an outlet or a plug, and the device terminal it is (catalogue v3). */
+export const PinTerminal = z.strictObject({ pin: PinId, terminal: TerminalId });
+export type PinTerminal = z.infer<typeof PinTerminal>;
+
+/**
+ * A receptacle outlet (catalogue v3, ADR 0019 C6): one face a plug enters. Its slots are terminals of
+ * the device with no methods; a plug's contact branches join its pins to them through `contactOhm`.
+ * Outlet ids are save format per entry version once a release ships them.
+ */
+export const Outlet = z.strictObject({
+  id: OutletId,
+  /** A receptacle configuration of `NEMA_CONFIGS`. */
+  config: NemaConfigId,
+  /** The face point a plug's reach is measured to, in the device's own frame (integer mm). */
+  positionMm: PointMm,
+  /** R (Ω): each pin-to-slot contact's resistance. */
+  contactOhm: FiniteNumber.positive(),
+  /** Every slot of its configuration, each mapped to one of the device's terminals. */
+  pins: z.array(PinTerminal).min(1).max(4),
+});
+export type Outlet = z.infer<typeof Outlet>;
+
+/** The longest cord a plug may have (integer mm; game-design: 15 m, a long extension cord). */
+export const MAX_CORD_LENGTH_MM = 15_000;
+
+/**
+ * An appliance's cord and plug (catalogue v3, ADR 0019 C6): the plug's blades are terminals of the
+ * device with no methods; the cord's conductors are resistances inside the appliance's own model,
+ * derived from `cordAwg` and `cordLengthMm` (D12).
+ */
+export const PlugSpec = z.strictObject({
+  /** A plug configuration of `NEMA_CONFIGS`. */
+  config: NemaConfigId,
+  /** The cord's conductor size (integer AWG designation). */
+  cordAwg: Awg,
+  /** The cord's length (integer mm): how far the plug reaches (`out-of-reach`). */
+  cordLengthMm: Int.min(1).max(MAX_CORD_LENGTH_MM),
+  /** Where the cord leaves the appliance, in its own frame (integer mm); reach is measured from it. */
+  cordExitMm: PointMm,
+  /** Every blade of its configuration, each mapped to one of the device's terminals. */
+  pins: z.array(PinTerminal).min(1).max(4),
+});
+export type PlugSpec = z.infer<typeof PlugSpec>;
+
 /** Turns a boolean commanded key on or off (`device.operate … --value true`). */
 export const ToggleControl = z.strictObject({ id: DeviceStateKey, label: Label(40), type: z.literal('toggle') });
 
@@ -283,8 +445,22 @@ export const SelectorControl = z.strictObject({
   options: z.array(SafeString.min(1).max(MAX_DEVICE_STATE_STRING)).min(2),
 });
 
-/** Something the player operates (`device.operate {id, control, value}`). Its `id` is a commanded state key. */
-export const DeviceControl = z.discriminatedUnion('type', [ToggleControl, SetpointControl, SelectorControl]);
+/**
+ * A button (catalogue v3, D7): pressing it adds one to its commanded `counter` key (`device.press`, one
+ * logged command per press). `device.operate` never sets it.
+ */
+export const MomentaryControl = z.strictObject({ id: DeviceStateKey, label: Label(40), type: z.literal('momentary') });
+
+/**
+ * Something the player operates (`device.operate {id, control, value}`; a momentary control with
+ * `device.press {id, control}`). Its `id` is a commanded state key.
+ */
+export const DeviceControl = z.discriminatedUnion('type', [
+  ToggleControl,
+  SetpointControl,
+  SelectorControl,
+  MomentaryControl,
+]);
 export type DeviceControl = z.infer<typeof DeviceControl>;
 
 /**
@@ -313,7 +489,7 @@ export const DeviceCategory = z.enum([
 ]);
 export type DeviceCategory = z.infer<typeof DeviceCategory>;
 
-/** One device entry (catalogue format v2). */
+/** One device entry (catalogue format v3). */
 export const DeviceDefinition = z
   .strictObject({
     /** Catalogue id (`battery.ferrovane-12v-7ah`). `prop.*` is reserved for the built-in props. */
@@ -336,6 +512,21 @@ export const DeviceDefinition = z
     mounts: z.array(DeviceMount).max(8),
     /** What an enclosure offers, or `null` for anything that isn't one. */
     enclosure: EnclosureSpec.nullable(),
+    /**
+     * The mounts a device that isn't an enclosure offers (catalogue v3, ADR 0019 R5): a lampholder's
+     * `e26` socket. `[]` for an enclosure (its mounts are `enclosure.mounts`) and for most devices;
+     * `offeredMounts(device)` reads either. Ids share the entry's terminal and mount namespace.
+     */
+    hostMounts: z.array(EnclosureMount).max(8),
+    /** A receptacle's outlets (catalogue v3), `[]` for anything else. */
+    outlets: z.array(Outlet).max(4),
+    /** An appliance's cord and plug (catalogue v3), `null` for anything else. */
+    plug: PlugSpec.nullable(),
+    /**
+     * The entry that replaces this one (catalogue v3, ADR 0019 C12): the build menu hides a superseded
+     * entry and the inspector words its findings "replace". Saves that name it keep loading it.
+     */
+    supersededBy: CatalogRef.nullable(),
     /** Conductor product data, or `null` for anything that isn't a conductor. */
     conductor: ConductorSpec.nullable(),
     /** The electrical model: a kind from `MODEL_KINDS` and its parameters (SI floats, lengths in integer mm). */
@@ -357,8 +548,8 @@ export const DeviceDefinition = z
     extensions: Extensions,
   })
   .meta({
-    title: 'Controls device catalogue entry, catalogue format v2',
+    title: 'Controls device catalogue entry, catalogue format v3',
     description:
-      'One file in content/devices/ (ADR 0013, ADR 0016). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls), the registries (methods, mount and entry types), the tables, and source coverage.',
+      'One file in content/devices/ (ADR 0013, ADR 0016, ADR 0020). Zod in @controls/catalog is authoritative; this JSON Schema omits the rules that depend on the model kind (parameters, terminals, controls), the registries (methods, mount, entry and host-contact types, NEMA configurations), the tables, and source coverage.',
   });
 export type DeviceDefinition = z.infer<typeof DeviceDefinition>;

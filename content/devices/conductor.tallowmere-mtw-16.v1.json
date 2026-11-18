@@ -9,6 +9,10 @@
   "terminals": [],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": {
     "awg": 16,
     "stranding": "stranded",

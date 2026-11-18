@@ -71,9 +71,33 @@ describe('catalogue v2 registries', () => {
     }
   });
 
-  it('pins the P3 ids (save format once a save names them)', () => {
+  it('pins the P3 and P4 ids (save format once a save names them)', () => {
     expect(Object.keys(TERMINATION_METHODS)).toStrictEqual(['screw', 'springCage', 'backStab', 'twistOn']);
-    expect(Object.keys(MOUNT_TYPES)).toStrictEqual(['din35', 'backplate', 'deviceYoke', 'studFlange']);
+    expect(Object.keys(MOUNT_TYPES)).toStrictEqual([
+      'din35',
+      'backplate',
+      'deviceYoke',
+      'studFlange',
+      // Catalogue v3 (ADR 0020).
+      'busStab',
+      'mainFeed',
+      'mbj',
+      'groundBarKit',
+      'e26',
+    ]);
+    expect(
+      Object.fromEntries(Object.values(MOUNT_TYPES).map((t) => [t.id, [t.occupancy, t.bus, t.hostContacts]])),
+    ).toStrictEqual({
+      din35: ['linear', false, []],
+      backplate: ['area', false, []],
+      deviceYoke: ['single', false, ['chassis']],
+      studFlange: ['single', false, []],
+      busStab: ['linear', true, ['stab']],
+      mainFeed: ['single', false, ['l1', 'l2']],
+      mbj: ['single', false, ['neutral', 'chassis']],
+      groundBarKit: ['single', false, ['chassis']],
+      e26: ['single', false, ['shell', 'centre']],
+    });
     expect(Object.keys(ENTRY_TYPES)).toStrictEqual(['knockout', 'pryout', 'clamp', 'drillSite']);
     expect(
       Object.values(TERMINATION_METHODS)

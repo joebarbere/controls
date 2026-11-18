@@ -137,10 +137,10 @@ flowchart LR
 
 **Catalogue format v3** (owner `content-designer`; reviewers `save-format-guardian`, `electrical-realism-reviewer`; ADR 0020):
 
-- [ ] Terminal `role` and `side`; per-method `multiConductor`; `EnclosureSpec.markedVolumeMm3` and `material`; mount-type contacts with sourced contact resistance; receptacle `outlets`, appliance `plug`; the `NEMA_CONFIGS` and new `MOUNT_TYPES` rows (`busStab` linear by space with phase by position, `mainBreaker`, `mbj`, `groundBarKit`, `e26`), the `momentary` control type. Source coverage paths extended; `device.v3.schema.json` exported; `docs/guides/authoring-content.md` updated.
-- [ ] `RegionProfile` (in `libs/domain/catalog/src/lib/region.ts`) gains `protection` (GFCI class and its sourced band, AFCI) and `inspectorRules: { table, version }`; NEC only.
-- [ ] `content/rules/` as a mirrored, sourced, staleness-tested family (`content-mirrors.spec.ts` row); rule ids append-only like colour ids.
-- [ ] `tb.quennick-st4@2` with the two-conductor cap; `@1` unchanged. `shipped.spec.ts` masks the v3 fields for catalogue-2 releases only, with self-tests. `catalogVersion` 3 in `docs/history.md`.
+- [x] Terminal `role` and `side`; per-method `multiConductor`; `EnclosureSpec.markedVolumeMm3` and `material`; mount-type contacts with sourced contact resistance; receptacle `outlets`, appliance `plug`; the `NEMA_CONFIGS` and new `MOUNT_TYPES` rows (`busStab` linear by space with phase by position, `mainBreaker`, `mbj`, `groundBarKit`, `e26`), the `momentary` control type. Source coverage paths extended; `device.v3.schema.json` exported; `docs/guides/authoring-content.md` updated. _Done (PR 6, [ADR 0020](../docs/decisions/0020-catalogue-format-v3.md)):_ plus terminal `access`, terminal families, a device contact's `host`, the bus pattern `{ pitchMm, stabs, legs }`, the single-mount anchor `alongMm`, `hostMounts` for a lampholder (R5), panel `spaces`, `supersededBy`, the `text` and `counter` key types and `AREA_USES`; `mainFeed` chosen over `mainBreaker` (ADR 0019 left it open); contact resistances covered at `fits.<type>.contacts.<id>.contactOhm`. Deviations in ADR 0020.
+- [x] `RegionProfile` (in `libs/domain/catalog/src/lib/region.ts`) gains `protection` (GFCI class and its sourced band, AFCI) and `inspectorRules: { table, version }`; NEC only. _Done:_ named `{ ruleSet, version }` (ADR 0020 deviation 6); the Class A limit stored as eight offline points.
+- [x] `content/rules/` as a mirrored, sourced, staleness-tested family (`content-mirrors.spec.ts` row); rule ids append-only like colour ids. _Done:_ `nec.v1.json` seeded with 240.4(D), 250.148(C) and 210.11(C)(1), each `check: null` until PR 20; frozen in `shipped.spec.ts` from catalogue 3.
+- [x] `tb.quennick-st4@2` with the two-conductor cap; `@1` unchanged. `shipped.spec.ts` masks the v3 fields for catalogue-2 releases only, with self-tests. `catalogVersion` 3 in `docs/history.md`. _Done:_ the mask covers catalogue-1 releases too (0.3.0 lacked the fields as well); `@1` gains `supersededBy`; twelve `-engine-7-catalog-3.ctrl` fixtures, 0.4.0's catalogue-2 saves load `engine-changed`. Raised: `tb.quennick-pe4@1` has the same two-conductor abstraction and isn't versioned.
 
 **World v4 schemas** (owner `save-format-guardian`):
 
@@ -319,7 +319,7 @@ PRs 2–4 and 25 run in parallel with the contract track; after PR 9 the physics
 | ------- | ------------------------------------------------------- | --------------------- |
 | —       | Kickoff: plan, spec v1.6, gates, versions, pre-audit    | Not started           |
 | —       | ADR 0019 world v4 and residential contract (agent team) | Accepted (2026-11-17) |
-| —       | Catalogue format v3 + `catalogVersion` 3                | Not started           |
+| —       | Catalogue format v3 + `catalogVersion` 3                | PR 6 (provisional)    |
 | —       | World document v4 + migration + commands                | Not started           |
 | —       | Engine 8 part 1 (mounts, plugs, earth, service)         | Not started           |
 | F4.1    | Wiring devices (parts 1–2)                              | Not started           |

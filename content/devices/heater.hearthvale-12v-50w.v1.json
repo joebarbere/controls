@@ -19,7 +19,10 @@
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "b",
@@ -29,11 +32,18 @@
         "y": 25,
         "z": 12
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "heater",

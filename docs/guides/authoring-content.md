@@ -1,6 +1,6 @@
 # Authoring catalogue content
 
-How to add or change a device, conductor, cable, tool, accessory or table in `content/`, so it loads, is sourced and stays compatible with every save. The format is [ADR 0016](../decisions/0016-catalogue-format-v2.md) (catalogue v2) on top of [ADR 0013](../decisions/0013-world-document-v2.md); the gotchas are in the [content caveats](../caveats/content.md). Content work belongs to the `content-designer` agent, and every new or changed value goes to `electrical-realism-reviewer` before the PR merges.
+How to add or change a device, conductor, cable, tool, accessory, table or inspector rule set in `content/`, so it loads, is sourced and stays compatible with every save. The format is [ADR 0020](../decisions/0020-catalogue-format-v3.md) (catalogue v3) on [ADR 0016](../decisions/0016-catalogue-format-v2.md) (catalogue v2) and [ADR 0013](../decisions/0013-world-document-v2.md); the gotchas are in the [content caveats](../caveats/content.md). Content work belongs to the `content-designer` agent, and every new or changed value goes to `electrical-realism-reviewer` before the PR merges.
 
 ## The realism charter, in practice
 
@@ -33,14 +33,16 @@ One id namespace covers the whole catalogue (ADR 0015); the prefix says the fami
 | tool      | `tool.*`             | `content/tools/`       | From F3.4 part 1: capabilities, holes, dies, torque range, bore size; part 2: punches, pull reach |
 | accessory | `ferrule.*`, `lug.*` | `content/accessories/` | From F3.1 part 2: ferrules and ring or fork lugs, with the die ids that crimp them                |
 | (table)   | —                    | `content/tables/`      | Pinned by `{ table, version, key }`; not entries                                                  |
+| (rules)   | —                    | `content/rules/`       | Catalogue v3: inspector rule sets, `<ruleSet>.v<version>.json`; not entries                       |
 
 `prop.*` is reserved for the built-in props. A new `content/` directory needs a row in `MIRRORS` (or `UNMIRRORED`) in `libs/domain/catalog/src/lib/content-mirrors.spec.ts`, a `.prettierignore` line for its generated mirror, and its documents passed to `parseCatalog` in `builtin.ts`.
 
 ## Coverage paths
 
-A `covers` path covers itself and everything below it; `*` (not first) matches one segment. The bare `terminals` path is only the terminal layout.
+A `covers` path covers itself and everything below it; `*` (not first) matches one segment. The bare `terminals` path is only the terminal layout (positions, labels, and each terminal's `role`, `side` and `access`), and `fits.<type>` only the fit's layout (width, anchor, which contacts): neither covers a value below it.
 
-- **Device:** `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`ratedConductors`, `maxConductors`, `awgRange`, `stranding`, `stripLengthMm`, `torqueNm`, `drives`, `alRated`, `entryMm`, `exitAxis`), `fits.<mountType>`, `mounts.<id>`, `entries.<id>`, `interiorVolumeMm3`, `conductor.<field>`.
+- **Device:** `model.params.<name>`, `sizeMm`, `terminals`, `terminals.<id>.methods.<method>.<field>` (`ratedConductors`, `maxConductors`, `awgRange`, `stranding`, `stripLengthMm`, `torqueNm`, `drives`, `alRated`, `entryMm`, `exitAxis`, and `multiConductor` when set), `fits.<mountType>` and `fits.<mountType>.contacts.<id>.contactOhm`, `mounts.<id>` (an enclosure's mounts or a `hostMounts` mount, host contacts and bus pattern included), `entries.<id>`, `interiorVolumeMm3`, `markedVolumeMm3`, `material`, `spaces`, `outlets.<id>.<field>` (`config`, `positionMm`, `pins`, `contactOhm`), `plug.<field>` (`config`, `cordAwg`, `cordLengthMm`, `cordExitMm`, `pins`), `conductor.<field>`.
+- **Rule set:** `rules.<id>.article` (the article and our paraphrase of it), `rules.<id>.check.params.<name>`.
 - **Cable:** `conductors.<index>`, `jacket.<field>`. **Tool:** `capabilities`, `holes.<id>`, `dies.<id>`, `torque`, `boreDiameterMm`, `drives`, `punches`, `pull.lengthMm`, `pull.maxBendDeg`. **Accessory:** `awgRange`, `stranding`, `dies`, `barrelLengthMm`, `studDiameterMm`.
 - **Table:** `rows.<key>.<field>`, or `rows.<key>` for a row, or `rows.*.<field>` for a column.
 
@@ -101,6 +103,24 @@ From F3.5 part 2. Wire duct (`duct.*`, kind `raceway.duct`), EMT-lite parts (`em
 - `entryMm` and `exitAxis` are game-design geometry unless the product's drawing is cited.
 - **A lamp's conduction fraction is its own param** (D17): `lamp.incandescent` entries may set `conductionFraction` (0–0.2) beside `thermalTimeConstantMs`, the pair that sets the filament's heat capacity and its cool-down; without it the entry takes `sim-core`'s `LAMP_CONDUCTION_FRACTION` (0.1). Source both, and recompute k, G and C = (4 k T_r³ + G) τ in a spec (`lamp-120v.spec.ts` shows the hand calculation).
 
+## Catalogue v3: P4's devices ([ADR 0020](../decisions/0020-catalogue-format-v3.md))
+
+- **Every terminal** has `role` (for the inspector: `ungrounded`, `grounded`, `egc`, `traveller`, `common`, `line`, `load` or `null`), `side` (`line`/`load` on a GFCI device, else `null`) and `access`: `land` exactly when it has methods, else `clip` (a lead's clip fits) or `none` (a plug blade, a slot behind a face). The simulator never reads role or side.
+- **A two-conductor cap** is a method's `multiConductor: { awgRange, equalSize }` (`null`: none). It is electrical: adding one to a shipped entry is a new entry version (`tb.quennick-st4@2`).
+- **Mount contacts:** a fit lists `contacts: [{ id, terminal, host, positionOffset, contactOhm }]`; `host` is one of the mount type's `hostContacts` (`MOUNT_TYPES`), `positionOffset` steps along a bus (line 1 → 0, line 2 → 1). The host's mount maps the host contacts it offers to its terminals (`contacts: [{ id, terminal }]`), and a `busStab` mount has `bus: { pitchMm, stabs, legs }` (stab k reaches `legs[k mod 2]`). Source every `contactOhm` on its own (`fits.<type>.contacts.<id>.contactOhm`).
+- **A device that offers a mount but isn't an enclosure** (a lampholder's `e26`) declares it in `hostMounts`; an enclosure keeps its mounts in `enclosure.mounts`.
+- **Enclosures** state `material` (`steel` or `nonmetallic`) and, where the maker marks one, `markedVolumeMm3`; a load centre lists its panel `spaces` in order. Never put a code's box-fill allowance anywhere: fill is reported, not judged (P4 Q1).
+- **Receptacles** list `outlets` (a `NEMA_CONFIGS` receptacle configuration, the face point, the contact resistance, every slot to a methodless terminal); **appliances** a `plug` (configuration, cord size and length, exit point, every blade to a methodless terminal). An entry with a plug fits no mount.
+- **Buttons** are `momentary` controls over a `counter` key; a load centre's directory is `text` keys, never controls.
+- **Superseded entries** name their replacement in `supersededBy`; the old version stays for old saves.
+
+## Inspector rule sets (`content/rules/`)
+
+- One file per rule-set version (`nec.v1.json`): `ruleSet`, `version`, `title`, `edition` (`NFPA 70-2023`), `rules`, `sources`.
+- A rule is `{ id, article, title, paraphrase, severity, check }`. **The article is a number only** (`240.4(D)`); **the paraphrase is our own words**, at most 300 characters, never the code's text and never a table. `severity` is `violation`, `warning` or `report` (no pass or fail, for fill). `check` is `{ kind, params }`, a check kind of `@controls/inspector`, or `null` for a rule listed but not checked.
+- A number a check needs is a parameter with its own source (`rules.<id>.check.params.<name>`) or read from the entry it judges, never a gauge-to-amperes or fill table.
+- **Rule ids are append-only** across versions; changing a shipped rule's article, severity or check is a new rule-set version (its prose may be corrected).
+
 ## Entry versions
 
 - Saves reference `{ id, version }`, never the data, so a shipped entry is never edited or deleted.
@@ -108,7 +128,8 @@ From F3.5 part 2. Wire duct (`duct.*`, kind `raceway.duct`), EMT-lite parts (`em
 - **Changing any existing value is a new version:** copy the file to `<id>.v<n+1>.json`, change it there, keep the old one.
 - **Text-only fixes** to a citation keep the version (they change no value).
 - A table value change is a new **table** version; only new entry versions pin it. Colour ids are append-only across colour-table versions.
-- While a `catalogVersion` hasn't shipped (catalogue 2 until v0.4.0), its new entries may still change in place.
+- While a `catalogVersion` hasn't shipped (catalogue 3 until v0.5.0), its new entries may still change in place.
+- **Catalogue v3's fields count as gaining data** for a shipped entry (`role: null`, `contacts: []`, a sourced `material`): it keeps its version. A value that changes behaviour (a two-conductor cap) is a new version, with `supersededBy` on the old one.
 
 ## Brands
 

@@ -58,6 +58,10 @@ function conductor(id: string, overrides: Record<string, unknown> = {}): Record<
     terminals: [],
     mounts: [],
     enclosure: null,
+    hostMounts: [],
+    outlets: [],
+    plug: null,
+    supersededBy: null,
     conductor: {
       awg: 14,
       stranding: 'solid',
@@ -112,6 +116,7 @@ const screw = {
   contactOhm: 0.0003,
   heatPathWPerK: 0.026,
   hotSpotHeatCapacityJPerK: 1.1,
+  multiConductor: null,
   combination: null,
 };
 
@@ -124,11 +129,34 @@ function box(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     modelName: 'B-1',
     category: 'enclosure',
     sizeMm: { widthMm: 50, heightMm: 75, depthMm: 60 },
-    terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [screw] }],
-    mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0 }],
+    terminals: [
+      {
+        id: 'ground',
+        label: 'GND',
+        positionMm: { x: 10, y: 0, z: 5 },
+        methods: [screw],
+        role: null,
+        side: null,
+        access: 'land',
+      },
+    ],
+    mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0, alongMm: 0, contacts: [] }],
+    hostMounts: [],
+    outlets: [],
+    plug: null,
+    supersededBy: null,
     enclosure: {
       mounts: [
-        { id: 'yoke', type: 'deviceYoke', positionMm: { x: 25, y: 37, z: 60 }, axis: '+x', facing: '+z', extentMm: 0 },
+        {
+          id: 'yoke',
+          type: 'deviceYoke',
+          positionMm: { x: 25, y: 37, z: 60 },
+          axis: '+x',
+          facing: '+z',
+          extentMm: 0,
+          contacts: [],
+          bus: null,
+        },
       ],
       entries: [
         {
@@ -151,6 +179,9 @@ function box(overrides: Record<string, unknown> = {}): Record<string, unknown> {
         },
       ],
       interiorVolumeMm3: 295000,
+      markedVolumeMm3: null,
+      material: 'steel',
+      spaces: [],
     },
     conductor: null,
     model: { kind: 'test.box', params: {} },
@@ -163,6 +194,7 @@ function box(overrides: Record<string, unknown> = {}): Record<string, unknown> {
       'mounts',
       'entries',
       'interiorVolumeMm3',
+      'material',
     ]),
     extensions: {},
     ...overrides,
@@ -416,7 +448,19 @@ describe('catalogue format v2: the families on test fixtures', () => {
 
   it('termination specs: registered methods, once each, torque exactly for clamp-torque methods', () => {
     const withMethods = (methods: unknown[]) =>
-      box({ terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods }] });
+      box({
+        terminals: [
+          {
+            id: 'ground',
+            label: 'GND',
+            positionMm: { x: 10, y: 0, z: 5 },
+            methods,
+            role: null,
+            side: null,
+            access: methods.length > 0 ? 'land' : 'clip',
+          },
+        ],
+      });
     const devices = (b: Record<string, unknown>) => ({ devices: [conductor('conductor.test-14'), bareConductor(), b] });
     expect(messages(devices(withMethods([{ ...screw, method: 'solder' }]))).join()).toContain(
       'Unknown termination method "solder"',
@@ -444,7 +488,7 @@ describe('catalogue format v2: the families on test fixtures', () => {
 
   it('termination specs need a source per field: terminals alone covers only the layout', () => {
     const layoutOnly = box({
-      sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3']),
+      sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3', 'material']),
     });
     const found = messages({ devices: [conductor('conductor.test-14'), bareConductor(), layoutOnly] });
     expect(found).toContain(
@@ -462,6 +506,7 @@ describe('catalogue format v2: the families on test fixtures', () => {
       torqueNm: null,
       drives: [],
       ratedConductors: 2,
+      multiConductor: null,
       combination: {
         minConductors: 2,
         maxConductors: 2,
@@ -474,9 +519,23 @@ describe('catalogue format v2: the families on test fixtures', () => {
         id: 'splice.test-nut',
         category,
         enclosure: null,
+        hostMounts: [],
+        outlets: [],
+        plug: null,
+        supersededBy: null,
         mounts: [],
         model: { kind: 'splice.twistOn', params: {} },
-        terminals: [{ id: 'splice', label: 'S', positionMm: { x: 0, y: 0, z: 0 }, methods }],
+        terminals: [
+          {
+            id: 'splice',
+            label: 'S',
+            positionMm: { x: 0, y: 0, z: 0 },
+            methods,
+            role: null,
+            side: null,
+            access: methods.length > 0 ? 'land' : 'clip',
+          },
+        ],
         sources: source(['sizeMm', 'terminals', 'terminals.splice.methods']),
       });
     expect(messages(devices(splice([nut])))).toStrictEqual([]);
@@ -490,7 +549,19 @@ describe('catalogue format v2: the families on test fixtures', () => {
 
   it('ADR 0018 §8 clamp fields: the clamp type fits the method, the clamp depth fits the strip, a combination exactly for twistOn', () => {
     const withMethods = (methods: unknown[]) =>
-      box({ terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods }] });
+      box({
+        terminals: [
+          {
+            id: 'ground',
+            label: 'GND',
+            positionMm: { x: 10, y: 0, z: 5 },
+            methods,
+            role: null,
+            side: null,
+            access: methods.length > 0 ? 'land' : 'clip',
+          },
+        ],
+      });
     const devices = (b: Record<string, unknown>) => ({ devices: [conductor('conductor.test-14'), bareConductor(), b] });
     const found = (methods: unknown[]) => messages(devices(withMethods(methods))).join();
     expect(found([{ ...screw, clampType: 'springCage' }])).toContain(
@@ -533,8 +604,18 @@ describe('catalogue format v2: the families on test fixtures', () => {
     ).toContain('combination.totalAreaUm2.min must not exceed minConductors');
     expect(found([nut])).not.toContain('combination.totalAreaUm2.min must not exceed minConductors');
     const covered = box({
-      terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [nut] }],
-      sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3']),
+      terminals: [
+        {
+          id: 'ground',
+          label: 'GND',
+          positionMm: { x: 10, y: 0, z: 5 },
+          methods: [nut],
+          role: null,
+          side: null,
+          access: 'land',
+        },
+      ],
+      sources: source(['sizeMm', 'terminals', 'fits.studFlange', 'mounts', 'entries', 'interiorVolumeMm3', 'material']),
     });
     expect(messages(devices(covered))).toContain(
       '[2] box.test-1gang@1: terminals.ground.methods.twistOn.combination: Has no source (realism charter: every value has a source)',
@@ -677,7 +758,9 @@ describe('catalogue format v2: the families on test fixtures', () => {
     expect(
       messages({
         devices: [
-          conductor('conductor.test-14', { mounts: [{ type: 'din35', widthMm: 9, crossMm: 0 }] }),
+          conductor('conductor.test-14', {
+            mounts: [{ type: 'din35', widthMm: 9, crossMm: 0, alongMm: 0, contacts: [] }],
+          }),
           bareConductor(),
           box(),
         ],
@@ -688,7 +771,7 @@ describe('catalogue format v2: the families on test fixtures', () => {
         devices: [
           conductor('conductor.test-14'),
           bareConductor(),
-          box({ mounts: [{ type: 'shelf', widthMm: 9, crossMm: 0 }] }),
+          box({ mounts: [{ type: 'shelf', widthMm: 9, crossMm: 0, alongMm: 0, contacts: [] }] }),
         ],
       }).join(),
     ).toContain('mounts.shelf: Unknown mount type');

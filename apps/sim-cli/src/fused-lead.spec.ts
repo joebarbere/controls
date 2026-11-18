@@ -13,7 +13,7 @@ import { workshopWorld } from './testing/workshop';
  * stand-in's L1 and N fuses at copper's melting point, and its save, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/fused-lead.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/fused-lead-engine-7-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/fused-lead-engine-7-catalog-3.ctrl
  *
  * carries the one non-initial lead end state (both ends `intermittentOpen`, for good) through the
  * container, the migration and the load check. The fixture-rebuild check in `sources.spec.ts`

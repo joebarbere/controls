@@ -296,7 +296,7 @@ describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
     expect(createSaveManifest()).toMatchObject({
       schemaVersion: 3,
-      catalogVersion: 2,
+      catalogVersion: 3,
       simEngineVersion: SIM_ENGINE_VERSION,
     });
   });

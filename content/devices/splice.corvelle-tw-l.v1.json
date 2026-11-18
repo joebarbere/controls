@@ -58,13 +58,21 @@
               "min": 4161820,
               "max": 16543850
             }
-          }
+          },
+          "multiConductor": null
         }
-      ]
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "splice.twistOn",

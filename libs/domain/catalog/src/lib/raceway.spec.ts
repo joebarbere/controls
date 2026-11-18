@@ -132,10 +132,12 @@ describe('the raceway and terminal-block load rules', () => {
     expect(messages(long).join()).toMatch(/stock is at most 6000 mm/);
   });
 
-  it('refuses a crossMm on a mount that isn’t linear, and categories on the wrong kinds', () => {
+  it('refuses a crossMm on an area mount and an alongMm off a single mount, and categories on the wrong kinds', () => {
     const duct = clone(DUCT);
-    duct['mounts'] = [{ type: 'backplate', widthMm: 2000, crossMm: 5 }];
-    expect(messages(duct).join()).toMatch(/crossMm places a device across a linear mount only/);
+    duct['mounts'] = [{ type: 'backplate', widthMm: 2000, crossMm: 5, alongMm: 0, contacts: [] }];
+    expect(messages(duct).join()).toMatch(/crossMm places a device on a linear or single mount only/);
+    duct['mounts'] = [{ type: 'backplate', widthMm: 2000, crossMm: 0, alongMm: 5, contacts: [] }];
+    expect(messages(duct).join()).toMatch(/alongMm anchors a device on a single mount only/);
     const block = clone('tb.quennick-st4');
     block['category'] = 'raceway';
     expect(messages(block).join()).toMatch(/Category "raceway" goes with raceway kinds/);

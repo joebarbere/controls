@@ -1,4 +1,4 @@
-import { type DeviceStateValue, FiniteNumber, Int } from '@controls/save-format';
+import { type DeviceStateValue, FiniteNumber, Int, LabelText } from '@controls/save-format';
 import * as z from 'zod';
 
 /*
@@ -21,8 +21,31 @@ import * as z from 'zod';
 /** Who writes a state key (ADR 0011 §1). Commands never read `sim` keys. */
 export type StateOwner = 'commanded' | 'sim';
 
-/** The JSON type of a state value, which decides the controls that can drive it. */
-export type StateValueType = 'boolean' | 'number' | 'enum';
+/**
+ * The JSON type of a state value, which decides the controls that can drive it. Catalogue v3 (ADR 0019,
+ * ADR 0020) adds `text`, a nullable `LabelText` (a load centre's directory entries; never driven by a
+ * control), and `counter`, a non-negative integer (a momentary control's press count, raised only by
+ * `device.press`).
+ */
+export type StateValueType = 'boolean' | 'number' | 'enum' | 'text' | 'counter';
+
+/** The schema of every `text` key (catalogue v3): printable ASCII label text of 1 to 32 characters, or `null`. */
+export const TEXT_STATE_SCHEMA: z.ZodType<DeviceStateValue> = LabelText.nullable();
+
+/** The schema of every `counter` key (catalogue v3): a non-negative safe integer. */
+export const COUNTER_STATE_SCHEMA: z.ZodType<DeviceStateValue> = Int.min(0).max(Number.MAX_SAFE_INTEGER);
+
+/**
+ * A family of terminals a kind's entries number for themselves (catalogue v3, ADR 0019 C3): a neutral
+ * bar's `n1` … `n30`. An entry of the kind has `prefix` + 1 … `prefix` + n for one n in `[min, max]`,
+ * besides the kind's fixed `terminals`.
+ */
+export interface TerminalFamily {
+  /** The id prefix (a terminal id's grammar), followed by the 1-based index. */
+  readonly prefix: string;
+  readonly min: number;
+  readonly max: number;
+}
 
 /** One key of a device state bag. */
 export interface StateKeyDef {
@@ -71,6 +94,8 @@ export interface ModelKindDef {
   readonly raceway?: 'duct' | 'conduit';
   /** The terminal ids every device of this kind has, sorted. Empty for connections. */
   readonly terminals: readonly string[];
+  /** Terminal families each entry numbers for itself (catalogue v3); absent: none, the terminals are exactly `terminals`. */
+  readonly terminalFamilies?: readonly TerminalFamily[];
   /** Validates `model.params` of a catalogue entry (a strict object of numbers). */
   readonly params: z.ZodType<Readonly<Record<string, number>>>;
   /** Every state key, by name. Names are unique across both bags. */
@@ -467,7 +492,7 @@ export type ConductorParams = z.infer<typeof ConductorParams>;
 
 function key(
   owner: StateOwner,
-  type: Exclude<StateValueType, 'enum'>,
+  type: Exclude<StateValueType, 'enum' | 'text' | 'counter'>,
   schema: z.ZodType<DeviceStateValue>,
   initial: DeviceStateValue,
   description: string,
@@ -482,6 +507,22 @@ function enumKey<const V extends readonly [string, ...string[]]>(
   description: string,
 ): StateKeyDef {
   return { owner, type: 'enum', schema: z.enum(values), initial, values, description };
+}
+
+/**
+ * A commanded `text` key (catalogue v3): nullable label text, starting `null`. Never a control: no
+ * control type drives a `text` key, so `device.operate` can't set one.
+ */
+export function textKey(description: string): StateKeyDef {
+  return { owner: 'commanded', type: 'text', schema: TEXT_STATE_SCHEMA, initial: null, values: null, description };
+}
+
+/**
+ * A commanded `counter` key (catalogue v3): a momentary control's press count, starting at 0, raised by
+ * one per `device.press` and never set by `device.operate`.
+ */
+export function counterKey(description: string): StateKeyDef {
+  return { owner: 'commanded', type: 'counter', schema: COUNTER_STATE_SCHEMA, initial: 0, values: null, description };
 }
 
 /** Enclosure parameters (F3.5): none. An enclosure has no electrical model in P3; its data is its `enclosure` block. */

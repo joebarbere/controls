@@ -33,11 +33,15 @@ describe('exported catalogue JSON Schema', () => {
     expect(readdirSync(outDir).sort()).toStrictEqual(Object.keys(schemas).sort());
   });
 
-  it('has the v2 formats, one row file per table and one state file per model kind', () => {
+  it('has each format at the version that last changed it, one row file per table and one state file per model kind', () => {
     const states = Object.values(MODEL_KINDS).map((k) =>
       k.placement === 'entity' ? `device-state.${k.kind}.schema.json` : `connection-state.${k.kind}.schema.json`,
     );
-    const formats = ['device', 'cable', 'tool', 'accessory', 'table'].map((f) => `${f}.v2.schema.json`);
+    const formats = [
+      'device.v3.schema.json',
+      'rule-set.v3.schema.json',
+      ...['cable', 'tool', 'accessory', 'table'].map((f) => `${f}.v2.schema.json`),
+    ];
     const rows = Object.keys(TABLE_KINDS).map((t) => `table-row.${t}.schema.json`);
     expect(Object.keys(schemas).sort()).toStrictEqual([...formats, ...rows, ...states].sort());
   });

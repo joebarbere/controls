@@ -24,7 +24,9 @@
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 330
+        "extentMm": 330,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "rail-2",
@@ -36,7 +38,9 @@
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 330
+        "extentMm": 330,
+        "contacts": [],
+        "bus": null
       },
       {
         "id": "plate",
@@ -48,7 +52,9 @@
         },
         "axis": "+x",
         "facing": "+z",
-        "extentMm": 350
+        "extentMm": 350,
+        "contacts": [],
+        "bus": null
       }
     ],
     "entries": [
@@ -118,8 +124,15 @@
         "axis": "-y"
       }
     ],
-    "interiorVolumeMm3": 38890368
+    "interiorVolumeMm3": 38890368,
+    "markedVolumeMm3": null,
+    "material": "steel",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.panel",
@@ -168,6 +181,12 @@
         "entries.drill-top-1",
         "entries.drill-top-2"
       ]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a sheet-steel wall-mount enclosure, the class its enclosure-class source names (1.5 mm body steel; UL 50/50E and NEMA 250, cited by number), so metal the inspector expects to be bonded.",
+      "covers": ["material"]
     }
   ],
   "extensions": {}

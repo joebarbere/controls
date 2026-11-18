@@ -15,7 +15,9 @@
     {
       "type": "studFlange",
       "widthMm": 102,
-      "crossMm": 0
+      "crossMm": 0,
+      "alongMm": 0,
+      "contacts": []
     }
   ],
   "enclosure": {
@@ -139,8 +141,15 @@
         "axis": "+z"
       }
     ],
-    "interiorVolumeMm3": 364952
+    "interiorVolumeMm3": 364952,
+    "markedVolumeMm3": null,
+    "material": "steel",
+    "spaces": []
   },
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "enclosure.box",
@@ -181,6 +190,12 @@
       "kind": "game-design",
       "citation": "game-design: fixed to the side of a stud by a bracket (common practice); it takes its full width along the stud.",
       "covers": ["fits.studFlange"]
+    },
+    {
+      "id": "material",
+      "kind": "real-world",
+      "citation": "real-world (product class): a sheet-steel junction box, the class its box-class source names (sheet-steel outlet boxes listed to UL 514A, cited by number), so metal the inspector expects to be bonded. It has no chassis terminal, so nothing bonds to it in the game; P4 supersedes it with a metal-box entry that has one (ADR 0020).",
+      "covers": ["material"]
     }
   ],
   "extensions": {}

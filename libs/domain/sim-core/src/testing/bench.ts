@@ -91,13 +91,25 @@ export const TEST_MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = {
 
 const size = { widthMm: 10, heightMm: 10, depthMm: 10 };
 /** A clip-only test terminal (catalogue v2: no termination methods). */
-const terminal = (id: string, x: number) => ({ id, label: id, positionMm: { x, y: 0, z: 0 }, methods: [] });
+const terminal = (id: string, x: number) => ({
+  id,
+  label: id,
+  positionMm: { x, y: 0, z: 0 },
+  methods: [],
+  role: null,
+  side: null,
+  access: 'clip',
+});
 const testSource = (covers: string[]) => [{ id: 'test', kind: 'game-design', citation: 'game-design: test', covers }];
 const base = {
   brand: 'Testbrand',
   modelName: 'T-1',
   mounts: [],
   enclosure: null,
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   conductor: null,
   controls: [],
   extensions: {},

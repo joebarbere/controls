@@ -2,6 +2,7 @@ import * as z from 'zod';
 import { DeviceDefinition } from './device';
 import { AccessoryDefinition, CableDefinition, ToolDefinition } from './families';
 import { bagSchemas, MODEL_KINDS } from './model-kinds';
+import { RuleSetDocument } from './rules';
 import { TABLE_KINDS, TableDocument } from './tables';
 
 /*
@@ -9,8 +10,10 @@ import { TABLE_KINDS, TableDocument } from './tables';
  * docs, content tools and mods. Zod stays authoritative. The checked-in copies under `json-schema/`
  * are compared to this by a test; regenerate them with `pnpm nx test catalog -u`.
  *
- * - `<family>.v2.schema.json`: catalogue format v2 (ADR 0016) for devices, cables, tools, accessories
- *   and tables; `table-row.<table>.schema.json`: each table's row shape. Catalogue data, not save format.
+ * - `<family>.v<N>.schema.json`: each family's format at the catalogue format version that last changed
+ *   it: `device.v3` and `rule-set.v3` (catalogue v3, ADR 0020), and `cable.v2`, `tool.v2`,
+ *   `accessory.v2` and `table.v2` (unchanged since catalogue v2, ADR 0016); `table-row.<table>.schema.json`:
+ *   each table's row shape. Catalogue data, not save format.
  * - `device-state.<kind>.schema.json` and `connection-state.<kind>.schema.json` are save format
  *   (ADR 0013, ADR 0015): what `EntityV2.state`/`sim` and world v3's `ConnectionV3.state`/`sim` hold for
  *   that kind. Changing an existing kind's file needs a `schemaVersion` bump; a new kind adds a file.
@@ -18,7 +21,8 @@ import { TABLE_KINDS, TableDocument } from './tables';
 export function catalogJsonSchemas(): Record<string, Record<string, unknown>> {
   const generate = (schema: z.ZodType) => z.toJSONSchema(schema, { target: 'draft-2020-12' });
   const out: Record<string, Record<string, unknown>> = {
-    'device.v2.schema.json': generate(DeviceDefinition),
+    'device.v3.schema.json': generate(DeviceDefinition),
+    'rule-set.v3.schema.json': generate(RuleSetDocument),
     'cable.v2.schema.json': generate(CableDefinition),
     'tool.v2.schema.json': generate(ToolDefinition),
     'accessory.v2.schema.json': generate(AccessoryDefinition),

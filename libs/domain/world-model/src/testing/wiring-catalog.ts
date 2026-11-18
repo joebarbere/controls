@@ -82,6 +82,10 @@ const conductor = (id: string, insulated: boolean, awg = 14, stranding: 'solid' 
   terminals: [],
   mounts: [],
   enclosure: null,
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   conductor: {
     awg,
     stranding,
@@ -121,6 +125,7 @@ const screw = {
   contactOhm: 0.0003,
   heatPathWPerK: 0.026,
   hotSpotHeatCapacityJPerK: 1.1,
+  multiConductor: null,
   combination: null,
 };
 
@@ -131,6 +136,7 @@ const cageClamp = {
   contactOhm: 0.0003,
   heatPathWPerK: 0.02,
   hotSpotHeatCapacityJPerK: 0.5,
+  multiConductor: null,
   combination: null,
 };
 
@@ -142,11 +148,34 @@ const box = {
   modelName: 'B-1',
   category: 'enclosure',
   sizeMm: { widthMm: 50, heightMm: 75, depthMm: 60 },
-  terminals: [{ id: 'ground', label: 'GND', positionMm: { x: 10, y: 0, z: 5 }, methods: [screw] }],
-  mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0 }],
+  terminals: [
+    {
+      id: 'ground',
+      label: 'GND',
+      positionMm: { x: 10, y: 0, z: 5 },
+      methods: [screw],
+      role: null,
+      side: null,
+      access: 'land',
+    },
+  ],
+  mounts: [{ type: 'studFlange', widthMm: 50, crossMm: 0, alongMm: 0, contacts: [] }],
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   enclosure: {
     mounts: [
-      { id: 'yoke', type: 'deviceYoke', positionMm: { x: 25, y: 37, z: 60 }, axis: '+x', facing: '+z', extentMm: 0 },
+      {
+        id: 'yoke',
+        type: 'deviceYoke',
+        positionMm: { x: 25, y: 37, z: 60 },
+        axis: '+x',
+        facing: '+z',
+        extentMm: 0,
+        contacts: [],
+        bus: null,
+      },
     ],
     entries: [
       {
@@ -169,6 +198,9 @@ const box = {
       },
     ],
     interiorVolumeMm3: 295000,
+    markedVolumeMm3: null,
+    material: 'steel',
+    spaces: [],
   },
   conductor: null,
   model: { kind: 'test.box', params: {} },
@@ -181,6 +213,7 @@ const box = {
     'mounts',
     'entries',
     'interiorVolumeMm3',
+    'material',
   ]),
   extensions: {},
 };
@@ -215,6 +248,9 @@ const block = {
           ...cageClamp,
         },
       ],
+      role: null,
+      side: null,
+      access: 'land',
     },
     {
       id: '2',
@@ -239,6 +275,7 @@ const block = {
           contactOhm: 0.0003,
           heatPathWPerK: 0.026,
           hotSpotHeatCapacityJPerK: 1.1,
+          multiConductor: null,
           combination: null,
         },
         {
@@ -274,6 +311,7 @@ const block = {
           hotSpotHeatCapacityJPerK: 2,
           // Two or three of 18 to 12 AWG, at least two 18s (1 646 094 µm²) and at most 5 000 000 µm² in
           // all: two 14s fit (4 161 820), a third doesn't (6 242 730). Test values, not a product.
+          multiConductor: null,
           combination: {
             minConductors: 2,
             maxConductors: 3,
@@ -282,13 +320,20 @@ const block = {
           },
         },
       ],
+      role: null,
+      side: null,
+      access: 'land',
     },
   ],
   mounts: [
-    { type: 'din35', widthMm: 20, crossMm: 0 },
-    { type: 'backplate', widthMm: 20, crossMm: 0 },
+    { type: 'din35', widthMm: 20, crossMm: 0, alongMm: 0, contacts: [] },
+    { type: 'backplate', widthMm: 20, crossMm: 0, alongMm: 0, contacts: [] },
   ],
   enclosure: null,
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   conductor: null,
   model: { kind: 'test.block', params: {} },
   controls: [],
@@ -300,7 +345,7 @@ const block = {
 const yokeDevice = {
   ...block,
   id: 'tb.test-yoke',
-  mounts: [{ type: 'deviceYoke', widthMm: 20, crossMm: 0 }],
+  mounts: [{ type: 'deviceYoke', widthMm: 20, crossMm: 0, alongMm: 0, contacts: [] }],
   sources: source(['sizeMm', 'terminals', 'terminals.*.methods', 'fits.deviceYoke']),
 };
 
@@ -314,19 +359,44 @@ const panel = {
   sizeMm: { widthMm: 600, heightMm: 400, depthMm: 150 },
   terminals: [],
   mounts: [],
+  hostMounts: [],
+  outlets: [],
+  plug: null,
+  supersededBy: null,
   enclosure: {
     mounts: [
-      { id: 'rail-1', type: 'din35', positionMm: { x: 50, y: 300, z: 100 }, axis: '+x', facing: '+z', extentMm: 500 },
+      {
+        id: 'rail-1',
+        type: 'din35',
+        positionMm: { x: 50, y: 300, z: 100 },
+        axis: '+x',
+        facing: '+z',
+        extentMm: 500,
+        contacts: [],
+        bus: null,
+      },
       // An area mount (a backplate patch), a square of side extentMm (ADR 0015 implementation note 7).
-      { id: 'plate', type: 'backplate', positionMm: { x: 50, y: 20, z: 50 }, axis: '+x', facing: '+z', extentMm: 200 },
+      {
+        id: 'plate',
+        type: 'backplate',
+        positionMm: { x: 50, y: 20, z: 50 },
+        axis: '+x',
+        facing: '+z',
+        extentMm: 200,
+        contacts: [],
+        bus: null,
+      },
     ],
     entries: [],
     interiorVolumeMm3: null,
+    markedVolumeMm3: null,
+    material: 'steel',
+    spaces: [],
   },
   conductor: null,
   model: { kind: 'test.panel', params: {} },
   controls: [],
-  sources: source(['sizeMm', 'mounts']),
+  sources: source(['sizeMm', 'mounts', 'material']),
   extensions: {},
 };
 

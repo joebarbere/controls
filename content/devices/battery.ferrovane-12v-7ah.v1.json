@@ -19,7 +19,10 @@
         "y": 32,
         "z": 98
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     },
     {
       "id": "pos",
@@ -29,11 +32,18 @@
         "y": 32,
         "z": 98
       },
-      "methods": []
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
     }
   ],
   "mounts": [],
   "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
   "conductor": null,
   "model": {
     "kind": "battery",

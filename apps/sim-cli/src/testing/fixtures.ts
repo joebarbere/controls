@@ -36,7 +36,7 @@ export const ENGINE_FIXTURE_DIRS: readonly string[] = Array.from({ length: CURRE
 /** An engine-numbered fixture name: engine N, and from catalogue 2 on catalogue C. */
 export const ENGINE_FIXTURE_PATTERN = /-engine-(\d+)(?:-catalog-(\d+))?\.ctrl$/;
 
-/** The fixture name this build writes and verifies for `scenario` (`sources` → `sources-engine-7-catalog-2.ctrl`). */
+/** The fixture name this build writes and verifies for `scenario` (`sources` → `sources-engine-7-catalog-3.ctrl`). */
 export function currentFixtureName(scenario: string): string {
   return `${scenario}-engine-${SIM_ENGINE_VERSION}-catalog-${CATALOG_VERSION}.ctrl`;
 }

@@ -22,12 +22,12 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v3/ctrl/sources-engine-7-catalog-2.ctrl` is its save (world v3,
- * engine 7; the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
+ * Node's V8 and Chromium's). `fixtures/v3/ctrl/sources-engine-7-catalog-3.ctrl` is its save (world v3,
+ * engine 7, catalogue 3; the `-engine-7-catalog-2` save is 0.4.0's, and the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
  * `-engine-4`, `-engine-5` and `-engine-6` are earlier engines' or catalogues', `engine-changed` too), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/sources-engine-7-catalog-2.ctrl
+ *     --save libs/domain/save-format/fixtures/v3/ctrl/sources-engine-7-catalog-3.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). Its bags are the first supply state in
  * any fixture.
@@ -199,6 +199,20 @@ describe('engine-version collision guard (F2.4 save-format review)', () => {
         expect(loaded.manifest.simEngineVersion).toBe(6);
         expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
       }
+    },
+  );
+
+  it.each(
+    readdirSync(CTRL_FIXTURE_DIR)
+      .filter((f) => f.endsWith('-engine-7-catalog-2.ctrl'))
+      .map((f) => [f]),
+  )(
+    "0.4.0's %s (engine 7, catalogue 2) loads as engine-changed under catalogue 3, never refused (ADR 0019, ADR 0020)",
+    (name) => {
+      const loaded = loadGame(new Uint8Array(readFileSync(join(CTRL_FIXTURE_DIR, name))));
+      if (!loaded.ok) throw new Error(loaded.error.message);
+      expect([loaded.manifest.simEngineVersion, loaded.manifest.catalogVersion]).toStrictEqual([7, 2]);
+      expect(loaded.replay).toMatchObject({ status: 'restarted', reason: 'engine-changed' });
     },
   );
 

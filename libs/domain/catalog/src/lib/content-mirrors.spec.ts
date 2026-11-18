@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { BUILTIN_ACCESSORY_DOCUMENTS } from './builtin-accessories.generated';
 import { BUILTIN_CABLE_DOCUMENTS } from './builtin-cables.generated';
 import { BUILTIN_DEVICE_DOCUMENTS } from './builtin-devices.generated';
+import { BUILTIN_RULE_DOCUMENTS } from './builtin-rules.generated';
 import { BUILTIN_TABLE_DOCUMENTS } from './builtin-tables.generated';
 import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
 
@@ -15,7 +16,7 @@ import { BUILTIN_TOOL_DOCUMENTS } from './builtin-tools.generated';
  * not this test's.
  *
  * Adding a mirrored directory (catalogue v2 added `content/tables/`, F3.4 part 1 `content/tools/`,
- * F3.1 part 2 `content/cables/` and `content/accessories/`) is one row in MIRRORS, then
+ * F3.1 part 2 `content/cables/` and `content/accessories/`, catalogue v3 `content/rules/`) is one row in MIRRORS, then
  * `pnpm nx test catalog -u`, then the generated file's path in `.prettierignore`.
  * A new `content/` directory with no row here, mirrored or not, fails the coverage test below.
  */
@@ -61,6 +62,12 @@ const MIRRORS: readonly ContentMirror[] = [
     generated: 'builtin-accessories.generated.ts',
     exportName: 'BUILTIN_ACCESSORY_DOCUMENTS',
     documents: BUILTIN_ACCESSORY_DOCUMENTS,
+  },
+  {
+    dir: 'rules',
+    generated: 'builtin-rules.generated.ts',
+    exportName: 'BUILTIN_RULE_DOCUMENTS',
+    documents: BUILTIN_RULE_DOCUMENTS,
   },
 ];
 
