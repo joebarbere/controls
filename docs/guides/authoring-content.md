@@ -138,15 +138,17 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Brand          | Makes                                                                        |
 | -------------- | ---------------------------------------------------------------------------- |
 | Brindlecore    | Bench DC supply                                                              |
+| Castellby      | Wiring devices: wall switches, the dimmer, lampholders (P4)                  |
 | Corvelle       | Twist-on wire connectors (wire nuts)                                         |
 | Calderyn       | Torque screwdrivers                                                          |
 | Corriden       | Drill bits (ship augers) and bi-metal hole saws                              |
 | Emberlyn       | Cartridge fuse                                                               |
+| Fennisby       | LED light fixtures (P4)                                                      |
 | Ferrovane      | Sealed lead-acid battery                                                     |
 | Hearthvale     | Heater elements                                                              |
 | Larkmoor Power | Utility services (one brand for the utility)                                 |
 | Lattisby       | Slotted wire duct                                                            |
-| Lumivane       | Incandescent lamps                                                           |
+| Lumivane       | Lamps and bulbs: incandescent and LED                                        |
 | Orrinwood      | Power resistor                                                               |
 | Pellmoor       | Control-panel enclosures                                                     |
 | Penmarrow      | Label printers                                                               |

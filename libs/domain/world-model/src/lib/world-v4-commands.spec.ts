@@ -460,14 +460,49 @@ describe('the single-mount anchor (catalogue v3 `alongMm`, `crossMm`)', () => {
     });
   });
 
-  it('no built-in entry declares a non-zero anchor on a single mount', () => {
-    for (const device of BUILTIN_CATALOG.devices) {
-      for (const fit of device.mounts) {
-        if (mountType(fit.type)?.occupancy === 'single') {
-          expect([device.id, fit.alongMm, fit.crossMm]).toStrictEqual([device.id, 0, 0]);
-        }
-      }
-    }
+  it('the built-in single-mount anchors are exactly the F4.1 part 1 entries’ (bulbs centred on a socket, devices in a gang)', () => {
+    const anchored = BUILTIN_CATALOG.devices.flatMap((device) =>
+      device.mounts
+        .filter((fit) => mountType(fit.type)?.occupancy === 'single' && (fit.alongMm !== 0 || fit.crossMm !== 0))
+        .map((fit) => [device.id, fit.type, fit.alongMm, fit.crossMm]),
+    );
+    expect(anchored).toStrictEqual([
+      ['dimmer.castellby-600w', 'deviceYoke', 1, 1],
+      ['lamp.lumivane-a19-100w', 'e26', -30, -30],
+      ['lamp.lumivane-a19-60w', 'e26', -30, -30],
+      ['light.fennisby-led-wall-15w', 'deviceYoke', -37, -24],
+      ['light.lumivane-led-a19-9w', 'e26', -30, -30],
+      ['switch.castellby-1p-15a', 'deviceYoke', 6, 4],
+      ['switch.castellby-3way-15a', 'deviceYoke', 6, 4],
+      ['switch.castellby-4way-15a', 'deviceYoke', 6, 4],
+    ]);
+  });
+
+  it('a shipped bulb screws into a shipped holder at its anchor, and a switch into a steel box’s yoke', () => {
+    const bus = residentialBench();
+    const holder = { id: 'lampholder.castellby-keyless', version: 1 };
+    const bulb = { id: 'lamp.lumivane-a19-60w', version: 1 };
+    const Z = { yaw: 0, pitch: 0, roll: 0 };
+    expect(code(bus, 'entity.place', { ref: holder, positionMm: at(0, 4000, 0) })).toBeNull();
+    const id = bus.state.nextEntityId - 1;
+    const on = { entity: id, mount: 'socket' };
+    // The socket is at (54, 54, 40) in the holder; the bulb's anchor is (−30, −30).
+    expect(checkMount(bus.state, BUILTIN_CATALOG, bulb, at(24, 4024, 40), Z, on, null)).toBeNull();
+    expect(checkMount(bus.state, BUILTIN_CATALOG, bulb, at(54, 4054, 40), Z, on, null)?.code).toBe('off-mount');
+    expect(placeInWorld(bus.state, bulb, at(40, 4040, 40), [], { catalog: BUILTIN_CATALOG })).toMatchObject({
+      ok: true,
+      kind: 'mount',
+      positionMm: at(24, 4024, 40),
+      mountedOn: on,
+    });
+    const box = { id: 'box.tinmoor-1g-steel', version: 1 };
+    const sw = { id: 'switch.castellby-3way-15a', version: 1 };
+    expect(code(bus, 'entity.place', { ref: box, positionMm: at(1000, 4000, 0) })).toBeNull();
+    const boxId = bus.state.nextEntityId - 1;
+    // The yoke is at (2, 2, 2) inside the box; the switch's anchor is (6, 4).
+    expect(
+      checkMount(bus.state, BUILTIN_CATALOG, sw, at(1008, 4006, 2), Z, { entity: boxId, mount: 'yoke' }, null),
+    ).toBeNull();
   });
 });
 

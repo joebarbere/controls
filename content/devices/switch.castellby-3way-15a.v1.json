@@ -1,0 +1,428 @@
+{
+  "id": "switch.castellby-3way-15a",
+  "version": 1,
+  "title": "15 A 120 V 3-way wall switch",
+  "brand": "Castellby",
+  "modelName": "CB-3W15",
+  "category": "switch",
+  "sizeMm": {
+    "widthMm": 33,
+    "heightMm": 64,
+    "depthMm": 60
+  },
+  "terminals": [
+    {
+      "id": "common",
+      "label": "COMMON",
+      "positionMm": {
+        "x": 0,
+        "y": 20,
+        "z": 45
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 0,
+            "y": 20,
+            "z": 45
+          },
+          "exitAxis": "-x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        },
+        {
+          "method": "backStab",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 14
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 0,
+            "y": 20,
+            "z": 30
+          },
+          "exitAxis": "-x",
+          "clampType": "pushIn",
+          "clampDepthMm": 10,
+          "contactOhm": 0.001,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "ground",
+      "label": "GREEN",
+      "positionMm": {
+        "x": 16,
+        "y": 0,
+        "z": 55
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 16,
+            "y": 0,
+            "z": 55
+          },
+          "exitAxis": "-y",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "t1",
+      "label": "BRASS",
+      "positionMm": {
+        "x": 33,
+        "y": 44,
+        "z": 45
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 33,
+            "y": 44,
+            "z": 45
+          },
+          "exitAxis": "+x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        },
+        {
+          "method": "backStab",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 14
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 33,
+            "y": 44,
+            "z": 30
+          },
+          "exitAxis": "+x",
+          "clampType": "pushIn",
+          "clampDepthMm": 10,
+          "contactOhm": 0.001,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "t2",
+      "label": "BRASS",
+      "positionMm": {
+        "x": 33,
+        "y": 20,
+        "z": 45
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 33,
+            "y": 20,
+            "z": 45
+          },
+          "exitAxis": "+x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        },
+        {
+          "method": "backStab",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 14
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 13,
+            "tolerance": 2
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 33,
+            "y": 20,
+            "z": 30
+          },
+          "exitAxis": "+x",
+          "clampType": "pushIn",
+          "clampDepthMm": 10,
+          "contactOhm": 0.001,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "deviceYoke",
+      "widthMm": 33,
+      "crossMm": 4,
+      "alongMm": 6,
+      "contacts": [
+        {
+          "id": "strap",
+          "terminal": "ground",
+          "host": "chassis",
+          "positionOffset": 0,
+          "contactOhm": 0.005
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "switch.wall3way",
+    "params": {
+      "ratedCurrentA": 15,
+      "ratedVoltageV": 120
+    }
+  },
+  "controls": [
+    {
+      "id": "position",
+      "label": "Switch",
+      "type": "selector",
+      "options": ["t1", "t2"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "switch-rating",
+      "kind": "real-world",
+      "citation": "real-world (product class), read 2026-11-18: residential-grade toggle wall switches (single-pole, 3-way and 4-way) of the 15 A class are marked 15 A at 120 V AC on makers' product listings; general-use snap switches are listed to UL 20 (cited by number). The simulator reads neither value (a closed switch is an ideal join); the inspector and the push-in rule (15 A devices only) do.",
+      "covers": ["model.params.ratedCurrentA", "model.params.ratedVoltageV"]
+    },
+    {
+      "id": "body-layout",
+      "kind": "game-design",
+      "citation": "game-design: the body is drawn 33 mm wide (a residential switch body is about 1.3 in) and 64 mm tall, and 60 mm deep from a box's back wall to a single-gang box's opening, so its face sits at the box front (the strap's ears and the toggle aren't drawn); brass screws on the side faces, 45 mm from the back, the green grounding screw on the bottom face. Not modelled on a product drawing.",
+      "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "yoke-fit",
+      "kind": "game-design",
+      "citation": "game-design: one device per gang by its strap (the deviceYoke mount; outlet-box practice, UL 514A by number). The yoke mount's origin is the gang's inside back-lower-left corner (content caveats), so the 33 × 64 mm body sits 6 mm along and 4 mm up from it, inside a single-gang box's 47 × 72 mm and a 2-gang box's 46 mm gang. Its one strap contact joins the green grounding terminal to a metal box's chassis; whether that alone bonds the device is the inspector's question, not the compiler's.",
+      "covers": ["fits.deviceYoke"]
+    },
+    {
+      "id": "strap-bond-contact",
+      "kind": "game-design",
+      "citation": "game-design (plan D3: a yoke-screw bond is game-design): 5 mΩ from the grounding terminal through the strap and its two mounting screws to a metal box's tapped ears, ten or more times the screw class's 0.2 to 0.5 mΩ for a torqued copper conductor (NBS BSS 103) because the joint is plated steel on steel under small screws at no marked torque; not measured. On a box with no chassis terminal (or a nonmetallic one) the contact adds nothing.",
+      "covers": ["fits.deviceYoke.contacts.strap.contactOhm"]
+    },
+    {
+      "id": "screw-torque",
+      "kind": "real-world",
+      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional switch is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": ["terminals.*.methods.screw.torqueNm"]
+    },
+    {
+      "id": "screw-terminal-class",
+      "kind": "game-design",
+      "citation": "game-design inside a read class: the switch's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: each conductor reaches its terminal from outside the body face the terminal is on and leaves along that face's normal; a push-in hole is drawn on the same side face as its screw, 15 mm behind it (a real device's holes are in its back, which the yoke mount puts against the box's back wall here). Not modelled on a product drawing.",
+      "covers": [
+        "terminals.*.methods.screw.entryMm",
+        "terminals.*.methods.screw.exitAxis",
+        "terminals.*.methods.backStab.entryMm",
+        "terminals.*.methods.backStab.exitAxis"
+      ]
+    },
+    {
+      "id": "screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and Phillips combination head on every terminal screw, the green grounding screw included, common on wiring-device terminal screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit wiring-device screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread and nicks (ADR 0018 §4).",
+      "covers": ["terminals.*.methods.screw.contactOhm"]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), the screw-terminal class's values, as on the P3 lamp holder: the heat path into the device, 0.026 W/K, is calibrated, not measured (with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the Draper point, about 525 °C, and about 1000 °C). The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass screw and terminal plate × about 380 J/(kg·K).",
+      "covers": ["terminals.*.methods.screw.heatPathWPerK", "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"]
+    },
+    {
+      "id": "push-in-class",
+      "kind": "real-world",
+      "citation": "real-world (product class and the P4 pre-audit), read 2026-11-18: the push-in (back-wire) holes of 15 A residential switches accept 14 AWG solid copper only (makers' listings), the pre-audit's push-in limit for 15 A devices (switches listed to UL 20, receptacles to UL 498, both cited by number); one conductor per hole, no torque and no drive, not for aluminium. Only the current-carrying terminals have holes; the grounding screw has none.",
+      "covers": [
+        "terminals.*.methods.backStab.ratedConductors",
+        "terminals.*.methods.backStab.maxConductors",
+        "terminals.*.methods.backStab.awgRange",
+        "terminals.*.methods.backStab.stranding",
+        "terminals.*.methods.backStab.alRated"
+      ]
+    },
+    {
+      "id": "push-in-rules",
+      "kind": "game-design",
+      "citation": "game-design anchored to a read figure: one switch's back strip gauge reads about 1/2 in (12.7 mm; an installation sheet read 2026-11-18), so the strip is 13 mm, ± 2 mm (the tolerance is game-design), the push-in clamp type, and the spring grips the last 10 mm of a fully seated conductor.",
+      "covers": [
+        "terminals.*.methods.backStab.stripLengthMm",
+        "terminals.*.methods.backStab.clampType",
+        "terminals.*.methods.backStab.clampDepthMm"
+      ]
+    },
+    {
+      "id": "push-in-contact",
+      "kind": "game-design",
+      "citation": "game-design (ADR 0018 §4.1, §3.3, §11): R₀ 1 mΩ, the ADR's back-stab value, the worst of its spring, twist-on and push-in examples and inside NBS BSS 128's (1980) 1.5 mΩ assembly acceptance limit; a spring tab's line contact on a solid conductor is a poorer joint than a torqued screw. The hole's spring presses the conductor onto the same brass plate the screw clamps, so its heat path (0.026 W/K) and clamp heat capacity (1.1 J/K) are the screw class's.",
+      "covers": [
+        "terminals.*.methods.backStab.contactOhm",
+        "terminals.*.methods.backStab.heatPathWPerK",
+        "terminals.*.methods.backStab.hotSpotHeatCapacityJPerK"
+      ]
+    }
+  ],
+  "extensions": {}
+}

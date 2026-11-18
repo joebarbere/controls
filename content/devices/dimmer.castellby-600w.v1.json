@@ -1,0 +1,265 @@
+{
+  "id": "dimmer.castellby-600w",
+  "version": 1,
+  "title": "600 W 120 V incandescent wall dimmer",
+  "brand": "Castellby",
+  "modelName": "CB-D600",
+  "category": "switch",
+  "sizeMm": {
+    "widthMm": 44,
+    "heightMm": 70,
+    "depthMm": 60
+  },
+  "terminals": [
+    {
+      "id": "ground",
+      "label": "GREEN",
+      "positionMm": {
+        "x": 22,
+        "y": 0,
+        "z": 55
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 22,
+            "y": 0,
+            "z": 55
+          },
+          "exitAxis": "-y",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "line",
+      "label": "LINE",
+      "positionMm": {
+        "x": 0,
+        "y": 45,
+        "z": 45
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 0,
+            "y": 45,
+            "z": 45
+          },
+          "exitAxis": "-x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "load",
+      "label": "LOAD",
+      "positionMm": {
+        "x": 44,
+        "y": 45,
+        "z": 45
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 44,
+            "y": 45,
+            "z": 45
+          },
+          "exitAxis": "+x",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "deviceYoke",
+      "widthMm": 44,
+      "crossMm": 1,
+      "alongMm": 1,
+      "contacts": [
+        {
+          "id": "strap",
+          "terminal": "ground",
+          "host": "chassis",
+          "positionOffset": 0,
+          "contactOhm": 0.005
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "dimmer.wall",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 600
+    }
+  },
+  "controls": [
+    {
+      "id": "on",
+      "label": "Switch",
+      "type": "toggle"
+    },
+    {
+      "id": "level",
+      "label": "Level",
+      "type": "setpoint",
+      "unit": "level",
+      "min": 0,
+      "max": 1,
+      "step": 0.05
+    }
+  ],
+  "sources": [
+    {
+      "id": "dimmer-rating",
+      "kind": "real-world",
+      "citation": "real-world (product class), read 2026-11-18: single-pole forward-phase (leading-edge) wall dimmers for incandescent loads are commonly marked 600 W at 120 V AC (about 5 A) on makers' listings; wall dimmers are listed to UL 1472 (cited by number). The model takes the rated voltage only as its first guess at the circuit (it then measures it); the rated power is the inspector's.",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
+    },
+    {
+      "id": "body-layout",
+      "kind": "game-design",
+      "citation": "game-design: the body is drawn 44 × 70 mm (a dimmer's heat sink makes it wider than a switch) and 60 mm deep from a box's back wall to a single-gang box's opening; line and load screws on the side faces, the green grounding screw on the bottom face. Many real dimmers have wire leads instead (one listing read gives flying leads for 14 to 10 AWG); a device's own leads can't be spliced in the game, so this one is side-wired like a switch. Not modelled on a product drawing.",
+      "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "yoke-fit",
+      "kind": "game-design",
+      "citation": "game-design: one device per gang by its strap (the deviceYoke mount; outlet-box practice, UL 514A by number). The yoke mount's origin is the gang's inside back-lower-left corner (content caveats), so the 44 × 70 mm body sits 1 mm along and 1 mm up from it, inside a single-gang box's 47 × 72 mm and a 2-gang box's 46 mm gang. Its one strap contact joins the green grounding terminal to a metal box's chassis; whether that alone bonds the device is the inspector's question, not the compiler's.",
+      "covers": ["fits.deviceYoke"]
+    },
+    {
+      "id": "strap-bond-contact",
+      "kind": "game-design",
+      "citation": "game-design (plan D3: a yoke-screw bond is game-design): 5 mΩ from the grounding terminal through the strap and its two mounting screws to a metal box's tapped ears, ten or more times the screw class's 0.2 to 0.5 mΩ for a torqued copper conductor (NBS BSS 103) because the joint is plated steel on steel under small screws at no marked torque; not measured. On a box with no chassis terminal (or a nonmetallic one) the contact adds nothing.",
+      "covers": ["fits.deviceYoke.contacts.strap.contactOhm"]
+    },
+    {
+      "id": "screw-torque",
+      "kind": "real-world",
+      "citation": "real-world (product class), read 2026-11-18: makers' published listings for 15 A residential toggle switches give a terminal-screw torque of 14 to 18 lb·in (1.58 to 2.03 N·m), the range one lampholder maker also publishes (the P3 lamp holder's anchor). The fictional dimmer is marked 1.8 N·m (16 lb·in is 1.808 N·m), inside it; the marking itself is game-design. NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": ["terminals.*.methods.screw.torqueNm"]
+    },
+    {
+      "id": "screw-terminal-class",
+      "kind": "game-design",
+      "citation": "game-design inside a read class: the dimmer's side-wired binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium (not CO/ALR). One switch listing read (2026-11-18) gives 14 to 10 AWG for side wiring; 14 to 12 is used. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (the P3 holder's values, not published figures).",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: each conductor reaches its terminal from outside the body face the terminal is on and leaves along that face's normal. Not modelled on a product drawing.",
+      "covers": ["terminals.*.methods.screw.entryMm", "terminals.*.methods.screw.exitAxis"]
+    },
+    {
+      "id": "screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and Phillips combination head on every terminal screw, the green grounding screw included, common on wiring-device terminal screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit wiring-device screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread and nicks (ADR 0018 §4).",
+      "covers": ["terminals.*.methods.screw.contactOhm"]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), the screw-terminal class's values, as on the P3 lamp holder: the heat path into the device, 0.026 W/K, is calibrated, not measured (with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the Draper point, about 525 °C, and about 1000 °C). The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass screw and terminal plate × about 380 J/(kg·K).",
+      "covers": ["terminals.*.methods.screw.heatPathWPerK", "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"]
+    }
+  ],
+  "extensions": {}
+}

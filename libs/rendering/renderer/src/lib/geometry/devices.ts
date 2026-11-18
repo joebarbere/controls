@@ -96,6 +96,22 @@ export const WIRE_NUT_KIND = 'splice.twistOn';
 /** The utility service model kinds (the stand-in supply), drawn as a service cabinet. */
 export const UTILITY_KINDS = ['utility.splitPhase', 'utility.threePhase'] as const;
 
+/**
+ * The P4 F4.1 part 1 lighting kinds (wall switches, the dimmer, lampholders, the LED bulb and wall
+ * light), drawn by one plain recipe ({@link lightingParts}) until `renderer-engineer`'s own (levers,
+ * a socket, a glowing LED). The A19 incandescent bulbs keep the lamp kind's recipe.
+ */
+export const LIGHTING_KINDS = [
+  'switch.wall1p',
+  'switch.wall3way',
+  'switch.wall4way',
+  'dimmer.wall',
+  'lampholder.e26',
+  'lampholder.e26PullChain',
+  'light.led',
+  'light.ledFixture',
+] as const;
+
 /** Which recipe draws a model kind (given its body size: a cut part's length). Kinds without one are drawn as unknown objects. */
 const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm) => Part[]>> = {
   battery: batteryParts,
@@ -118,6 +134,7 @@ const RECIPES: Readonly<Record<string, (def: DeviceDefinition, size: BodySizeMm)
   [WIRE_NUT_KIND]: wireNutParts,
   'utility.splitPhase': utilityParts,
   'utility.threePhase': utilityParts,
+  ...Object.fromEntries(LIGHTING_KINDS.map((kind) => [kind, lightingParts])),
 };
 
 interface Part {
@@ -205,7 +222,20 @@ const UTILITY_LOOK: Look = {
   opening: hole, // each lug's conductor bore
 };
 
+/** The lighting kinds' plain look (renderer-local, game-design; no maker's trade dress). */
+const LIGHTING_LOOK: Look = {
+  body: plastic(0xece8dc), // ivory moulded body, porcelain or white housing
+  panel: unused,
+  label: plastic(0xf6f6f6),
+  positive: unused,
+  negative: unused,
+  accent: metal(0xc8a24a), // brass terminal screws and contacts
+  bulb: unused,
+  opening: unused,
+};
+
 const LOOKS: Readonly<Record<string, Look>> = {
+  ...Object.fromEntries(LIGHTING_KINDS.map((kind) => [kind, LIGHTING_LOOK])),
   battery: {
     body: plastic(0x2b2d30), // black ABS case
     panel: plastic(0x3a3d42), // lid
@@ -1051,6 +1081,23 @@ function utilityParts(def: DeviceDefinition): Part[] {
     parts.push({ slot: 'accent', geometry: boxBetween(p.x - 9, p.y - 9, d - 1, p.x + 9, p.y + 11, d + proud) });
     parts.push({ slot: 'opening', geometry: cylinderZ(p.x, p.y, 3.5, d + proud, d + proud + 0.3) });
     parts.push({ slot: 'accent', geometry: cylinderY(p.x, d + proud / 2 - 1, 3.5, p.y + 11, p.y + 14) });
+  }
+  return parts;
+}
+
+/**
+ * A lighting device's plain body (F4.1 part 1, until each kind has its own recipe): its catalogue box,
+ * a label plate on its front (z = depth) and a screw head at every terminal a conductor lands on.
+ */
+function lightingParts(def: DeviceDefinition): Part[] {
+  const { widthMm: w, heightMm: h, depthMm: d } = def.sizeMm as NonNullable<DeviceDefinition['sizeMm']>;
+  const parts: Part[] = [
+    { slot: 'body', geometry: boxBetween(0, 0, 0, w, h, d) },
+    { slot: 'label', geometry: boxBetween(w * 0.2, h * 0.8, d, w * 0.8, h * 0.9, d + 0.5) },
+  ];
+  for (const t of def.terminals.filter((x) => x.methods.length > 0)) {
+    const p = t.positionMm;
+    parts.push({ slot: 'accent', geometry: sphere(p.x, p.y, p.z, 3) });
   }
   return parts;
 }

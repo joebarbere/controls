@@ -325,16 +325,19 @@ describe('the as-made contact model (ADR 0018 §4, F3.3 part 1)', () => {
       .flatMap((d) => d.terminals.flatMap((t) => t.methods))
       .filter((m) => m.method === 'screw');
     // The breaker (2), the DIN supply (2), the stand-in service (3), D12's heater (2) and lamp (2), and
-    // F3.5 part 2's screw and ground terminal blocks (2 each), and the screw block's catalogue-3 version 2 (2).
-    expect(methods.length).toBe(17);
+    // F3.5 part 2's screw and ground terminal blocks (2 each), the screw block's catalogue-3 version 2 (2),
+    // and F4.1 part 1's wiring devices: the single-pole, 3-way and 4-way switches (3, 4, 5), the dimmer (3)
+    // and the keyless and pull-chain lampholders (3 each): 17 + 21.
+    expect(methods.length).toBe(38);
     for (const m of methods) {
       expect(m.contactOhm).toBe(3e-4);
       expect(m.heatPathWPerK).toBe(0.026);
       expect(m.combination).toBeNull();
-      // Only the 120 V lamp's side-wired holder screws are binding heads (they splay bare strands).
+      // Only side-wired wiring-device screws are binding heads (they splay bare strands).
       expect(['pressurePlate', 'boxLug', 'bindingScrew']).toContain(m.clampType);
       expect(m.clampDepthMm).toBeLessThanOrEqual(m.stripLengthMm.nominal - m.stripLengthMm.tolerance);
     }
-    expect(methods.filter((m) => m.clampType === 'bindingScrew')).toHaveLength(2);
+    // The 120 V lamp's holder screws (2) and every F4.1 part 1 wiring-device screw (21).
+    expect(methods.filter((m) => m.clampType === 'bindingScrew')).toHaveLength(23);
   });
 });
