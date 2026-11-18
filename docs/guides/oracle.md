@@ -58,3 +58,5 @@ print i(vs0) i(vs1)
 .endc
 .end
 ```
+
+AC decks may also give a source a series inductance (`RI<k>` to `m<k>`, `LI<k>` on to its `b` end, F2.4) and, since engine 8, couple two sources as the split-phase T-equivalent does: a coupled source's path continues through `H<k>` (R_m times its partner's sense current) and `ED<k>` (L_m times the voltage of `LD<k>`, a 1 H inductor that `F<k>` drives with the partner's current), so its row carries (R_m + jωL_m) I_p ([ADR 0012](../decisions/0012-oracle-corpus.md)'s engine 8 amendment).
