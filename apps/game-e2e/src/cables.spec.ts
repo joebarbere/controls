@@ -24,7 +24,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the run (pinned from this spec; the console twin below reaches it too). */
-const RUN_HASH = 'f6d0c04b83bf2dca0484644dd4f56051a48e5f1b7c14c45067c3f14b906b8692';
+const RUN_HASH = 'b387f2f94728b1fba1024d2fe3f7d81b621f83fb84cabdcba7230b397f251650';
 
 const NMB = 'cable.sorrelby-nmb-14-2';
 const SPOOL_BUTTON = '5: NM-B 14/2 with ground, copper, 600 V (spool)';

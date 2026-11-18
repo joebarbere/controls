@@ -149,14 +149,29 @@ describe('the lamp model (golden)', () => {
   it('a saved filament outside the model range is clamped into it at the bank build (never a negative R)', () => {
     const host = benchLampHost();
     const cold = host.withSim(3, { filamentTempK: 200 });
-    expect(cold.sim(3)).toStrictEqual({ filamentTempK: LAMP_AMBIENT_K.value });
+    expect(cold.sim(3)).toStrictEqual({
+      burnedOut: false,
+      filamentTempK: LAMP_AMBIENT_K.value,
+      overvoltageSinceTick: null,
+    });
     cold.operate(2, 'closed', true).advance(10);
     expect(cold.record(3)['status']).toBe('solved');
   });
 
+  it('carries world v4’s burnedOut and overvoltageSinceTick through as saved (engine 7 models neither; ADR 0019)', () => {
+    const saved = benchLampHost().withSim(3, { burnedOut: true, filamentTempK: 300, overvoltageSinceTick: 40 });
+    expect(saved.sim(3)).toMatchObject({ burnedOut: true, overvoltageSinceTick: 40 });
+    saved.operate(2, 'closed', true).advance(10);
+    expect(saved.sim(3)).toMatchObject({ burnedOut: true, overvoltageSinceTick: 40 });
+  });
+
   it('a new lamp starts at ambient: the inrush at the closing solve is E over the cold resistance and the series R', () => {
     const host = benchLampHost();
-    expect(host.sim(3)).toStrictEqual({ filamentTempK: LAMP_AMBIENT_K.value });
+    expect(host.sim(3)).toStrictEqual({
+      burnedOut: false,
+      filamentTempK: LAMP_AMBIENT_K.value,
+      overvoltageSinceTick: null,
+    });
     host.advance(5).operate(2, 'closed', true);
     const peak = host.record(3);
     const expected = 12.9 / (COLD_OHM + 0.023 + 3 * leadOhm);

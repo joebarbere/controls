@@ -51,6 +51,9 @@ describe('exported JSON Schema', () => {
     expect(versionOf('manifest.v3.schema.json', 'schemaVersion')).toBe(3);
     expect(versionOf('world.v3.schema.json', 'schemaVersion')).toBe(3);
     expect(versionOf('replay-log.v3.schema.json', 'schemaVersion')).toBe(3);
+    expect(versionOf('manifest.v4.schema.json', 'schemaVersion')).toBe(4);
+    expect(versionOf('world.v4.schema.json', 'schemaVersion')).toBe(4);
+    expect(versionOf('replay-log.v4.schema.json', 'schemaVersion')).toBe(4);
     expect(versionOf('settings.v1.schema.json', 'settingsVersion')).toBe(1);
     expect(versionOf('settings.v2.schema.json', 'settingsVersion')).toBe(2);
   });

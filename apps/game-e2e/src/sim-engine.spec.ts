@@ -12,7 +12,7 @@ import { startSandbox } from './support/sandbox';
  * drift (ADR 0014), not a golden to re-pin. The `?sab=0` fallback gives the same hashes.
  * Since F2.5 the D6 golden with a lit lamp is `bench-lamp.spec.ts` (`bench-lamp.console`, both transports).
  */
-const SIM_STEP_HASH = 'aa47983d2b1e32da5f9cd1909e29bdaf9c695f7878534579e010aa8dbd930253';
+const SIM_STEP_HASH = 'fd82e0a5f0c9f21dd482fab80b84959dd9641316f89a01baf912afd55c711c98';
 const SIM_STEP_SNAPSHOT_HASH = '155c2cd26fb761cff74036f668e10124738b16fb374c274bd90e23f4730cf57f';
 
 type Hooks = {
@@ -87,7 +87,7 @@ for (const { transport, query } of [
  * must reach the hashes `apps/sim-cli/src/sources.spec.ts` pins under Node: the CV/CC mode, the hiccup
  * ticks and the coulomb counting, byte for byte.
  */
-const SOURCES_HASH = '58be51c364d3206d098233232765f85bfd5fd6b36c5f30ab24ce77e5be1eea2b';
+const SOURCES_HASH = '9175709aa70b9a7226eba34560a3a86cf035e0c728b5e83fccde3e3f24a11b16';
 const SOURCES_SNAPSHOT_HASH = '6201347b0baf66c7f21de96cf7c0f6247a0557b5b9540719d21bde3560e9425e';
 
 test('the sources scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {
@@ -116,7 +116,7 @@ test('the sources scenario reaches the same hashes in the game as sim-cli in Nod
  * F2.4 part 2: the split-phase service's series-inductance phasors across runtimes.
  * `apps/sim-cli/scenarios/mains.console` must reach the hashes `apps/sim-cli/src/mains.spec.ts` pins.
  */
-const MAINS_HASH = '7e85756b604b16b681ca720b3411f3b7fb6eeba93879996a0fa409595cd9e173';
+const MAINS_HASH = '24ffa339c39037e6952df563dd7b39a1195fd9541198ab6f86799bdf1ada8853';
 const MAINS_SNAPSHOT_HASH = '898649e509950d88f3194754ead58a4601773295b7e634575120ae77b9483e68';
 
 test('the mains scenario reaches the same hashes in the game as sim-cli in Node (D6, F2.4)', async ({ page }) => {

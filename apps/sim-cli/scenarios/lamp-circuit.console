@@ -2,7 +2,7 @@
 # spelled out; 'auto' is Trainee's). The same commands as lamp-circuit.ts, which must log exactly these
 # entries; apps/sim-cli/src/lamp-circuit.spec.ts pins LAMP_CIRCUIT_LIT_HASH, LAMP_CIRCUIT_HASH and
 # LAMP_CIRCUIT_SNAPSHOT_HASH. Its save is the frozen fixture
-# libs/domain/save-format/fixtures/v3/ctrl/lamp-circuit-engine-7-catalog-3.ctrl (--save), rebuilt by
+# libs/domain/save-format/fixtures/v4/ctrl/lamp-circuit-engine-7-catalog-3.ctrl (--save), rebuilt by
 # sources.spec.ts.
 #   pnpm sim run apps/sim-cli/scenarios/lamp-circuit.console --world content/levels/workshop.json --difficulty journeyman
 #

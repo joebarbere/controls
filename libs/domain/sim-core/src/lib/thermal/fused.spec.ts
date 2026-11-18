@@ -43,7 +43,7 @@ const screw = (id: number) => ({
 /** The rig (see the file comment), at tick 0 with nothing simulated yet. */
 function shortWorld(): World {
   return World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed: 5,
     tick: 0,
     nextEntityId: 2,
@@ -54,6 +54,7 @@ function shortWorld(): World {
     difficulty: 'trainee',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities: [
       {
         id: 1,
@@ -63,6 +64,7 @@ function shortWorld(): World {
         sim: {},
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -81,6 +83,7 @@ function shortWorld(): World {
         state: {},
         sim: { ...LEAD_SIM_BAG_V3, fused: false },
         extensions: {},
+        marking: { a: null, b: null },
       },
     ],
     cables: [],

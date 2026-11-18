@@ -114,6 +114,8 @@ export function leadConnectCommand(catalog: Catalog = BUILTIN_CATALOG) {
         state: bags.state,
         sim: bags.sim,
         extensions: {},
+        // A lead stays lead-shaped: never taped (world v4, ADR 0019).
+        marking: { a: null, b: null },
       };
       return succeed({
         // The new id is above every existing one, so appending keeps the order.

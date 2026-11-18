@@ -63,6 +63,7 @@ const conductor = (id: number, a: object | null, b: object | null, sim: object =
   state: {},
   sim,
   extensions: {},
+  marking: { a: null, b: null },
 });
 const lead = (id: number) => ({
   id,
@@ -77,6 +78,7 @@ const lead = (id: number) => ({
   state: {},
   sim: { ...LEAD_SIM_BAG_V3 },
   extensions: {},
+  marking: { a: null, b: null },
 });
 
 /**
@@ -85,7 +87,7 @@ const lead = (id: number) => ({
  */
 function thermalWorld(torqueA = 0.8, connections?: unknown[]): World {
   return World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed: 3,
     tick: 0,
     nextEntityId: 2,
@@ -96,6 +98,7 @@ function thermalWorld(torqueA = 0.8, connections?: unknown[]): World {
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities: [
       {
         id: 1,
@@ -105,6 +108,7 @@ function thermalWorld(torqueA = 0.8, connections?: unknown[]): World {
         sim: { thermal: 0, tripped: false },
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },

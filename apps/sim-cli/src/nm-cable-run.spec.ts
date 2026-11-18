@@ -25,14 +25,14 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * player-facing e2e comes with the UI half. Its save is a frozen fixture (save-format review), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/nm-cable-run.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/nm-cable-run-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/nm-cable-run-engine-7-catalog-3.ctrl
  *
  * and rebuilt from the console file by `sources.spec.ts`'s fixture-rebuild check, so `cable.add`,
  * `cable.strip` and a cable conductor's `wire.land` replay are pinned.
  */
 
 /** world.hash after `nm-cable-run.ts`. */
-export const NM_CABLE_RUN_HASH = 'b49c8916c38baba2e7eb6fb0ff6c7544547bf8cb552064746a0606acdc97dfad';
+export const NM_CABLE_RUN_HASH = 'f4460ea0d69737f32137b46e59c3ad76682e2c0c520dd89bf400bef84f99ffdd';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const script = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/nm-cable-run.ts');

@@ -19,14 +19,14 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/drill-and-pull.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/drill-and-pull-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/drill-and-pull-engine-7-catalog-3.ctrl
  *
  * and rebuilt from the console file by `sources.spec.ts`'s fixture-rebuild check, so the cut drill site,
  * `wire.pull` and a cable with a bore replay are pinned.
  */
 
 /** world.hash after `drill-and-pull.ts`. */
-export const DRILL_AND_PULL_HASH = 'd02e5bec4daa15aacd1aa8bb252999460b716a2d6587b2213bff98e96b6ee04d';
+export const DRILL_AND_PULL_HASH = '68341a598e8a23291e0428ec1099f2702b4c86b39e6a11e3910100edc91bce37';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const script = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/drill-and-pull.ts');

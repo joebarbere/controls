@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { assertNoNegativeZero, rawReplayLogV2Arb } from '../../testing/arbitraries';
 import { migrateReplayLog } from '../documents';
 import { replayLogV2ToV3 } from '../v3/from-v2';
+import { replayLogV3ToV4 } from '../v4/from-v3';
 import { ReplayLogV2 } from './replay-log';
 
 const entry = (seq: number, tick = 0, id = 'entity.place', args: Record<string, never> = {}) => ({
@@ -86,7 +87,7 @@ describe('ReplayLogV2', () => {
         expect(ReplayLogV2.parse(JSON.parse(text))).toStrictEqual(parsed);
         expect(migrateReplayLog(JSON.parse(text))).toStrictEqual({
           ok: true,
-          value: replayLogV2ToV3(parsed),
+          value: replayLogV3ToV4(replayLogV2ToV3(parsed)),
           fromVersion: 2,
         });
       }),

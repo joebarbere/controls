@@ -10,15 +10,15 @@ import { workshopWorld } from './testing/workshop';
 /*
  * The protection scenario (F2.5 part 2, save-format review): a save holding a blown fuse, a part-melted
  * fuse and a tripped breaker, through `.ctrl` and the load check, not only through JSON. Its hashes
- * are pinned here; `fixtures/v3/ctrl/protection-engine-<N>-catalog-<C>.ctrl` is its save, written by
+ * are pinned here; `fixtures/v4/ctrl/protection-engine-<N>-catalog-<C>.ctrl` is its save, written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/protection.console --world content/levels/workshop.json \
- *     --save libs/domain/save-format/fixtures/v3/ctrl/protection-engine-7-catalog-3.ctrl
+ *     --save libs/domain/save-format/fixtures/v4/ctrl/protection-engine-7-catalog-3.ctrl
  *
  * (a new fixture for a new engine, never a regenerated one). The fixture-rebuild check in
  * `sources.spec.ts` rebuilds it from the scenario.
  */
-export const PROTECTION_HASH = '2635ccff29f623af7fb7344ecd7d8c6df4561e5264da057f52617565f91643eb';
+export const PROTECTION_HASH = '1f57f7ed65a8efb1b5bd1430fcd9f4bd37eacb863bec1d94ebc4f79a5e0f445d';
 export const PROTECTION_SNAPSHOT_HASH = '5af97022d2958906709fa3730fe89871e632f8472ec6e9abf0d7570b7dc93e6b';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/protection.console');

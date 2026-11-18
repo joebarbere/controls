@@ -1,4 +1,4 @@
-import { type ConnectionV3, type EntityV3, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
+import { type ConnectionV4, type EntityV4, LEAD_SIM_BAG_V3, World } from '@controls/save-format';
 
 /*
  * The bench's wired plant (F3.6 part 1, plan P3 "Budgets", ADR 0015, ADR 0018 §10): 1,000 catalogue
@@ -35,10 +35,10 @@ const THHN_14 = { id: 'conductor.tallowmere-thhn-14-solid', version: 1 };
 
 /** The wired plant's world at tick 0 (sim bags initial, no solution), of `loops` loops. */
 export function buildWiredPlant(loops = WIRED_LOOPS): World {
-  const entities: EntityV3[] = [];
-  const connections: ConnectionV3[] = [];
+  const entities: EntityV4[] = [];
+  const connections: ConnectionV4[] = [];
   let terminations = 0;
-  const place = (ref: { id: string; version: number }, state: EntityV3['state'], sim: EntityV3['sim']): number => {
+  const place = (ref: { id: string; version: number }, state: EntityV4['state'], sim: EntityV4['sim']): number => {
     const id = entities.length + 1;
     const positionMm = { x: (id % 100) * 200, y: 0, z: Math.floor(id / 100) * 200 };
     entities.push({
@@ -49,12 +49,13 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
       sim,
       mountedOn: null,
       inEntry: null,
+      pluggedInto: null,
       label: null,
       extensions: {},
     });
     return id;
   };
-  const connection = (fields: Partial<ConnectionV3> & Pick<ConnectionV3, 'ref' | 'a' | 'b'>) =>
+  const connection = (fields: Partial<ConnectionV4> & Pick<ConnectionV4, 'ref' | 'a' | 'b'>) =>
     connections.push({
       id: connections.length + 1,
       cable: null,
@@ -65,6 +66,7 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
       state: {},
       sim: { ...LEAD_SIM_BAG_V3 },
       extensions: {},
+      marking: { a: null, b: null },
       ...fields,
     });
   const lead = (a: number, at: string, b: number, bt: string) =>
@@ -110,7 +112,7 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
     lead(lamp, 'b', battery, 'neg');
   }
   return World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed: 2026,
     tick: 0,
     nextEntityId: entities.length + 1,
@@ -121,6 +123,7 @@ export function buildWiredPlant(loops = WIRED_LOOPS): World {
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities,
     connections,
     cables: [],

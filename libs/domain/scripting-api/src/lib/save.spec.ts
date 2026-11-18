@@ -1,5 +1,12 @@
 import { CommandRegistry } from '@controls/commands';
-import { createReplayLog, createWorld, CtrlWriteError, readCtrl, writeCtrl } from '@controls/save-format';
+import {
+  createReplayLog,
+  createWorld,
+  CtrlWriteError,
+  CURRENT_SCHEMA_VERSION,
+  readCtrl,
+  writeCtrl,
+} from '@controls/save-format';
 import { TINY_PNG } from '@controls/save-format/testing';
 import { createWorldRegistry, type World, worldHash } from '@controls/world-model';
 import fc from 'fast-check';
@@ -63,8 +70,11 @@ describe('the .ctrl fixtures', () => {
           connections: saved.connections.map((c, i) => ({ ...c, sim: filled(c.sim, materialised.connections[i].sim) })),
         };
         expect({ ...materialised, sim: null }).toStrictEqual(initialised);
+        // World v4's `overvoltageSinceTick` (ADR 0019) is null for "no excursion", a value, not unset.
         for (const entity of materialised.entities) {
-          for (const value of Object.values(entity.sim)) expect(value).not.toBeNull();
+          for (const [key, value] of Object.entries(entity.sim)) {
+            if (key !== 'overvoltageSinceTick') expect(value, key).not.toBeNull();
+          }
         }
         // A lead's end keys stay null (its clips have no hot-spot node); its conductor is initialised.
         for (const connection of materialised.connections) expect(connection.sim['conductorTempK']).not.toBeNull();
@@ -110,7 +120,7 @@ describe('Game.save', () => {
         world: game.world(),
         replayLog: game.replayLog(),
         thumbnail: null,
-        fromVersion: 3,
+        fromVersion: CURRENT_SCHEMA_VERSION,
       },
     });
   });
@@ -132,7 +142,7 @@ describe('loadGame', () => {
     const result = loaded(original.save());
     const game = result.game;
     expect(result.replay).toEqual({ status: 'continued' });
-    expect(result.fromVersion).toBe(3);
+    expect(result.fromVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(result.manifest).toStrictEqual(createManifest());
     expect(game.hash()).toBe(original.hash());
     expect(game.world()).toStrictEqual(original.world());
@@ -266,6 +276,7 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
           inEntry: null,
           label: null,
           extensions: {},
+          pluggedInto: null,
         },
       ],
     }) as World;
@@ -295,7 +306,7 @@ describe('the device check (invalid-device-state, ADR 0013)', () => {
 describe('createSaveManifest', () => {
   it('records the built-in catalogue and the engine version', () => {
     expect(createSaveManifest()).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       catalogVersion: 3,
       simEngineVersion: SIM_ENGINE_VERSION,
     });

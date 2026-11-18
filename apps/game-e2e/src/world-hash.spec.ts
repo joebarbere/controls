@@ -7,11 +7,11 @@ import { startSandbox } from './support/sandbox';
  * game computes them in Chromium through the `?e2e=1` session hook. Change both or neither.
  */
 const GOLDEN = {
-  emptySeed0: '45cb3d322da6233b88642422bee7eaf27cef5325907eaae3b31abd598e6c9fdc',
-  propsAndExtensionsFixture: '7284d19dee71b4307efd523022ca9d195f9697e4bd14bdf93c90360d211bad6d',
-  scenario: '52f3577dc8a1de1800229970a12a70b3db9ecb6ad571e6af9c6c6123bcc73e93',
+  emptySeed0: '8b28cd0b4bbe1a9acc6c02df20f144c8548a9c55b1a11e12bf0a2c01bb049e3b',
+  propsAndExtensionsFixture: '97bf8bac0667dde1722d0e01711f99a24f59d7d995f99a8fe7534a3eac47ea4d',
+  scenario: '4a295adc03a63bbd02579fe306b6f4142c9a50fedc781c7addd6767d3f27c439',
   /** `content/levels/workshop.json` (seed 0): the world the game boots with, and New sandbox with seed 0 (F1.9). */
-  workshopSeed0: 'dffa0c299298023206d272b7af834fb1f378903058743c5ec89745e15c60a969',
+  workshopSeed0: '89152b3aad738c92776f210e3b7f82092e8ed934d447e7758fd034dea79b000f',
 };
 
 /** `libs/domain/save-format/fixtures/v1/world/empty.json`: `createWorld({ seed: 0 })`. */

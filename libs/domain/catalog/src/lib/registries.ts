@@ -1,4 +1,4 @@
-import { CAMEL_ID_PATTERN, TERMINAL_ID_PATTERN } from '@controls/save-format';
+import { CAMEL_ID_PATTERN } from '@controls/save-format';
 import * as z from 'zod';
 
 /*
@@ -512,25 +512,15 @@ export const FAMILY_PREFIXES = Object.freeze({
 /*
  * Catalogue v3 (P4, ADR 0020) vocabularies and id grammars.
  *
- * `OutletId` and `AreaUseId` are the grammars ADR 0019 fixes for world v4 (`EntityV4.pluggedInto.outlet`,
- * `AreaV4.use`). They are defined here until world v4 (PR 7) adds them to `save-format`'s primitives,
- * the source of truth for persisted grammar; then this module re-exports those in place of its own
- * copies, as catalogue v2 did with `ColourId` and the other v3 ids (ADR 0016). `ContactId` is the
- * grammar of a mount contact's id, which a compiled contact branch's `ElementRef` carries (ADR 0019
- * "What the netlist compiler reads" 8) and `topologyHash` hashes.
+ * `OutletId` and `AreaUseId` are the grammars world v4 stores (`EntityV4.pluggedInto.outlet`,
+ * `AreaV4.use`; ADR 0019). They are defined in `save-format`'s primitives, the source of truth for
+ * persisted grammar, and re-exported here (world v4, P4 PR 7), as catalogue v2 did with `ColourId` and
+ * the other v3 ids (ADR 0016): a second schema with the same `.meta({ id })` would collide in the JSON
+ * Schema export. `ContactId` is the grammar of a mount contact's id, which a compiled contact branch's
+ * `ElementRef` carries (ADR 0019 "What the netlist compiler reads" 8) and `topologyHash` hashes; no
+ * save stores it, so it stays here.
  */
-
-/** A receptacle outlet's id, unique within its catalogue entry (TerminalId's grammar; ADR 0019). */
-export const OutletId = z
-  .string()
-  .max(32)
-  .regex(TERMINAL_ID_PATTERN)
-  .meta({ id: 'OutletId', description: 'A receptacle outlet id within one catalogue entry (TerminalId grammar).' });
-export type OutletId = z.infer<typeof OutletId>;
-
-/** A row of {@link AREA_USES} (lower camelCase; ADR 0019). */
-export const AreaUseId = camelId('AreaUseId', 'An area use: a row of the catalogue AREA_USES registry.');
-export type AreaUseId = z.infer<typeof AreaUseId>;
+export { AreaUseId, OutletId } from '@controls/save-format';
 
 /** A mount contact's id, and a mount type's host contact id (lower camelCase, at most 32; ADR 0019, ADR 0020). */
 export const ContactId = camelId('ContactId', 'A mount contact id: lower camelCase, at most 32 characters.');

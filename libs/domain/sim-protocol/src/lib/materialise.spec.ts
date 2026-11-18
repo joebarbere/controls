@@ -19,6 +19,7 @@ function world(): World {
         sim: { stateOfCharge: 1 },
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -30,6 +31,7 @@ function world(): World {
         sim: {},
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -41,6 +43,7 @@ function world(): World {
         sim: { hot: 3 },
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -52,6 +55,7 @@ function world(): World {
         sim: { filamentTempK: null },
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -144,6 +148,7 @@ describe('materialiseWorld (ADR 0011 §1, ADR 0013)', () => {
       state: {},
       sim: { ...LEAD_SIM_BAG_V3 },
       extensions: {},
+      marking: { a: null, b: null },
     });
     const busWorld = World.parse({ ...world(), nextConnectionId: 3, connections: [lead(1), lead(2)] });
     const bag = { ...LEAD_SIM_BAG_V3, conductorTempK: 300.5 };

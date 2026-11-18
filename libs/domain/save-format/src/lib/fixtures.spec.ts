@@ -179,17 +179,35 @@ const REFUSED_V3: Record<string, string> = {
   'world/waypoint-host-missing.json': 'A waypoint host must exist',
 };
 
-describe('v3 fixtures that must not load as they are', () => {
-  const dir = join(fixturesRoot, 'v3/refused');
+/** `fixtures/v4/refused/<kind>/*.json`, with the message each must be refused with (ADR 0019 invariants 9–11). */
+const REFUSED_V4: Record<string, string> = {
+  'world/area-empty-box.json': 'An area’s maxMm is greater than its minMm on every axis',
+  'world/area-named-like-fixture.json': 'An area id is not a fixture id',
+  'world/areas-unsorted.json': 'Area ids must be unique and sorted in ascending order',
+  'world/lead-with-marking.json': 'A lead carries no marking: { a: null, b: null }',
+  'world/outlet-shared.json': 'At most one plug is in each outlet',
+  'world/plug-cycle.json': 'Mounts, entries and plugs must not form a cycle',
+  'world/plugged-and-mounted.json': 'A plugged entity is neither mounted nor in an entry',
+  'world/plugged-into-itself.json': 'An entity is not plugged into itself',
+  'world/plugged-into-missing.json': 'An entity is plugged into an entity that exists',
+};
+
+describe.each([
+  [3, REFUSED_V3],
+  [4, REFUSED_V4],
+] as const)('v%i fixtures that must not load as they are', (version, refused) => {
+  const dir = join(fixturesRoot, `v${version}/refused`);
   const files = readdirSync(dir).flatMap((kind) => readdirSync(join(dir, kind)).map((name) => `${kind}/${name}`));
 
   it('every refused fixture is listed with its rule', () => {
-    expect(files.sort()).toStrictEqual(Object.keys(REFUSED_V3).sort());
+    expect(files.sort()).toStrictEqual(Object.keys(refused).sort());
   });
 
-  it.each(Object.entries(REFUSED_V3))('refused/%s is refused (%s)', (file, message) => {
+  it.each(Object.entries(refused))('refused/%s is refused (%s)', (file, message) => {
+    const json = JSON.parse(readFileSync(join(dir, file), 'utf8')) as Record<string, unknown>;
+    expect(json['schemaVersion'], 'fixture is in the wrong version directory').toBe(version);
     const migrator = file.startsWith('world/') ? worldMigrator : replayLogMigrator;
-    const result = migrator.migrate(JSON.parse(readFileSync(join(dir, file), 'utf8')));
+    const result = migrator.migrate(json);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe('invalid');

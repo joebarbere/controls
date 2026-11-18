@@ -79,7 +79,11 @@ describe('MODEL_KINDS', () => {
         fused: 'sim boolean false',
         insulationDamaged: 'sim boolean false',
       },
-      'lamp.incandescent': { filamentTempK: 'sim number null' },
+      'lamp.incandescent': {
+        burnedOut: 'sim boolean false',
+        filamentTempK: 'sim number null',
+        overvoltageSinceTick: 'sim number null',
+      },
       // ADR 0015: the connection sim keys (world v3's ConnectionV3.sim), provisional until v0.4.0.
       lead: {
         conductorTempK: 'sim number null',
@@ -231,7 +235,10 @@ describe('device state bags', () => {
   it('a new device starts with every key at its initial value', () => {
     expect(initialBags(spst)).toStrictEqual({ state: { closed: false }, sim: {} });
     expect(initialBags(battery)).toStrictEqual({ state: {}, sim: { stateOfCharge: 1 } });
-    expect(initialBags(MODEL_KINDS['lamp.incandescent'])).toStrictEqual({ state: {}, sim: { filamentTempK: null } });
+    expect(initialBags(MODEL_KINDS['lamp.incandescent'])).toStrictEqual({
+      state: {},
+      sim: { burnedOut: false, filamentTempK: null, overvoltageSinceTick: null },
+    });
     for (const kind of kinds) {
       const bags = initialBags(kind);
       expect(checkBags(kind, bags.state, bags.sim)).toStrictEqual([]);

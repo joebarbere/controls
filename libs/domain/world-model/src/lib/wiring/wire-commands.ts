@@ -107,6 +107,8 @@ function newConductor(
     state: bags.state,
     sim: bags.sim,
     extensions: {},
+    // World v4: a new conductor has no tape (`wire.mark` adds it, ADR 0019).
+    marking: { a: null, b: null },
   };
 }
 

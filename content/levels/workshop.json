@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "seed": 0,
   "tick": 0,
   "nextEntityId": 1,
@@ -74,6 +74,7 @@
       "extensions": {}
     }
   ],
+  "areas": [],
   "entities": [],
   "connections": [],
   "cables": [],

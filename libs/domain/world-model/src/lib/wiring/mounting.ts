@@ -6,6 +6,7 @@ import {
   deviceMountWidthMm,
   type EnclosureMount,
   mountType,
+  offeredMounts,
 } from '@controls/catalog';
 import { type CommandFailure, fail } from '@controls/commands';
 import { findEntity } from '../entity-commands';
@@ -143,7 +144,10 @@ export function checkMount(
   const host = findEntity(world, mountedOn.entity);
   if (!host) return fail('not-found', `No entity with id ${mountedOn.entity}`);
   if (host.id === self) return fail('unknown-mount', 'A device is never mounted on itself');
-  const mount = catalog.device(host.ref)?.enclosure?.mounts.find((m) => m.id === mountedOn.mount);
+  // The host's offered mounts (catalogue v3): an enclosure's, or a non-enclosure's `hostMounts` (a
+  // lampholder's `e26`), so a host need not be an enclosure (world v4, ADR 0020 R5).
+  const hostDevice = catalog.device(host.ref);
+  const mount = hostDevice && offeredMounts(hostDevice).find((m) => m.id === mountedOn.mount);
   if (!mount) return fail('unknown-mount', `Entity ${mountedOn.entity} has no mount "${mountedOn.mount}"`);
   if (!catalog.device(ref)?.mounts.some((m) => m.type === mount.type)) {
     return fail('mount-mismatch', `${ref.id} does not fit a ${mount.type} mount`);

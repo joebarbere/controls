@@ -5,8 +5,10 @@ import {
   checkControlValue,
   CUT_LENGTH_KEY,
   type DeviceDefinition,
+  areaUse,
   isCutToLength,
   type ModelKindDef,
+  offeredMounts,
   TERMINATION_METHODS,
 } from '@controls/catalog';
 import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
@@ -20,6 +22,7 @@ import { checkTailReach, landedPoint } from './wiring/checks';
 import { boredHoleTooLarge, BORED_HOLE_MAX, cableInFraming, maxStripAtBoxMm, supportGap } from './wiring/framing';
 import { checkInEntry, connectorsInEntry } from './wiring/in-entry';
 import { checkMount } from './wiring/mounting';
+import { checkPlugInsert } from './wiring/plug';
 import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from './types';
 
 /*
@@ -38,12 +41,24 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  *   each control's value inside the entry's control range (`checkControlValue`, as `device.operate`);
  * - a built-in prop (`prop.*` at version 1) has no device state: both bags are empty;
  * - an enclosure's `openEntries` has no bit at or above its catalogue entry's number of entries;
- * - `mountedOn` names a mount the host's catalogue entry has, of a type the device declares it fits,
- *   and both are axis-aligned;
+ * - `mountedOn` names a mount the host's catalogue entry offers (`offeredMounts`: an enclosure's
+ *   mounts or a non-enclosure's `hostMounts`, world v4), of a type the device declares it fits, and
+ *   both are axis-aligned;
  * - `inEntry` (ADR 0015 F3.4 part 2 note 4) passes exactly `entity.place`'s `checkInEntry`: a conduit
  *   connector, in an open entry of its trade size of an enclosure, its entry end exactly at the entry
  *   pointing in, with room (`maxCables`, counting the entry's cable ends). Where the catalogue doesn't
  *   know the host it is left alone.
+ * - (world v4, ADR 0019) `pluggedInto` passes exactly `plug.insert`'s `checkPlugInsert` for a plug
+ *   already in place: the appliance's entry has a plug, the receptacle's has that outlet, the
+ *   configurations mate (`nemaMates`), both are at quarter-turns and the cord reaches; where the
+ *   catalogue doesn't know either entity it is left alone (a built-in prop is never plugged in, and has
+ *   no outlets: a plug into one is refused, never left alone, as is a mount on one). An
+ *   entry that both fits a mount and has a plug is refused by the catalogue itself (`parseCatalog`);
+ * - (world v4) a `directory<n>` text key above the entry's panel `spaces` is `null`
+ *   (`directoryKeyProblems`). Counters (catalogue v3 `counter` keys) are non-negative integers through
+ *   `checkBags`, like every key's own schema.
+ *
+ * Areas (world v4): each `use` is a row of `AREA_USES`.
  *
  * Connections:
  * - the ref is a connection kind, lead-shaped exactly when the kind isn't a conductor kind, with
@@ -52,6 +67,8 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  * - each landed end's terminal exists (props have none); a termination's method is one of that
  *   terminal's methods, and its accessory (if the catalogue knows it) is an accessory the method takes;
  * - a conductor's colour is in the colour table and one its entry is made in;
+ * - (world v4) each end's tape (`marking`) is a colour-table id and never `bare` (not a tape colour);
+ *   which colour is correct is the inspector's, never the load check's;
  * - a bore waypoint's tool (if known) is a tool that can bore, within the bored-hole limit
  *   (`BORED_HOLE_MAX`, F3.2 part 4); a hosted waypoint's known host and a
  *   known device with a landed end are axis-aligned;
@@ -79,6 +96,35 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
 /** At most this many issues are reported. */
 const MAX_ISSUES = 20;
 
+/** The colour-table id of bare copper: a conductor colour, never a tape colour (world v4, ADR 0019). */
+const BARE_COLOUR = 'bare';
+
+/** A panel directory key (ADR 0019 deviation 5): `directory<space>`, space from 1. */
+const DIRECTORY_KEY = /^directory([1-9][0-9]*)$/;
+
+/**
+ * Each `directory<n>` text key of `kind` that holds text although `n` is above the entry's panel
+ * spaces (world v4, ADR 0019 deviation 5: `directory1` … `directory42` are one key per space of the
+ * largest panel, and a smaller panel's keys above its `spaces` stay `null`). On an entry with no
+ * spaces every directory key stays `null`; a kind without directory keys has no problems.
+ */
+export function directoryKeyProblems(
+  kind: ModelKindDef,
+  device: DeviceDefinition,
+  state: Readonly<Record<string, unknown>>,
+): ValidationIssue[] {
+  const spaces = device.enclosure?.spaces.length ?? 0;
+  const problems: ValidationIssue[] = [];
+  for (const name of Object.keys(kind.keys).sort()) {
+    const space = DIRECTORY_KEY.exec(name)?.[1];
+    if (space === undefined || kind.keys[name].type !== 'text') continue;
+    if (Number(space) > spaces && state[name] !== null && state[name] !== undefined) {
+      problems.push({ path: `state.${name}`, message: `Space ${space} is above the panel's ${spaces}: it stays null` });
+    }
+  }
+  return problems;
+}
+
 const sameRef = (a: CatalogRef, b: CatalogRef): boolean => a.id === b.id && a.version === b.version;
 
 /**
@@ -88,6 +134,9 @@ const sameRef = (a: CatalogRef, b: CatalogRef): boolean => a.id === b.id && a.ve
 export function checkWorldReferences(world: World, catalog: Catalog = BUILTIN_CATALOG): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const add = (path: string, message: string) => issues.push({ path, message });
+  world.areas.forEach((area, index) => {
+    if (!areaUse(area.use)) add(`areas[${index}].use`, 'Not an area use (AREA_USES)');
+  });
   world.entities.forEach((entity, index) => checkEntity(world, entity, `entities[${index}]`, catalog, add));
   world.connections.forEach((connection, index) =>
     checkConnection(world, connection, `connections[${index}]`, catalog, add),
@@ -104,6 +153,7 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
       if (Object.keys(entity[bag]).length > 0) add(`${at}.${bag}`, 'A built-in prop has no device state');
     }
     if (entity.inEntry !== null) add(`${at}.inEntry`, 'A built-in prop is in no entry (only a conduit connector is)');
+    if (entity.pluggedInto !== null) add(`${at}.pluggedInto`, 'A built-in prop has no cord plug');
     return;
   }
   const kind = catalog.kindOf(entity.ref);
@@ -128,6 +178,24 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   if (device.enclosure !== null && typeof openEntries === 'number' && Number.isInteger(openEntries)) {
     if (Math.floor(openEntries / 2 ** device.enclosure.entries.length) !== 0) {
       add(`${at}.state.openEntries`, 'Opens an entry the enclosure does not have');
+    }
+  }
+  for (const problem of directoryKeyProblems(kind, device, entity.state)) add(`${at}.${problem.path}`, problem.message);
+  if (entity.pluggedInto !== null) {
+    const host = findEntity(world, entity.pluggedInto.entity) as Entity; // the schema guarantees it exists
+    // A built-in prop isn't a catalogue device, but it is known: it has no outlets (`plug.insert` refuses
+    // it as `not-a-receptacle`), so it is never left alone like an unknown ref.
+    if (isBuiltinPropRef(host.ref)) {
+      add(`${at}.pluggedInto`, 'A built-in prop has no outlets');
+    } else if (catalog.device(host.ref)) {
+      // Exactly the command's check, for a plug already in place (its own outlet isn't "occupied").
+      const refused = checkPlugInsert(
+        world,
+        catalog,
+        { appliance: entity.id, receptacle: host.id, outlet: entity.pluggedInto.outlet },
+        { existing: true },
+      );
+      if (refused) add(`${at}.pluggedInto`, `Not a plug the receptacle takes there (${refused.code})`);
     }
   }
   // A cut-to-length raceway's length is one `raceway.cut` could have made (F3.5 part 2): within the
@@ -156,9 +224,14 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   }
   if (entity.mountedOn !== null) {
     const host = findEntity(world, entity.mountedOn.entity) as Entity; // the schema guarantees it exists
+    // A built-in prop offers no mounts (`checkMount` refuses it as `unknown-mount`): known, so checked.
+    if (isBuiltinPropRef(host.ref)) {
+      add(`${at}.mountedOn`, 'A built-in prop has no mounts');
+      return;
+    }
     const hostDevice = catalog.device(host.ref);
     if (!hostDevice) return;
-    const mount = hostDevice.enclosure?.mounts.find((m) => m.id === entity.mountedOn?.mount);
+    const mount = offeredMounts(hostDevice).find((m) => m.id === entity.mountedOn?.mount);
     if (!mount) {
       add(`${at}.mountedOn.mount`, "Not a mount of the host's catalogue entry");
       return;
@@ -237,6 +310,12 @@ function checkConnection(world: World, connection: Connection, at: string, catal
     if (conductor && !conductor.colours.some((c) => c.base === base && c.stripe === stripe)) {
       add(`${at}.colour`, 'The conductor entry is not made in that colour');
     }
+  }
+  for (const end of ['a', 'b'] as const) {
+    const tape = connection.marking[end];
+    if (tape === null) continue;
+    if (tape === BARE_COLOUR) add(`${at}.marking.${end}`, 'Bare is not a tape colour');
+    else if (!catalog.colour(tape)) add(`${at}.marking.${end}`, 'Not in the colour table');
   }
   checkRouteReferences(world, connection.route ?? [], `${at}.route`, catalog, add);
   const [pa, pb] = points;

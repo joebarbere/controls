@@ -16,7 +16,7 @@ import { startSandbox } from './support/sandbox';
  */
 
 /** `world.hash` after the one `wire.add` (pinned from this suite; the three surfaces must agree). */
-const ROUTED_HASH = '490d77416ac1d769101fc3463cf309da43f4bd8240ea800b9d3a8b01a25c54f0';
+const ROUTED_HASH = '80f130c405242144ae3be6477464c55afc11261c9b52944095055ed4b4f0e6e3';
 
 const THHN = 'conductor.tallowmere-thhn-14-solid';
 /**

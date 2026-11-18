@@ -15,7 +15,7 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  */
 
 /** world.hash after `din-panel-breaker.console`. The game-e2e driver must match it. */
-export const DIN_PANEL_BREAKER_HASH = '1a66183aff4660050c4764268e48c9903553d0e85bb104b4cc13a541af344404';
+export const DIN_PANEL_BREAKER_HASH = 'a2e7b4ef67142be2f7229161016f73b70f18c2016122ab3d687e578ca97d7822';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

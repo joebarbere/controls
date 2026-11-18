@@ -1,0 +1,399 @@
+{
+  "schemaVersion": 4,
+  "seed": 20261117,
+  "tick": 41200,
+  "nextEntityId": 11,
+  "nextConnectionId": 1,
+  "nextCableId": 1,
+  "nextTerminationId": 1,
+  "regionId": "nec",
+  "difficulty": "apprentice",
+  "assisted": false,
+  "fixtures": [],
+  "areas": [],
+  "entities": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "enclosure.fixture-load-centre-24",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 0,
+          "y": 1000,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true,
+        "coverOn": true,
+        "openEntries": 3,
+        "directory1": "KITCHEN SA 1",
+        "directory2": "KITCHEN SA 2",
+        "directory3": "BATH GFCI",
+        "directory4": null,
+        "directory5": "BEDROOMS AFCI",
+        "directory6": null,
+        "directory7": null,
+        "directory8": null,
+        "directory9": null,
+        "directory10": null,
+        "directory11": null,
+        "directory12": null,
+        "directory13": null,
+        "directory14": null,
+        "directory15": null,
+        "directory16": null,
+        "directory17": null,
+        "directory18": null,
+        "directory19": null,
+        "directory20": null,
+        "directory21": null,
+        "directory22": null,
+        "directory23": null,
+        "directory24": null,
+        "directory25": null,
+        "directory26": null,
+        "directory27": null,
+        "directory28": null,
+        "directory29": null,
+        "directory30": null,
+        "directory31": null,
+        "directory32": null,
+        "directory33": null,
+        "directory34": null,
+        "directory35": null,
+        "directory36": null,
+        "directory37": null,
+        "directory38": null,
+        "directory39": null,
+        "directory40": null,
+        "directory41": null,
+        "directory42": null
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": "PANEL A",
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "breaker.fixture-plug-on-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 100,
+          "y": 1500,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "magneticSinceTick": 41195,
+        "thermal": 0.6243,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "bus-left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 3,
+      "ref": {
+        "id": "breaker.fixture-gfci-1p-20a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 100,
+          "y": 1525,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true,
+        "test": 0
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "residualIntegral": 1,
+        "residualSinceTick": 41190,
+        "testHeldSinceTick": null,
+        "thermal": 0.0125,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "bus-left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 4,
+      "ref": {
+        "id": "breaker.fixture-afci-1p-15a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 100,
+          "y": 1550,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true,
+        "test": 0
+      },
+      "sim": {
+        "arcExposure": 0.7305,
+        "arcLastSeenTick": 41100,
+        "magneticSinceTick": null,
+        "thermal": 0,
+        "tripCause": "arcFault",
+        "tripped": true
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "bus-left"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 5,
+      "ref": {
+        "id": "breaker.fixture-plug-on-2p-30a",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 160,
+          "y": 1500,
+          "z": 50
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": false
+      },
+      "sim": {
+        "magneticSinceTick": null,
+        "thermalL1": 0.21,
+        "thermalL2": 0.2075,
+        "tripCause": null,
+        "tripped": false
+      },
+      "mountedOn": {
+        "entity": 1,
+        "mount": "bus-right"
+      },
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 6,
+      "ref": {
+        "id": "receptacle.fixture-gfci-5-20r",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 2400,
+          "y": 400,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "reset": 2,
+        "test": 3
+      },
+      "sim": {
+        "latched": false,
+        "residualIntegral": 0,
+        "residualSinceTick": null,
+        "testHeldSinceTick": null,
+        "tripCause": "groundFault"
+      },
+      "mountedOn": null,
+      "inEntry": null,
+      "label": "BATH",
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 7,
+      "ref": {
+        "id": "lamp.lumivane-120v-60w",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 3000,
+          "y": 2400,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {},
+      "sim": {
+        "burnedOut": true,
+        "filamentTempK": 2950.5,
+        "overvoltageSinceTick": 40960
+      },
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 8,
+      "ref": {
+        "id": "appliance.fixture-hair-dryer",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 2500,
+          "y": 900,
+          "z": 200
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "on": true
+      },
+      "sim": {
+        "overvoltageSinceTick": null
+      },
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": {
+        "entity": 6,
+        "outlet": "top"
+      }
+    },
+    {
+      "id": 9,
+      "ref": {
+        "id": "switch.fixture-wall-3way",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 500,
+          "y": 1200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "position": "t2"
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    },
+    {
+      "id": 10,
+      "ref": {
+        "id": "dimmer.fixture-wall",
+        "version": 1
+      },
+      "transform": {
+        "positionMm": {
+          "x": 600,
+          "y": 1200,
+          "z": 0
+        },
+        "orientationMdeg": {
+          "yaw": 0,
+          "pitch": 0,
+          "roll": 0
+        }
+      },
+      "state": {
+        "level": 0.35,
+        "on": true
+      },
+      "sim": {},
+      "mountedOn": null,
+      "inEntry": null,
+      "label": null,
+      "extensions": {},
+      "pluggedInto": null
+    }
+  ],
+  "connections": [],
+  "cables": [],
+  "sim": null,
+  "extensions": {}
+}

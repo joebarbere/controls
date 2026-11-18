@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 4,
+  "initialWorld": {
+    "schemaVersion": 4,
+    "seed": 0,
+    "tick": 0,
+    "nextEntityId": 1,
+    "nextConnectionId": 1,
+    "nextCableId": 1,
+    "nextTerminationId": 1,
+    "regionId": "nec",
+    "difficulty": "apprentice",
+    "assisted": false,
+    "fixtures": [],
+    "areas": [],
+    "entities": [],
+    "connections": [],
+    "cables": [],
+    "sim": null,
+    "extensions": {}
+  },
+  "firstSeq": 0,
+  "entries": [],
+  "endTick": 0
+}

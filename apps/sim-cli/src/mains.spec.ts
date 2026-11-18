@@ -11,7 +11,7 @@ import { workshopWorld } from './testing/workshop';
  * inductance's phasors (Node's V8 against Chromium's). Since F3.6 part 2 it stops at tick 10, before
  * either lead fuses (an 18 AWG lead carrying kiloamps reaches copper's melting point within tens of ms).
  */
-export const MAINS_HASH = '7e85756b604b16b681ca720b3411f3b7fb6eeba93879996a0fa409595cd9e173';
+export const MAINS_HASH = '24ffa339c39037e6952df563dd7b39a1195fd9541198ab6f86799bdf1ada8853';
 export const MAINS_SNAPSHOT_HASH = '898649e509950d88f3194754ead58a4601773295b7e634575120ae77b9483e68';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/mains.console');

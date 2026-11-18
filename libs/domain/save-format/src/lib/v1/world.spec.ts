@@ -3,6 +3,7 @@ import { assertNoNegativeZero, rawWorldV1Arb } from '../../testing/arbitraries';
 import { migrateWorld } from '../documents';
 import { worldV1ToV2 } from '../v2/from-v1';
 import { worldV2ToV3 } from '../v3/from-v2';
+import { worldV3ToV4 } from '../v4/from-v3';
 import { MAX_COORDINATE_MM, WorldV1 } from './world';
 
 const crate = (id: number, x = 0) => ({
@@ -137,7 +138,7 @@ describe('WorldV1', () => {
         expect(WorldV1.parse(w)).toStrictEqual(w);
         // The loader agrees with the schema, and migrates the world to the current version.
         const loaded = migrateWorld(JSON.parse(text));
-        expect(loaded).toStrictEqual({ ok: true, value: worldV2ToV3(worldV1ToV2(w)), fromVersion: 1 });
+        expect(loaded).toStrictEqual({ ok: true, value: worldV3ToV4(worldV2ToV3(worldV1ToV2(w))), fromVersion: 1 });
       }),
     );
   });

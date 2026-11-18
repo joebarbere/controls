@@ -1,7 +1,7 @@
 import type { CommandBus } from '@controls/commands';
 import { createWorld, migrateReplayLog, World } from '@controls/save-format';
 import { BUILTIN_CATALOG } from '@controls/catalog';
-import { catalogRefArb, deepFreeze, rawWorldV3Arb } from '@controls/save-format/testing';
+import { catalogRefArb, deepFreeze, rawWorldV4Arb } from '@controls/save-format/testing';
 import fc from 'fast-check';
 import { entityCommands } from './entity-commands';
 import { cableCommands, enclosureCommands, racewayCommands, wireCommands } from './wiring';
@@ -113,7 +113,7 @@ function deleteTarget(world: World, target: { withLeads: boolean; pick: number }
   const pool = world.entities;
   return target.pick < pool.length ? pool[target.pick].id : world.nextEntityId + target.pick;
 }
-const worldArb = rawWorldV3Arb.map((raw) => World.parse(raw));
+const worldArb = rawWorldV4Arb.map((raw) => World.parse(raw));
 
 function pickId(bus: CommandBus<World>, index: number): number {
   const entities = bus.state.entities;

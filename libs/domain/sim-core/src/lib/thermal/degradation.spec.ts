@@ -91,7 +91,7 @@ const screw = (id: number, torqueNm: number) => ({
  */
 function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = THHN_14): World {
   return World.parse({
-    schemaVersion: 3,
+    schemaVersion: 4,
     seed,
     tick,
     nextEntityId: 2,
@@ -102,6 +102,7 @@ function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = TH
     difficulty: 'apprentice',
     assisted: false,
     fixtures: [],
+    areas: [],
     entities: [
       {
         id: 1,
@@ -111,6 +112,7 @@ function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = TH
         sim: { thermal: 0, tripped: false },
         mountedOn: null,
         inEntry: null,
+        pluggedInto: null,
         label: null,
         extensions: {},
       },
@@ -129,6 +131,7 @@ function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = TH
         state: {},
         sim: { ...LEAD_SIM_BAG_V3, ...sim1 },
         extensions: {},
+        marking: { a: null, b: null },
       },
       {
         id: 2,
@@ -143,6 +146,7 @@ function benchWorld(torqueA = 4, sim1: object = {}, seed = 3, tick = 0, ref = TH
         state: {},
         sim: { ...LEAD_SIM_BAG_V3 },
         extensions: {},
+        marking: { a: null, b: null },
       },
     ],
     cables: [],

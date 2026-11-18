@@ -203,7 +203,11 @@ describe('load determinism properties (F2.5)', () => {
   it('starts from the bench demo with the lamp at ambient and the switch closed', () => {
     const host = loadBench();
     expect(host.bus.state.entities.map((e) => e.ref.id)).toStrictEqual([BATTERY.id, SPST.id, LAMP.id]);
-    expect(host.sim(3)).toStrictEqual({ filamentTempK: LAMP_AMBIENT_K.value });
+    expect(host.sim(3)).toStrictEqual({
+      burnedOut: false,
+      filamentTempK: LAMP_AMBIENT_K.value,
+      overvoltageSinceTick: null,
+    });
     expect(host.record(3)['currentA']).toBeGreaterThan(5);
   });
 });

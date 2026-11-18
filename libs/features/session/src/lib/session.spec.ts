@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
-import { createWorld, readCtrl } from '@controls/save-format';
+import { createWorld, CURRENT_SCHEMA_VERSION, readCtrl } from '@controls/save-format';
 import { createGame, loadGame, replayGame, runConsoleScript } from '@controls/scripting-api';
 import { worldHash } from '@controls/world-model';
 import { FakeSimWorker } from '../testing/fake-sim-worker';
@@ -204,7 +204,11 @@ describe('Session', () => {
     expect(session.canUndo()).toBe(false);
     expect(session.entries()).toEqual([]);
     session.exec('entity.place', place);
-    expect(session.replayLog()).toMatchObject({ schemaVersion: 3, initialWorld: world, entries: [{ seq: 0 }] });
+    expect(session.replayLog()).toMatchObject({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      initialWorld: world,
+      entries: [{ seq: 0 }],
+    });
   });
 
   it('runs the same code as a scripting-api game: same console lines, same hash, same replay log', async () => {

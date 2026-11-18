@@ -21,13 +21,13 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * so the lamp's island was recorded unsolved (0 iterations, zeros); since engine 5 (F2.5) the lamp is
  * modelled and the circuit is solved: the switch is closed, so the lamp is lit at tick 0's solve.
  */
-export const BENCH_LEADS_HASH = 'e4aa37718a1aa816ce643df637857001a8185fdf19bcdac5f4a7972c69330d37';
+export const BENCH_LEADS_HASH = '116c53b763453eb4889831567608c025a34ec8c3684941eb27675ad40229588d';
 
 /** What engines 3 and 4 (the lamp unmodelled) wrote for the same world, read as world v3 (`b2124245…6b45` as v2). */
-const ENGINE_3_HASH = '5d8ac8b0a805cb68c3b34b1a914853b171cff2bc8474058e084094563a73ee7a';
+const ENGINE_3_HASH = 'f1f41d231b6b362907ef894c3aeec4efe46b197d542320abdcf5f0a9a212a4fd';
 
 /** What engine 1 (the world v2 kickoff, before the engine ran) wrote: `sim: null`, read as world v3 (`1825e8ba…cead` as v2). */
-const ENGINE_1_HASH = '68e0ba457502adb24f562141e611a337e60e4500d3b860feadc6eba9f2f2f574';
+const ENGINE_1_HASH = '7bcc776daae3f87008ad02b256c7262a6203cf19da4f276b5822886fc097e1a4';
 
 const bundle = join(WORKSPACE_ROOT, 'dist/apps/sim-cli/main.mjs');
 const scenarios = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios');

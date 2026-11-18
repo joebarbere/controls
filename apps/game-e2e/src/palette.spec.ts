@@ -13,7 +13,7 @@ import { enterSeed } from './support/sandbox';
  * that file, so the palette path is checked against the console-line path. Change them together.
  * The session is the workshop level with seed 0 (F1.9), typed into the new-game dialog.
  */
-const PALETTE_PLACE_UNDO_HASH = '573a33a935a76d59c17d0f3eb36302ecac279c67705eaf0e8b65c743790ea88b';
+const PALETTE_PLACE_UNDO_HASH = 'e89fd4ed5db7719a8f0750700a0a81bbc570f286f2fe6c4bee6eeafd809fc8cc';
 
 const SCENARIO = join(workspaceRoot, 'apps/sim-cli/scenarios/palette-place-undo.console');
 

@@ -22,6 +22,7 @@ const entity = (id: number, ref: Entity['ref'], state: Entity['state'] = {}, sim
   inEntry: null,
   label: null,
   extensions: {},
+  pluggedInto: null,
 });
 
 function world(entities: Entity[], connections: World['connections'] = []): World {
@@ -47,6 +48,7 @@ const lead = (id: number, a: [number, string], b: [number, string], ref = LEAD) 
   state: {},
   sim: { ...LEAD_SIM_BAG_V3 },
   extensions: {},
+  marking: { a: null, b: null },
 });
 
 const fixtures = join(import.meta.dirname, '../../../save-format/fixtures');
@@ -75,13 +77,32 @@ describe('checkWorldReferences (the invalid-device-state load check)', () => {
   it('refuses a lamp filament temperature outside 200–3600 K (a 1 K save would give a negative R, F2.5 review)', () => {
     const LAMP = { id: 'lamp.lumivane-12v-5w', version: 1 };
     const lamp = (filamentTempK: number | null) =>
-      checkWorldReferences(world([entity(1, LAMP, {}, { filamentTempK })]));
+      checkWorldReferences(
+        world([entity(1, LAMP, {}, { burnedOut: false, filamentTempK, overvoltageSinceTick: null })]),
+      );
     for (const ok of [null, 200, 293.15, 3600]) expect(lamp(ok)).toStrictEqual([]);
     for (const bad of [1, 65, 199.9, 3600.1]) {
       expect(lamp(bad)).toStrictEqual([
         { path: 'entities[0].sim.filamentTempK', message: 'Not a valid lamp.incandescent filamentTempK value' },
       ]);
     }
+  });
+
+  it('refuses a lamp bag without world v4’s burnedOut and overvoltageSinceTick, or with bad values (ADR 0019)', () => {
+    const LAMP = { id: 'lamp.lumivane-120v-60w', version: 1 };
+    const lamp = (sim: Entity['sim']) => checkWorldReferences(world([entity(1, LAMP, {}, sim)]));
+    expect(lamp({ burnedOut: true, filamentTempK: 2950, overvoltageSinceTick: 41_000 })).toStrictEqual([]);
+    expect(lamp({ filamentTempK: null }).map((i) => i.path)).toStrictEqual([
+      'entities[0].sim.burnedOut',
+      'entities[0].sim.overvoltageSinceTick',
+    ]);
+    expect(lamp({ burnedOut: 1, filamentTempK: null, overvoltageSinceTick: -1 }).map((i) => i.path)).toStrictEqual([
+      'entities[0].sim.burnedOut',
+      'entities[0].sim.overvoltageSinceTick',
+    ]);
+    expect(lamp({ burnedOut: false, filamentTempK: null, overvoltageSinceTick: 1.5 }).map((i) => i.path)).toStrictEqual(
+      ['entities[0].sim.overvoltageSinceTick'],
+    );
   });
 
   it("checks each control's value against the entry's control range (a crafted 1e9 V setpoint)", () => {
@@ -148,21 +169,24 @@ describe('checkWorldReferences (the invalid-device-state load check)', () => {
     expect(checkWorldReferences(World.parse({ ...world([]), nextEntityId: 31, entities: many }))).toHaveLength(20);
   });
 
-  it('every level, every v2 world fixture (migrated) and every v3 world fixture passes', () => {
+  it('every level, every v2 world fixture (migrated) and every v3 and v4 world fixture passes', () => {
     const paths = [
       ...readdirSync(levels).map((name) => join(levels, name)),
       ...['empty', 'props-and-extensions', 'devices-sim-null', 'bench-lamp-mid-interval'].map((name) =>
         join(fixtures, 'v2/world', `${name}.json`),
       ),
-      ...readdirSync(join(fixtures, 'v3/world'))
-        .filter((name) => name.endsWith('.json'))
-        .map((name) => join(fixtures, 'v3/world', name)),
+      ...['v3/world', 'v4/world'].flatMap((dir) =>
+        readdirSync(join(fixtures, dir))
+          .filter((name) => name.endsWith('.json'))
+          .map((name) => join(fixtures, dir, name)),
+      ),
     ];
     for (const path of paths) {
       const loaded = migrateWorld(json(path));
       if (!loaded.ok) throw new Error(`${path}: ${loaded.error.message}`);
-      // The bench-lamp fixture's fuses and the v3 fixtures' conductors, cables, boxes and panels aren't
-      // in the catalogue yet: unknown refs, left alone.
+      // The bench-lamp fixture's fuses, the v3 fixtures' conductors, cables, boxes and panels and the
+      // v4 fixtures' receptacles, appliances, breakers and load centre aren't in the catalogue yet:
+      // unknown refs, left alone (the v4 burned-out lamp is a real entry and is checked).
       expect(checkWorldReferences(loaded.value), path).toStrictEqual([]);
     }
   });

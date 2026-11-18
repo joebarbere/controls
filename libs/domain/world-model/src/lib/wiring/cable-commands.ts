@@ -133,6 +133,7 @@ export function cableAddCommand(catalog: Catalog = BUILTIN_CATALOG) {
           state: bags.state,
           sim: bags.sim,
           extensions: {},
+          marking: { a: null, b: null },
         };
       });
       const next = first + conductors.length;
