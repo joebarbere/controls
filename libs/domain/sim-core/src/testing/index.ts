@@ -7,3 +7,4 @@ export * from './wired-loop';
 export * from './residential';
 export * from './devices';
 export * from './plug-on';
+export * from './afci';

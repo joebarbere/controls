@@ -1,10 +1,10 @@
 import type { CommandBus } from '@controls/commands';
 import { migrateWorld, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '@controls/world-model';
-import { decodeSnapshot, materialiseWorld, type SimEvent } from '@controls/sim-protocol';
+import { decodeSnapshot, materialiseWorld, type SimEvent, SimEventSchema } from '@controls/sim-protocol';
 import { SimEngine, type SimEngineOptions } from '../lib/engine/engine';
 import { BATTERY, end } from './bench';
-import { engineBus, engineTestOptions, GENERATOR, RESISTOR_2_4, RHEOSTAT, SERVICE } from './engine';
+import { engineBus, engineTestOptions, GENERATOR, RESISTOR_2_4, RHEOSTAT, ROD, SERVICE } from './engine';
 
 /*
  * Helpers for F2.4's source specs: the refs of the built-in sources (the battery is `BATTERY` in
@@ -33,7 +33,21 @@ export const SOURCE_SESSION_REFS = Object.freeze({
   'utility.threePhase': { id: 'utility.larkmoor-208y120-150kva', version: 1 },
   'generator.portable': GENERATOR,
   'service.splitPhase': SERVICE,
+  'electrode.groundRod': ROD,
 });
+
+/**
+ * `events`, each parsed with the wire's `SimEventSchema` (protocol 8: every kind's detail exactly), so
+ * every spec on a `SourceHost` fails at once on an event the worker's message parse would refuse (a
+ * refused event fails the whole sim link in the game). Throws naming the event.
+ */
+export function checkedEvents(events: readonly SimEvent[]): readonly SimEvent[] {
+  for (const event of events) {
+    const parsed = SimEventSchema.safeParse(event);
+    if (!parsed.success) throw new Error(`an event the protocol refuses: ${JSON.stringify(event)}`);
+  }
+  return events;
+}
 
 /** A world bus and an engine that follows it, on the engine test catalogue and models. */
 export class SourceHost {
@@ -74,7 +88,7 @@ export class SourceHost {
     const result = this.bus.exec(id, args);
     if (!result.ok) throw new Error(`${id} ${JSON.stringify(args)} failed: ${JSON.stringify(result.error)}`);
     if (result.logged) this.engine.applied(result.entry, this.bus.state);
-    this.events.push(...this.engine.takeEvents());
+    this.events.push(...checkedEvents(this.engine.takeEvents()));
     return this;
   }
 
@@ -99,7 +113,7 @@ export class SourceHost {
   advanceTo(tick: number): this {
     this.engine.advanceTo(tick);
     this.bus.advanceTo(tick);
-    this.events.push(...this.engine.takeEvents());
+    this.events.push(...checkedEvents(this.engine.takeEvents()));
     return this;
   }
 

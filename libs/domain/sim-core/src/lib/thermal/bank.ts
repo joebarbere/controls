@@ -642,6 +642,8 @@ export class ConnectionThermalBank {
         }
         view.setFloat64(at + (side === 0 ? O.endATempK : O.endBTempK), this.th[e] + 0, true);
         view.setFloat64(at + (side === 0 ? O.endAContactOhm : O.endBContactOhm), r + 0, true);
+        // Protocol 8: the end's degradation factor D (≥ 1, never falls), own state.
+        view.setFloat64(at + (side === 0 ? O.endADegradation : O.endBDegradation), this.degradation[e] + 0, true);
       }
       view.setUint8(at + (side === 0 ? O.endAState : O.endBState), code);
       if (side === 0) ra = r;

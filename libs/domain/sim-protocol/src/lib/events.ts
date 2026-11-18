@@ -4,10 +4,14 @@
  * never in any hash, never persisted.
  */
 
+import type { TripCauseValue } from './device-output';
+
 /**
  * The event kinds. Adding one bumps `SIM_PROTOCOL_VERSION`. Protocol 7 (F3.6 part 3, ADR 0018 §6):
  * the connection events `terminationOverheat` (a termination's hot spot crossed ambient + 100 K
- * upwards) and `insulationDamaged` (the step that set a connection's sticky flag).
+ * upwards) and `insulationDamaged` (the step that set a connection's sticky flag). Protocol 8 (P4,
+ * ADR 0019 "Protocol 8"): `lampBurnout` (the step that set a lamp's sticky `burnedOut`) and
+ * `overvoltage` (a device's voltage past its region's Range B for the sourced dwell, F4.4).
  */
 export const SIM_EVENT_KINDS = Object.freeze([
   'tripped',
@@ -18,8 +22,51 @@ export const SIM_EVENT_KINDS = Object.freeze([
   'overRated',
   'terminationOverheat',
   'insulationDamaged',
+  'lampBurnout',
+  'overvoltage',
 ] as const);
 export type SimEventKind = (typeof SIM_EVENT_KINDS)[number];
+
+/**
+ * Each event kind's `detail`, typed (protocol 8: the message schema parses each kind's detail exactly,
+ * so a `tripped` cause outside {@link TRIP_CAUSE_VALUES} or a missing temperature is an invalid
+ * message, never a free-form string):
+ *
+ * - `tripped`: `{ cause }`, every breaker kind (the DIN breaker's `thermal | magnetic`; the plug-on,
+ *   GFCI and AFCI breakers' and, from P4 PR 13, the GFCI receptacle's full list);
+ * - `hiccup`: `{ phase: 'off' | 'retry' }`;
+ * - `terminationOverheat`, `insulationDamaged`: `{ temperatureK }` (the node after the step);
+ * - `lampBurnout`: `{ filamentTempK }` (the filament after the step that burned it out);
+ * - `overvoltage`: `{ voltageV }` (the device's RMS voltage when the dwell completed);
+ * - every other kind: `{}`.
+ */
+export interface SimEventDetails {
+  readonly tripped: { readonly cause: TripCauseValue };
+  readonly blown: Readonly<Record<string, never>>;
+  readonly hiccup: { readonly phase: 'off' | 'retry' };
+  readonly nonConverged: Readonly<Record<string, never>>;
+  readonly singular: Readonly<Record<string, never>>;
+  readonly overRated: Readonly<Record<string, never>>;
+  readonly terminationOverheat: { readonly temperatureK: number };
+  readonly insulationDamaged: { readonly temperatureK: number };
+  readonly lampBurnout: { readonly filamentTempK: number };
+  readonly overvoltage: { readonly voltageV: number };
+}
+
+/** `event`'s detail typed by its kind, or `null` when it is another kind (`simEventDetail(e, 'tripped')?.cause`). */
+export function simEventDetail<K extends SimEventKind>(event: SimEvent, kind: K): SimEventDetails[K] | null {
+  return event.kind === kind ? (event.detail as unknown as SimEventDetails[K]) : null;
+}
+
+/** Device events (protocol 8 lists them): `entity` set, `entities` empty, `connection` null. */
+export const DEVICE_EVENT_KINDS: readonly SimEventKind[] = Object.freeze([
+  'tripped',
+  'blown',
+  'hiccup',
+  'overRated',
+  'lampBurnout',
+  'overvoltage',
+]);
 
 /** Island events (raised on the rising edge of the island's flag, with the island's entities). */
 export const ISLAND_EVENT_KINDS: readonly SimEventKind[] = Object.freeze(['nonConverged', 'singular']);
@@ -45,8 +92,11 @@ export interface SimEvent {
    */
   readonly end: 'a' | 'b' | null;
   /**
-   * Kind-specific detail: hiccup `{ phase: 'off' | 'retry' }`; a connection event `{ temperatureK }`
-   * (the node's temperature after the step that raised it); `{}` otherwise.
+   * Kind-specific detail ({@link SimEventDetails}, parsed per kind on the wire since protocol 8): a
+   * `tripped` event's `{ cause }`; hiccup `{ phase: 'off' | 'retry' }`; a connection event
+   * `{ temperatureK }` (the node's temperature after the step that raised it); `lampBurnout`
+   * `{ filamentTempK }`; `overvoltage` `{ voltageV }`; `{}` otherwise. Read it typed through
+   * {@link simEventDetail}.
    */
   readonly detail: Readonly<Record<string, number | string | boolean>>;
 }

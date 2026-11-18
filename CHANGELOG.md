@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Protocol 8: records for the residential kinds, degradation factors and typed events** (P4 PR 11, decision D18; [ADR 0011 amendment](docs/decisions/0011-sim-worker-contract.md#amendment-protocol-8-residential-records-and-events-p4), [simulation caveats](docs/caveats/simulation.md#protocol-8-records-and-events-p4-pr-11)). `SIM_PROTOCOL_VERSION` stays 8, provisional until 0.5.0; its fingerprint is re-pinned in place (`5eb42d62…6b15` → `ff52fee2…289b2de7`). Signed off by `renderer-engineer` and `angular-ui-engineer` (the latter on condition of the typed `emit`, done).
+  - **Device records** for every engine 8 kind on main: the plug-on breakers (per-pole current, thermal fraction and pickup, the drawn opening time, `state` and `tripCause`, always written: read a trip from `state`, never the handle), the GFCI breaker (neutral current, `residualMa`, `pickupMa`, `residualIntegral`, `testHeld`, the line-side and load-side voltages), the AFCI breaker (`arcExposure`, `arcingDownstream`), the service (each drop conductor's current, the utility grounding's, the meter base's voltages) and the ground rod (its current and `touchVoltageV`, its potential rise against remote earth). The GFCI and AFCI records carry a `readings` bit field: a field is a reading only with its bit, which its schema names (`readingBit`, read through `isDeviceReading`), so a generic display shows no reading, never 0 V. The lamp's record gains `burnedOut` (status moves to byte 49, still last).
+  - **Pending schemas** for the LED lamp and fixture and the dimmer (`PENDING_DEVICE_OUTPUT_SCHEMAS`), which P4 PR 12 registers without moving the fingerprint.
+  - **Connection records** gain `endADegradation` and `endBDegradation` (each end's degradation factor; 104 → 120 bytes, checked at module load to stay every f64 then every u8). A cooled end that degraded now reads `degraded` in the wire readout (`degraded at end a (contact resistance 3.22× original)`, "3.22 times" in the live region; a hot one `degrading … (above the oxidation onset; contact resistance 1.8× original)`), `degraded N times` in the netlist panel and `degradation N` in `wire.info`, where before it read normal once below the oxidation onset.
+  - **Events:** `lampBurnout` and `overvoltage` (schemas only: P4 PR 12 and F4.4 emit them); every kind's detail is parsed exactly on the wire, so a `tripped` event's `cause` is one of `thermal`, `magnetic`, `groundFault`, `arcFault`, `test` (`TRIP_CAUSE_VALUES`, the catalogue's `TRIP_CAUSES`), read typed with `simEventDetail`. A mismatched detail would fail the whole sim link, so sim-core's `emit` is typed by `SimEventDetails` (a wrong detail doesn't compile) and a spec parses every emitter's events with the wire schema.
+  - **Allocation:** every new record writer is gated at 0 B a call; the lamp's record writer, which boxed two doubles a call, no longer does (bit-identical).
+  - **Moved pins** (snapshot hashes only, from the connection records' new layout and the lamp record's `burnedOut` and `status` move; no world hash, save, `topologyHash` or `netlist.dump` golden moved, `SIM_ENGINE_VERSION` stays 8). Old → new:
+
+  | Pin                                               | Old                 | New                 |
+  | ------------------------------------------------- | ------------------- | ------------------- |
+  | `LAMP_CIRCUIT_LIT_SNAPSHOT_HASH`                  | `649d0adb…1777b4ec` | `44818cbb…a05eff96` |
+  | `LAMP_CIRCUIT_SNAPSHOT_HASH`                      | `0b4e387f…683269ae` | `995d6070…e8f2426a` |
+  | `BAD_TERMINATION_SNAPSHOT_HASH`                   | `db7924fd…2b9d8968` | `859d3ec0…9227ed6b` |
+  | `BENCH_LAMP_SNAPSHOT_HASH`                        | `9858632b…9c4c66f1` | `357509f4…b5a0a0cc` |
+  | `BENCH_LAMP_LIT_SNAPSHOT_HASH`                    | `928d6ee2…bd174008` | `b378caa2…fa499aae` |
+  | `MAINS_SNAPSHOT_HASH`                             | `13164c91…98185a9b` | `19fb43a7…c093be92` |
+  | `PROTECTION_SNAPSHOT_HASH`                        | `5af97022…7dc93e6b` | `355038b1…8013aadf` |
+  | `SIM_STEP_SNAPSHOT_HASH`                          | `155c2cd2…730cf57f` | `aea05b1f…882c6c55` |
+  | `SOURCES_SNAPSHOT_HASH`                           | `6201347b…60e9425e` | `128ac07a…23a65c84` |
+  | `wire-info/bad-termination.txt` (`degradation 1`) | golden text         | re-pinned           |
+
 - **Breakers v2, the GFCI and the AFCI, headless** (P4 PR 10, F4.2 part 1, decisions D6–D8; [ADR 0021](docs/decisions/0021-service-grounding-and-protection-physics.md) part 2, [simulation caveats](docs/caveats/simulation.md#breakers-v2-the-gfci-and-the-afci-p4-pr-10)), on test-only catalogue entries until the content PRs.
   - **New model kinds** `breaker.plugOn1p`, `breaker.plugOn2p` (one bimetal and one pickup per pole, a common trip), `breaker.gfci1p` and `breaker.afci1p` (a pigtail neutral and a load-neutral terminal), with ADR 0019's keys unchanged and now final, `TRIP_CAUSES`, parameter schemas whose magnetic band is in absolute amperes (the DIN entry's 8–12 × can't be carried over) and their `device-state.*.schema.json`.
   - **Thermal and magnetic:** the P2 bimetal law (116.84 s, 29.72 s, 3.872 s and 0.9449 s at 135 %, 200 %, 500 % and 10 ×, inside the read bands; never at k_u I_n); above a pickup drawn in 240–400 A the breaker opens after an opening time drawn in 8–20 ms (`magneticSinceTick` persisted, so a save inside the window opens at the same tick), not within the tick.

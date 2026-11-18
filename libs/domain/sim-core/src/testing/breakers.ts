@@ -23,6 +23,10 @@ export interface BankRig {
   runToTrip(limit: number): number;
   /** One protection step; returns its result. */
   step(): boolean;
+  /** Sets node `node`'s voltage (V, a phasor). */
+  volts(node: number, re: number, im?: number): BankRig;
+  /** The device's record (protocol 8), written into a fresh zeroed buffer of its schema's size. */
+  record(): DataView;
 }
 
 /**
@@ -39,6 +43,11 @@ export function bankRig(
     readonly seed?: number;
     readonly entity?: number;
     readonly tick?: number;
+    /**
+     * Terminal → node (protocol 8's records read voltages between terminals): nodes index the rig's
+     * solution, `2 * parts.length` of them (each branch's two ends first), every one on island 0.
+     */
+    readonly nodes?: Readonly<Record<string, number>>;
   } = {},
 ): BankRig {
   const seed = options.seed ?? 11;
@@ -47,7 +56,7 @@ export function bankRig(
   const netlist = {
     branches,
     islands: [{ kind: 'ac' }],
-    nodes: parts.flatMap(() => [{}, {}]),
+    nodes: parts.flatMap(() => [{ island: 0 }, { island: 0 }]),
   } as unknown as Netlist;
   const solution = {
     branches: new Float64Array(2 * parts.length),
@@ -75,7 +84,7 @@ export function bankRig(
       branches: branches.map((b) => b.index),
       frequencyHz: 60,
       stream: () => deriveStream(seed, entityStreamKey(entity)),
-      ...deviceExtras(seed, entity, parts),
+      ...deviceExtras(seed, entity, parts, { nodes: options.nodes ?? {} }),
     },
   ]);
   const rig: BankRig = {
@@ -87,6 +96,16 @@ export function bankRig(
       solution.branches[2 * b] = re;
       solution.branches[2 * b + 1] = im;
       return rig;
+    },
+    volts(node, re, im = 0) {
+      solution.nodes[2 * node] = re;
+      solution.nodes[2 * node + 1] = im;
+      return rig;
+    },
+    record() {
+      const view = new DataView(new ArrayBuffer(model.output?.recordBytes ?? 0));
+      bank.writeRecord?.(0, view, 0, ctx as unknown as LayerContext);
+      return view;
     },
     step() {
       const changed = (bank.protection as (c: LayerContext) => boolean)(ctx as unknown as LayerContext);

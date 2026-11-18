@@ -43,8 +43,10 @@ export function fakeView(descriptor: TopologyDescriptor, section: DataView): Sna
   } as unknown as SnapshotView;
 }
 
-/** Writes a lamp record's light output and status code at `offset`. */
+/** Writes a lamp record's light output and status code at `offset` (protocol 8: `status` at 49, after `burnedOut`). */
 export function writeLamp(section: DataView, offset: number, light: number, status: number): void {
-  section.setFloat64(offset + 40, light, true);
-  section.setUint8(offset + 48, status);
+  const fields = DEVICE_OUTPUT_SCHEMAS['lamp.incandescent'].fields;
+  const at = (name: string) => offset + (fields.find((f) => f.name === name)?.offset ?? -1);
+  section.setFloat64(at('lightOutputRel'), light, true);
+  section.setUint8(at('status'), status);
 }

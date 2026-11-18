@@ -2,7 +2,8 @@ import { ReplayEntry, ReplayLog, World } from '@controls/save-format';
 import * as z from 'zod';
 import { isSharedArrayBuffer } from './buffer';
 import { ElementRefSchema, type TopologyDescriptor, TopologyDescriptorSchema } from './descriptor';
-import { SIM_EVENT_KINDS, type SimEvent } from './events';
+import { TRIP_CAUSE_VALUES } from './device-output';
+import { SIM_EVENT_KINDS, type SimEvent, type SimEventKind } from './events';
 import { SimStateExport } from './materialise';
 
 /*
@@ -88,16 +89,44 @@ export type SimStartReason = z.infer<typeof SimStartReason>;
 /** Host-side rejections of a pending query (never on the wire). */
 export type SimQueryError = 'superseded' | 'timeout' | 'crashed' | 'unavailable';
 
-const SimEventSchema = z.strictObject({
-  tick: Tick,
-  kind: z.enum(SIM_EVENT_KINDS),
-  entity: z.int().min(1).nullable(),
-  entities: z.array(z.int().min(1)),
-  /** Protocol 7: the connection of a connection event, else null. */
-  connection: z.int().min(1).nullable(),
-  end: z.enum(['a', 'b']).nullable(),
-  detail: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
-});
+/** A finite number (every event detail number is, ADR 0011 §5.3). */
+const Finite = z.number().refine(Number.isFinite, 'finite');
+const Empty = z.strictObject({});
+
+/**
+ * Each event kind's `detail` (protocol 8, `SimEventDetails`): parsed exactly, so a cause outside the
+ * enum, a missing temperature or an extra key is an invalid message.
+ */
+const SIM_EVENT_DETAIL_SCHEMAS = {
+  tripped: z.strictObject({ cause: z.enum(TRIP_CAUSE_VALUES) }),
+  blown: Empty,
+  hiccup: z.strictObject({ phase: z.enum(['off', 'retry']) }),
+  nonConverged: Empty,
+  singular: Empty,
+  overRated: Empty,
+  terminationOverheat: z.strictObject({ temperatureK: Finite }),
+  insulationDamaged: z.strictObject({ temperatureK: Finite }),
+  lampBurnout: z.strictObject({ filamentTempK: Finite }),
+  overvoltage: z.strictObject({ voltageV: Finite }),
+} as const satisfies Record<SimEventKind, z.ZodType>;
+
+const simEventOf = <K extends SimEventKind>(kind: K) =>
+  z.strictObject({
+    tick: Tick,
+    kind: z.literal(kind),
+    entity: z.int().min(1).nullable(),
+    entities: z.array(z.int().min(1)),
+    /** Protocol 7: the connection of a connection event, else null. */
+    connection: z.int().min(1).nullable(),
+    end: z.enum(['a', 'b']).nullable(),
+    detail: SIM_EVENT_DETAIL_SCHEMAS[kind],
+  });
+
+/** One sim event on the wire, discriminated by `kind` (each kind's detail typed, protocol 8). */
+export const SimEventSchema = z.discriminatedUnion(
+  'kind',
+  SIM_EVENT_KINDS.map(simEventOf) as unknown as [ReturnType<typeof simEventOf>, ...ReturnType<typeof simEventOf>[]],
+);
 
 /** Worker → main. */
 export const WorkerToHost = z.discriminatedUnion('type', [

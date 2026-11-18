@@ -11,10 +11,19 @@ export interface DeviceOutputField {
   readonly type: DeviceOutputFieldType;
   /** Naturally aligned within the record. */
   readonly offset: number;
-  /** An SI symbol (`W`, `K`, `V`, `A`), or `null` for ratios and enums. */
+  /**
+   * A unit symbol (`W`, `K`, `V`, `A`, `Ω`; protocol 8 adds the prefixed `mA` and `ms` its field names
+   * carry, `residualMa`, `openingMs`), or `null` for ratios, enums and bit fields.
+   */
   readonly unit: string | null;
   /** `u8` enums: the code-to-name table; `null` otherwise. */
   readonly values: readonly string[] | null;
+  /**
+   * Protocol 8: the bit in the record's `readings` field that says whether this field is a reading
+   * (`DEVICE_READING_*`; absent for a field without one). A field whose bit is clear is no reading,
+   * never 0 A or 0 V: read it through {@link isDeviceReading}.
+   */
+  readonly readingBit?: number;
 }
 
 export interface DeviceOutputSchema {
@@ -53,6 +62,15 @@ export function deviceOutputSchemaProblems(schema: DeviceOutputSchema): string[]
     if (field.offset + size > schema.recordBytes) problems.push(`${field.name}: past the end of the record`);
     if (FIELD_RANK[field.type] < rank) problems.push(`${field.name}: out of order (f64, then 4-byte, then u8)`);
     if (field.values !== null && field.type !== 'u8') problems.push(`${field.name}: only u8 fields have enum values`);
+    if (field.readingBit !== undefined) {
+      const bit = field.readingBit;
+      if (!(Number.isInteger(bit) && bit > 0 && bit <= 128 && (bit & (bit - 1)) === 0)) {
+        problems.push(`${field.name}: readingBit must be one bit of a u8`);
+      }
+      if (!schema.fields.some((f) => f.name === 'readings' && f.type === 'u8' && f.values === null)) {
+        problems.push(`${field.name}: a readingBit needs a u8 readings field`);
+      }
+    }
     rank = FIELD_RANK[field.type];
     end = field.offset + size;
   }
@@ -66,11 +84,59 @@ export function deviceOutputSchemaProblems(schema: DeviceOutputSchema): string[]
  */
 export const RECORD_STATUS_VALUES: readonly string[] = Object.freeze(['unsolved', 'solved', 'unsettled', 'singular']);
 
-const f64 = (name: string, offset: number, unit: string | null): DeviceOutputField =>
-  Object.freeze({ name, type: 'f64', offset, unit, values: null });
+const f64 = (name: string, offset: number, unit: string | null, readingBit?: number): DeviceOutputField =>
+  Object.freeze(
+    readingBit === undefined
+      ? { name, type: 'f64', offset, unit, values: null }
+      : { name, type: 'f64', offset, unit, values: null, readingBit },
+  );
 const u8Enum = (name: string, offset: number, values: readonly string[]): DeviceOutputField =>
   Object.freeze({ name, type: 'u8', offset, unit: null, values: Object.freeze([...values]) });
+const u8Bits = (name: string, offset: number): DeviceOutputField =>
+  Object.freeze({ name, type: 'u8', offset, unit: null, values: null });
 const status = (offset: number): DeviceOutputField => u8Enum('status', offset, RECORD_STATUS_VALUES);
+
+/**
+ * Why a breaker tripped, by code (protocol 8): `none` (0: not tripped), then the causes of a trip
+ * ({@link TRIP_CAUSE_VALUES}). A record's `tripCause` and a `tripped` event's `detail.cause` use these
+ * names; the catalogue's `TRIP_CAUSES` (the persisted `tripCause` key) is the same list, which a
+ * sim-core spec pins.
+ */
+export const TRIP_CAUSE_VALUES = Object.freeze(['thermal', 'magnetic', 'groundFault', 'arcFault', 'test'] as const);
+export type TripCauseValue = (typeof TRIP_CAUSE_VALUES)[number];
+/** A record's `tripCause` field values by code: `none`, then {@link TRIP_CAUSE_VALUES}. */
+export const RECORD_TRIP_CAUSE_VALUES: readonly string[] = Object.freeze(['none', ...TRIP_CAUSE_VALUES]);
+
+/** A breaker's `state` values by code (the DIN breaker's, shared by every breaker kind): the handle and the trip. */
+export const BREAKER_STATE_VALUES: readonly string[] = Object.freeze(['off', 'on', 'tripped']);
+
+/**
+ * The `readings` bits of a protocol 8 record that reads more than one island or a voltage between two
+ * terminals (the GFCI and AFCI breakers): which electrical fields are a reading. A clear bit means no
+ * reading (the field is written 0 and is never shown as 0 A or 0 V), whatever `status` says; the
+ * connection records' rule (ADR 0011's protocol 7 amendment §3).
+ */
+export const DEVICE_READING_CURRENT = 1;
+export const DEVICE_READING_NEUTRAL_CURRENT = 2;
+export const DEVICE_READING_RESIDUAL = 4;
+export const DEVICE_READING_LINE_VOLTAGE = 8;
+export const DEVICE_READING_LOAD_VOLTAGE = 16;
+
+/** The LED lamp's and fixture's record (protocol 8, pending): one layout for both kinds. */
+function ledSchema(kind: string): DeviceOutputSchema {
+  return Object.freeze({
+    kind,
+    recordBytes: 40,
+    fields: Object.freeze([
+      f64('powerW', 0, 'W'),
+      f64('voltageV', 8, 'V'),
+      f64('currentA', 16, 'A'),
+      f64('lightOutputRel', 24, null),
+      u8Enum('driverState', 32, ['off', 'running']),
+      status(33),
+    ]),
+  });
+}
 
 /**
  * The output schemas of the built-in device models, by kind: the protocol's table (ADR 0011 §5.4).
@@ -78,7 +144,8 @@ const status = (offset: number): DeviceOutputField => u8Enum('status', offset, R
  * `BUILTIN_DEVICE_OUTPUTS` (what the models write) must equal it exactly, which a sim-core spec
  * checks. F2.4 (protocol 3): the battery, the bench supply and the DIN PSU. The AC services publish
  * no record. F2.5 (protocol 4): the incandescent lamp, the resistor and the heater, the fuse and the
- * thermal-magnetic breaker.
+ * thermal-magnetic breaker. P4 (protocol 8): the plug-on, GFCI and AFCI breakers, the service, the ground
+ * rod, and the lamp's `burnedOut`.
  */
 export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
   battery: Object.freeze({
@@ -122,7 +189,9 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
       f64('resistanceOhm', 24, 'Ω'),
       f64('filamentTempK', 32, 'K'),
       f64('lightOutputRel', 40, null),
-      status(48),
+      // Protocol 8: the sticky burnout (ADR 0019), own state, always written; `status` stays last.
+      u8Enum('burnedOut', 48, ['no', 'yes']),
+      status(49),
     ]),
   }),
   resistor: Object.freeze({
@@ -158,10 +227,126 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
       f64('currentA', 0, 'A'),
       f64('thermalFraction', 8, null),
       f64('magneticPickupA', 16, 'A'),
-      u8Enum('state', 24, ['off', 'on', 'tripped']),
+      u8Enum('state', 24, BREAKER_STATE_VALUES),
       status(25),
     ]),
   }),
+  // Protocol 8 (P4, ADR 0011's protocol 8 amendment): the residential kinds of engine 8. Every record
+  // ends with the validity `status`; state, trip cause and every draw-relevant own-state field are
+  // always written whatever the status (ADR 0019's co-sign conditions).
+  'breaker.plugOn1p': Object.freeze({
+    kind: 'breaker.plugOn1p',
+    recordBytes: 40,
+    fields: Object.freeze([
+      f64('currentA', 0, 'A'),
+      f64('thermalFraction', 8, null),
+      f64('magneticPickupA', 16, 'A'),
+      f64('openingMs', 24, 'ms'),
+      u8Enum('state', 32, BREAKER_STATE_VALUES),
+      u8Enum('tripCause', 33, RECORD_TRIP_CAUSE_VALUES),
+      status(34),
+    ]),
+  }),
+  'breaker.plugOn2p': Object.freeze({
+    kind: 'breaker.plugOn2p',
+    recordBytes: 64,
+    fields: Object.freeze([
+      f64('pole1CurrentA', 0, 'A'),
+      f64('pole2CurrentA', 8, 'A'),
+      f64('pole1ThermalFraction', 16, null),
+      f64('pole2ThermalFraction', 24, null),
+      f64('pole1MagneticPickupA', 32, 'A'),
+      f64('pole2MagneticPickupA', 40, 'A'),
+      f64('openingMs', 48, 'ms'),
+      u8Enum('state', 56, BREAKER_STATE_VALUES),
+      u8Enum('tripCause', 57, RECORD_TRIP_CAUSE_VALUES),
+      status(58),
+    ]),
+  }),
+  'breaker.gfci1p': Object.freeze({
+    kind: 'breaker.gfci1p',
+    recordBytes: 88,
+    fields: Object.freeze([
+      f64('currentA', 0, 'A', DEVICE_READING_CURRENT),
+      f64('neutralCurrentA', 8, 'A', DEVICE_READING_NEUTRAL_CURRENT),
+      f64('residualMa', 16, 'mA', DEVICE_READING_RESIDUAL),
+      f64('lineVoltageV', 24, 'V', DEVICE_READING_LINE_VOLTAGE),
+      f64('loadVoltageV', 32, 'V', DEVICE_READING_LOAD_VOLTAGE),
+      f64('thermalFraction', 40, null),
+      f64('magneticPickupA', 48, 'A'),
+      f64('openingMs', 56, 'ms'),
+      f64('pickupMa', 64, 'mA'),
+      f64('residualIntegral', 72, null),
+      u8Enum('state', 80, BREAKER_STATE_VALUES),
+      u8Enum('tripCause', 81, RECORD_TRIP_CAUSE_VALUES),
+      u8Enum('testHeld', 82, ['no', 'yes']),
+      u8Bits('readings', 83),
+      status(84),
+    ]),
+  }),
+  'breaker.afci1p': Object.freeze({
+    kind: 'breaker.afci1p',
+    recordBytes: 72,
+    fields: Object.freeze([
+      f64('currentA', 0, 'A', DEVICE_READING_CURRENT),
+      f64('neutralCurrentA', 8, 'A', DEVICE_READING_NEUTRAL_CURRENT),
+      f64('lineVoltageV', 16, 'V', DEVICE_READING_LINE_VOLTAGE),
+      f64('loadVoltageV', 24, 'V', DEVICE_READING_LOAD_VOLTAGE),
+      f64('thermalFraction', 32, null),
+      f64('magneticPickupA', 40, 'A'),
+      f64('openingMs', 48, 'ms'),
+      f64('arcExposure', 56, null),
+      u8Enum('state', 64, BREAKER_STATE_VALUES),
+      u8Enum('tripCause', 65, RECORD_TRIP_CAUSE_VALUES),
+      u8Enum('arcingDownstream', 66, ['no', 'yes']),
+      u8Bits('readings', 67),
+      status(68),
+    ]),
+  }),
+  'service.splitPhase': Object.freeze({
+    kind: 'service.splitPhase',
+    recordBytes: 64,
+    fields: Object.freeze([
+      f64('l1CurrentA', 0, 'A'),
+      f64('l2CurrentA', 8, 'A'),
+      f64('neutralCurrentA', 16, 'A'),
+      f64('groundingCurrentA', 24, 'A'),
+      f64('l1NeutralV', 32, 'V'),
+      f64('l2NeutralV', 40, 'V'),
+      f64('lineToLineV', 48, 'V'),
+      status(56),
+    ]),
+  }),
+  'electrode.groundRod': Object.freeze({
+    kind: 'electrode.groundRod',
+    recordBytes: 24,
+    fields: Object.freeze([f64('currentA', 0, 'A'), f64('touchVoltageV', 8, 'V'), status(16)]),
+  }),
+});
+
+/**
+ * Protocol 8 record schemas agreed for kinds that are **not on main yet** (P4 PR 12's lighting, ADR
+ * 0011's protocol 8 amendment): the LED lamp and fixture (`light.led`, `light.ledFixture`) and the
+ * wall dimmer (`dimmer.wall`). The PR that adds a kind's engine model moves its schema from here into
+ * {@link DEVICE_OUTPUT_SCHEMAS} unchanged, and the protocol fingerprint, which covers both tables as
+ * one map, doesn't move. A kind is never in both (a sim-protocol spec checks it), and each passes
+ * {@link deviceOutputSchemaProblems}. Appliances (P4 PR 13) have no reserved schema: their fields are
+ * agreed in the amendment, their layout lands with their model.
+ */
+export const PENDING_DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
+  'dimmer.wall': Object.freeze({
+    kind: 'dimmer.wall',
+    recordBytes: 32,
+    fields: Object.freeze([
+      f64('levelRms', 0, null),
+      f64('loadVoltageV', 8, 'V'),
+      f64('currentA', 16, 'A'),
+      u8Enum('state', 24, ['off', 'on']),
+      status(25),
+    ]),
+  }),
+  'light.led': ledSchema('light.led'),
+  'light.ledFixture': ledSchema('light.ledFixture'),
 });
 
 /** One device record's fields by name: a number, or an enum field's value name (`status: 'solved'`). */
@@ -194,6 +379,20 @@ export function decodeDeviceRecord(schema: DeviceOutputSchema, data: DataView, o
     }
   }
   return values;
+}
+
+/**
+ * Whether field `field` of a record decoded by `schema` (`decodeDeviceRecord`) is a reading by its
+ * `readings` bit (protocol 8): `false` when the field has a `readingBit` and the record's `readings`
+ * lacks it, so a generic display shows no reading, never 0 A or 0 V. A field without a bit (and an
+ * unknown field name) returns `true`: its validity is the record's `status` rule (§5.4), which the
+ * caller still applies to solved quantities.
+ */
+export function isDeviceReading(schema: DeviceOutputSchema, values: DecodedDeviceRecord, field: string): boolean {
+  const def = schema.fields.find((f) => f.name === field);
+  if (def?.readingBit === undefined) return true;
+  const readings = values['readings'];
+  return typeof readings === 'number' && (readings & def.readingBit) !== 0;
 }
 
 /**

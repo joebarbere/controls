@@ -175,7 +175,7 @@ Every pole is a resistor branch of `contactResistanceOhm` (`pole`, or `pole1` an
 
 **Part 2 (P4 PR 10):**
 
-7. **No device records for the new kinds yet** (`output: null`): their protocol 8 records (per-pole currents, `residualMa`, `arcExposure`, the state and cause codes) are PR 11's, with the ADR 0011 amendment. Their behaviour is tested through bags, events and the solution.
+7. **No device records for the new kinds yet** (`output: null`): their protocol 8 records (per-pole currents, `residualMa`, `arcExposure`, the state and cause codes) are PR 11's, with the ADR 0011 amendment. Their behaviour is tested through bags, events and the solution. _Done in PR 11 ([ADR 0011's protocol 8 amendment](0011-sim-worker-contract.md#amendment-protocol-8-residential-records-and-events-p4)): the four breakers, the service and the ground rod publish records._
 8. **A GFCI opens at the last tick at or before its limit**, not at the first tick after the integral reaches 1 (ADR 0019 wrote "Σ dt / t(I) ≥ 1"): the integral is still persisted that way, but the trip is taken one step ahead at the present rate, so at 100 mA the breaker is open at 100 ms, inside the 0.1001 s limit, where the literal rule gave 101 ms.
 9. **The AFCI's T_limit is quantised to whole buckets** (D8 wrote Δt / T_limit(I)): each counted bucket adds 1 / n with n the whole 100 ms buckets inside the limit, so the bucket that takes the exposure to 1 is never after the limit; at the strict "under 0.2 s" point n is 1.
 10. **The AFCI test button has no persisted key**: the press trips it in the `commanded` hook (when closed and powered), with the event at the press's tick; ADR 0019 listed only the counter, so nothing new is saved.

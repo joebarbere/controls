@@ -24,9 +24,9 @@ import { startSandbox } from './support/sandbox';
 test.use({ viewport: { width: 1280, height: 720 } });
 
 const BENCH_LAMP_LIT_HASH = 'aa1a6b79b9d0f20c64f4883f0e5a548536e3718ce6199087b06538e2754ac9af';
-const BENCH_LAMP_LIT_SNAPSHOT_HASH = '928d6ee2389d803afdc14ebd80a980297a326c2494ab6dc4fb8473c1bd174008';
+const BENCH_LAMP_LIT_SNAPSHOT_HASH = 'b378caa2331deb97d124ca72295d7748e53c9670fc30c5c4a0a8f75dfa499aae';
 const BENCH_LAMP_HASH = '45aebef1e82a96125ef4b56cf8795c8236c2b61c4b558b80016d2452c2107c04';
-const BENCH_LAMP_SNAPSHOT_HASH = '9858632b4a7a968cbc792b552f16f6a2829848062cdcfbc54e096f739c4c66f1';
+const BENCH_LAMP_SNAPSHOT_HASH = '357509f49feae3d5e8e91901bda9c5900cb41d560fab240504d528a3b5a0a0cc';
 /** The lamp's `inrush-band` source: the inrush is 10 to 15 times the settled current. */
 const INRUSH_BAND = { min: 10, max: 15 };
 /** The last cadence solve before tick 1500 (SOLVE_INTERVAL_TICKS = 10), and before 2000. */

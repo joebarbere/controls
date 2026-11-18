@@ -14,7 +14,8 @@ import { SimEngine, type SimConnectionRecord, type SimEngineOptions } from './en
  * `wire.info <id>` (F3.6 part 3, plan D16): a read-only console query, like `netlist.dump`. It prints
  * one connection's protocol 7 record (ADR 0015 "Protocol 7 connection records") with its length: the
  * conductor's resistance at its temperature, the current, the conductor and end drops, the
- * temperatures, the end states and the insulation flag. A debug aid until P5's instruments.
+ * temperatures, the end states, each end's degradation factor (protocol 8) and the insulation flag. A
+ * debug aid until P5's instruments.
  *
  * Like `netlist.dump` it is a pure function of the **materialised** world: an engine started from it
  * writes the same record as the engine that exported it (records are a function of the export), so
@@ -33,8 +34,8 @@ import { SimEngine, type SimConnectionRecord, type SimEngineOptions } from './en
  * status solved
  * current 11.8059 A
  * conductor R 0.0170339 Ω at 303.033 K, drop 0.2011 V
- * end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V, conductor side 119.28 V
- * end b ok, contact 0.000516818 Ω at 301.709 K, drop 0.00610151 V, conductor side 119.078 V
+ * end a ok, contact 0.0254515 Ω at 393.822 K, drop 0.300478 V, conductor side 119.28 V, degradation 1
+ * end b ok, contact 0.000516818 Ω at 301.709 K, drop 0.00610151 V, conductor side 119.078 V, degradation 1
  * insulation intact
  * ```
  *
@@ -101,11 +102,13 @@ function recordLines(record: SimConnectionRecord): string[] {
     const voltsBit = side === 'A' ? CONNECTION_READING_END_A_VOLTS : CONNECTION_READING_END_B_VOLTS;
     const drop = value(`end${side}DropV`, dropBit, 'V');
     const volts = `, conductor side ${value(`end${side}Volts`, voltsBit, 'V')}`;
+    // Protocol 8: the end's degradation factor D (R = R_made × D; 1 as made, never falls).
+    const degradation = `, degradation ${formatWireNumber(n(`end${side}Degradation`))}`;
     // An open end is a gap: its closed-contact resistance is not what it is now.
     lines.push(
       state === 'intermittentOpen'
-        ? `${name} intermittentOpen, open at ${temp(`end${side}TempK`)}, gap ${drop}${volts}`
-        : `${name} ${state}, contact ${quantity(n(`end${side}ContactOhm`), 'Ω')} at ${temp(`end${side}TempK`)}, drop ${drop}${volts}`,
+        ? `${name} intermittentOpen, open at ${temp(`end${side}TempK`)}, gap ${drop}${volts}${degradation}`
+        : `${name} ${state}, contact ${quantity(n(`end${side}ContactOhm`), 'Ω')} at ${temp(`end${side}TempK`)}, drop ${drop}${volts}${degradation}`,
     );
   }
   lines.push(`insulation ${v['insulationDamaged'] === 'yes' ? 'damaged' : 'intact'}`);

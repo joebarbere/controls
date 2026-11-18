@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import {
   decodeDeviceRecord,
   DEVICE_OUTPUT_SCHEMAS,
+  PENDING_DEVICE_OUTPUT_SCHEMAS,
   deviceOutputSchemaProblems,
   NOMINAL_BANDS,
   RECORD_STATUS_VALUES,
@@ -363,15 +364,29 @@ describe('device output schemas and nominal bands', () => {
   it('every built-in schema is well formed, keyed by its kind, and band 0 is none', () => {
     expect(Object.keys(DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual([
       'battery',
+      'breaker.afci1p',
+      'breaker.gfci1p',
+      'breaker.plugOn1p',
+      'breaker.plugOn2p',
       'breaker.thermalMagnetic',
+      'electrode.groundRod',
       'fuse',
       'heater',
       'lamp.incandescent',
       'resistor',
+      'service.splitPhase',
       'supply.bench',
       'supply.dinPsu',
     ]);
-    for (const [kind, schema] of Object.entries(DEVICE_OUTPUT_SCHEMAS)) {
+    // Protocol 8's pending schemas (P4 PR 12's lighting): never registered and pending at once.
+    expect(Object.keys(PENDING_DEVICE_OUTPUT_SCHEMAS).sort()).toStrictEqual([
+      'dimmer.wall',
+      'light.led',
+      'light.ledFixture',
+    ]);
+    for (const kind of Object.keys(PENDING_DEVICE_OUTPUT_SCHEMAS))
+      expect(DEVICE_OUTPUT_SCHEMAS).not.toHaveProperty(kind);
+    for (const [kind, schema] of Object.entries({ ...DEVICE_OUTPUT_SCHEMAS, ...PENDING_DEVICE_OUTPUT_SCHEMAS })) {
       expect(schema.kind).toBe(kind);
       expect(deviceOutputSchemaProblems(schema)).toStrictEqual([]);
       expect(schema.fields.at(-1)).toMatchObject({ name: 'status', type: 'u8', values: RECORD_STATUS_VALUES });

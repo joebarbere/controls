@@ -270,11 +270,14 @@ class CopiedSnapshot implements SnapshotView {
     const data = this.data;
     const bytes = this.front;
     // Typed-array reads where the layout allows (little-endian, an aligned f64: every section and
-    // record is 8-aligned in the copy): the per-snapshot readout reads 16 fields of 2,000 records.
+    // record is 8-aligned in the copy): the per-snapshot readout reads every field
+    // (`CONNECTION_F64_COUNT` + `CONNECTION_U8_COUNT`) of 2,000 records.
     const n = Math.min(offsets.length, types.length, out.length);
     const records = plan.records;
     if (records !== null && LITTLE_ENDIAN && (base & 7) === 0 && records.length * CONNECTION_VALUES <= out.length) {
-      // The protocol layout, record by record: 12 contiguous f64 words, then 4 u8 bytes.
+      // The protocol layout, record by record: `CONNECTION_F64_COUNT` contiguous f64 words, then
+      // `CONNECTION_U8_COUNT` u8 bytes from `CONNECTION_U8_OFFSET` (checked at module load,
+      // `connectionLayoutProblems`).
       const words = this.frontF64;
       let k = 0;
       for (let c = 0; c < records.length; c++) {

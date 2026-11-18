@@ -19,7 +19,7 @@ import { workshopWorld } from './testing/workshop';
  * `sources.spec.ts` rebuilds it from the scenario.
  */
 export const PROTECTION_HASH = '1f57f7ed65a8efb1b5bd1430fcd9f4bd37eacb863bec1d94ebc4f79a5e0f445d';
-export const PROTECTION_SNAPSHOT_HASH = '5af97022d2958906709fa3730fe89871e632f8472ec6e9abf0d7570b7dc93e6b';
+export const PROTECTION_SNAPSHOT_HASH = '355038b18d5d0a204e98b7791ebe356520628c74cd1afc4f6ba0d1118013aadf';
 
 const scenario = join(WORKSPACE_ROOT, 'apps/sim-cli/scenarios/protection.console');
 const fixture = currentFixture('protection');

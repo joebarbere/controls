@@ -42,8 +42,8 @@ const MODE_LIMIT = 1;
 const MODE_OFF = 2;
 
 /** The `hiccup` events' detail (ADR 0011 §4). */
-const HICCUP_OFF = Object.freeze({ phase: 'off' });
-const HICCUP_RETRY = Object.freeze({ phase: 'retry' });
+const HICCUP_OFF = Object.freeze({ phase: 'off' } as const);
+const HICCUP_RETRY = Object.freeze({ phase: 'retry' } as const);
 
 /**
  * The DIN PSU's output record (ADR 0011 §5.4, finalised in F2.4): the output voltage and current

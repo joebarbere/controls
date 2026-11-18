@@ -2,6 +2,7 @@ import {
   CONNECTION_OUTPUT_FIELDS,
   CONNECTION_OUTPUT_SCHEMAS,
   CONNECTION_RECORD_BYTES,
+  CONNECTION_RECORD_OFFSETS,
   CONNECTION_RECORD_STATUS_VALUES,
 } from './connection-output';
 import type { TopologyDescriptor } from './descriptor';
@@ -63,9 +64,9 @@ const descriptor = (): TopologyDescriptor => ({
   // Protocol 7: the three leads' records, then an unlanded conductor's (not netlisted).
   connections: [
     { connection: 1, kind: 'lead', recordOffset: 0, branch: 1 },
-    { connection: 2, kind: 'lead', recordOffset: 104, branch: 2 },
-    { connection: 3, kind: 'lead', recordOffset: 208, branch: 3 },
-    { connection: 9, kind: 'conductor', recordOffset: 312, branch: -1 },
+    { connection: 2, kind: 'lead', recordOffset: CONNECTION_RECORD_BYTES, branch: 2 },
+    { connection: 3, kind: 'lead', recordOffset: 2 * CONNECTION_RECORD_BYTES, branch: 3 },
+    { connection: 9, kind: 'conductor', recordOffset: 3 * CONNECTION_RECORD_BYTES, branch: -1 },
   ],
   connectionSchemas: { lead: CONNECTION_OUTPUT_SCHEMAS['lead'], conductor: CONNECTION_OUTPUT_SCHEMAS['conductor'] },
 });
@@ -273,6 +274,7 @@ describe('NetlistReadout connection records (protocol 7)', () => {
           endAContactOhm: 0.0005,
           conductorTempK: 295,
           endATempK: 296,
+          endADegradation: 3.5,
           endAState: 1,
           endBState: 0,
           insulationDamaged: 1,
@@ -293,6 +295,8 @@ describe('NetlistReadout connection records (protocol 7)', () => {
     expect(reading.connectionValues[at(2, 'currentA')]).toBe(5);
     expect(reading.connectionValues[at(3, 'endAContactOhm')]).toBe(0.0005);
     expect(reading.connectionValues[at(3, 'endAState')]).toBe(1);
+    // Protocol 8: the degradation factors, inside the f64 block (the fast path copies them in order).
+    expect(reading.connectionValues[at(3, 'endADegradation')]).toBe(3.5);
     expect(reading.connectionValues[at(3, 'insulationDamaged')]).toBe(1);
     // A re-read with no connection section clears the previous values (never a stale reading).
     readout.read(fakeSnapshotView({ descriptor: d }), reading);
@@ -306,18 +310,20 @@ describe('NetlistReadout connection records (protocol 7)', () => {
       const shifted: TopologyDescriptor = {
         ...d,
         connections: [{ connection: 1, kind: 'lead', recordOffset: 0, branch: 1 }],
-        connectionSchemas: { lead: { kind: 'lead', recordBytes: 112, fields } },
+        connectionSchemas: { lead: { kind: 'lead', recordBytes: CONNECTION_RECORD_BYTES + 8, fields } },
       };
-      const bytes = new Uint8Array(112);
+      const bytes = new Uint8Array(CONNECTION_RECORD_BYTES + 8);
       const view = new DataView(bytes.buffer);
       view.setFloat64(shift + CONNECTION_OUTPUT_FIELDS[0].offset, 3.25, true); // currentA
-      view.setFloat64(shift + CONNECTION_OUTPUT_FIELDS[9].offset, 301.5, true); // conductorTempK
-      view.setUint8(shift + CONNECTION_OUTPUT_FIELDS[15].offset, 1); // status solved
+      view.setFloat64(shift + CONNECTION_RECORD_OFFSETS.conductorTempK, 301.5, true);
+      view.setFloat64(shift + CONNECTION_RECORD_OFFSETS.endBDegradation, 2.5, true);
+      view.setUint8(shift + CONNECTION_RECORD_OFFSETS.status, 1); // solved
       const r = NetlistReadout.of(shifted);
       const reading = r.createReading();
       r.read(fakeSnapshotView({ descriptor: shifted, connections: bytes }), reading);
       expect(reading.connectionValues[at(0, 'currentA')]).toBe(3.25);
       expect(reading.connectionValues[at(0, 'conductorTempK')]).toBe(301.5);
+      expect(reading.connectionValues[at(0, 'endBDegradation')]).toBe(2.5);
       expect(reading.connectionStatus[0]).toBe(1);
     }
   });

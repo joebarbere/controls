@@ -19,6 +19,9 @@ import type { LayerContext, SimDevice } from './device-model';
 import type { DeviceStateValue } from '@controls/save-format';
 import { deriveStream, entityStreamKey } from '@controls/world-model';
 import { LAMP_MODEL } from '../devices/loads/lamp';
+import { GROUND_ROD_MODEL } from '../devices/sources/ground-rod';
+import { SERVICE_SPLIT_PHASE_MODEL } from '../devices/sources/service';
+import { residentialTestOptions, ROD, SERVICE } from '../../testing/residential';
 import { BREAKER_MODEL } from '../devices/protection/breaker';
 import { FUSE_MODEL } from '../devices/protection/fuse';
 
@@ -397,5 +400,120 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
       expect(rig.events, name).toStrictEqual([]);
       expect(bytes / 200_000, name).toBeLessThan(1);
     }
+  });
+
+  // Protocol 8 (P4 PR 11): every new record writer on its bank, into one reused buffer, on a solved
+  // island with every electrical field a reading (the GFCI's and AFCI's voltages included). A record is
+  // written at every publish, so it must not allocate either. The AFCI's downstream marks are built only
+  // while an end arcs (none here).
+  it('each protocol 8 record writer alone (a fixed solution, a reused buffer) allocates nothing per call', () => {
+    const p20 = plugOnParams(20);
+    const nodes = { line: 0, load: 1, pigtail: 2, loadNeutral: 3 };
+    const sensing = (rig: BankRig) => rig.amps('pole', 15, 1).amps('neutral', -14.99, -1).volts(0, 120).volts(1, 119);
+    const rigs: [string, BankRig][] = [
+      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15)],
+      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15).amps('pole2', -15)],
+      [
+        'gfci1p',
+        sensing(
+          bankRig(GFCI_BREAKER_MODEL, { ...p20, ...GFCI_SENSE_PARAMS }, ['neutral', 'pole'], {
+            state: { on: true, test: 0 },
+            nodes,
+          }),
+        ),
+      ],
+      [
+        'afci1p',
+        sensing(bankRig(AFCI_BREAKER_MODEL, p20, ['neutral', 'pole'], { state: { on: true, test: 0 }, nodes })),
+      ],
+    ];
+    const writers: [string, () => void][] = rigs.map(([name, rig]) => {
+      const view = new DataView(new ArrayBuffer(128));
+      const write = rig.bank.writeRecord as NonNullable<typeof rig.bank.writeRecord>;
+      return [name, () => write(0, view, 0, rig.ctx)];
+    });
+    // The service (dropN, l1, l2 and its earth contact) and a ground rod (its earth contact), on one
+    // solved AC island; the lamp on a DC one.
+    const ctx = (branches: number) =>
+      ({
+        tick: 0,
+        dtS: 0.001,
+        netlist: {
+          branches: Array.from({ length: branches }, (_, i) => ({ index: i, island: 0, a: i, b: i + 1 })),
+          islands: [{ kind: 'ac' }],
+          nodes: Array.from({ length: branches + 1 }, () => ({ island: 0 })),
+        },
+        solution: {
+          branches: Float64Array.from({ length: 2 * branches }, (_, k) => 1.5 + k),
+          nodes: Float64Array.from({ length: 2 * branches + 2 }, (_, k) => 120.25 - k),
+        },
+        islandReadable: () => true,
+        islandStatus: () => 'solved',
+        emit: () => undefined,
+        arcingCount: () => 0,
+        arcingBranch: () => -1,
+      }) as unknown as LayerContext;
+    const residential = residentialTestOptions().catalog;
+    const service = SERVICE_SPLIT_PHASE_MODEL.bank([
+      {
+        entity: 1,
+        params: residential.device(SERVICE)?.model.params as Record<string, number>,
+        bag: {},
+        state: {},
+        branches: [0, 1, 2],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(1)),
+        ...deviceExtras(11, 1, ['dropN', 'l1', 'l2'], {
+          contacts: [{ branch: 3, relation: 'earth', contact: 'grounding' }],
+        }),
+      },
+    ]);
+    const rod = GROUND_ROD_MODEL.bank([
+      {
+        entity: 1,
+        params: residential.device(ROD)?.model.params as Record<string, number>,
+        bag: {},
+        state: {},
+        branches: [],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(1)),
+        ...deviceExtras(11, 1, [], { contacts: [{ branch: 0, relation: 'earth', contact: 'electrode' }] }),
+      },
+    ]);
+    const lamp = LAMP_MODEL.bank([
+      {
+        entity: 2,
+        params: ENGINE_TEST_CATALOG.device(LAMP)?.model.params as Record<string, number>,
+        bag: { filamentTempK: 2700, burnedOut: false, overvoltageSinceTick: null },
+        state: {},
+        branches: [0],
+        frequencyHz: 60,
+        stream: () => deriveStream(11, entityStreamKey(2)),
+        ...deviceExtras(11, 2, ['element']),
+      },
+    ]);
+    const serviceCtx = ctx(4);
+    const rodCtx = ctx(1);
+    const lampCtx = ctx(1);
+    const view = new DataView(new ArrayBuffer(128));
+    writers.push(
+      ['service', () => service.writeRecord?.(0, view, 0, serviceCtx)],
+      ['groundRod', () => rod.writeRecord?.(0, view, 0, rodCtx)],
+      ['lamp', () => lamp.writeRecord?.(0, view, 0, lampCtx)],
+    );
+    for (const [name, call] of writers) {
+      for (let k = 0; k < 200_000; k++) call(); // tier up
+      const bytes = sampledLoopBytes(call, 200_000);
+      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC record-${name} ${bytes / 200_000}`);
+      expect(bytes / 200_000, name).toBeLessThan(1);
+    }
+    // The gate sees an allocation: a writer that builds one small object per call reads far above it.
+    let sink: unknown = null;
+    const planted = () => {
+      sink = { v: view.getFloat64(0, true) };
+    };
+    for (let k = 0; k < 200_000; k++) planted();
+    expect(sampledLoopBytes(planted, 200_000) / 200_000).toBeGreaterThan(8);
+    expect(sink).not.toBeNull();
   });
 });

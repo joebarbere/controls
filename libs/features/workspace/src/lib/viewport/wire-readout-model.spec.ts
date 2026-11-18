@@ -1,6 +1,7 @@
 import type { WireRef } from '@controls/renderer';
 import { CONNECTION_OXIDATION_ONSET_K, fakeSnapshotView, NetlistReadout } from '@controls/sim-protocol';
 import { benchDescriptor, connectionRecords } from '../netlist/netlist.fakes';
+import { shownDegradation } from '../netlist/netlist-model';
 import {
   READOUT_OVERHEAT_K,
   sameWireReadout,
@@ -248,6 +249,40 @@ describe('the wire readout: review cases (F3.6 part 3)', () => {
     expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K + 1e-9 }).state).toBe(
       'degrading at end a (above the oxidation onset)',
     );
+  });
+
+  it('protocol 8: a cooled end that degraded still reads degraded, with its factor; hot, it reads degrading with it', () => {
+    // The carried P3 item: before protocol 8 a degraded end read `normal` once it cooled below the onset.
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 3.217 }).state).toBe(
+      'degraded at end a (contact resistance 3.22× original)',
+    );
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 1 }).state).toBe('normal');
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 1.004 }).state).toBe('normal'); // 1.00 at 3 s.f.
+    expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K + 5, endADegradation: 1.8 }).state).toBe(
+      'degrading at end a (above the oxidation onset; contact resistance 1.8× original)',
+    );
+    expect(readout({ ...LOOSE, endATempK: CONNECTION_OXIDATION_ONSET_K + 5, endADegradation: 1 }).state).toBe(
+      'degrading at end a (above the oxidation onset)',
+    );
+    expect(readout({ ...LOOSE, endATempK: READOUT_OVERHEAT_K + 1, endADegradation: 2 }).state).toBe(
+      'degraded at end a (contact resistance 2× original), overheating at end a',
+    );
+    // An intermittently open end keeps its (persisted, never falling) factor.
+    expect(readout({ ...LOOSE, endAState: 3, endADegradation: 45.06, readings: 1 }).state).toContain(
+      'degraded at end a (contact resistance 45.1× original)',
+    );
+    // The netlist panel and the readout round alike (toPrecision(3)): 1.045 is 1.04 in both.
+    expect(readout({ ...LOOSE, endATempK: 300, endADegradation: 1.045 }).state).toBe(
+      `degraded at end a (contact resistance ${shownDegradation(1.045)}× original)`,
+    );
+  });
+
+  it('protocol 8: the live region spells the factor out ("times")', () => {
+    const sampler = new WireReadoutSampler();
+    const records = connectionRecords([lead, lead, lead, { ...LOOSE, endATempK: 300, endADegradation: 3.217 }]);
+    sampler.update(fakeSnapshotView({ descriptor: benchDescriptor(1), connections: records }), WIRE);
+    expect(sampler.summary(WIRE, null)).toContain('contact resistance 3.22 times original');
+    expect(sampler.summary(WIRE, null)).not.toContain('×');
   });
 
   it('allocates its reading once per descriptor, and reads nothing with no target', () => {
