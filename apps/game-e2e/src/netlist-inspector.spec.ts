@@ -18,6 +18,7 @@ const golden = JSON.parse(
 ) as { tick: number; lampCurrentA: number };
 
 type Hooks = {
+  __controlsSession?: { exec(id: string, args?: unknown): { ok: boolean } };
   __controlsViewport?: {
     overlayGraph(): { terminals: { entity: number; terminal: string; highlighted: boolean }[] } | undefined;
   };
@@ -102,4 +103,34 @@ test("the inspector's lamp-branch current equals the game.probe derivation; a no
   await page.keyboard.press('Enter');
   await expect(tree).toBeHidden();
   await expect.poll(() => highlighted(page)).toEqual([]);
+});
+
+// The inspector can open before the worker has published the netlist: the console's `sim.step` doesn't
+// wait for the worker, so on a slow CI runner the test above opened it on the empty workshop's snapshot.
+// The hint takes focus; when the netlist replaces it with the tree, focus moves to the tree's tab stop
+// instead of falling to <body>.
+test('focus moves from the hint to the tree when the netlist arrives (F2.6)', async ({ page }) => {
+  test.slow(); // software WebGL2 makes each key round trip slow on CI runners
+  await page.goto('/?e2e=1&renderer=webgl2');
+  await startSandbox(page);
+  await expect(page.locator('ctl-viewport')).toHaveAttribute('data-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('ctl-dev-console [data-editor="ready"]')).toBeAttached();
+  await page.keyboard.press('Backquote');
+  await expect(page.getByRole('textbox', { name: 'Console input' })).toBeFocused();
+  await page.keyboard.insertText('view.netlistInspector');
+  await page.keyboard.press('Enter');
+
+  const inspector = page.getByRole('region', { name: 'Inspector' });
+  await expect(inspector.getByText('The netlist is empty.')).toBeFocused(); // no circuit in the workshop yet
+  const placed = await page.evaluate(
+    () =>
+      (window as unknown as Hooks).__controlsSession?.exec('entity.place', {
+        ref: { id: 'battery.ferrovane-12v-7ah', version: 1 },
+        positionMm: { x: 900, y: -300, z: 200 },
+      }).ok,
+  );
+  expect(placed).toBe(true);
+  const first = inspector.getByRole('tree', { name: 'Netlist' }).getByRole('treeitem').first();
+  await expect(first).toBeFocused();
+  await expect(first).toHaveAttribute('aria-selected', 'true');
 });

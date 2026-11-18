@@ -139,7 +139,7 @@ flowchart LR
 ```
 
 - `ctl-viewport` is an `@defer (on immediate)` block in `Workspace`, with an empty `viewport-placeholder` while it loads. The workspace queries it by template ref (`viewChild<Viewport>('viewport')`), so `viewState()`, `captureThumbnail()` and the terminal highlight are simply absent until it has rendered, as they already were until the renderer started.
-- `focusViewport()` and `view.netlistInspector` wait for their lazy block to render before moving focus (`afterLoaded`); the viewport's focus is skipped if the player has moved focus meanwhile.
+- `focusViewport()` and `view.netlistInspector` wait for their lazy block to render before moving focus (`afterLoaded`); either is skipped if the player has moved focus meanwhile. Inside the inspector, a render that replaces the focused hint or row (the first snapshot, a new generation, a reset) moves focus to the new tab stop rather than leaving it on `<body>`.
 - The settings dialog comes from the `@controls/feature-settings/dialog` entry, not the package index, so the app's `@defer` can split it. New P4 panels follow the same rule ([UI caveats](../caveats/ui.md)).
 
 ## The netlist inspector (F2.6)
