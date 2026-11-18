@@ -1,4 +1,4 @@
-import { BUILTIN_CATALOG, catalogOrThrow } from '@controls/catalog';
+import { BUILTIN_CATALOG, catalogOrThrow, mountType } from '@controls/catalog';
 import type { CommandBus } from '@controls/commands';
 import { World } from '@controls/save-format';
 import {
@@ -16,6 +16,7 @@ import {
 import { argOptionChoices } from './arg-options';
 import { selectionToggle } from './device-commands';
 import { checkWorldReferences } from './devices';
+import { checkPlugInsert } from './wiring/plug';
 import { entityHold, moveBlocker } from './entity-commands';
 import { placeInWorld } from './snap/world-placement';
 import { beltChoices } from './tools/tool-belt';
@@ -87,6 +88,18 @@ describe('plug.insert and plug.remove', () => {
     expect(code(bus, 'plug.insert', { appliance: 10, receptacle: 11, outlet: 'socket-1' })).toBeNull();
     expect(code(bus, 'plug.insert', { appliance: 11, receptacle: 10, outlet: 'socket-1' })).toBe('plug-cycle');
     expect(code(bus, 'plug.insert', { appliance: 10, receptacle: 10, outlet: 'socket-1' })).toBe('already-plugged');
+  });
+
+  it('refuses (defensively) an appliance that is mounted or in an entry', () => {
+    const world = residentialBench().state;
+    const with_ = (extra: object) => ({
+      entities: world.entities.map((e) => (e.id === 2 ? { ...e, ...extra } : e)),
+    });
+    const args = { appliance: 2, receptacle: 1, outlet: 'top' };
+    const mounted = with_({ mountedOn: { entity: 4, mount: 'left' } });
+    const inEntry = with_({ inEntry: { entity: 4, entry: 'ko1' } });
+    expect(checkPlugInsert(mounted, RESIDENTIAL_TEST_CATALOG, args)?.code).toBe('mounted');
+    expect(checkPlugInsert(inEntry, RESIDENTIAL_TEST_CATALOG, args)?.code).toBe('in-entry');
   });
 
   it('plug.remove unplugs; refuses not-found, not-an-appliance and not-plugged', () => {
@@ -270,6 +283,23 @@ describe('lead.connect refuses an inaccessible terminal', () => {
   });
 });
 
+describe('the load check refuses a stored lead on an inaccessible terminal', () => {
+  it('a lead clip on `access: none` is refused; on the device’s other terminals it loads', () => {
+    const bus = residentialBench();
+    const lead = bus.state.connections.find((c) => c.id === 2);
+    const end = lead?.b;
+    if (!end) throw new Error('missing lead');
+    const at = (terminal: string) => ({
+      ...bus.state,
+      connections: bus.state.connections.map((c) => (c.id === 2 ? { ...c, b: { ...end, terminal } } : c)),
+    });
+    expect(checkWorldReferences(at('ground'), RESIDENTIAL_TEST_CATALOG)).toStrictEqual([]);
+    expect(checkWorldReferences(at('a'), RESIDENTIAL_TEST_CATALOG)).toStrictEqual([
+      { path: 'connections[1].b.terminal', message: "A clip can't reach that terminal" },
+    ]);
+  });
+});
+
 describe('wire.land enforces multiConductor (catalogue v3)', () => {
   const route = (x: number) => [
     { kind: 'free', positionMm: at(x, 2000, 0), entity: null, fixture: null, tool: null },
@@ -325,14 +355,18 @@ describe('busStabIndex and the bus mount', () => {
   const panel = (bus: Bus) => entityOf(bus, 4) as World['entities'][number];
   const left = RESIDENTIAL_TEST_CATALOG.device(RESIDENTIAL.panel)?.enclosure?.mounts[0];
   if (!left) throw new Error('missing');
+  const FIT = { crossMm: 0 };
 
   it('finds a stab by exact lookup, and maps it to its leg by row', () => {
     const bus = residentialBench();
-    expect(busStabIndex(panel(bus), left, benchStabMm('left', 0))).toBe(0);
-    expect(busStabIndex(panel(bus), left, benchStabMm('left', 1))).toBe(1);
-    expect(busStabIndex(panel(bus), left, at(5000, 99, 0))).toBeNull();
-    expect(busStabIndex(panel(bus), left, at(5000, 100, 1))).toBeNull();
-    expect(busStabIndex(panel(bus), left, at(5000, 50, 0))).toBeNull(); // k = 2 is past the last stab
+    expect(busStabIndex(panel(bus), left, benchStabMm('left', 0), FIT)).toBe(0);
+    expect(busStabIndex(panel(bus), left, benchStabMm('left', 1), FIT)).toBe(1);
+    expect(busStabIndex(panel(bus), left, at(5000, 99, 0), FIT)).toBeNull();
+    expect(busStabIndex(panel(bus), left, at(5000, 100, 1), FIT)).toBeNull();
+    expect(busStabIndex(panel(bus), left, at(5000, 50, 0), FIT)).toBeNull(); // k = 2 is past the last stab
+    // Off the device's cross line (its fit's crossMm): no stab, however exact the along offset.
+    expect(busStabIndex(panel(bus), left, benchStabMm('left', 0), { crossMm: 3 })).toBeNull();
+    expect(busStabIndex(panel(bus), left, at(5003, 100, 0), FIT)).toBeNull();
     expect([busStabLeg(left, 0), busStabLeg(left, 1), busStabLeg(left, 2)]).toStrictEqual(['busL1', 'busL2', null]);
   });
 
@@ -429,7 +463,7 @@ describe('the single-mount anchor (catalogue v3 `alongMm`, `crossMm`)', () => {
   it('no built-in entry declares a non-zero anchor on a single mount', () => {
     for (const device of BUILTIN_CATALOG.devices) {
       for (const fit of device.mounts) {
-        if (['deviceYoke', 'studFlange', 'mainFeed', 'mbj', 'groundBarKit', 'e26'].includes(fit.type)) {
+        if (mountType(fit.type)?.occupancy === 'single') {
           expect([device.id, fit.alongMm, fit.crossMm]).toStrictEqual([device.id, 0, 0]);
         }
       }

@@ -4,6 +4,7 @@ import {
   commandStreamKey,
   connectionStreamKey,
   deriveStream,
+  ENTITY_PURPOSES,
   entityPurposeStreamKey,
   entityStreamKey,
   hashStreamKey,
@@ -190,7 +191,7 @@ describe('deriveStream', () => {
   it('pins the world v4 purpose streams: keys and first outputs (ADR 0019 "PRNG stream keys")', () => {
     // Each draw is the first nextFloat() of its own stream. Changing one moves every saved device's
     // behaviour: a determinism change (SIM_ENGINE_VERSION at least).
-    const purposes = ['pickupL2', 'opening', 'gfciPickup', 'gfciMechanism', 'duty', 'afci'];
+    const purposes = ENTITY_PURPOSES;
     const first = purposes.map((p) => [
       entityPurposeStreamKey(7, p),
       deriveStream(42, entityPurposeStreamKey(7, p)).nextFloat(),

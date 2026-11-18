@@ -138,19 +138,21 @@ export function busStabAt(mount: EnclosureMount, along: number): number | null {
 }
 
 /**
- * `busStabIndex(host, mount, positionMm)`: the stab index (from 0) of the bus mount `mount` of `host`
- * a device whose origin is at `positionMm` (world integer mm) sits on, or `null` when the position isn't
- * on the mount's plane and cross line or isn't exactly a stab position, or the mount has no bus. The one
- * function `checkMount`, snapping, the ghost, the compiler (P4 PR 9) and the inspector use, so they
- * agree on every breaker's space and leg ({@link busStabLeg}).
+ * `busStabIndex(host, mount, positionMm, fit)`: the stab index (from 0) of the bus mount `mount` of
+ * `host` that a device mounted by `fit` sits on with its origin at `positionMm` (world integer mm), or
+ * `null` when the position isn't on the mount's plane (normal 0), isn't on the device's cross line
+ * (cross = `fit.crossMm`) or isn't exactly a stab position, or the mount has no bus. The one function
+ * `checkMount`, snapping, the ghost, the compiler (P4 PR 9) and the inspector use, so they agree on
+ * every breaker's space and leg ({@link busStabLeg}).
  */
 export function busStabIndex(
   host: Pick<Entity, 'transform'>,
   mount: EnclosureMount,
   positionMm: PositionMm,
+  fit: Pick<DeviceMount, 'crossMm'>,
 ): number | null {
   const offset = mountOffset(host, mount, positionMm);
-  if (offset === null || offset.normal !== 0) return null;
+  if (offset === null || offset.normal !== 0 || offset.cross !== fit.crossMm) return null;
   return busStabAt(mount, offset.along);
 }
 

@@ -38,7 +38,7 @@ const WORLD_V4_FILES = [
   'wire.mark.args.schema.json',
 ];
 
-/** SHA-256 of each P3 schema's hint-stripped canonical JSON (as of v0.4.0). */
+/** SHA-256 of each P3 schema's hint-stripped JSON (as of v0.4.0; `JSON.stringify` in the generated key order). */
 const P3_ACCEPTANCE_PINS: Record<string, string> = {
   'cable.add.args.schema.json': 'a69e0112bd5321e9d943337c257f0d97e5541f40e70635fa6496cb81b87bb7c8',
   'cable.delete.args.schema.json': '458f4b5c8b5bef8164806f8c9947358afe305159644e89e14d0d6e27df6886e5',
@@ -133,7 +133,7 @@ describe('exported command argument JSON Schema', () => {
 
   it('every P3 argument schema accepts exactly what v0.4.0 shipped (hint-stripped SHA-256 pins, ADR 0019)', () => {
     // A `.meta()` hint (title, description, x-controls-*) may change without a bump, so the pins hash
-    // a hint-stripped canonical copy; any acceptance change fails here. World v4's five new schemas
+    // a hint-stripped copy; any acceptance change fails here. World v4's five new schemas
     // join this list when v0.5.0 ships.
     const actual = Object.fromEntries(
       Object.keys(P3_ACCEPTANCE_PINS).map((file) => [

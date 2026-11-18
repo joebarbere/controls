@@ -155,8 +155,22 @@ describe('world v4 command properties', () => {
       World.parse({
         ...world,
         entities: world.entities.map((e) => ({ ...e, sim: Object.fromEntries(Object.keys(e.sim).map((k) => [k, n])) })),
+        // Connection sim bags too: the bench's conductor and lead, every key set to another value.
+        connections: world.connections.map((c) => ({
+          ...c,
+          sim: Object.fromEntries(
+            Object.entries(c.sim).map(([k, v]) => [
+              k,
+              typeof v === 'number' ? v + n : typeof v === 'boolean' ? !v : v === null ? 1000 + n : v,
+            ]),
+          ),
+        })),
       });
-    const stripSim = (world: World) => ({ ...world, entities: world.entities.map((e) => ({ ...e, sim: {} })) });
+    const stripSim = (world: World) => ({
+      ...world,
+      entities: world.entities.map((e) => ({ ...e, sim: {} })),
+      connections: world.connections.map((c) => ({ ...c, sim: {} })),
+    });
     fc.assert(
       fc.property(opsArb, opArb, fc.integer({ min: 1, max: 9 }), (prefix, op, n) => {
         if (op.kind === 'undo' || op.kind === 'redo') return;

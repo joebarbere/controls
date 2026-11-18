@@ -126,6 +126,10 @@ export function entityStreamKey(id: number): string {
   return `entity:${id}`;
 }
 
+/** The frozen world v4 purposes of an entity's own streams (ADR 0019 "PRNG stream keys"). */
+export const ENTITY_PURPOSES = ['pickupL2', 'opening', 'gfciPickup', 'gfciMechanism', 'duty', 'afci'] as const;
+export type EntityPurpose = (typeof ENTITY_PURPOSES)[number];
+
 /**
  * The stream key for one purpose of an entity's own randomness (world v4, ADR 0019 "PRNG stream keys"):
  * `entity:<id>:<purpose>` (`pickupL2`, `opening`, `gfciPickup`, `gfciMechanism`, `duty`, `afci`). Each
@@ -133,7 +137,7 @@ export function entityStreamKey(id: number): string {
  * later moves nothing else. No P4 command draws from it; the engine does (P4 PR 9 on). The purpose
  * strings are frozen with v4 at v0.5.0 (golden keys and first outputs in `prng.spec.ts`).
  */
-export function entityPurposeStreamKey(id: number, purpose: string): string {
+export function entityPurposeStreamKey(id: number, purpose: EntityPurpose): string {
   return `${entityStreamKey(id)}:${purpose}`;
 }
 

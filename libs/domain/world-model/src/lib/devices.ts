@@ -12,7 +12,7 @@ import {
   TERMINATION_METHODS,
 } from '@controls/catalog';
 import { type CatalogRef, isBuiltinPropRef, type ValidationIssue } from '@controls/save-format';
-import { findEntity } from './entity-commands';
+import { findEntity, isLead } from './entity-commands';
 import { fixtureSpec } from './fixtures';
 import { conduitContinuityProblem } from './routing/continuity';
 import { coversChord, routeFloorMm } from './routing/floor';
@@ -299,6 +299,13 @@ function checkConnection(world: World, connection: Connection, at: string, catal
   for (const end of ['a', 'b'] as const) {
     const value = connection[end];
     if (value === null) continue;
+    // World v4 (P4 PR 8): a test lead's clip never sits on a terminal nothing can reach (`access:
+    // 'none'`), as `lead.connect` refuses (`inaccessible`). Only catalogue-3 entries declare `none`.
+    if (isLead(connection)) {
+      const entity = findEntity(world, value.entity);
+      const terminal = entity && catalog.device(entity.ref)?.terminals.find((t) => t.id === value.terminal);
+      if (terminal?.access === 'none') add(`${at}.${end}.terminal`, "A clip can't reach that terminal");
+    }
     points.push(checkEnd(world, value, `${at}.${end}`, catalog, add));
   }
   const conductor = kind && isConductorKind(kind) ? catalog.device(connection.ref)?.conductor : undefined;
