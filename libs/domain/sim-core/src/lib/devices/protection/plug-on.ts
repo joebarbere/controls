@@ -395,7 +395,10 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
     const b = hot[2 * i + p];
     if (b < 0) return READING_SOLVED;
     const status = islandCode(ctx, ctx.netlist.branches[b].island);
-    if (status === READING_SOLVED) view.setFloat64(at, Math.sqrt(amps2(ctx, b)) + 0, true);
+    if (status === READING_SOLVED) {
+      const s = ctx.solution.branches;
+      view.setFloat64(at, Math.sqrt(s[2 * b] * s[2 * b] + s[2 * b + 1] * s[2 * b + 1]) + 0, true);
+    }
     return status;
   };
 
@@ -420,7 +423,7 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
     } else hotRead = false;
     const nb = neutral[i];
     if (nb >= 0 && islandCode(ctx, ctx.netlist.branches[nb].island) === READING_SOLVED) {
-      view.setFloat64(offset + 8, Math.sqrt(amps2(ctx, nb)) + 0, true);
+      view.setFloat64(offset + 8, Math.sqrt(s[2 * nb] * s[2 * nb] + s[2 * nb + 1] * s[2 * nb + 1]) + 0, true);
       bits |= PLUG_ON_READING_NEUTRAL_CURRENT;
       if (sensor !== null && hotRead) {
         // What the sensor sees: |I_pole + I_neutral|, in mA.
