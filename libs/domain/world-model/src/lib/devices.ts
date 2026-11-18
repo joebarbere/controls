@@ -51,7 +51,8 @@ import type { Cable, Connection, ConnectionEnd, Entity, PositionMm, World } from
  * - (world v4, ADR 0019) `pluggedInto` passes exactly `plug.insert`'s `checkPlugInsert` for a plug
  *   already in place: the appliance's entry has a plug, the receptacle's has that outlet, the
  *   configurations mate (`nemaMates`), both are at quarter-turns and the cord reaches; where the
- *   catalogue doesn't know either entity it is left alone (a built-in prop is never plugged in). An
+ *   catalogue doesn't know either entity it is left alone (a built-in prop is never plugged in, and has
+ *   no outlets: a plug into one is refused, never left alone, as is a mount on one). An
  *   entry that both fits a mount and has a plug is refused by the catalogue itself (`parseCatalog`);
  * - (world v4) a `directory<n>` text key above the entry's panel `spaces` is `null`
  *   (`directoryKeyProblems`). Counters (catalogue v3 `counter` keys) are non-negative integers through
@@ -182,7 +183,11 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   for (const problem of directoryKeyProblems(kind, device, entity.state)) add(`${at}.${problem.path}`, problem.message);
   if (entity.pluggedInto !== null) {
     const host = findEntity(world, entity.pluggedInto.entity) as Entity; // the schema guarantees it exists
-    if (catalog.device(host.ref)) {
+    // A built-in prop isn't a catalogue device, but it is known: it has no outlets (`plug.insert` refuses
+    // it as `not-a-receptacle`), so it is never left alone like an unknown ref.
+    if (isBuiltinPropRef(host.ref)) {
+      add(`${at}.pluggedInto`, 'A built-in prop has no outlets');
+    } else if (catalog.device(host.ref)) {
       // Exactly the command's check, for a plug already in place (its own outlet isn't "occupied").
       const refused = checkPlugInsert(
         world,
@@ -219,6 +224,11 @@ function checkEntity(world: World, entity: Entity, at: string, catalog: Catalog,
   }
   if (entity.mountedOn !== null) {
     const host = findEntity(world, entity.mountedOn.entity) as Entity; // the schema guarantees it exists
+    // A built-in prop offers no mounts (`checkMount` refuses it as `unknown-mount`): known, so checked.
+    if (isBuiltinPropRef(host.ref)) {
+      add(`${at}.mountedOn`, 'A built-in prop has no mounts');
+      return;
+    }
     const hostDevice = catalog.device(host.ref);
     if (!hostDevice) return;
     const mount = offeredMounts(hostDevice).find((m) => m.id === entity.mountedOn?.mount);

@@ -119,6 +119,19 @@ describe('v3 → v4 migration', () => {
     expect(WorldV4.parse(v4)).toStrictEqual(v4);
   });
 
+  it('a crafted v3 lamp bag with 63 or 64 keys migrates past the 64-key cap and is refused cleanly', () => {
+    // WorldV3 allows 64 keys; the step adds two, so WorldV4 refuses the result (migration-failed). Such a
+    // bag could never have passed the v3 load check (the lamp kind had exactly one key).
+    const [, mains] = LAMP_INCANDESCENT_REFS_V3;
+    const sim = Object.fromEntries(Array.from({ length: 63 }, (_, i) => [`k${i}`, 0]));
+    const v3 = v3World([v3Entity(1, { ...mains }, sim)]);
+    expect(() => WorldV4.parse(worldV3ToV4(v3))).toThrow();
+    expect(worldMigrator.migrate(JSON.parse(JSON.stringify(v3)))).toMatchObject({
+      ok: false,
+      error: { kind: 'migration-failed', from: 3, to: 4 },
+    });
+  });
+
   it('a replay log migrates its initial world and copies every entry verbatim', () => {
     fc.assert(
       fc.property(rawReplayLogV3Arb, (raw) => {

@@ -271,12 +271,29 @@ describe('the world v4 load check: plugs (checkPlugInsert for a plug in place)',
     );
   });
 
-  it('leaves a plug alone where the catalogue doesn’t know the receptacle; a built-in prop has no plug', () => {
+  it('leaves a plug alone where the catalogue doesn’t know the receptacle; a built-in prop has no plug, outlets or mounts', () => {
     const unknown = { id: 'receptacle.fixture-unknown', version: 1 };
     expect(check(world([entity(1, unknown), plugged(2, KETTLE, 5000, 1)]))).toStrictEqual([]);
     expect(messages(world([entity(1, DUPLEX), plugged(2, ref('prop.crate'), 0, 1)]))).toStrictEqual([
       'entities[1].pluggedInto: A built-in prop has no cord plug',
     ]);
+    // A built-in prop is known, not unknown: it has no outlets (plug.insert: not-a-receptacle) and no mounts.
+    expect(messages(world([entity(1, ref('prop.crate')), plugged(2, KETTLE, 0, 1)]))).toStrictEqual([
+      'entities[1].pluggedInto: A built-in prop has no outlets',
+    ]);
+    expect(
+      checkPlugInsert(world([entity(1, ref('prop.crate')), entity(2, KETTLE)]), CATALOG, {
+        appliance: 2,
+        receptacle: 1,
+        outlet: 'top',
+      })?.code,
+    ).toBe('not-a-receptacle');
+    const onProp = world([
+      entity(1, ref('prop.crate')),
+      entity(2, BULB, 0, { mountedOn: { entity: 1, mount: 'socket' } }),
+    ]);
+    expect(messages(onProp)).toStrictEqual(['entities[1].mountedOn: A built-in prop has no mounts']);
+    expect(checkMount(onProp, CATALOG, BULB, at(0), Z, { entity: 1, mount: 'socket' }, 2)?.code).toBe('unknown-mount');
   });
 });
 

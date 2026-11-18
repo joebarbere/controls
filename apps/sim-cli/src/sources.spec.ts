@@ -22,8 +22,9 @@ import { WORKSHOP_LEVEL, workshopWorld } from './testing/workshop';
  * limit and a battery discharging, for 2345 ticks. Its two hashes are pinned here **and** in
  * `apps/game-e2e/src/sim-engine.spec.ts`, which runs the same console file with the engine in the page
  * (D6: the supplies' mode, the hiccup timing and the battery's coulomb counting, byte for byte in
- * Node's V8 and Chromium's). `fixtures/v4/ctrl/sources-engine-7-catalog-3.ctrl` is its save (world v3,
- * engine 7, catalogue 3; the `-engine-7-catalog-2` save is 0.4.0's, and the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
+ * Node's V8 and Chromium's). `fixtures/v4/ctrl/sources-engine-7-catalog-3.ctrl` is its save (world v4,
+ * engine 7, catalogue 3; its world v3 twin under `fixtures/v3/ctrl` is the catalogue v3 PR's, kept; the
+ * `-engine-7-catalog-2` save is 0.4.0's, and the `-engine-6-catalog-2` saves under v2 and v3 are engine 6's, kept as `engine-changed` regression tests;
  * `-engine-4`, `-engine-5` and `-engine-6` are earlier engines' or catalogues', `engine-changed` too), written by
  *
  *   pnpm sim run apps/sim-cli/scenarios/sources.console --world content/levels/workshop.json \

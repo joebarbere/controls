@@ -260,7 +260,7 @@
       },
       "sim": {
         "latched": false,
-        "residualIntegral": 0.4375,
+        "residualIntegral": 0,
         "residualSinceTick": null,
         "testHeldSinceTick": null,
         "tripCause": "groundFault"
