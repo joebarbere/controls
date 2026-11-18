@@ -34,6 +34,8 @@ All three are part of the terminal layout and covered by the `terminals` path (w
 
 `ModelKindDef.terminalFamilies?: { prefix, min, max }[]` (ADR 0019 C3): an entry of such a kind has `prefix`1 … `prefix`n for one n in `[min, max]`, with no gap, besides the kind's fixed `terminals` (a load centre's neutral bar, `n1` … `n<k>` with k from 1 to 64; ADR 0019's P4 PR 14 amendment). Without families the rule is ADR 0016's: exactly the kind's terminals.
 
+_Corrected by [ADR 0019](0019-world-document-v4.md)'s [P4 PR 14 amendment](0019-world-document-v4.md#amendment-p4-pr-14-2026-11-18-the-load-centre-its-bars-and-its-feed): a family's shape is now `{ prefix, min, max, rule? }`, where `rule: { access, role? }` binds every member; `ModelKindDef.terminalRules` binds named fixed terminals the same way; `parseCatalog` checks both. Freeze rule (from v0.5.0): a family's `min` only falls and its `max` only grows; a terminal rule on a kind with shipped entries only loosens (a stricter one needs a new kind)._
+
 ### The multi-conductor cap and `tb.quennick-st4@2`
 
 `TerminalMethodSpec.multiConductor: { awgRange, equalSize } | null` (the carried P3 item): when two or more conductors are landed by that method, each must lie in `awgRange` and, if `equalSize`, all be the same size. Non-null only with `maxConductors ≥ 2`, inside the method's own `awgRange`, coverage `terminals.<id>.methods.<method>.multiConductor`. `null` on every catalogue-2 spec. It is a termination spec value, so electrical (ADR 0016).

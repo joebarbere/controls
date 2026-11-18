@@ -403,8 +403,10 @@ describe('the tripCause rule (P4 PR 10, ADR 0019 "Schema invariants")', () => {
       ),
     );
     // The fixture keeps its fixture-only refs (no real entry exists before the content PRs); each
-    // stands for one of the kinds ADR 0021 part 2 finalised.
+    // stands for one of the kinds ADR 0021 part 2 finalised, and the load centre for the kind ADR 0019's
+    // P4 PR 14 amendment settled (44 keys, no `on`; fixed in place by PR 14a).
     const standsFor: Readonly<Record<string, string>> = {
+      'enclosure.fixture-load-centre-24': 'enclosure.loadCentre',
       'breaker.fixture-plug-on-1p-20a': 'breaker.plugOn1p',
       'breaker.fixture-plug-on-2p-30a': 'breaker.plugOn2p',
       'breaker.fixture-gfci-1p-20a': 'breaker.gfci1p',

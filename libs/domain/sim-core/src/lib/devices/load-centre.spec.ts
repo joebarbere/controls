@@ -93,6 +93,8 @@ const Z_FEED_MAIN = re(R_BB + LC_MAIN_POLE_OHM + LC_FEED_OHM);
 /** A branch breaker's stab contact and pole, its two leads and its load. */
 const branchZ = (ohms: number): Complex => re(LC_STAB_OHM + LC_BRANCH_POLE_OHM + 2 * R_BB + ohms);
 
+/** Engine against hand calculation (the plan's ≤ 0.5 %, held far tighter here: same model, exact arithmetic). */
+const ENGINE_TOL = 1e-5;
 const near = (got: number, want: number, rel: number) => expect(Math.abs(got / want - 1)).toBeLessThan(rel);
 
 function host(): SourceHost {
@@ -173,20 +175,24 @@ describe('the main-breaker load centre: bus and neutral-bar currents', () => {
     // Bus currents: the feed contact on each leg, which by KCL is the sum of that bar's stab contacts.
     const feed1 = current(h, contact(main, 'load1'));
     const feed2 = current(h, contact(main, 'load2'));
-    near(abs(feed1), abs(I1), 0.005);
-    near(abs(feed2), abs(I2), 0.005);
+    near(abs(feed1), abs(I1), ENGINE_TOL);
+    near(abs(feed2), abs(I2), ENGINE_TOL);
     // A contact's current runs from the dependent device (end a) to the host (end b): into the bar from
     // the feed, out of it into each breaker. KCL at the bar, at the plan's floor (1e-9 · max|I| + 1e-12 A).
     const stabs1 = add(current(h, contact(a, 'line1')), current(h, contact(b, 'line1')));
     const floor = 1e-9 * abs(feed1) + 1e-12;
     expect(abs(add(stabs1, feed1))).toBeLessThan(floor);
     expect(abs(add(current(h, contact(c, 'line1')), feed2))).toBeLessThan(floor);
-    near(abs(current(h, contact(a, 'line1'))), abs(I1) / 2, 0.005);
+    near(abs(current(h, contact(a, 'line1'))), abs(I1) / 2, ENGINE_TOL);
     // The neutral bar's current, read from the neutral conductor (connection 3): |I_1 + I_2|.
-    near(abs(current(h, connection(3))), abs(add(I1, I2)), 0.005);
-    near(abs(current(h, connection(3))), 18.5394, 0.005);
+    near(abs(current(h, connection(3))), abs(add(I1, I2)), ENGINE_TOL);
+    near(abs(current(h, connection(3))), 18.5394, ENGINE_TOL);
     // The engine's own reading of the feed contact (what protocol 8's busL1CurrentA will publish).
-    near(h.engine.branchAmps({ kind: 'contact', entity: main, relation: 'mount', contact: 'load1' }), abs(I1), 0.005);
+    near(
+      h.engine.branchAmps({ kind: 'contact', entity: main, relation: 'mount', contact: 'load1' }),
+      abs(I1),
+      ENGINE_TOL,
+    );
   });
 
   it('with nothing on mainFeed the bus is unfed: the island holds no source, nothing is reported, no current', () => {
@@ -230,8 +236,8 @@ describe('a main-lug subpanel (no main bonding jumper)', () => {
     load(h, a, RESISTOR_12, lc, 'n1');
     const want = 120 / abs(add(Z_LN, re(R_L + R_N + R_BB + R_BB + LC_FEED_OHM), branchZ(12)));
     near(want, 9.93087, 1e-4);
-    near(abs(current(h, contact(main, 'l1'))), want, 0.005);
-    near(abs(current(h, connection(3))), want, 0.005);
+    near(abs(current(h, contact(main, 'l1'))), want, ENGINE_TOL);
+    near(abs(current(h, connection(3))), want, ENGINE_TOL);
     const netlist = h.engine.netlist;
     const nodeOf = (ref: TerminalRef) =>
       netlist.nodes.find((n) => n.members.some((m) => m.entity === ref.entity && m.terminal === ref.terminal))?.index;
@@ -263,11 +269,11 @@ describe('a ground fault on a branch (the EGC on the ground bar, the GEC to a ro
     const R_M = LC_BOND_OHM + 2 * LC_BOND_OHM + R_BB + R_N;
     const want = 120 / abs(add(LOOP, parallel(re(R_M), re(R_E))));
     near(want, 1313.99, 1e-4);
-    near(abs(current(h, connection(fault))), want, 0.005);
+    near(abs(current(h, connection(fault))), want, ENGINE_TOL);
     const viaJumper = (want * R_E) / (R_M + R_E);
     near(viaJumper, 1312.64, 1e-4);
-    near(abs(current(h, contact(mbj, 'neutral'))), viaJumper, 0.005);
-    near(abs(current(h, contact(mbj, 'chassis'))), viaJumper, 0.005);
+    near(abs(current(h, contact(mbj, 'neutral'))), viaJumper, ENGINE_TOL);
+    near(abs(current(h, contact(mbj, 'chassis'))), viaJumper, ENGINE_TOL);
     // It opens inside its opening time (8–20 ms), magnetically; the main (2000 A and up) doesn't.
     h.advance(7);
     expect(h.sim(a)['tripped']).toBe(false);
@@ -281,14 +287,14 @@ describe('a ground fault on a branch (the EGC on the ground bar, the GEC to a ro
     const { h, a, fault, lc } = faulted(false);
     const want = 120 / abs(add(LOOP, re(R_E)));
     near(want, 2.66996, 1e-4);
-    near(abs(current(h, connection(fault))), want, 0.005);
+    near(abs(current(h, connection(fault))), want, ENGINE_TOL);
     const touch = want * (R_BB + ROD_OHM);
     near(touch, 106.532, 1e-4);
     const reading = h.engine.probe(t(lc, 'chassis'), { entity: 0, terminal: 'earth' });
     expect(reading.kind).toBe('ac');
-    if (reading.kind === 'ac') near(reading.rmsVolts, touch, 0.005);
+    if (reading.kind === 'ac') near(reading.rmsVolts, touch, ENGINE_TOL);
     h.advance(3000);
     expect(h.sim(a)['tripped']).toBe(false);
-    near(abs(current(h, connection(fault))), want, 0.005);
+    near(abs(current(h, connection(fault))), want, ENGINE_TOL);
   });
 });

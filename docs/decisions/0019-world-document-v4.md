@@ -458,8 +458,8 @@ Decided by `save-format-guardian` for P4 PR 14a (the kinds and their netlist mod
 
 - **No `on` key.** A load centre has no handle of its own: its main breaker (a separate entity) has one. The "45 keys" of the PR 7 text counted an `on` that was never decided; the bag is 44 commanded keys, under `MAX_DEVICE_STATE_KEYS` (64).
 - **`coverOn` starts `false`.** A dead front is fitted after the panel is wired, as a duct's cover is (F3.5 part 2's `coverOn`); P5's shock model reads it. It is the entry's toggle control; no `directory*` key is ever a control.
-- **Terminal roles**, checked by `parseCatalog` through the kind's new `terminalRules` and each family's `rule`: `busL1`, `busL2` and `chassis` are `access: 'clip'` with no methods (reached through mounted devices and clips, never landed on); `neutral` and every `n<k>` are `land` with `role: 'grounded'` (one grounded conductor each); every `g<k>` is `land` with `role: 'egc'`.
-- **Bar terminal ids and mount ids are save format per entry version from v0.5.0** (renumbering is a new entry version; a family's `max` only grows): a saved conductor's landed end names `n12`, and a saved device's `mountedOn` names a mount.
+- **Terminal roles**, checked by `parseCatalog` through the kind's new `terminalRules` and each family's `rule`: `busL1`, `busL2` and `chassis` are `access: 'clip'` with no methods (reached through mounted devices and clips, never landed on); `neutral` and every `n<k>` are `land` with `role: 'grounded'` (one grounded conductor each); every `g<k>` is `land` with `role: 'egc'`; the jumper's `body` is `none` (it is never landed on or clipped) and the main lugs' `l1` and `l2` are `land`. (Mechanism added in implementation, endorsed by `save-format-guardian` in review; it follows the freeze rule in the next bullet.)
+- **Bar terminal ids and mount ids are save format per entry version from v0.5.0** (renumbering is a new entry version; a family's `min` only falls and its `max` only grows; a terminal rule on a kind with shipped entries only loosens, and a stricter one needs a new kind): a saved conductor's landed end names `n12`, and a saved device's `mountedOn` names a mount.
 - **The ground bar is on the kit, not the can.** An accessory equipment grounding bar is its own entity (`bond.groundBar`) on the load centre's `groundBarKit` mount, bonded to `chassis` through that mount's contact; the can itself has no `g` terminals.
 - **The inspector finds a main bonding jumper by its mount, never by its kind:** what bonds a neutral bar to its can is whatever device sits on the load centre's `mbj` mount (a `bond.jumper` today; a strap kind later would be another kind on the same mount).
 - **`feed.mainLugs`:** the feeder lands on `l1` and `l2`, which reach the bus bars through the `mainFeed` mount's contacts. A main-lug panel is one load-centre entry with main lugs on `mainFeed`.
@@ -479,7 +479,7 @@ Decided by `save-format-guardian` for P4 PR 14a (the kinds and their netlist mod
 
 - **`enclosure.loadCentre`:** one ideal join group `[neutral, n1 … nN]` and no elements. `busL1`, `busL2` and `chassis` are lone terminals, joined only through mounted devices; with nothing on `mainFeed` the bus is unfed and nothing is reported.
 - **`bond.groundBar`:** one ideal join group `[bar, g1 … gN]`. **`bond.jumper`** and **`feed.mainLugs`:** no element. None of the four kinds has sim state, a bank or a record (`output: null`).
-- **Ideal joins, no bus-bar or neutral-bar resistance.** A labelled abstraction: every path through a bar already crosses a sourced contact or termination (a stab, the feed contact, a conductor's landed end).
+- **Ideal joins, no bus-bar or neutral-bar resistance.** A labelled abstraction. Every path through a bar already crosses a mount contact or a termination of milliohms; a residential bus or neutral bar is roughly 5–12 µΩ per space (aluminium, 57–150 mm², resistivity × length ÷ area), under 1 % of a branch path and under 0.1 % of a fault loop, so it is left out.
 - **`mainFeed` to the bus** goes through the ordinary non-bus mount-contact path ([ADR 0021](0021-service-grounding-and-protection-physics.md) §4), with no `busStabIndex`.
 - **Family terminals reach the models:** `DeviceTopologyInput` gains `terminals`, the entry's ids (its families' members included), sorted and frozen once per entry by the catalogue (`Catalog.terminalIds`). A model's terminal ids must be the entry's, not only the kind's. The bar models cache their topology per entry on that array, so a compile allocates nothing for them.
 - **`wiringGraph`:** the bar joins appear; the neutral bar and the can stay unjoined unless a jumper is mounted (or a conductor joins them).
@@ -490,7 +490,7 @@ Not laid out in PR 14a, which was written while PR 11 (protocol 8, [ADR 0011](00
 
 - `busL1CurrentA` and `busL2CurrentA`: the **feed-contact current** on that leg, with the reading bit cleared when `mainFeed` is empty (not the sum of the stabs, which is about 0 by KCL);
 - `mbjCurrentA`, when a jumper is mounted;
-- `touchVoltageV` (`chassis` to remote earth);
+- `touchVoltageV` (`chassis` to remote earth: the enclosure's potential rise, an upper bound on a touch voltage; no surface-potential model);
 - `status`;
 - **no `gecCurrentA`**: the GEC is a conductor with its own connection record;
 - a compiler host-side index (host entity, mount, host contact → branch), built once per compile, so the record reads its contact branches without a search per tick.

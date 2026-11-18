@@ -3,11 +3,11 @@
   "seed": 20261118,
   "tick": 0,
   "nextEntityId": 13,
-  "nextConnectionId": 1,
+  "nextConnectionId": 3,
   "nextCableId": 1,
-  "nextTerminationId": 1,
+  "nextTerminationId": 5,
   "regionId": "nec",
-  "difficulty": "apprentice",
+  "difficulty": "trainee",
   "assisted": false,
   "fixtures": [],
   "areas": [],
@@ -469,7 +469,174 @@
       "pluggedInto": null
     }
   ],
-  "connections": [],
+  "connections": [
+    {
+      "id": 1,
+      "ref": {
+        "id": "conductor.test-14",
+        "version": 1
+      },
+      "a": {
+        "entity": 8,
+        "terminal": "load",
+        "termination": {
+          "id": 1,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 1.4,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 1,
+        "terminal": "n11",
+        "termination": {
+          "id": 2,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 1.4,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 135,
+            "y": -20,
+            "z": 60
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 100,
+            "y": -20,
+            "z": 60
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 600,
+      "colour": {
+        "base": "white",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "fused": false,
+        "insulationDamaged": false
+      },
+      "extensions": {},
+      "marking": {
+        "a": null,
+        "b": null
+      }
+    },
+    {
+      "id": 2,
+      "ref": {
+        "id": "conductor.test-14-bare",
+        "version": 1
+      },
+      "a": {
+        "entity": 12,
+        "terminal": "g10",
+        "termination": {
+          "id": 3,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 1.4,
+          "accessory": null
+        }
+      },
+      "b": {
+        "entity": 1,
+        "terminal": "n12",
+        "termination": {
+          "id": 4,
+          "method": "screw",
+          "auto": true,
+          "stripLengthMm": 13,
+          "nickedStrandFraction": 0,
+          "torqueNm": 1.4,
+          "accessory": null
+        }
+      },
+      "cable": null,
+      "route": [
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 540,
+            "y": -20,
+            "z": 60
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        },
+        {
+          "kind": "free",
+          "positionMm": {
+            "x": 110,
+            "y": -20,
+            "z": 60
+          },
+          "entity": null,
+          "fixture": null,
+          "tool": null
+        }
+      ],
+      "lengthMm": 1000,
+      "colour": {
+        "base": "bare",
+        "stripe": null
+      },
+      "label": null,
+      "state": {},
+      "sim": {
+        "conductorTempK": null,
+        "endADegradation": 1,
+        "endAState": "ok",
+        "endATempK": null,
+        "endATerminationId": null,
+        "endBDegradation": 1,
+        "endBState": "ok",
+        "endBTempK": null,
+        "endBTerminationId": null,
+        "fused": false,
+        "insulationDamaged": false
+      },
+      "extensions": {},
+      "marking": {
+        "a": null,
+        "b": null
+      }
+    }
+  ],
   "cables": [],
   "sim": null,
   "extensions": {}

@@ -209,6 +209,9 @@ describe('load-centre netlist properties (P4 PR 14a)', () => {
           if (element.kind !== 'entity') expect(graph.joined(end(branch.a), end(branch.b))).toBe(true);
         }
         const jumper = of(bus.state, [LC.mbj]).length > 0;
+        // With every conductor removed, the neutral bar and the can are joined exactly when a jumper is mounted.
+        const bare = wiringGraph({ ...bus.state, connections: [] }, ENGINE_TEST_CATALOG, { models });
+        expect(bare.joined({ entity: 1, terminal: 'neutral' }, { entity: 1, terminal: 'chassis' })).toBe(jumper);
         if (!jumper && bus.state.connections.length === 0) {
           expect(graph.joined({ entity: 1, terminal: 'neutral' }, { entity: 1, terminal: 'chassis' })).toBe(false);
         }

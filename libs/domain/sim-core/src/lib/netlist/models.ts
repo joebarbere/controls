@@ -305,8 +305,10 @@ function barModel(kind: string, head: string, prefix: string): DeviceNetlistMode
  * joined only through what is mounted (a main breaker or main lugs on `mainFeed`, breakers on the
  * stabs, a main bonding jumper on `mbj`, a ground bar kit on `groundBarKit`); with nothing on
  * `mainFeed` the bus is unfed and nothing is reported. **No bus-bar or neutral-bar resistance** (a
- * labelled abstraction): every path through a bar already crosses a sourced contact or termination (a
- * stab, the feed contact, a conductor's landed end); the bar's own resistance is left out.
+ * labelled abstraction). Every path through a bar already crosses a mount contact or a termination of
+ * milliohms; a residential bus or neutral bar is roughly 5–12 µΩ per space (aluminium, 57–150 mm²,
+ * resistivity × length ÷ area), under 1 % of a branch path and under 0.1 % of a fault loop, so it is
+ * left out.
  */
 const enclosureLoadCentre = barModel('enclosure.loadCentre', 'neutral', 'n');
 

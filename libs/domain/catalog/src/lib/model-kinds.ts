@@ -948,6 +948,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     kind: 'bond.jumper',
     placement: 'entity',
     terminals: ['body'],
+    terminalRules: { body: { access: 'none' } },
     params: z.strictObject({}),
     keys: {},
     description:
@@ -1094,6 +1095,7 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     kind: 'feed.mainLugs',
     placement: 'entity',
     terminals: ['l1', 'l2'],
+    terminalRules: { l1: { access: 'land' }, l2: { access: 'land' } },
     params: z.strictObject({}),
     keys: {},
     description:

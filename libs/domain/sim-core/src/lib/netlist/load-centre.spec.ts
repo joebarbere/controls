@@ -206,4 +206,10 @@ describe('enclosure.loadCentre (P4 PR 14a)', () => {
     check();
     expect(compile(bus.state).diagnostics).toStrictEqual([]);
   });
+
+  it('a catalogue that knows an entry but not its terminal ids is an internal error, never a silent empty device', () => {
+    const bus = loadCentre();
+    const broken = { ...ENGINE_TEST_CATALOG, terminalIds: () => undefined };
+    expect(() => compileNetlist(bus.state, broken)).toThrow('the catalogue has no terminal ids for panel.test-lc-20@1');
+  });
 });

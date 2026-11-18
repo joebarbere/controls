@@ -191,5 +191,19 @@ describe('the load centre in the world (P4 PR 14a)', () => {
     const mounts = world.entities.map((e) => e.mountedOn?.mount ?? null);
     for (const mount of ['main', 'left', 'right', 'mbj', 'groundBar']) expect(mounts).toContain(mount);
     expect(world.entities.find((e) => e.mountedOn?.mount === 'main')?.ref).toStrictEqual(LC.main);
+    // Two conductors on the bars: space 11's breaker load screw to n11 (k ≥ 10, so string order differs
+    // from numeric), and the ground bar kit's g10 to n12.
+    const ends = world.connections.map((c) => [
+      world.entities.find((e) => e.id === c.a?.entity)?.ref.id,
+      c.a?.terminal,
+      c.b?.entity,
+      c.b?.terminal,
+    ]);
+    expect(ends).toStrictEqual([
+      [LC.branch20.id, 'load', lc?.id, 'n11'],
+      [LC.groundBar.id, 'g10', lc?.id, 'n12'],
+    ]);
+    const space11 = world.entities.find((e) => e.id === world.connections[0].a?.entity);
+    expect(space11?.transform.positionMm).toStrictEqual(spacePositionMm(11));
   });
 });
