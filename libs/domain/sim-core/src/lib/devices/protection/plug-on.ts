@@ -318,12 +318,6 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
     emit('tripped', entity[i], { cause: TRIP_CAUSES[code - 1] });
   };
 
-  /** |I|² of branch `b` in the last solution. */
-  const amps2 = (ctx: LayerContext | CommandedContext, b: number): number => {
-    const s = ctx.solution.branches;
-    return s[2 * b] * s[2 * b] + s[2 * b + 1] * s[2 * b + 1];
-  };
-
   /** Whether device `i`'s line-side electronics are powered in the last solution (line to pigtail). */
   const powered = (i: number, ctx: CommandedContext): boolean => {
     const h = hot[2 * i];
@@ -401,7 +395,10 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
     const b = hot[2 * i + p];
     if (b < 0) return READING_SOLVED;
     const status = islandCode(ctx, ctx.netlist.branches[b].island);
-    if (status === READING_SOLVED) view.setFloat64(at, Math.sqrt(amps2(ctx, b)) + 0, true);
+    if (status === READING_SOLVED) {
+      const s = ctx.solution.branches;
+      view.setFloat64(at, Math.sqrt(s[2 * b] * s[2 * b] + s[2 * b + 1] * s[2 * b + 1]) + 0, true);
+    }
     return status;
   };
 
@@ -426,7 +423,7 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
     } else hotRead = false;
     const nb = neutral[i];
     if (nb >= 0 && islandCode(ctx, ctx.netlist.branches[nb].island) === READING_SOLVED) {
-      view.setFloat64(offset + 8, Math.sqrt(amps2(ctx, nb)) + 0, true);
+      view.setFloat64(offset + 8, Math.sqrt(s[2 * nb] * s[2 * nb] + s[2 * nb + 1] * s[2 * nb + 1]) + 0, true);
       bits |= PLUG_ON_READING_NEUTRAL_CURRENT;
       if (sensor !== null && hotRead) {
         // What the sensor sees: |I_pole + I_neutral|, in mA.
@@ -526,7 +523,8 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
           const branch = netlist.branches[b];
           if (marks[branch.a] === 0 && marks[branch.b] === 0) continue;
           if (!ctx.islandReadable(branch.island)) continue;
-          largest = Math.max(largest, Math.sqrt(amps2(ctx, b)));
+          const s = ctx.solution.branches;
+          largest = Math.max(largest, Math.sqrt(s[2 * b] * s[2 * b] + s[2 * b + 1] * s[2 * b + 1]));
         }
       }
     }
@@ -597,6 +595,8 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
       const dt = ctx.dtS;
       const tick = ctx.tick;
       const branches = ctx.netlist.branches;
+      const s = ctx.solution.branches;
+      if (sensor !== null) sensor.dtS[0] = dt;
       const boundary = variant.afci && tick % BUCKET_TICKS === 0;
       for (let i = 0; i < n; i++) {
         // Whether the test was held over this step (its resistor drew this step's residual): the cause of
@@ -628,7 +628,9 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
         let hotThermal = false;
         for (let p = 0; p < poles; p++) {
           const k = 2 * i + p;
-          const i2 = amps2(ctx, hot[k]);
+          // |I|² read in place: a helper returning it boxes the double when it isn't inlined (gfci.ts).
+          const hb = hot[k];
+          const i2 = s[2 * hb] * s[2 * hb] + s[2 * hb + 1] * s[2 * hb + 1];
           thermal[k] = Math.max(0, thermal[k] + dt * invTau[i] * (i2 * invRated2[i] - thermal[k])) + 0;
           if (i2 >= pickup2[k]) above = true;
           if (thermal[k] >= tripAt[i]) hotThermal = true;
@@ -641,11 +643,10 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
         } else magSince[i] = -1;
         if (code === CAUSE_NONE && hotThermal) code = CAUSE_THERMAL;
         if (sensor !== null) {
-          const s = ctx.solution.branches;
           const re = s[2 * h0] + s[2 * nb];
           const im = s[2 * h0 + 1] + s[2 * nb + 1];
-          const residual = Math.sqrt(re * re + im * im);
-          if (sensor.step(i, residual, tick, dt) && code === CAUSE_NONE) {
+          sensor.residualA[i] = Math.sqrt(re * re + im * im);
+          if (sensor.step(i, tick) && code === CAUSE_NONE) {
             code = held ? CAUSE_TEST : CAUSE_GROUND_FAULT;
           }
         }

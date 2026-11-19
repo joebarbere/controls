@@ -227,6 +227,32 @@ function sampledLoopBytes(call: () => void, calls: number): number {
   return bytes;
 }
 
+/** A layer's measure: windows of this many calls, after `LAYER_WARM_UP_CALLS` calls. */
+const LAYER_WINDOW_CALLS = 40_000;
+const LAYER_WINDOWS = 5;
+const LAYER_WARM_UP_CALLS = 200_000;
+
+/**
+ * Bytes a layer's `call` allocates per call, by the engine gates' rule (`settledWindows`): sampled
+ * windows of `LAYER_WINDOW_CALLS` calls until the last four agree within 2 B a call, then the median
+ * of the last `LAYER_WINDOWS`. The warm-up goes through `runCalls` in short calls, so `runCalls` is
+ * optimised on entry rather than by an on-stack replacement inside a window (a compile that allocates
+ * about 11.5 kB under the window's frame; snapshot-read, #152). A layer that allocates on every call
+ * raises every window. A layer still tiering up, or re-optimising after a deopt, boxes its doubles for
+ * a while (measured: the lamp's `continuous` at 121 B a call through the second window in 60 of 60
+ * runs, `Math.sqrt`, `max` and `min` returning heap numbers; the AFCI's `protection` 1.19 MB in a
+ * window after new closures deoptimised it), so its windows fall, and the rule waits for them. With
+ * one 200,000-call window, `afci1p` read 1.72 B a call once in a full `verify` under load.
+ */
+function layerBytesPerCall(call: () => void): { perCall: number; windows: readonly number[] } {
+  for (let k = 0; k < LAYER_WARM_UP_CALLS; k += 1_000) runCalls(call, 1_000);
+  const { perStep, all } = settledWindows(
+    LAYER_WINDOWS,
+    () => sampledLoopBytes(call, LAYER_WINDOW_CALLS) / LAYER_WINDOW_CALLS,
+  );
+  return { perCall: perStep, windows: all };
+}
+
 describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () => {
   /** The battery (1) through `device` (2; terminals `a`, `b`) into `load` (3), `extra` commands first. */
   const series = (
@@ -362,43 +388,43 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
       ],
     ].map(([name, make]) => [name as string, (make as () => () => void)()]);
     for (const [name, call] of layers) {
-      for (let k = 0; k < 200_000; k++) call(); // tier up
-      const bytes = sampledLoopBytes(call, 200_000);
-      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${bytes / 200_000}`);
+      const { perCall, windows } = layerBytesPerCall(call);
+      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${perCall} [${windows.join(' ')}]`);
       // Under 1 B a call: one heap number a call is 16 B; the window's own noise measured 0.01–0.07.
-      expect(bytes / 200_000, name).toBeLessThan(1);
+      expect(perCall, `${name}: windows (B a call) ${windows.join(' ')}`).toBeLessThan(1);
     }
   });
 
   // Breakers v2 (P4 PR 10): each kind's protection layer on its bank, a loaded closed breaker every tick
-  // (the AFCI's bucket boundaries included, with nothing arcing; the GFCI's residual 0).
+  // (the AFCI's bucket boundaries included, with nothing arcing; the GFCI's residual 2 mA, under its
+  // pickup). The currents aren't whole amps: a whole |I|² is a small integer, which V8 tags without a
+  // heap number, so a double crossing a call that isn't inlined (16 B a call) would go unseen.
   it('each breakers-v2 layer alone (bank calls on a fixed solution) allocates nothing per call', () => {
     const p20 = plugOnParams(20);
     const rigs: [string, BankRig][] = [
-      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15)],
-      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15).amps('pole2', -15)],
+      ['plugOn1p', bankRig(PLUG_ON_1P_MODEL, p20, ['pole']).amps('pole', 15.3)],
+      ['plugOn2p', bankRig(PLUG_ON_2P_MODEL, p20, ['pole1', 'pole2']).amps('pole1', 15.3).amps('pole2', -15.3)],
       [
         'gfci1p',
         bankRig(GFCI_BREAKER_MODEL, { ...p20, ...GFCI_SENSE_PARAMS }, ['neutral', 'pole'], {
           state: { on: true, test: 0 },
         })
-          .amps('pole', 15)
-          .amps('neutral', -15),
+          .amps('pole', 15.3)
+          .amps('neutral', -15.298),
       ],
       [
         'afci1p',
         bankRig(AFCI_BREAKER_MODEL, p20, ['neutral', 'pole'], { state: { on: true, test: 0 } })
-          .amps('pole', 15)
-          .amps('neutral', -15),
+          .amps('pole', 15.3)
+          .amps('neutral', -15.3),
       ],
     ];
     for (const [name, rig] of rigs) {
       const call = () => rig.step();
-      for (let k = 0; k < 200_000; k++) call(); // tier up
-      const bytes = sampledLoopBytes(call, 200_000);
-      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${bytes / 200_000}`);
+      const { perCall, windows } = layerBytesPerCall(call);
+      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC layer-${name} ${perCall} [${windows.join(' ')}]`);
       expect(rig.events, name).toStrictEqual([]);
-      expect(bytes / 200_000, name).toBeLessThan(1);
+      expect(perCall, `${name}: windows (B a call) ${windows.join(' ')}`).toBeLessThan(1);
     }
   });
 
@@ -502,10 +528,9 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
       ['lamp', () => lamp.writeRecord?.(0, view, 0, lampCtx)],
     );
     for (const [name, call] of writers) {
-      for (let k = 0; k < 200_000; k++) call(); // tier up
-      const bytes = sampledLoopBytes(call, 200_000);
-      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC record-${name} ${bytes / 200_000}`);
-      expect(bytes / 200_000, name).toBeLessThan(1);
+      const { perCall, windows } = layerBytesPerCall(call);
+      if (process.env['ALLOC_LOG'] === '1') console.log(`ALLOC record-${name} ${perCall} [${windows.join(' ')}]`);
+      expect(perCall, `${name}: windows (B a call) ${windows.join(' ')}`).toBeLessThan(1);
     }
     // The gate sees an allocation: a writer that builds one small object per call reads far above it.
     let sink: unknown = null;
@@ -515,5 +540,28 @@ describe('SimEngine per-tick allocation, F2.5 devices (regression gates)', () =>
     for (let k = 0; k < 200_000; k++) planted();
     expect(sampledLoopBytes(planted, 200_000) / 200_000).toBeGreaterThan(8);
     expect(sink).not.toBeNull();
+  });
+
+  it("the layer measure sees a call's allocation, and a median ignores a one-off in one window", () => {
+    const rig = bankRig(AFCI_BREAKER_MODEL, plugOnParams(20), ['neutral', 'pole'], { state: { on: true, test: 0 } })
+      .amps('pole', 15)
+      .amps('neutral', -15);
+    const ring: unknown[] = new Array(4096).fill(null);
+    let at = 0;
+    // 32 B a call, kept alive in a ring so escape analysis can't remove it.
+    const leaky = () => {
+      rig.step();
+      ring[at++ & 4095] = { a: at, b: at + 1 };
+    };
+    expect(layerBytesPerCall(leaky).perCall).toBeGreaterThan(8);
+    // 400 kB once, in the third window (as the 1.72 B a call that one 200,000-call window read).
+    let calls = 0;
+    const once = LAYER_WARM_UP_CALLS + 2 * LAYER_WINDOW_CALLS + 100;
+    const bursty = () => {
+      rig.step();
+      if (++calls === once) ring[0] = new Array(50_000).fill(0.5);
+    };
+    expect(layerBytesPerCall(bursty).perCall).toBeLessThan(1);
+    expect(calls).toBeGreaterThan(once); // the burst ran inside the measured windows
   });
 });

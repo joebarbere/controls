@@ -191,12 +191,12 @@ function smokeRig(netlist: boolean): SnapshotReadRig {
  * allocation: a read must allocate nothing.
  */
 /**
- * The allocation probe's smoke form: windows of 5,000 reads (a read that allocates a boxed double,
- * 12 B, still shows as 12 B; a one-off 11 kB step would be 2.2 B, but it must land in every window of
- * a size to count, and the smallest of 3 is kept), the warm-up to optimised code unchanged.
+ * The allocation probe's smoke form: the median of 5 windows of 5,000 reads (a read that allocates a
+ * boxed double, 12 B, raises every window; a one-off burst while the read briefly runs unoptimised
+ * lands in one, which the median ignores), the warm-up to optimised code unchanged.
  */
 const SMOKE_READS = 5_000;
-const SMOKE_WINDOWS = 3;
+const SMOKE_WINDOWS = 5;
 
 export const SNAPSHOT_READ_CASE: BenchCase = {
   name: 'snapshot-read-500-devices',
@@ -243,7 +243,7 @@ export const OVERLAY_READ_CASE: BenchCase = {
     // Smoke: the plain read's smoke form on the smoke plant (it ignored smoke before, 13 s of CI's 30).
     const bytes = smoke
       ? bytesPerRead(smokeRig(true), SMOKE_READS, SMOKE_WINDOWS)
-      : bytesPerRead(netlistRig(), 4_000, 6, 10_000);
+      : bytesPerRead(netlistRig(), 4_000, 7, 10_000);
     return {
       value: bytes,
       failure:

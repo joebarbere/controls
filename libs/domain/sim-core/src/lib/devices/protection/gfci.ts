@@ -55,14 +55,40 @@ export function gfciRateTable(limits: GfciClassLimits): GfciRateTable {
  * below the first point, linear in rate between points, `Infinity` above the last point.
  */
 export function gfciTripRate(table: GfciRateTable, amps: number): number {
+  RATE_SCRATCH[0] = amps;
+  gfciTripRateInto(table, RATE_SCRATCH, 0, RATE_SCRATCH, 1);
+  return RATE_SCRATCH[1];
+}
+
+const RATE_SCRATCH = new Float64Array(2);
+
+/**
+ * `gfciTripRate` slot to slot: the rate at the current `from[at]` (A), written to `out[outAt]`. Only
+ * tagged values and small integers cross the call, so a call the optimiser doesn't inline boxes no
+ * double (the simulation caveats, "No double crosses a call in a per-tick path").
+ */
+export function gfciTripRateInto(
+  table: GfciRateTable,
+  from: Float64Array,
+  at: number,
+  out: Float64Array,
+  outAt: number,
+): void {
   const xs = table.amps;
   const rs = table.rates;
   const last = xs.length - 1;
-  if (amps <= xs[0]) return rs[0];
-  if (amps > xs[last]) return Infinity;
+  const amps = from[at];
+  if (amps <= xs[0]) {
+    out[outAt] = rs[0];
+    return;
+  }
+  if (amps > xs[last]) {
+    out[outAt] = Infinity;
+    return;
+  }
   let k = 1;
   while (amps > xs[k]) k++;
-  return rs[k - 1] + ((rs[k] - rs[k - 1]) * (amps - xs[k - 1])) / (xs[k] - xs[k - 1]);
+  out[outAt] = rs[k - 1] + ((rs[k] - rs[k - 1]) * (amps - xs[k - 1])) / (xs[k] - xs[k - 1]);
 }
 
 /** min + (max − min) u, u the first output of `stream` (a band draw, ADR 0019 "PRNG stream keys"). */
@@ -79,7 +105,10 @@ const TRIP_AT = 1 + GFCI_INTEGRAL_TOLERANCE.value;
 
 /**
  * The ground-fault sensors of a bank's GFCI devices, struct-of-arrays (no allocation per tick). `since`
- * and `testHeld` hold −1 for `null`.
+ * and `testHeld` hold −1 for `null`. A step's doubles go in through slots, never as arguments: the
+ * caller writes the residual to `residualA[i]` and the step length to `dtS[0]`, then calls `step(i,
+ * tick)`. A double passed to a call the optimiser doesn't inline is boxed (16 B a call, measured on the
+ * GFCI breaker's layer gate in about one run in eight, and in every run under `--no-maglev`).
  */
 export class GfciSensor {
   readonly pickupA: Float64Array;
@@ -87,6 +116,12 @@ export class GfciSensor {
   readonly integral: Float64Array;
   readonly since: Float64Array;
   readonly testHeld: Float64Array;
+  /** Per device: the residual |I_hot + I_neutral| (A) the next `step` reads, written by the caller. */
+  readonly residualA: Float64Array;
+  /** The step length (s) the next `step` reads, written by the caller: `dtS[0]`. */
+  readonly dtS = new Float64Array(1);
+  /** `step`'s trip rate (1/s), slot to slot. */
+  private readonly rate = new Float64Array(1);
 
   constructor(
     count: number,
@@ -97,6 +132,7 @@ export class GfciSensor {
     this.integral = new Float64Array(count);
     this.since = new Float64Array(count).fill(-1);
     this.testHeld = new Float64Array(count).fill(-1);
+    this.residualA = new Float64Array(count);
   }
 
   /**
@@ -121,10 +157,13 @@ export class GfciSensor {
   }
 
   /**
-   * One protection step `[tick, tick + 1)` of device `i` at residual current `amps` (A, a reading):
-   * integrates, and returns whether it trips at this step (open from `tick + 1`). Allocates nothing.
+   * One protection step `[tick, tick + 1)` of device `i` at the residual current `residualA[i]` (A, a
+   * reading) over `dtS[0]` (s): integrates, and returns whether it trips at this step (open from
+   * `tick + 1`). Allocates nothing.
    */
-  step(i: number, amps: number, tick: number, dtS: number): boolean {
+  step(i: number, tick: number): boolean {
+    const amps = this.residualA[i];
+    const dtS = this.dtS[0];
     if (!(amps >= this.pickupA[i])) {
       this.integral[i] = 0;
       this.since[i] = -1;
@@ -134,7 +173,8 @@ export class GfciSensor {
       this.since[i] = tick;
       this.integral[i] = 0;
     }
-    const rate = gfciTripRate(this.table, amps);
+    gfciTripRateInto(this.table, this.residualA, i, this.rate, 0);
+    const rate = this.rate[0];
     if (rate === Infinity) this.integral[i] = 1;
     else this.integral[i] = Math.min(1, this.integral[i] + dtS * rate);
     // Open at the last tick at or before the integral reaches 1 at the present rate: never later than the

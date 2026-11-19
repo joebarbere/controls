@@ -19,8 +19,7 @@ import {
   SIM_PROTOCOL_VERSION,
   type TopologyDescriptor,
 } from '@controls/sim-protocol';
-import { GCProfiler, getHeapStatistics, setFlagsFromString } from 'node:v8';
-import { runInNewContext } from 'node:vm';
+import { sampledBytes } from './allocation-sites';
 
 /*
  * The main thread's per-frame snapshot read (ADR 0011 §9.2, plan F2.3b), as `sim bench` measures it:
@@ -69,8 +68,8 @@ export const READ_SMOKE_PLANT = Object.freeze({ devices: 50, nodes: 100, branche
 
 /**
  * The allocation gate, in bytes per read: under 1 B, so any object allocated on every read (12 B or
- * more, a boxed double) fails, and so does one every dozen reads. With the warm-up windows discarded
- * (`bytesPerRead`) a read measures 0 B: 13 of 13 `sim bench` runs on a loaded machine (#60 review 2).
+ * more, a boxed double) fails, and so does one every dozen reads. Sampled (`bytesPerRead`, #152), a
+ * warm read measures 0 B in almost every window; the median of the windows is the gate's value.
  */
 export const READ_ALLOCATION_GATE_BYTES = 1;
 
@@ -199,42 +198,43 @@ export function snapshotReadRig(
 }
 
 /**
- * Bytes allocated per frame's read, by the method of the simulation caveats: `--expose-gc` at run
- * time, a collection before each window, heap growth plus what each GC freed (`GCProfiler`), and the
- * smallest of several windows (code not yet optimised allocates more). Returned as a slope between
- * windows of `reads`, `2 × reads` and `3 × reads` reads, so the profiler's own fixed cost per window
- * cancels out and only what each read adds is left.
+ * One measured window: `count` frames, each a publish and a read. Module-level and warmed by many
+ * short calls, so V8 can optimise it on entry: a loop that first gets hot inside a window is compiled
+ * there by on-stack replacement, which allocates about 11.5 kB under the window's frame every window,
+ * whatever its length (measured, #152).
  */
-export function bytesPerRead(rig: SnapshotReadRig, reads = 20_000, windows = 6, warmup = 20_000): number {
-  setFlagsFromString('--expose-gc');
-  const collect = runInNewContext('gc') as () => void;
-  // Long enough for the read to reach optimised code: before that it may box what it returns.
-  for (let i = 0; i < warmup; i++) {
+function readWindow(rig: SnapshotReadRig, count: number): void {
+  for (let i = 0; i < count; i++) {
     rig.announce();
     rig.read();
   }
-  const window = (count: number) => {
-    collect();
-    const profiler = new GCProfiler();
-    const start = getHeapStatistics().used_heap_size;
-    profiler.start();
-    for (let i = 0; i < count; i++) {
-      rig.announce();
-      rig.read();
-    }
-    const stats = profiler.stop()?.statistics ?? [];
-    const freed = stats.reduce(
-      (sum, s) => sum + s.beforeGC.heapStatistics.usedHeapSize - s.afterGC.heapStatistics.usedHeapSize,
-      0,
-    );
-    return getHeapStatistics().used_heap_size - start + freed;
+}
+
+/** Reads per warm-up call: short, so the warm-up is many calls of {@link readWindow}. */
+const WARM_UP_CALL_READS = 50;
+
+/**
+ * Bytes allocated per frame's read, sampled as sim-core's allocation gates sample a step (the
+ * simulation caveats, "Measuring allocation in a spec"). After a warm-up of `warmup` reads to optimised
+ * code, each of `windows` estimates samples the bytes under `reads` reads and under `2 × reads`
+ * (`sampledBytes`: the reads alone, nothing else in the process) and takes the difference per read,
+ * so a fixed cost per window cancels (an on-stack-replacement compile of the loop: about 11.5 kB, and
+ * about 6.8 kB once a long-lived process has sent hundreds of rigs through `readWindow`, measured).
+ * The gate takes the median estimate: a read that allocates raises every one, while a window where the
+ * read briefly runs unoptimised (a one-off of up to 37 kB, about 1 window in 100) moves one, which
+ * the median ignores. Heap growth, the method before, also counted what the rest of the process
+ * allocated (single slopes up to 67 B a read with nothing sampled under the read), and its
+ * smallest-window slopes let a one-off through (1.024 and 3.024 B a read on CI, #144 and #152).
+ * Use an odd `windows`.
+ */
+export function bytesPerRead(rig: SnapshotReadRig, reads = 20_000, windows = 7, warmup = 20_000): number {
+  for (let done = 0; done < warmup; done += WARM_UP_CALL_READS) readWindow(rig, WARM_UP_CALL_READS);
+  const estimate = () => {
+    const one = sampledBytes(() => readWindow(rig, reads));
+    const two = sampledBytes(() => readWindow(rig, 2 * reads));
+    return (two - one) / reads;
   };
-  // One window of each size first, discarded: the first measured window of a process carries a
-  // one-time cost (about 17.7 kB) that isn't the read's.
-  for (const count of [reads, 2 * reads, 3 * reads]) window(count);
-  const smallest = (count: number) => Math.min(...Array.from({ length: windows }, () => window(count)));
-  const [one, two, three] = [smallest(reads), smallest(2 * reads), smallest(3 * reads)];
-  // Two independent slopes, the smaller kept: what a read allocates raises both, while a one-off
-  // step (about 11 kB, now and then in one window size) raises at most one.
-  return Math.max(0, Math.min(two - one, three - two) / reads);
+  const perRead = Array.from({ length: windows }, estimate).sort((a, b) => a - b);
+  const mid = perRead.length >> 1;
+  return Math.max(0, perRead.length % 2 === 1 ? perRead[mid] : (perRead[mid - 1] + perRead[mid]) / 2);
 }
