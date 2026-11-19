@@ -2,6 +2,7 @@ import { BUILTIN_CATALOG, type Catalog, catalogOrThrow, type ModelKindDef, type 
 import type { CommandBus } from '@controls/commands';
 import { createWorld, FiniteNumber, type World } from '@controls/save-format';
 import { createWorldBus, createWorldRegistry } from '@controls/world-model';
+import { LOAD_CENTRE_DOCUMENTS } from '@controls/world-model/testing';
 import * as z from 'zod';
 import { BUILTIN_DEVICE_MODELS, GENERATOR_STUB_NAMEPLATE } from '../lib/devices';
 import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../lib/engine/device-model';
@@ -399,6 +400,9 @@ export const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
   ...PLUG_ON_DOCUMENTS,
+  // P4 PR 14a: the load centre, its bonds, main lugs and breakers over the real kinds (world-model's
+  // TEST-ONLY entries, `LOAD_CENTRE_REFS`), until PR 14's content ships real ones.
+  ...LOAD_CENTRE_DOCUMENTS,
 ];
 
 /** The built-in catalogue, `bench.ts`'s test entries and the engine's. */

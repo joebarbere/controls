@@ -25,7 +25,13 @@ import { HEATER, RESISTOR_10R } from '../../testing/loads';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
 import { AFCI_15, GFCI_20, PLUG_ON_15, PLUG_ON_2P_20 } from '../../testing/plug-on';
 import { free, SPLIT_PHASE, THHN_14_SOLID, wireArgs, wiredBus } from '../../testing/wired';
-import { WIRING_TEST_CATALOG } from '@controls/world-model/testing';
+import {
+  GROUND_BAR_X,
+  LOAD_CENTRE_REFS as LC,
+  MAIN_X,
+  MBJ_X,
+  WIRING_TEST_CATALOG,
+} from '@controls/world-model/testing';
 
 const WIRE_NUT_M = { id: 'splice.corvelle-tw-m', version: 1 };
 
@@ -78,6 +84,11 @@ const MODEL_KIND_TOPOLOGY = {
   gfci1pOn: '5d73d2eb00a7dd458f914f5762a1f21d0e1ec7578439254f1e63adadf8b3649b',
   gfci1pTestHeld: 'd3a3ca6c3e89faf7efcfab2eb021f29598bfbe957d21d64effea190b7b9977d8',
   afci1pOn: '5be6e63cd04b8997eda7695e7d85c25862396180d54d027aca6ee29a5db77bd6',
+  enclosureLoadCentre: 'f52ae1b791fc9826b682091fcb0c55a38c7323135661a9413ace6f88b0158f5d',
+  bondJumper: 'a88ec8ae6747d35a16c3641a6ff2e94469f0203e002a9f24fee2c2b1747b2d94',
+  bondGroundBar: '858448f9244aab46e749266ff0fccd5af97a4b6989a93b0b05124a4422bab51e',
+  feedMainLugs: 'fa041edf741d8b4a5ff1dbf0b61181b4d419b9d308b9c94cbf699d79c48f2f4b',
+  plugOn2pMainFeed: '2db16066d87d28a0eaca442658d0dd9dcdbdd15c836ae3f5ffdf5911327a5198',
 };
 
 /** The model kind each golden above covers: together, every kind in `MODEL_KINDS` (a test checks). */
@@ -117,6 +128,11 @@ const PINNED_KIND: Readonly<Record<keyof typeof MODEL_KIND_TOPOLOGY, string>> = 
   gfci1pOn: 'breaker.gfci1p',
   gfci1pTestHeld: 'breaker.gfci1p',
   afci1pOn: 'breaker.afci1p',
+  enclosureLoadCentre: 'enclosure.loadCentre',
+  bondJumper: 'bond.jumper',
+  bondGroundBar: 'bond.groundBar',
+  feedMainLugs: 'feed.mainLugs',
+  plugOn2pMainFeed: 'breaker.plugOn2p',
 };
 
 /** A length byte and the ASCII codes of `text`. */
@@ -233,6 +249,16 @@ describe('topologyHash', () => {
       const patched = { ...world, entities: world.entities.map((e) => ({ ...e, sim: { ...e.sim, ...sim } })) };
       return compileNetlist(patched, ENGINE_TEST_CATALOG).topologyHash;
     };
+    /** A load centre (1) at the origin, with `ref` (2) on its mount `mount` at x when given (its handle on if `on`). */
+    const onLoadCentre = (ref?: typeof LEAD, mount = '', x = 0, on = false) => {
+      const bus = benchBus(ENGINE_TEST_CATALOG);
+      run(bus, 'entity.place', { ref: LC.loadCentre, positionMm: origin });
+      if (ref !== undefined) {
+        run(bus, 'entity.place', { ref, positionMm: { x, y: 0, z: 0 }, mountedOn: { entity: 1, mount } });
+      }
+      if (on) run(bus, 'device.operate', { id: 2, control: 'on', value: true });
+      return compileNetlist(bus.state, ENGINE_TEST_CATALOG).topologyHash;
+    };
     const lead = () => {
       const bus = benchBus();
       for (const ref of [LAMP, LAMP]) run(bus, 'entity.place', { ref, positionMm: origin });
@@ -264,6 +290,16 @@ describe('topologyHash', () => {
       gfci1pOn: handleOn(GFCI_20),
       gfci1pTestHeld: handleOn(GFCI_20, { testHeldSinceTick: 0 }),
       afci1pOn: handleOn(AFCI_15),
+      // P4 PR 14a (ADR 0019's P4 PR 14 amendment), on world-model's TEST-ONLY entries: a lone 20-space load
+      // centre (its neutral bar `neutral`, `n1` … `n20` one join group, a family), and one with each
+      // mount kind's device: a main bonding jumper on `mbj` (two contacts on its one `body` terminal), a
+      // ground bar kit on `groundBarKit` (`bar`, `g1` … `g10` one group), main lugs on `mainFeed`, and the
+      // main breaker (a `breaker.plugOn2p`) on `mainFeed` with its handle on.
+      enclosureLoadCentre: onLoadCentre(),
+      bondJumper: onLoadCentre(LC.mbj, 'mbj', MBJ_X),
+      bondGroundBar: onLoadCentre(LC.groundBar, 'groundBar', GROUND_BAR_X),
+      feedMainLugs: onLoadCentre(LC.mainLugs, 'main', MAIN_X),
+      plugOn2pMainFeed: onLoadCentre(LC.main, 'main', MAIN_X, true),
       resistor: one(RESISTOR_10R),
       heater: one(HEATER),
       fuse: one(FUSE_1A),
