@@ -1,5 +1,6 @@
 import { BUILTIN_CATALOG, type BreakerParams, MODEL_KINDS, type PlugOnBreakerParams } from '@controls/catalog';
 import { deriveStream, entityPurposeStreamKey, entityStreamKey } from '@controls/world-model';
+import fc from 'fast-check';
 import { bankRig } from '../../../testing/breakers';
 import { BUSBAR, engineBus, ENGINE_TEST_CATALOG, RHEOSTAT } from '../../../testing/engine';
 import { AFCI_15, GFCI_20, PLUG_ON_15, PLUG_ON_20, PLUG_ON_2P_20, plugOnParams } from '../../../testing/plug-on';
@@ -26,6 +27,15 @@ import { PLUG_ON_1P_MODEL, PLUG_ON_2P_MODEL } from './plug-on';
  *   for pole 1, `:pickupL2` for pole 2); above it the breaker opens ⌈8 + 12 u′⌉ ticks after the first
  *   step that saw it (u′ the `:opening` stream's first output), whatever the current: at 25 × and 50 ×
  *   of a 20 A breaker (500 A, 1000 A) and 50 × of a 15 A one (750 A), cause `magnetic`;
+ * - **above the pickup the magnetic path owns the trip** (ADR 0021 part 2, correction): the law's time
+ *   at I is ≈ τ (k_u I_n / I)², under the 8 ms opening floor from 18.75 × √(60 / 0.008) ≈ 1.62 kA on a
+ *   15 A pole (and, at the drawn 20 ms ceiling, from 18.75 × √(60 / 0.020) ≈ 1.03 kA). At 1.9 kA on 15 A
+ *   (a = (1900 / 15)² = 16 044.4, θ_k ≈ a k / 60 000 from cold) the bimetal crosses k_u² = 1.5625 at
+ *   k = ⌈1.5625 × 60 000 / 16 044.4⌉ = ⌈5.843⌉ = 6 ticks, before any drawn opening (≥ 8): the breaker
+ *   still opens at the drawn opening, cause `magnetic`. On a two-pole breaker a bimetal crossing on the
+ *   other pole inside the window doesn't initiate either (the armature has released the common trip).
+ *   Below the pickup a cold bimetal needs at least τ (k_u I_n / I_max)² ≈ 132 ms at 15 A (400 A), 93.5 ms
+ *   at 30 A (950 A), the shipped minimum, so a thermal trip from cold never undercuts the mechanism;
  * - the frozen DIN entry's pickup is 8–12 × 15 A = 120–180 A; no plug-on band is ever a multiple.
  *
  * Every engine golden reads the current the circuit drew (a utility stand-in, the breaker, a rheostat;
@@ -117,7 +127,10 @@ describe('the thermal element (bank, exact currents)', () => {
     'trips thermally at %s × within 0.5 % of the law and inside its band (15 and 20 A)',
     (k) => {
       for (const p of [P15, P20]) {
-        const rig = bankRig(PLUG_ON_1P_MODEL, p, ['pole']).amps('pole', k * p.ratedCurrentA);
+        const rig = bankRig(PLUG_ON_1P_MODEL, p as unknown as Record<string, number>, ['pole']).amps(
+          'pole',
+          k * p.ratedCurrentA,
+        );
         const ticks = rig.runToTrip(4_000_000);
         expect(rig.events.at(-1)?.cause).toBe('thermal');
         near(ticks * dt, thermalTripS(p, k * p.ratedCurrentA), 0.005);
@@ -229,6 +242,121 @@ describe('the magnetic element (opening after the drawn opening time, D6)', () =
     const b = ticksToTrip(loaded, 100);
     expect(b).toStrictEqual(a);
     expect(loaded.engine.snapshotHash()).toBe(straight.engine.snapshotHash());
+  });
+});
+
+describe('above the pickup the magnetic path owns the trip (ADR 0021 part 2, correction)', () => {
+  it('1.9 kA on a 15 A pole: the bimetal crosses at tick 6, yet it opens at the drawn opening, magnetic', () => {
+    const rig = bankRig(PLUG_ON_1P_MODEL, P15, ['pole']).amps('pole', 1900);
+    const opening = openingOf(P15, 11, 2);
+    expect(opening).toBeGreaterThanOrEqual(8);
+    for (let k = 0; k < 6; k++) rig.step();
+    // The hand calculation: θ is past k_u² after 6 ticks (and not after 5), and nothing has opened.
+    expect(rig.bank.bag(0)['thermal'] as number).toBeGreaterThanOrEqual(1.5625);
+    expect(rig.events).toStrictEqual([]);
+    expect(rig.bank.bag(0)['magneticSinceTick']).toBe(0);
+    expect(6 + rig.runToTrip(100)).toBe(opening);
+    expect(rig.events).toStrictEqual([{ tick: opening, kind: 'tripped', cause: 'magnetic' }]);
+    expect(rig.bank.bag(0)).toMatchObject({ tripped: true, tripCause: 'magnetic', magneticSinceTick: null });
+  });
+
+  it('crosses k_u² between ticks 5 and 6 at 1.9 kA (the golden’s hand figure)', () => {
+    const rig = bankRig(PLUG_ON_1P_MODEL, P15, ['pole']).amps('pole', 1900);
+    for (let k = 0; k < 5; k++) rig.step();
+    expect(rig.bank.bag(0)['thermal'] as number).toBeLessThan(1.5625);
+  });
+
+  it('a bimetal already at its trip point, then a fault: magnetic at the drawn opening, not thermal at once', () => {
+    const rig = bankRig(PLUG_ON_1P_MODEL, P20, ['pole'], {
+      bag: { thermal: 1.5625 * (1 - 1e-9), tripped: false, tripCause: null, magneticSinceTick: null },
+    }).amps('pole', 800);
+    expect(rig.runToTrip(100)).toBe(openingOf(P20, 11, 2));
+    expect(rig.events.at(-1)?.cause).toBe('magnetic');
+  });
+
+  it('two-pole: pole 1 above its pickup, pole 2’s bimetal crossing inside the window: magnetic, at the opening', () => {
+    const rig = bankRig(PLUG_ON_2P_MODEL, P20, ['pole1', 'pole2'], {
+      bag: { thermalL1: 0, thermalL2: 1.5625 * (1 - 1e-6), tripped: false, tripCause: null, magneticSinceTick: null },
+    })
+      .amps('pole1', 1500)
+      .amps('pole2', 100);
+    const opening = openingOf(P20, 11, 2);
+    for (let k = 0; k < 2; k++) rig.step();
+    // Pole 2 is past its trip point (100 A is 5 ×) and pole 1 too (1.5 kA), well inside the window.
+    expect(rig.bank.bag(0)['thermalL2'] as number).toBeGreaterThanOrEqual(1.5625);
+    expect(rig.events).toStrictEqual([]);
+    expect(2 + rig.runToTrip(100)).toBe(opening);
+    expect(rig.events.at(-1)?.cause).toBe('magnetic');
+  });
+
+  it('two-pole: once the fault clears below every pickup before the opening, a hot bimetal trips thermally', () => {
+    const rig = bankRig(PLUG_ON_2P_MODEL, P20, ['pole1', 'pole2'], {
+      bag: { thermalL1: 0, thermalL2: 1.5625 * (1 - 1e-6), tripped: false, tripCause: null, magneticSinceTick: null },
+    })
+      .amps('pole1', 1500)
+      .amps('pole2', 100);
+    for (let k = 0; k < 2; k++) rig.step();
+    expect(rig.events).toStrictEqual([]);
+    rig.amps('pole1', 10).step();
+    expect(rig.events).toStrictEqual([{ tick: 3, kind: 'tripped', cause: 'thermal' }]);
+  });
+
+  it('property: from the drawn pickup to 5 kA, any rating, any pole, any bimetal state: magnetic at the opening', () => {
+    // The shipped plug-on entries (one- and two-pole, 15–50 A), each with its own band.
+    const shipped = BUILTIN_CATALOG.devices.filter((d) => d.model.kind === 'breaker.plugOn1p');
+    expect(shipped.map((d) => (d.model.params as PlugOnBreakerParams).ratedCurrentA)).toStrictEqual([
+      15, 20, 30, 40, 50,
+    ]);
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...shipped.map((d) => d.model.params as PlugOnBreakerParams)),
+        fc.integer({ min: 1, max: 1000 }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.boolean(),
+        fc.boolean(),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        (p, seed, frac, twoPole, faultOnPole2, heat1, heat2) => {
+          const rating = p.ratedCurrentA;
+          const pole: 1 | 2 = twoPole && faultOnPole2 ? 2 : 1;
+          const pickup = pickupOf(p, seed, 2, pole);
+          const amps = pickup + frac * (5000 - pickup);
+          // A bimetal anywhere from cold to just under its trip point.
+          const theta = (h: number) => 1.5625 * (1 - 1e-6) * h;
+          const rig = twoPole
+            ? bankRig(PLUG_ON_2P_MODEL, p as unknown as Record<string, number>, ['pole1', 'pole2'], {
+                seed,
+                bag: { thermalL1: theta(heat1), thermalL2: theta(heat2), tripped: false, tripCause: null },
+              })
+                .amps(pole === 1 ? 'pole1' : 'pole2', amps)
+                // The other pole's load, below every band (≤ 5 ×, up to 250 A at 50 A).
+                .amps(pole === 1 ? 'pole2' : 'pole1', 5 * rating * heat2)
+            : bankRig(PLUG_ON_1P_MODEL, p as unknown as Record<string, number>, ['pole'], {
+                seed,
+                bag: { thermal: theta(heat1), tripped: false, tripCause: null },
+              }).amps('pole', amps);
+          expect(rig.runToTrip(100)).toBe(openingOf(p, seed, 2));
+          expect(rig.events).toHaveLength(1);
+          expect(rig.events[0].cause).toBe('magnetic');
+        },
+      ),
+      { seed: 20261119, numRuns: 300 },
+    );
+  });
+
+  it('below every shipped band’s top a cold bimetal needs ≥ 93.5 ms: thermal never undercuts the 8 ms floor', () => {
+    const entries = BUILTIN_CATALOG.devices.filter((d) =>
+      ['breaker.plugOn1p', 'breaker.plugOn2p', 'breaker.gfci1p', 'breaker.afci1p'].includes(d.model.kind),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    let least = Infinity;
+    for (const d of entries) {
+      const p = d.model.params as PlugOnBreakerParams;
+      least = Math.min(least, thermalTripS(p, p.magneticPickupMaxA));
+    }
+    // 30 A at 950 A: −60 ln(1 − (37.5 / 950)²) = 0.093563 s.
+    near(least, 0.093563, 0.005);
+    expect(least).toBeGreaterThan(0.02);
   });
 });
 

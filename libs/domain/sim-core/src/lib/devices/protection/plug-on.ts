@@ -41,6 +41,13 @@ import { drawTicksInBand, GfciSensor, gfciRateTable } from './gfci';
  * (8–20 ms), counted from the first protection step that saw a pole above its pickup
  * (`magneticSinceTick`, persisted, so a save inside the window opens at the same tick); the fault
  * current keeps flowing (and heating the bimetal) until then. Below the pickup the excursion ends.
+ * While any pole is above its pickup the magnetic path owns the trip: the armature releases the latch
+ * within the first half-cycle and the mechanism sets the contact opening, so a bimetal crossing its
+ * trip point inside the window (the law's time falls under the 8 ms floor from about 1.03 kA on a
+ * 15 A pole) neither opens it early nor reports `thermal`; on a two-pole breaker the other pole's
+ * bimetal doesn't either (one common trip unit, already released). Below every band's top a cold
+ * bimetal needs at least 93.5 ms (30 A at 950 A: 60 × (37.5 / 950)²), so the thermal path never
+ * needs the mechanism's delay from cold (ADR 0021 part 2, correction).
  *
  * **Common trip.** Any pole's thermal or magnetic trip opens every pole (`tripped`, one key). The cause
  * is persisted (`tripCause`) and carried by the `tripped` event; when two causes come at one step the
@@ -62,7 +69,9 @@ import { drawTicksInBand, GfciSensor, gfciRateTable } from './gfci';
  *
  * **Abstractions** (for `electrical-realism-reviewer`): one time constant per bimetal (no case mass);
  * no ambient compensation; the pickup is the same on AC and DC; a pole's contact resistance is
- * constant; no let-through I²t or interrupting rating; the GFCI and AFCI's neutral is never switched.
+ * constant; no let-through I²t or interrupting rating; the GFCI and AFCI's neutral is never switched;
+ * a bimetal already near its trip point (a long overload) that crosses it below the pickup opens at that
+ * step, with no mechanism time.
  *
  * **Records** (protocol 8, P4 PR 11; ADR 0011's protocol 8 amendment): per-pole currents (|I|, RMS on
  * AC), thermal fractions (θ / k_u², 1 trips) and drawn pickups, the drawn opening time, `state`
@@ -641,7 +650,9 @@ function plugOnBank(variant: Variant, devices: readonly SimDevice[]): SimDeviceB
           // Open at the state tick `magneticSinceTick + opening`: this step's end.
           if (tick + 1 - magSince[i] >= openingTicks[i]) code = CAUSE_MAGNETIC;
         } else magSince[i] = -1;
-        if (code === CAUSE_NONE && hotThermal) code = CAUSE_THERMAL;
+        // Above any pole's pickup the armature has released the latch (one trip unit for every pole):
+        // the mechanism is already opening, and no bimetal, on this pole or the other, initiates it.
+        if (code === CAUSE_NONE && hotThermal && !above) code = CAUSE_THERMAL;
         if (sensor !== null) {
           const re = s[2 * h0] + s[2 * nb];
           const im = s[2 * h0 + 1] + s[2 * nb + 1];

@@ -26,12 +26,14 @@ import { AFCI_BREAKER_MODEL, GFCI_BREAKER_MODEL, PLUG_ON_1P_MODEL, PLUG_ON_2P_MO
  *   readings, about ±15 %). 500 % is below every band's pickup (75–250 A against 240–350 A), and 10 ×
  *   only on 15 and 20 A (150 and 200 A against 240 A); at 10 × of 30 A and up the pickup band begins;
  * - **magnetic**: each pole's pickup is min + (max − min) u (u its stream's first output); above it the
- *   breaker opens ⌈8 + 12 u′⌉ ticks after the first step that saw it. The fault: a 0.2 Ω load on the
- *   25 kVA stand-in draws about 120 / (0.2 + 0.0146) ≈ 560 A on 15 and 20 A (above 400 A), a 0.05 Ω
- *   one about 1.9 kA on 30–50 A (above ≤ 1000 A). Kept inside the magnetic window: the bimetal law's
- *   time falls as (k_u I_n / I)² × τ, so it beats the 8 ms opening floor above about
- *   18.75 × √(60 / 0.008) ≈ 1.62 kA on a 15 A breaker (at 1.9 kA it trips `thermal` in ≈ 6 ms, a model
- *   limit reported to sim-engine-engineer); at 560 A on 15 A it needs ≈ 67 ms, at 1.9 kA on 30 A ≈ 23 ms;
+ *   breaker opens ⌈8 + 12 u′⌉ ticks after the first step that saw it, cause `magnetic`, whatever the
+ *   bimetal does meanwhile (ADR 0021 part 2, correction). The faults: a 0.2 Ω load on the 25 kVA
+ *   stand-in draws about 120 / (0.2 + 0.0146) ≈ 560 A on 15 and 20 A (above 400 A), a 0.05 Ω one
+ *   about 1.9 kA on 30–50 A (above ≤ 1000 A); and a bolted 1 mΩ fault, about
+ *   120 / (0.0146 + 0.001 + pole + stab) ≈ 4.9 kA on 15 A (9.1 mΩ) to 6.9 kA on 50 A (1.8 mΩ), above
+ *   the shipped service's ≈ 1.6 kA at the meter. There the bimetal law's time, ≈ τ (k_u I_n / I)²,
+ *   is under 1 ms (15 A at 4.9 kA: 60 × (18.75 / 4900)² ≈ 0.88 ms): it crosses its trip point long
+ *   before the 8 ms floor, and the breaker still opens at the drawn opening, magnetic;
  * - **pole loss at the rating**, I_n² × (pole + stab contact): 15 A: 225 × 9.1 mΩ = 2.0475 W; 20 A:
  *   400 × 5.1 mΩ = 2.04 W; 30 A: 900 × 4.1 mΩ = 3.69 W; 40 A: 1600 × 2.5 mΩ = 4.0 W; 50 A:
  *   2500 × 1.8 mΩ = 4.5 W (the anchors: about 2.2 W for a 20 A residential AFCI; about 2.5, 2.8, 3.8,
@@ -82,8 +84,15 @@ const MAX_CLEARING_S: Record<number, Record<number, number | 'instantaneous'>> =
   50: { 15: 0.63, 20: 'instantaneous', 25: 'instantaneous' },
 };
 
-/** The bolted fault that lands inside the rating's magnetic window (see the header). */
+/** A fault just above the rating's band (see the header). */
 const faultOhms = (p: PlugOnBreakerParams) => (p.ratedCurrentA <= 20 ? 0.2 : 0.05);
+/** A bolted fault (1 mΩ): several kA, where the bimetal law alone would cross in under 1 ms. */
+const BOLTED_OHMS = 0.001;
+/** Each fault and the least current (A) it must draw: above the band's top, and bolted above the service's 1.6 kA. */
+const faults = (p: PlugOnBreakerParams): [string, number, number][] => [
+  ['above the band', faultOhms(p), p.magneticPickupMaxA],
+  ['bolted', BOLTED_OHMS, 4000],
+];
 
 const openingOf = (p: PlugOnBreakerParams, seed: number, id: number) =>
   Math.ceil(
@@ -286,19 +295,22 @@ describe('the shipped plug-on breaker entries (P4 F4.2 part 2)', () => {
   );
 
   it.each(ENTRIES.filter((d) => d.model.kind === 'breaker.plugOn1p').map((d) => [d.id, d] as const))(
-    '%s, a bolted load on the bench above its band: magnetic, opening 8–20 ms after the fault',
+    '%s, a fault above its band and a bolted one on the bench: magnetic, opening 8–20 ms after the fault',
     (_, d) => {
       const p = params(d);
-      const host = bench(d);
-      host.advance(20);
-      host.operate(3, 'ohms', faultOhms(p));
-      expect(partAmps(host, 2, 'pole')).toBeGreaterThan(p.magneticPickupMaxA);
-      const { ticks, cause } = ticksToTrip(host, 100);
-      expect(cause).toBe('magnetic');
-      expect(ticks).toBe(openingOf(p, 11, 2));
-      expect(ticks).toBeGreaterThanOrEqual(8);
-      expect(ticks).toBeLessThanOrEqual(20);
-      expect(partAmps(host, 2, 'pole')).toBe(0);
+      for (const [label, ohms, least] of faults(p)) {
+        const host = bench(d);
+        host.advance(20);
+        host.operate(3, 'ohms', ohms);
+        expect(partAmps(host, 2, 'pole'), label).toBeGreaterThan(least);
+        const { ticks, cause } = ticksToTrip(host, 100);
+        expect(cause, label).toBe('magnetic');
+        expect(ticks, label).toBe(openingOf(p, 11, 2));
+        expect(ticks).toBeGreaterThanOrEqual(8);
+        expect(ticks).toBeLessThanOrEqual(20);
+        expect(partAmps(host, 2, 'pole')).toBe(0);
+        expect(host.sim(2)).toMatchObject({ tripped: true, tripCause: 'magnetic' });
+      }
       // The pickup it drew is inside the entry's band.
       const pickup = pickupOf(p, 11, 2);
       expect(pickup).toBeGreaterThanOrEqual(p.magneticPickupMinA);
@@ -307,22 +319,40 @@ describe('the shipped plug-on breaker entries (P4 F4.2 part 2)', () => {
   );
 
   it.each(ENTRIES.filter((d) => d.model.kind === 'breaker.plugOn2p').map((d) => [d.id, d] as const))(
-    '%s: a bolted fault on its second pole opens both (a common trip)',
+    '%s: a fault above its band or a bolted one on its second pole opens both (a common trip, magnetic)',
     (_, d) => {
       const p = params(d);
-      const host = bench(d);
-      host.operate(3, 'ohms', 12);
-      host.advance(20);
-      near(partAmps(host, 2, 'pole1'), 10, 0.02);
-      host.operate(4, 'ohms', faultOhms(p));
-      expect(partAmps(host, 2, 'pole2')).toBeGreaterThan(p.magneticPickupMaxA);
-      const { ticks, cause } = ticksToTrip(host, 100);
-      expect(cause).toBe('magnetic');
-      expect(ticks).toBe(openingOf(p, 11, 2));
-      expect(partAmps(host, 2, 'pole1')).toBe(0);
-      expect(partAmps(host, 2, 'pole2')).toBe(0);
+      for (const [label, ohms, least] of faults(p)) {
+        const host = bench(d);
+        host.operate(3, 'ohms', 12);
+        host.advance(20);
+        near(partAmps(host, 2, 'pole1'), 10, 0.02);
+        host.operate(4, 'ohms', ohms);
+        expect(partAmps(host, 2, 'pole2'), label).toBeGreaterThan(least);
+        const { ticks, cause } = ticksToTrip(host, 100);
+        expect(cause, label).toBe('magnetic');
+        expect(ticks, label).toBe(openingOf(p, 11, 2));
+        expect(partAmps(host, 2, 'pole1')).toBe(0);
+        expect(partAmps(host, 2, 'pole2')).toBe(0);
+      }
     },
   );
+
+  it.each(
+    ENTRIES.filter((d) => d.model.kind === 'breaker.gfci1p' || d.model.kind === 'breaker.afci1p').map(
+      (d) => [d.id, d] as const,
+    ),
+  )('%s, a bolted line-to-neutral fault on its load: magnetic at the drawn opening (no residual, no arc)', (_, d) => {
+    const p = params(d);
+    const host = bench(d);
+    host.advance(20);
+    host.operate(3, 'ohms', BOLTED_OHMS);
+    expect(partAmps(host, 2, 'pole')).toBeGreaterThan(4000);
+    const { ticks, cause } = ticksToTrip(host, 100);
+    expect(cause).toBe('magnetic');
+    expect(ticks).toBe(openingOf(p, 11, 2));
+    expect(host.sim(2)).toMatchObject({ tripped: true, tripCause: 'magnetic' });
+  });
 
   it.each(ENTRIES.filter((d) => d.model.kind === 'breaker.gfci1p').map((d) => [d.id, d] as const))(
     '%s: its 15 kΩ test resistor trips it, cause test, about 3637 ticks after the press, inside the hold',
