@@ -32,6 +32,7 @@ import {
   islandReferenceNode,
 } from '../mna/dc';
 import { AcSolver } from '../mna/ac';
+import { OUTER_LOOP_MAX_ITERATIONS } from '../constants';
 import { AC_DEFAULT_VALUES, AC_STAMP_UNSET, AcBranchValues, type AcDefaultValue } from '../mna/ac-values';
 import { DC_DEFAULT_VALUES, DcBranchValues, type DcDefaultValue, RESISTOR_DEFAULT_MODELS } from '../mna/values';
 import { isEmptyNetlist, NetlistCompiler } from '../netlist/compile';
@@ -369,6 +370,20 @@ export class SimEngine {
   private branchDcValue: (SimDeviceBank['dcValue'] | null)[] = [];
   private branchAcValue: (SimDeviceBank['acValue'] | null)[] = [];
   private branchIterate: (SimDeviceBank['iterate'] | null)[] = [];
+  /**
+   * Per branch: its bank's `acIterate` hook (engine 8, the phasor outer loop: a dimmer, an LED driver),
+   * and the branches that have one, ascending: the loop calls only these.
+   */
+  private branchAcIterate: (SimDeviceBank['acIterate'] | null)[] = [];
+  private acIterating = new Int32Array(0);
+  /** Per island: 1 if a hook on it asked for another phasor solve in the last pass (scratch). */
+  private acMoved = new Uint8Array(0);
+  /** Per iterating branch: its bank's `acStage` (0 by default); and the distinct stages, ascending. */
+  private acIteratingStage = new Int32Array(0);
+  private acStages = new Int32Array(0);
+  /** Per island (scratch): capped this solve, and its phasor solves this solve. */
+  private acCapped = new Uint8Array(0);
+  private acSolves = new Uint16Array(0);
   private branchDefault: (DcDefaultValue | undefined)[] = [];
   /** Per branch: 1 if its DC default is its static `resistanceOhm`, which `defaultOhms` holds (see `refreshDefaultOhms`). */
   private defaultResistor = new Uint8Array(0);
@@ -1105,7 +1120,10 @@ export class SimEngine {
     const next = this.solver.solveNonlinear(netlist, this.values, this.nonlinear, this.spare);
     // Then the AC islands, into the same record: the DC solve left them zeroed and unsolved, and the
     // phasor solver writes only `ac` islands (mixed islands stay unsolved: P2 has no converters).
-    if (this.hasAc) this.acSolver.solve(netlist, this.acValues, this.frequencyHz, next);
+    if (this.hasAc) {
+      this.acSolver.solve(netlist, this.acValues, this.frequencyHz, next);
+      if (this.acIterating.length > 0) this.iterateAc(netlist, next);
+    }
     // Indexed loops throughout: a cadence solve allocates nothing of the engine's own.
     const islands = netlist.islands;
     for (let k = 0; k < islands.length; k++) {
@@ -1155,6 +1173,72 @@ export class SimEngine {
       this.previousFlags[island.index] = flags;
     }
     if (why !== 'start') this.onSolve?.(tick);
+  }
+
+  /**
+   * The phasor outer loop (engine 8, P4 D10 and D11; ADR 0021 L2, L3). After the first phasor solve,
+   * the `acIterate` hooks run **in stages** (`SimDeviceBank.acStage`, ascending; 0 by default): within
+   * a stage each hook on a solved, non-singular island sees the solution and may set a new value, and
+   * only the islands whose hooks moved are solved again, while hooks of other stages keep the values
+   * they were last stamped with. So a dimmer (stage 0) fits its reactance with the drivers downstream
+   * frozen, then the LED drivers (stage 1) settle with the reactance frozen. An island may take at most
+   * `OUTER_LOOP_MAX_ITERATIONS` phasor solves in one engine solve; one still moving then is flagged
+   * `nonConverged` and left out of later passes. Each island holding a hook records its own phasor
+   * solves as its iterations. Allocation-free.
+   */
+  private iterateAc(netlist: Netlist, next: DcSolution): void {
+    const iterating = this.acIterating;
+    const stageOf = this.acIteratingStage;
+    const stages = this.acStages;
+    const moved = this.acMoved;
+    const capped = this.acCapped;
+    const solves = this.acSolves;
+    const cap = OUTER_LOOP_MAX_ITERATIONS.value;
+    capped.fill(0);
+    solves.fill(1);
+    let pass = 1;
+    for (let si = 0; si < stages.length; si++) {
+      const stage = stages[si];
+      for (;;) {
+        moved.fill(0);
+        let any = false;
+        for (let k = 0; k < iterating.length; k++) {
+          if (stageOf[k] !== stage) continue;
+          const index = iterating[k];
+          const branch = netlist.branches[index];
+          const island = branch.island;
+          const result = next.islands[island];
+          if (capped[island] === 1 || !result.solved || (result.flags & ISLAND_FLAG_SINGULAR) !== 0) continue;
+          if (this.unmodelled[island] === 1) continue;
+          const hook = this.branchAcIterate[index] as NonNullable<SimDeviceBank['acIterate']>;
+          if (hook.call(this.branchBank[index], this.branchDevice[index], branch, next, this.acValues, pass)) {
+            moved[island] = 1;
+          }
+        }
+        for (let i = 0; i < moved.length; i++) {
+          if (moved[i] === 0) continue;
+          if (solves[i] >= cap) {
+            // Still moving at the cap: never hidden, and no more passes for it this solve.
+            capped[i] = 1;
+            moved[i] = 0;
+            continue;
+          }
+          solves[i]++;
+          any = true;
+        }
+        if (!any) break;
+        pass++;
+        this.acSolver.solve(netlist, this.acValues, this.frequencyHz, next, moved);
+      }
+    }
+    // A re-solve rewrote its island's record (one iteration, no flags): set each island's own count.
+    for (let k = 0; k < iterating.length; k++) {
+      const island = netlist.branches[iterating[k]].island;
+      const result = next.islands[island];
+      if (!result.solved) continue;
+      result.iterations = solves[island];
+      if (capped[island] === 1) result.flags |= ISLAND_FLAG_NON_CONVERGED;
+    }
   }
 
   /** Every DC island's branch values: a bank's, else the kind's default, else a placeholder (unmodelled). */
@@ -1208,6 +1292,22 @@ export class SimEngine {
       const index = branches[i];
       const branch = netlist.branches[index];
       values.stamps[index] = AC_STAMP_UNSET;
+      const acIterate = this.branchAcIterate[index];
+      if (acIterate) {
+        // The phasor outer loop's pass 0: valued from the warm start (the last solution, if any).
+        acIterate.call(
+          this.branchBank[index],
+          this.branchDevice[index],
+          branch,
+          this.solved ? this.solution : null,
+          values,
+          0,
+        );
+        if (values.stamps[index] === AC_STAMP_UNSET) {
+          throw new Error(`A device model's acIterate left AC branch ${index} without a value`);
+        }
+        continue;
+      }
       const acValue = this.branchAcValue[index];
       if (acValue && acValue.call(this.branchBank[index], this.branchDevice[index], branch, values)) {
         if (values.stamps[index] === AC_STAMP_UNSET) {
@@ -1412,6 +1512,7 @@ export class SimEngine {
     this.branchDcValue = new Array<SimDeviceBank['dcValue'] | null>(branchCount).fill(null);
     this.branchAcValue = new Array<SimDeviceBank['acValue'] | null>(branchCount).fill(null);
     this.branchIterate = new Array<SimDeviceBank['iterate'] | null>(branchCount).fill(null);
+    this.branchAcIterate = new Array<SimDeviceBank['acIterate'] | null>(branchCount).fill(null);
     this.branchDefault = netlist.branches.map((branch) => ownModel(DC_DEFAULT_VALUES, branch.model));
     this.refreshDefaultOhms();
     this.branchAcDefault = netlist.branches.map((branch) => ownModel(AC_DEFAULT_VALUES, branch.model));
@@ -1426,9 +1527,20 @@ export class SimEngine {
       this.branchDcValue[branch.index] = bank.dcValue ?? null;
       this.branchAcValue[branch.index] = bank.acValue ?? null;
       this.branchIterate[branch.index] = bank.iterate ?? null;
+      this.branchAcIterate[branch.index] = bank.acIterate ?? null;
     }
+    // Only branches of AC islands take part in the phasor outer loop (a DC island values them by `dcValue`).
+    this.acIterating = Int32Array.from(
+      netlist.branches.filter((b) => this.branchAcIterate[b.index] !== null && netlist.islands[b.island].kind === 'ac'),
+      (b) => b.index,
+    );
 
     const islandCount = netlist.islands.length;
+    this.acMoved = new Uint8Array(islandCount);
+    this.acCapped = new Uint8Array(islandCount);
+    this.acSolves = new Uint16Array(islandCount);
+    this.acIteratingStage = Int32Array.from(this.acIterating, (b) => this.branchBank[b]?.acStage ?? 0);
+    this.acStages = Int32Array.from(new Set(this.acIteratingStage)).sort();
     this.unmodelled = new Uint8Array(islandCount);
     this.unvalued = new Uint8Array(branchCount);
     this.previousFlags = new Uint8Array(islandCount);

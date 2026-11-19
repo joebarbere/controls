@@ -23,7 +23,7 @@ describe('netlist models', () => {
     }
   });
 
-  it('read only commanded state and their declared sim topology keys (the fuse and the breakers only)', () => {
+  it('read only commanded state and their declared sim topology keys (the fuse, the breakers and the lamp only)', () => {
     const declared: Record<string, readonly string[]> = {};
     for (const model of Object.values(DEVICE_NETLIST_MODELS)) {
       const kind = MODEL_KINDS[model.kind];
@@ -37,6 +37,8 @@ describe('netlist models', () => {
       'breaker.plugOn2p': ['tripped'],
       'breaker.thermalMagnetic': ['tripped'],
       fuse: ['blown'],
+      // Engine 8 (P4 F4.1 part 1): a burned-out filament has no element (ADR 0019).
+      'lamp.incandescent': ['burnedOut'],
     });
   });
 

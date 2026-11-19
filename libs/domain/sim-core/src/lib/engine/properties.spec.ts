@@ -7,6 +7,7 @@ import { AC_SOURCE, BATTERY, end, LAMP, LEAD, origin, SPST } from '../../testing
 import { SOURCE_SESSION_REFS } from '../../testing/sources';
 import { LOAD_SESSION_REFS } from '../../testing/loads';
 import { PROTECTION_SESSION_REFS } from '../../testing/protection';
+import { LIGHTING_SESSION_REFS } from '../../testing/lighting';
 import {
   AC_TWIN,
   DROOP,
@@ -250,6 +251,8 @@ describe('engine determinism properties', () => {
       ...SOURCE_SESSION_REFS,
       ...LOAD_SESSION_REFS,
       ...PROTECTION_SESSION_REFS,
+      // P4 F4.1 part 1: the dimmer and the LED drivers (`devices/lighting/properties.spec.ts`).
+      ...LIGHTING_SESSION_REFS,
     };
     for (const kind of kinds) {
       expect(covered[kind], kind).toBeDefined();

@@ -1,5 +1,6 @@
 import { type DeviceStateValue, FiniteNumber, Int, LabelText } from '@controls/save-format';
 import * as z from 'zod';
+import { LIGHTING_MODEL_KINDS } from './model-kinds-lighting';
 
 /*
  * Device model kinds (plan P2 decision D4, ADR 0011 §1, ADR 0013). A catalogue entry names its kind
@@ -865,7 +866,8 @@ const TEST_BUTTON_KEY: StateKeyDef = counterKey(
  * P4 engine 8 part 1: the utility service (`service.splitPhase`) and the ground rod
  * (`electrode.groundRod`), both stateless. P4 PR 10 (breakers v2, ADR 0021 part 2): the plug-on breakers
  * (`breaker.plugOn1p`, `breaker.plugOn2p`), the GFCI breaker (`breaker.gfci1p`) and the combination AFCI
- * breaker (`breaker.afci1p`), with ADR 0019's keys. Adding a kind needs no `schemaVersion` bump.
+ * breaker (`breaker.afci1p`), with ADR 0019's keys. P4 F4.1 part 1: the lighting kinds
+ * (`LIGHTING_MODEL_KINDS`). Adding a kind needs no `schemaVersion` bump.
  */
 export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze({
   battery: {
@@ -1264,6 +1266,8 @@ export const MODEL_KINDS: Readonly<Record<string, ModelKindDef>> = Object.freeze
     description:
       'A utility service, three-phase four-wire wye: L1, L2 and L3 120° apart about the neutral, behind the transformer impedance.',
   },
+  // P4 F4.1 part 1: the wall switches, the dimmer, the E26 lampholder and the LED lights (their own file).
+  ...LIGHTING_MODEL_KINDS,
 } satisfies Record<string, ModelKindDef>);
 
 /** The model kind `kind`, or `undefined`. Own properties only (`toString` is not a kind). */

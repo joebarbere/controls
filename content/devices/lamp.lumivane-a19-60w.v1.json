@@ -1,0 +1,139 @@
+{
+  "id": "lamp.lumivane-a19-60w",
+  "version": 1,
+  "title": "120 V 60 W A19 incandescent bulb (E26)",
+  "brand": "Lumivane",
+  "modelName": "LV-A19-60",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 60,
+    "heightMm": 60,
+    "depthMm": 112
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "FOOT",
+      "positionMm": {
+        "x": 30,
+        "y": 30,
+        "z": 0
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
+    },
+    {
+      "id": "b",
+      "label": "SHELL",
+      "positionMm": {
+        "x": 30,
+        "y": 17,
+        "z": 12
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "e26",
+      "widthMm": 26,
+      "crossMm": -30,
+      "alongMm": -30,
+      "contacts": [
+        {
+          "id": "foot",
+          "terminal": "a",
+          "host": "centre",
+          "positionOffset": 0,
+          "contactOhm": 0.002
+        },
+        {
+          "id": "shell",
+          "terminal": "b",
+          "host": "shell",
+          "positionOffset": 0,
+          "contactOhm": 0.002
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "lamp.incandescent",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 60,
+      "filamentRatedTempK": 2700,
+      "thermalTimeConstantMs": 30,
+      "conductionFraction": 0.05
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "general-service-lamp-class",
+      "kind": "real-world",
+      "citation": "real-world (product class): the 120 V 60 W general-service incandescent lamp with a medium screw base (lamp makers' catalogues, typical published ratings, paraphrased, not one vendor's). Its hot resistance is V² / P = 14400 / 60 = 240 Ω and its rated current P / V = 0.5 A.",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW"]
+    },
+    {
+      "id": "filament-temperature",
+      "kind": "real-world",
+      "citation": "L. L. Holladay, \"Proportion of energy radiated by incandescent solids in various spectral regions\", J. Opt. Soc. Am. 17 (1928), pp. 329–342, Table 5 (read 2026-11-12; plausible per the realism review, not independently verified), paraphrased: regular gas-filled tungsten lamps of 50 W and 75 W run their filaments at a maximum of about 2685 K and 2735 K; a 60 W lamp interpolates to about 2705 K, and 2700 K is taken (the rounding is game-design; the P3 120 V lamp's value). With tungsten's resistivity (Jones and Langmuir, 1927) it gives a cold resistance of 240 × 5.4849 / 81.095 = 16.23 Ω at 20 °C, 1/14.79 of the hot one.",
+      "covers": ["model.params.filamentRatedTempK"]
+    },
+    {
+      "id": "inrush-band",
+      "kind": "real-world",
+      "citation": "Physics from H. A. Jones and I. Langmuir, General Electric Review 30 (1927): a filament's cold-to-hot resistance ratio is ρ(T_r)/ρ(T_a), 13.5 to 16.1 for rated temperatures of 2500 to 2900 K at a 293 K ambient; 14.79 at 2700 K. Source impedance and the wiring in series lower the current ratio, so the inrush is 10 to 15 times the settled current.",
+      "covers": ["model.params.filamentRatedTempK"]
+    },
+    {
+      "id": "filament-time-constant",
+      "kind": "real-world",
+      "citation": "Physics estimate (P3 decision D17), recomputed in lighting-entries.spec.ts: a straight tungsten wire that radiates 95 % of 60 W at 2700 K with a total emissivity of about 0.317 (Holladay 1928, Table 3) and has 240 Ω there (ρ = 81.095 µΩ·cm, Jones and Langmuir) is about 43 µm × 438 mm, 12.5 mg at 19.3 g/cm³; with tungsten's heat capacity at 2700 K (36.19 J/(mol·K), NIST-JANAF; 0.197 J/(g·K)) that is 2.46 mJ/K against a loss slope of 0.0857 W/K, τ ≈ 28.7 ms. A coiled filament's self-shading raises it (about 32 ms if 90 % of its surface radiates freely). 30 ms is taken, the P3 120 V lamp's value.",
+      "covers": ["model.params.thermalTimeConstantMs"]
+    },
+    {
+      "id": "conduction-fraction",
+      "kind": "game-design",
+      "citation": "game-design inside published behaviour (P3 decision D17, paired with the time constant as the realism review recommended in P2): 5 % of the rated power is lost by conduction at the rated point, the rest radiated. The model's light fits the published L ∝ V^3.4 (Fink and Beaty) best near 5 %. A gas-filled lamp also loses heat to its gas, which the vacuum model doesn't carry; the one linear term stands in for end losses and gas both.",
+      "covers": ["model.params.conductionFraction"]
+    },
+    {
+      "id": "a19-envelope",
+      "kind": "real-world",
+      "citation": "real-world: A19 is the A (standard household) bulb shape at a maximum diameter of 19 eighths of an inch, 2-3/8 in or 60.3 mm (the North American lamp-shape designation, ANSI C79.1 by number); drawn 60 mm across, rounded down, and 112 mm long overall, the 4.41 in of an A19 lamp datasheet read 2026-11-18. The base is the medium screw (E26).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "bulb-terminals",
+      "kind": "game-design",
+      "citation": "game-design: the base's foot contact (a) at the bottom centre and its threaded shell (b) 12 mm up its side; neither takes a conductor, but a test lead's clip can grip either while the bulb is out of a socket.",
+      "covers": ["terminals"]
+    },
+    {
+      "id": "e26-fit",
+      "kind": "real-world",
+      "citation": "real-world for the contacts, game-design for the place: a medium Edison screw base (E26, a 26 mm thread) screwed into a socket touches the socket's centre contact with its foot and the socket's screw shell with its threaded shell (the e26 mount type; lamp-base standards not cited by number). The bulb's origin sits 30 mm along and 30 mm across from the socket's axis, so its 60 mm body is centred on it (game-design anchor), and the fit takes the thread's 26 mm.",
+      "covers": ["fits.e26"]
+    },
+    {
+      "id": "e26-contact",
+      "kind": "game-design",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "covers": ["fits.e26.contacts.foot.contactOhm", "fits.e26.contacts.shell.contactOhm"]
+    }
+  ],
+  "extensions": {}
+}

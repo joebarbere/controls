@@ -14,7 +14,7 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice, engine 8’s service and ground rod and the breakers v2 kinds, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice, engine 8’s service and ground rod the breakers v2 kinds and F4.1’s lighting kinds, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
       'breaker.afci1p',
@@ -23,6 +23,7 @@ describe('MODEL_KINDS', () => {
       'breaker.plugOn2p',
       'breaker.thermalMagnetic',
       'conductor',
+      'dimmer.wall',
       'electrode.groundRod',
       'enclosure.box',
       'enclosure.panel',
@@ -30,7 +31,11 @@ describe('MODEL_KINDS', () => {
       'generator.portable',
       'heater',
       'lamp.incandescent',
+      'lampholder.e26',
+      'lampholder.e26PullChain',
       'lead',
+      'light.led',
+      'light.ledFixture',
       'raceway.conduit',
       'raceway.conduitConnector',
       'raceway.conduitElbow',
@@ -41,6 +46,9 @@ describe('MODEL_KINDS', () => {
       'supply.bench',
       'supply.dinPsu',
       'switch.spst',
+      'switch.wall1p',
+      'switch.wall3way',
+      'switch.wall4way',
       'terminalBlock.feedThrough',
       'terminalBlock.ground',
       'utility.splitPhase',
@@ -159,6 +167,15 @@ describe('MODEL_KINDS', () => {
       },
       'supply.dinPsu': { mode: 'sim enum ok', phaseTicks: 'sim number 0' },
       'switch.spst': { closed: 'commanded boolean false' },
+      // P4 F4.1 part 1 (ADR 0019's key table): the wiring devices' controls, the LED driver's state.
+      'dimmer.wall': { level: 'commanded number 1', on: 'commanded boolean false' },
+      'lampholder.e26': {},
+      'lampholder.e26PullChain': { closed: 'commanded boolean false' },
+      'light.led': { overvoltageSinceTick: 'sim number null', running: 'sim boolean false' },
+      'light.ledFixture': { overvoltageSinceTick: 'sim number null', running: 'sim boolean false' },
+      'switch.wall1p': { closed: 'commanded boolean false' },
+      'switch.wall3way': { position: 'commanded enum t1' },
+      'switch.wall4way': { position: 'commanded enum straight' },
       'terminalBlock.feedThrough': {},
       'terminalBlock.ground': {},
       'utility.splitPhase': {},

@@ -8,3 +8,4 @@ export * from './residential';
 export * from './devices';
 export * from './plug-on';
 export * from './afci';
+export * from './lighting';

@@ -1,0 +1,271 @@
+{
+  "id": "lampholder.castellby-pull-chain",
+  "version": 1,
+  "title": "660 W pull-chain E26 porcelain lampholder",
+  "brand": "Castellby",
+  "modelName": "CB-PC660",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 108,
+    "heightMm": 108,
+    "depthMm": 64
+  },
+  "terminals": [
+    {
+      "id": "centre",
+      "label": "CENTRE",
+      "positionMm": {
+        "x": 54,
+        "y": 54,
+        "z": 40
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "none"
+    },
+    {
+      "id": "ground",
+      "label": "GREEN",
+      "positionMm": {
+        "x": 54,
+        "y": 20,
+        "z": 0
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 54,
+            "y": 20,
+            "z": 0
+          },
+          "exitAxis": "-z",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "hot",
+      "label": "BRASS",
+      "positionMm": {
+        "x": 34,
+        "y": 54,
+        "z": 0
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 34,
+            "y": 54,
+            "z": 0
+          },
+          "exitAxis": "-z",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "neutral",
+      "label": "SILVER",
+      "positionMm": {
+        "x": 74,
+        "y": 54,
+        "z": 0
+      },
+      "methods": [
+        {
+          "method": "screw",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid", "stranded"],
+          "stripLengthMm": {
+            "nominal": 16,
+            "tolerance": 3
+          },
+          "torqueNm": 1.8,
+          "drives": ["slotted", "phillips"],
+          "alRated": false,
+          "entryMm": {
+            "x": 74,
+            "y": 54,
+            "z": 0
+          },
+          "exitAxis": "-z",
+          "clampType": "bindingScrew",
+          "clampDepthMm": 12,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.026,
+          "hotSpotHeatCapacityJPerK": 1.1,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [],
+  "enclosure": null,
+  "hostMounts": [
+    {
+      "id": "socket",
+      "type": "e26",
+      "positionMm": {
+        "x": 54,
+        "y": 54,
+        "z": 40
+      },
+      "axis": "+x",
+      "facing": "+z",
+      "extentMm": 0,
+      "contacts": [
+        {
+          "id": "centre",
+          "terminal": "centre"
+        },
+        {
+          "id": "shell",
+          "terminal": "neutral"
+        }
+      ],
+      "bus": null
+    }
+  ],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "lampholder.e26PullChain",
+    "params": {
+      "ratedPowerW": 660,
+      "ratedVoltageV": 250
+    }
+  },
+  "controls": [
+    {
+      "id": "closed",
+      "label": "Pull chain",
+      "type": "toggle"
+    }
+  ],
+  "sources": [
+    {
+      "id": "lampholder-rating",
+      "kind": "real-world",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: medium-base (E26) porcelain lampholders that mount on an outlet box, keyless and pull-chain, are marked 660 W at 250 V on makers' and distributors' listings; lampholders are listed to UL 496 (cited by number). The simulator reads neither value; the inspector may.",
+      "covers": ["model.params.ratedPowerW", "model.params.ratedVoltageV"]
+    },
+    {
+      "id": "body-layout",
+      "kind": "game-design",
+      "citation": "game-design inside a read class: a porcelain base drawn 108 × 108 mm (4-1/4 in, enough to cover a 4 in outlet box; the listings read mount on 4 in and 3-1/4 in boxes) and 64 mm tall with the socket; top-wired (screws on the back face, toward the box), brass (hot) and silver (neutral) either side of the socket and a green grounding screw below. Not every product in the class has a grounding screw; the kind gives every lampholder one. The pull-chain switch sits between the brass screw and the socket's centre contact, a terminal nothing can reach (access none).",
+      "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "socket",
+      "kind": "real-world",
+      "citation": "real-world for the contacts, game-design for the place: the socket's screw shell is the grounded conductor's and its centre contact the ungrounded one's (NFPA 70-2023 Art. 200.10(C), screw shells, cited by number), so the shell is on the silver screw and the centre contact on the brass one (through the pull-chain switch on that holder). The E26 socket is on the base's axis with its bottom 40 mm above the back face (game-design).",
+      "covers": ["mounts.socket"]
+    },
+    {
+      "id": "screw-torque",
+      "kind": "game-design",
+      "citation": "game-design anchored to a published figure: one lampholder maker's product pages give a terminal-screw torque range of 14 to 18 lb·in (1.6 to 2.0 N·m) (read 2026-11-12 for the P3 lamp holder, paraphrased, the maker not named). The fictional holder is marked 1.8 N·m (about 16 lb·in), inside it; NFPA 70-2023 Art. 110.14(D) requires the marked value (cited by number). No UL 486A-B torque table is used.",
+      "covers": ["terminals.*.methods.screw.torqueNm"]
+    },
+    {
+      "id": "screw-terminal-class",
+      "kind": "game-design",
+      "citation": "game-design inside a read class: the holder's binding-head screws take one copper conductor each, 14 or 12 AWG, solid or stranded, wrapped clockwise under the head; not marked for aluminium. One pull-chain holder listing seen in a search summary (2026-11-18) gives 14 to 10 AWG; 14 to 12 is used, as on the P3 holder. Stranded copper under a binding head splays (ADR 0018 §4.3). The 16 ± 3 mm strip wraps about three-quarters of a turn round the screw and the head grips 12 mm of it (not published figures).",
+      "covers": [
+        "terminals.*.methods.screw.ratedConductors",
+        "terminals.*.methods.screw.maxConductors",
+        "terminals.*.methods.screw.awgRange",
+        "terminals.*.methods.screw.stranding",
+        "terminals.*.methods.screw.stripLengthMm",
+        "terminals.*.methods.screw.alRated",
+        "terminals.*.methods.screw.clampType",
+        "terminals.*.methods.screw.clampDepthMm"
+      ]
+    },
+    {
+      "id": "terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors come from the box behind the holder and reach each screw on its back face along -z; not modelled on a product.",
+      "covers": ["terminals.*.methods.screw.entryMm", "terminals.*.methods.screw.exitAxis"]
+    },
+    {
+      "id": "screw-drives",
+      "kind": "game-design",
+      "citation": "game-design: a slotted and Phillips combination head on every terminal screw, the green grounding screw included, common on wiring-device terminal screws (common practice, not one product); the drive type is a name and its size is not modelled.",
+      "covers": ["terminals.*.methods.screw.drives"]
+    },
+    {
+      "id": "screw-terminal-contact",
+      "kind": "real-world",
+      "citation": "NBS Building Science Series 103 (W. J. Meese and R. W. Beausoliel, 1977; read in the P3 source pre-audit, ADR 0018 §4.1): good branch-circuit wiring-device screw-terminal connections dropped 3 to 8 mV at 15 A, 0.2 to 0.5 mΩ. The class value 0.3 mΩ is taken as R₀, the contact resistance at the marked torque with a copper conductor at 20 °C; the engine scales it for torque, strip length, conductor count, strand spread and nicks (ADR 0018 §4).",
+      "covers": ["terminals.*.methods.screw.contactOhm"]
+    },
+    {
+      "id": "screw-terminal-thermal",
+      "kind": "game-design",
+      "citation": "game-design calibration (ADR 0018 §3.3, §11), the screw-terminal class's values, as on the P3 lamp holder: the heat path into the device, 0.026 W/K, is calibrated, not measured (with 14 AWG copper at 15 A it puts BSS 103's 18 to 36 W glowing connections between the Draper point, about 525 °C, and about 1000 °C). The clamp's heat capacity, 1.1 J/K, is a physics estimate: about 3 g of brass screw and terminal plate × about 380 J/(kg·K).",
+      "covers": ["terminals.*.methods.screw.heatPathWPerK", "terminals.*.methods.screw.hotSpotHeatCapacityJPerK"]
+    }
+  ],
+  "extensions": {}
+}

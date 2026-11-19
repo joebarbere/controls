@@ -8,6 +8,7 @@ import type { LayerContext, SimDevice, SimDeviceBank, SimDeviceModel } from '../
 import type { SimEngineOptions } from '../lib/engine/engine';
 import type { DeviceNetlistModel, NetlistModels } from '../lib/netlist/models';
 import { PLUG_ON_DOCUMENTS } from './plug-on';
+import { LIGHTING_DOCUMENTS } from './lighting';
 import {
   BATTERY,
   end,
@@ -399,6 +400,7 @@ export const ENGINE_DOCUMENTS: readonly unknown[] = [
   entry(ORDER_A, 'Test order probe A', 'test.orderA', {}, ['t']),
   entry(ORDER_B, 'Test order probe B', 'test.orderB', {}, ['t']),
   ...PLUG_ON_DOCUMENTS,
+  ...LIGHTING_DOCUMENTS,
 ];
 
 /** The built-in catalogue, `bench.ts`'s test entries and the engine's. */

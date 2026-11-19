@@ -122,7 +122,7 @@ export const DEVICE_READING_RESIDUAL = 4;
 export const DEVICE_READING_LINE_VOLTAGE = 8;
 export const DEVICE_READING_LOAD_VOLTAGE = 16;
 
-/** The LED lamp's and fixture's record (protocol 8, pending): one layout for both kinds. */
+/** The LED lamp's and fixture's record (protocol 8; registered by P4 PR 12): one layout for both kinds. */
 function ledSchema(kind: string): DeviceOutputSchema {
   return Object.freeze({
     kind,
@@ -322,18 +322,7 @@ export const DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>>
     recordBytes: 24,
     fields: Object.freeze([f64('currentA', 0, 'A'), f64('touchVoltageV', 8, 'V'), status(16)]),
   }),
-});
-
-/**
- * Protocol 8 record schemas agreed for kinds that are **not on main yet** (P4 PR 12's lighting, ADR
- * 0011's protocol 8 amendment): the LED lamp and fixture (`light.led`, `light.ledFixture`) and the
- * wall dimmer (`dimmer.wall`). The PR that adds a kind's engine model moves its schema from here into
- * {@link DEVICE_OUTPUT_SCHEMAS} unchanged, and the protocol fingerprint, which covers both tables as
- * one map, doesn't move. A kind is never in both (a sim-protocol spec checks it), and each passes
- * {@link deviceOutputSchemaProblems}. Appliances (P4 PR 13) have no reserved schema: their fields are
- * agreed in the amendment, their layout lands with their model.
- */
-export const PENDING_DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({
+  // P4 PR 12 (F4.1 part 1): the lighting kinds, moved here unchanged from the pending table (protocol 8).
   'dimmer.wall': Object.freeze({
     kind: 'dimmer.wall',
     recordBytes: 32,
@@ -348,6 +337,17 @@ export const PENDING_DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutput
   'light.led': ledSchema('light.led'),
   'light.ledFixture': ledSchema('light.ledFixture'),
 });
+
+/**
+ * Protocol 8 record schemas agreed for kinds that are **not on main yet** (ADR 0011's protocol 8
+ * amendment). Empty since P4 PR 12 moved the LED lamp and fixture (`light.led`, `light.ledFixture`)
+ * and the wall dimmer (`dimmer.wall`) into {@link DEVICE_OUTPUT_SCHEMAS}. The PR that adds a kind's engine model moves its schema from here into
+ * {@link DEVICE_OUTPUT_SCHEMAS} unchanged, and the protocol fingerprint, which covers both tables as
+ * one map, doesn't move. A kind is never in both (a sim-protocol spec checks it), and each passes
+ * {@link deviceOutputSchemaProblems}. Appliances (P4 PR 13) have no reserved schema: their fields are
+ * agreed in the amendment, their layout lands with their model.
+ */
+export const PENDING_DEVICE_OUTPUT_SCHEMAS: Readonly<Record<string, DeviceOutputSchema>> = Object.freeze({});
 
 /** One device record's fields by name: a number, or an enum field's value name (`status: 'solved'`). */
 export type DecodedDeviceRecord = Readonly<Record<string, number | string>>;

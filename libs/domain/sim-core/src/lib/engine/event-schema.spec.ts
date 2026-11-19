@@ -7,6 +7,7 @@ import { GFCI_20, PLUG_ON_20 } from '../../testing/plug-on';
 import { BREAKER, FUSE_1A } from '../../testing/protection';
 import { BENCH_SUPPLY, DIN_PSU, SourceHost, UTILITY_SPLIT } from '../../testing/sources';
 import { wiredLoopWorld } from '../../testing/wired-loop';
+import { A19_60W, acSourceAt, socket } from '../../testing/lighting';
 import type { CommandedContext, LayerContext } from './device-model';
 
 /*
@@ -15,7 +16,8 @@ import type { CommandedContext, LayerContext } from './device-model';
  * by `SimEventDetails` (a wrong detail doesn't compile, below), and this spec runs a scenario for every
  * emitter the engine has, parsing each event it raises with the wire's schema: a GFCI's test press and
  * a ground fault, an AFCI's arc fault, a plug-on breaker's magnetic and thermal trips, the DIN breaker,
- * a DIN PSU's hiccup, a loose termination's connection events, a blown fuse, and the island events.
+ * a DIN PSU's hiccup, a loose termination's connection events, a blown fuse, a lamp's burnout, and the
+ * island events.
  * (`SourceHost` also parses every event any spec on it raises: `checkedEvents`.)
  */
 
@@ -138,6 +140,18 @@ describe('every emitted event parses with the wire schema (protocol 8, typed det
     ]);
     unsettled.advance(10);
     expect(parsed(unsettled)).toContainEqual({ kind: 'nonConverged', detail: {} });
+  });
+
+  it('a lamp burns out ({ filamentTempK }, P4 PR 12): a 60 W A19 bulb on the 200 V test source', () => {
+    const h = new SourceHost();
+    const source = h.place(acSourceAt(200));
+    const { holder, bulb } = socket(h, A19_60W);
+    h.lead(source, 'l', holder, 'hot').lead(holder, 'neutral', source, 'n');
+    h.advance(600);
+    const burnouts = parsed(h).filter((e) => e.kind === 'lampBurnout');
+    expect(burnouts).toHaveLength(1);
+    expect((burnouts[0].detail as { filamentTempK: number }).filamentTempK).toBeGreaterThanOrEqual(3200);
+    expect(h.events.find((e) => e.kind === 'lampBurnout')?.entity).toBe(bulb);
   });
 
   it('a wrong detail does not compile: emit is typed by SimEventDetails', () => {

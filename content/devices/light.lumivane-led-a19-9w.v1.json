@@ -1,0 +1,121 @@
+{
+  "id": "light.lumivane-led-a19-9w",
+  "version": 1,
+  "title": "120 V 9 W A19 LED bulb (E26, 60 W replacement)",
+  "brand": "Lumivane",
+  "modelName": "LV-LA19-9",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 60,
+    "heightMm": 60,
+    "depthMm": 112
+  },
+  "terminals": [
+    {
+      "id": "a",
+      "label": "FOOT",
+      "positionMm": {
+        "x": 30,
+        "y": 30,
+        "z": 0
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
+    },
+    {
+      "id": "b",
+      "label": "SHELL",
+      "positionMm": {
+        "x": 30,
+        "y": 17,
+        "z": 12
+      },
+      "methods": [],
+      "role": null,
+      "side": null,
+      "access": "clip"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "e26",
+      "widthMm": 26,
+      "crossMm": -30,
+      "alongMm": -30,
+      "contacts": [
+        {
+          "id": "foot",
+          "terminal": "a",
+          "host": "centre",
+          "positionOffset": 0,
+          "contactOhm": 0.002
+        },
+        {
+          "id": "shell",
+          "terminal": "b",
+          "host": "shell",
+          "positionOffset": 0,
+          "contactOhm": 0.002
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "light.led",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 9,
+      "powerFactor": 0.9,
+      "dropoutVoltageV": 90,
+      "restartVoltageV": 95
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "led-a19-class",
+      "kind": "real-world",
+      "citation": "real-world (product class), read 2026-11-18: an A19 LED lamp datasheet for a 60 W incandescent replacement gives an E26 base, 120 V rated, 9 W rated power and power factor 0.9 (other makers' 9 W A19 sheets, seen in search summaries, not read in full, range from about 0.5 to 0.94; the model carries it as a lagging displacement, ADR 0021 L3). ENERGY STAR's lamps specification, version 2.0, lowered its power-factor minimum for 5 to 10 W lamps from 0.7 to 0.6 (a trade summary read 2026-11-18), so 0.9 is a high-power-factor product of the class.",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW", "model.params.powerFactor"]
+    },
+    {
+      "id": "driver-dropout",
+      "kind": "game-design",
+      "citation": "game-design inside the P4 pre-audit's labelled figure (constant power from 108 V, dropout about 90 V; not a datasheet reading): the driver stops below 90 V and, once stopped, starts again at 95 V, a 5 V hysteresis band chosen so it never chatters at the edge. Both lie below the 108 V the pre-audit holds constant power from, and the rated 120 V is above both.",
+      "covers": ["model.params.dropoutVoltageV", "model.params.restartVoltageV"]
+    },
+    {
+      "id": "a19-envelope",
+      "kind": "real-world",
+      "citation": "real-world: A19 is the A (standard household) bulb shape at a maximum diameter of 19 eighths of an inch, 2-3/8 in or 60.3 mm (the North American lamp-shape designation, ANSI C79.1 by number); drawn 60 mm across, rounded down, and 112 mm long overall, the 4.41 in of an A19 lamp datasheet read 2026-11-18. The base is the medium screw (E26).",
+      "covers": ["sizeMm"]
+    },
+    {
+      "id": "bulb-terminals",
+      "kind": "game-design",
+      "citation": "game-design: the base's foot contact (a) at the bottom centre and its threaded shell (b) 12 mm up its side; neither takes a conductor, but a test lead's clip can grip either while the bulb is out of a socket.",
+      "covers": ["terminals"]
+    },
+    {
+      "id": "e26-fit",
+      "kind": "real-world",
+      "citation": "real-world for the contacts, game-design for the place: a medium Edison screw base (E26, a 26 mm thread) screwed into a socket touches the socket's centre contact with its foot and the socket's screw shell with its threaded shell (the e26 mount type; lamp-base standards not cited by number). The bulb's origin sits 30 mm along and 30 mm across from the socket's axis, so its 60 mm body is centred on it (game-design anchor), and the fit takes the thread's 26 mm.",
+      "covers": ["fits.e26"]
+    },
+    {
+      "id": "e26-contact",
+      "kind": "game-design",
+      "citation": "game-design (plan D3: an E26 base contact is game-design), an order-of-magnitude anchor, not a measurement: 2 mΩ for each of the foot and the shell, about the constriction resistance ρ / (2a) of one small contact spot of radius a = 15 µm in cartridge brass (about 28 % IACS, ρ ≈ 6.16 × 10⁻⁸ Ω·m: 2.05 mΩ, Holm's single-spot formula), rounded down. A real shell touches at several thread points and the foot at one sprung tab; both are taken alike.",
+      "covers": ["fits.e26.contacts.foot.contactOhm", "fits.e26.contacts.shell.contactOhm"]
+    }
+  ],
+  "extensions": {}
+}

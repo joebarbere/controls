@@ -19,7 +19,9 @@ import {
   PLUG_ON_1P_MODEL,
   PLUG_ON_2P_MODEL,
 } from './protection';
+import { DIMMER_MODEL, LIGHT_LED_FIXTURE_MODEL, LIGHT_LED_MODEL } from './lighting';
 
+export * from './lighting';
 export * from './loads';
 export * from './protection';
 export * from './readings';
@@ -31,7 +33,8 @@ export * from './sources';
  * (split-phase and three-phase) and the portable generator stub. F2.5: the incandescent lamp (its
  * filament's R(T) and temperature), the resistor and the heater; part 2's fuse and thermal-magnetic breaker. Engine 8:
  * the service (`service.splitPhase`, the T-equivalent and its drop); breakers v2 (the plug-on, GFCI and AFCI
- * breakers, `plug-on.ts`); the ground rod (its protocol 8 record only). A kind without an engine model keeps
+ * breakers, `plug-on.ts`); the ground rod (its protocol 8 record only); P4 F4.1 part 1: the dimmer and the LED drivers (the wall switches and the
+ * lampholders are joins only). A kind without an engine model keeps
  * its bag as loaded.
  */
 export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = Object.freeze({
@@ -42,10 +45,13 @@ export const BUILTIN_DEVICE_MODELS: Readonly<Record<string, SimDeviceModel>> = O
   'breaker.plugOn2p': PLUG_ON_2P_MODEL,
   'breaker.thermalMagnetic': BREAKER_MODEL,
   'electrode.groundRod': GROUND_ROD_MODEL,
+  'dimmer.wall': DIMMER_MODEL,
   fuse: FUSE_MODEL,
   'generator.portable': GENERATOR_PORTABLE_MODEL,
   heater: HEATER_MODEL,
   'lamp.incandescent': LAMP_MODEL,
+  'light.led': LIGHT_LED_MODEL,
+  'light.ledFixture': LIGHT_LED_FIXTURE_MODEL,
   resistor: RESISTOR_MODEL,
   'service.splitPhase': SERVICE_SPLIT_PHASE_MODEL,
   'supply.bench': BENCH_SUPPLY_MODEL,

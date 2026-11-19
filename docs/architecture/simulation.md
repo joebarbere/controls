@@ -927,9 +927,26 @@ flowchart LR
 - **What the banks read for it.** `SimDevice` gains `contacts` (a device's relation contact branches: the service's `grounding`, a rod's `electrode`) and `terminalNode(terminal)` (resolved at bank build, so the GFCI's line-side voltage is read across an open pole). The ground rod has a bank only to write its record. The AFCI's `arcingDownstream` reuses its protection layer's lazy downstream marks.
 - **Pending schemas** (`PENDING_DEVICE_OUTPUT_SCHEMAS`): the LED lamp and fixture and the dimmer, agreed now and registered with their models in P4 PR 12 without moving the fingerprint.
 - **Connection records** gain each end's degradation factor D inside the f64 block (120 bytes); a module-load check keeps the layout the readout's fast path (every f64, then every u8).
-- **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (emitted by P4 PR 12 and F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
+- **Events.** `lampBurnout` and `overvoltage` join `SIM_EVENT_KINDS` (`lampBurnout` emitted by the lamp since P4 PR 12; `overvoltage` by F4.4); `SimEventSchema` parses each kind's detail exactly (`tripped {cause}` with a cause from `TRIP_CAUSE_VALUES`), and `simEventDetail(event, kind)` reads it typed.
 - **Allocation.** Every record writer, the lamp's included, writes into the view without returning a double from a helper (`writeAmps`, `writeVolts`) and is gated at under 1 B a call (`allocation-loads.spec.ts`).
+
+## Lighting models and the phasor outer loop (P4 PR 12)
+
+[ADR 0021](../decisions/0021-service-grounding-and-protection-physics.md#part-3-the-lighting-models-p4-pr-12) part 3 (F4.1 part 1). The wall switches (`switch.wall1p`, `.wall3way`, `.wall4way`) are ideal joins by commanded position, closed in every position in the wiring view; the keyless lampholder (`lampholder.e26`) has no element, its `e26` host mount putting a bulb's two contact branches on its screws. Two models need a value that depends on their own solution, so the engine gains a **phasor outer loop**:
+
+```mermaid
+flowchart TD
+    F["fillValues: acIterate pass 0<br/>(warm start = last solution, or null)"] --> S["AcSolver.solve: every AC island"]
+    S --> H{"each acIterate hook, pass k:<br/>a new value?"}
+    H -->|"yes, k < cap"| S
+    H -->|"no"| A["accept: islands record k solves"]
+    H -->|"yes at the cap"| N["flag the island nonConverged"]
+```
+
+- **The dimmer** (`devices/lighting/dimmer.ts`): one series element stamped as a lossless reactance X = c · R_th, c = √(1/k² − 1) for the RMS fraction k of a phase-cut sine at its level (`DIMMER_RMS_CURVE`); R_th is fitted from 1 / |I|² = a + b X² at two reactances (the warm start's and a 0.01 % probe; from a cold start a near short and the rated-voltage guess). Off: no element; on DC: latched on.
+- **The LED driver** (`devices/lighting/led.ts`, `light.led` and `light.ledFixture`): a conductance P / |V|² and an inductive susceptance |Q| / |V|² (the datasheet PF carried lagging, so a dimmer-fed driver never sees more than the open-circuit voltage) re-read each pass until G moves by under 0.1 %; stopped below its dropout (100 MΩ per branch) with hysteresis up to its restart voltage, `running` committed in `afterSolve`.
+- **Lamp burnout** (`devices/loads/lamp.ts`): the protection hook sets the sticky `burnedOut` at 3200 K, a sim topology key that drops the filament element.
 
 ## Not yet
 
-- **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve); an AC current source, or an AC nonlinear outer loop, would need the DC solver's floating-component pinning and `solveNonlinear` in complex form first.
+- **AC nonlinear loads**: F2.5's lamp, resistor and heater value AC branches through `acValue` and `AC_DEFAULT_VALUES` (the lamp's R(T) is fixed within a solve). P4 PR 12's phasor outer loop (`acIterate`) re-solves the AC islands for a dimmer or an LED driver by fixed-point passes, not Newton; an AC current source would still need the DC solver's floating-component pinning in complex form first.

@@ -175,9 +175,16 @@ export class AcSolver {
    * Solves every `ac` island of `netlist` at `frequencyHz` with `values`, into `out` if it fits (else
    * a new solution, whose other islands are zero and unsolved). Other islands' entries in `out` are
    * left untouched. Throws on a bad frequency, a missing value or a stamp that doesn't suit its
-   * element kind (a programming error).
+   * element kind (a programming error). With `only`, solves just the `ac` islands whose entry is 1
+   * (indexed by island), leaving every other island's values and record untouched.
    */
-  solve(netlist: Netlist, values: AcBranchValues, frequencyHz: number, out?: DcSolution): DcSolution {
+  solve(
+    netlist: Netlist,
+    values: AcBranchValues,
+    frequencyHz: number,
+    out?: DcSolution,
+    only?: Uint8Array,
+  ): DcSolution {
     // ω kept in a slot, never passed or returned per solve: a double crossing a call V8 doesn't inline is
     // boxed into a heap number (1.6 B/step in a mixed-device process; simulation caveats).
     if (frequencyHz !== this.omegaHz) {
@@ -207,7 +214,9 @@ export class AcSolver {
     }
     for (let ii = 0; ii < netlist.islands.length; ii++) {
       const island = netlist.islands[ii];
-      if (island.kind === 'ac') this.solveIsland(netlist, island, values, solution);
+      // `only` (engine 8, the phasor outer loop): re-solve just the islands flagged 1, leaving the rest as they were.
+      if (island.kind === 'ac' && (only === undefined || only[ii] === 1))
+        this.solveIsland(netlist, island, values, solution);
     }
     return solution;
   }

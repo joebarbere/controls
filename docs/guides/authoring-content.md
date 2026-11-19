@@ -138,15 +138,17 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Brand          | Makes                                                                        |
 | -------------- | ---------------------------------------------------------------------------- |
 | Brindlecore    | Bench DC supply                                                              |
+| Castellby      | Wiring devices: wall switches, the dimmer, lampholders (P4)                  |
 | Corvelle       | Twist-on wire connectors (wire nuts)                                         |
 | Calderyn       | Torque screwdrivers                                                          |
 | Corriden       | Drill bits (ship augers) and bi-metal hole saws                              |
 | Emberlyn       | Cartridge fuse                                                               |
+| Fennisby       | LED light fixtures (P4)                                                      |
 | Ferrovane      | Sealed lead-acid battery                                                     |
 | Hearthvale     | Heater elements                                                              |
 | Larkmoor Power | Utility services (one brand for the utility)                                 |
 | Lattisby       | Slotted wire duct                                                            |
-| Lumivane       | Incandescent lamps                                                           |
+| Lumivane       | Lamps and bulbs: incandescent and LED                                        |
 | Orrinwood      | Power resistor                                                               |
 | Pellmoor       | Control-panel enclosures                                                     |
 | Penmarrow      | Label printers                                                               |
@@ -163,3 +165,5 @@ Fictional, one per maker. Add new ones here in the PR that uses them.
 | Thimbleby      | Ferrules and insulated ring and fork lugs                                    |
 | Tinmoor        | Outlet and junction boxes (steel and PVC)                                    |
 | Veltmark       | Hand tools (strippers, cutters, drivers, crimper, knockout punch, fish tape) |
+
+**Brand names to review before 1.0.** _Lumivane_ is close to a real French LED maker's name (Lumiven; raised by the realism review, 2026-11-18). It shipped in P3 (`lamp.lumivane-120v-60w`), and saves reference entries by id, so ids are never renamed; a display-only `brand` change is the option to weigh before 1.0. Check every new brand against real makers' names, near spellings included.

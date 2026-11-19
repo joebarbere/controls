@@ -1,0 +1,238 @@
+{
+  "id": "light.fennisby-led-wall-15w",
+  "version": 1,
+  "title": "120 V 15 W LED wall light",
+  "brand": "Fennisby",
+  "modelName": "FN-W15",
+  "category": "load",
+  "sizeMm": {
+    "widthMm": 120,
+    "heightMm": 120,
+    "depthMm": 95
+  },
+  "terminals": [
+    {
+      "id": "ground",
+      "label": "GREEN",
+      "positionMm": {
+        "x": 70,
+        "y": 60,
+        "z": 40
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 70,
+            "y": 60,
+            "z": 40
+          },
+          "exitAxis": "-z",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.35,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "hot",
+      "label": "BLACK",
+      "positionMm": {
+        "x": 50,
+        "y": 60,
+        "z": 40
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 50,
+            "y": 60,
+            "z": 40
+          },
+          "exitAxis": "-z",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.35,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    },
+    {
+      "id": "neutral",
+      "label": "WHITE",
+      "positionMm": {
+        "x": 60,
+        "y": 60,
+        "z": 40
+      },
+      "methods": [
+        {
+          "method": "springCage",
+          "ratedConductors": 1,
+          "maxConductors": 1,
+          "awgRange": {
+            "smallest": 14,
+            "largest": 12
+          },
+          "stranding": ["solid"],
+          "stripLengthMm": {
+            "nominal": 10,
+            "tolerance": 1
+          },
+          "torqueNm": null,
+          "drives": [],
+          "alRated": false,
+          "entryMm": {
+            "x": 60,
+            "y": 60,
+            "z": 40
+          },
+          "exitAxis": "-z",
+          "clampType": "springCage",
+          "clampDepthMm": 9,
+          "contactOhm": 0.0003,
+          "heatPathWPerK": 0.02,
+          "hotSpotHeatCapacityJPerK": 0.35,
+          "combination": null,
+          "multiConductor": null
+        }
+      ],
+      "role": null,
+      "side": null,
+      "access": "land"
+    }
+  ],
+  "mounts": [
+    {
+      "type": "deviceYoke",
+      "widthMm": 120,
+      "crossMm": -24,
+      "alongMm": -37,
+      "contacts": [
+        {
+          "id": "strap",
+          "terminal": "ground",
+          "host": "chassis",
+          "positionOffset": 0,
+          "contactOhm": 0.005
+        }
+      ]
+    }
+  ],
+  "enclosure": null,
+  "hostMounts": [],
+  "outlets": [],
+  "plug": null,
+  "supersededBy": null,
+  "conductor": null,
+  "model": {
+    "kind": "light.ledFixture",
+    "params": {
+      "ratedVoltageV": 120,
+      "ratedPowerW": 15,
+      "powerFactor": 0.9,
+      "dropoutVoltageV": 90,
+      "restartVoltageV": 95
+    }
+  },
+  "controls": [],
+  "sources": [
+    {
+      "id": "led-fixture-class",
+      "kind": "real-world",
+      "citation": "real-world (product class), makers' listings seen in search summaries, 2026-11-18, not read in full: 15 W, 120 V surface-mounted LED fixtures list power factors from about 0.7 to 0.98 on makers' sheets, several at or above 0.9; 0.9 is taken (carried as a lagging displacement, ADR 0021 L3). Fixtures are listed to UL 1598 (cited by number).",
+      "covers": ["model.params.ratedVoltageV", "model.params.ratedPowerW", "model.params.powerFactor"]
+    },
+    {
+      "id": "driver-dropout",
+      "kind": "game-design",
+      "citation": "game-design inside the P4 pre-audit's labelled figure (constant power from 108 V, dropout about 90 V; not a datasheet reading): the driver stops below 90 V and, once stopped, starts again at 95 V, a 5 V hysteresis band chosen so it never chatters at the edge. Both lie below the 108 V the pre-audit holds constant power from, and the rated 120 V is above both.",
+      "covers": ["model.params.dropoutVoltageV", "model.params.restartVoltageV"]
+    },
+    {
+      "id": "body-layout",
+      "kind": "game-design",
+      "citation": "game-design: a square wall light drawn as its 120 × 120 mm bounding box, 95 mm deep from a device box's back wall (the yoke mount's origin) to 35 mm proud of a single-gang box's opening; its push-in terminal block (hot, neutral, ground) sits inside the gang, 40 mm off the back wall. The body covers the box's opening, as a fixture's canopy does, so a splice inside the box would sit inside the body. Not modelled on a product.",
+      "covers": ["sizeMm", "terminals"]
+    },
+    {
+      "id": "yoke-fit",
+      "kind": "game-design",
+      "citation": "game-design: the light's strap screws to a device box's two device-mounting holes, as a light wall-mounted fixture may (NFPA 70-2023 Art. 314.27(A)(1) Exception, cited by number, allows a wall luminaire of not more than 3 kg (6 lb) on other boxes when secured by at least two screws, which the inspector does not check; the fixture's mass isn't modelled), so it fits the deviceYoke mount, centred on the gang: its origin 37 mm left of and 24 mm below the gang's corner. The ceiling boxes offer no mount yet. Its one strap contact joins its ground terminal to a metal box's chassis.",
+      "covers": ["fits.deviceYoke"]
+    },
+    {
+      "id": "strap-bond-contact",
+      "kind": "game-design",
+      "citation": "game-design (plan D3: a yoke-screw bond is game-design): 5 mΩ from the grounding terminal through the strap and its two mounting screws to a metal box's tapped ears, ten or more times the screw class's 0.2 to 0.5 mΩ for a torqued copper conductor (NBS BSS 103) because the joint is plated steel on steel under small screws at no marked torque; not measured. On a box with no chassis terminal (or a nonmetallic one) the contact adds nothing.",
+      "covers": ["fits.deviceYoke.contacts.strap.contactOhm"]
+    },
+    {
+      "id": "push-block-class",
+      "kind": "game-design",
+      "citation": "game-design: real fixtures of the class have pigtail leads spliced in the box; a device's own leads can't be spliced in the game, so the light has a push-in (spring-cage) terminal block, one 14 or 12 AWG solid copper conductor per pole, not for aluminium, a 10 ± 1 mm strip and a 9 mm cage depth, as some fixtures' wiring compartments do. Its contact (0.3 mΩ, ADR 0018's spring-cage example inside NBS BSS 128's 1.5 mΩ), heat path (0.02 W/K) and clamp heat capacity (0.35 J/K) are the 2.5 mm² spring-cage terminal block's (tb.quennick-sc25), applied as game-design.",
+      "covers": [
+        "terminals.*.methods.springCage.ratedConductors",
+        "terminals.*.methods.springCage.maxConductors",
+        "terminals.*.methods.springCage.awgRange",
+        "terminals.*.methods.springCage.stranding",
+        "terminals.*.methods.springCage.stripLengthMm",
+        "terminals.*.methods.springCage.alRated",
+        "terminals.*.methods.springCage.clampType",
+        "terminals.*.methods.springCage.clampDepthMm",
+        "terminals.*.methods.springCage.contactOhm",
+        "terminals.*.methods.springCage.heatPathWPerK",
+        "terminals.*.methods.springCage.hotSpotHeatCapacityJPerK"
+      ]
+    },
+    {
+      "id": "terminal-geometry",
+      "kind": "game-design",
+      "citation": "game-design: conductors come from the box behind the light and enter each pole of the block along -z; not modelled on a product.",
+      "covers": ["terminals.*.methods.springCage.entryMm", "terminals.*.methods.springCage.exitAxis"]
+    }
+  ],
+  "extensions": {}
+}

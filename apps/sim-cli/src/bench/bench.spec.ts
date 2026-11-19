@@ -335,6 +335,7 @@ describe('the calibration loop', () => {
       'plant-resolve-topology-change',
       'plant-resolve-topology-change-wired',
       'intermittent-toggle-wired',
+      'lighting-resolve-topology-change',
     ]);
     for (const benchCase of calibrated) expect(benchCase.calibration?.warmup).toBe(CALIBRATION_WARMUP_RUNS);
     expect(CALIBRATION_WARMUP_RUNS).toBeGreaterThan(0);
@@ -387,6 +388,19 @@ describe('the shipped bench cases', () => {
     }
   });
 
+  it('time the lighting plant (P4 PR 12): a dimmer switched off and a level moved, each run from the same state, every island a reading', () => {
+    for (const name of ['lighting-resolve-topology-change', 'lighting-level-change']) {
+      const c = BENCH_CASES.find((x) => x.name === name);
+      expect(c?.budgetMs, name).toBe(name === 'lighting-level-change' ? null : 2);
+      c?.prepare?.(true);
+      const first = c?.run() ?? '';
+      c?.prepare?.(true);
+      expect(c?.run()).toBe(first);
+      // Every island solved (the `s` of `solved`), none at the cap.
+      for (const island of first.split(':')[1].split(',')) expect(island.endsWith('s'), `${name} ${island}`).toBe(true);
+    }
+  });
+
   it('gate the worst single command at a tenth of WATCHDOG_MS: one cable.add of the largest real assembly the cutter cuts (NM-B 8/3)', () => {
     expect(CABLE_ADD_BUDGET_MS).toBe(WATCHDOG_MS / 10);
     const gate = BENCH_CASES.find((c) => c.name === 'cable-add-worst-command');
@@ -423,6 +437,7 @@ describe('the shipped bench cases', () => {
       ['plant-resolve-topology-change', 2],
       ['plant-resolve-topology-change-wired', 2],
       ['intermittent-toggle-wired', 2],
+      ['lighting-resolve-topology-change', 2],
     ]);
     for (const c of calibrated) {
       expect(c.calibration).toMatchObject({ run: runCalibration, referenceMs: CALIBRATION_REFERENCE_MS.value });
