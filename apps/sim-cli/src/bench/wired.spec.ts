@@ -1,8 +1,9 @@
 import { BUILTIN_CATALOG } from '@controls/catalog';
 import { compileNetlist } from '@controls/sim-core';
+import type { BenchCase } from './bench';
+import { CALIBRATION_REFERENCE_MS, CALIBRATION_REFERENCE_TICK_MS } from './calibration';
 import { BENCH_CASES } from './cases';
 import {
-  TICK_WIRED_CASE,
   TOGGLED_CONNECTION,
   WIRED_ALLOCATION_GATE_BYTES,
   WIRED_START,
@@ -49,7 +50,16 @@ describe('the wired bench plant', () => {
   });
 });
 
+/** A bench case by name, as `sim bench` runs it. */
+function benchCase(name: string): BenchCase {
+  const found = BENCH_CASES.find((c) => c.name === name);
+  if (found === undefined) throw new Error(`no bench case "${name}"`);
+  return found;
+}
+
 describe('tick-wired-plant', () => {
+  const TICK_WIRED_CASE = benchCase('tick-wired-plant');
+
   it('times a cadence tick whose solve ran before the timer, and a warm bank with no re-solve', () => {
     expect(WIRED_START % 10).toBe(0);
     const materialised = wiredPlantWorld();
@@ -66,11 +76,20 @@ describe('tick-wired-plant', () => {
     expect(digest?.startsWith('2600:')).toBe(true);
   });
 
-  it('is gated at 0.3 ms with an allocation invariant; the wired re-solve is calibrated at 2 ms', () => {
-    expect(TICK_WIRED_CASE).toMatchObject({ budgetMs: 0.3 });
+  it('is gated at 0.3 ms on the reference machine (calibrated) with an allocation invariant; the wired re-solve is calibrated at 2 ms', () => {
+    // Calibrated (#153): a raw 0.3 ms gate read a slow Windows runner (0.302 ms) as a regression.
+    // Its reference is the loop's median beside this case, so a tick's gated ms on the reference
+    // machine is its raw ms there.
+    expect(TICK_WIRED_CASE).toMatchObject({
+      budgetMs: 0.3,
+      calibration: { name: 'calibration-loop', referenceMs: CALIBRATION_REFERENCE_TICK_MS.value },
+    });
     expect(TICK_WIRED_CASE.invariant).toBeDefined();
-    const resolve = BENCH_CASES.find((c) => c.name === 'plant-resolve-topology-change-wired');
-    expect(resolve).toMatchObject({ budgetMs: 2 });
+    const resolve = benchCase('plant-resolve-topology-change-wired');
+    expect(resolve).toMatchObject({
+      budgetMs: 2,
+      calibration: { name: 'calibration-loop', referenceMs: CALIBRATION_REFERENCE_MS.value },
+    });
     resolve?.prepare?.();
     const first = resolve?.run();
     resolve?.prepare?.();

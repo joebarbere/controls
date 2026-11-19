@@ -15,7 +15,12 @@ import {
   runBenchCase,
   SMOKE_RUNS,
 } from './bench';
-import { CALIBRATION_REFERENCE_MS, CALIBRATION_WARMUP_RUNS, runCalibration } from './calibration';
+import {
+  CALIBRATION_REFERENCE_MS,
+  CALIBRATION_REFERENCE_TICK_MS,
+  CALIBRATION_WARMUP_RUNS,
+  runCalibration,
+} from './calibration';
 import { WATCHDOG_MS } from '@controls/sim-protocol';
 import { CABLE_ADD_BENCH_CONDUCTORS, cableAddBench } from './cable-add';
 import { BENCH_CASES, CABLE_ADD_BUDGET_MS, PENDING_BENCH_CASES, ROUTE_BAKE_BUDGET_MS } from './cases';
@@ -333,6 +338,7 @@ describe('the calibration loop', () => {
     const calibrated = BENCH_CASES.filter((benchCase) => benchCase.calibration !== undefined);
     expect(calibrated.map((benchCase) => benchCase.name)).toStrictEqual([
       'plant-resolve-topology-change',
+      'tick-wired-plant',
       'plant-resolve-topology-change-wired',
       'intermittent-toggle-wired',
     ]);
@@ -349,10 +355,12 @@ describe('the calibration loop', () => {
     expect(source).not.toMatch(/\brequire\(|\bimport\(/);
   });
 
-  it('has a sourced reference that names its machine', () => {
-    expect(CALIBRATION_REFERENCE_MS.value).toBeGreaterThan(0);
-    expect(CALIBRATION_REFERENCE_MS).toMatchObject({ unit: 'ms', kind: 'numerical' });
-    expect(CALIBRATION_REFERENCE_MS.source).toMatch(/Ryzen 5 5600X/);
+  it('has sourced references that name their machine', () => {
+    for (const reference of [CALIBRATION_REFERENCE_MS, CALIBRATION_REFERENCE_TICK_MS]) {
+      expect(reference.value).toBeGreaterThan(0);
+      expect(reference).toMatchObject({ unit: 'ms', kind: 'numerical' });
+      expect(reference.source).toMatch(/Ryzen 5 5600X/);
+    }
   });
 });
 
@@ -417,16 +425,16 @@ describe('the shipped bench cases', () => {
     expect(first).toMatch(/^50:[0-9]+:[0-9a-f]{64}$/);
   });
 
-  it('gate the re-solve at spec §4.5’s 2 ms, scaled by the calibration loop; nothing else is calibrated', () => {
+  it('gate the re-solves at spec §4.5’s 2 ms and the wired tick at 0.3 ms, scaled by the calibration loop; nothing else is calibrated', () => {
     const calibrated = BENCH_CASES.filter((c) => c.calibration !== undefined);
-    expect(calibrated.map((c) => [c.name, c.budgetMs])).toStrictEqual([
-      ['plant-resolve-topology-change', 2],
-      ['plant-resolve-topology-change-wired', 2],
-      ['intermittent-toggle-wired', 2],
+    expect(calibrated.map((c) => [c.name, c.budgetMs, c.calibration?.referenceMs])).toStrictEqual([
+      ['plant-resolve-topology-change', 2, CALIBRATION_REFERENCE_MS.value],
+      // Its own reference: the loop's median beside the tick case on the reference machine (#153).
+      ['tick-wired-plant', 0.3, CALIBRATION_REFERENCE_TICK_MS.value],
+      ['plant-resolve-topology-change-wired', 2, CALIBRATION_REFERENCE_MS.value],
+      ['intermittent-toggle-wired', 2, CALIBRATION_REFERENCE_MS.value],
     ]);
-    for (const c of calibrated) {
-      expect(c.calibration).toMatchObject({ run: runCalibration, referenceMs: CALIBRATION_REFERENCE_MS.value });
-    }
+    for (const c of calibrated) expect(c.calibration?.run).toBe(runCalibration);
     expect(PENDING_BENCH_CASES.map((c) => c.name)).not.toContain('plant-resolve-topology-change');
   });
 });

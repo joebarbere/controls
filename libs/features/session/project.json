@@ -17,6 +17,7 @@
       "options": {
         "buildTarget": "game:build:development",
         "tsConfig": "libs/features/session/tsconfig.spec.json",
+        "setupFiles": ["libs/ui/src/testing/jsdom-warm-up.ts"],
         "watch": false
       }
     },

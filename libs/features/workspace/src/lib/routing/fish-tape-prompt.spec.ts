@@ -55,6 +55,15 @@ const dialog = () => screen.getByRole('dialog', { name: 'Fish tape: pull conduct
 const status = () => screen.getByTestId('tape-status').textContent?.trim();
 
 describe('FishTapePromptDialog (F3.4 part 2)', () => {
+  // The first world, pull request and render in the file are several times colder than later ones
+  // (about 0.8 s against 0.1 s locally under parallel load: Angular's first template pass, V8 warming
+  // up). Paid here, once, so the first test is timed like the rest (ui caveats).
+  beforeAll(async () => {
+    await mount();
+    document.body.innerHTML = '';
+    TestBed.resetTestingModule();
+  });
+
   afterEach(() => {
     document.body.innerHTML = '';
     TestBed.resetTestingModule();
