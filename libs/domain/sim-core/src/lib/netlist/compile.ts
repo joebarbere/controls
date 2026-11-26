@@ -835,7 +835,13 @@ export class NetlistCompiler {
     }
     const simCode = this.wiring ? 0 : simCodeOf(model, entity, options);
     const sim = this.wiring ? NO_SIM : simTopologyView(model, simCode);
-    const terminals = device.terminals.map((t) => t.id).sort();
+    // The entry's terminals (its families' members included), sorted and frozen once by the catalogue.
+    const terminals = this.catalog.terminalIds(entity.ref);
+    if (terminals === undefined) {
+      // `device` resolved above, so the catalogue knows this entry: a catalogue that lacks its
+      // terminal ids is a broken `Catalog` implementation, never a world problem.
+      throw new Error(`Netlist compiler: the catalogue has no terminal ids for ${entity.ref.id}@${entity.ref.version}`);
+    }
     const fragment = buildFragment(model, terminals, device.model.params, entity.state, sim, this.wiring);
     const parts = deviceParts(entity.id, fragment);
     return {
@@ -1275,7 +1281,7 @@ function buildFragment(
   sim: StateBag,
   wiring = false,
 ): DeviceFragment {
-  const input = { params, state, sim };
+  const input = { params, terminals, state, sim };
   const topology = wiring && model.wiring !== undefined ? model.wiring(input) : model.topology(input);
   const index = (terminal: string): number => {
     const i = terminals.indexOf(terminal);

@@ -1,5 +1,6 @@
 import { DEVICE_STATE_KEY_PATTERN, DeviceStateValue } from '@controls/save-format';
 import fc from 'fast-check';
+import { familyMember } from './catalog';
 import {
   bagSchemas,
   checkBags,
@@ -14,9 +15,11 @@ import {
 const kinds = Object.values(MODEL_KINDS);
 
 describe('MODEL_KINDS', () => {
-  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice, engine 8’s service and ground rod and the breakers v2 kinds, keyed by their own name', () => {
+  it('lists the P2 kinds, F3.1’s conductor, the F3.5 enclosure, raceway and terminal-block kinds, F3.3’s twist-on splice, engine 8’s service and ground rod, the breakers v2 kinds and the load centre’s, keyed by their own name', () => {
     expect(Object.keys(MODEL_KINDS).sort()).toStrictEqual([
       'battery',
+      'bond.groundBar',
+      'bond.jumper',
       'breaker.afci1p',
       'breaker.gfci1p',
       'breaker.plugOn1p',
@@ -25,7 +28,9 @@ describe('MODEL_KINDS', () => {
       'conductor',
       'electrode.groundRod',
       'enclosure.box',
+      'enclosure.loadCentre',
       'enclosure.panel',
+      'feed.mainLugs',
       'fuse',
       'generator.portable',
       'heater',
@@ -104,6 +109,16 @@ describe('MODEL_KINDS', () => {
       // F3.5 (ADR 0015, D11): the commanded knockout bit set; provisional until v0.4.0.
       'enclosure.box': { openEntries: 'commanded number 0' },
       'enclosure.panel': { openEntries: 'commanded number 0' },
+      // P4 PR 14a (ADR 0019's P4 PR 14 amendment): 44 commanded keys, the dead front starting off, no `on`.
+      'enclosure.loadCentre': {
+        coverOn: 'commanded boolean false',
+        openEntries: 'commanded number 0',
+        ...Object.fromEntries(Array.from({ length: 42 }, (_, i) => [`directory${i + 1}`, 'commanded text null'])),
+      },
+      // P4 PR 14a: the bonds and the main lugs hold no state.
+      'bond.groundBar': {},
+      'bond.jumper': {},
+      'feed.mainLugs': {},
       fuse: { blown: 'sim boolean false', bodyHeat: 'sim number 0', elementHeat: 'sim number 0' },
       'generator.portable': {},
       // Engine 8 (P4 PR 9): the service and the ground rod hold no state.
@@ -181,6 +196,13 @@ describe('MODEL_KINDS', () => {
       }
       if (kind.requires === 'enclosure') {
         expect(kind.keys['openEntries']?.owner, kind.kind).toBe('commanded');
+      }
+      // Terminal rules name fixed terminals only, and no fixed terminal is a member of the kind's own
+      // families (so an entry's terminals split one way: `neutral` is never read as `n` + an index).
+      for (const id of Object.keys(kind.terminalRules ?? {}))
+        expect(kind.terminals, `${kind.kind}.${id}`).toContain(id);
+      for (const family of kind.terminalFamilies ?? []) {
+        for (const id of kind.terminals) expect(familyMember(family.prefix, id), `${kind.kind}.${id}`).toBe(false);
       }
     }
   });

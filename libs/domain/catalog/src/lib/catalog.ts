@@ -59,6 +59,12 @@ export interface Catalog {
   device(ref: CatalogRef): DeviceDefinition | undefined;
   /** The model kind of the device entry a ref names, or `undefined` (unknown ref). */
   kindOf(ref: CatalogRef): ModelKindDef | undefined;
+  /**
+   * The terminal ids of the device entry a ref names, sorted (code units) and frozen, one array per
+   * entry, or `undefined` (unknown ref). What the netlist compiler and the models read (ADR 0019's P4
+   * PR 14 amendment): an entry's terminals, its families' members included, never the kind's alone.
+   */
+  terminalIds(ref: CatalogRef): readonly string[] | undefined;
   /** Every cable assembly, sorted by id, then version. */
   readonly cables: readonly CableDefinition[];
   cable(ref: CatalogRef): CableDefinition | undefined;
@@ -231,11 +237,15 @@ export function parseCatalog(
   const accessoryByKey = index(accessories);
   const ruleSetByKey = new Map(ruleSets.map((set) => [refKey(set.ruleSet, set.version), set]));
   const colourIds = [...colours.keys()].sort();
+  const terminalsByKey = new Map(
+    devices.map((d) => [refKey(d.id, d.version), Object.freeze(d.terminals.map((t) => t.id).sort())]),
+  );
   const catalog: Catalog = {
     version,
     devices,
     device: (ref) => deviceByKey.get(refKey(ref.id, ref.version)),
     kindOf: (ref) => kindByKey.get(refKey(ref.id, ref.version)),
+    terminalIds: (ref) => terminalsByKey.get(refKey(ref.id, ref.version)),
     cables,
     cable: (ref) => cableByKey.get(refKey(ref.id, ref.version)),
     tools,
@@ -498,6 +508,21 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
         `Model kind ${kind.kind}'s ${terminal.id} is out of reach: its access must be "none"`,
       );
     }
+    // What the kind requires of a named terminal or a family's members (ADR 0019's P4 PR 14 amendment).
+    const rule = Object.prototype.hasOwnProperty.call(kind.terminalRules ?? {}, terminal.id)
+      ? kind.terminalRules?.[terminal.id]
+      : families.find((f) => numbered.has(terminal.id) && familyMember(f.prefix, terminal.id))?.rule;
+    if (rule !== undefined) {
+      if (terminal.access !== rule.access) {
+        add(`terminals.${terminal.id}.access`, `Model kind ${kind.kind}'s ${terminal.id} must be "${rule.access}"`);
+      }
+      if (rule.role !== undefined && terminal.role !== rule.role) {
+        add(
+          `terminals.${terminal.id}.role`,
+          `Model kind ${kind.kind}'s ${terminal.id} has the role ${rule.role === null ? 'null' : `"${rule.role}"`}`,
+        );
+      }
+    }
   }
   if (kind.placement === 'connection') {
     if (device.sizeMm !== null) add('sizeMm', 'A connection kind has no body: sizeMm must be null');
@@ -570,6 +595,11 @@ function checkTerminals(device: DeviceDefinition, kind: ModelKindDef, add: Add):
       }
     });
   }
+}
+
+/** Whether `id` is `prefix` followed by a 1-based index (`n12` of `n`; never `neutral`). */
+export function familyMember(prefix: string, id: string): boolean {
+  return id.startsWith(prefix) && /^[1-9][0-9]*$/.test(id.slice(prefix.length));
 }
 
 function checkCategory(device: DeviceDefinition, kind: ModelKindDef, add: Add): void {

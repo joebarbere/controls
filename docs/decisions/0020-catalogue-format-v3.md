@@ -32,7 +32,9 @@ All three are part of the terminal layout and covered by the `terminals` path (w
 
 ### Terminal families
 
-`ModelKindDef.terminalFamilies?: { prefix, min, max }[]` (ADR 0019 C3): an entry of such a kind has `prefix`1 … `prefix`n for one n in `[min, max]`, with no gap, besides the kind's fixed `terminals` (a neutral bar's `n1` … `n30`). Without families the rule is ADR 0016's: exactly the kind's terminals.
+`ModelKindDef.terminalFamilies?: { prefix, min, max }[]` (ADR 0019 C3): an entry of such a kind has `prefix`1 … `prefix`n for one n in `[min, max]`, with no gap, besides the kind's fixed `terminals` (a load centre's neutral bar, `n1` … `n<k>` with k from 1 to 64; ADR 0019's P4 PR 14 amendment). Without families the rule is ADR 0016's: exactly the kind's terminals.
+
+_Corrected by [ADR 0019](0019-world-document-v4.md)'s [P4 PR 14 amendment](0019-world-document-v4.md#amendment-p4-pr-14-2026-11-18-the-load-centre-its-bars-and-its-feed): a family's shape is now `{ prefix, min, max, rule? }`, where `rule: { access, role? }` binds every member; `ModelKindDef.terminalRules` binds named fixed terminals the same way; `parseCatalog` checks both. Freeze rule (from v0.5.0): a family's `min` only falls and its `max` only grows; a terminal rule on a kind with shipped entries only loosens (a stricter one needs a new kind)._
 
 ### The multi-conductor cap and `tb.quennick-st4@2`
 
@@ -140,7 +142,7 @@ From the P4 pre-audit (electrical-realism-reviewer, 2026-11-17), for the content
   - resolve `mountedOn` through `offeredMounts` (so a bulb's host may be a lampholder's `hostMounts`), with one cycle walk over mounts, entries, plugs and host mounts;
   - decide the fate of the never-shipped `-engine-7-catalog-3.ctrl` fixtures once world v4 writes saves (kept as `engine-changed` regressions under `fixtures/v3`, like the engine-6 catalogue-2 ones, or deleted with a note);
   - the `LAMP_INCANDESCENT_REFS_V3` parity test against the frozen catalogue-2 list;
-  - check the load centre's bag (`on`, `coverOn`, `openEntries` and 42 `directory` keys, 45 commanded keys) against `MAX_DEVICE_STATE_KEYS` (64);
+  - check the load centre's bag (`coverOn`, `openEntries` and 42 `directory` keys, 44 commanded keys) against `MAX_DEVICE_STATE_KEYS` (64). _Corrected by ADR 0019's P4 PR 14 amendment: there is no `on` key; "45" was an error._
   - `DeviceStateValue`'s description in v4 covers `text` (label text, not only an enum string).
 - **World v4 commands (PR 8):** `wire.land` enforces `multiConductor` (the refusal code is that PR's, with `save-format-guardian`); `checkMount`, snapping and the ghost read the single-mount anchor (`alongMm`, `crossMm`; until then no entry declares a non-zero anchor on a single mount, tested) and offered mounts through `offeredMounts`; `device.operate`'s `momentary` refusal; `lead.connect`'s `inaccessible` on `access: 'none'`; the build menu hides `supersededBy` entries and `beltChoices` filters them (today it offers each id's newest version, which is the same entry for `tb.quennick-st4`); `busStabIndex` over `bus`.
 - **Engine 8 (PR 9):** contact branches from `fits.*.contacts`, `EnclosureMount.contacts` and `bus`, and outlets' `pins`; terminals from the entry (families). `ElementRef.part` is at most 32 characters, so a contact id with a prefix (`mount:<id>`) could overflow it: add a `contact` element-ref kind (ADR 0019 §8) or cap `ContactId` lower. _Done (PR 9, [ADR 0021](0021-service-grounding-and-protection-physics.md) §4–§5): a `contact` element-ref kind, so `ContactId` keeps its 32-character grammar._

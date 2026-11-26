@@ -9,3 +9,4 @@ export * from './routing-panel';
 export * from './cable-run';
 export * from './residential-catalog';
 export * from './residential-bench';
+export * from './load-centre-catalog';
