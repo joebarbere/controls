@@ -89,9 +89,8 @@ describe('App', () => {
     }
   });
 
-  // jsdom parses its built-in user-agent stylesheet on the first getComputedStyle in the process (about
-  // 0.7 s on a slow runner). Paid here, once, rather than inside whichever test happens to run first.
-  beforeAll(() => void window.getComputedStyle(document.body));
+  // jsdom's user-agent stylesheet parse (about 0.7 s on a slow runner) is paid before every spec file
+  // by the shared setup file, libs/ui/src/testing/jsdom-warm-up.ts, not inside the first test.
 
   /**
    * The main menu's items. Scoped to the menu so a query names its eight buttons, not every button in

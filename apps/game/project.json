@@ -81,6 +81,7 @@
     "test": {
       "executor": "@angular/build:unit-test",
       "options": {
+        "setupFiles": ["libs/ui/src/testing/jsdom-warm-up.ts"],
         "watch": false
       }
     },

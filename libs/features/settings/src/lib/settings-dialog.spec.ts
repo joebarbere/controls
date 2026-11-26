@@ -32,6 +32,15 @@ async function setup() {
 }
 
 describe('SettingsDialog', () => {
+  // The first render of the dialog and the form, and user-event's first click, are about 1.3 s colder
+  // than later ones under a CPU squeeze (Angular's first template pass, V8 warming up). Paid here, once,
+  // so the first test is timed like the rest; it timed out at 5.2 s on a macOS runner (PR #152).
+  beforeAll(async () => {
+    const { fixture } = await setup();
+    fixture.destroy();
+    document.body.innerHTML = '';
+  });
+
   afterEach(() => {
     document.body.innerHTML = '';
     delete document.documentElement.dataset['theme'];
